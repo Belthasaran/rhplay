@@ -1,0 +1,57 @@
+{
+    "id": "ccvanilla",
+    "name": "CrowdControl SMW Vanilla",
+    "description": "Launch Vanilla SMW plus CrowdControl's patch",
+    "url": "https://crowdcontrol.live/guides/SuperMarioWorld/",
+    "download_url": "error://invalid/The+BPS+Of+This+Hack+Requires+Manual+Blob+Creation.json",
+    "ips_download_url": "https://cc-modfiles.nyc3.digitaloceanspaces.com/Patches/SuperMarioWorld.Vanilla.ips",
+    "ips_sha1": "6a4eaee6446f1c38cb7b53c6138898eab183eac4",
+    "ips_sha224": "7a31cf8ed902fe75216550d035f1b52718dd57222ba207cbda906e3b",
+    "author_href": "https://crowdcontrol.live/",
+    "author": "CrowdControl",
+    "authors": "CrowdControl",
+    "patch_description": "Enabling patch to Vanilla SMW game for CrowdControl",
+    "patch_variants": {
+        "vanilla" : {
+             "version"             : "1.0",
+             "target_romname"      : "SMW",
+             "sha224_before_patch" : "fdc4c00e09a8e08d395003e9c8a747f45a9e5e94cbfedc508458eb08",
+             "sha224_after_patch"  : "a86df2881c47f77cfca32a5b7f85c94d8d6475bb3b76aff492b5c253",
+             "patchblob_name"      : "pblob_ccvanilla_e05d0597bc",
+             "patchblob_key"       :  "d0syVW5ZT0QzMnlVQ1FKbU9DWDVyb2g2bnN3SDExUXM4WEhBZTdCX1I5RT0=",
+             "patchblob_sha224"    : "e05d0597bc72f8fe18171cbcc6effd74dfc2a6797473c5601492c545"
+        }
+    },
+    "time": 1604901600,
+    "added": "2020-11-09",
+    "modified": "2020-11-09",
+    "psets": "WwogICAgICAgIHsKICAgICAgICAiaXBmcyIgOiAiYmFmeWJlaWMzbGR4NG80eGZwbmNwbWk0ZnlzbHFva3FkM3BnNnE3Ym1uaTI3bXB3eGRvbGc1ZjV3cXEiLAogICAgICAgICJrZXkiOiAiYmxvYnMvc19wYmxvYl8zNV9jY3ZfMzBfMjFfOTgyXzUwXzAwMDAuemlwIiwKICAgICAgICAiaGFzaCI6ICJRbVVWRVR6MnlLSlJqbWZOV2djd1BVWjJxQ3RXS3I0TXVVQXhSd1ppTGg2RFZNIiwKICAgICAgICAicHVibGljVXJsIjogImh0dHBzOi8vc213ZGJpLmlwYXJwYS5jb20vMzMxNzY5ZDEtNjVlYy00NWZkLTgyNzYtZTU1YmQ0YTQyOGQ1LWJ1Y2tldC9ibG9icy9zX3BibG9iXzM1X2Njdl8zMF8yMV85ODJfNTBfMDAwMC56aXAiCiAgICAgICAgIH0KICAgIF0K",
+    "demo": "No",
+    "featured": "No",
+    "length": "unknown",
+    "type": "Other",
+    "tags_href": "",
+    "tags": [
+        "patch",
+        "modded",
+        "asm"
+    ],
+    "comments_href": "#comments",
+    "comments": "0 ",
+    "rating": [
+        "0.0"
+    ],
+    "patch": "patch/Hmg6JQrOtkYsdknorDaWY7CXPhBF1rrb",
+    "pat_sha224": "caf4b515589f871b98c0cc30250fbde9399e1f4508d23f6d34ac11ce",
+    "pat_sha1": "f1429cb13673e791607f0e2362847bc4b8706447",
+    "pat_shake_128": "Hmg6JQrOtkYsdknorDaWY7CXPhBF1rrb",
+    "result_sha224": "a86df2881c47f77cfca32a5b7f85c94d8d6475bb3b76aff492b5c253",
+    "result_sha1": "141b9c5968c7c60def44b4fb742ceab96a5b17e5",
+    "result_shake1": "0MCRsKMMme9dytX5b9M9f5wBn9XhhqcA",
+    "rom": "rom/ccvanilla_0MCRsKMMme9dytX5b9M9f5wBn9XhhqcA.sfc",
+    "patchblob1_name": "pblob_ccvanilla_e05d0597bc",
+    "patchblob1_key": "d0syVW5ZT0QzMnlVQ1FKbU9DWDVyb2g2bnN3SDExUXM4WEhBZTdCX1I5RT0=",
+    "patchblob1_sha224": "e05d0597bc72f8fe18171cbcc6effd74dfc2a6797473c5601492c545",
+    "romblob_salt": "4Jo_pNPEFAWzjOSKGmwoYg==",
+    "romblob_name": "rblob_ccvanilla_ae5ac6b04a"
+}

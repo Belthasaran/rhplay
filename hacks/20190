@@ -1,0 +1,39 @@
+{
+    "name_href": "//dl.smwcentral.net/20190/Robfather_World_v1_1.zip",
+    "name": "Robfather World",
+    "author_href": "/?p=profile&id=38559",
+    "author": "DanOfMostTrades",
+    "added": "2019-06-14 12:43:50 AM",
+    "version history_href": "/?p=section&a=versionhistory&id=20190",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "14 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Are you having trouble breaking into Kaizo? Robfather world centers around intermediate platforming with small sprinkles of kaizo, allowing you to work on your dexterity and practice for the big titles.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=less+exgfx",
+    "tags": [
+        "less exgfx",
+        "music"
+    ],
+    "comments_href": "#comments",
+    "comments": "57 ",
+    "rating": [
+        "4.8"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=20190",
+    "id": "20190",
+    "pat_sha224": "61a30489f0fd9e491032c13c011f68dd3be6fa179b882ca371e51a45",
+    "pat_sha1": "04794773b86b6ccbcd1e395871de7b1d0400af12",
+    "pat_shake_128": "OkEI28N-AsBq4NpmEAIo9ZN4tW3Zv2gA",
+    "result_sha224": "2b5d9406aca3051695f4c0626d40eb3157b38b274ef96716730ee7a3",
+    "result_sha1": "48ec006aa13449112ecd3608dae9b9fb8e4d36eb",
+    "result_shake1": "z_RLIDln67q1Cbd_FC9nj2FAue_qCeLL",
+    "rom": "rom/20190_z_RLIDln67q1Cbd_FC9nj2FAue_qCeLL.sfc",
+    "patch": "patch/OkEI28N-AsBq4NpmEAIo9ZN4tW3Zv2gA",
+    "patchblob1_name": "pblob_20190_46ce7ec5b0",
+    "patchblob1_key": "bzRObl84U2RRZ1JMT3FZWm5Cc3BtYjQ1c1lVYWU2U01zV3RaSkhHQVZFVT0=",
+    "patchblob1_sha224": "46ce7ec5b02dfa567b9188c32dc5f7a4a24e6018f8eb2480a04a2bbd",
+    "romblob_salt": "Wskw9th22-4jUfje2sxqiQ==",
+    "romblob_name": "rblob_20190_985f24ff5f"
+}

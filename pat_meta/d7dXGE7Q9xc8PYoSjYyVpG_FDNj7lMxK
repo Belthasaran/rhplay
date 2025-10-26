@@ -1,0 +1,17 @@
+{
+  "id": "40708",
+  "patch": "/home/main/proj/rhtools/patch/d7dXGE7Q9xc8PYoSjYyVpG_FDNj7lMxK",
+  "patch_filename": "tajna1.3.bps",
+  "pat_sha1": "4e4375578e616d3e0a32f14fc37fddd8429b982b",
+  "pat_sha224": "8c470fd7ca963ad4182850e1d9ee561a7dbde8a3c95ff7919bc42e32",
+  "pat_shake_128": "d7dXGE7Q9xc8PYoSjYyVpG_FDNj7lMxK",
+  "result_sha1": "28ce5d976e62ecee0b38b704d6164e91dda12722",
+  "result_sha224": "9456b3965ea36ecd91e5c0d0cb170ad555ab9271d9030954bf14fe3b",
+  "result_shake1": "di-Hn1GM94IBlyTdQ8uVeE8IEwshnXqN",
+  "rom": "/home/main/proj/rhtools/rom/40708_di-Hn1GM94IBlyTdQ8uVeE8IEwshnXqN.sfc",
+  "patchblob1_name": "pblob_40708_3cc7964afb",
+  "patchblob1_key": "Vk1Bb1ZxcUl1NjZxekRkSDNHTWNqMmtqNFV3Tl9HY0lGQ3V1b3Z4aXh3ND0=",
+  "patchblob1_sha224": "3cc7964afb56bea17c00167884b831e706315b42c4952d2842e56328",
+  "romblob_name": "rblob_40708_7c0897e9c9",
+  "romblob_salt": "VxZ7oId6BIdmqKCO1ui1lg=="
+}

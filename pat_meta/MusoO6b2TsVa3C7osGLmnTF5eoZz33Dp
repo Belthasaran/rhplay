@@ -1,0 +1,17 @@
+{
+  "id": "40687",
+  "patch": "/home/main/proj/rhtools/patch/MusoO6b2TsVa3C7osGLmnTF5eoZz33Dp",
+  "patch_filename": "Showtime v1.7 (U) [PT-BR].bps",
+  "pat_sha1": "108ab39e147cf03554c075a2f584beb6066b9bf4",
+  "pat_sha224": "2af12d64e413473c761a1dbb0218060360084a87f59be7146b98c89d",
+  "pat_shake_128": "MusoO6b2TsVa3C7osGLmnTF5eoZz33Dp",
+  "result_sha1": "be0a70d666d2cd1cf270d4381f3386fc1138ec8e",
+  "result_sha224": "8c3a7267ecc03f21ecdef0520b68fbf2f7217d12b623711456fe4a16",
+  "result_shake1": "A7zZqOz4vHu1dzgwjcYY_23SSgFbx_z1",
+  "rom": "/home/main/proj/rhtools/rom/40687_A7zZqOz4vHu1dzgwjcYY_23SSgFbx_z1.sfc",
+  "patchblob1_name": "pblob_40687_224edc77d7",
+  "patchblob1_key": "aWYyZWVtczUzbnh4cEw1Mm4xY1dadldOM2g5N2otSVV0SzRfTHNfRUt6bz0=",
+  "patchblob1_sha224": "224edc77d7f61aa19eb45c9ab0a1c1fffbc1500ce1b334c2a7619f1b",
+  "romblob_name": "rblob_40687_4d9d740a72",
+  "romblob_salt": "JcUcEnC_MkCPvi0Nq-2xXg=="
+}

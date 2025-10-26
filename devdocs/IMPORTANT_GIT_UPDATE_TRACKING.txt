@@ -1,0 +1,18 @@
+# Mark database files to skip tracking changes
+git update-index --skip-worktree electron/rhdata.db
+git update-index --skip-worktree electron/patchbin.db
+
+# If you have example RHMD files you want to keep in repo but not track changes:
+git update-index --skip-worktree rhmd_sample.dat  # if this is the example
+
+###
+ Protect your local database files from being committed
+git update-index --skip-worktree electron/rhdata.db
+git update-index --skip-worktree electron/patchbin.db
+
+# Verify it worked - these files should show with 'S' prefix
+git ls-files -v | grep -E '(rhdata|patchbin)\.db'
+
+# Now check git status - the modified .db files should be gone
+git status
+

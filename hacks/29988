@@ -1,0 +1,13 @@
+{
+  "gameid": "29988",
+  "patch": "/home/main/proj/rhtools/patch/PPtL5yQJ7w8CnsB-lC-7meHmhRVepFn8",
+  "patch_filename": "Swordi World 2 1.1.bps",
+  "pat_sha1": "6f4e4c8e4ad1a363ec71c0172b13d37b5ed375f5",
+  "pat_sha224": "2a4d81fff59c8725935ed14f12f2a8bdd7f0df7c583c92e0826079a0",
+  "pat_shake_128": "PPtL5yQJ7w8CnsB-lC-7meHmhRVepFn8",
+  "result_sha1": "fdc47fb69b718d4fb3f6015ef361a26920b4fb1a",
+  "result_sha224": "c210d6cbc1466ea99555e64b7ad59f268d8b27cc41462ae3d73b4284",
+  "result_shake1": "2V7D3tDZL7UxzUCbwFFhu7VFDuAI2e88",
+  "rom": "/home/main/proj/rhtools/rom/29988_2V7D3tDZL7UxzUCbwFFhu7VFDuAI2e88.sfc",
+  "id": "29988"
+}

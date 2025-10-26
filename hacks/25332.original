@@ -1,0 +1,13 @@
+{
+  "gameid": "25332",
+  "patch": "/home/main/proj/rhtools/patch/Lg7gjxTcIcUSgEV_DT55v9wjwJHieQl1",
+  "patch_filename": "super mio world/Super_mio_World_EN_.bps",
+  "pat_sha1": "f3434300824a93267ebdfd869b8cc0ff21975be4",
+  "pat_sha224": "77bfbfc2b200a4e95c70b3b019d435468e64c23f7407a55f0bb27295",
+  "pat_shake_128": "Lg7gjxTcIcUSgEV_DT55v9wjwJHieQl1",
+  "result_sha1": "1bd490358d796fb93d6f7968671212b9d02b5952",
+  "result_sha224": "1c849161b6c72f7e5c21e0c19f089370f5a7b2846513bd43499c9923",
+  "result_shake1": "Ps6XujO4IYq7yX7OU_nbpP52oH8_JIu-",
+  "rom": "/home/main/proj/rhtools/rom/25332_Ps6XujO4IYq7yX7OU_nbpP52oH8_JIu-.sfc",
+  "id": "25332"
+}

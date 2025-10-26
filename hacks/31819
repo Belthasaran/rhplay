@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/31819/Darkside%202.3.zip",
+    "name": "Darkside 2",
+    "author_href": "/?p=profile&id=37703",
+    "author": "Insanit",
+    "added": "2022-08-17 05:16:12 PM",
+    "version history_href": "/?p=section&a=versionhistory&id=31819",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "8 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "Light vs Darkness",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "exgfx",
+        "music",
+        "story"
+    ],
+    "comments_href": "#comments",
+    "comments": "9 ",
+    "rating": [
+        "4.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=31819",
+    "id": "31819",
+    "pat_sha224": "74cf16595df6c0d0b20cf9b10939a9480c4672240b275183d49a4e19",
+    "pat_sha1": "6b1e3674fc52eede20358ed1d30e515653560303",
+    "pat_shake_128": "8JmoO4nP3d6O36Lp1gSLQ4IxQAJEI-KL",
+    "result_sha224": "4cebeb11be85bb63cb8e312ef5a3fe88c9b2c7e02a6f621b9e0f10b0",
+    "result_sha1": "faa726af34a561d09f217abc8bf96a5b257413d5",
+    "result_shake1": "yH8729zUBJ4fD7ELzheh9c8GE-FGo7iZ",
+    "rom": "rom/31819_yH8729zUBJ4fD7ELzheh9c8GE-FGo7iZ.sfc",
+    "patch": "patch/8JmoO4nP3d6O36Lp1gSLQ4IxQAJEI-KL",
+    "patchblob1_name": "pblob_31819_52cfe725d1",
+    "patchblob1_key": "VjA0cTlORTlWTGw4NGVqemwyVUJFWHFZaFloZmtwQjM1bEZaazhtdEdRTT0=",
+    "patchblob1_sha224": "52cfe725d1dcd78a6044883f24908f51d43adbc8c25e5a12ad770fd0",
+    "romblob_salt": "kDQ4RcHVWMhEZYJPTABmJw==",
+    "romblob_name": "rblob_31819_2653228f7c"
+}

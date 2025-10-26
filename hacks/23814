@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/23814/Of_Jumps_and_Platforms.zip",
+    "name": "Of Jumps and Platforms",
+    "author_href": "/?p=profile&id=34390",
+    "author": "Darolac",
+    "added": "2020-07-13 05:13:43 PM",
+    "version history_href": "/?p=section&a=versionhistory&id=23814",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "7 exit(s)",
+    "type": "Standard: Hard",
+    "description": "Of Jumps and Platforms (or OJaP, in short) is a SMW hack of hard-very hard difficulty, heavily focused on platforming. It contains a total of 7 exits, carefuly crafted and balanced to offer a difficulty progression through them. Inspired by hacks like slurdgery, Nachos and Fried Oreos and mice, Of Jumps and Platforms offers some hard, challenging platforming action through each one of the levels, each one containing an asm-focused gimmick.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "gimmick",
+        "music",
+        "variety"
+    ],
+    "comments_href": "#comments",
+    "comments": "40 ",
+    "rating": [
+        "4.9"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=23814",
+    "id": "23814",
+    "pat_sha224": "7556211e80eb2c36f689165e8a4685c9580a5a4368096aaa8c769e83",
+    "pat_sha1": "b2f921a572bbb68f9832b6df992cce0b541ac3bf",
+    "pat_shake_128": "AEApFJ8L4WZxr42nZnzpxSmxoM2UP5xV",
+    "result_sha224": "e31618cb749362e30ed180d623cccb381093b8712b77c4bec7e602a6",
+    "result_sha1": "557aa09ef8b6c88f910b44d44a2263b089aa4d16",
+    "result_shake1": "-_WgjxPW6-PMf5EMpCNc0ZNjR77iJj0b",
+    "rom": "rom/23814_-_WgjxPW6-PMf5EMpCNc0ZNjR77iJj0b.sfc",
+    "patch": "patch/AEApFJ8L4WZxr42nZnzpxSmxoM2UP5xV",
+    "patchblob1_name": "pblob_23814_1a03ab4b69",
+    "patchblob1_key": "NlJkR192QjNubTdMMFhNYl9fNnpldE5tZFZmRk1jc3VPcld4cWlJalVxUT0=",
+    "patchblob1_sha224": "1a03ab4b69b528c1479e055c103381515f08fb66025853681c8c5f8b",
+    "romblob_salt": "UbLM43KgIQ68sXsKQB1DvA==",
+    "romblob_name": "rblob_23814_accc20587c"
+}

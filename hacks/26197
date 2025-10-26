@@ -1,0 +1,38 @@
+{
+    "name_href": "//dl.smwcentral.net/26197/SuperCindyWorld.zip",
+    "name": "Super Cindy World",
+    "author_href": "/?p=profile&id=39461",
+    "author": "The_Uber_Camper",
+    "added": "2021-02-20 12:48:26 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "14 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Super Cindy World is a Valentine's Day gift to my fiancee, it was made in just 2 weeks.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=exgfx",
+    "tags": [
+        "exgfx",
+        "music",
+        "story"
+    ],
+    "comments_href": "#comments",
+    "comments": "24 ",
+    "rating": [
+        "4.7"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=26197",
+    "id": "26197",
+    "pat_sha224": "585a0535ee15f3495d3ad3c8429ebaba64a0c5967ecee0ebbc8cb647",
+    "pat_sha1": "738ce176f86f0909b56f855a42aacc0cc9bc0599",
+    "pat_shake_128": "QA5bOLYdYumVR5ViHTXd3dMG379eojpA",
+    "result_sha224": "9ddee41589375b5c0d4d90de31b72f605756ad0b0ee73839698769d1",
+    "result_sha1": "641cbd6372db4df07f021b35121b29eee31baa27",
+    "result_shake1": "8B9XJ-WqVRyjjwjuex3m3hMLs-UuvHWG",
+    "rom": "rom/26197_8B9XJ-WqVRyjjwjuex3m3hMLs-UuvHWG.sfc",
+    "patch": "patch/QA5bOLYdYumVR5ViHTXd3dMG379eojpA",
+    "patchblob1_name": "pblob_26197_8a8e68c08c",
+    "patchblob1_key": "Vkl1V0ZCNGFzdkFKdmFVem1KNGhjM2Z6NnI4cV9YLU5hSEtDSEpvN2FZQT0=",
+    "patchblob1_sha224": "8a8e68c08cc335ef82d240a8cf5d1c8605c41e111c0db7ab72bfc4eb",
+    "romblob_salt": "eIUop4LVTJc5ZnTkZEB1aw==",
+    "romblob_name": "rblob_26197_0c7cf2cf49"
+}

@@ -1,0 +1,204 @@
+================================================================================
+                        MDSERVER QUICK START GUIDE
+================================================================================
+
+The Metadata API Server is RUNNING and READY! ✅
+
+Server URL: http://localhost:3000
+Status: ALL TESTS PASSING
+
+================================================================================
+ADMIN CLIENT CREDENTIALS
+================================================================================
+
+Client ID:     170075e6-5dd6-4d4e-aa2c-560464c68c1a
+Client Secret: 43b5983a104fc76fc02c6b9a9d4952b1bc751a810145676a69ffb24a7283400b
+Access:        Admin (full access)
+
+Also saved in: mdserver/admin_credentials.txt
+
+================================================================================
+READ-ONLY CLIENT CREDENTIALS
+================================================================================
+
+Client ID:     fae292e6-fc2c-4d70-9352-f211277a4137
+Client Secret: ffd88a07e42f63a7d4a6630c7274ea9b5d694b8793158064ee3b4203248fa435
+Access:        Read-only
+
+================================================================================
+QUICK TESTS
+================================================================================
+
+1. Check Health:
+   curl http://localhost:3000/health
+
+2. List Attachments (Authenticated):
+   curl -H "X-Client-Id: 170075e6-5dd6-4d4e-aa2c-560464c68c1a" \
+        -H "X-Client-Secret: 43b5983a104fc76fc02c6b9a9d4952b1bc751a810145676a69ffb24a7283400b" \
+        "http://localhost:3000/api/attachments?limit=5"
+
+3. Search for File:
+   curl -X POST \
+     -H "X-Client-Id: fae292e6-fc2c-4d70-9352-f211277a4137" \
+     -H "X-Client-Secret: ffd88a07e42f63a7d4a6630c7274ea9b5d694b8793158064ee3b4203248fa435" \
+     -H "Content-Type: application/json" \
+     -d '{"file_name":"pblob_10047_cf84fd445a"}' \
+     http://localhost:3000/api/search
+
+4. List Clients (Admin Only):
+   curl -H "X-Client-Id: 170075e6-5dd6-4d4e-aa2c-560464c68c1a" \
+        -H "X-Client-Secret: 43b5983a104fc76fc02c6b9a9d4952b1bc751a810145676a69ffb24a7283400b" \
+        http://localhost:3000/api/clients
+
+================================================================================
+SERVER MANAGEMENT
+================================================================================
+
+Start Server:
+  npm run mdserver:start
+
+Stop Server:
+  pkill -f "node mdserver/server.js"
+
+Restart Server:
+  pkill -f "node mdserver/server.js" && npm run mdserver:start &
+
+View Logs:
+  tail -f mdserver/server.log
+
+Check Status:
+  ps aux | grep "node mdserver/server.js"
+  curl http://localhost:3000/health
+
+================================================================================
+CREATE NEW CLIENTS
+================================================================================
+
+Read-Only Client:
+  npm run mdserver:create-client "My Client Name"
+
+Admin Client:
+  npm run mdserver:create-client "My Admin Name" admin
+
+Via API (Admin Only):
+  curl -X POST \
+    -H "X-Client-Id: 170075e6-5dd6-4d4e-aa2c-560464c68c1a" \
+    -H "X-Client-Secret: 43b5983a104fc76fc02c6b9a9d4952b1bc751a810145676a69ffb24a7283400b" \
+    -H "Content-Type: application/json" \
+    -d '{"client_name":"New Client","admin_client":0}' \
+    http://localhost:3000/api/clients
+
+================================================================================
+FOR FETCHPATCHES.JS INTEGRATION
+================================================================================
+
+The server is READY for --apisearch implementation.
+
+When Option G is implemented in fetchpatches.js, use:
+
+  node fetchpatches.js mode2 --apisearch \
+    --apiurl=http://localhost:3000/api/search \
+    --apiclient=fae292e6-fc2c-4d70-9352-f211277a4137 \
+    --apisecret=ffd88a07e42f63a7d4a6630c7274ea9b5d694b8793158064ee3b4203248fa435
+
+The /api/search endpoint will:
+  1. Receive POST with attachment metadata
+  2. Search database for matches
+  3. Return file_data if available (binary)
+  4. Return metadata with URLs if no file_data (JSON)
+  5. Return 404 if not found
+
+================================================================================
+DATABASE LOCATIONS
+================================================================================
+
+mdserver/mdserverdata.db    - Server data (clients, logs, options)
+mdserver/rhdata.db          - Symlink to ../electron/rhdata.db
+mdserver/patchbin.db        - Symlink to ../electron/patchbin.db
+
+Note: Symbolic links save disk space and keep data in sync with main databases.
+
+================================================================================
+SECURITY WARNING
+================================================================================
+
+⚠️  CURRENT VAULT_KEY IS FOR TESTING ONLY!
+
+For production:
+  1. Generate new key: node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+  2. Update mdserver/environment
+  3. Recreate all clients
+  4. Enable HTTPS
+  5. Add rate limiting
+
+================================================================================
+SERVER RESPONSE SIGNING (OPTIONAL)
+================================================================================
+
+To enable digital signatures on server responses:
+
+Step 1: Create Server Signer
+  cd mdserver
+  node create_signer.js
+  
+  Select type: 2 (server)
+  Enter name: "Production Server Signer"
+  Select algorithm: 1 (ED25519 recommended)
+
+Step 2: Add to Environment File
+  The create_signer.js tool will output the configuration.
+  Add to mdserver/environment:
+  
+  SERVER_SIGNER_UUID=<generated-uuid>
+  SERVER_SIGNER_ALGORITHM=ED25519
+  SERVER_PRIVATE_KEY_HEX=<generated-hex-key>
+
+Step 3: Restart Server
+  The server will automatically sign all JSON responses with server_signature
+
+Response Format with Signatures:
+  {
+    "data": {...},
+    "mdsignatures": {
+      "siglist-uuid-1": [
+        {
+          "signeruuid": "signer-1",
+          "signature": "hex...",
+          "signer_name": "Metadata Signer",
+          "signed_at": "2025-10-11..."
+        }
+      ]
+    },
+    "server_signature": {
+      "signeruuid": "server-signer-uuid",
+      "signature": "hex...",
+      "algorithm": "ED25519",
+      "hash": "sha256-hex..."
+    }
+  }
+
+================================================================================
+FILES TO READ
+================================================================================
+
+1. mdserver/README.md              - Complete user documentation
+2. mdserver/API_SERVER_SUMMARY.md  - Implementation details
+3. MDSERVER_COMPLETE.txt           - Full status report
+
+================================================================================
+STATUS
+================================================================================
+
+✅ Server Running on http://localhost:3000
+✅ All Databases Connected
+✅ 2 API Clients Created
+✅ All Endpoints Tested
+✅ Authentication Working
+✅ Permissions Working
+✅ Logging Working
+✅ Ready for fetchpatches.js Integration
+
+Server is PRODUCTION-READY for testing environment! 🎉
+
+================================================================================
+

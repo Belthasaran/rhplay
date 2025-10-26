@@ -1,0 +1,40 @@
+{
+    "name_href": "//dl.smwcentral.net/17395/Super%20Gracie%20World%20v1.3.bps.zip",
+    "name": "Super Gracie World",
+    "author_href": "/?p=profile&id=29490",
+    "author": "white_moth",
+    "added": "2018-04-23 07:48:55 PM",
+    "version history_href": "/?p=section&a=versionhistory&id=17395",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "14 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "Super Gracie World is intended for people who want a somewhat easier kaizo experience. Intended to be played without savestates.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=glitch",
+    "tags": [
+        "glitch",
+        "traditional",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "26 ",
+    "rating": [
+        "4.8"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=17395",
+    "id": "17395",
+    "pat_sha224": "0094ef4bcbd5ded7ac8c5f33db6b166f9036dbaa6c6385332111fa0c",
+    "pat_sha1": "b6b461ad7b35dad38191464279527f0d32750123",
+    "pat_shake_128": "amJ3nzvu-8INOL9iIw41gjyFdK-Lr7rO",
+    "result_sha224": "d4e1721147669c0ab44dc79eeeef455662c0cc10d0ec489c2af5045c",
+    "result_sha1": "c54da41f66c004eeaabab34f390101d0f321a3d2",
+    "result_shake1": "7WZeXX73VBwrSv8tFSN0lA__D4186HH1",
+    "rom": "rom/17395_7WZeXX73VBwrSv8tFSN0lA__D4186HH1.sfc",
+    "patch": "patch/amJ3nzvu-8INOL9iIw41gjyFdK-Lr7rO",
+    "patchblob1_name": "pblob_17395_52f4080ad4",
+    "patchblob1_key": "SzJYQnk5NmNBTjQ0T2lVaHZpTmdKMDgyRWt4MG5ZbURZWTZGME96eUZvOD0=",
+    "patchblob1_sha224": "52f4080ad4a71f1b892c47349c3b15128ca999e98a2710bab6d694e6",
+    "romblob_salt": "dKDAdGnxLWnEc50OnG9mWQ==",
+    "romblob_name": "rblob_17395_3207520be0"
+}

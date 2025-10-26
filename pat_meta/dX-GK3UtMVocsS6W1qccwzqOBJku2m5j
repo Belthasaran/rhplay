@@ -1,0 +1,17 @@
+{
+  "id": "9706",
+  "patch": "/home/main/proj/rhtools/patch/dX-GK3UtMVocsS6W1qccwzqOBJku2m5j",
+  "patch_filename": "MixA.bps",
+  "pat_sha1": "d437e8761769063479b6cb15a80451d49b416b37",
+  "pat_sha224": "bc5cfd6fffa11971f7646605fb2a7efafb1563983f9cc1f349e25204",
+  "pat_shake_128": "dX-GK3UtMVocsS6W1qccwzqOBJku2m5j",
+  "result_sha1": "e8119de3de4000a84f8e98aebaae36620d00d4fc",
+  "result_sha224": "72a458dc876ea9aa93988748e0eaf3cbc25bb1fe65b5a87b1882aaba",
+  "result_shake1": "0OTRAy3EETF93Vc5wDSXlR75L9LOtcOS",
+  "rom": "/home/main/proj/rhtools/rom/9706_0OTRAy3EETF93Vc5wDSXlR75L9LOtcOS.sfc",
+  "patchblob1_name": "pblob_9706_7fb0d7656c",
+  "patchblob1_key": "aHphOHg0cGR4MjM1UnVVVnZraXBGaWhTV1RrdnlzTGpSajVXTHpJbjVlOD0=",
+  "patchblob1_sha224": "7fb0d7656c1c0c2f4a99042149727cc1da9d6ab09c9582afd1f4836e",
+  "romblob_name": "rblob_9706_cddad78126",
+  "romblob_salt": "mr9DNCDIZ2lcl3IrDxsqjg=="
+}

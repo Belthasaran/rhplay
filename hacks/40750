@@ -1,0 +1,13 @@
+{
+  "gameid": "40750",
+  "patch": "/home/main/proj/rhtools/patch/wWy3MvT00uw7wVuD4-7QD-nFJunNXHss",
+  "patch_filename": "Fresh Hops 2/Fresh Hops 2 v1.1.bps",
+  "pat_sha1": "72d4d574a31526846577564ce651cc7948611c6f",
+  "pat_sha224": "9dba1bd958ca22204850bfcee01286773861c2e5a7e01f084024e4dc",
+  "pat_shake_128": "wWy3MvT00uw7wVuD4-7QD-nFJunNXHss",
+  "result_sha1": "fbb3343cf4a705b2afe986e740f4dd6cbfdbba82",
+  "result_sha224": "3960ecde68e5e417de33f21df35a162f8fb5abb4af85e4f1a118a064",
+  "result_shake1": "BrPfqz_wyoCkiZNvrJ4kllEGEKdxigTE",
+  "rom": "/home/main/proj/rhtools/rom/40750_BrPfqz_wyoCkiZNvrJ4kllEGEKdxigTE.sfc",
+  "id": "40750"
+}

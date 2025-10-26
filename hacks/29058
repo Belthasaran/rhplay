@@ -1,0 +1,13 @@
+{
+  "gameid": "29058",
+  "patch": "/home/main/proj/rhtools/patch/UMykN8Gw4F1tdPentFHE0Cf7Ve2Qqt-W",
+  "patch_filename": "SuperNantucketWorld_011.bps",
+  "pat_sha1": "88f555419ac6bbd7171f73efc03bb009c0d30f8d",
+  "pat_sha224": "6016ae3bf885c46690013a223e2cc5ef7b8af6db3c72826d4271e4f1",
+  "pat_shake_128": "UMykN8Gw4F1tdPentFHE0Cf7Ve2Qqt-W",
+  "result_sha1": "f9e5379ab67dad4de155efe8079bd15cd0138f05",
+  "result_sha224": "69cdd7a6f94ffe5def341c4bd4a5b627dfda5b4359b32b7da7f8d23a",
+  "result_shake1": "GK6iGp7baL5G5oxtyGsWti0la0NXdtoL",
+  "rom": "/home/main/proj/rhtools/rom/29058_GK6iGp7baL5G5oxtyGsWti0la0NXdtoL.sfc",
+  "id": "29058"
+}

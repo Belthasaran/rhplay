@@ -1,0 +1,13 @@
+{
+  "gameid": "22045",
+  "patch": "/home/main/proj/rhtools/patch/ul_CiLmWh-oJJnHV-WuYLqIBGVLmoplY",
+  "patch_filename": "pitmkORIGINAL.bps",
+  "pat_sha1": "c0d17b34db0f02ba0293625b70c0f544c801f69b",
+  "pat_sha224": "2454c0a927e1b046623885cd6e4fd2a6956cc918d37c25aea1430632",
+  "pat_shake_128": "ul_CiLmWh-oJJnHV-WuYLqIBGVLmoplY",
+  "result_sha1": "6817e07a7a8d02ba5fec3022a457e8e7bace99cf",
+  "result_sha224": "37391350386bdbb45b25e0bf550bd2aed49cabae35c869553d91fc0a",
+  "result_shake1": "IRMW1jGkVe9H7QEWb_Vj_9iQTrd9VBJ7",
+  "rom": "/home/main/proj/rhtools/rom/22045_IRMW1jGkVe9H7QEWb_Vj_9iQTrd9VBJ7.sfc",
+  "id": "22045"
+}

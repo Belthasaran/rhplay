@@ -1,0 +1,37 @@
+{
+    "name_href": "//dl.smwcentral.net/19550/Let%27s%20Climb.zip",
+    "name": "Climb The Tower",
+    "author_href": "/?p=profile&id=35082",
+    "author": "Sweetdude",
+    "added": "2019-04-03 04:04:43 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "9 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "I don't have much time to talk the deadline is soon!",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=music",
+    "tags": [
+        "music",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "22 ",
+    "rating": [
+        "4.5"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=19550",
+    "id": "19550",
+    "pat_sha224": "4d45b84192800d7dcc56703fdbbb54fb1a39d1390f36e0098e62145c",
+    "pat_sha1": "7258f411fb261c4674d6934ebf1e0e1850d7b092",
+    "pat_shake_128": "qmr9iL0a0vRXxYjAg7DGS8ylUGmNN_y9",
+    "result_sha224": "30bb923d5c4bb34e71deb97789319fd88d01f798148dc3381995763a",
+    "result_sha1": "0e5c580207c2ff6c2fdf4b7d5e6f33be7fa93fbc",
+    "result_shake1": "Vm_-M2IBxwG-QfRWHOm_3_P-whrRrAJ9",
+    "rom": "rom/19550_Vm_-M2IBxwG-QfRWHOm_3_P-whrRrAJ9.sfc",
+    "patch": "patch/qmr9iL0a0vRXxYjAg7DGS8ylUGmNN_y9",
+    "patchblob1_name": "pblob_19550_cec4fe19a7",
+    "patchblob1_key": "Njg0cFk5YUtoV2dmM3liYmtMRDlDNmxqanlpbWJmajFaOVBrTkF0SFdmdz0=",
+    "patchblob1_sha224": "cec4fe19a737c6c124474a0448b5fcc22ede757c93319874f404ab60",
+    "romblob_salt": "4uz51ycG3geVRfJnwqvLjw==",
+    "romblob_name": "rblob_19550_0a49abba11"
+}

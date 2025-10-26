@@ -1,0 +1,36 @@
+{
+    "name_href": "//dl.smwcentral.net/32593/2Kaizo2Learn_1.0.zip",
+    "name": "2Kaizo2Learn",
+    "author_href": "/?p=profile&id=46588",
+    "author": "blueribbonhighlife",
+    "added": "2022-11-21 12:27:24 AM",
+    "demo": "No",
+    "featured": "No",
+    "length": "69 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Welcome to 2Kaizo2Learn!!",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=tutorial",
+    "tags": [
+        "tutorial"
+    ],
+    "comments_href": "#comments",
+    "comments": "4 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=32593",
+    "id": "32593",
+    "patch": "patch/7mVa9iFte1NgLy6uEmr9OT_CbHArqoTu",
+    "pat_sha224": "05a4a9c9ffc7994690ddbfafcfa295bb001b98939ea69cfa4cb4f9d8",
+    "pat_sha1": "2340d3a49650b0da9da0037eced44feb35c1426b",
+    "pat_shake_128": "7mVa9iFte1NgLy6uEmr9OT_CbHArqoTu",
+    "result_sha224": "2a6fce1c6a89997f3c6a8b6db5bf25f8a0754d365fa8aa6a6c8773c1",
+    "result_sha1": "017e41d8cb9ade4ad0a8c5c7c286f8e0da5577a6",
+    "result_shake1": "h9k-CaNpruHXq2rTRrbXUD0nb6lGsiLC",
+    "rom": "rom/32593_h9k-CaNpruHXq2rTRrbXUD0nb6lGsiLC.sfc",
+    "patchblob1_name": "pblob_32593_0e371969a2",
+    "patchblob1_key": "d0dGM1RCWEdlZG0xUVVheDE3UXdQdmNsSUh2aGMtczFLSU5MQ05xRnh0RT0=",
+    "patchblob1_sha224": "0e371969a24605a365fd7457991cbac9189ab3b28f915d900e9c1888",
+    "romblob_salt": "9UzX9kPOHWPuUOKTO4vlig==",
+    "romblob_name": "rblob_32593_5ab0be305d"
+}

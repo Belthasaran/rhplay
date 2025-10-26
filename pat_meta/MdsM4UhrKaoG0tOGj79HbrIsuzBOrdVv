@@ -1,0 +1,17 @@
+{
+  "id": "40684",
+  "patch": "/home/main/proj/rhtools/patch/MdsM4UhrKaoG0tOGj79HbrIsuzBOrdVv",
+  "patch_filename": "Crash Bandicoot and the Retro Dimension.bps",
+  "pat_sha1": "f20202a45fd4997b5bc868804ceb37df60b899a8",
+  "pat_sha224": "fb068c6625b5a2407e35009fc0b231907d55c47a9a3e9c4627b27e06",
+  "pat_shake_128": "MdsM4UhrKaoG0tOGj79HbrIsuzBOrdVv",
+  "result_sha1": "652daf8565c1138a2c07edc90962028ace819af3",
+  "result_sha224": "f8831940a35d67b94a0a4225fcfa1d9f2ea09ee5d98d8002c91d2e1d",
+  "result_shake1": "GVbl91m55GugyciUnT1oa8YbelHGs5Hv",
+  "rom": "/home/main/proj/rhtools/rom/40684_GVbl91m55GugyciUnT1oa8YbelHGs5Hv.sfc",
+  "patchblob1_name": "pblob_40684_f5edeeb8c6",
+  "patchblob1_key": "UWxRb1dxaW9Kc09aWWltV01FdXNjMUlBTmtKRGxqSm1MRWhRSHRxNUcwTT0=",
+  "patchblob1_sha224": "f5edeeb8c634baebfb1d2ebf098fc78492fa0914ba947e44189785f1",
+  "romblob_name": "rblob_40684_63ee8b6f4c",
+  "romblob_salt": "RTryzod-2eifKIDfKflxug=="
+}

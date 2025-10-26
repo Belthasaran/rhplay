@@ -1,0 +1,17 @@
+{
+  "id": "40765",
+  "patch": "/home/main/proj/rhtools/patch/2n4k0ILaGufazRG4oCQgwgrWFxxHJQut",
+  "patch_filename": "The Art of Shells/The Art of Shells.bps",
+  "pat_sha1": "24c6f2c4f20e70c522de2e1a61505e14f9a4dc38",
+  "pat_sha224": "57c96e6dfe5f937be8db88cc8a2bc8d66aa5c3ba694844dab3b56d55",
+  "pat_shake_128": "2n4k0ILaGufazRG4oCQgwgrWFxxHJQut",
+  "result_sha1": "7be69d17429b5a0a0cb325fb03523273ba0c15e3",
+  "result_sha224": "d337b40cff85b259b4e556f9dc6130e3fb2838a5633215739ed89f41",
+  "result_shake1": "GVVvTLk3iI6a-kyOnRAglmP2pL0NvE7a",
+  "rom": "/home/main/proj/rhtools/rom/40765_GVVvTLk3iI6a-kyOnRAglmP2pL0NvE7a.sfc",
+  "patchblob1_name": "pblob_40765_3a589e0cb0",
+  "patchblob1_key": "WEgzWUU0X3RHZW1NOHhxSDN3RXo2RUFoSFRQUTNCSXJqT1JvWk1MbVEwZz0=",
+  "patchblob1_sha224": "3a589e0cb04ba00d7769503429a426d11c2302bd12c23d4d527f3685",
+  "romblob_name": "rblob_40765_f0154ea2ee",
+  "romblob_salt": "gSqfZZkFLbZlBVe_5UhndQ=="
+}

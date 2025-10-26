@@ -1,0 +1,13 @@
+{
+  "gameid": "30424",
+  "patch": "/home/main/proj/rhtools/patch/yaG8sA-MdIwlpI4Ilh4IQociM--xUbJs",
+  "patch_filename": "Super Chambo World 1.1.bps",
+  "pat_sha1": "4900298ab247192b13cb456df24717fffc4fb33d",
+  "pat_sha224": "d1d5c4de8895a1734a1952a8bc0e60e69566ed0c08f7e46f422d061b",
+  "pat_shake_128": "yaG8sA-MdIwlpI4Ilh4IQociM--xUbJs",
+  "result_sha1": "3b06b664b6233ec84004059680f5478cea29e7fe",
+  "result_sha224": "a4da021700ceecb35817e0f368374a0dc666d46dd7ddd4a52a014bbc",
+  "result_shake1": "9TpNufvfdVN-Mk4yn0h5XgYA07lujf17",
+  "rom": "/home/main/proj/rhtools/rom/30424_9TpNufvfdVN-Mk4yn0h5XgYA07lujf17.sfc",
+  "id": "30424"
+}

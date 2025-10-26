@@ -1,0 +1,13 @@
+{
+  "gameid": "40744",
+  "patch": "/home/main/proj/rhtools/patch/UmUJkuryz9ANJpB5SK4y4rUDN3QqaUUh",
+  "patch_filename": "Beneath the Bottom of the Screen.bps",
+  "pat_sha1": "b7cf889ff85bb20beea2ce875068180fbcd6b3cf",
+  "pat_sha224": "327dd0f2dfe8dc170cc59001adeb5af8f191171af73c14d41be2a3d5",
+  "pat_shake_128": "UmUJkuryz9ANJpB5SK4y4rUDN3QqaUUh",
+  "result_sha1": "85b920d461472b21a198f929404e26a0bc0eb7b7",
+  "result_sha224": "e7e8eea66cc95de26997bfb82042aff716ac6a27e6d30743c98ae669",
+  "result_shake1": "M6qF9YGPd_agBpNG1jrjkusPE2mM7Fz5",
+  "rom": "/home/main/proj/rhtools/rom/40744_M6qF9YGPd_agBpNG1jrjkusPE2mM7Fz5.sfc",
+  "id": "40744"
+}

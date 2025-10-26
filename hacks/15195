@@ -1,0 +1,40 @@
+{
+    "name_href": "//dl.smwcentral.net/15195/Korosu%20Mario%20World%201.4.zip",
+    "name": "Korosu Mario World",
+    "author_href": "/?p=profile&id=29695",
+    "author": "ChrisG___",
+    "added": "2017-02-18 11:44:02 PM",
+    "version history_href": "/?p=section&a=versionhistory&id=15195",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "17 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "Inspired by hacks like Kaizo Mario World and Super Dram World, Korosu Mario World isn't actually about Mario at all. He's Busy.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=glitch",
+    "tags": [
+        "glitch",
+        "luigi",
+        "puzzle"
+    ],
+    "comments_href": "#comments",
+    "comments": "41 ",
+    "rating": [
+        "4.6"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=15195",
+    "id": "15195",
+    "pat_sha224": "1f14231bf0ca50e9e7e8748b1d7a55de5b3cb60c012e6001fa7e5916",
+    "pat_sha1": "96f82ec0d17aa54ce9d7b2ec2b6527c382e87516",
+    "pat_shake_128": "yAPtKnLAcVjezrAIw14OCEtoG0BHDRTN",
+    "result_sha224": "0599cbc776125d7df698a294082ad0b4b1aef19b550d80ba1a96614d",
+    "result_sha1": "27b202b00b34b783bf1b38f2d97c6d1dc79cd437",
+    "result_shake1": "g8lz-QEPW5GssplMeNWBc4K27NX69yrw",
+    "rom": "rom/15195_g8lz-QEPW5GssplMeNWBc4K27NX69yrw.sfc",
+    "patch": "patch/yAPtKnLAcVjezrAIw14OCEtoG0BHDRTN",
+    "patchblob1_name": "pblob_15195_74ceb82da3",
+    "patchblob1_key": "R1NXWXJGSWp3Rl9hQUx2bm56LUtBS3dWbXZPVDZ4Zzc2X1JJVnJzSUJ1ND0=",
+    "patchblob1_sha224": "74ceb82da3bda6b3949b3f07dab53e403991eda7e0c9cdc8d83b343a",
+    "romblob_salt": "9wu4_uGj1h7S065D9dk72g==",
+    "romblob_name": "rblob_15195_7e8335fba7"
+}

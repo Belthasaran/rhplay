@@ -1,0 +1,17 @@
+{
+  "id": "40736",
+  "patch": "/home/main/proj/rhtools/patch/_RepN50j_ykNbbSsA8lAT41-ZC1NhTQR",
+  "patch_filename": "Shellenge.bps",
+  "pat_sha1": "868e5b956b36b329780fe19fabc34a25dd3e95dc",
+  "pat_sha224": "1738d016b4d0878162e3a10ecebd30981add6b74386d4eaa71b31df9",
+  "pat_shake_128": "_RepN50j_ykNbbSsA8lAT41-ZC1NhTQR",
+  "result_sha1": "63d7f8a3b637286f0fb347b189b6160397836330",
+  "result_sha224": "1497d775355168a3c03549d598ef1ec00728d3a4d9ec92aa9ceadb00",
+  "result_shake1": "KLuSRWvqOKqePj65XbcHS_p1XqqBvFxt",
+  "rom": "/home/main/proj/rhtools/rom/40736_KLuSRWvqOKqePj65XbcHS_p1XqqBvFxt.sfc",
+  "patchblob1_name": "pblob_40736_bc1518d1a9",
+  "patchblob1_key": "cjE1cUtpanF2WFJOUDlqR01vSTZGX2ZqRDd5dTVYdXRZbjVxTkpSbXVFYz0=",
+  "patchblob1_sha224": "bc1518d1a9cee172da0b0d94ecf79f9747c3f55e87ff525d5fabcf68",
+  "romblob_name": "rblob_40736_2917a1249b",
+  "romblob_salt": "mb4P6KKLlIPz0LbZ8X3igw=="
+}

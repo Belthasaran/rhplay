@@ -1,0 +1,13 @@
+{
+  "gameid": "34379",
+  "patch": "/home/main/proj/rhtools/patch/74lJSBb33bjUR7BEYY-v2m0oPEFdWA-D",
+  "patch_filename": "TheMagicCookingPot v1.0.bps",
+  "pat_sha1": "1ca6bdabf832a107ea76f145f5516f1665073ef2",
+  "pat_sha224": "897eaa9f1ae3c917f938038a3d88e445db30351f92fb232c1c408081",
+  "pat_shake_128": "74lJSBb33bjUR7BEYY-v2m0oPEFdWA-D",
+  "result_sha1": "727f3c645ab29525b22f1a8625c3ab264d4ea695",
+  "result_sha224": "c93af035ca537ff51f1127ed33e3f6667cb068bd4ee939e20c02c030",
+  "result_shake1": "F_-hW37QItCDMe-Kvhswg_myEeAQNpjF",
+  "rom": "/home/main/proj/rhtools/rom/34379_F_-hW37QItCDMe-Kvhswg_myEeAQNpjF.sfc",
+  "id": "34379"
+}

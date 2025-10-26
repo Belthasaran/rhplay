@@ -1,0 +1,13 @@
+{
+  "gameid": "17982",
+  "patch": "/home/main/proj/rhtools/patch/GxIBzfNTeKY7BZkGre91WEwC_5Exafmg",
+  "patch_filename": "Super Wakana Land 2.1.1.bps",
+  "pat_sha1": "2e87b99a35b0d162aa52576911532110bce07142",
+  "pat_sha224": "276a52ef9a9e263582f4661046505b592cd9c0d4a51a89c28ef98801",
+  "pat_shake_128": "GxIBzfNTeKY7BZkGre91WEwC_5Exafmg",
+  "result_sha1": "74b0ed5439db24271217f00ec543569ba7a33c55",
+  "result_sha224": "9366dba3c1ceba5117a809d58a3472aacd580bf229478c129fed9362",
+  "result_shake1": "5zT_gtTtIn-BbGO7tjf6xvEF-xNbL2OR",
+  "rom": "/home/main/proj/rhtools/rom/17982_5zT_gtTtIn-BbGO7tjf6xvEF-xNbL2OR.sfc",
+  "id": "17982"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "9825",
+  "patch": "/home/main/proj/rhtools/patch/08I66jW133N4E6vQmoFwf8uTOzBeD08W",
+  "patch_filename": "Super Mario World SMB3.bps",
+  "pat_sha1": "60074a23c21d2708b6563971e0f414474d7a3637",
+  "pat_sha224": "9ba1e28a57d28a6193a58eed5e2c509ef622492aae78003686f6fdea",
+  "pat_shake_128": "08I66jW133N4E6vQmoFwf8uTOzBeD08W",
+  "result_sha1": "13c60fa84a6fb7d635d292acab407473e28af198",
+  "result_sha224": "1e18b399c176a3aa180bfc254178d99b05a985243df3ef31c6519079",
+  "result_shake1": "7I8xM0Zj2fTHKpUUFyIQKGqjjyW2M3nA",
+  "rom": "/home/main/proj/rhtools/rom/9825_7I8xM0Zj2fTHKpUUFyIQKGqjjyW2M3nA.sfc",
+  "patchblob1_name": "pblob_9825_23ab52d5fc",
+  "patchblob1_key": "Q2FsWWlMclhoT05FZEc2RjUxeW1xWnhWNzB1WUpOUmQ0TXc4RjdyS0U2dz0=",
+  "patchblob1_sha224": "23ab52d5fcc3af8129d0c504f0bf820259d74dfaed094d82ad68b80c",
+  "romblob_name": "rblob_9825_f273acb489",
+  "romblob_salt": "vWWKluvudZwweywK39pF3g=="
+}

@@ -1,0 +1,13 @@
+{
+  "gameid": "40699",
+  "patch": "/home/main/proj/rhtools/patch/B9T-vWmTOpMbIvKwPpUTQjxwDLy6FWQf",
+  "patch_filename": "ssdw 1.1.bps",
+  "pat_sha1": "71d06ae9f40a7ba9ab98d630fdf5f9100d72a3c2",
+  "pat_sha224": "2cee6b4d9a0260c2cb90585186f58006ce877f105db55ff85c6929fd",
+  "pat_shake_128": "B9T-vWmTOpMbIvKwPpUTQjxwDLy6FWQf",
+  "result_sha1": "e4182ae366df34539d0e83195a343b4d224078a2",
+  "result_sha224": "aa58d8317ed554669975816884ffef82982806303cdc0d09ed563721",
+  "result_shake1": "tguDmOiaXRJwMGxNpCHcAMb0gbQbxgwy",
+  "rom": "/home/main/proj/rhtools/rom/40699_tguDmOiaXRJwMGxNpCHcAMb0gbQbxgwy.sfc",
+  "id": "40699"
+}

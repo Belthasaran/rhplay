@@ -1,0 +1,13 @@
+{
+  "gameid": "40622",
+  "patch": "/home/main/proj/rhtools/patch/VC92HzWv9sWoiPnrMj2i801HKTylcfh8",
+  "patch_filename": "BIM!/BIM.bps",
+  "pat_sha1": "d5381a89ee006790c3a0e4cc3252f4d8de76a1bb",
+  "pat_sha224": "96a6288a7c59aa2e5acf6d97f19ceaa6c48735bb0137aff2edc804d5",
+  "pat_shake_128": "VC92HzWv9sWoiPnrMj2i801HKTylcfh8",
+  "result_sha1": "ce74eccfd487178d18a44e59c4b1cf8ad8ac2a8e",
+  "result_sha224": "a4b282ec76439a26fab6d06b949c4f5f2adf849867b4102a031f70b1",
+  "result_shake1": "kEDwbUr4XJ9QLEFMeNp6Of4IGvlPmeE0",
+  "rom": "/home/main/proj/rhtools/rom/40622_kEDwbUr4XJ9QLEFMeNp6Of4IGvlPmeE0.sfc",
+  "id": "40622"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "40735",
+  "patch": "/home/main/proj/rhtools/patch/kqBDC835Blip3XZaTSLw8N7OuvrO4U2Z",
+  "patch_filename": "Mario Mario's Superior Platforming Physics Challenge.bps",
+  "pat_sha1": "ac5eec4ffcdac64e1a3e2c1c264bbb82363ddb41",
+  "pat_sha224": "0fec91cbdc28ea9b72d3b230f9f1e48b46a5159d5481bb22d6a65bd1",
+  "pat_shake_128": "kqBDC835Blip3XZaTSLw8N7OuvrO4U2Z",
+  "result_sha1": "30ce21bd5d6100942dc8e44e4bb71a0debf62f59",
+  "result_sha224": "0a9e2ae06a4fbee97676cc71db5f0d29a21536a3d02a5fd3ce1bdd7f",
+  "result_shake1": "eFZe8VeCY4mkVVjCyCswBMk0sv5D9kIt",
+  "rom": "/home/main/proj/rhtools/rom/40735_eFZe8VeCY4mkVVjCyCswBMk0sv5D9kIt.sfc",
+  "patchblob1_name": "pblob_40735_da83429cd4",
+  "patchblob1_key": "M3E0TERjX0d5VzhZb0kzQ0VuNENlT1J4eDU0TnRtbk5pR0YyMTZtbjZ1az0=",
+  "patchblob1_sha224": "da83429cd43c4407cb7b10f526007c487666e56ec0cb7d11e8ea9479",
+  "romblob_name": "rblob_40735_be50583dc5",
+  "romblob_salt": "I4M1iBhiDOHwIhS7uKO-EQ=="
+}

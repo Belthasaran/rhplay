@@ -1,0 +1,40 @@
+{
+    "name_href": "//dl.smwcentral.net/17304/Super%20Hark%20Bros%201.21.zip",
+    "name": "Super Hark Bros",
+    "author_href": "/?p=profile&id=29695",
+    "author": "ChrisG___",
+    "added": "2018-04-04 12:53:48 AM",
+    "version history_href": "/?p=section&a=versionhistory&id=17304",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "16 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Harkness finds out his Chipotle order was wrong and seeks revenge...",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=custom",
+    "tags": [
+        "custom",
+        "music",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "36 ",
+    "rating": [
+        "4.6"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=17304",
+    "id": "17304",
+    "pat_sha224": "4055782bb2bfebb019c64a272a1769f9d86da58e058d3617e1542fe5",
+    "pat_sha1": "8a957551bc65fc0d0af4a4b3e8892203f9ac9f50",
+    "pat_shake_128": "0a6Amm3HT7QybB_loQ1ZA7mJQ0qEPcNk",
+    "result_sha224": "177c36e6a1d774549e8d36ecec0fce0f65ba47a7fa3171f0d4d6f8ef",
+    "result_sha1": "aad6e5b89fc9f41217a3cd59e90cdae01cf63428",
+    "result_shake1": "96BwIh1QmrihtF86TmNbkNIr7Ow7GcSv",
+    "rom": "rom/17304_96BwIh1QmrihtF86TmNbkNIr7Ow7GcSv.sfc",
+    "patch": "patch/0a6Amm3HT7QybB_loQ1ZA7mJQ0qEPcNk",
+    "patchblob1_name": "pblob_17304_9ddd99d168",
+    "patchblob1_key": "SnM5Yms3ZWRKY1lzMXg5bVVLWjMyM3lfaU0yZ3paX25ENW5jLTRfRzZIND0=",
+    "patchblob1_sha224": "9ddd99d168657b7aa115b4c945c4d161b5125eb23773bb997970a3bf",
+    "romblob_salt": "q60WnlraHXFjW2T65t6fIg==",
+    "romblob_name": "rblob_17304_157d7cb56b"
+}

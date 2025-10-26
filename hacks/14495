@@ -1,0 +1,43 @@
+{
+    "name_href": "//dl.smwcentral.net/14495/JUMP%20ver1.04.zip",
+    "name": "JUMP",
+    "authors_href": "/?p=profile&id=1250",
+    "authors": "JUMP Team, ",
+    "added": "2016-11-11 04:08:10 AM",
+    "version history_href": "/?p=section&a=versionhistory&id=14495",
+    "version history": "View",
+    "demo": "No",
+    "featured": "Yes",
+    "length": "125 exit(s)",
+    "type": "Standard: Very Hard",
+    "description": "This hack started as a small collab lead by aterraformer to be mostly vanilla with modern ASM technologies, very inspired by the original VIPs.  It later expanded to much larger proportions and was headed by worldpeace (Cool|Cruel creator and winner of the 8th Annual VLDC).  Some levels still retain the original feel, while many others have embraced more chocolate aspects.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "bosses",
+        "gimmick",
+        "less exgfx",
+        "music",
+        "variety"
+    ],
+    "comments_href": "#comments",
+    "comments": "123 ",
+    "rating": [
+        "4.5"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=14495",
+    "id": "14495",
+    "pat_sha224": "6ca363b440b8238d5d6c9817290f71a8cfd4d4f0e5fdbc340be90cc2",
+    "pat_sha1": "691e92f4cbb39c6739a195019b58e1d8d301fd89",
+    "pat_shake_128": "NYX77EPnkp4Jr4Qqmw7geCgkATRaWztX",
+    "result_sha224": "7996aee5cebf5cfa8e14348a6c6bb68d3647d871eab3bff1785f4218",
+    "result_sha1": "6b97902fa9faa16bf4cec819f99d94998c436b70",
+    "result_shake1": "vvcFW20Iqyt_95lH5JYYo_WJY0JO2wEB",
+    "rom": "rom/14495_vvcFW20Iqyt_95lH5JYYo_WJY0JO2wEB.sfc",
+    "patch": "patch/NYX77EPnkp4Jr4Qqmw7geCgkATRaWztX",
+    "patchblob1_name": "pblob_14495_671b0dfbe0",
+    "patchblob1_key": "a3h3RExwdmU4QU8xTWJoUnAxUHZydnROeGVlYWNaZ2tyR2paLXJ6OHRYaz0=",
+    "patchblob1_sha224": "671b0dfbe0b2f924fa996987c8cb18c62af9b435f501b277264cdebe",
+    "romblob_salt": "Dlon5IQCf8Seg1FRufUwig==",
+    "romblob_name": "rblob_14495_d9254ec124"
+}

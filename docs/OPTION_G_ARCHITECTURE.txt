@@ -1,0 +1,343 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                 Option G: API Search Architecture                            ║
+║                    with Digital Signature Verification                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CLIENT: fetchpatches.js                            │
+│                             (Mode 2, Option G)                              │
+└─────────────────┬───────────────────────────────────────────────────────────┘
+                  │
+                  │ 1. POST /api/search
+                  │    Headers: X-Client-Id, X-Client-Secret
+                  │    Body: { auuid, file_hash_sha256, ... }
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      SERVER: mdserver/server.js                             │
+│                          Metadata API Server                                │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ 1. authenticate(req, res, next)                                       │ │
+│  │    - Decrypt client credentials using VAULT_KEY                       │ │
+│  │    - Verify against apiclients table                                  │ │
+│  │    - Attach client info to request                                    │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                ▼                                            │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ 2. Search attachments table                                           │ │
+│  │    - Query by auuid, hashes, CIDs, etc.                               │ │
+│  │    - Load record if found                                             │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                ▼                                            │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ 3. loadMetadataSignatures(record)                                     │ │
+│  │    - Load siglistuuid from record                                     │ │
+│  │    - Query signaturelists and signaturelistentries                    │ │
+│  │    - Build mdsignatures array                                         │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                ▼                                            │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ 4. Prepare Response                                                   │ │
+│  │    - Option A: Binary (if file_data exists)                           │ │
+│  │    - Option B: JSON with metadata + signatures                        │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                ▼                                            │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ 5. signResponse(data)                                                 │ │
+│  │    - Create SHA256 hash of response data                              │ │
+│  │    - Sign hash with server private key (ED25519/RSA)                  │ │
+│  │    - Attach server_signature to response                              │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────┬───────────────────────────────────────────────────────────┘
+                  │
+                  │ 2. Response with signatures
+                  │    Content-Type: application/json or application/octet-stream
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    CLIENT: Signature Verification                           │
+│                   (fetchpatches_mode2_optionG.js)                           │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ STEP 1: Verify Server Signature (REQUIRED)                            │ │
+│  │                                                                        │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │ 1. Check server_signature present                                │ │ │
+│  │  │    ├─> Missing? → REJECT (unsigned response)                     │ │ │
+│  │  │    └─> Present? → Continue                                       │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  │                           ▼                                            │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │ 2. Load signer from local signers table                          │ │ │
+│  │  │    ├─> Unknown? → REJECT (unknown signer)                        │ │ │
+│  │  │    └─> Known?   → Continue                                       │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  │                           ▼                                            │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │ 3. Verify signer is server-type                                  │ │ │
+│  │  │    ├─> Not server? → REJECT (wrong signer type)                  │ │ │
+│  │  │    └─> Server?     → Continue                                    │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  │                           ▼                                            │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │ 4. Verify cryptographic signature                                │ │ │
+│  │  │    - Recreate SHA256 hash of response data                       │ │ │
+│  │  │    - Verify signature with public key                            │ │ │
+│  │  │    ├─> Invalid? → REJECT (signature verification failed)         │ │ │
+│  │  │    └─> Valid?   → ACCEPT response                                │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                ▼                                            │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ STEP 2: Verify Metadata Signatures (if present)                       │ │
+│  │                                                                        │ │
+│  │  For each mdsignature in response:                                    │ │
+│  │    1. Load signer from local signers table                            │ │
+│  │    2. Create canonical string from record                             │ │
+│  │    3. Verify signature with public key                                │ │
+│  │    4. Accept updates only if signatures valid                         │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                ▼                                            │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │ STEP 3: Validate file_data Hash (CRITICAL)                            │ │
+│  │                                                                        │ │
+│  │  If response contains file_data:                                      │ │
+│  │    1. Calculate SHA256 hash of file_data                              │ │
+│  │    2. Compare with expected file_hash_sha256                          │ │
+│  │    3. ├─> Match?    → ACCEPT, store file_data                         │ │
+│  │       └─> Mismatch? → REJECT, do NOT store                            │ │
+│  │                                                                        │ │
+│  │  ⚠️  This validation is INDEPENDENT of signatures                     │ │
+│  │  ⚠️  ALWAYS performed before storing file_data                        │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────┬───────────────────────────────────────────────────────────┘
+                  │
+                  │ 3. Update local database (if all validations pass)
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      LOCAL DATABASE: patchbin.db                            │
+│                                                                             │
+│  UPDATE attachments                                                         │
+│    SET file_data = ?                                                        │
+│    WHERE auuid = ?                                                          │
+│      AND file_hash_sha256 = SHA256(file_data)  -- Verified!                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        Database Schema (Relevant Tables)                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  signers (in patchbin.db)                                                   │
+│  ────────────────────────────────────────────────────────────────────────── │
+│  signeruuid (PK)                                                            │
+│  signer_type         ('metadata' or 'server')                               │
+│  signer_name                                                                │
+│  publickey           (hex-encoded DER format)                               │
+│  publickey_type      ('ED25519' or 'RSA')                                   │
+│  siglistuuid         (signature for this signer)                            │
+│  row_version                                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  signaturelists (in patchbin.db)                                            │
+│  ────────────────────────────────────────────────────────────────────────── │
+│  siglistuuid (PK)                                                           │
+│  record_type         (e.g., 'attachments')                                  │
+│  record_uuid         (e.g., auuid of attachment)                            │
+│  signed_row_version  (version of record that was signed)                    │
+│  signed_action       ('upsert' or 'delete')                                 │
+│  signlist_timestamp                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  signaturelistentries (in patchbin.db)                                      │
+│  ────────────────────────────────────────────────────────────────────────── │
+│  sentryuuid (PK)                                                            │
+│  siglistuuid (FK → signaturelists)                                          │
+│  signeruuid (FK → signers)                                                  │
+│  signature           (hex-encoded signature)                                │
+│  signature_algorithm ('ED25519' or 'RSA')                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  attachments (in patchbin.db)                                               │
+│  ────────────────────────────────────────────────────────────────────────── │
+│  auuid (PK)                                                                 │
+│  file_name                                                                  │
+│  file_size                                                                  │
+│  file_hash_sha256    (for file_data validation)                            │
+│  file_data           (binary blob)                                          │
+│  siglistuuid         (FK → signaturelists)                                  │
+│  row_version         (incremented on legitimate changes)                    │
+│  ...other metadata...                                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  apiclients (in mdserverdata.db)                                            │
+│  ────────────────────────────────────────────────────────────────────────── │
+│  clientuuid (PK)                                                            │
+│  encrypted_clientid  (AES-256-CBC with VAULT_KEY)                           │
+│  encrypted_secret    (AES-256-CBC with VAULT_KEY)                           │
+│  admin_client        (0=read-only, 1=read-write)                            │
+│  client_name                                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  donotsearch (in patchbin.db)                                               │
+│  ────────────────────────────────────────────────────────────────────────── │
+│  entryuuid (PK)                                                             │
+│  url (UNIQUE)                                                               │
+│  server_response     (reason for blocking)                                  │
+│  since               (timestamp)                                            │
+│  stop_time           (seconds to block, default 17200 = 4.7 hours)         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         Canonical String Format                              ║
+║                  (for consistent signature verification)                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Given a record from attachments table:
+{
+  auuid: "123-456",
+  file_name: "test.bin",
+  file_size: 1024,
+  file_hash_sha256: "abc123...",
+  file_data: <binary>,          // EXCLUDED from signature
+  siglistuuid: "789-xyz",       // EXCLUDED from signature
+  updated_time: "2025-10-11",   // EXCLUDED from signature
+  ...
+}
+
+Canonical String:
+  auuid=123-456&file_hash_sha256=abc123...&file_name=test.bin&file_size=1024&...
+
+Rules:
+  1. Sort keys alphabetically
+  2. Exclude: siglistuuid, *signature*, *_time, file_data, pblobdata
+  3. Format: key=value (null → key=null, binary → hex)
+  4. Join with '&'
+
+Hash and Sign:
+  1. SHA256(canonical_string) → hash
+  2. Sign(hash, private_key) → signature
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          Error Handling Flow                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+HTTP 403 Forbidden:
+  ├─> Log: "API endpoint cancelled"
+  ├─> Set apiCancelled = true
+  └─> Skip API for remaining attachments in this run
+
+HTTP 603 Custom Error:
+  ├─> Log: "Server requests no more queries"
+  ├─> Add URL to donotsearch table (block for 4.7 hours)
+  └─> Skip API for all future runs until expiration
+
+Unsigned Response:
+  ├─> Log: "No server signature - REJECTING"
+  └─> Return null (try other search options)
+
+Invalid Server Signature:
+  ├─> Log: "Server signature verification FAILED - REJECTING"
+  └─> Return null
+
+Unknown Signer:
+  ├─> Log: "Unknown server signer: <uuid>"
+  ├─> Suggest: "Add server signer to your local signers table"
+  └─> Return null
+
+file_data Hash Mismatch:
+  ├─> Log: "file_data hash validation FAILED"
+  ├─> Log expected vs actual hash
+  ├─> REJECT (do not store)
+  └─> Update last_search timestamp only
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    Test Infrastructure Architecture                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Production Environment:                  Test Environment:
+─────────────────────                    ─────────────────
+
+Server Port: 3000                        Server Port: 3001
+DB: electron/patchbin.db        →        DB: tests/test_data/test_patchbin.db
+DB: electron/rhdata.db          →        DB: tests/test_data/test_rhdata.db
+DB: mdserver/mdserverdata.db    →        DB: tests/test_data/test_mdserverdata.db
+ENV: mdserver/environment       →        ENV: tests/test_data/test_environment
+
+
+Test Workflow:
+  1. npm run test:setup
+     └─> Creates isolated test databases
+         Creates sample attachments
+         Creates test schemas
+
+  2. npm run test:create-signers
+     └─> Generates ED25519 keypairs
+         Creates test signers
+         Saves test environment
+
+  3. npm run test:e2e
+     └─> Starts test server (port 3001)
+         Creates test client
+         Signs test metadata
+         Tests API endpoint
+         Verifies signatures
+         Tests fetchpatches.js
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                        Security Guarantees Summary                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+✓ Server Response Security:
+  • All JSON responses are cryptographically signed
+  • Unsigned responses are REJECTED by client
+  • Server signer type is verified
+  • Unknown signers are REJECTED
+  • Response timestamps prevent replay attacks (24h window)
+
+✓ Replay Attack Protection:
+  • Server includes response_timestamp in signed data
+  • Client verifies timestamp is within 86400 seconds (24 hours)
+  • Old responses (>24h) are REJECTED
+  • Attacker cannot replay saved responses after expiration
+  • Informative errors distinguish old vs. future timestamps
+
+✓ Metadata Security:
+  • Metadata records are signed offline
+  • Signatures verified before accepting updates
+  • Unsigned metadata updates are NOT stored
+  • Row versioning invalidates old signatures
+
+✓ file_data Security:
+  • SHA256 hash ALWAYS verified before storing
+  • Independent of signature verification
+  • Hash mismatches are REJECTED
+  • Invalid data is NEVER stored
+
+✓ Transport Security:
+  • Client credentials encrypted (AES-256-CBC)
+  • HTTPS recommended for production
+  • API endpoints can be blocked (donotsearch)
+  • HTTP 403/603 handling
+
+✓ Testing Security:
+  • Isolated test databases
+  • Separate test signers
+  • Separate test port
+  • No impact on production data
+

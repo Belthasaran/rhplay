@@ -1,0 +1,11 @@
+rhmd.dat
+example-gametable
+rhmd-import
+backup
+clientdata.db
+rhdata.db
+patchbin.db
+*.db-shm
+*.db-wal
+*.db-journal
+

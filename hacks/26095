@@ -1,0 +1,38 @@
+{
+    "name_href": "//dl.smwcentral.net/26095/Super%20Hark%20Bros%202.zip",
+    "name": "Super Hark Bros 2",
+    "author_href": "/?p=profile&id=29695",
+    "author": "ChrisG___",
+    "added": "2021-02-04 06:24:55 AM",
+    "demo": "No",
+    "featured": "No",
+    "length": "24 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "It's been 3 years since that day. You just wanted a Veggie Burrito but when you took that first bite, something felt off. Well, you're still bitter. You must right that wrong.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=chocolate+sprinkles",
+    "tags": [
+        "chocolate sprinkles",
+        "intermediate",
+        "kaizo"
+    ],
+    "comments_href": "#comments",
+    "comments": "20 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=26095",
+    "id": "26095",
+    "pat_sha224": "d9c87c7df6711208df07979b6020e65a365946ca89facc6d71b908fb",
+    "pat_sha1": "806b2796aa0611bb2443cd83b0b7c4e435b7215a",
+    "pat_shake_128": "FYKEn-d6ZFZ8ZpYGlj_eNX5KEQhDHJt5",
+    "result_sha224": "f087cab4f916ef451501a0546cdd36b15dc0c474e6109f206de6ef39",
+    "result_sha1": "ce5c989892e87f889b89899513c697841d987f6e",
+    "result_shake1": "ba8rf4bocuIrNt0dIKmXMN3bRrTEqhiF",
+    "rom": "rom/26095_ba8rf4bocuIrNt0dIKmXMN3bRrTEqhiF.sfc",
+    "patch": "patch/FYKEn-d6ZFZ8ZpYGlj_eNX5KEQhDHJt5",
+    "patchblob1_name": "pblob_26095_377754541c",
+    "patchblob1_key": "M01ITXhRS0NFdzFZMGZTalIyLUtNeGdHWm9NNVFsR05PNGxydlk5NjZZVT0=",
+    "patchblob1_sha224": "377754541ca0b4f77fc358289b9369201ac7f982e323e9597e79835c",
+    "romblob_salt": "GBqHaOWJdkxWMteKEUgNMw==",
+    "romblob_name": "rblob_26095_076757a247"
+}

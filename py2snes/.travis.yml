@@ -1,0 +1,14 @@
+language: python
+python:
+- '3.7'
+deploy:
+  provider: pypi
+  on:
+    tags: true
+  user: tcprescott
+  password:
+    secure: "Krh20jZ6CoGmfVaWmzPrOrb9e4V33nXgm8DY2zOeS3iCi1CV3EVDD2+K5Ryuye4ug8JVF3dbgi+WmufB/6zXSKht3tYs4tJWUC85HL8KeE20wVETpI96gpJfLPKtoonO7E8RmIXmzcGotz98Jmsvfs83n89j4/GZOXLWTnvw0rE11O4Fve9BMto5ohTX+k4TEzi+dK54/IMQ3UdW09RnDmc1IDtUITLb0Fg5tIHtZigYsZw7DzZykF8Bxf7GJ41kdMas2W4G2yHe1OIjeUVxcRZhXP2Gwj4aaGm3L4pbyW8L7o9a483VnzGlZLkNrWNvdnRsxCqGlseOadgJN2L9mqhVmvVjPu8lYMqXz6w7d54qGmCbddzUWOh8WsJ8/GdatKFVrzW1WsqMIH3bSRKHLyWKjVzPpU5GINpC5dxIS0llzFPv674KFSHT59x45NRn22KVklMyGlvLjA/j9k/HyI9co/7r+j29oapoZju/3Dx4e/roh5SaUDVH9syf5SZn32g57cQirp2CZuEp28zdnxWvzbwCjbs95dIc79HMGljKF91vKStfG0Ty8hYn+XF37gepQPwuzKV8tK1dg+J8cmimwntc4XHD3NrOY+LmHIi0DxBaPpV6SSCz/LxTWcaNV4QDMjasvWKeaLIj32k0ZmMt0y4c6tJE4UTrbvOyzXc="
+install:
+- pip install -r requirements.txt
+script:
+- echo "skipping tests"

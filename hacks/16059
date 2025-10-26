@@ -1,0 +1,38 @@
+{
+    "name_href": "//dl.smwcentral.net/16059/Kaizo%20Mario%20World.zip",
+    "name": "Kaizo Mario World",
+    "author": "T. Takemoto",
+    "added": "2017-08-18 10:31:49 PM",
+    "demo": "No",
+    "featured": "Yes",
+    "length": "12 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "Kaizo Mario World, also known as Asshole Mario, is a hack created by T. Takemoto for his friend R. Kiba. It features extremely sadistic, unique and groundbreaking level design. This is also the hack that started it all, since the kaizo genre wasn't existent beforehand. The literal translation of \"Kaizo Mario World\" is \"\u81ea\u4f5c\u306e\u6539\u9020\u30de\u30ea\u30aa\uff08\u30b9\u30fc\u30d1\u30fc\u30de\u30ea\u30aa\u30ef\u30fc\u30eb\u30c9\uff09\u3092\u53cb\u4eba\u306b\u30d7\u30ec\u30a4\u3055\u305b\u308b\", or in plain English, \"Making my friend play through my Mario hack (Super Mario World)\". Kaizo is a rough translation of the word \"modify\" or \"change\" in Japanese.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=gimmick",
+    "tags": [
+        "gimmick",
+        "glitch",
+        "puzzle",
+        "traditional"
+    ],
+    "comments_href": "#comments",
+    "comments": "29 ",
+    "rating": [
+        "4.6"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=16059",
+    "id": "16059",
+    "pat_sha224": "ebada5a69d8d1bbe91a5f5418af566e014c502e177e17b8ba1f672cf",
+    "pat_sha1": "5818aee273c68cdf82b079325d4afc6004e464be",
+    "pat_shake_128": "YZhTwCS8lS4b99tnOkscz_Q4md59_EWV",
+    "result_sha224": "d124739ddfdb5e740767b9b53620ba29c2e36a77386361b9dd69d01d",
+    "result_sha1": "3bbec3441e5d724db1673b432c8f20568be12c63",
+    "result_shake1": "ibS5t5kbC2QJR3xzfyXYZDfZr5-g8BK3",
+    "rom": "rom/16059_ibS5t5kbC2QJR3xzfyXYZDfZr5-g8BK3.sfc",
+    "patch": "patch/YZhTwCS8lS4b99tnOkscz_Q4md59_EWV",
+    "patchblob1_name": "pblob_16059_859b6a69d6",
+    "patchblob1_key": "YkpBb1VvQzJlbjVrWHVPZC00bnRGVlNHaU5TUzFadlJwRWlvUURUSjc1az0=",
+    "patchblob1_sha224": "859b6a69d634aeff69eec5706899436f2c687f8d634ccf42bfca9bb8",
+    "romblob_salt": "5wchPUcc4neB_GF_J1f_-g==",
+    "romblob_name": "rblob_16059_3d3d5de67a"
+}

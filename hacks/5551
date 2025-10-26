@@ -1,0 +1,13 @@
+{
+  "gameid": "5551",
+  "patch": "/home/main/proj/rhtools/patch/73SEuN7VF5DMX-WIs-ChQBR5TF-ae2qd",
+  "patch_filename": "Mario's Treasure Hunt.ips",
+  "pat_sha1": "906aef7dce5bda5bdec85d94b3d3819c7f54334a",
+  "pat_sha224": "60247c76dec5e737ab26021f34eb58ce7651097cc06689269cc9add1",
+  "pat_shake_128": "73SEuN7VF5DMX-WIs-ChQBR5TF-ae2qd",
+  "result_sha1": "1d6c0b8074024ad77aeff3c76cf17f372515c510",
+  "result_sha224": "5523dd82aa8980148a035b6510736d288e90c3a24c81d8f90884ef01",
+  "result_shake1": "gc10KbUiEVJzZM7m_hgn5kTA_0ttzPV-",
+  "rom": "/home/main/proj/rhtools/rom/5551_gc10KbUiEVJzZM7m_hgn5kTA_0ttzPV-.sfc",
+  "id": "5551"
+}

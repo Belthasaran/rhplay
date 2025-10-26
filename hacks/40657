@@ -1,0 +1,13 @@
+{
+  "gameid": "40657",
+  "patch": "/home/main/proj/rhtools/patch/ZUQ_ltk9v2sY0OEHg3tVNpYveLOKKNHp",
+  "patch_filename": "THROWING HANDS.bps",
+  "pat_sha1": "0950c8bdac2e3d4dc47e0b3a1a520e3a41f541c4",
+  "pat_sha224": "3e150dc381c7ff9edf303dbff978bbb3d1f6dde4abd7ff60e303dea6",
+  "pat_shake_128": "ZUQ_ltk9v2sY0OEHg3tVNpYveLOKKNHp",
+  "result_sha1": "73e85fe5f51f429910204b5ba16f79620b5c8961",
+  "result_sha224": "97ed8c96abd3567c964043ba95b71ed2c0b3a83e73cd970eb99a9d18",
+  "result_shake1": "NGqyn5eBngt8pEs8IdNaA4wxYic6rghc",
+  "rom": "/home/main/proj/rhtools/rom/40657_NGqyn5eBngt8pEs8IdNaA4wxYic6rghc.sfc",
+  "id": "40657"
+}

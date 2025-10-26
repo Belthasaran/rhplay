@@ -1,0 +1,13 @@
+{
+  "gameid": "32431",
+  "patch": "/home/main/proj/rhtools/patch/rt9fFb3YVrHi7kXcz4KJoFX43ckrz9-J",
+  "patch_filename": "4th Chamber.bps",
+  "pat_sha1": "e650a7343b32f5a477f1de352351c67eed93cadd",
+  "pat_sha224": "f37535e60cbf2da1718a0a5e2eaf28b1311ae590c3a71cf784774412",
+  "pat_shake_128": "rt9fFb3YVrHi7kXcz4KJoFX43ckrz9-J",
+  "result_sha1": "cc0d3e524a4ca82dab3d731e86aadcc8b096e1c6",
+  "result_sha224": "5aa7ab0fdb1592c63422e8600eb88ed7e15f97a4c65ef7fd7fd98bae",
+  "result_shake1": "IOQMwcjt-MKvmWiTkzlG5GFUiQLb_CDs",
+  "rom": "/home/main/proj/rhtools/rom/32431_IOQMwcjt-MKvmWiTkzlG5GFUiQLb_CDs.sfc",
+  "id": "32431"
+}

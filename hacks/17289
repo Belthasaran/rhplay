@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/17289/GPW1.2.zip",
+    "name": "Grand Poo World",
+    "author_href": "/?p=profile&id=32572",
+    "author": "Barbarian",
+    "added": "2018-04-09 02:34:18 AM",
+    "version history_href": "/?p=section&a=versionhistory&id=17289",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "21 exit(s)",
+    "type": "Kaizo: Expert",
+    "description": "This hack is dedicated to the speedrunner and Twitch streamer Grand Poo Bear.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=music",
+    "tags": [
+        "music",
+        "platformer",
+        "traditional"
+    ],
+    "comments_href": "#comments",
+    "comments": "38 ",
+    "rating": [
+        "4.5"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=17289",
+    "psets": "W3sKICAgICAgICAiaGFzaCI6ICJRbVhQdXFhYllTMmUyNWtwM2FLdmhIeGlBc2Y3Z0hXRlBoa1RBVTdEOVZxb29wIiwKICAgICAgICAiaXBmcyI6ICJiYWZ5YmVpZWdyNGQ3YXl5enFob3piYm03ZWNpYXhrZGI1MmFtZjZqdW53cDJoamViZWFweXJwbXlrbSIsCiAgICAgICAgImtleSI6ICJibG9icy9zZXRwYmxvYl9wYmxvYl8xN18wLnppcCIsCiAgICAgICAgInB1YmxpY1VybCI6ICJodHRwczovL3Ntd2RiaS5pcGFycGEuY29tLzMzMTc2OWQxLTY1ZWMtNDVmZC04Mjc2LWU1NWJkNGE0MjhkNS1idWNrZXQvYmxvYnMvc2V0cGJsb2JfcGJsb2JfMTdfMC56aXAiCiAgICB9XQo=",
+    "id": "17289",
+    "pat_sha224": "b081f6a111348ba29280d756134c750a6c7fdecefd059e1ca0b3960f",
+    "pat_sha1": "18ce4b622c89a592041b5da40f66eac2d9766179",
+    "pat_shake_128": "UyAx4lWecEQsCEGfiIUDEg-YGU9Pxg2-",
+    "result_sha224": "634bdefb4982a84809916d50d761439a495a82d51c9ca25a80777f97",
+    "result_sha1": "e1a2fdee93c969a1355b1faf95aa1a1266d9ced1",
+    "result_shake1": "C6fd_6VkhpioxRX8JOZzvxdv8CqTMhG7",
+    "rom": "rom/17289_C6fd_6VkhpioxRX8JOZzvxdv8CqTMhG7.sfc",
+    "patch": "patch/UyAx4lWecEQsCEGfiIUDEg-YGU9Pxg2-",
+    "patchblob1_name": "pblob_17289_098dc0ae9d",
+    "patchblob1_key": "WFFkdEFwWWZpQUFqaGN0Z05KZ2JqRmJrUjJ5RVFzM0RBNWFIeGtEdGJjST0=",
+    "patchblob1_sha224": "098dc0ae9d262b12da16004422f14a56e5ee5fa3af101c30eb64381e",
+    "romblob_salt": "Y4b9WymfuX-o3iOl4Ax-mA==",
+    "romblob_name": "rblob_17289_b9941e3b4e"
+}

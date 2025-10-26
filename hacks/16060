@@ -1,0 +1,38 @@
+{
+    "name_href": "//dl.smwcentral.net/16060/Kaizo%20Mario%20World%203.zip",
+    "name": "Kaizo Mario World 3",
+    "author": "T. Takemoto",
+    "added": "2017-08-18 10:37:18 PM",
+    "demo": "No",
+    "featured": "Yes",
+    "length": "10 exit(s)",
+    "type": "Kaizo: Expert",
+    "description": "Kaizo Mario World 3, also known as Asshole Mario 3, is a hack created by T. Takemoto for his friend R. Kiba. It features extremely sadistic, unique and groundbreaking level design. The literal translation of \"Kaizo Mario World\" is \"\u81ea\u4f5c\u306e\u6539\u9020\u30de\u30ea\u30aa\uff08\u30b9\u30fc\u30d1\u30fc\u30de\u30ea\u30aa\u30ef\u30fc\u30eb\u30c9\uff09\u3092\u53cb\u4eba\u306b\u30d7\u30ec\u30a4\u3055\u305b\u308b\", or in plain English, \"Making my friend play through my Mario hack (Super Mario World)\". Kaizo is a rough translation of the word \"modify\" or \"change\" in Japanese.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=gimmick",
+    "tags": [
+        "gimmick",
+        "glitch",
+        "puzzle",
+        "traditional"
+    ],
+    "comments_href": "#comments",
+    "comments": "17 ",
+    "rating": [
+        "4.6"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=16060",
+    "id": "16060",
+    "pat_sha224": "4c90c08d3f535047435410b6a85c1d62e441113432ae1cce1ddd43ef",
+    "pat_sha1": "8ab8aee0f78e9ab7285067a1e3d0a35d68b30277",
+    "pat_shake_128": "SmipTctBbCtIcABaGIhut9zJgXwRNaGr",
+    "result_sha224": "e4389df970fb93d9fd6e401c885a861e3377051141e69bf9866eee73",
+    "result_sha1": "a4197080d9f114f7acb5725600959d74624352b8",
+    "result_shake1": "QbEKcEhz0MjGQejoRSeYOURmmyB239oF",
+    "rom": "rom/16060_QbEKcEhz0MjGQejoRSeYOURmmyB239oF.sfc",
+    "patch": "patch/SmipTctBbCtIcABaGIhut9zJgXwRNaGr",
+    "patchblob1_name": "pblob_16060_927f70305a",
+    "patchblob1_key": "QjB4ZDBoWV9QU2tZNVQ0cDBZNm9XQ2NfVGtaWFhzTFFFRjY4Q0JSbXlmND0=",
+    "patchblob1_sha224": "927f70305ab7c584eded89cb79428ecb75034a16f660f110f9c63eb5",
+    "romblob_salt": "_amOy6zgOgFAVbLmUIh8iQ==",
+    "romblob_name": "rblob_16060_71c4a191ce"
+}

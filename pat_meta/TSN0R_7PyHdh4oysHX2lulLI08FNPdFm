@@ -1,0 +1,17 @@
+{
+  "id": "40684",
+  "patch": "/home/main/proj/rhtools/patch/TSN0R_7PyHdh4oysHX2lulLI08FNPdFm",
+  "patch_filename": "Crash Bandicoot e a Dimens�o Retro.bps",
+  "pat_sha1": "83e9788a8b596e1ce85af3bd88618dfd42190c14",
+  "pat_sha224": "137bb0733bb4f65bc10dd8f18ecac715e0f59d37c8304c690d3a3ada",
+  "pat_shake_128": "TSN0R_7PyHdh4oysHX2lulLI08FNPdFm",
+  "result_sha1": "477e8e6dfc700082977fb0f42ec2b8f9dfc22970",
+  "result_sha224": "c8feb64fb0afdc428c539f12dc28c42d9996c31ecda90712bf78671b",
+  "result_shake1": "2xtaVzcqyeWM0Zon4Q002XV0T86H-c9L",
+  "rom": "/home/main/proj/rhtools/rom/40684_2xtaVzcqyeWM0Zon4Q002XV0T86H-c9L.sfc",
+  "patchblob1_name": "pblob_40684_f9043b68f3",
+  "patchblob1_key": "V1d3c1picWZiZHpqRDJaN2ROYnFheWk3bHdWS09pN2h4bTZWcUcyMG9Gbz0=",
+  "patchblob1_sha224": "f9043b68f3bd2dea11d7cfa7bf2346d479e5922a38285972b8407691",
+  "romblob_name": "rblob_40684_2b7e5187ab",
+  "romblob_salt": "amR92h1fF81LorbQqOwr1g=="
+}

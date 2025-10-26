@@ -1,0 +1,17 @@
+{
+  "id": "21408",
+  "patch": "/home/main/proj/rhtools/patch/x0fL8BBxPmAE5hhetLkTpPjffSrijZeG",
+  "patch_filename": "Ayashi Mario.bps",
+  "pat_sha1": "c373856da98aabd4952181f1901e57391a3fa0d7",
+  "pat_sha224": "8f9f9f4ed45a5977c0af0298e4a0e7348bd0abdf49b9d72ca4a07e0f",
+  "pat_shake_128": "x0fL8BBxPmAE5hhetLkTpPjffSrijZeG",
+  "result_sha1": "bc72a8710bd7a8c3f0a1cb5076ed32e4df0e298a",
+  "result_sha224": "88a991766d062fc7d077d24de68168956e6e3445ddf1320d414fdd56",
+  "result_shake1": "M8WkDFA8kFmRDoQuA9rkbcrsXwOIK9VJ",
+  "rom": "/home/main/proj/rhtools/rom/21408_M8WkDFA8kFmRDoQuA9rkbcrsXwOIK9VJ.sfc",
+  "patchblob1_name": "pblob_21408_ddda0ab2b8",
+  "patchblob1_key": "NUNkMElHQXcxSURnSTBzU2o3b0pMMy1KcXc0bGlfNUkycWxPMUsxVWs0cz0=",
+  "patchblob1_sha224": "ddda0ab2b823be4d289ca5e0eee76927ae8e5ae672e7fb7e7cbdd00c",
+  "romblob_name": "rblob_21408_29a6251e2b",
+  "romblob_salt": "wXmfuEHxmIDcSmlBMT3DFw=="
+}

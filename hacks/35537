@@ -1,0 +1,58 @@
+{
+    "name_href": "https://bin.smwcentral.net/u/32572/Grand_Poo_World_3.bps",
+    "name": "Grand Poo World 3",
+    "author_href": "/?p=profile&id=32572",
+    "author": "Barbarian",
+    "added": "2023-11-17 11:02:00 PM",
+    "version history_href": "",
+    "version history": "",
+    "demo": "No",
+    "featured": "No",
+    "length": "3 exit(s)",
+    "type": "Kaizo: Expert",
+    "description": "Grand Poo World 3 is the third and final game in the series.\n\nThis game emphasizes custom asm and difficult platforming.\n\n This hack is dedicated to my friend, GrandPooBear. This hack would nout exist or be anywhere nearly as cool without the hard work of Kaizoman, dtothefourth, Nexus, Freakin Ha, Hiro-Soft, Com_Poser, DantheVP and Ggamer. I cannot thank these individuals enough for their endless patience and generosity.\n\nI genuinely hope you enjoy the game.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=bosses",
+    "standard_patchnum" : "7",
+    "standard_levelids" : ["10E", "10D", "110", "113", "114", "116", "116", "112", "11C", "11E", "123", "124", "126", "129", "12C", "12F", "133", "134", "135", "137", "139", "13A", "13B", "10D", "10B", "10A", "107", "106", "103", "102", "101", "23", "21", "20", "1E", "1B", "19", "18", "17", "16", "15", "13", "11", "F", "E", "B", "7", "6", "4", "3", "2", "1", "25", "27", "30", "110", "112", "114"],
+    "tags": [
+        "bosses",
+        "custom music",
+        "less efgfx",
+        "music",
+        "secrets",
+        "traditional"
+    ],
+    "comments_href": "#comments",
+    "comments": "0 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=files&u=32572",
+    "id": "35537",
+    "otherids": [
+        "gpw3"
+    ],
+    "setids": [
+        "blobs/setpblob_pblob_gpw3_gpw_gp.zip"
+    ],
+    "psets" : "W3sKICAgICAgICAiaXBmcyIgOiJiYWZ5YmVpZHlvcHd3ZnBpdmNsNTI1eGd0a3ZzcnZrdGVobmY1aTdweml5NmlxZ3pmYzR6eGluMjQ3ZSIsCiAgICAgICAgImtleSI6ICJibG9icy9zZXRwYmxvYl9wYmxvYl9ncHczX2dwd19ncC56aXAiLAogICAgICAgICJoYXNoIjogIlFtV1NyQUVLcnpnbkJ4ZTJtSHJxMUFIZjlMdmJKOGtmU0RCbjk0c2FaelNMVzQiLAogICAgICAgICJwdWJsaWNVcmwiOiAiaHR0cHM6Ly9zbXdkYmkuaXBhcnBhLmNvbS8zMzE3NjlkMS02NWVjLTQ1ZmQtODI3Ni1lNTViZDRhNDI4ZDUtYnVja2V0L2Jsb2JzL3NldHBibG9iX3BibG9iX2dwdzNfZ3B3X2dwLnppcCIKICAgIH1dCgo=",
+    "versions" : [
+        { "revision" : "1.0",  "patchblob_name" : "pblob_gpw3_1691b3f0d6" }
+    ],
+    "levellog" : [
+[{"hid": "35537", "levelid_hex": "10E", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "10D", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "110", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "113", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "114", "patchnum": "7", "typecode": "_", "comments": "Boss"}, {"hid": "35537", "levelid_hex": "116", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "116", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "112", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "11C", "patchnum": "7", "typecode": "_", "comments": "Blades of Chaos"}, {"hid": "35537", "levelid_hex": "11E", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "123", "patchnum": "7", "typecode": "_", "comments": "Chuck Boss"}, {"hid": "35537", "levelid_hex": "124", "patchnum": "7", "typecode": "_", "comments": "Banzai Barrage"}, {"hid": "35537", "levelid_hex": "126", "patchnum": "7", "typecode": "_", "comments": "Chuck Boss"}, {"hid": "35537", "levelid_hex": "129", "patchnum": "7", "typecode": "_", "comments": "Star Road"}, {"hid": "35537", "levelid_hex": "12C", "patchnum": "7", "typecode": "_", "comments": "WAY COOL LEVEL"}, {"hid": "35537", "levelid_hex": "12F", "patchnum": "7", "typecode": "_"}, {"hid": "35537", "levelid_hex": "133", "patchnum": "7", "typecode": "_", "comments": "So Long"}, {"hid": "35537", "levelid_hex": "134", "patchnum": "7", "typecode": "_", "comments": "Boss"}, {"hid": "35537", "levelid_hex": "135", "patchnum": "7", "typecode": "_", "comments": "Hall of Heroes"}, {"hid": "35537", "levelid_hex": "137", "patchnum": "7", "typecode": "_", "comments": "Yoshi"}, {"hid": "35537", "levelid_hex": "139", "patchnum": "7", "typecode": "_", "comments": "Hm"}, {"hid": "35537", "levelid_hex": "13A", "patchnum": "7", "typecode": "_", "comments": "[Crab Boss]"}, {"hid": "35537", "levelid_hex": "13B", "patchnum": "7", "typecode": "_", "comments": "Gate of Fire"}, {"hid": "35537", "levelid_hex": "10D", "patchnum": "7", "typecode": "_", "comments": "Guano Grotto"}, {"hid": "35537", "levelid_hex": "10B", "patchnum": "7", "typecode": "_", "comments": "Tempo Temple"}, {"hid": "35537", "levelid_hex": "10A", "patchnum": "7", "typecode": "_", "comments": "Time"}, {"hid": "35537", "levelid_hex": "107", "patchnum": "7", "typecode": "_", "comments": "Testudo"}, {"hid": "35537", "levelid_hex": "106", "patchnum": "7", "typecode": "_", "comments": "Tall, Tall Peak"}, {"hid": "35537", "levelid_hex": "103", "patchnum": "7", "typecode": "_", "comments": "Anastasis"}, {"hid": "35537", "levelid_hex": "102", "patchnum": "7", "typecode": "_", "comments": "Luigi [midway}"}, {"hid": "35537", "levelid_hex": "101", "patchnum": "7", "typecode": "_", "comments": "Blast Brigade"}, {"hid": "35537", "levelid_hex": "23", "patchnum": "7", "typecode": "_", "comments": "23[midway]"}, {"hid": "35537", "levelid_hex": "21", "patchnum": "7", "typecode": "_", "comments": "Yacht Club Keep"}, {"hid": "35537", "levelid_hex": "20", "patchnum": "7", "typecode": "_", "comments": "#5 Castle"}, {"hid": "35537", "levelid_hex": "1E", "patchnum": "7", "typecode": "_", "comments": "Flintlock"}, {"hid": "35537", "levelid_hex": "1B", "patchnum": "7", "typecode": "_", "comments": "Bubbles"}, {"hid": "35537", "levelid_hex": "19", "patchnum": "7", "typecode": "_", "comments": "Hagakure"}, {"hid": "35537", "levelid_hex": "18", "patchnum": "7", "typecode": "_", "comments": "Slip Not"}, {"hid": "35537", "levelid_hex": "17", "patchnum": "7", "typecode": "_", "comments": "Toxic Tunnel"}, {"hid": "35537", "levelid_hex": "16", "patchnum": "7", "typecode": "_", "comments": "Weird Weald"}, {"hid": "35537", "levelid_hex": "15", "patchnum": "7", "typecode": "_", "comments": "Steppe Sprint"}, {"hid": "35537", "levelid_hex": "13", "patchnum": "7", "typecode": "_", "comments": "[Rooms]"}, {"hid": "35537", "levelid_hex": "11", "patchnum": "7", "typecode": "_", "comments": "Dreadnoughth"}, {"hid": "35537", "levelid_hex": "F", "patchnum": "7", "typecode": "_", "comments": "Coastal Elite Zone"}, {"hid": "35537", "levelid_hex": "E", "patchnum": "7", "typecode": "_", "comments": "Boss"}, {"hid": "35537", "levelid_hex": "B", "patchnum": "7", "typecode": "_", "comments": "Determination"}, {"hid": "35537", "levelid_hex": "7", "patchnum": "7", "typecode": "_", "comments": "[Midway]"}, {"hid": "35537", "levelid_hex": "6", "patchnum": "7", "typecode": "_", "comments": "[Midway]"}, {"hid": "35537", "levelid_hex": "4", "patchnum": "7", "typecode": "_", "comments": "[Midway]"}, {"hid": "35537", "levelid_hex": "3", "patchnum": "7", "typecode": "_", "comments": "Top Secret Area"}, {"hid": "35537", "levelid_hex": "2", "patchnum": "7", "typecode": "_", "comments": "Porpoise Please"}, {"hid": "35537", "levelid_hex": "1", "patchnum": "7", "typecode": "_", "comments": "Ropeburn"}, {"hid": "35537", "levelid_hex": "25", "patchnum": "7", "typecode": "_", "comments": "gpw1?"}, {"hid": "35537", "levelid_hex": "27", "patchnum": "7", "typecode": "B"}, {"hid": "35537", "levelid_hex": "30", "patchnum": "7", "typecode": "_", "comments": "[Midway]"}, {"hid": "35537", "levelid_hex": "110", "patchnum": "7", "typecode": "_", "comments": "[Midway]"}, {"hid": "35537", "levelid_hex": "112", "patchnum": "7", "typecode": "_", "comments": "[Midway]"}, {"hid": "35537", "levelid_hex": "114", "patchnum": "7", "typecode": "B"}]
+    ],
+    "patch": "patch/GTv49QvbLKbQU1c8OQ9uBt0tiPqUON5l",
+    "pat_sha224": "df3c8f36c58ea198bad6bb2a3ee1d58882ac1f92e3751113046a45a8",
+    "pat_sha1": "b73ffeebd794f647e7c3f7bc61d24bb881832108",
+    "pat_shake_128": "GTv49QvbLKbQU1c8OQ9uBt0tiPqUON5l",
+    "result_sha224": "6bb823f45ee28001b28f7b4376163b87736f9663310ffad8ee2951d8",
+    "result_sha1": "309e8dd89e31579cb85a86ad7efff9d19d9da9c7",
+    "result_shake1": "kRKGgOvw8L6CB02E_B0fEgXMxrvQi_x6",
+    "rom": "rom/gpw3_kRKGgOvw8L6CB02E_B0fEgXMxrvQi_x6.sfc",
+    "patchblob1_name": "pblob_gpw3_1691b3f0d6",
+    "patchblob1_key": "dUduWWROXzZhc0lrdlFQQks1anFiTW5wUEJ6ZmIzMzJWYk5oUDU5WXZDQT0=",
+    "patchblob1_sha224": "1691b3f0d6448720a1c661d812e6bb5769c071b4b825da5ae071dfbc",
+    "romblob_salt": "4KvAp8hydDvru2GRPizjHg==",
+    "romblob_name": "rblob_gpw3_476851ad2b"
+}

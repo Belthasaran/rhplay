@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/19145/BabyKaizoWorld.zip",
+    "name": "Baby Kaizo World",
+    "author_href": "/?p=profile&id=32207",
+    "author": "Nowieso",
+    "added": "2019-02-19 12:23:30 AM",
+    "version history_href": "/?p=section&a=versionhistory&id=19145",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "44 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Dear Baby,",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=custom+character",
+    "tags": [
+        "custom character",
+        "music",
+        "traditional",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "104 ",
+    "rating": [
+        "4.6"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=19145",
+    "id": "19145",
+    "pat_sha224": "c9c26f209b7c5ba6334fbb091b9502ebf5af38fad0e6de52bed35a53",
+    "pat_sha1": "50e71f965554ad7fb42addc5b79b7c23ce563f3d",
+    "pat_shake_128": "5mWRzAx0WHCpFcwDbqFLe4BSYNYsGnuE",
+    "result_sha224": "1c1c3ad0100cb824c3154bc372d8270fa5826653faa26a28f01b0635",
+    "result_sha1": "2159c751d5a6e53c77da175792acdf2b76e20171",
+    "result_shake1": "13Owj8j8Cbwb0Gv02kxKkxHJVAoNuvhr",
+    "rom": "rom/19145_13Owj8j8Cbwb0Gv02kxKkxHJVAoNuvhr.sfc",
+    "patch": "patch/5mWRzAx0WHCpFcwDbqFLe4BSYNYsGnuE",
+    "patchblob1_name": "pblob_19145_7765ada208",
+    "patchblob1_key": "NjM0QmxVU2k5ZW94Nlk1ZGxnLWQ5MW9xSmlTMFFOcEgyb3FSR19ESlZBTT0=",
+    "patchblob1_sha224": "7765ada208d99cd4368ddcb8001e2fa8e35434e00306a51a65d7ef57",
+    "romblob_salt": "5BycFn57Xd5_yWUynQx4cQ==",
+    "romblob_name": "rblob_19145_465f8b825b"
+}

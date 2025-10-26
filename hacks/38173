@@ -1,0 +1,129 @@
+{
+  "name_href": "https://dl.smwcentral.net/38173/Perchance.zip",
+  "section": "smwhacks",
+  "name": "Perchance",
+  "time": 1722697548,
+  "added": "2024-08-03 16:54:46 PM",
+  "moderated": false,
+  "authors_json": [
+    {
+      "id": 62214,
+      "name": "papanug"
+    }
+  ],
+  "submitter": {
+    "id": 62214,
+    "name": "papanug"
+  },
+  "images": [
+    "https://dl.smwcentral.net/image/110341.png",
+    "https://dl.smwcentral.net/image/110342.png",
+    "https://dl.smwcentral.net/image/110343.png",
+    "https://dl.smwcentral.net/image/110344.png",
+    "https://dl.smwcentral.net/image/110345.png",
+    "https://dl.smwcentral.net/image/110346.png",
+    "https://dl.smwcentral.net/image/110347.png",
+    "https://dl.smwcentral.net/image/110348.png",
+    "https://dl.smwcentral.net/image/110349.png",
+    "https://dl.smwcentral.net/image/110350.png",
+    "https://dl.smwcentral.net/image/110351.png",
+    "https://dl.smwcentral.net/image/110352.png",
+    "https://dl.smwcentral.net/image/110353.png",
+    "https://dl.smwcentral.net/image/110354.png",
+    "https://dl.smwcentral.net/image/110355.png"
+  ],
+  "author_href": "/?p=profile&id=62214",
+  "author": "papanug",
+  "submitted_href": "/?p=profile&id=62214",
+  "submitted": "2024-08-03 03:05:48 PM",
+  "demo": "No",
+  "hall of fame": "No",
+  "length": "36 exit(s)",
+  "type": "Kaizo: Expert",
+  "description": "Perchance.\r\n\r\nI wanted to make something that was both fun and challenging: this was the end result. The hack features difficult kaizo platforming with light chocolate mechanics - and a heavy focus on platforming and jumping. I'm not the biggest fan of \"shell/item\" tech, so you won't find much of that in this hack. Ultimately, I made things that I thought were fun. I'm sure no one will like everything - but I hope that, if you choose to play this hack, that you will be happy you spent the time to play it. \r\n\r\nAlthough the hack has 36 exits - I must warn you that this hack plays much longer.\r\n\r\nWhile playing, you'll find custom music, custom bosses, custom graphics, saving on the overworld, fast retry, as well as an assortment of secrets. You may also find a kaizo block or two.  \r\n\r\nHuge shoutouts to Binavik, Daizo Dee Von, DevazureBlue, and countless others who helped me so much. None of this would be possible without them.",
+  "tags_href": "/?p=section&s=smwhacks&u=1&f%5Btags%5D=challenging",
+  "tags": [
+    "challenging",
+    "expert",
+    "fun",
+    "kaizo"
+  ],
+  "comments_href": "#comments",
+  "comments": "3 ",
+  "rating": [
+    "0.0"
+  ],
+  "size": 3480357,
+  "downloads": 47,
+  "download_url": "https://dl.smwcentral.net/38173/Perchance.zip",
+  "obsoleted_by": null,
+  "url": "https://www.smwcentral.net/?p=section&a=details&id=38173",
+  "id": "38173",
+  "fields": {
+    "demo": "No",
+    "hof": "No",
+    "length": "36 exit(s)",
+    "difficulty": "Kaizo: Expert",
+    "description": "Perchance.<br>\r\n<br>\r\nI wanted to make something that was both fun and challenging: this was the end result. The hack features difficult kaizo platforming with light chocolate mechanics - and a heavy focus on platforming and jumping. I'm not  the biggest fan of \"shell/item\" tech, so you won't find much of that in this hack. Ultimately, I made things that I thought were fun. I'm sure no one will like everything - but I hope that, if you choose to play this hack, that you will be happy you spent the time to play it. <br>\r\n<br>\r\nAlthough the hack has 36 exits - I must warn you that this hack plays much longer.<br>\r\n<br>\r\nWhile playing, you'll find custom music, custom bosses, custom graphics, saving on the overworld, fast retry, as well as an assortment of secrets. You may also find a kaizo block or two.  <br>\r\n<br>\r\nHuge shoutouts to Binavik, Daizo Dee Von, DevazureBlue, and countless others who helped me so much. None of this would be possible without them."
+  },
+  "raw_fields": {
+    "demo": false,
+    "hof": false,
+    "length": 36,
+    "difficulty": {
+      "6": "kaizo_expert"
+    },
+    "description": "Perchance.\r\n\r\nI wanted to make something that was both fun and challenging: this was the end result. The hack features difficult kaizo platforming with light chocolate mechanics - and a heavy focus on platforming and jumping. I'm not the biggest fan of \"shell/item\" tech, so you won't find much of that in this hack. Ultimately, I made things that I thought were fun. I'm sure no one will like everything - but I hope that, if you choose to play this hack, that you will be happy you spent the time to play it. \r\n\r\nAlthough the hack has 36 exits - I must warn you that this hack plays much longer.\r\n\r\nWhile playing, you'll find custom music, custom bosses, custom graphics, saving on the overworld, fast retry, as well as an assortment of secrets. You may also find a kaizo block or two.  \r\n\r\nHuge shoutouts to Binavik, Daizo Dee Von, DevazureBlue, and countless others who helped me so much. None of this would be possible without them."
+  },
+  "prior_releases": [
+    {
+      "version": "0.1",
+      "psets": "WwogICAgewogICAgICAgICJpcGZzIjogImJhZnliZWllbHRrcmN5N2Z2NnpvZ2RkNmh2aXZzamd5eGE1ejNpcmhwZDVobGZrZGtreXllbHM2M2lhIiwKICAgICAgICAia2V5IjogImJsb2JzL3NfcGJsb2JfMzdfMzhfMDAwMS56aXAiLAogICAgICAgICJoYXNoIjogIlFtY2ViV3hQaWU1WURkZkU1czFEY1BOZHdnZERvaHlhTmFYczVVaUhwUUVUc3IiLAogICAgICAgICJwdWJsaWNVcmwiOiAiaHR0cHM6Ly9zbXdkYmkuaXBhcnBhLmNvbS8zMzE3NjlkMS02NWVjLTQ1ZmQtODI3Ni1lNTViZDRhNDI4ZDUtYnVja2V0L2Jsb2JzL3NfcGJsb2JfMzdfMzhfMDAwMS56aXAiCiAgICB9Cl0KCg==",
+      "patch": "patch/ViPgOUo73C3FhkSUj-OdLEucaD5AJVzY",
+      "pat_sha224": "d125a740a036463c9aa01943c18312459d48cc10f4d5722f032d6762",
+      "pat_sha1": "b0afaba9c17423c5657ead151450087571b34721",
+      "pat_shake_128": "ViPgOUo73C3FhkSUj-OdLEucaD5AJVzY",
+      "result_sha224": "f3278f1cfa8548150c2d3cc0861670183eb50704a9eb171baebe5660",
+      "result_sha1": "3d026de44ffb4e7c2f2f73cb960667feb04e04dc",
+      "result_shake1": "yDnkt9GV5jOAdocWa-JiwGKd4pn9OQep",
+      "rom": "rom/38173_yDnkt9GV5jOAdocWa-JiwGKd4pn9OQep.sfc",
+      "patchblob1_name": "pblob_38173_bf634c38a8",
+      "patchblob1_key": "d0VNbEZGbzk4ai12d01HcHdWQWI0bGpNYk5Id1ZjZXZhYkNxTlM0Zkk3TT0=",
+      "patchblob1_sha224": "bf634c38a81b59b4b4532e5bf2fea85600938370674047c23c0eb913",
+      "romblob_salt": "kyqluaMoVunHpBDKxX2VmQ==",
+      "romblob_name": "rblob_38173_c2c072673b"
+    },
+    {
+      "version": "1.0",
+      "patch": "patch/Cpqdc_5LUavoisyAEEw8XKbWkEGXAhKL",
+      "pat_sha224": "538e292c04fd2bf19b495f191799675c0dc4c4d6cd97e2ee6d09e6a4",
+      "pat_sha1": "f11e04725bb191715e76bafd4e9da001f1ec4086",
+      "pat_shake_128": "Cpqdc_5LUavoisyAEEw8XKbWkEGXAhKL",
+      "result_sha224": "9e62a88296f8b1fabddb1559236467ea556eed37c57642ff531961d1",
+      "result_sha1": "9f1de16cfb7d51dd4d48801200c6ed3456563515",
+      "result_shake1": "J6TMZ05UyoSx9FZrtlOpnScm8zg0TNU1",
+      "rom": "rom/38173_J6TMZ05UyoSx9FZrtlOpnScm8zg0TNU1.sfc",
+      "patchblob1_name": "pblob_38173_c518000f07",
+      "patchblob1_key": "bGtiOF9fYmNpWld1cHctODNEdGNoV250QTJMU3QxbUhGN2tVQjZtS3Njbz0=",
+      "patchblob1_sha224": "c518000f07c72362ecd5df4a40c7ae401b2d33427e4a99755289ea50",
+      "romblob_salt": "VNMjOD6DDUSPKfWXUvt7GA==",
+      "romblob_name": "rblob_38173_03ec1c6f1e"
+    }
+  ],
+  "psets": "WyAgICB7CiAgICAgICAgImlwZnMiOiAiYmFmeWJlaWFqcWpqazdlaXJvM2k0azJ2NDZwbjZqNDZ1N3dhNWxyNnNpM2lyejQ3Z2J3ZWk3Y3d1NG0iLAogICAgICAgICJrZXkiOiAiYmxvYnMvc19wYmxvYl8zN18zOF8wMDAyLnppcCIsCiAgICAgICAgImhhc2giOiAiUW1OeW1kdVpqb3RmMWNlWk1pSjFHb0pCUVEzNGkxWW5FTm9QOE01REhkaVI5QyIsCiAgICAgICAgInB1YmxpY1VybCI6ICJodHRwczovL3Ntd2RiaS5pcGFycGEuY29tLzMzMTc2OWQxLTY1ZWMtNDVmZC04Mjc2LWU1NWJkNGE0MjhkNS1idWNrZXQvYmxvYnMvc19wYmxvYl8zN18zOF8wMDAyLnppcCIKICAgIH0KXQoK",
+  "patch": "/home/main/proj/rhtools/patch/qwnzE69j9EnV0RlWf4VpUkGU650bt_Np",
+  "pat_sha224": "bd7b0ecd2113e5e51cf0d405f1979f9146d49e8025eb575966ba4662",
+  "pat_sha1": "a03da84377bae67ac58927ec4f1b8d4180b6cf5a",
+  "pat_shake_128": "qwnzE69j9EnV0RlWf4VpUkGU650bt_Np",
+  "result_sha224": "c5088a163796a81a54e38292c7749f23b33acbf9dd6b538f1075dbc4",
+  "result_sha1": "44b1eff293345d3999feed527366266d1e7b9f69",
+  "result_shake1": "lyaN7_cYaYLhLpitXO-DDU1ncpNhMELr",
+  "rom": "/home/main/proj/rhtools/rom/38173_lyaN7_cYaYLhLpitXO-DDU1ncpNhMELr.sfc",
+  "patchblob1_name": "pblob_38173_1b02613f50",
+  "patchblob1_key": "MkJVY1NLbG1UZWNJREdxNzFpS1pRMXBmcy1FcGVqN25oRTV6Tjg0Wm5OND0=",
+  "patchblob1_sha224": "1b02613f50d804f77d17518e00c397f74d615f56198bf444693055cd",
+  "romblob_salt": "DEQbKSMg7nFcVwFNWnToFQ==",
+  "romblob_name": "rblob_38173_28ce765f56",
+  "gameid": "38173",
+  "patch_filename": "Perchance/Perchance.bps"
+}

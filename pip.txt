@@ -1,0 +1,18 @@
+pip3 install ipfshttpclient
+pip3 install cryptography
+
+#pip3 install pycrypto
+pip3 install --upgrade pip
+#env "CFLAGS=-I/usr/local/include -L/usr/local/lib" pip3 install pycrypto
+
+#+
+pip3 install requests
+pip3 install compress
+
+# npm install -g @gleekhq/fleek-cli
+#npm install -g  @fleekhq/fleek-storage-js
+
+
+pip3 install aiofiles
+pip3 install websockets
+pip3 install nest_asyncio

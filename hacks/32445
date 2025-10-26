@@ -1,0 +1,13 @@
+{
+  "gameid": "32445",
+  "patch": "/home/main/proj/rhtools/patch/wO_vfWSxDnaTRDHaKTpSlVOfpZDwXwIa",
+  "patch_filename": "Paul Remastered.bps",
+  "pat_sha1": "dfd951bb8832a6cfc06fb69612d25e5a3fe2bee3",
+  "pat_sha224": "ee86cda9be9d4743020ac4d26a6c16369abd57e546d1966a54f6a750",
+  "pat_shake_128": "wO_vfWSxDnaTRDHaKTpSlVOfpZDwXwIa",
+  "result_sha1": "ef1c64f3ae53d610f1c20da6de93c2254b07ce40",
+  "result_sha224": "c28d38f572248eb0b1de3d1e2a89d7fc94ea35672739005adaab0b87",
+  "result_shake1": "pq-Q-SpwnMHx5Kd0at-H2gH9DZWngQVc",
+  "rom": "/home/main/proj/rhtools/rom/32445_pq-Q-SpwnMHx5Kd0at-H2gH9DZWngQVc.sfc",
+  "id": "32445"
+}

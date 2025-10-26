@@ -1,0 +1,17 @@
+{
+  "id": "38051",
+  "patch": "/home/main/proj/rhtools/patch/xxR8cvFaPXrirK_1mfqPYPOiAvsSyVRa",
+  "patch_filename": "Mario Climbs A Tower.bps",
+  "pat_sha1": "d9f7432386ef716b26adc7e7118a9d25e8c94303",
+  "pat_sha224": "28c550666569aa8a22c60afbc98c0a2b0254dda60ee1651b0efb47a0",
+  "pat_shake_128": "xxR8cvFaPXrirK_1mfqPYPOiAvsSyVRa",
+  "result_sha1": "1f7bac82791256f7b8f001bec8350a56c328dd34",
+  "result_sha224": "9c5c7e1e2da521bf7ec98f6d77e4e2306115f03cdd1cc17d72b60176",
+  "result_shake1": "TATGo9wrn_P5Lp7gc44Rwf_Yfo_8D8qj",
+  "rom": "/home/main/proj/rhtools/rom/38051_TATGo9wrn_P5Lp7gc44Rwf_Yfo_8D8qj.sfc",
+  "patchblob1_name": "pblob_38051_95b304712a",
+  "patchblob1_key": "emZSTG5lTGhJeVdxWWFCdll6UUJnS2lHS2k2ZzV3MFNKM0VIOEVORURRST0=",
+  "patchblob1_sha224": "95b304712ac3b74254c1242631d11618c4ef9ac3d11e82f62bd73b59",
+  "romblob_name": "rblob_38051_93d7038ed1",
+  "romblob_salt": "kOkvuXRB-0z-mBGhqKaTmA=="
+}

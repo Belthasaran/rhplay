@@ -1,0 +1,28 @@
+diff --git a/node_modules/fernet/fernet.js b/node_modules/fernet/fernet.js
+index 9b8786f..7484b18 100644
+--- a/node_modules/fernet/fernet.js
++++ b/node_modules/fernet/fernet.js
+@@ -33,7 +33,7 @@ var hexBits = function hexBits(bits) {
+ // convert base64 string to hex string
+ var decode64toHex = function decode64(string) {
+   var s = URLBase64.decode(string.replace(/=+$/, ''));
+-  return (new Buffer(s)).toString('hex');
++  return (new Buffer.from(s)).toString('hex');
+ }
+ 
+ // convert array to hex string
+@@ -101,7 +101,13 @@ var fernet = function fernet(opts) {
+ 
+     var decrypted = AES.decrypt(encrypted, encryptionKey, { iv: iv });
+ 
+-    return decrypted.toString(Utf8);
++    // PATCH for Node.js v24+ UTF-8 validation
++    // crypto-js UTF-8 encoding fails on binary data, fallback to Latin1
++    try {
++      return decrypted.toString(Utf8);
++    } catch (e) {
++      return decrypted.toString(Latin1);
++    }
+   }
+ 
+   this.timeBytes = timeBytes;

@@ -1,0 +1,13 @@
+{
+  "gameid": "40565",
+  "patch": "/home/main/proj/rhtools/patch/63yormeItWqf_c8MTSGAfrD5u6IUTm2_",
+  "patch_filename": "Incredibous Shells 2.bps",
+  "pat_sha1": "08fff87aed762d3c80dc3a69ab999e4f6af107ce",
+  "pat_sha224": "09d7fe336b27322a059442fd192d82da7d76b4b684cf869d7b07e096",
+  "pat_shake_128": "63yormeItWqf_c8MTSGAfrD5u6IUTm2_",
+  "result_sha1": "498b03863f118fa23aa3b2ac1462c8077f258ea6",
+  "result_sha224": "7b2b65a94c06d959f68bca9d302c88423d89215c518989947ab3e2c7",
+  "result_shake1": "ZBnDWghwSV8poSlI8OT8HdqjOmfyk2B_",
+  "rom": "/home/main/proj/rhtools/rom/40565_ZBnDWghwSV8poSlI8OT8HdqjOmfyk2B_.sfc",
+  "id": "40565"
+}

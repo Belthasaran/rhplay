@@ -1,0 +1,13 @@
+{
+  "gameid": "5003",
+  "patch": "/home/main/proj/rhtools/patch/sOnYDQcHzXFmdTwX82oelG6rt5feJCsX",
+  "patch_filename": "Super Wario World Mini Quest Update 2.bps",
+  "pat_sha1": "57d2fc4de7174bc49679faa4cf43f7a62552d5aa",
+  "pat_sha224": "ebfadf90414c6ff4c7ac62aee341402dc66090c3ee3e37bf73e8870e",
+  "pat_shake_128": "sOnYDQcHzXFmdTwX82oelG6rt5feJCsX",
+  "result_sha1": "ac1231d2fce08c1901720eb213c2b529615c1ad1",
+  "result_sha224": "9d463c62afca9f4bd5596e2edec49608987df862b50ed420f057b80f",
+  "result_shake1": "jA1rzNKif4nt0V6P4F-DEOLnUQqBxSfH",
+  "rom": "/home/main/proj/rhtools/rom/5003_jA1rzNKif4nt0V6P4F-DEOLnUQqBxSfH.sfc",
+  "id": "5003"
+}

@@ -1,0 +1,13 @@
+{
+  "gameid": "30171",
+  "patch": "/home/main/proj/rhtools/patch/QKe7yXo6fB033xoxQjDQ8IiF5aeZAUZ-",
+  "patch_filename": "BlocksHammersCoinsSpikes.bps",
+  "pat_sha1": "e3b9d64d29b69c6c24498c2cb424be2e93249d43",
+  "pat_sha224": "e77c32069bf1ce1d624a36963294659dfc71ca3eea4edc943c02096d",
+  "pat_shake_128": "QKe7yXo6fB033xoxQjDQ8IiF5aeZAUZ-",
+  "result_sha1": "6116c1b098bd7c4fbf4e0fa1974fa2982014af30",
+  "result_sha224": "a7c4d7cde5bfdc9d4fce22ff13d7274ec909abfbe85c348e9791321d",
+  "result_shake1": "6_k4cx0F764jFnWtoBefHUPMW0vWXO16",
+  "rom": "/home/main/proj/rhtools/rom/30171_6_k4cx0F764jFnWtoBefHUPMW0vWXO16.sfc",
+  "id": "30171"
+}

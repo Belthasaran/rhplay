@@ -1,0 +1,13 @@
+{
+  "gameid": "30143",
+  "patch": "/home/main/proj/rhtools/patch/3bns5BcJ4GeUvPCCyHEhc-07Kao15eC2",
+  "patch_filename": "HYPERION.bps",
+  "pat_sha1": "3e7f373145df843674b7489762484a61b565b543",
+  "pat_sha224": "4a57c50b0c6d5ad45a5c1324a4bbb92bfbce680a5027034865cfedc5",
+  "pat_shake_128": "3bns5BcJ4GeUvPCCyHEhc-07Kao15eC2",
+  "result_sha1": "ed607a2244f251e74a6c5578136cd89c9c194669",
+  "result_sha224": "b6273ebd6dc13ab964276b17d50578fe8a69bbdff3d10f132c779095",
+  "result_shake1": "PfQAgozN_upmRnaaP8lgBwf0lg43T12S",
+  "rom": "/home/main/proj/rhtools/rom/30143_PfQAgozN_upmRnaaP8lgBwf0lg43T12S.sfc",
+  "id": "30143"
+}

@@ -1,0 +1,455 @@
+════════════════════════════════════════════════════════════════════════
+  LUNAR MAGIC BINARY ANALYSIS - INVESTIGATION CONTINUATION PROMPT
+════════════════════════════════════════════════════════════════════════
+
+CONTEXT:
+────────────────────────────────────────────────────────────────────────
+
+We are investigating how Lunar Magic (LM) discovers relocated level name 
+tables in Super Mario World ROM hacks. 
+
+WHAT WE'VE COMPLETED:
+- ✅ Reverse-engineered LM's level name table structure (24-byte entries)
+- ✅ Identified LM version-specific locations (2.40, 2.53, 3.61)
+- ✅ Analyzed ROM-side data structures extensively
+- ✅ Built working tools with 95% auto-detection
+- ✅ Ruled out: single pointer, RAT tags, simple pattern matching
+
+WHAT REMAINS:
+- ❌ LM's exact discovery algorithm (in binary code)
+- ❌ RAT tag format and parsing
+- ❌ .mwl/.mw2 project file structure
+- ❌ How LM stores/reads custom table offsets
+
+════════════════════════════════════════════════════════════════════════
+
+THE PROBLEM:
+────────────────────────────────────────────────────────────────────────
+
+Some ROM hacks use CUSTOM table locations (not the standard 0x084E42, 
+0x084D3A, or 0x085000). Example: ROM 18612 uses 0x08EA1D.
+
+Lunar Magic 3.61 can open these ROMs and correctly find the custom table.
+We need to understand HOW.
+
+Current hypothesis:
+1. LM checks known locations first
+2. LM reads metadata from .mwl project files
+3. LM may scan for RAT (Relocatable Address Tag) markers
+4. LM employs proprietary heuristics
+
+To confirm, we must analyze LM's binary code.
+
+════════════════════════════════════════════════════════════════════════
+
+BINARY TO ANALYZE:
+────────────────────────────────────────────────────────────────────────
+
+File: /home/main/proj/rhtools/refmaterial/Lunar_Magic_lm361/lm32.exe
+Type: PE32 Windows executable (32-bit)
+Size: ~3 MB
+
+Also available (but larger):
+File: /home/main/proj/rhtools/refmaterial/Lunar_Magic_lm361/x64/lm.exe
+Type: PE64 Windows executable (64-bit)
+
+Recommendation: Analyze lm32.exe (simpler, 32-bit)
+
+════════════════════════════════════════════════════════════════════════
+
+TOOLS RECOMMENDED:
+────────────────────────────────────────────────────────────────────────
+
+Disassembler/Decompiler:
+  • Ghidra (FREE, recommended) - https://ghidra-sre.org/
+  • IDA Pro (commercial)
+  • Binary Ninja (commercial)
+  • radare2/Cutter (FREE)
+
+String Analysis:
+  • strings command (Linux/Unix)
+  • PE Explorer
+  • CFF Explorer
+
+Debugger (optional, for dynamic analysis):
+  • x64dbg
+  • OllyDbg (32-bit)
+  • WinDbg
+
+════════════════════════════════════════════════════════════════════════
+
+STARTING POINTS FOR ANALYSIS:
+────────────────────────────────────────────────────────────────────────
+
+1. SEARCH FOR KNOWN HEXADECIMAL CONSTANTS
+   ─────────────────────────────────────────────────────────────────────
+   
+   In Ghidra: Search > For Scalars
+   
+   Search for:
+   • 0x084E42  (LM 3.61 standard table location)
+   • 0x084D3A  (LM 2.53 standard table location)
+   • 0x085000  (LM 2.40 standard table location)
+   • 0x010FEB  (old pointer location)
+   • 0x02E000  (Layer 1 pointer table - already found in binary)
+   
+   If found in code, you've located the discovery routine!
+   
+   Example code might look like:
+   ```c
+   if (check_table_at(rom, 0x084E42)) {
+       return 0x084E42;
+   } else if (check_table_at(rom, 0x084D3A)) {
+       return 0x084D3A;
+   } ...
+   ```
+
+2. SEARCH FOR KNOWN STRINGS
+   ─────────────────────────────────────────────────────────────────────
+   
+   In Ghidra: Search > For Strings
+   
+   Search for:
+   • "Level Number"
+   • "Level Number Too Large"
+   • "LMRELOC1"
+   • "STAR" (RAT tag signature)
+   • ".mwl" (project file extension)
+   • ".mw2"
+   • "Choose a valid level number"
+   
+   Right-click on string > References > Show References to Address
+   This finds code that uses the string.
+   
+   Trace backwards from string usage to find calling functions.
+
+3. FIND FILE I/O OPERATIONS
+   ─────────────────────────────────────────────────────────────────────
+   
+   In Ghidra: Symbol Tree > Imports > KERNEL32.DLL
+   
+   Look for:
+   • CreateFileA / CreateFileW  (opens files)
+   • ReadFile                   (reads data)
+   • SetFilePointer / SetFilePointerEx (seeks to offset)
+   • MapViewOfFile             (memory-maps files)
+   
+   Cross-reference these APIs to find ROM loading code:
+   Right-click > Find References to CreateFileA
+   
+   When ROM is opened, LM must read the table. Look for:
+   • SetFilePointer(handle, 0x084E42, ...)
+   • ReadFile after seeking to table offset
+
+4. SEARCH FOR "STAR" SIGNATURE
+   ─────────────────────────────────────────────────────────────────────
+   
+   In Ghidra: Search > Memory
+   Pattern: 53 54 41 52  (ASCII "STAR")
+   
+   Look for code that scans for this signature:
+   ```c
+   if (memcmp(buffer, "STAR", 4) == 0) {
+       // Parse RAT tag
+   }
+   ```
+   
+   This is LM's Relocatable Address Tag system.
+
+5. ANALYZE "OPEN ROM" UI HANDLER
+   ─────────────────────────────────────────────────────────────────────
+   
+   Find file dialog strings:
+   • "Select ROM"
+   • "*.smc;*.sfc"
+   • "Open ROM"
+   
+   Find GetOpenFileName API:
+   Symbol Tree > Imports > COMDLG32.DLL > GetOpenFileNameA
+   
+   Trace execution after file dialog:
+   GetOpenFileNameA → CreateFileA → [Table Discovery] → Display Editor
+   
+   The [Table Discovery] step is what we need to understand.
+
+6. EXAMINE .mwl FILE PARSING
+   ─────────────────────────────────────────────────────────────────────
+   
+   Search for ".mwl" string
+   Find code that opens .mwl files
+   Look for structure reading like:
+   
+   ```c
+   struct MWL_Header {
+       uint32_t magic;
+       uint32_t version;
+       // ... more fields ...
+       uint32_t level_name_table_offset;  // <-- This is what we need!
+   };
+   ```
+   
+   Document the .mwl file format.
+
+════════════════════════════════════════════════════════════════════════
+
+SPECIFIC CODE PATTERNS TO LOOK FOR:
+────────────────────────────────────────────────────────────────────────
+
+Pattern 1: Array of Known Locations
+────────────────────────────────────
+
+```c
+uint32_t standard_offsets[] = {
+    0x084E42,  // LM 3.61
+    0x084D3A,  // LM 2.53
+    0x085000   // LM 2.40
+};
+
+for (int i = 0; i < 3; i++) {
+    if (validate_table(rom, standard_offsets[i])) {
+        return standard_offsets[i];
+    }
+}
+```
+
+Pattern 2: Pointer Dereference
+────────────────────────────────
+
+```c
+// Read pointer from ROM
+uint32_t ptr = read_24bit(rom, 0x010FEB);
+uint32_t file_offset = snes_to_file_offset(ptr);
+
+if (validate_table(rom, file_offset)) {
+    return file_offset;
+}
+```
+
+Pattern 3: RAT Tag Scanning
+────────────────────────────
+
+```c
+for (offset = 0x80000; offset < rom_size; offset++) {
+    if (memcmp(rom + offset, "STAR", 4) == 0) {
+        uint32_t type = *(uint32_t*)(rom + offset + 4);
+        if (type == LEVEL_NAMES_TYPE) {
+            return offset + header_size;
+        }
+    }
+}
+```
+
+Pattern 4: Validation Function
+────────────────────────────────
+
+```c
+bool is_valid_level_name_table(byte* data) {
+    int valid = 0;
+    for (int i = 0; i < 10; i++) {  // Check first 10 entries
+        if (count_valid_chars(data + i * 24) >= 5) {
+            valid++;
+        }
+    }
+    return valid >= 7;  // At least 7/10 entries valid
+}
+```
+
+════════════════════════════════════════════════════════════════════════
+
+GHIDRA WORKFLOW:
+────────────────────────────────────────────────────────────────────────
+
+Step 1: Load Binary
+───────────────────
+File > Import File > lm32.exe
+Analyze? Yes
+Wait for auto-analysis to complete (~5-10 minutes)
+
+Step 2: Search for Constants
+──────────────────────────────
+Search > For Scalars > 0x84E42
+
+If found:
+- Double-click to jump to location
+- Press 'D' to disassemble
+- Press 'F' to create function
+- Window > Decompiler to see C-like code
+
+Step 3: Analyze Function
+──────────────────────────
+Read decompiled code
+Add comments (right-click > Add Comment)
+Rename variables (right-click > Rename Variable)
+Identify the algorithm
+
+Step 4: Trace Calls
+─────────────────────
+Window > Function Call Graph
+See what calls this function
+See what it calls
+
+Step 5: Document
+─────────────────
+Create pseudocode
+Document algorithm
+Test understanding
+
+════════════════════════════════════════════════════════════════════════
+
+QUESTIONS TO ANSWER:
+────────────────────────────────────────────────────────────────────────
+
+Critical Questions:
+
+1. What is the EXACT discovery algorithm?
+   - What order does LM check locations?
+   - What validation is used?
+   - What happens if all methods fail?
+
+2. Is there a hardcoded array of offsets?
+   - Where in the binary?
+   - What are ALL the values?
+   - Can we extract this array?
+
+3. Does LM use RAT tags?
+   - What is the RAT type code for level names?
+   - What is the RAT header format?
+   - How does LM parse RAT tags?
+
+4. What is the .mwl file format?
+   - Where is the table offset stored?
+   - What is the field offset?
+   - What is the field size?
+
+5. Does LM patch ROM code?
+   - Does it update ASM instructions?
+   - Where does it inject pointers?
+   - How does the game find relocated data?
+
+════════════════════════════════════════════════════════════════════════
+
+EXPECTED OUTPUT:
+────────────────────────────────────────────────────────────────────────
+
+After analysis, we should have:
+
+1. Python implementation of LM's algorithm:
+   ```python
+   def find_lm_table_like_lunar_magic(rom_data):
+       # Step 1: Try LM 3.61 location
+       if validate_table(rom_data, 0x084E42):
+           return 0x084E42
+       
+       # Step 2: Try LM 2.53 location
+       if validate_table(rom_data, 0x084D3A):
+           return 0x084D3A
+       
+       # Step 3: Try LM 2.40 location
+       if validate_table(rom_data, 0x085000):
+           return 0x085000
+       
+       # Step 4: Scan for RAT tags
+       rat_offset = scan_for_rat_tags(rom_data)
+       if rat_offset:
+           return rat_offset
+       
+       # Step 5: Failed
+       return None
+   ```
+
+2. RAT tag parser:
+   ```python
+   def parse_rat_tags(rom_data):
+       for offset in range(len(rom_data) - 4):
+           if rom_data[offset:offset+4] == b'STAR':
+               type_code = struct.unpack('<I', rom_data[offset+4:offset+8])[0]
+               if type_code == LEVEL_NAMES_RAT_TYPE:
+                   return offset + 8  # Skip header
+       return None
+   ```
+
+3. .mwl file parser:
+   ```python
+   def read_table_offset_from_mwl(mwl_path):
+       with open(mwl_path, 'rb') as f:
+           f.seek(OFFSET_TO_TABLE_PTR_FIELD)
+           return struct.unpack('<I', f.read(4))[0]
+   ```
+
+4. Complete documentation:
+   - LM_DISCOVERY_ALGORITHM.md
+   - RAT_TAG_FORMAT.md
+   - MWL_FILE_FORMAT.md
+
+════════════════════════════════════════════════════════════════════════
+
+ALTERNATIVE: COMMUNITY APPROACH
+────────────────────────────────────────────────────────────────────────
+
+If binary analysis proves too difficult, try:
+
+1. SMW Central Forums
+   Post in "SMW Hacking" section
+   Ask about LM internals
+   Someone may have analyzed this
+
+2. Lunar Magic Discord/IRC
+   Contact LM developers directly
+   Ask for documentation
+   May get official specs
+
+3. Search GitHub
+   Look for "lunar magic parser"
+   Find .mwl file format projects
+   Check for existing reverse engineering
+
+════════════════════════════════════════════════════════════════════════
+
+FILES TO REFERENCE:
+────────────────────────────────────────────────────────────────────────
+
+Read before starting:
+• devdocs/LM_INVESTIGATION_STATUS.md - What we know so far
+• devdocs/LM_TABLE_DISCOVERY_ANALYSIS.md - Investigation summary
+• devdocs/LM_BINARY_ANALYSIS_GUIDE.md - This detailed guide
+• devdocs/SMW_LM_LEVEL_NAMES_RESEARCH.md - LM name system structure
+
+════════════════════════════════════════════════════════════════════════
+
+SUCCESS CRITERIA:
+────────────────────────────────────────────────────────────────────────
+
+Analysis is complete when we can:
+
+✅ Replicate LM's discovery algorithm exactly
+✅ Auto-detect 100% of ROMs (including ROM 18612)
+✅ Parse RAT tags programmatically
+✅ Read .mwl project files
+✅ Remove need for --table-offset flag
+✅ Document everything for future reference
+
+════════════════════════════════════════════════════════════════════════
+
+ESTIMATED EFFORT:
+────────────────────────────────────────────────────────────────────────
+
+Time: 2-5 days of focused work
+Skill Level: Intermediate reverse engineering
+Tools: Ghidra (free), patience, persistence
+
+This is advanced work but achievable with methodical analysis.
+
+════════════════════════════════════════════════════════════════════════
+
+READY TO BEGIN?
+────────────────────────────────────────────────────────────────────────
+
+1. Install Ghidra: https://ghidra-sre.org/
+2. Load lm32.exe
+3. Search for 0x084E42
+4. Start documenting what you find!
+
+Good luck! 🔍
+
+════════════════════════════════════════════════════════════════════════
+

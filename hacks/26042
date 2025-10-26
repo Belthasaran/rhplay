@@ -1,0 +1,38 @@
+{
+    "name_href": "//dl.smwcentral.net/26042/Riff%20World%202.zip",
+    "name": "Riff World 2",
+    "author_href": "/?p=profile&id=31494",
+    "author": "Freakin_HA",
+    "added": "2021-01-30 01:09:37 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "32 exit(s)",
+    "type": "Kaizo: Expert",
+    "description": "Riff World 2 is a kaizo Super Mario World hack that I have been working on for quite a long time, it has been in development since mid 2018. This hack features a blend between modern and old kaizo level design.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=bosses",
+    "tags": [
+        "bosses",
+        "music",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "17 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=26042",
+    "id": "26042",
+    "pat_sha224": "869e1a42eaea6dd3cc4781671376b9426c1345f93b2b7715e8fb3f15",
+    "pat_sha1": "061eeb4f6bcb5a96d3a0bb4b954770b5e34d812d",
+    "pat_shake_128": "tD1dOJuiTVx3MRnBUFTfesUm6uqcFcCr",
+    "result_sha224": "b945ec933094eef2adffd521db589d6edd0c214e7935973738ebd7c1",
+    "result_sha1": "33906f57237830b60a3cd21052262265a6859101",
+    "result_shake1": "lejel0ebMQzFNCZ7zY61vFkBrAl3XgIo",
+    "rom": "rom/26042_lejel0ebMQzFNCZ7zY61vFkBrAl3XgIo.sfc",
+    "patch": "patch/tD1dOJuiTVx3MRnBUFTfesUm6uqcFcCr",
+    "patchblob1_name": "pblob_26042_3e9de5c6eb",
+    "patchblob1_key": "UzRiWGloNG84ZlZGRGpna2prbW5MZ2gwRzJUMWkwaTlMLWVveXBpQ1lxVT0=",
+    "patchblob1_sha224": "3e9de5c6eb6b53fe8934162518c0eba273cd850452b09d112a13eec8",
+    "romblob_salt": "KllzqpIp3u1ViNaAiUWXDg==",
+    "romblob_name": "rblob_26042_625dc80580"
+}

@@ -1,0 +1,13 @@
+{
+  "gameid": "9799",
+  "patch": "/home/main/proj/rhtools/patch/gPIyqLRqF65xeRraNW2VjUKuQv_TpxJh",
+  "patch_filename": "MIX4AAE.bps",
+  "pat_sha1": "5c07ef41e069a94312ee8a2f2b3326da9b295ff5",
+  "pat_sha224": "c7bef8e544f7235642a19af6b1960a324702c4234c510e4420b0ee3a",
+  "pat_shake_128": "gPIyqLRqF65xeRraNW2VjUKuQv_TpxJh",
+  "result_sha1": "e124f61e0a21a136ee82bde9454f4c676dedab23",
+  "result_sha224": "dc28833091848f6247e9bd77baa2757836f5f2294df6f11a8cb3626a",
+  "result_shake1": "3Ux0MIncFr1_d4-REEOx2nBbDMwdfnNj",
+  "rom": "/home/main/proj/rhtools/rom/9799_3Ux0MIncFr1_d4-REEOx2nBbDMwdfnNj.sfc",
+  "id": "9799"
+}

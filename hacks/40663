@@ -1,0 +1,13 @@
+{
+  "gameid": "40663",
+  "patch": "/home/main/proj/rhtools/patch/fS103JtJSMDmc195nfui9tOqvlz-WWtV",
+  "patch_filename": "Super Dram World 3 v1.3/Super Dram World v1.2 Music/Super Dram World v1.2.bps",
+  "pat_sha1": "d53b4dd82295fa9765d2bf023b5cf113cfa1a8d2",
+  "pat_sha224": "7a815b5fe8591a7255de168232417cb3488d4161c0e79ac5a63e537f",
+  "pat_shake_128": "fS103JtJSMDmc195nfui9tOqvlz-WWtV",
+  "result_sha1": "e876453387f92f645ac58a42650c8ea0f06e71cf",
+  "result_sha224": "9f0f600ba992cc421e128bd771fe72309e41572b9949cdadcec347d3",
+  "result_shake1": "ei6vPa66P1H6dJjgLHqsL_JWmSeOD8v7",
+  "rom": "/home/main/proj/rhtools/rom/40663_ei6vPa66P1H6dJjgLHqsL_JWmSeOD8v7.sfc",
+  "id": "40663"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "40683",
+  "patch": "/home/main/proj/rhtools/patch/XufoUGmw2lw9EyBdZdxtNRxsgJi80xJK",
+  "patch_filename": "good old days - recycle bin v1.11.bps",
+  "pat_sha1": "08fdb1de7a07a7edfddc01a296e99b52270d0387",
+  "pat_sha224": "8d7f09412d3b6bfe57f0ad7baeba26c1227a68c83c3da9b1ba1bf2a2",
+  "pat_shake_128": "XufoUGmw2lw9EyBdZdxtNRxsgJi80xJK",
+  "result_sha1": "9afc20acb092ab679c31e89a770f33e0016f51b5",
+  "result_sha224": "56cbf2d46c0dfc342e9f1cdcbcc55c64d1f8d43845ab643c64928421",
+  "result_shake1": "-wsioVlsmXeoqKVPPm0Q05FOOfS7XFPL",
+  "rom": "/home/main/proj/rhtools/rom/40683_-wsioVlsmXeoqKVPPm0Q05FOOfS7XFPL.sfc",
+  "patchblob1_name": "pblob_40683_d14c0d472f",
+  "patchblob1_key": "UFFRMXZ4STJRX01BQ1RQa3ZRcEZkbVBFcFNSMFY1ZVRFTmVfa1NFU1VFTT0=",
+  "patchblob1_sha224": "d14c0d472f9d52ad4bd376f3bbede85e3e299043c759c7b645ec753f",
+  "romblob_name": "rblob_40683_48705695c8",
+  "romblob_salt": "t6zL-3fIfc5BCJDWaQYvYg=="
+}

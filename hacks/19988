@@ -1,0 +1,13 @@
+{
+  "gameid": "19988",
+  "patch": "/home/main/proj/rhtools/patch/BBQ-TOTbz7m1QWVR70I7E_M3Y5qIKk8G",
+  "patch_filename": "SuperSpongeWorld.bps",
+  "pat_sha1": "241a02ed9b6242a9fbff9a5c1b330b57647a7f69",
+  "pat_sha224": "5c78bee518847129cf7fdcbe22eeba2ee1b685c72953d85380c2dc20",
+  "pat_shake_128": "BBQ-TOTbz7m1QWVR70I7E_M3Y5qIKk8G",
+  "result_sha1": "e3f5f2b135b47e913b92f56c9fa4d89cdd316c8f",
+  "result_sha224": "0169887f350b33a1bcf95fde9de23e36f574e75fc44e9e1f55758e30",
+  "result_shake1": "WROEli4BYSWUz0o_4hLiziIB6DsgxgDL",
+  "rom": "/home/main/proj/rhtools/rom/19988_WROEli4BYSWUz0o_4hLiziIB6DsgxgDL.sfc",
+  "id": "19988"
+}

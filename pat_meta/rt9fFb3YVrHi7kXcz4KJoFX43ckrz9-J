@@ -1,0 +1,17 @@
+{
+  "id": "32431",
+  "patch": "/home/main/proj/rhtools/patch/rt9fFb3YVrHi7kXcz4KJoFX43ckrz9-J",
+  "patch_filename": "4th Chamber.bps",
+  "pat_sha1": "e650a7343b32f5a477f1de352351c67eed93cadd",
+  "pat_sha224": "f37535e60cbf2da1718a0a5e2eaf28b1311ae590c3a71cf784774412",
+  "pat_shake_128": "rt9fFb3YVrHi7kXcz4KJoFX43ckrz9-J",
+  "result_sha1": "cc0d3e524a4ca82dab3d731e86aadcc8b096e1c6",
+  "result_sha224": "5aa7ab0fdb1592c63422e8600eb88ed7e15f97a4c65ef7fd7fd98bae",
+  "result_shake1": "IOQMwcjt-MKvmWiTkzlG5GFUiQLb_CDs",
+  "rom": "/home/main/proj/rhtools/rom/32431_IOQMwcjt-MKvmWiTkzlG5GFUiQLb_CDs.sfc",
+  "patchblob1_name": "pblob_32431_bd61779e84",
+  "patchblob1_key": "WXd6bGxINzU2S3RUNll2RW5DX3dERmRMYWJuTDBUeDB4bzhZaTBFWEl1dz0=",
+  "patchblob1_sha224": "bd61779e84d339e62d6472ce7dd1cd76ca06ae0ca20e9be4e29b39cb",
+  "romblob_name": "rblob_32431_fb69c31306",
+  "romblob_salt": "t4uHMimvShoPY7fDgfwGMg=="
+}

@@ -1,0 +1,17 @@
+{
+  "id": "40645",
+  "patch": "/home/main/proj/rhtools/patch/tBkrfkRRenekQjbL6zdoj594NuKBNMhl",
+  "patch_filename": "MariosMisadventures2 v1.0.5.bps",
+  "pat_sha1": "04abb1e2b7c37009ecda3c4694e71c28defc3ad7",
+  "pat_sha224": "40f0f343f326dfc78f8d48de87ce99f0f4efdbbccac0b14c8efe0e9e",
+  "pat_shake_128": "tBkrfkRRenekQjbL6zdoj594NuKBNMhl",
+  "result_sha1": "9fbcbe59282b3dcb52703a192816962489573905",
+  "result_sha224": "1fa8016535ec3df64a59a676272c1beabb6d58ec8bf7c9dd97690081",
+  "result_shake1": "5_GHTu9sANg3MekCA1cIsReJJ5pus3A4",
+  "rom": "/home/main/proj/rhtools/rom/40645_5_GHTu9sANg3MekCA1cIsReJJ5pus3A4.sfc",
+  "patchblob1_name": "pblob_40645_681b4ad85a",
+  "patchblob1_key": "cFhSZEJMelBGVTh1REZMYTZpZFRZUXlZUnY3cVZDRGFxNF9DS2FVc0pFZz0=",
+  "patchblob1_sha224": "681b4ad85ad484f87c21079e6a1d75c10e72309a469367321986dc97",
+  "romblob_name": "rblob_40645_32fc953b1b",
+  "romblob_salt": "xd9yayB4MtQxY2PUan7J0Q=="
+}

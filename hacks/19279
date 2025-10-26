@@ -1,0 +1,37 @@
+{
+    "name_href": "//dl.smwcentral.net/19279/Quickie%20World%202.zip",
+    "name": "Quickie World 2",
+    "author_href": "/?p=profile&id=33350",
+    "author": "Valdio",
+    "added": "2019-03-08 04:06:26 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "22 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Luigi wants some too.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=kaizo",
+    "tags": [
+        "kaizo",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "94 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=19279",
+    "id": "19279",
+    "pat_sha224": "ba974b04aad338d1516ea2dfedc7d604824fc48f29370d1b7c24d3e1",
+    "pat_sha1": "26cbe5e502b6ba78e6ae6c2093df989bdcf4a429",
+    "pat_shake_128": "V_M_-FanC6SMWuxdh0Mhs42cFRPPhBo3",
+    "result_sha224": "92904047fb3615e3108135daaa6b3257b4cd853c13e1db3d35724c26",
+    "result_sha1": "edfa21b2e6ddb5aca36d7ca93881f08ce905bfee",
+    "result_shake1": "VU-sKGCvoqQdhY6XHRYGC8Arm29OwAWO",
+    "rom": "rom/19279_VU-sKGCvoqQdhY6XHRYGC8Arm29OwAWO.sfc",
+    "patch": "patch/V_M_-FanC6SMWuxdh0Mhs42cFRPPhBo3",
+    "patchblob1_name": "pblob_19279_4998ec11b5",
+    "patchblob1_key": "eFlnZWUzV0JheTBvNjJyRDZYRmMyRkZSdGFfVjUxSzBYUUI0YlpLRG1OZz0=",
+    "patchblob1_sha224": "4998ec11b5192b4c64507bf998912b7b41c7bbf9ec86f6ea4fe133a2",
+    "romblob_salt": "4iEsGp1mqYheLiooJzOcKA==",
+    "romblob_name": "rblob_19279_497eccbd2f"
+}

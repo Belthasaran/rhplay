@@ -1,0 +1,17 @@
+{
+  "id": "25332",
+  "patch": "/home/main/proj/rhtools/patch/4q4yclT_Q0Fdl8jqtxVOrciZe3gpLOpy",
+  "patch_filename": "super mio world/Super_mio_World_PT_BR_.bps",
+  "pat_sha1": "f5b2372c1fe665901b55c0b1605412782a4b9928",
+  "pat_sha224": "8d19ed7c2974ebd8274c548eb34d7faf5e4e9dab8b236f51f1a1e954",
+  "pat_shake_128": "4q4yclT_Q0Fdl8jqtxVOrciZe3gpLOpy",
+  "result_sha1": "4017f069d83865f75dbb1a92031d11dd346de8e0",
+  "result_sha224": "524e7445904ac716c6ccd11a346cf34d678b4c93cb3a8d38b5ea3f47",
+  "result_shake1": "sCHMLrbpvrrjwwGGpGxiXUBRMULmiMEe",
+  "rom": "/home/main/proj/rhtools/rom/25332_sCHMLrbpvrrjwwGGpGxiXUBRMULmiMEe.sfc",
+  "patchblob1_name": "pblob_25332_3c1aba1ce8",
+  "patchblob1_key": "ZGpNekNDVk5FR0NuSGNBNWlGTUNmM1FTYy1DclhKZ0JhMkZYdWJCUEwtMD0=",
+  "patchblob1_sha224": "3c1aba1ce824587717fc5451996c8764819b90843a16651238e01a0c",
+  "romblob_name": "rblob_25332_406f5a3ed0",
+  "romblob_salt": "THMf5olZHHMBC_0F8rJmkg=="
+}

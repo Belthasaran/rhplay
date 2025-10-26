@@ -1,0 +1,13 @@
+{
+  "gameid": "40549",
+  "patch": "/home/main/proj/rhtools/patch/Fwe5svYN8P3NPRYsqpGHK3eA8w-C8O1a",
+  "patch_filename": "VuitGrups.bps",
+  "pat_sha1": "6950c01568fe1f64443e55cfde953516b9ebe10e",
+  "pat_sha224": "cf7be6820a2b2a4a6fd30f8e749395a615734affd622e8859e033ed0",
+  "pat_shake_128": "Fwe5svYN8P3NPRYsqpGHK3eA8w-C8O1a",
+  "result_sha1": "f1199ea4a2787ed6ab8f7182e301ce86efe7e023",
+  "result_sha224": "a88a4f258e1cffdc068eefe971a016233d8af189e960c5fa90c6cdd4",
+  "result_shake1": "2bJ1nSG7q9-hcMdKSxGKX-s40f4PHTo8",
+  "rom": "/home/main/proj/rhtools/rom/40549_2bJ1nSG7q9-hcMdKSxGKX-s40f4PHTo8.sfc",
+  "id": "40549"
+}

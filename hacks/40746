@@ -1,0 +1,13 @@
+{
+  "gameid": "40746",
+  "patch": "/home/main/proj/rhtools/patch/gjDA_LMxDtBgvcvzqLI65H52ixU4Spu6",
+  "patch_filename": "SOTM.bps",
+  "pat_sha1": "c5ce338342b38f3747f66871a7e970ba25e0af01",
+  "pat_sha224": "17715c93cf528e359c0ecccebe365db25e03dba907ff7eb35f4739e4",
+  "pat_shake_128": "gjDA_LMxDtBgvcvzqLI65H52ixU4Spu6",
+  "result_sha1": "278c9226ab50b0b47ae7230c0dcbd617a76bcd18",
+  "result_sha224": "0344b0cb4d1dbd14943301c5bf16c07840f17b9793c7a416ad495f0d",
+  "result_shake1": "fK2xUYCGiiIVyUBzBYx56yMuo4m6-EX8",
+  "rom": "/home/main/proj/rhtools/rom/40746_fK2xUYCGiiIVyUBzBYx56yMuo4m6-EX8.sfc",
+  "id": "40746"
+}

@@ -1,0 +1,28 @@
+
+Addendum to  fetchpatches.js  MODE2 features
+
+*  --ipfsgateway=URL  option -  Option can be used multiple times when calling the script.  If the file is
+not found on the first IPFS gateway, then the later gateways in the list will be searched.
+
+* If the string %CID% is contained in the gateway URL, then it will be replaced with the CID.
+If not, then the standard pattern for using the IPFS gateway will be assumed.
+* If the --ipfsgateway= option is not given, then by default a list of default IPFS gateways will be used, including:
+all gateway listed in the url attribute of the ipfsgateways table of the existing patchbin.db sqlite database.
+Except gateways that failed within the last 10 minutes according to the notworking_timestamp attribute will
+be skipped.
+
+* During initialization, before the script starts the overall search pattern in mode2: verify the IPFS
+gateway is responsive and working correctly, by requesting the
+file with CID  bafybeifx7yeb55armcsxwwitkymga5xf53dxiarykms3ygqic223w5sk3m  and then wait 2 seconds
+
+The output should consist of the text "Hello from IPFS Gateway Checker"
+That output has a SHA256 sum of 7530010a7ec61daef2e028720f102a75d40af932528e742eb10cdae4de8d7004
+
+If the IPFS gateway errors or fails to reply, then display a warning message and skip the gateway for all
+subsequent searches.   Update the gateway's notworking_timestamp  timstamp in the database to match the
+current time, and place the error text in the error attribute.
+
+
+
+
+

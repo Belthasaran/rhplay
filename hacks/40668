@@ -1,0 +1,13 @@
+{
+  "gameid": "40668",
+  "patch": "/home/main/proj/rhtools/patch/n6gvPscW4H_pmp-CMoVzVCkCx6IXF-o2",
+  "patch_filename": "The Found Levels featuring Aeron (version 1.2.3).bps",
+  "pat_sha1": "6c2100c4631066e1b18fb81efc1b13829b671f9a",
+  "pat_sha224": "cb0342f2d9990616f3dce58b4619b3c943070de8c8d2c46f623e2603",
+  "pat_shake_128": "n6gvPscW4H_pmp-CMoVzVCkCx6IXF-o2",
+  "result_sha1": "81b4f4192c9ed75d333e773f2528af7b6fe75c82",
+  "result_sha224": "44477d0116562d37b99047c9b45d90e2a293f3ee0c09e395f8a9aad0",
+  "result_shake1": "bRsQNtmHEVUPCoLNYFEqWjuJcoafgutV",
+  "rom": "/home/main/proj/rhtools/rom/40668_bRsQNtmHEVUPCoLNYFEqWjuJcoafgutV.sfc",
+  "id": "40668"
+}

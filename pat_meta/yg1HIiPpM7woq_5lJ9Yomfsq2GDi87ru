@@ -1,0 +1,17 @@
+{
+  "id": "19571",
+  "patch": "/home/main/proj/rhtools/patch/yg1HIiPpM7woq_5lJ9Yomfsq2GDi87ru",
+  "patch_filename": "SuperFartWorld.bps",
+  "pat_sha1": "73a7a90b2deaa3330f644870fb8a73055694f98e",
+  "pat_sha224": "e83b6e3c557313cde4ded6a56c791288ddfafc26638f4432c33e6629",
+  "pat_shake_128": "yg1HIiPpM7woq_5lJ9Yomfsq2GDi87ru",
+  "result_sha1": "11129aa6ab202a36ca230b6b7dd700254dd720e3",
+  "result_sha224": "1de50239f49f3ceb701aae421834d7a96d997cdcb95502696d4b9a5c",
+  "result_shake1": "nZxC_i0nTM8vxpXb__pSK5cFPPlxz2s8",
+  "rom": "/home/main/proj/rhtools/rom/19571_nZxC_i0nTM8vxpXb__pSK5cFPPlxz2s8.sfc",
+  "patchblob1_name": "pblob_19571_b0162f1266",
+  "patchblob1_key": "MDZ2SjlHU0NwRmZMdW9iYU12cE4xLUtmOFBtQXBOdEdWbFBHWGFsbVU0UT0=",
+  "patchblob1_sha224": "b0162f1266eb2deef905ace6241715a6c7060d4cdcc3adb536bf267f",
+  "romblob_name": "rblob_19571_1ed07ae507",
+  "romblob_salt": "Nog_6GsYeCBemWSQt0m2EA=="
+}

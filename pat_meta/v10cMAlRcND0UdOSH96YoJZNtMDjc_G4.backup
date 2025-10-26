@@ -1,0 +1,16 @@
+{
+  "id": "40663",
+  "patch": "/home/main/proj/rhtools/patch/v10cMAlRcND0UdOSH96YoJZNtMDjc_G4",
+  "patch_filename": "Super Dram World 3 v1.3/Super Dram World v1.3.bps",
+  "pat_sha1": "2acafa4e0163c19f8920801c9de615955261e11d",
+  "pat_sha224": "5761254402dd8e5d6e065985bd44574343c441fa533ffa4be8e3393a",
+  "pat_shake_128": "v10cMAlRcND0UdOSH96YoJZNtMDjc_G4",
+  "result_sha1": "4d58059b43785dc9c7e30e583202bc45120f616b",
+  "result_sha224": "986d288e85286195a57e90c1170571f2ff0d75bc00b385db00b253ee",
+  "result_shake1": "St6z91sbK2QRTu68qesSK9aNkbUFHY1D",
+  "rom": "/home/main/proj/rhtools/rom/40663_St6z91sbK2QRTu68qesSK9aNkbUFHY1D.sfc",
+  "patchblob1_name": "pblob_40663_790d333202",
+  "patchblob1_key": "p2aVxpQEz2LVAr4n8yoTYqXX5BSzEOHvmBrjWtZ7Nxg=",
+  "patchblob1_sha224": "790d33320270a5dc981594ad932e238118bd9addd95b383144056d2a",
+  "romblob_name": "rblob_40663_2f9999a128"
+}

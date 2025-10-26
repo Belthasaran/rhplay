@@ -1,0 +1,53 @@
+Now I want to implement mode2 of the script.
+
+This mode is to scan the attachments table for records where the file_data
+attribute is NULL but the file_size and SHA224 or SHA256 of the file are known in ascending
+order based on the last_search attribute up to a maximum number of files chosen by a --searchmax
+option default to 20. Then look for the file content anywhere we can find it in order to populate 
+the file_data. The idea is the database is to be shipped with metadata attributes, but
+file_data is to be completed slowly over time or on-demand when necessary.
+
+If the file can be found anywhere, and verified using a secure cryptographic hash, then we update the file_data attribute of the attachment records to contain the correct file data.
+If the file cannot be found anywhere, then we update the last_search timesetamp of the record to the current time.
+
+For script mode2   we should have options for looking for the files.
+
+These options are tried in order from A,B,C,D,E,F,G to search for matching file data.
+By default only option A is used. Option A can be excluded by specifying --nosearchlocal
+Additional options are added to the search by specifying a parameter,
+such as --searchlocalpath=../  or --searchlocalpath="C:\path\to\search" which can be specified multiple times.
+or  --searchardrive --searchipfs
+
+By default when searching folders: we skip files that do not have the correct filename or that do not have the correct file size.  But when searching inside Zip or 7z archive files we have to read the file sizes and names inside all archive files to check if a match could be inside the file.  By default we skip and do not download or search files larger than 200MB; larger files can be searched by giving a --maxfilesize=400MB option, for example,
+to set the limit at 400MB. 
+
+  - Option A: searchlocal, unless --nosearchlocal is used: Search the local file system for files which match: all folders recursively beneath a default list of program folders. We do not recurse below folders which are symbolic links.  We account for the fact
+    that the file on the local system may have a different file extension from the attachment.
+	
+  - Option B: --searchlocalpath Is the same as option A: searchlocal, except our search starts at a location on the filesystem or disk drive. The specified location can also be the full path to an archive file, Zip, 7z, Tar file, or  .ISO disk image, whose contents are to be scanned for the file data we are looking for. The script should have a parameter we can set to choose the base of our search.
+
+  - Options A, B, and E should have an --ignorefilename option not active by default to scan all files based on their SHA224 hash. In this case we are looking for data anywhere which matches     the correct hash in order to populate the file_data attribute.
+
+  - Option C: --searchardrive is to attempt to search the ardrive based on the arweave_file_id attribute.
+    If no file with the given id is found, then search any file on the ardrive with the correct arweave_file_name
+    or arweave_file_path
+
+  - Option D: --searchipfs is to attempt to retrieve the file from IPFS using the file_ipfs_cidv1 and file_ipfs_cidv0.  There should be optional parameters offered for selecting an IPFS client or an IPFS gateway
+there should be an optional parameter for a gateway URL to read IPFS through a HTTPS gateway.
+  
+  - Option E: --allardrive files is to attempt a broader search of all files in the public ardrive folder PUBLIC_FOLDER_ID "07b13d74-e426-4012-8c6d-cba0927012fb", and search the whole ardrive with driveID  "58677413-8a0c-4982-944d-4a1b40454039". A quick check based on ardrive metadata without downloading files is attempted first, and any exact matches will be tried before any search that requires downloading all files.
+The downloaded file could also be .tar file, .zip file, or a .7z file which contains the sought file inside it;
+make sure to search the archive file for any file data that matches the correct hash.
+
+ - Option F: --download is to check for specific download_urls attribute of the attachments table.
+ If the recored attribute is not NULL, then it can be a string listing a specific URL.
+ The download_urls attribute in the database can also be a JSON-encoded array of strings.
+ If this option is used, then try to search each URL in random order until a matching file is found or they all failed. If the downloaded data is a Zip, 7z, or tar archive, then search for a match in the archive.
+
+ - Option G: --apisearch --apiurl=https://example.com/path/to/endpoint is to submit a POST request to a private
+ search API located at the specified API URL. Before searching make sure the donotsearch table of the patchbin.db database does not have a non-expired donotsearch entry for this server or URL.  The POST form contains JSON data with the following dictionary attributes corresponding to attributes in the attachments table: auuid, pbuuid, gvuuid, resuuid, file_crc16, file_crc32, locators, parents, file_ipfs_cidv0, file_ipfs_cidv1, file_hash_sha224, file_hash_sha1, file_hash_md5, file_hash_sha256, file_name, decoded_ipfs_cidv0, decoded_ipfs_cidv1, decoded_hash_sha224, decoded_hash_sha256, updated_time, import_time, download_urls, arweave_file_name, arweave_file_id, arweave_file_path, last_search, file_size.  The server's response to the POST request will either be binary file object  that should be the file_data we  are searching for, but the reply can also be a text docuement or JSON document. A JSON document would be a dictionary with an url attribute indicating retrieval URLs, or an update attribute containing replacement values to update the attachment record with. If an update attribute is included, then an included signeruuid and signature attribute based on signing a SHA256 hash or other hash of the update string using an ED25519 keypair must be verified against an authorized signer found in the signers SQL table.  If the reply status code is HTTP ERROR 403, then cancel this search option and make no more queries to this endpoint during the script run.  If the server returns HTTP ERROR 603, then do the same and insert this server into the donotsearch table with url as the API URL .
+
+
+- By default, The searchlocal and searchlocalpath options should also have optional parameters to scan inside archive files and ISO disk images.
+
+

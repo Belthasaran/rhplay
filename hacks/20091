@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/20091/Kaizo%20Kindergarten%20v1.09.zip",
+    "name": "Panga's Kaizo Kindergarten (For Dummies)",
+    "author_href": "/?p=profile&id=3491",
+    "author": "PangaeaPanga",
+    "added": "2019-06-14 07:15:26 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "40 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description_href": "https://bit.ly/2W6ehML",
+    "description": "Change log",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "fixme",
+        "gimmick",
+        "glitch",
+        "secrets"
+    ],
+    "comments_href": "#comments",
+    "comments": "60 ",
+    "rating": [
+        "4.5"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=20091",
+    "id": "20091",
+    "pat_sha224": "37e6a4c54a542122bccdea8ec8f319ae352193b7f5d687b6c80e04e0",
+    "pat_sha1": "11822ee208c7cca3499a1c82903abdd8e76ee6ec",
+    "pat_shake_128": "PCFOzuLpXxuejZ10GSNJdTC5m6IIBTpO",
+    "result_sha224": "b382f3af2257f0b4d31d383d9c1bab761bc3a104dae4df8d2ab9211e",
+    "result_sha1": "2ebada8cc0822a3600c9cf606d26bd55e326fa18",
+    "result_shake1": "ulXa3MHi2mz2TEtylYfksX1AgNjbAOJ6",
+    "rom": "rom/20091_ulXa3MHi2mz2TEtylYfksX1AgNjbAOJ6.sfc",
+    "patch": "patch/PCFOzuLpXxuejZ10GSNJdTC5m6IIBTpO",
+    "patchblob1_name": "pblob_20091_88e604c9de",
+    "patchblob1_key": "c2NHajRYaUtoWEdlSnZyeW5peHU3MmwySU9ZUWRQeHpYa2lIRUZMSkQ1Zz0=",
+    "patchblob1_sha224": "88e604c9de6345f265643a69ee3cc8e35393b7e2324113e7b0d03d6d",
+    "romblob_salt": "37Ll9HrskqlPlllxaP1ZwQ==",
+    "romblob_name": "rblob_20091_779e8d3e43"
+}

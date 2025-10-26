@@ -1,0 +1,13 @@
+{
+  "gameid": "40597",
+  "patch": "/home/main/proj/rhtools/patch/PpRf2lZfEv77kmc2dB30lVlb-f4TxzEr",
+  "patch_filename": "SMW_MIX_BETA2.bps",
+  "pat_sha1": "f7b733db22e784cc122e66c406d0babf64f7c5af",
+  "pat_sha224": "0a36377e4f7fced513858bafd4f099504f8acf36409780baa6561393",
+  "pat_shake_128": "PpRf2lZfEv77kmc2dB30lVlb-f4TxzEr",
+  "result_sha1": "fa390d061f95a05ffc82bb037f148043af14066b",
+  "result_sha224": "e9c8fdaef6456fb6f758e4c0e7db64e7d8a18f37c8547cf89c811ac1",
+  "result_shake1": "tnHfWUxESpervBNQ4_cV861R1Q0j8a02",
+  "rom": "/home/main/proj/rhtools/rom/40597_tnHfWUxESpervBNQ4_cV861R1Q0j8a02.sfc",
+  "id": "40597"
+}

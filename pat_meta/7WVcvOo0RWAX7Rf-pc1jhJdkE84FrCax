@@ -1,0 +1,17 @@
+{
+  "id": "9862",
+  "patch": "/home/main/proj/rhtools/patch/7WVcvOo0RWAX7Rf-pc1jhJdkE84FrCax",
+  "patch_filename": "Kid Adventure 3 (English version).bps",
+  "pat_sha1": "6ad27a0d350c54587a2e8c7bfc2a467b2b758691",
+  "pat_sha224": "7dd66ea5bbd75120d9636bda3690ee49510b3e96f933f5f1b9ff7eeb",
+  "pat_shake_128": "7WVcvOo0RWAX7Rf-pc1jhJdkE84FrCax",
+  "result_sha1": "6036b0c8a9279a8ccd9e325d7863f175131e6b01",
+  "result_sha224": "f89c0937881c7fa11e234d4d6e6931e5c810f4896f374de0e13e6736",
+  "result_shake1": "_d3nMU-tZYn_PGSRRnXPIl1zYwjY6Sz_",
+  "rom": "/home/main/proj/rhtools/rom/9862__d3nMU-tZYn_PGSRRnXPIl1zYwjY6Sz_.sfc",
+  "patchblob1_name": "pblob_9862_f9ec465ea4",
+  "patchblob1_key": "NlJUNUQxVjB3SGZqQlpIME1Ld0UyUzdlYlByM1RvUzFMemJhaERXQmZncz0=",
+  "patchblob1_sha224": "f9ec465ea49f2a5ca091c9c3ce823f7133b17ac3f83d84684d8dd17e",
+  "romblob_name": "rblob_9862_b5d05b6135",
+  "romblob_salt": "i_dTMTxV0u_7c-DXX53SOg=="
+}

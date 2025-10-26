@@ -1,0 +1,164 @@
+Addendum to FETCHPATCHES_MODE2_SPEC.txt
+
+================================================================================
+SERVER SIGNATURE SCHEME (UPDATED)
+================================================================================
+
+The server signing implementation has been updated from the original spec.
+Here is the current implementation:
+
+Option G: --apisearch --apiurl=URL --apiclient=ID --apisecret=SECRET
+
+Server POST Request:
+  - URL: Configured API endpoint (e.g., http://localhost:3000/api/search)
+  - Method: POST
+  - Headers:
+    * X-Client-Id: <client-id>
+    * X-Client-Secret: <client-secret>
+    * Content-Type: application/json
+  - Body: JSON with attachment metadata fields
+
+Server Response Types:
+
+1. Binary File (if file_data available):
+   - Content-Type: application/octet-stream
+   - Headers:
+     * X-File-Name: filename
+     * X-File-Size: size in bytes
+     * X-Signature-List-UUID: siglistuuid (if signed)
+   - Body: Raw file data
+   - Note: Binary responses are NOT signed (file hash provides integrity)
+
+2. JSON Metadata (if no file_data):
+   {
+     "found": true,
+     "data": {
+       "auuid": "...",
+       "file_name": "...",
+       "row_version": 2,
+       "siglistuuid": "siglist-uuid",
+       "arweave_file_id": "...",
+       "file_ipfs_cidv1": "...",
+       "download_urls": "..."
+     },
+     "mdsignatures": {
+       "siglist-uuid": [
+         {
+           "signeruuid": "metadata-signer-uuid",
+           "signature": "hex-signature",
+           "signature_algorithm": "ED25519",
+           "hash_algorithm": "SHA256",
+           "signed_at": "2025-10-11T12:00:00Z",
+           "signer_name": "Metadata Signer",
+           "publickey_type": "ED25519"
+         }
+       ]
+     },
+     "server_signature": {
+       "signeruuid": "server-signer-uuid",
+       "signature": "hex-signature",
+       "algorithm": "ED25519",
+       "hash": "sha256-hash-of-data"
+     },
+     "metadata_updates": [...]  # Optional: Additional records to update
+   }
+
+3. Not Found:
+   {
+     "error": "Not found",
+     "message": "No matching attachments found"
+   }
+   - Note: Error responses should still include server_signature
+
+Client Validation (REQUIRED):
+
+1. Server Signature Validation:
+   - MUST verify server_signature on all JSON responses
+   - MUST reject response if signature invalid
+   - MUST verify signer is 'server' type in client's signers table
+   - Hash verification:
+     a. Serialize response.data as JSON string
+     b. Calculate SHA-256 hash
+     c. Verify matches server_signature.hash
+     d. Verify signature using server signer's public key
+
+2. Metadata Signature Validation (for storing updates):
+   - CAN read unsigned metadata
+   - MUST NOT store updates unless properly signed
+   - MUST verify at least one valid metadata signature
+   - MUST verify signer is 'metadata' type
+   - MUST verify signed_row_version <= row_version
+
+3. Version Conflict Resolution:
+   - If client row_version >= server signed_row_version: SKIP
+   - If server signed_row_version > client row_version: APPLY
+   - Track versions in local database
+
+4. Signed Actions:
+   - signed_action = 'upsert': Insert or update record
+   - signed_action = 'delete': Delete record from client database
+
+HTTP Error Handling:
+
+- HTTP 403 Forbidden:
+  * Cancel API search for this endpoint
+  * Do not make more requests this run
+  * Do not add to donotsearch table (temporary)
+
+- HTTP 603 (Custom):
+  * Cancel API search for this endpoint
+  * Add to donotsearch table with expiry
+  * Do not query this endpoint until expiry
+
+donotsearch Table:
+  - url: API endpoint URL
+  - stop_time: Seconds to block (default 17200 = ~5 hours)
+  - since: When block started
+  - server_response: Error message
+  - Before querying, check if URL is in donotsearch with unexpired entry
+
+Row Versioning:
+
+All signed tables now have:
+  - row_version: Current version of record (INTEGER, default 1)
+  - siglistuuid: Link to signatures
+
+signaturelists table now has:
+  - signed_row_version: Which version was signed
+  - signed_action: 'upsert' or 'delete'
+  - signlist_timestamp: When signed
+
+When row_version is incremented, old signatures become invalid.
+Signing script automatically detects version mismatch and replaces signatures.
+
+Signed Tables:
+  - attachments (patchbin.db)
+  - gameversions (rhdata.db)
+  - patchblobs (rhdata.db)
+  - rhpatches (rhdata.db)
+  - signers (patchbin.db) - Can sign the signer list itself!
+
+================================================================================
+SUMMARY OF CHANGES FROM ORIGINAL SPEC
+================================================================================
+
+Original Spec Proposed:
+  - Signature verification with ED25519
+  - signeruuid and signature in update response
+  - Signature of SHA256 hash of update string
+
+Current Implementation:
+  ✅ ED25519 and RSA support
+  ✅ Row versioning system
+  ✅ signaturelists and signaturelistentries tables
+  ✅ Multiple signers per record
+  ✅ Server signature separate from metadata signatures
+  ✅ Binary responses return file data directly (not signed)
+  ✅ JSON responses include both metadata and server signatures
+  ✅ signed_action for delete operations
+  ✅ Version conflict resolution
+  ✅ donotsearch table support (to be implemented in client)
+  ✅ HTTP 403/603 handling (to be implemented in client)
+
+================================================================================
+

@@ -1,0 +1,39 @@
+{
+    "name_href": "//dl.smwcentral.net/17441/QuickieWorld1.12.zip",
+    "name": "Quickie World",
+    "author_href": "/?p=profile&id=33350",
+    "author": "Valdio",
+    "added": "2018-04-24 02:40:18 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "14 exit(s)",
+    "type": "Kaizo: Beginner",
+    "description": "Hey kid, you wanna go fast?",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "music",
+        "traditional",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "101 ",
+    "rating": [
+        "4.8"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=17441",
+    "id": "17441",
+    "pat_sha224": "631428025f41a1743ece4f1f4084fed2a69d8a2fe58275e352860a21",
+    "pat_sha1": "cce9e1b687d42ef2ab531b5179845d5b1bf35fa7",
+    "pat_shake_128": "bSySWg3JD5lhz0VVyR7StRktXF_kMtwa",
+    "result_sha224": "86da16e359de048a7d9cb22734cf04fef2412e71db0a2298eeaeeaad",
+    "result_sha1": "b27297217808ffe5474895b914fd114c874507ea",
+    "result_shake1": "bMETCn84qdhkozffaCqY7LK6Ly0S4sUE",
+    "rom": "rom/17441_bMETCn84qdhkozffaCqY7LK6Ly0S4sUE.sfc",
+    "patch": "patch/bSySWg3JD5lhz0VVyR7StRktXF_kMtwa",
+    "patchblob1_name": "pblob_17441_97be81bf8b",
+    "patchblob1_key": "aklveDV6bmVnRDZfVEpjWHl0c1F5ZXM5TUk2d2xFMVRENU16d1c1MHhZYz0=",
+    "patchblob1_sha224": "97be81bf8bfa146bd69cd8e34b718dae6f8710c040851768c057a440",
+    "romblob_salt": "ZIIf8vm0p-MZyzbOzZQeSg==",
+    "romblob_name": "rblob_17441_d1382e8a11"
+}

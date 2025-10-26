@@ -1,0 +1,33 @@
+# Sensitive files
+admin_credentials.txt
+*_credentials.txt
+environment
+
+# Signer key files (NEVER commit private keys!)
+signer_*.txt
+*_signer_*.txt
+*.pem
+*.key
+
+# Databases (contain user data)
+mdserverdata.db
+rhdata.db
+patchbin.db
+
+# Backups
+*.db-*
+*.bak
+
+# Logs
+*.log
+logs/
+server.log
+
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Signature logs (may contain sensitive data)
+log_mdsign_new.json
+log_mdsign_historical.json

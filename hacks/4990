@@ -1,0 +1,37 @@
+{
+    "name_href": "//dl.smwcentral.net/4990/SMW-%20RDL.zip",
+    "name": "Super Mario World: Return To Dinosaur Land",
+    "author_href": "/?p=profile&id=43",
+    "author": "RAGB",
+    "added": "2013-06-24 01:29:35 PM",
+    "demo": "No",
+    "featured": "Yes",
+    "length": "59 exit(s)",
+    "type": "Standard: Normal",
+    "description": "This is a complete hack of Super Mario World. Don't expect any new graphics here; this game is all about the level design. All the levels and worlds are new, and some of the worlds have themes not present in the original game, such as a water world and an ice world.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=traditional",
+    "tags": [
+        "traditional",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "50 ",
+    "rating": [
+        "4.6"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=4990",
+    "id": "4990",
+    "pat_sha224": "9ff99d402b402f2dfb6d8d0eb01b9538643c4a9743f57661e9c5e090",
+    "pat_sha1": "e9a891ecd0f6f43a4592487ca2590311be00396d",
+    "pat_shake_128": "N37H3ajNsHj9PzVcH1wBuVqdWSpKj7zx",
+    "result_sha224": "93a82f7fe91169114f61e8c3e332f9d4235815b29307d58d2088458c",
+    "result_sha1": "809ac186e6945ed9612eca616bc1e269073b35f8",
+    "result_shake1": "Ss7quSwgGHo5v8IAjHZ0MyayDKi84HUS",
+    "rom": "rom/4990_Ss7quSwgGHo5v8IAjHZ0MyayDKi84HUS.sfc",
+    "patch": "patch/N37H3ajNsHj9PzVcH1wBuVqdWSpKj7zx",
+    "patchblob1_name": "pblob_4990_12b0d970d3",
+    "patchblob1_key": "Z3NJc2NCd1ZiaUZnYVhUZEVuM2tkZzVFQzFkdl80M1ZXRjdkUEZzNHlYRT0=",
+    "patchblob1_sha224": "12b0d970d36c57f83df89aa856c0eaa20f70e5965a9749346f2850b7",
+    "romblob_salt": "xFymIM_wRuXo9e529LsbHg==",
+    "romblob_name": "rblob_4990_41c4b0c4f9"
+}

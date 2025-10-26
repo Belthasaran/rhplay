@@ -1,0 +1,42 @@
+{
+    "name_href": "//dl.smwcentral.net/19720/JUMPhalf_ver1.01.zip",
+    "name": "JUMP\u00bd",
+    "authors_href": "/?p=profile&id=22633",
+    "authors": "JUMP Team, ",
+    "added": "2019-04-23 06:14:56 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "130 exit(s)",
+    "type": "Standard: Very Hard",
+    "description": "This is the long-awaited sequel to JUMP. Started by aterraformer as a smaller collab inspired by the VIPs, it quickly spiralled out of control and became a true sequel headed by lolyoshi, Sixcorby, and Lazy, and was saved by worldpeace several times over. JUMP\u00bd features even more of the wacky design and creativity JUMP is known for, on top of several new features and a significantly less brutal difficulty curve.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "bosses",
+        "gimmick",
+        "less exgfx",
+        "music",
+        "puzzle",
+        "variety"
+    ],
+    "comments_href": "#comments",
+    "comments": "119 ",
+    "rating": [
+        "4.7"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=19720",
+    "id": "19720",
+    "pat_sha224": "01f1abee9411433ea66d3d52d74b4e48e11447955e792702069ad40d",
+    "pat_sha1": "4059075a9c2dc10834ccc9ce185eb5df99fb9003",
+    "pat_shake_128": "Mp_zcGbehpt8Fx6JJ6yzyZPr43rbzF5p",
+    "result_sha224": "7b0319b165207a61c83f1821a37122b0a27bad196d522cab49d2e6f4",
+    "result_sha1": "93f41a0ef364c9077eee9bf3a662d012a14709b6",
+    "result_shake1": "WJP9mJkFlimFspejivy_Tpu0MKTOntOD",
+    "rom": "rom/19720_WJP9mJkFlimFspejivy_Tpu0MKTOntOD.sfc",
+    "patch": "patch/Mp_zcGbehpt8Fx6JJ6yzyZPr43rbzF5p",
+    "patchblob1_name": "pblob_19720_2d619074ee",
+    "patchblob1_key": "M3laLWFJbGZkeExvR2J6RUJ2eVpMX3FnTmEwNUNxTWstMDZ2WlFXOExoYz0=",
+    "patchblob1_sha224": "2d619074ee2e3063069f2887675e2447e1fb1583e2288cdb4c331a75",
+    "romblob_salt": "bNlj0yI_XnfsD-c7B2XyTQ==",
+    "romblob_name": "rblob_19720_2ef9918a8d"
+}

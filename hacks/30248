@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/30248/Brave%20New%20World%201.1.zip",
+    "name": "Brave New World",
+    "author_href": "/?p=profile&id=38665",
+    "author": "derv82",
+    "added": "2022-04-15 05:13:22 PM",
+    "version history_href": "/?p=section&a=versionhistory&id=30248",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "12 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "\"Brave New World\" is a mostly-vanilla, glitch-heavy kaizo hack dedicated to BraveToazter.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=glitch",
+    "tags": [
+        "glitch",
+        "music",
+        "puzzle",
+        "vanilla"
+    ],
+    "comments_href": "#comments",
+    "comments": "16 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=30248",
+    "id": "30248",
+    "pat_sha224": "a03cae308003ee19e9dd4be5328db5ddbe76b518d0fd3fa214f1fde8",
+    "pat_sha1": "d4e8f58ab1f05a2538b49a7ccb0fe7869df09d8d",
+    "pat_shake_128": "nDxyziqTtwmHCqumpuZwWWsm7qSvMhmT",
+    "result_sha224": "3cca3d7c868a151bf14ec54908ca27cbf797f89146441d0fc4691a5d",
+    "result_sha1": "ffd8032209647ad1b8f87c6504d86874588ce4d2",
+    "result_shake1": "aw4tm5lRPx32XMP6YEe8cmVEVPYBS7hT",
+    "rom": "rom/30248_aw4tm5lRPx32XMP6YEe8cmVEVPYBS7hT.sfc",
+    "patch": "patch/nDxyziqTtwmHCqumpuZwWWsm7qSvMhmT",
+    "patchblob1_name": "pblob_30248_b3e1feaaa9",
+    "patchblob1_key": "WTdQQWNDYlVrWmFiMUJFcjhjbmNReDRSOENjNzl5UENFOTdSTXFKQ290RT0=",
+    "patchblob1_sha224": "b3e1feaaa91608741312e5edf7ffbe4f559c9fb90c8c4aa222c688b6",
+    "romblob_salt": "RbOvdugNmRvQv5cup8Tfjw==",
+    "romblob_name": "rblob_30248_99cfc82c14"
+}

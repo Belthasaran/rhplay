@@ -1,0 +1,17 @@
+{
+  "id": "40663",
+  "patch": "/home/main/proj/rhtools/patch/7ttYAuSyXqvPdT44_qPwxzhgcS9eBuZE",
+  "patch_filename": "Super Dram World 3 v1.3/Super Dram World v1.2 Music/Super Dram World v1.2 CustomMusic.bps",
+  "pat_sha1": "8237b85d16af40e7acceeb2e9ffb42fe7ca43eda",
+  "pat_sha224": "797846829341ad9ec9710859906c5a44b1106dc99b870ed6c3700130",
+  "pat_shake_128": "7ttYAuSyXqvPdT44_qPwxzhgcS9eBuZE",
+  "result_sha1": "10a998844754e518a8d581d744b5a64a56012d3f",
+  "result_sha224": "7323dc6f787d8be9a4a92d881eb129677b2a681b32ab58ccee34676c",
+  "result_shake1": "gec0TuByVJAXmU0kNTmGerkdnJJYpGJV",
+  "rom": "/home/main/proj/rhtools/rom/40663_gec0TuByVJAXmU0kNTmGerkdnJJYpGJV.sfc",
+  "patchblob1_name": "pblob_40663_29346ea804",
+  "patchblob1_key": "cXRsa19RaU1vNXRGVGRFQVUtVWlDZ0VYLVhiUVRXZ19UN1BVejhGcFJPST0=",
+  "patchblob1_sha224": "29346ea804f4b9bc0810a45033b6356e7c5afaccd80b655fc0bb46ae",
+  "romblob_name": "rblob_40663_d7894baae4",
+  "romblob_salt": "olp2INiNVxJXr2IR6qQgoQ=="
+}

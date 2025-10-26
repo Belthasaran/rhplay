@@ -1,0 +1,138 @@
+{
+  "name": "rhtools",
+  "version": "1.0.0",
+  "description": "RHTools - ROM Hack Tools Application",
+  "author": "RHTools Team",
+  "main": "electron/main.js",
+  "scripts": {
+    "postinstall": "patch-package",
+    "electron:start": "cross-env ELECTRON_START_URL=http://localhost:5173 electron electron/main.js --xdg-portal-required-version=4",
+    "electron:start-smart": "cd electron && ./smart-start.sh",
+    "renderer:dev": "npm --prefix electron/renderer run dev",
+    "renderer:build": "npm --prefix electron/renderer run build",
+    "app:dev": "run-p renderer:dev electron:start",
+    "app:dev-smart": "cd electron && ./smart-start.sh",
+    "app:build": "npm run renderer:build",
+    "build:win": "npm run renderer:build && electron-builder --win portable",
+    "build:win-all": "npm run renderer:build && electron-builder --win nsis,portable",
+    "build:linux": "npm run renderer:build && electron-builder --linux AppImage",
+    "loaddata": "node loaddata.js",
+    "attachblobs": "node attachblobs.js",
+    "fetchpatches": "node fetchpatches.js",
+    "fetchpatches:mode1": "node fetchpatches.js mode1",
+    "fetchpatches:mode2": "node fetchpatches.js mode2",
+    "fetchpatches:mode3": "node fetchpatches.js mode3",
+    "fetchpatches:addsizes": "node fetchpatches.js addsizes",
+    "migrate:ipfsgateways": "node migrate_ipfsgateways.js",
+    "update:ipfsgateways": "node update_ipfs_gateways.js",
+    "test:mode2": "cd tests && node test_mode2.js",
+    "test:mode3": "node tests/test_mode3.js",
+    "test:setup": "node tests/setup_test_env.js",
+    "test:create-signers": "node tests/create_test_signers.js",
+    "test:server": "node tests/test_server.js",
+    "test:e2e": "node tests/test_e2e_apig.js",
+    "mdserver:start": "node mdserver/server.js",
+    "mdserver:create-client": "node mdserver/create_client.js",
+    "mdserver:setup": "node mdserver/setup.js",
+    "mdserver:create-signer": "node mdserver/create_signer.js",
+    "mdserver:sign-metadata": "node mdserver/sign_metadata.js",
+    "mdserver:migrate-signatures": "node mdserver/migrate_signatures.js",
+    "mdserver:cleanup-signatures": "node mdserver/cleanup_signatures.js",
+    "client:migrate-apiserver": "node electron/migrate_apiservers.js",
+    "client:add-apiserver": "node electron/manage_apiserver.js add",
+    "client:list-apiservers": "node electron/manage_apiserver.js list",
+    "client:test-apiserver": "node electron/manage_apiserver.js test",
+    "updategames": "node updategames.js",
+    "updategames:all": "node updategames.js --all-patches",
+    "updategames:test": "node updategames.js --dry-run --limit=5",
+    "updategames:resume": "node updategames.js --resume",
+    "test:blob-compat": "node tests/test_blob_compatibility.js",
+    "test:python-compat": "node tests/test_python_script_compat.js",
+    "test:updategames": "node tests/test_updategames.js",
+    "test:usb2snes-list": "node tests/test_usb2snes_list.js",
+    "test:usb2snes-mkdir": "node tests/test_usb2snes_mkdir.js",
+    "test:usb2snes-putfile": "node tests/test_usb2snes_putfile.js",
+    "test:usb2snes-full": "node tests/test_usb2snes_mkdir_then_upload.js",
+    "utils:identify-keys": "node identify-incompatible-keys.js",
+    "utils:reprocess-attachments": "node reprocess-attachments.js",
+    "utils:backfill-rhmd": "node backfill_rhmd.js",
+    "verify:blobs": "node verify-all-blobs.js --verify-blobs=files",
+    "verify:blobs-db": "node verify-all-blobs.js --verify-blobs=db",
+    "verify:blobs-full": "node verify-all-blobs.js --verify-blobs=files --full-check",
+    "verify:blobs-db-full": "node verify-all-blobs.js --verify-blobs=db --full-check",
+    "verify:blobs-result": "node verify-all-blobs.js --verify-blobs=files --full-check --verify-result",
+    "verify:blobs-db-result": "node verify-all-blobs.js --verify-blobs=db --full-check --verify-result",
+    "upload:list-ipfs": "node list-unuploaded-blobs.js --provider=ipfs",
+    "upload:list-arweave": "node list-unuploaded-blobs.js --provider=arweave",
+    "upload:list-ardrive": "node list-unuploaded-blobs.js --provider=ardrive"
+  },
+  "dependencies": {
+    "@poeticode/js-lzma": "^1.0.0",
+    "adm-zip": "^0.5.10",
+    "ardrive-cli": "^3.0.3",
+    "ardrive-core-js": "^3.0.3",
+    "better-sqlite3": "^11.10.0",
+    "crc": "^4.3.2",
+    "crc-32": "^1.2.2",
+    "dotenv": "^16.6.1",
+    "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
+    "express": "^4.21.2",
+    "fernet": "0.3.2",
+    "lzma-native": "^8.0.6",
+    "multiformats": "^9.9.0",
+    "node-jose": "^2.2.0",
+    "urlsafe-base64": "^1.0.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^36.9.5",
+    "npm-run-all": "^4.1.5",
+    "patch-package": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.rhtools.app",
+    "productName": "RHTools",
+    "directories": {
+      "output": "dist-builds"
+    },
+    "files": [
+      "electron/**/*",
+      "!electron/renderer/node_modules/**/*",
+      "!electron/renderer/src/**/*",
+      "!electron/test_data/**/*",
+      "!electron/tests/**/*",
+      "!electron/backup/**/*",
+      "!electron/**/*.db-shm",
+      "!electron/**/*.db-wal",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-${version}-setup.exe"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    }
+  }
+}

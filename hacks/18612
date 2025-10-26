@@ -1,0 +1,39 @@
+{
+    "name_href": "//dl.smwcentral.net/18612/Akogare%20v1.2.zip",
+    "name": "Akogare Mario World",
+    "author_href": "/?p=profile&id=32358",
+    "author": "Mega",
+    "added": "2018-12-09 12:46:59 AM",
+    "version history_href": "/?p=section&a=versionhistory&id=18612",
+    "version history": "View",
+    "demo": "No",
+    "featured": "No",
+    "length": "28 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "This is a hack I wanted to make for fun when I first joined this community.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=vanilla",
+    "tags": [
+        "vanilla",
+        "variety"
+    ],
+    "comments_href": "#comments",
+    "comments": "66 ",
+    "rating": [
+        "4.9"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=18612",
+    "id": "18612",
+    "pat_sha224": "f3605f57d2dd1073ec9f0e3833cfdc0e2fe14d2e13db24ddf1eb7d53",
+    "pat_sha1": "40fb01edb318ea6fa4a623fd193c2edbeba20c0d",
+    "pat_shake_128": "bOrMlHCm9zbT6-_bBZKxHnE_pVqYo5NL",
+    "result_sha224": "77df0d608de1af9ca8659a9dc4c494545988386eb919c8bbc340bf10",
+    "result_sha1": "584fd81ca6efce820a0c97d6142eec59fbcd5168",
+    "result_shake1": "-rP5482M-c8hAg4oaWZyPm5Soeqf3gI5",
+    "rom": "rom/18612_-rP5482M-c8hAg4oaWZyPm5Soeqf3gI5.sfc",
+    "patch": "patch/bOrMlHCm9zbT6-_bBZKxHnE_pVqYo5NL",
+    "patchblob1_name": "pblob_18612_c5d3988d1e",
+    "patchblob1_key": "UUVjTHV3YnV1RWZCbTRyMGktRjNGTWJfZzhiVEhWbWJldWp3YnRqcW5qRT0=",
+    "patchblob1_sha224": "c5d3988d1e87d3aca762f177cb48c61a014fb49acd23032b2d3913f1",
+    "romblob_salt": "lqpYewwbZxs4JxW0wbQxQw==",
+    "romblob_name": "rblob_18612_66699ac138"
+}

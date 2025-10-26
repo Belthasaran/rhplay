@@ -1,0 +1,17 @@
+{
+  "id": "21687",
+  "patch": "/home/main/proj/rhtools/patch/ar9-9zcs4GVsyxGcUEddCyiZue6rvs8F",
+  "patch_filename": "Mario Saves Christmas V1.2.bps",
+  "pat_sha1": "378baaf13ad1c5c2025fa7eec75554cbdd9a0503",
+  "pat_sha224": "e42708de85f4a7568e8262fab67295375c5bf9ed06c67fda11bd73fe",
+  "pat_shake_128": "ar9-9zcs4GVsyxGcUEddCyiZue6rvs8F",
+  "result_sha1": "a0b617541618bf2deefc7f7f4b775f0e0c39579f",
+  "result_sha224": "0364f95d42c35e86dea0c9a4d4e2a2592779a82f61af3248cab5ee0f",
+  "result_shake1": "yrq8jW4TTirznwKrQGt_4RiW8GjAnidM",
+  "rom": "/home/main/proj/rhtools/rom/21687_yrq8jW4TTirznwKrQGt_4RiW8GjAnidM.sfc",
+  "patchblob1_name": "pblob_21687_09b0031f90",
+  "patchblob1_key": "b1JTZzhyTVIwZEhqVVZqTXlrYkpVOWFLemN5M2xDQ21ubHNmZ2N4bkVDQT0=",
+  "patchblob1_sha224": "09b0031f905aeaa7bc520f974f52db015d85fe37c1d37824c45589a4",
+  "romblob_name": "rblob_21687_f532b98aff",
+  "romblob_salt": "C_49DZt5IXMteadmcH2nJA=="
+}

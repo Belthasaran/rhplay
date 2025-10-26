@@ -1,0 +1,17 @@
+{
+  "id": "38173",
+  "patch": "/home/main/proj/rhtools/patch/qwnzE69j9EnV0RlWf4VpUkGU650bt_Np",
+  "patch_filename": "Perchance/Perchance.bps",
+  "pat_sha1": "a03da84377bae67ac58927ec4f1b8d4180b6cf5a",
+  "pat_sha224": "bd7b0ecd2113e5e51cf0d405f1979f9146d49e8025eb575966ba4662",
+  "pat_shake_128": "qwnzE69j9EnV0RlWf4VpUkGU650bt_Np",
+  "result_sha1": "44b1eff293345d3999feed527366266d1e7b9f69",
+  "result_sha224": "c5088a163796a81a54e38292c7749f23b33acbf9dd6b538f1075dbc4",
+  "result_shake1": "lyaN7_cYaYLhLpitXO-DDU1ncpNhMELr",
+  "rom": "/home/main/proj/rhtools/rom/38173_lyaN7_cYaYLhLpitXO-DDU1ncpNhMELr.sfc",
+  "patchblob1_name": "pblob_38173_a90ce98983",
+  "patchblob1_key": "bFcybTFnTWhaVmFFRTd3LWUyRkNnOXBPWnVTNU8yc2xzUDdkQzBNaWlaQT0=",
+  "patchblob1_sha224": "a90ce98983e27c842cf7698154666151de9add8e7a3adcf8b739866f",
+  "romblob_name": "rblob_38173_89dfd0d1db",
+  "romblob_salt": "nxK3fPqJR08Jic2ZrVrOrw=="
+}

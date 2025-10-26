@@ -1,0 +1,38 @@
+    {
+        "id": "ccvanilla",
+        "name": "CC (SMW Vanilla)",
+        "url" : "https://crowdcontrol.live/guides/SuperMarioWorld/",
+        "bps_download_url": "https://cc-modfiles.nyc3.digitaloceanspaces.com/Patches/SuperMarioWorld.Vanilla.ips",
+        "bps_sha1" : "cfc01fbac71f99c7b09e8c7e28b601acec538638",
+        "bps_sha224" : "2d6256b933f6fc2a2c97a6509d36e652b5afc15501d80edae803bc89",
+        "author_href": "",
+        "author": "CC",
+        "authors": "CC",
+        "patch_description" : "BPS game patch to be layered on top of Vanilla SMW for CC support",
+        "patch_targets" : ["vanilla"],
+        "time": 1604901600,
+        "added": "2020-11-09",
+        "modified": "2020-11-09",
+        "psets": [
+             {
+	    "description" : "Blob mirror for patches.  Sets number 31, 32, sm, and cc.",		
+             "ipfs": "bafybeifyvidw266qsd2ayw4insfmgjhkeczyaaocqfxqvwvizgkxvijo6a",
+              "key": "blobs/s_pblob_32_31_sm_cc.zip",
+              "hash": "QmUby6qDyrbKC4gz4kVxV1d3xi23B2NqHVwANnkFDHXvKC",
+              "publicUrl": "https://smwdbi.iparpa.com/331769d1-65ec-45fd-8276-e55bd4a428d5-bucket/blobs/s_pblob_32_31_sm_cc.zip"
+               }
+         ],
+        "demo": "No",
+        "featured": "No",
+        "length": "unknown",
+        "type": "Other",
+        "description": "Patch Header in Core metadata",
+        "tags_href": "",
+        "tags": [ "patch", "modded", "asm"],
+        "comments_href": "#comments",
+        "comments": "0 ",
+        "rating": [ "0.0" ],
+        "url": ""
+    }
+
+

@@ -1,0 +1,38 @@
+{
+    "name_href": "//dl.smwcentral.net/19167/snakes1.05.zip",
+    "name": "Elephants and Snakes and Crocodiles",
+    "author_href": "/?p=profile&id=14790",
+    "author": "Morsel",
+    "added": "2019-03-14 12:05:59 PM",
+    "demo": "No",
+    "featured": "No",
+    "length": "13 exit(s)",
+    "type": "Kaizo: Expert",
+    "description": "Please play my other hacks first.",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "graphics",
+        "music"
+    ],
+    "comments_href": "#comments",
+    "comments": "22 ",
+    "rating": [
+        "4.9"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=19167",
+    "id": "19167",
+    "pat_sha224": "15906fc765ded7c2ffb34f4d26ae61c1f699e6b1360c8124d4e6ad51",
+    "pat_sha1": "cfbcfe0a634055013a2b344a7e2330fe284ca80a",
+    "pat_shake_128": "e1DHGMwBljslFEj9TM7LXd-1eLKI2BEJ",
+    "result_sha224": "689e22da706d8ddabfb6790304496b1c6aad6c858f3f8f2c58726208",
+    "result_sha1": "a352b258e69bb2aa520f0cb831e31196f18877ff",
+    "result_shake1": "Yn2Lhd2Hgl-4IqqQucrIkpk3QK1mda6c",
+    "rom": "rom/19167_Yn2Lhd2Hgl-4IqqQucrIkpk3QK1mda6c.sfc",
+    "patch": "patch/e1DHGMwBljslFEj9TM7LXd-1eLKI2BEJ",
+    "patchblob1_name": "pblob_19167_4ad8f7cdb6",
+    "patchblob1_key": "c3BxSzZvWmRoX0pzRGJrS3llbm9Gem9HdHlnai1BWmY3T1gzN2stZ3lBUT0=",
+    "patchblob1_sha224": "4ad8f7cdb63160f878ed5e77f9b6b0619bf81b0c7cbec48f7361bc98",
+    "romblob_salt": "RM8b-gGUR6X1FUw2vsiyoA==",
+    "romblob_name": "rblob_19167_eb871cc7ab"
+}

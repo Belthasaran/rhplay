@@ -1,0 +1,851 @@
+/**
+ * Objective to Dynamically loads/unloads ASM code snippets into running SMW game
+ * Loader concept based on PatCdr's CARL system
+ * Features:
+ * - Load ASM modules from text files
+ * - Assemble code using ASAR (or simple assembler fallback)
+ * - Inject code into free RAM
+ * - Setup per-frame execution hooks
+ * - Manage multiple loaded modules
+ * - Unload modules cleanly
+ * 
+ * CARL Calling Convention:
+ * - Code called once per frame (after V-Blank)
+ * - Called via JSL (must return with RTL)
+ * - A, X, Y are 8-bit on entry
+ * - !carl_initialized byte is 0 on first call
+ * - Self-unload: Set A=0xDE, X=0xCO, Y=0xDE and RTL
+ */
+
+const fs = require('fs').promises;
+const { spawn } = require('child_process');
+const path = require('path');
+
+// CARL System Addresses
+const CARL_ADDRESSES = {
+  // Free RAM for code modules
+  MODULE_RAM_START: 0x7FA000,        // Start of module storage
+  MODULE_RAM_SIZE: 0x6000,           // 24KB for modules
+  
+  // CARL system variables
+  CARL_INITIALIZED_FLAG: 0x7F8000,   // Per-module init flags
+  CARL_MODULE_TABLE: 0x7F8100,       // Module address table
+  CARL_HOOK_ADDR: 0x7F8200,          // Hook caller code
+  
+  // Frame hook address (NMI or similar)
+  FRAME_HOOK_RAM: 0x7F8300           // Where we put the frame-call code
+};
+
+class CarlModuleLoader {
+  /**
+   * @param {SNESWrapper} snesWrapper - Active SNES connection
+   */
+  constructor(snesWrapper) {
+    this.snes = snesWrapper;
+    this.loadedModules = new Map();
+    this.nextModuleAddress = CARL_ADDRESSES.MODULE_RAM_START;
+    this.asarPath = null;  // Path to ASAR executable
+  }
+
+  /**
+   * Set path to ASAR assembler executable
+   * 
+   * @param {string} asarPath - Path to asar executable or DLL
+   */
+  setAsarPath(asarPath) {
+    this.asarPath = asarPath;
+    console.log(`[CarlModuleLoader] ASAR path set to: ${asarPath}`);
+  }
+
+  /**
+   * Load a CARL module from file or text
+   * 
+   * @param {string} moduleName - Module name (identifier)
+   * @param {string} sourceOrPath - ASM source code or path to .asm file
+   * @returns {Promise<Object>} Load result
+   */
+  async loadModule(moduleName, sourceOrPath) {
+    console.log(`[CarlModuleLoader] Loading module: ${moduleName}`);
+    
+    // Check if already loaded
+    if (this.loadedModules.has(moduleName)) {
+      return {
+        success: false,
+        message: `Module ${moduleName} already loaded. Use !reload to update.`
+      };
+    }
+    
+    // Determine if it's a file path or source code
+    let asmSource;
+    if (sourceOrPath.includes('\n') || !sourceOrPath.endsWith('.asm')) {
+      // Direct source code
+      asmSource = sourceOrPath;
+    } else {
+      // File path
+      try {
+        asmSource = await fs.readFile(sourceOrPath, 'utf-8');
+      } catch (error) {
+        return {
+          success: false,
+          message: `Failed to load file: ${error.message}`
+        };
+      }
+    }
+    
+    // Assemble code
+    const assembled = await this.assembleCode(asmSource, moduleName);
+    if (!assembled.success) {
+      return assembled;  // Return error
+    }
+    
+    // Check if we have space
+    const codeSize = assembled.code.length;
+    if (this.nextModuleAddress + codeSize > CARL_ADDRESSES.MODULE_RAM_START + CARL_ADDRESSES.MODULE_RAM_SIZE) {
+      return {
+        success: false,
+        message: `Not enough free RAM for module (${codeSize} bytes needed)`
+      };
+    }
+    
+    // Upload code to RAM
+    const moduleAddress = this.nextModuleAddress;
+    console.log(`[CarlModuleLoader] Uploading ${codeSize} bytes to 0x${moduleAddress.toString(16).toUpperCase()}...`);
+    
+    // Convert SNES WRAM address to USB2SNES protocol address
+    // SNES: 0x7E0000-0x7FFFFF (WRAM) -> USB2SNES: 0xF50000-0xF6FFFF
+    const protocolAddr = 0xF50000 + (moduleAddress - 0x7E0000);
+    console.log(`[CarlModuleLoader] USB2SNES protocol address: 0x${protocolAddr.toString(16).toUpperCase()}`);
+    
+    await this.snes.PutAddress([[protocolAddr, assembled.code]]);
+    
+    // Initialize module flag
+    const initFlagAddr = CARL_ADDRESSES.CARL_INITIALIZED_FLAG + this.loadedModules.size;
+    const initFlagProtocolAddr = 0xF50000 + (initFlagAddr - 0x7E0000);
+    await this.snes.PutAddress([[initFlagProtocolAddr, Buffer.from([0])]]);
+    
+    // Check if this is the first module BEFORE adding to map
+    const isFirstModule = this.loadedModules.size === 0;
+    
+    // Store module info
+    this.loadedModules.set(moduleName, {
+      address: moduleAddress,
+      size: codeSize,
+      initFlag: initFlagAddr,
+      source: asmSource
+    });
+    
+    // Update next available address
+    this.nextModuleAddress += codeSize;
+    
+    // Update frame hook to call this module
+    await this.updateFrameHook();
+    
+    // Install NMI hijack for first module
+    if (isFirstModule) {
+      console.log('[CarlModuleLoader] First module loaded - installing NMI hijack...');
+      try {
+        await this.installFrameHook();
+      } catch (error) {
+        console.error('[CarlModuleLoader] Failed to install NMI hijack:', error);
+        // Don't fail the load, but warn
+        console.warn('[CarlModuleLoader] Module loaded but may not execute without manual NMI hijack');
+      }
+    }
+    
+    console.log(`[CarlModuleLoader] Module ${moduleName} loaded at 0x${moduleAddress.toString(16).toUpperCase()}`);
+    
+    return {
+      success: true,
+      message: `✓ Module "${moduleName}" loaded (${codeSize} bytes at 0x${moduleAddress.toString(16).toUpperCase()})${isFirstModule ? ' + NMI hook installed' : ''}`,
+      data: {
+        module: moduleName,
+        address: moduleAddress,
+        size: codeSize,
+        nmiHookInstalled: isFirstModule
+      }
+    };
+  }
+
+  /**
+   * Unload a CARL module
+   * 
+   * @param {string} moduleName - Module name
+   * @returns {Promise<Object>} Unload result
+   */
+  async unloadModule(moduleName) {
+    console.log(`[CarlModuleLoader] Unloading module: ${moduleName}`);
+    
+    if (!this.loadedModules.has(moduleName)) {
+      return {
+        success: false,
+        message: `Module ${moduleName} not loaded`
+      };
+    }
+    
+    const moduleInfo = this.loadedModules.get(moduleName);
+    
+    // Clear module memory (write zeros)
+    const zeros = Buffer.alloc(moduleInfo.size);
+    const protocolAddr = 0xF50000 + (moduleInfo.address - 0x7E0000);
+    await this.snes.PutAddress([[protocolAddr, zeros]]);
+    
+    // Clear init flag
+    const initFlagProtocolAddr = 0xF50000 + (moduleInfo.initFlag - 0x7E0000);
+    await this.snes.PutAddress([[initFlagProtocolAddr, Buffer.from([0])]]);
+    
+    // Remove from loaded list
+    this.loadedModules.delete(moduleName);
+    
+    // Update frame hook (remove this module from call list)
+    await this.updateFrameHook();
+    
+    console.log(`[CarlModuleLoader] Module ${moduleName} unloaded`);
+    
+    return {
+      success: true,
+      message: `✓ Module "${moduleName}" unloaded`,
+      data: { module: moduleName }
+    };
+  }
+
+  /**
+   * Reload a CARL module (unload + load)
+   * 
+   * @param {string} moduleName - Module name
+   * @param {string} sourceOrPath - Updated ASM source or file path
+   * @returns {Promise<Object>} Reload result
+   */
+  async reloadModule(moduleName, sourceOrPath) {
+    console.log(`[CarlModuleLoader] Reloading module: ${moduleName}`);
+    
+    // Unload if loaded
+    if (this.loadedModules.has(moduleName)) {
+      const unloadResult = await this.unloadModule(moduleName);
+      if (!unloadResult.success) {
+        return unloadResult;
+      }
+    }
+    
+    // Load with new source
+    return await this.loadModule(moduleName, sourceOrPath);
+  }
+
+  /**
+   * Update the frame hook to call all loaded modules
+   * 
+   * Generates code that JSLs to each module in sequence, then returns
+   * Code format:
+   *   JSL module1_addr
+   *   JSL module2_addr
+   *   ...
+   *   RTL
+   * 
+   * @returns {Promise<void>}
+   */
+  async updateFrameHook() {
+    console.log('[CarlModuleLoader] Updating frame hook...');
+    
+    const hookCode = [];
+    
+    // Generate JSL instructions for each loaded module
+    for (const [name, info] of this.loadedModules.entries()) {
+      // JSL opcode: $22
+      hookCode.push(0x22);
+      
+      // 24-bit address in little-endian format
+      const addr = info.address;
+      hookCode.push(addr & 0xFF);           // Low byte
+      hookCode.push((addr >> 8) & 0xFF);    // Middle byte
+      hookCode.push((addr >> 16) & 0xFF);   // High byte (bank)
+      
+      console.log(`[CarlModuleLoader]   - JSL to ${name} at 0x${addr.toString(16).toUpperCase()}`);
+    }
+    
+    // RTL to return from frame hook
+    hookCode.push(0x6B);
+    
+    const hookBuffer = Buffer.from(hookCode);
+    
+    // Upload hook code to CARL_HOOK_ADDR (convert to protocol address)
+    const hookProtocolAddr = 0xF50000 + (CARL_ADDRESSES.CARL_HOOK_ADDR - 0x7E0000);
+    await this.snes.PutAddress([[hookProtocolAddr, hookBuffer]]);
+    
+    console.log(`[CarlModuleLoader] Frame hook updated (${hookBuffer.length} bytes, ${this.loadedModules.size} module(s))`);
+  }
+  
+  /**
+   * Install the frame hook hijack
+   * 
+   * Hijacks SMW's RAM-based game loop to call CARL modules every frame.
+   * SMW uses RAM addresses for indirect jumps during game mode processing.
+   * 
+   * @returns {Promise<Object>} Result
+   */
+  async installFrameHook() {
+    console.log('[CarlModuleLoader] Installing RAM-based frame hook for SMW...');
+    
+    // Set up the hook caller code in RAM first
+    await this.updateFrameHook();
+    
+    // SMW creates a RAM routine at $7F8000 during initialization (at ROM $008027)
+    // This routine is called MANY times per frame with JSL $7F8000
+    // Perfect for our CARL hook!
+    //
+    // We'll:
+    // 1. Back up the original code at $7F8000
+    // 2. Replace the start with JSL to our trampoline
+    // 3. Our trampoline calls CARL modules, then calls the original code
+    
+    const SMW_RAM_ROUTINE = 0x7F8000;  // SMW's RAM routine (called every frame)
+    const hookProtocolAddr = 0xF50000 + (SMW_RAM_ROUTINE - 0x7E0000);
+    
+    // Read the entire SMW RAM routine to back it up (typically 50-100 bytes)
+    // We'll read 128 bytes to be safe
+    console.log(`[CarlModuleLoader] Reading SMW RAM routine at 0x${SMW_RAM_ROUTINE.toString(16).toUpperCase()}...`);
+    const originalCodeArray = await this.snes.GetAddresses([[hookProtocolAddr, 4]]);
+    //const originalCodeArray = await this.snes.GetAddresses([[hookProtocolAddr, 128]]);
+    const originalCode = originalCodeArray[0];
+    
+    console.log(`[CarlModuleLoader] Original code: ${Array.from(originalCode).map(b => '$' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`);
+    //console.log(`[CarlModuleLoader] Original code (first 16 bytes): ${Array.from(originalCode.slice(0, 16)).map(b => '$' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`);
+    
+    // Check if already patched (would start with $22 = JSL)
+    if (originalCode[0] === 0x22) {
+      console.log('[CarlModuleLoader] Already patched! Skipping installation.');
+      return {
+        success: true,
+        message: '✓ Frame hook already installed',
+        data: {
+          hookAddress: CARL_ADDRESSES.CARL_HOOK_ADDR,
+          alreadyPatched: true
+        }
+      };
+    }
+    
+    // Build trampoline at FRAME_HOOK_RAM ($7F8300)
+    // 
+    // Execution flow:
+    // 1. ROM calls JSL $7F8000 → Stack: [ROM_return]
+    // 2. We patched $7F8000 with JSL $7F8300 → Stack: [ROM_return, $7F8004]
+    // 3. Our trampoline executes:
+    //    a. JSL $7F8200 (CARL modules) → they RTL back to us
+    //    b. LDA #$F0, STA $0201 (execute the instruction we overwrote)
+    //    c. RTL → pops $7F8004, continues original routine naturally
+    // 4. Original routine runs from $7F8004 to $7F8182 (RTL) → pops ROM_return, back to ROM
+    //
+    // Why we execute the overwritten instruction:
+    // - We overwrote bytes 0-3 at $7F8000 with JSL $7F8300
+    // - Original bytes: $A9 $F0 $8D $01 = "LDA #$F0, STA $0201"  
+    // - This initializes OAM_ExtendedDispY (sprite Y position slot 0) to $F0 (offscreen)
+    // - Without it, sprite slot 0 is never hidden -> visual artifacts
+    //
+    const trampolineAddr = CARL_ADDRESSES.FRAME_HOOK_RAM;
+    const trampolineProtocolAddr = 0xF50000 + (trampolineAddr - 0x7E0000);
+    
+    const trampoline = [];
+    
+    // Call CARL module hook
+    trampoline.push(0x22);  // JSL
+    const carlHook = CARL_ADDRESSES.CARL_HOOK_ADDR;
+    trampoline.push(carlHook & 0xFF);
+    trampoline.push((carlHook >> 8) & 0xFF);
+    trampoline.push((carlHook >> 16) & 0xFF);
+    
+    // Execute the instruction we overwrote (LDA #$F0, STA $0201)
+    // This initializes OAM sprite slot 0 Y position to offscreen
+    trampoline.push(0xA9);  // LDA #$F0
+    trampoline.push(0xF0);
+    trampoline.push(0x8D);  // STA $0201 (OAM_ExtendedDispY slot 0)
+    trampoline.push(0x01);
+    trampoline.push(0x02);
+    
+    // Return - this pops $7F8004 from stack and continues the original routine
+    trampoline.push(0x6B);  // RTL
+    
+    const trampolineBuffer = Buffer.from(trampoline);
+    
+    console.log(`[CarlModuleLoader] Trampoline (${trampolineBuffer.length} bytes): ${Array.from(trampolineBuffer).map(b => '$' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`);
+    console.log(`[CarlModuleLoader] Trampoline structure:`);
+    console.log(`  1. JSL $${carlHook.toString(16).toUpperCase().padStart(6, '0')} → Call CARL modules`);
+    console.log(`  2. LDA #$F0, STA $0201 → Execute overwritten instruction (init OAM sprite Y pos)`);
+    console.log(`  3. RTL → Return to $7F8004 (continue original routine naturally)`);
+    
+    // Upload trampoline
+    await this.snes.PutAddress([[trampolineProtocolAddr, trampolineBuffer]]);
+    console.log(`[CarlModuleLoader] Trampoline uploaded to 0x${trampolineAddr.toString(16).toUpperCase()} (${trampolineBuffer.length} bytes)`);
+    
+    // Patch $7F8000 with JSL to our trampoline
+    const hookPatch = Buffer.from([
+      0x22,  // JSL opcode
+      trampolineAddr & 0xFF,
+      (trampolineAddr >> 8) & 0xFF,
+      (trampolineAddr >> 16) & 0xFF
+    ]);
+    
+    await this.snes.PutAddress([[hookProtocolAddr, hookPatch]]);
+    
+    console.log(`[CarlModuleLoader] ✓ Patched $${SMW_RAM_ROUTINE.toString(16).toUpperCase()} with JSL to trampoline`);
+    console.log(`[CarlModuleLoader] ✓ Overwritten instruction restored - no sprite artifacts`);
+    console.log(`[CarlModuleLoader] Stack flow: ROM calls → [ROM_addr] → $7F8000 JSL → [ROM_addr, $7F8004] → Trampoline → RTL → $7F8004 continues → RTL → ROM`);
+    
+    return {
+      success: true,
+      message: '✓ RAM-based frame hook installed at $7F8000 - CARL modules will run every frame!',
+      data: {
+        hookAddress: CARL_ADDRESSES.CARL_HOOK_ADDR,
+        patchedAddress: SMW_RAM_ROUTINE,
+        trampolineAddress: trampolineAddr,
+        originalBytes: Array.from(originalCode)
+      }
+    };
+  }
+
+  /**
+   * Assemble ASM code
+   * 
+   * @param {string} asmSource - ASM source code
+   * @param {string} moduleName - Module name (for error messages)
+   * @returns {Promise<Object>} Assembly result {success, code, message}
+   */
+  async assembleCode(asmSource, moduleName) {
+    // Try ASAR if available
+    if (this.asarPath) {
+      return await this.assembleWithAsar(asmSource, moduleName);
+    }
+    
+    // Fallback: Try simple assembly (for very basic code)
+    return await this.assembleSimple(asmSource, moduleName);
+  }
+
+  /**
+   * Assemble using ASAR
+   * 
+   * @param {string} asmSource - ASM source
+   * @param {string} moduleName - Module name
+   * @returns {Promise<Object>} Result
+   */
+  async assembleWithAsar(asmSource, moduleName) {
+    console.log(`[CarlModuleLoader] Assembling with ASAR...`);
+    
+    // Create temp files
+    const tempDir = '/tmp/carl_' + Date.now();
+    const tempAsmPath = path.join(tempDir, `${moduleName}.asm`);
+    const tempRomPath = path.join(tempDir, 'temp.sfc');
+    const refRomPath = path.join(tempDir, 'reference.sfc');
+    
+    try {
+      await fs.mkdir(tempDir, { recursive: true });
+      
+      // Prepare ASM source with CARL wrapper
+      // freedata - tells ASAR to place code in free space
+      // JSL module - jump to the actual module code
+      // module: - label for the module code
+      const wrappedSource = `freedata
+JSL module
+module:
+${asmSource}
+`;
+      
+      console.log(`[CarlModuleLoader] Wrapped ASM source (${wrappedSource.length} bytes):`);
+      console.log(wrappedSource);
+      
+      // Write ASM source
+      await fs.writeFile(tempAsmPath, wrappedSource);
+      
+      // Create minimal valid SNES ROM (LoROM, 512KB)
+      const referenceRom = Buffer.alloc(524288);  // 512KB
+      
+      // Add minimal SNES header at $7FC0 (LoROM header location)
+      const headerOffset = 0x7FC0;
+      
+      // ROM title (21 bytes) - blank
+      for (let i = 0; i < 21; i++) {
+        referenceRom[headerOffset + i] = 0x20;  // Space character
+      }
+      
+      // ROM makeup byte
+      referenceRom[headerOffset + 0x15] = 0x20;  // LoROM, no special chips
+      
+      // ROM type
+      referenceRom[headerOffset + 0x16] = 0x00;  // ROM only
+      
+      // ROM size (512KB = $08)
+      referenceRom[headerOffset + 0x17] = 0x08;
+      
+      // SRAM size
+      referenceRom[headerOffset + 0x18] = 0x00;  // No SRAM
+      
+      // Country code
+      referenceRom[headerOffset + 0x19] = 0x01;  // USA
+      
+      // Developer ID
+      referenceRom[headerOffset + 0x1A] = 0x00;
+      
+      // Version
+      referenceRom[headerOffset + 0x1B] = 0x00;
+      
+      // Checksum complement (will be fixed by ASAR)
+      referenceRom[headerOffset + 0x1C] = 0xFF;
+      referenceRom[headerOffset + 0x1D] = 0xFF;
+      
+      // Checksum (will be fixed by ASAR)
+      referenceRom[headerOffset + 0x1E] = 0x00;
+      referenceRom[headerOffset + 0x1F] = 0x00;
+      
+      // Interrupt vectors (point to RTI/RTL instructions)
+      // Native mode vectors at $7FE0-$7FFF
+      const vectorOffset = 0x7FE0;
+      for (let i = 0; i < 16; i++) {
+        referenceRom[vectorOffset + (i * 2)] = 0x00;
+        referenceRom[vectorOffset + (i * 2) + 1] = 0x80;  // Point to $8000
+      }
+      
+      // Put RTI at $8000 (simple interrupt handler)
+      referenceRom[0x8000] = 0x40;  // RTI
+      
+      await fs.writeFile(refRomPath, referenceRom);
+      await fs.writeFile(tempRomPath, referenceRom);
+      
+      // Run ASAR
+      const result = await this.runAsar(tempAsmPath, tempRomPath);
+      
+      if (!result.success) {
+        // Cleanup on error
+        //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+        return result;
+      }
+      
+      // Read both ROMs
+      const modifiedRom = await fs.readFile(tempRomPath);
+      const originalRom = await fs.readFile(refRomPath);
+      
+      console.log(`[CarlModuleLoader] ROM sizes - Original: ${originalRom.length}, Modified: ${modifiedRom.length}`);
+      
+      // Find all changed bytes
+      const changes = [];
+      
+      // Compare original ROM size region (skip header at 0x7FC0-0x7FDF to avoid checksum changes)
+      const headerStart = 0x7FC0;
+      const headerEnd = 0x7FE0;
+      
+      for (let i = 0; i < originalRom.length; i++) {
+        // Skip header region (ASAR modifies checksums)
+        if (i >= headerStart && i < headerEnd) {
+          continue;
+        }
+        
+        if (modifiedRom[i] !== originalRom[i]) {
+          changes.push({ offset: i, value: modifiedRom[i] });
+        }
+      }
+      
+      // Check expanded region (beyond original ROM)
+      if (modifiedRom.length > originalRom.length) {
+        for (let i = originalRom.length; i < modifiedRom.length; i++) {
+          // Only include non-zero bytes (freedata fills with actual code)
+          if (modifiedRom[i] !== 0) {
+            changes.push({ offset: i, value: modifiedRom[i] });
+          }
+        }
+      }
+      
+      if (changes.length === 0) {
+        //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+        return {
+          success: false,
+          message: 'ASAR produced no code changes - check your assembly syntax'
+        };
+      }
+      
+      console.log(`[CarlModuleLoader] ASAR changed ${changes.length} bytes`);
+      
+      // Sanity check - if ASAR changed too many bytes, something is wrong
+      if (changes.length > 10000) {
+        //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+        return {
+          success: false,
+          message: `ASAR changed ${changes.length} bytes - this is too much for a CARL module. Check your code or ROM setup.`
+        };
+      }
+      
+      // Group consecutive changes into chunks
+      const chunks = [];
+      let currentChunk = [changes[0]];
+      
+      for (let i = 1; i < changes.length; i++) {
+        if (changes[i].offset === currentChunk[currentChunk.length - 1].offset + 1) {
+          currentChunk.push(changes[i]);
+        } else {
+          chunks.push(currentChunk);
+          currentChunk = [changes[i]];
+        }
+      }
+      chunks.push(currentChunk);
+      
+      console.log(`[CarlModuleLoader] Found ${chunks.length} code chunk(s)`);
+      
+      if (chunks.length === 0) {
+        //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+        return {
+          success: false,
+          message: 'No code chunks found in ASAR output'
+        };
+      }
+      
+      // Find the JSL chunk (starts with $22) and module chunk(s)
+      let jslChunk = null;
+      const moduleChunks = [];
+      
+      for (const chunk of chunks) {
+        const bytes = chunk.map(c => c.value);
+        const bytesHex = bytes.map(b => '$' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+        
+        // Check if this chunk starts with JSL opcode ($22)
+        if (bytes[0] === 0x22 && bytes.length >= 4) {
+          jslChunk = chunk;
+          console.log(`[CarlModuleLoader]   - Found JSL at offset ${chunk[0].offset}: ${bytesHex}`);
+        } else {
+          moduleChunks.push(chunk);
+          console.log(`[CarlModuleLoader]   - Found module chunk at offset ${chunk[0].offset}: ${bytes.length} byte(s) = ${bytesHex}`);
+        }
+      }
+      
+      // We need at least one module chunk (the actual code)
+      if (moduleChunks.length === 0) {
+        //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+        return {
+          success: false,
+          message: 'No module code found - only JSL instruction detected'
+        };
+      }
+      
+      // Concatenate all module chunks to form the complete module code
+      const moduleBytes = [];
+      for (const chunk of moduleChunks) {
+        const bytes = chunk.map(c => c.value);
+        moduleBytes.push(...bytes);
+      }
+      
+      let moduleCode = Buffer.from(moduleBytes);
+      
+      // Check for ASAR "STAR" metadata header and skip it
+      // ASAR freedata puts: "STAR" + size byte + checksum bytes + JSL + actual code
+      if (moduleCode.length >= 4 && 
+          moduleCode[0] === 0x53 && moduleCode[1] === 0x54 && 
+          moduleCode[2] === 0x41 && moduleCode[3] === 0x52) {
+        
+        console.log('[CarlModuleLoader] Detected ASAR STAR metadata, skipping header...');
+        
+        // Skip "STAR" (4 bytes) + size (1 byte) + checksum (2 bytes) = 7 bytes
+        // Then skip the JSL wrapper (4 bytes) = 11 bytes total
+        if (moduleCode.length > 11) {
+          moduleCode = moduleCode.slice(11);
+          console.log('[CarlModuleLoader] Skipped 11 bytes of ASAR metadata and JSL wrapper');
+        }
+      }
+      
+      console.log(`[CarlModuleLoader] Extracted ${moduleCode.length} bytes of module code`);
+      console.log(`[CarlModuleLoader] Module bytes: ${Array.from(moduleCode).map(b => '$' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`);
+      
+      // Cleanup temp files
+      //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+      
+      // Verify module ends with RTL ($6B)
+      if (moduleCode[moduleCode.length - 1] !== 0x6B) {
+        console.warn('[CarlModuleLoader] Warning: Module does not end with RTL ($6B) - may not return properly');
+      }
+      
+      return {
+        success: true,
+        code: moduleCode,
+        message: `Assembled ${moduleCode.length} bytes with ASAR`
+      };
+      
+    } catch (error) {
+      // Cleanup on error
+      //await fs.rm(tempDir, { recursive: true }).catch(() => {});
+      return {
+        success: false,
+        message: `ASAR error: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Run ASAR assembler
+   * 
+   * @param {string} asmPath - Path to ASM file
+   * @param {string} romPath - Path to ROM file
+   * @returns {Promise<Object>} Result
+   */
+  runAsar(asmPath, romPath) {
+    return new Promise((resolve) => {
+      console.log(`[CarlModuleLoader] Running ASAR: ${this.asarPath} --no-title-check ${asmPath} ${romPath}`);
+      
+      const asar = spawn(this.asarPath, ['--no-title-check', asmPath, romPath]);
+      
+      let stdout = '';
+      let stderr = '';
+      
+      asar.stdout.on('data', (data) => { 
+        stdout += data;
+        console.log(`[ASAR stdout] ${data}`);
+      });
+      
+      asar.stderr.on('data', (data) => { 
+        stderr += data;
+        console.log(`[ASAR stderr] ${data}`);
+      });
+      
+      asar.on('close', (code) => {
+        console.log(`[CarlModuleLoader] ASAR exited with code ${code}`);
+        if (code === 0) {
+          resolve({ success: true, message: 'Assembly successful' });
+        } else {
+          resolve({ success: false, message: `ASAR failed (code ${code}): ${stderr || stdout}` });
+        }
+      });
+      
+      asar.on('error', (error) => {
+        console.error(`[CarlModuleLoader] ASAR spawn error:`, error);
+        resolve({ success: false, message: `Failed to run ASAR: ${error.message}` });
+      });
+    });
+  }
+
+  /**
+   * Simple assembly (fallback for basic code)
+   * 
+   * @param {string} asmSource - ASM source
+   * @param {string} moduleName - Module name
+   * @returns {Promise<Object>} Result
+   */
+  async assembleSimple(asmSource, moduleName) {
+    console.log(`[CarlModuleLoader] Using simple assembler (limited)...`);
+    
+    // Very basic: Just extract hex bytes if present
+    // Look for lines like: db $A9,$02,$8D,$19,$00,$6B
+    const hexBytes = [];
+    const lines = asmSource.split('\n');
+    
+    for (const line of lines) {
+      const cleaned = line.trim().toLowerCase();
+      
+      // Look for db/dw directives
+      if (cleaned.startsWith('db ') || cleaned.startsWith('dw ')) {
+        const bytesStr = cleaned.substring(3).trim();
+        const bytes = bytesStr.split(',').map(b => {
+          const hex = b.trim().replace(/^\$/, '0x');
+          return parseInt(hex, 16);
+        }).filter(b => !isNaN(b));
+        
+        hexBytes.push(...bytes);
+      }
+    }
+    
+    if (hexBytes.length === 0) {
+      // No hex bytes found - try to provide helpful error
+      return {
+        success: false,
+        message: 'Cannot assemble code. ASAR not configured and simple assembler failed. Code must contain "db" directives with hex bytes.'
+      };
+    }
+    
+    console.log(`[CarlModuleLoader] Simple assembly: ${hexBytes.length} bytes`);
+    
+    return {
+      success: true,
+      code: Buffer.from(hexBytes),
+      message: `Assembled ${hexBytes.length} bytes (simple assembler)`
+    };
+  }
+
+  /**
+   * Get list of loaded modules
+   * 
+   * @returns {Array<Object>} Module information
+   */
+  getLoadedModules() {
+    const modules = [];
+    
+    for (const [name, info] of this.loadedModules.entries()) {
+      modules.push({
+        name,
+        address: info.address,
+        size: info.size,
+        addressHex: `0x${info.address.toString(16).toUpperCase()}`
+      });
+    }
+    
+    return modules;
+  }
+
+  /**
+   * Check if module is loaded
+   * 
+   * @param {string} moduleName - Module name
+   * @returns {boolean} True if loaded
+   */
+  isModuleLoaded(moduleName) {
+    return this.loadedModules.has(moduleName);
+  }
+
+  /**
+   * Get module info
+   * 
+   * @param {string} moduleName - Module name
+   * @returns {Object|null} Module info or null
+   */
+  getModuleInfo(moduleName) {
+    return this.loadedModules.get(moduleName) || null;
+  }
+
+  /**
+   * Unload all modules
+   * 
+   * @returns {Promise<Object>} Result
+   */
+  async unloadAll() {
+    console.log('[CarlModuleLoader] Unloading all modules...');
+    
+    const moduleNames = Array.from(this.loadedModules.keys());
+    let unloadedCount = 0;
+    
+    for (const moduleName of moduleNames) {
+      const result = await this.unloadModule(moduleName);
+      if (result.success) {
+        unloadedCount++;
+      }
+    }
+    
+    // Reset address allocation
+    this.nextModuleAddress = CARL_ADDRESSES.MODULE_RAM_START;
+    
+    return {
+      success: true,
+      message: `✓ Unloaded ${unloadedCount} module(s)`,
+      data: { count: unloadedCount }
+    };
+  }
+
+  /**
+   * Get memory usage statistics
+   * 
+   * @returns {Object} Memory stats
+   */
+  getMemoryStats() {
+    const usedBytes = this.nextModuleAddress - CARL_ADDRESSES.MODULE_RAM_START;
+    const availableBytes = CARL_ADDRESSES.MODULE_RAM_SIZE - usedBytes;
+    
+    return {
+      totalSize: CARL_ADDRESSES.MODULE_RAM_SIZE,
+      usedBytes,
+      availableBytes,
+      moduleCount: this.loadedModules.size,
+      usagePercent: ((usedBytes / CARL_ADDRESSES.MODULE_RAM_SIZE) * 100).toFixed(1)
+    };
+  }
+}
+
+module.exports = CarlModuleLoader;
+

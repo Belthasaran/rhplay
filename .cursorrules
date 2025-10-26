@@ -1,0 +1,55 @@
+# Project Rules for AI Agents
+#
+Notes: Project uses enode.sh to run various standalone node scripts in parent directories through electron.
+such as: enode.sh fetchpatches.js mode3 -b gameid 23415 
+
+
+## File Guidelines
+
+* Don't create extra document files for minor changes, except by appending a very brief summary to a docs/CHANGELOG.md.
+* Even for major changes, also add a brief summary to docs/CHANGELOG.md
+* New document files generally go in the docs or devdocs subdirectory. not the root folder.
+* The docs directory is for user manuals and brief dev overview and summary information. evdocs is for more detailed developer
+documentation.
+* Extra documentation filenames should avoid being too much more generic than their contents - For example example FINAL_SUMMARY_GVupdates.md would be preferred instead of FINAL_SUMMARY.md   to summarize changes that are related to that one update or script.
+* Scripts using database files; should have the option to use an environment variable to override the database file path, such as: PATCHBIN_DB_PATH, RHDATA_DB_PATH, or RHMD_FILE
+* Scripts that edit data in a database should have a minimum of 3 test cases in the tests/ directory that verifies of each major option or parameter and uses the environment variables to select a non-production database for those test cases.  Larger scripts should have more than 3 overall.
+* Scripts that accept command line parameters should have a --help command line option.
+* Make sure script files intended to be invoked as interactive programs or utilities, not only as a library should be listed in docs/PROGRAMS.MD after creating or updating a script.
+* Please make sure running your test cases is included by a centralized script that can run all test project cases.
+* After updating code that creates or updates patchblob, attachments records, or patchblob files: make sure all related test cases in  the tests/ directory still pass.
+* Serialize vue reactive objects before IPC.
+
+
+## Database Schema Changes
+
+### Schema Documentation
+**REQUIRED:** All new database schema changes MUST be documented in `docs/SCHEMACHANGES.md`.
+
+When making any schema changes (adding tables, modifying columns, adding indexes, etc.):
+1. Document the change in `docs/SCHEMACHANGES.md` with:
+   - Date of change
+   - Description of the schema modification
+   - Rationale for the change
+   - Tables/columns affected
+   - Any data type changes or constraints
+
+### Database Migration Commands
+**REQUIRED:** All new database migration scripts or maintenance commands that the admin should run MUST be appended to `docs/DBMIGRATE.md`.
+
+When creating migration scripts or database maintenance commands:
+1. Append the command/script to `docs/DBMIGRATE.md` with:
+   - Date added
+   - Purpose of the migration/command
+   - The actual SQL or script command
+   - Prerequisites or dependencies
+   - Expected outcome
+   - Any warnings or important notes
+
+### Workflow
+When implementing database changes:
+1. Make the schema change in the codebase
+2. Document in `docs/SCHEMACHANGES.md`
+3. If a migration script is needed, add it to `docs/DBMIGRATE.md`
+4. Update both files in the same commit as the schema change
+

@@ -1,0 +1,40 @@
+{
+    "name_href": "//dl.smwcentral.net/18238/Invictus%201.0.zip",
+    "name": "Invictus",
+    "author_href": "/?p=profile&id=31382",
+    "author": "juzcook",
+    "added": "2018-10-03 05:35:53 AM",
+    "demo": "No",
+    "featured": "No",
+    "length": "22 exit(s)",
+    "type": "Kaizo: Intermediate",
+    "description": "Invictus is a chocolate kaizo hack with a touch of vanilla charm that will challenge even the most experienced players. It aims to be fun, whilst remaining difficult albeit fair. It took the entirety of my free time over the course of nine months to learn and build. Good luck, and enjoy!",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "bosses",
+        "chocolate",
+        "gimmick",
+        "music"
+    ],
+    "comments_href": "#comments",
+    "comments": "51 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=18238",
+    "id": "18238",
+    "pat_sha224": "0d92997c6e5b5768ca31063fe8e8d74960a57b926625a051c6c5b94b",
+    "pat_sha1": "a2106cc59e15937c7c129bb1813aefec14f1ce4f",
+    "pat_shake_128": "0W-7sDXx27K-hJ4EkFLLxK1BlNuef2qS",
+    "result_sha224": "2dd2201d16bdf323d05867d21507e937b6a42e5d8017a3b11eda552d",
+    "result_sha1": "6dd24c31b5d8c568aab0de6d68855f609cbe8f08",
+    "result_shake1": "MOjYc2DOoOX92-2eVgGnnrVg6K_SXdL9",
+    "rom": "rom/18238_MOjYc2DOoOX92-2eVgGnnrVg6K_SXdL9.sfc",
+    "patch": "patch/0W-7sDXx27K-hJ4EkFLLxK1BlNuef2qS",
+    "patchblob1_name": "pblob_18238_74e746da2a",
+    "patchblob1_key": "SzNEcjFaRkNfZVAxVjJZTmNqT2RKRWF4MEJQUUllMmdnSVFwNGQ1MGphcz0=",
+    "patchblob1_sha224": "74e746da2ae492b50032635ecc8e9ebf436320b7a0e2864c5821ae54",
+    "romblob_salt": "CYPzX2oanSwlqIL2K4FZCA==",
+    "romblob_name": "rblob_18238_e1f5f57a79"
+}

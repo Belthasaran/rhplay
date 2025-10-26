@@ -1,0 +1,13 @@
+{
+  "gameid": "40683",
+  "patch": "/home/main/proj/rhtools/patch/XufoUGmw2lw9EyBdZdxtNRxsgJi80xJK",
+  "patch_filename": "good old days - recycle bin v1.11.bps",
+  "pat_sha1": "08fdb1de7a07a7edfddc01a296e99b52270d0387",
+  "pat_sha224": "8d7f09412d3b6bfe57f0ad7baeba26c1227a68c83c3da9b1ba1bf2a2",
+  "pat_shake_128": "XufoUGmw2lw9EyBdZdxtNRxsgJi80xJK",
+  "result_sha1": "9afc20acb092ab679c31e89a770f33e0016f51b5",
+  "result_sha224": "56cbf2d46c0dfc342e9f1cdcbcc55c64d1f8d43845ab643c64928421",
+  "result_shake1": "-wsioVlsmXeoqKVPPm0Q05FOOfS7XFPL",
+  "rom": "/home/main/proj/rhtools/rom/40683_-wsioVlsmXeoqKVPPm0Q05FOOfS7XFPL.sfc",
+  "id": "40683"
+}

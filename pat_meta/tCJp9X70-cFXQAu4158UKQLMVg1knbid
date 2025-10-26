@@ -1,0 +1,17 @@
+{
+  "id": "5056",
+  "patch": "/home/main/proj/rhtools/patch/tCJp9X70-cFXQAu4158UKQLMVg1knbid",
+  "patch_filename": "PureVanillaHack_SMW.bps",
+  "pat_sha1": "bebd838c34412b83598fe784843388af0f297f18",
+  "pat_sha224": "67b9110d9c3fd10fa21e937e94dcd5d82f3d8180ddce314d19cc7828",
+  "pat_shake_128": "tCJp9X70-cFXQAu4158UKQLMVg1knbid",
+  "result_sha1": "07188576f53ca1693b8a13c594202f9506d97e64",
+  "result_sha224": "65e063486d0581461bc3244dec5efef29e398380a24586bc51be3135",
+  "result_shake1": "gl4nrFHQ56ggHSEv3S7NApdWaaLYes2I",
+  "rom": "/home/main/proj/rhtools/rom/5056_gl4nrFHQ56ggHSEv3S7NApdWaaLYes2I.sfc",
+  "patchblob1_name": "pblob_5056_096dc70a3e",
+  "patchblob1_key": "MkpBRm1Yb2Vxc3VadWRBbjNpV2lONEZTUThpWXhCRmR6MVYwcmNjNjdhST0=",
+  "patchblob1_sha224": "096dc70a3e7c3c2cfeb60db97356e014807758f23df5b175538f01d8",
+  "romblob_name": "rblob_5056_4f46a87326",
+  "romblob_salt": "E_Dz_ezHiqh8Fulx3huWQA=="
+}

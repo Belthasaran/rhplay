@@ -1,0 +1,13 @@
+{
+  "gameid": "40658",
+  "patch": "/home/main/proj/rhtools/patch/30lDImIAnUOpSaBKV1NxEnsp_OL-_c5C",
+  "patch_filename": "fish_plinko.bps",
+  "pat_sha1": "d5580436ad4c6e4b79f5201baa67394e6cd3e16d",
+  "pat_sha224": "b9f524553254cfa1e150353f7082d028788f78d87832458bc5a98c90",
+  "pat_shake_128": "30lDImIAnUOpSaBKV1NxEnsp_OL-_c5C",
+  "result_sha1": "01d11f3b55396f782607bd6b03a5191e58512f0f",
+  "result_sha224": "4e69e5f3e56cf3f5cb213a1a2ca195dd4eae1fe89b0b86bc18599a74",
+  "result_shake1": "VK7EOf_cjFhLdzNURqhjDym0-I1LhUGr",
+  "rom": "/home/main/proj/rhtools/rom/40658_VK7EOf_cjFhLdzNURqhjDym0-I1LhUGr.sfc",
+  "id": "40658"
+}

@@ -1,0 +1,41 @@
+{
+    "name_href": "//dl.smwcentral.net/27282/apes1.14.zip",
+    "name": "Storks and Apes and Crocodiles",
+    "author_href": "/?p=profile&id=14790",
+    "author": "Morsel",
+    "added": "2021-06-15 05:52:31 PM",
+    "version history_href": "/?p=section&a=versionhistory&id=27282",
+    "version history": "View",
+    "demo": "No",
+    "featured": "Yes",
+    "length": "17 exit(s)",
+    "type": "Kaizo: Expert",
+    "description": "Dear victim,",
+    "tags_href": "/?p=section&s=smwhacks&u=0&f%5Btags%5D=asm",
+    "tags": [
+        "asm",
+        "exgfx",
+        "music",
+        "story"
+    ],
+    "comments_href": "#comments",
+    "comments": "35 ",
+    "rating": [
+        "5.0"
+    ],
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=27282",
+    "id": "27282",
+    "pat_sha224": "df2857d2984d897b5ebb756bb0e713dab0f831afced8d78022a064eb",
+    "pat_sha1": "cf1d0dc699f93ec2b325217895966521c6eaa82b",
+    "pat_shake_128": "_jz0AsZpOuft1getHzbQaGRZx725oqad",
+    "result_sha224": "af2ac3ed4285e2ea5f6bf8e30cc798decb2096baf476cd3813841aa4",
+    "result_sha1": "74c8e5200031f20e97c186d9bca083430da3646b",
+    "result_shake1": "1PLkP1-rxOeIlOL7ytWWvTkeCjt3Twf6",
+    "rom": "rom/27282_1PLkP1-rxOeIlOL7ytWWvTkeCjt3Twf6.sfc",
+    "patch": "patch/_jz0AsZpOuft1getHzbQaGRZx725oqad",
+    "patchblob1_name": "pblob_27282_ed940ecbc2",
+    "patchblob1_key": "dm9TY0wzMXZEN2lPNW5VeFE1ZldONEJDVEQtMmVFOUVFOXlTQUJLcEpMOD0=",
+    "patchblob1_sha224": "ed940ecbc20a03a77da13c2d32c61e90d56917d44d7605462882baec",
+    "romblob_salt": "TSRoWWsq8KC0N_qescyD7g==",
+    "romblob_name": "rblob_27282_5e8a288dd2"
+}

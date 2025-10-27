@@ -1,5 +1,52 @@
 # RHTools Changelog
 
+## 2025-01-27 - Run Completion Enhancement
+
+### Feature: Proper Run Completion Handling
+
+**Overview**: Fixed the run completion flow to properly mark runs as completed in the database and clear UI state for new runs.
+
+**Problem Solved**: When completing the last challenge in a run, the system was only showing a completion alert but not:
+- Marking the run as 'completed' in the database
+- Clearing run entries from the UI
+- Resetting state for preparing a new run
+
+**Implementation**: Enhanced the run completion system with:
+
+1. **New Database Handler**: `db:runs:complete`
+   - Updates run status to 'completed' in database
+   - Sets completed_at timestamp
+   - Follows same pattern as cancel handler
+
+2. **Enhanced completeRun() Function**:
+   - Calls database completion handler
+   - Provides proper error handling
+   - Clears all run state after completion
+
+3. **New clearRunState() Function**:
+   - Resets all run-related variables to initial state
+   - Clears run entries, challenge results, undo stack
+   - Clears checked items and global conditions
+   - Clears staging-related state
+   - Prepares UI for new run planning
+
+**Technical Details**:
+- Added `db:runs:complete` IPC handler in `electron/ipc-handlers.js`
+- Added `completeRun` API method in `electron/preload.js`
+- Enhanced `completeRun()` function in `electron/renderer/src/App.vue`
+- Added comprehensive `clearRunState()` function
+
+**Files Modified**:
+- `electron/ipc-handlers.js` - Added completion handler
+- `electron/preload.js` - Added API method
+- `electron/renderer/src/App.vue` - Enhanced completion flow
+
+**Benefits**:
+- Runs are properly marked as completed in database
+- UI is cleared and ready for new run planning
+- Consistent with cancel run behavior
+- Better user experience for consecutive runs
+
 ## 2025-01-27 - USB2SNES Auto-Connect Enhancement
 
 ### Feature: Automatic USB2SNES Connection for Launch Operations

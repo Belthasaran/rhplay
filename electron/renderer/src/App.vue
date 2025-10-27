@@ -4161,6 +4161,40 @@ async function openRunModal() {
 function closeRunModal() {
   runModalOpen.value = false;
 }
+
+function clearRunState() {
+  // Clear all run-related state to prepare for a new run
+  currentRunUuid.value = '';
+  currentRunName.value = '';
+  currentRunStatus.value = 'preparing';
+  currentChallengeIndex.value = 0;
+  runStartTime.value = null;
+  runElapsedSeconds.value = 0;
+  runPauseSeconds.value = 0;
+  isRunPaused.value = false;
+  
+  // Clear run entries
+  runEntries.splice(0, runEntries.length);
+  
+  // Clear challenge results
+  challengeResults.value = [];
+  
+  // Clear undo stack
+  undoStack.value = [];
+  
+  // Clear checked items
+  checkedRun.value.clear();
+  
+  // Clear global conditions
+  globalRunConditions.value = [];
+  
+  // Clear staging-related state
+  stagingFolderPath.value = '';
+  stagingSfcCount.value = 0;
+  runStagingActionStatus.value = '';
+  
+  console.log('[clearRunState] Run state cleared, ready for new run');
+}
 function toggleCheckAllRun(e: Event) {
   const target = e.target as HTMLInputElement;
   if (target.checked) {
@@ -5642,22 +5676,43 @@ async function revealCurrentChallenge(revealedEarly: boolean = false) {
   }
 }
 
-function completeRun() {
+async function completeRun() {
   // Stop timer
   if (runTimerInterval.value) {
     clearInterval(runTimerInterval.value);
     runTimerInterval.value = null;
   }
   
-  currentRunStatus.value = 'completed';
-  
-  alert(
-    `Run "${currentRunName.value}" completed!\n\n` +
-    `Total time: ${formatTime(runElapsedSeconds.value)}\n` +
-    `Challenges: ${runEntries.length}`
-  );
-  
-  closeRunModal();
+  try {
+    // Mark run as completed in database
+    if (isElectronAvailable()) {
+      const result = await (window as any).electronAPI.completeRun({
+        runUuid: currentRunUuid.value
+      });
+      
+      if (!result.success) {
+        console.error('Failed to complete run in database:', result.error);
+        alert('Error completing run: ' + result.error);
+        return;
+      }
+    }
+    
+    currentRunStatus.value = 'completed';
+    
+    alert(
+      `Run "${currentRunName.value}" completed!\n\n` +
+      `Total time: ${formatTime(runElapsedSeconds.value)}\n` +
+      `Challenges: ${runEntries.length}`
+    );
+    
+    // Clear run state to prepare for new run
+    clearRunState();
+    
+    closeRunModal();
+  } catch (error) {
+    console.error('Error completing run:', error);
+    alert('Error completing run: ' + error.message);
+  }
 }
 
 function formatTime(seconds: number): string {

@@ -684,6 +684,31 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Complete a run (mark as finished)
+   * Channel: db:runs:complete
+   */
+  ipcMain.handle('db:runs:complete', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Update run status to completed
+      db.prepare(`
+        UPDATE runs 
+        SET status = 'completed',
+            completed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE run_uuid = ?
+      `).run(runUuid);
+      
+      console.log(`Run ${runUuid} marked as completed`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error completing run:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Get run results (expanded challenges)
    * Channel: db:runs:get-results
    */

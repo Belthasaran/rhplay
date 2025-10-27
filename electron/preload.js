@@ -203,6 +203,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getActiveRun: () => ipcRenderer.invoke('db:runs:get-active'),
   
   /**
+   * Get all runs from database
+   * @returns {Promise<Array>} Array of all runs
+   */
+  getAllRuns: () => ipcRenderer.invoke('db:runs:get-all'),
+  
+  /**
+   * Delete a run
+   * @param {Object} params - {runUuid}
+   * @returns {Promise<{success: boolean}>}
+   */
+  deleteRun: (params) => ipcRenderer.invoke('db:runs:delete', params),
+  
+  /**
+   * Get plan entries for a run
+   * @param {Object} params - {runUuid}
+   * @returns {Promise<Array>} Array of plan entries
+   */
+  getRunPlanEntries: (params) => ipcRenderer.invoke('db:runs:get-plan-entries', params),
+  
+  /**
    * Pause a run
    * @param {string} runUuid - Run UUID
    * @returns {Promise<{success: boolean}>}

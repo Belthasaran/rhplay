@@ -153,6 +153,8 @@
               <div class="common-filters">
                 <div class="filter-section-label">Common Filters:</div>
                 <div class="filter-tags">
+                  <button @click="addFilterTag('demo:No')" class="filter-tag">demo:No</button>
+                  <button @click="addFilterTag('demo:Yes')" class="filter-tag">demo:Yes</button>
                   <button @click="addFilterTag('Kaizo')" class="filter-tag">Kaizo</button>
                   <button @click="addFilterTag('Standard')" class="filter-tag">Standard</button>
                   <button @click="addFilterTag('Puzzle')" class="filter-tag">Puzzle</button>
@@ -547,6 +549,7 @@
         <div class="modal-header-actions">
           <!-- Preparing state -->
           <template v-if="!isRunActive">
+            <button @click="openPastRunsModal" class="btn-past-runs">📜 Past Runs</button>
             <button @click="editGlobalConditions" class="btn-conditions-header" :title="`Global Conditions: ${globalRunConditions.length > 0 ? globalRunConditions.join(', ') : 'None'}`">
               {{ globalRunConditions.length > 0 ? `✓ Global Conditions (${globalRunConditions.length})` : 'Set Global Conditions' }}
             </button>
@@ -1848,6 +1851,121 @@
           Close
         </button>
       </footer>
+    </div>
+  </div>
+
+  <!-- Past Runs Modal -->
+  <div v-if="pastRunsModalOpen" class="modal-backdrop" @click.self="closePastRunsModal">
+    <div class="modal past-runs-modal">
+      <header class="modal-header">
+        <h3>📜 Past Runs</h3>
+        <button class="close" @click="closePastRunsModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="past-runs-controls">
+          <button @click="deleteCheckedPastRuns" :disabled="checkedPastRuns.length === 0" class="btn-danger">Delete Checked</button>
+        </div>
+        <div class="past-runs-content">
+          <div class="past-runs-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-check"></th>
+                  <th>Run Name</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Started</th>
+                  <th>Completed</th>
+                  <th># Challenges</th>
+                  <th># Finished</th>
+                  <th># Skipped</th>
+                  <th>Conditions</th>
+                  <th>Pause</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="run in pastRuns" :key="run.run_uuid" @click="selectPastRun(run.run_uuid)" :class="{ 'selected': selectedPastRunUuid === run.run_uuid }">
+                  <td class="col-check" @click.stop>
+                    <input 
+                      type="checkbox" 
+                      :checked="checkedPastRuns.includes(run.run_uuid)" 
+                      @change="togglePastRunCheck(run.run_uuid)"
+                      :disabled="run.status === 'active'"
+                    />
+                  </td>
+                  <td>{{ run.run_name }}</td>
+                  <td>{{ run.status }}</td>
+                  <td>{{ formatShortDateTime(run.created_at) }}</td>
+                  <td>{{ formatShortDateTime(run.started_at) }}</td>
+                  <td>{{ formatShortDateTime(run.completed_at) }}</td>
+                  <td>{{ run.total_challenges }}</td>
+                  <td>{{ run.completed_challenges }}</td>
+                  <td>{{ run.skipped_challenges }}</td>
+                  <td>{{ formatConditions(run.global_conditions) }}</td>
+                  <td>{{ formatTime(run.pause_seconds || 0) }}</td>
+                </tr>
+                <tr v-if="pastRuns.length === 0">
+                  <td colspan="11" class="empty">No past runs found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="selectedPastRunUuid && selectedPastRun" class="past-runs-inspector">
+            <h4>Run Details</h4>
+            <div class="inspector-content">
+              <div class="detail-row">
+                <label>Run Name:</label>
+                <span>{{ selectedPastRun.run_name }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Status:</label>
+                <span>{{ selectedPastRun.status }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Created:</label>
+                <span>{{ formatDateTime(selectedPastRun.created_at) }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Started:</label>
+                <span>{{ formatDateTime(selectedPastRun.started_at) }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Completed:</label>
+                <span>{{ formatDateTime(selectedPastRun.completed_at) }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedPastRun.staging_folder">
+                <label>Staging Folder:</label>
+                <button @click="openStagingFolderForPastRun" class="btn-link">📁 Open</button>
+              </div>
+              <div v-if="selectedPastRunResults && selectedPastRunResults.length > 0" class="results-section">
+                <h5>Results</h5>
+                <table class="results-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Game ID</th>
+                      <th>Game Name</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="result in selectedPastRunResults" :key="result.result_uuid">
+                      <td>{{ result.sequence_number }}</td>
+                      <td>{{ result.gameid }}</td>
+                      <td>{{ result.game_name }}</td>
+                      <td>{{ result.status }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-if="selectedPastRunPlanEntries && selectedPastRunPlanEntries.length > 0" class="plan-section">
+                <h5>Plan Entries</h5>
+                <button @click="viewPastRunPlanEntries" class="btn-secondary">View Plan Entries</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -3916,6 +4034,18 @@ const runNameInput = ref<string>('My Challenge Run');
 const resumeRunModalOpen = ref(false);
 const resumeRunData = ref<any>(null);
 
+// Past runs modal
+const pastRunsModalOpen = ref(false);
+const pastRuns = ref<any[]>([]);
+const checkedPastRuns = ref<string[]>([]);
+const selectedPastRunUuid = ref<string | null>(null);
+const selectedPastRun = computed(() => {
+  if (!selectedPastRunUuid.value) return null;
+  return pastRuns.value.find(r => r.run_uuid === selectedPastRunUuid.value);
+});
+const selectedPastRunResults = ref<any[]>([]);
+const selectedPastRunPlanEntries = ref<any[]>([]);
+
 // Staging progress modal
 const stagingProgressModalOpen = ref(false);
 const stagingProgressCurrent = ref(0);
@@ -5582,6 +5712,126 @@ function editGlobalConditions() {
   if (numbers.length > 0) {
     const newConditions = numbers.map(n => allConditions[n - 1]);
     globalRunConditions.value = [...new Set(newConditions)];  // Remove duplicates
+  }
+}
+
+// Past Runs Modal Functions
+async function openPastRunsModal() {
+  try {
+    pastRunsModalOpen.value = true;
+    // Fetch all runs from database
+    const runs = await (window as any).electronAPI.getAllRuns();
+    // Filter out active runs (keep only past/finished runs)
+    pastRuns.value = runs.filter((run: any) => run.status !== 'active');
+  } catch (error) {
+    console.error('Error loading past runs:', error);
+    alert('Error loading past runs: ' + (error as any).message);
+  }
+}
+
+function closePastRunsModal() {
+  pastRunsModalOpen.value = false;
+  checkedPastRuns.value = [];
+  selectedPastRunUuid.value = null;
+  selectedPastRunResults.value = [];
+  selectedPastRunPlanEntries.value = [];
+}
+
+function togglePastRunCheck(runUuid: string) {
+  const index = checkedPastRuns.value.indexOf(runUuid);
+  if (index === -1) {
+    checkedPastRuns.value.push(runUuid);
+  } else {
+    checkedPastRuns.value.splice(index, 1);
+  }
+}
+
+async function selectPastRun(runUuid: string) {
+  selectedPastRunUuid.value = runUuid;
+  
+  // Load results for this run
+  try {
+    selectedPastRunResults.value = await (window as any).electronAPI.getRunResults({ runUuid });
+  } catch (error) {
+    console.error('Error loading run results:', error);
+    selectedPastRunResults.value = [];
+  }
+  
+  // Load plan entries for this run
+  try {
+    selectedPastRunPlanEntries.value = await (window as any).electronAPI.getRunPlanEntries({ runUuid });
+  } catch (error) {
+    console.error('Error loading plan entries:', error);
+    selectedPastRunPlanEntries.value = [];
+  }
+}
+
+async function deleteCheckedPastRuns() {
+  if (checkedPastRuns.value.length === 0) return;
+  
+  if (!confirm(`Delete ${checkedPastRuns.value.length} run(s)? This action cannot be undone.`)) {
+    return;
+  }
+  
+  try {
+    for (const runUuid of checkedPastRuns.value) {
+      // Delete the run (cascade will delete results and plan entries)
+      await (window as any).electronAPI.deleteRun({ runUuid });
+    }
+    
+    // Remove from list
+    pastRuns.value = pastRuns.value.filter(r => !checkedPastRuns.value.includes(r.run_uuid));
+    checkedPastRuns.value = [];
+    
+    if (selectedPastRunUuid.value && checkedPastRuns.value.includes(selectedPastRunUuid.value)) {
+      selectedPastRunUuid.value = null;
+      selectedPastRunResults.value = [];
+      selectedPastRunPlanEntries.value = [];
+    }
+  } catch (error) {
+    console.error('Error deleting runs:', error);
+    alert('Error deleting runs: ' + (error as any).message);
+  }
+}
+
+function openStagingFolderForPastRun() {
+  if (!selectedPastRun.value || !selectedPastRun.value.staging_folder) return;
+  
+  // Use shell to open folder
+  const shell = (window as any).electronAPI.shell;
+  if (shell && shell.openPath) {
+    shell.openPath(selectedPastRun.value.staging_folder);
+  }
+}
+
+function viewPastRunPlanEntries() {
+  // Show plan entries in an alert (simple implementation)
+  const planText = selectedPastRunPlanEntries.value.map(entry => {
+    return `#${entry.sequence_number}: ${entry.entry_type} (${entry.count}x)`;
+  }).join('\n');
+  
+  alert(`Plan Entries:\n\n${planText}`);
+}
+
+function formatShortDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleString('en-US');
+}
+
+function formatConditions(conditionsJson: string | null | undefined): string {
+  if (!conditionsJson) return '';
+  try {
+    const conditions = JSON.parse(conditionsJson);
+    return conditions.join(', ');
+  } catch {
+    return '';
   }
 }
 
@@ -7379,6 +7629,128 @@ button:disabled {
   overflow-y: auto;
 }
 
+/* Past Runs Modal */
+.past-runs-modal { 
+  width: 1200px; 
+  max-width: 95vw; 
+  max-height: 90vh;
+}
+
+.past-runs-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.past-runs-content {
+  display: flex;
+  gap: 20px;
+  height: calc(90vh - 200px);
+}
+
+.past-runs-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 800px;
+}
+
+.past-runs-inspector {
+  width: 350px;
+  border-left: 2px solid var(--border-primary);
+  padding-left: 20px;
+  overflow-y: auto;
+}
+
+.past-runs-inspector h4 {
+  margin-bottom: 15px;
+  color: var(--accent-primary);
+}
+
+.inspector-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-row {
+  display: flex;
+  gap: 10px;
+}
+
+.detail-row label {
+  font-weight: 600;
+  min-width: 100px;
+  color: var(--text-secondary);
+}
+
+.detail-row span {
+  flex: 1;
+  word-break: break-word;
+}
+
+.results-section, .plan-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.results-section h5, .plan-section h5 {
+  margin-bottom: 10px;
+  color: var(--accent-primary);
+}
+
+.results-table {
+  width: 100%;
+  font-size: 12px;
+}
+
+.results-table th,
+.results-table td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.results-table th {
+  font-weight: 600;
+  background: var(--bg-secondary);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.btn-link:hover {
+  color: var(--accent-secondary);
+}
+
+.past-runs-table-wrapper tbody tr {
+  cursor: pointer;
+}
+
+.past-runs-table-wrapper tbody tr.selected {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.past-runs-table-wrapper tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.past-runs-table-wrapper tbody tr.selected:hover {
+  background: var(--accent-secondary);
+}
+
+.col-check input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Staging Success Modal */
 .staging-success-modal { width: 700px; max-width: 95vw; }
 .success-info { padding: 24px; }
@@ -7473,7 +7845,7 @@ button:disabled {
 .btn-upload:hover { background: #7c3aed; }
 .btn-manual-confirm { 
   background: #f59e0b; 
-  color: white;
+  color: white; 
   margin-top: 12px;
 }
 .btn-manual-confirm:hover { background: #d97706; }
@@ -7928,6 +8300,20 @@ button:disabled {
 .btn-conditions-header:hover {
   background: #dbeafe;
   border-color: #60a5fa;
+}
+
+.btn-past-runs {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-past-runs:hover {
+  background: #fde68a;
+  border-color: #f59e0b;
 }
 
 /* Skill rating caption */

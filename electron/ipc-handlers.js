@@ -2567,6 +2567,85 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // ===========================================================================
+  // PAST RUNS OPERATIONS
+  // ===========================================================================
+  
+  /**
+   * Get all runs from database
+   * Channel: db:runs:get-all
+   */
+  ipcMain.handle('db:runs:get-all', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const runs = db.prepare(`
+        SELECT 
+          run_uuid,
+          run_name,
+          run_description,
+          status,
+          created_at,
+          started_at,
+          completed_at,
+          updated_at,
+          total_challenges,
+          completed_challenges,
+          skipped_challenges,
+          global_conditions,
+          pause_seconds,
+          staging_folder
+        FROM runs
+        ORDER BY created_at DESC
+      `).all();
+      
+      return runs;
+    } catch (error) {
+      console.error('Error getting all runs:', error);
+      throw error;
+    }
+  });
+  
+  /**
+   * Delete a run (cascade deletes results and plan entries)
+   * Channel: db:runs:delete
+   */
+  ipcMain.handle('db:runs:delete', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Delete run (CASCADE will handle run_results and run_plan_entries)
+      db.prepare('DELETE FROM runs WHERE run_uuid = ?').run(runUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting run:', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  /**
+   * Get plan entries for a run
+   * Channel: db:runs:get-plan-entries
+   */
+  ipcMain.handle('db:runs:get-plan-entries', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const entries = db.prepare(`
+        SELECT *
+        FROM run_plan_entries
+        WHERE run_uuid = ?
+        ORDER BY sequence_number
+      `).all(runUuid);
+      
+      return entries;
+    } catch (error) {
+      console.error('Error getting plan entries:', error);
+      throw error;
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 

@@ -143,7 +143,7 @@
                   ref="filterSearchInput"
                   v-model="searchQuery"
                   type="text"
-                  placeholder="Search or filter... (try: rating:>3, added:2025, Kaizo)"
+                  placeholder="Search or filter... (try: rating:>3, -demo:Yes, author:Panga)"
                   class="filter-search-input"
                   @keydown.esc="closeFilterDropdown"
                 />
@@ -185,15 +185,18 @@
         </div>
 
         <div class="filter-dropdown-container">
-          <button @click="toggleIgnoreDropdown" class="filter-dropdown-btn">
-            <span>Ignore</span>
+          <button @click="toggleManageDropdown" class="filter-dropdown-btn">
+            <span>Manage</span>
             <span class="dropdown-arrow">▼</span>
           </button>
 
-          <div v-if="ignoreDropdownOpen" class="filter-dropdown simple-dropdown" @click.stop>
+          <div v-if="manageDropdownOpen" class="filter-dropdown simple-dropdown" @click.stop>
             <div class="simple-dropdown-body">
-              <button @click="hideChecked(); closeIgnoreDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Hide checked</button>
-              <button @click="unhideChecked(); closeIgnoreDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Unhide checked</button>
+              <button @click="hideChecked(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Hide checked</button>
+              <button @click="unhideChecked(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Unhide checked</button>
+              <div class="dropdown-separator"></div>
+              <button @click="exportFull(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Export Full</button>
+              <button @click="importGames(); closeManageDropdown()" class="dropdown-action-btn">Import</button>
             </div>
           </div>
         </div>
@@ -599,7 +602,7 @@
               <option v-for="diff in randomFilterValues.difficulties" :key="diff" :value="diff">{{ diff }}</option>
             </select>
           </label>
-          <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="Advanced filter (try: rating:>3, author:Panga, Kaizo)" />
+          <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="Advanced filter (try: rating:>3, -demo:Yes, author:Panga)" />
           <label>
             Count
             <input class="count" v-model.number="randomFilter.count" type="number" min="1" max="100" />
@@ -2164,8 +2167,8 @@ const filterSearchInput = ref<HTMLInputElement | null>(null);
 // Select dropdown state
 const selectDropdownOpen = ref(false);
 
-// Ignore dropdown state
-const ignoreDropdownOpen = ref(false);
+// Manage dropdown state
+const manageDropdownOpen = ref(false);
 
 // USB2SNES Tools modal state
 const usb2snesToolsModalOpen = ref(false);
@@ -2312,13 +2315,83 @@ function closeSelectDropdown() {
   selectDropdownOpen.value = false;
 }
 
-// Ignore dropdown functions
-function toggleIgnoreDropdown() {
-  ignoreDropdownOpen.value = !ignoreDropdownOpen.value;
+// Manage dropdown functions
+function toggleManageDropdown() {
+  manageDropdownOpen.value = !manageDropdownOpen.value;
 }
 
-function closeIgnoreDropdown() {
-  ignoreDropdownOpen.value = false;
+function closeManageDropdown() {
+  manageDropdownOpen.value = false;
+}
+
+// Export and Import functions
+async function exportFull() {
+  if (selectedIds.value.size === 0) {
+    alert('Please select games to export');
+    return;
+  }
+
+  try {
+    // Open directory picker
+    const result = await (window as any).electronAPI.selectDirectory({
+      title: 'Select export directory',
+      properties: ['openDirectory', 'createDirectory']
+    });
+
+    if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+      const exportDir = result.filePaths[0];
+      const gameIds = Array.from(selectedIds.value);
+      
+      // Call backend export function
+      const exportResult = await (window as any).electronAPI.exportGames({
+        gameIds,
+        exportDirectory: exportDir
+      });
+
+      if (exportResult.success) {
+        alert(`Successfully exported ${exportResult.exportedCount} games to ${exportDir}`);
+      } else {
+        alert(`Export failed: ${exportResult.error}`);
+      }
+    }
+  } catch (error) {
+    console.error('Export error:', error);
+    alert('Export failed: ' + (error as any).message);
+  }
+}
+
+async function importGames() {
+  try {
+    // Open file picker for multiple files
+    const result = await (window as any).electronAPI.selectFiles({
+      title: 'Select game info files to import',
+      filters: [
+        { name: 'Game Info Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile', 'multiSelections']
+    });
+
+    if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+      const filePaths = result.filePaths;
+      
+      // Call backend import function
+      const importResult = await (window as any).electronAPI.importGames({
+        filePaths
+      });
+
+      if (importResult.success) {
+        alert(`Successfully imported ${importResult.importedCount} games`);
+        // Refresh the game list
+        await loadGames();
+      } else {
+        alert(`Import failed: ${importResult.error}`);
+      }
+    }
+  } catch (error) {
+    console.error('Import error:', error);
+    alert('Import failed: ' + (error as any).message);
+  }
 }
 
 // USB2SNES Tools modal functions
@@ -3190,8 +3263,8 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && selectDropdownOpen.value) {
     closeSelectDropdown();
   }
-  if (e.key === 'Escape' && ignoreDropdownOpen.value) {
-    closeIgnoreDropdown();
+  if (e.key === 'Escape' && manageDropdownOpen.value) {
+    closeManageDropdown();
   }
   if (e.key === 'Escape' && usb2snesDropdownOpen.value) {
     closeUsb2snesDropdown();
@@ -3224,7 +3297,7 @@ function handleGlobalClick(e: MouseEvent) {
   if (!clickedInsideAnyDropdown) {
     closeFilterDropdown();
     closeSelectDropdown();
-    closeIgnoreDropdown();
+    closeManageDropdown();
     closeSnesContentsDropdown();
   }
 }
@@ -7269,6 +7342,12 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   color: var(--text-tertiary);
+}
+
+.dropdown-separator {
+  height: 1px;
+  background: var(--border-primary);
+  margin: 4px 0;
 }
 
 /* USB2SNES Tools Modal */

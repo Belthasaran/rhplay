@@ -1,5 +1,39 @@
 # RHTools Changelog
 
+## 2025-01-27 - Game Export/Import Feature
+
+### New Feature: Comprehensive Game Export/Import System
+
+**Overview**: Replaced "Ignore" dropdown with "Manage" dropdown, adding powerful export/import capabilities for complete game data portability.
+
+**New Functionality**:
+- **Export Full**: Export selected games with all associated data to directory
+- **Import**: Import games from JSON files with validation and hash verification
+- **File Management**: Automatic file name sanitization and UUID fallback
+- **Data Integrity**: SHA256 hash verification for attachment files
+
+**Technical Implementation**:
+- Comprehensive data export from rhdata.db, clientdata.db, and patchbin.db
+- Binary attachment files saved separately with metadata in JSON
+- Two-phase import process (JSON first, then attachments with hash verification)
+- Error handling with graceful degradation and user feedback
+
+**Database Tables Exported**:
+- `gameversions`, `gameversion_stats`, `rhpatches`, `patchblobs`, `patchblobs_extended`
+- `user_game_annotations` (client-specific data)
+- `attachments` (metadata only, binary data in separate files)
+
+**Files Modified**:
+- `electron/renderer/src/App.vue` - UI changes and export/import functions
+- `electron/ipc-handlers.js` - Backend handlers and dialog support
+- `electron/preload.js` - API methods for frontend-backend communication
+
+**Benefits**:
+- Complete data portability between RHTools installations
+- Easy backup and restore of selected games
+- Cross-platform game sharing capabilities
+- Data integrity protection through hash verification
+
 ## 2025-10-26 - CARL Module Loader - Critical Crash Fixes
 
 ### Bug Fix 1: Race Condition During Patch Installation

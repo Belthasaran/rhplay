@@ -14,10 +14,46 @@
 function matchesFilter(game, query) {
   if (!query) return true;
   
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
+  
+  // Split query into individual terms (space-separated)
+  const terms = q.split(/\s+/).filter(term => term.length > 0);
+  
+  // Process each term and combine with AND logic
+  for (const term of terms) {
+    if (!matchesTerm(game, term)) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * Check if a game matches a single filter term
+ * @param {Object} game - Game object
+ * @param {string} term - Single filter term
+ * @returns {boolean} - Whether the game matches the term
+ */
+function matchesTerm(game, term) {
+  const isNegated = term.startsWith('-');
+  const actualTerm = isNegated ? term.substring(1) : term;
+  const matches = evaluateTerm(game, actualTerm);
+  
+  return isNegated ? !matches : matches;
+}
+
+/**
+ * Evaluate a single filter term (without negation)
+ * @param {Object} game - Game object
+ * @param {string} term - Filter term (without negation)
+ * @returns {boolean} - Whether the game matches the term
+ */
+function evaluateTerm(game, term) {
+  const t = term.toLowerCase();
   
   // Check for attribute:value pattern
-  const attributeMatch = q.match(/^(\w+):(>|<|>=|<=)?(.+)$/);
+  const attributeMatch = t.match(/^(\w+):(>|<|>=|<=)?(.+)$/);
   
   if (attributeMatch) {
     const [, attr, operator, value] = attributeMatch;
@@ -50,6 +86,26 @@ function matchesFilter(game, query) {
       return gameVersion === targetVersion;
     }
     
+    // Handle numeric fields with operators
+    if (['length', 'added'].includes(attr)) {
+      const gameValue = getGameAttribute(game, attr);
+      if (gameValue === null) return false;
+      
+      const numValue = parseFloat(gameValue);
+      const targetValue = parseFloat(value);
+      
+      if (isNaN(numValue) || isNaN(targetValue)) {
+        // Fall back to string comparison
+        return gameValue.toLowerCase().includes(value.toLowerCase());
+      }
+      
+      if (operator === '>') return numValue > targetValue;
+      if (operator === '<') return numValue < targetValue;
+      if (operator === '>=') return numValue >= targetValue;
+      if (operator === '<=') return numValue <= targetValue;
+      return numValue === targetValue;
+    }
+    
     // Handle other attribute searches
     const gameValue = getGameAttribute(game, attr);
     if (gameValue === null) return false;
@@ -74,9 +130,16 @@ function matchesFilter(game, query) {
     game.difficulty ? String(game.difficulty) : '',
     game.gametype ? String(game.gametype) : '',
     game.legacy_type ? String(game.legacy_type) : '',
+    game.demo ? String(game.demo) : '',
+    game.featured ? String(game.featured) : '',
+    game.obsoleted ? String(game.obsoleted) : '',
+    game.removed ? String(game.removed) : '',
+    game.moderated ? String(game.moderated) : '',
+    // Include tags from JSON data
+    game.tags ? String(game.tags) : '',
   ].join(' ').toLowerCase();
   
-  return haystack.includes(q);
+  return haystack.includes(t);
 }
 
 /**
@@ -100,6 +163,17 @@ function getGameAttribute(game, attr) {
     difficulty: game.difficulty,
     added: game.added,
     version: game.version ?? game.CurrentVersion,
+    // Additional gameversions table fields
+    demo: game.demo,
+    featured: game.featured,
+    combinedtype: game.combinedtype,
+    legacy_type: game.legacy_type,
+    obsoleted: game.obsoleted,
+    removed: game.removed,
+    moderated: game.moderated,
+    // JSON data fields
+    tags: game.tags,
+    section: game.section,
   };
   
   if (directProps[attr] !== undefined) {

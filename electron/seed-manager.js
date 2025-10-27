@@ -233,7 +233,7 @@ function selectRandomGame(params) {
   
   const basicFilteredGames = dbManager.withClientData('rhdata', (db) => {
     let query = `
-      SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.publicrating
+      SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.publicrating, gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated
       FROM gameversions gv
       WHERE gv.gameid IN (${availableGameids.map(() => '?').join(',')})
         AND gv.removed = 0

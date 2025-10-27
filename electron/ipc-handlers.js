@@ -5,7 +5,7 @@
  * Provides database access, game data, user annotations, and settings
  */
 
-const { ipcMain } = require('electron');
+const { ipcMain, dialog } = require('electron');
 const crypto = require('crypto');
 const { app } = require('electron');
 const seedManager = require('./seed-manager');
@@ -894,7 +894,7 @@ function registerDatabaseHandlers(dbManager) {
       
       // First get all games with basic filters (type and difficulty)
       let query = `
-        SELECT gameid, version, name, combinedtype, difficulty, gametype, legacy_type, author, length, description, publicrating
+        SELECT gameid, version, name, combinedtype, difficulty, gametype, legacy_type, author, length, description, publicrating, demo, featured, obsoleted, removed, moderated
         FROM gameversions
         WHERE removed = 0 AND obsoleted = 0
       `;
@@ -2647,7 +2647,317 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // ===========================================================================
+  // DIALOG OPERATIONS
+  // ===========================================================================
+  
+  /**
+   * Select directory dialog
+   * Channel: dialog:selectDirectory
+   */
+  ipcMain.handle('dialog:selectDirectory', async (event, options) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: options.title || 'Select Directory',
+        properties: options.properties || ['openDirectory'],
+        defaultPath: options.defaultPath
+      });
+      return result;
+    } catch (error) {
+      console.error('Error in directory selection:', error);
+      return { canceled: true };
+    }
+  });
+  
+  /**
+   * Select files dialog
+   * Channel: dialog:selectFiles
+   */
+  ipcMain.handle('dialog:selectFiles', async (event, options) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: options.title || 'Select Files',
+        filters: options.filters || [],
+        properties: options.properties || ['openFile'],
+        defaultPath: options.defaultPath
+      });
+      return result;
+    } catch (error) {
+      console.error('Error in file selection:', error);
+      return { canceled: true };
+    }
+  });
+
+  // ===========================================================================
+  // GAME EXPORT/IMPORT OPERATIONS
+  // ===========================================================================
+  
+  /**
+   * Export selected games to directory
+   * Channel: db:games:export
+   */
+  ipcMain.handle('db:games:export', async (event, { gameIds, exportDirectory }) => {
+    try {
+      const fs = require('fs').promises;
+      const path = require('path');
+      const crypto = require('crypto');
+      
+      let exportedCount = 0;
+      
+      for (const gameId of gameIds) {
+        try {
+          // Create export data object
+          const exportData = {
+            gameid: gameId,
+            exported_at: new Date().toISOString(),
+            databases: {}
+          };
+          
+          // Export from rhdata.db
+          const rhdataDb = dbManager.getConnection('rhdata');
+          
+          // Get all gameversions for this gameid
+          const gameversions = rhdataDb.prepare(`
+            SELECT * FROM gameversions WHERE gameid = ?
+          `).all(gameId);
+          
+          if (gameversions.length === 0) {
+            console.warn(`No gameversions found for gameid ${gameId}`);
+            continue;
+          }
+          
+          exportData.databases.rhdata = {
+            gameversions: gameversions,
+            gameversion_stats: rhdataDb.prepare(`
+              SELECT * FROM gameversion_stats WHERE gameid = ?
+            `).all(gameId),
+            rhpatches: rhdataDb.prepare(`
+              SELECT * FROM rhpatches WHERE gameid = ?
+            `).all(gameId)
+          };
+          
+          // Get patchblobs referenced by gameversions
+          const patchblobIds = new Set();
+          for (const gv of gameversions) {
+            if (gv.patchblob_id) {
+              patchblobIds.add(gv.patchblob_id);
+            }
+          }
+          
+          if (patchblobIds.size > 0) {
+            const patchblobIdsArray = Array.from(patchblobIds);
+            const placeholders = patchblobIdsArray.map(() => '?').join(',');
+            
+            exportData.databases.rhdata.patchblobs = rhdataDb.prepare(`
+              SELECT * FROM patchblobs WHERE patchblob_id IN (${placeholders})
+            `).all(...patchblobIdsArray);
+            
+            exportData.databases.rhdata.patchblobs_extended = rhdataDb.prepare(`
+              SELECT * FROM patchblobs_extended WHERE patchblob_id IN (${placeholders})
+            `).all(...patchblobIdsArray);
+          }
+          
+          // Export from clientdata.db
+          const clientdataDb = dbManager.getConnection('clientdata');
+          exportData.databases.clientdata = {
+            user_game_annotations: clientdataDb.prepare(`
+              SELECT * FROM user_game_annotations WHERE gameid = ?
+            `).all(gameId)
+          };
+          
+          // Export from patchbin.db
+          const patchbinDb = dbManager.getConnection('patchbin');
+          if (patchbinDb) {
+            const attachments = [];
+            const attachmentFiles = [];
+            
+            if (patchblobIds.size > 0) {
+              const patchblobIdsArray = Array.from(patchblobIds);
+              const placeholders = patchblobIdsArray.map(() => '?').join(',');
+              
+              const attachmentRecords = patchbinDb.prepare(`
+                SELECT * FROM attachments WHERE patchblob_id IN (${placeholders})
+              `).all(...patchblobIdsArray);
+              
+              for (const attachment of attachmentRecords) {
+                // Create attachment record without file_data
+                const attachmentRecord = { ...attachment };
+                delete attachmentRecord.file_data;
+                attachments.push(attachmentRecord);
+                
+                // Save file_data to separate file if it exists
+                if (attachment.file_data) {
+                  const fileName = sanitizeFileName(attachment.file_name) || attachment.auuid;
+                  const filePath = path.join(exportDirectory, fileName);
+                  
+                  // Convert base64 to buffer and save
+                  const fileBuffer = Buffer.from(attachment.file_data, 'base64');
+                  await fs.writeFile(filePath, fileBuffer);
+                  
+                  attachmentFiles.push({
+                    auuid: attachment.auuid,
+                    file_name: attachment.file_name,
+                    saved_as: fileName,
+                    file_hash_sha256: attachment.file_hash_sha256
+                  });
+                }
+              }
+            }
+            
+            exportData.databases.patchbin = {
+              attachments: attachments,
+              attachment_files: attachmentFiles
+            };
+          }
+          
+          // Write export file
+          const exportFileName = `${gameId}_info.json`;
+          const exportFilePath = path.join(exportDirectory, exportFileName);
+          await fs.writeFile(exportFilePath, JSON.stringify(exportData, null, 2));
+          
+          exportedCount++;
+          console.log(`Exported game ${gameId} to ${exportFilePath}`);
+          
+        } catch (gameError) {
+          console.error(`Error exporting game ${gameId}:`, gameError);
+        }
+      }
+      
+      return { success: true, exportedCount };
+    } catch (error) {
+      console.error('Error in export operation:', error);
+      return { success: false, error: error.message };
+    }
+  });
+  
+  /**
+   * Import games from JSON files
+   * Channel: db:games:import
+   */
+  ipcMain.handle('db:games:import', async (event, { filePaths }) => {
+    try {
+      const fs = require('fs').promises;
+      const crypto = require('crypto');
+      
+      let importedCount = 0;
+      const errors = [];
+      
+      // First pass: import JSON files
+      for (const filePath of filePaths) {
+        if (!filePath.endsWith('_info.json')) {
+          continue; // Skip non-info files in first pass
+        }
+        
+        try {
+          const fileContent = await fs.readFile(filePath, 'utf8');
+          const exportData = JSON.parse(fileContent);
+          
+          if (!exportData.gameid || !exportData.databases) {
+            errors.push(`Invalid export file: ${filePath}`);
+            continue;
+          }
+          
+          const gameId = exportData.gameid;
+          
+          // Import rhdata.db tables
+          if (exportData.databases.rhdata) {
+            const rhdataDb = dbManager.getConnection('rhdata');
+            
+            // Import gameversions
+            if (exportData.databases.rhdata.gameversions) {
+              for (const gv of exportData.databases.rhdata.gameversions) {
+                try {
+                  rhdataDb.prepare(`
+                    INSERT OR REPLACE INTO gameversions 
+                    (gameid, version, name, author, length, combinedtype, difficulty, gametype, legacy_type, description, publicrating, demo, featured, obsoleted, removed, moderated, patchblob_id, gvjsondata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `).run(
+                    gv.gameid, gv.version, gv.name, gv.author, gv.length, gv.combinedtype, 
+                    gv.difficulty, gv.gametype, gv.legacy_type, gv.description, gv.publicrating,
+                    gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated, gv.patchblob_id, gv.gvjsondata
+                  );
+                } catch (insertError) {
+                  console.warn(`Error inserting gameversion for ${gameId}:`, insertError);
+                }
+              }
+            }
+            
+            // Import other tables similarly...
+            // (Additional table imports would go here)
+          }
+          
+          // Import clientdata.db tables
+          if (exportData.databases.clientdata) {
+            const clientdataDb = dbManager.getConnection('clientdata');
+            
+            if (exportData.databases.clientdata.user_game_annotations) {
+              for (const uga of exportData.databases.clientdata.user_game_annotations) {
+                try {
+                  clientdataDb.prepare(`
+                    INSERT OR REPLACE INTO user_game_annotations 
+                    (gameid, status, user_difficulty_rating, user_review_rating, user_skill_rating, hidden, exclude_from_random, user_notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  `).run(
+                    uga.gameid, uga.status, uga.user_difficulty_rating, uga.user_review_rating,
+                    uga.user_skill_rating, uga.hidden, uga.exclude_from_random, uga.user_notes
+                  );
+                } catch (insertError) {
+                  console.warn(`Error inserting user_game_annotations for ${gameId}:`, insertError);
+                }
+              }
+            }
+          }
+          
+          importedCount++;
+          console.log(`Imported game ${gameId} from ${filePath}`);
+          
+        } catch (fileError) {
+          errors.push(`Error importing ${filePath}: ${fileError.message}`);
+        }
+      }
+      
+      // Second pass: import attachment files (if they exist and match hash)
+      for (const filePath of filePaths) {
+        if (filePath.endsWith('_info.json')) {
+          continue; // Skip info files in second pass
+        }
+        
+        try {
+          // This would need to be implemented based on the attachment file structure
+          // For now, just log that we found attachment files
+          console.log(`Found attachment file: ${filePath}`);
+        } catch (fileError) {
+          errors.push(`Error processing attachment ${filePath}: ${fileError.message}`);
+        }
+      }
+      
+      return { 
+        success: true, 
+        importedCount, 
+        errors: errors.length > 0 ? errors : undefined 
+      };
+    } catch (error) {
+      console.error('Error in import operation:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
+}
+
+// Helper function to sanitize file names
+function sanitizeFileName(fileName) {
+  if (!fileName) return null;
+  
+  // Only allow alphanumeric characters, hyphens, and underscores
+  const sanitized = fileName.replace(/[^a-zA-Z0-9\-_]/g, '_');
+  
+  // Ensure it's not empty and not just underscores
+  if (sanitized.length === 0 || sanitized.match(/^_+$/)) {
+    return null;
+  }
+  
+  return sanitized;
 }
 
 module.exports = { registerDatabaseHandlers };

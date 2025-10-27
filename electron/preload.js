@@ -216,11 +216,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteRun: (params) => ipcRenderer.invoke('db:runs:delete', params),
   
   /**
-   * Get plan entries for a run
-   * @param {Object} params - {runUuid}
-   * @returns {Promise<Array>} Array of plan entries
+   * Export games to directory
+   * @param {Object} params - {gameIds, exportDirectory}
+   * @returns {Promise<{success: boolean, exportedCount?: number, error?: string}>}
    */
-  getRunPlanEntries: (params) => ipcRenderer.invoke('db:runs:get-plan-entries', params),
+  exportGames: (params) => ipcRenderer.invoke('db:games:export', params),
+  
+  /**
+   * Import games from files
+   * @param {Object} params - {filePaths}
+   * @returns {Promise<{success: boolean, importedCount?: number, errors?: Array, error?: string}>}
+   */
+  importGames: (params) => ipcRenderer.invoke('db:games:import', params),
+  
+  /**
+   * Select directory
+   * @param {Object} options - Directory selection options
+   * @returns {Promise<{canceled: boolean, filePaths?: Array}>}
+   */
+  selectDirectory: (options) => ipcRenderer.invoke('dialog:selectDirectory', options),
+  
+  /**
+   * Select multiple files
+   * @param {Object} options - File selection options
+   * @returns {Promise<{canceled: boolean, filePaths?: Array}>}
+   */
+  selectFiles: (options) => ipcRenderer.invoke('dialog:selectFiles', options),
   
   /**
    * Pause a run

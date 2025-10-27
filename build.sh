@@ -9,6 +9,8 @@ echo "🚀 RHTools Build Script"
 echo "======================"
 echo ""
 
+VERSION_STRING="0.1.0-beta"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -166,9 +168,9 @@ build_linux() {
     
     npm run build:linux
     
-    if [ -f "dist-builds/RHTools-1.0.0.AppImage" ]; then
+    if [ -f "dist-builds/RHTools-${VERSION_STRING}.AppImage" ] ; then
         print_success "Linux AppImage built successfully"
-        ls -lh dist-builds/RHTools-1.0.0.AppImage
+	ls -lh dist-builds/RHTools-${VERSION_STRING}.AppImage
     else
         print_error "Linux AppImage build failed"
         exit 1
@@ -186,9 +188,10 @@ build_windows() {
     
     npm run build:win
     
-    if [ -f "dist-builds/RHTools-1.0.0-portable.exe" ]; then
+    #if [ -f "dist-builds/RHTools-1.0.0-portable.exe" ]; then
+    if [ -f "dist-builds/RHTools-${VERSION_STRING}-portable.exe" ]; then
         print_success "Windows portable package built successfully"
-        ls -lh dist-builds/RHTools-1.0.0-portable.exe
+	ls -lh dist-builds/RHTools-${VERSION_STRING}-portable.exe
         print_status "⚠️  Note: Test the Windows package for native module compatibility"
     else
         print_error "Windows portable package build failed"
@@ -201,14 +204,14 @@ verify_packages() {
     print_status "Verifying packages..."
     
     # Check Linux package
-    if [ -f "dist-builds/RHTools-1.0.0.AppImage" ]; then
-        file dist-builds/RHTools-1.0.0.AppImage
+    if [ -f "dist-builds/RHTools-${VERSION_STRING}.AppImage" ] ; then
+        file dist-builds/RHTools-${VERSION_STRING}.AppImage
         print_success "Linux package verified"
     fi
     
     # Check Windows package
-    if [ -f "dist-builds/RHTools-1.0.0-portable.exe" ]; then
-        file dist-builds/RHTools-1.0.0-portable.exe
+    if [ -f "dist-builds/RHTools-${VERSION_STRING}-portable.exe" ]; then
+        file dist-builds/RHTools-${VERSION_STRING}-portable.exe
         print_success "Windows package verified"
     fi
 }
@@ -222,13 +225,13 @@ create_deployment_info() {
 
 ## Linux Package
 - **File**: RHTools-1.0.0.AppImage
-- **Size**: $(ls -lh RHTools-1.0.0.AppImage | awk '{print $5}')
+- **Size**: $(ls -lh RHTools-${VERSION_STRING}.AppImage | awk '{print $5}')
 - **Type**: Self-contained AppImage
-- **Usage**: chmod +x RHTools-1.0.0.AppImage && ./RHTools-1.0.0.AppImage
+- **Usage**: chmod +x RHTools-${VERSION_STRING}.AppImage && ./RHTools-${VERSION_STRING}.AppImage
 
 ## Windows Package
-- **File**: RHTools-1.0.0-portable.exe
-- **Size**: $(ls -lh RHTools-1.0.0-portable.exe | awk '{print $5}')
+- **File**: RHTools-${VERSION_STRING}-portable.exe
+- **Size**: $(ls -lh RHTools-${VERSION_STRING}-portable.exe | awk '{print $5}')
 - **Type**: Self-contained portable executable
 - **Usage**: Double-click to run
 

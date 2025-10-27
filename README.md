@@ -8,6 +8,9 @@ The database collected allows automating operations such as "Choose and launch a
 This is a sample release.
 This program is incomplete and a work in progress.
 
+![Rhplay Main window](/img/rhtools-rhplay-ss0.png "Main Window")
+![Rhplay Settings](/img/rhtools-rhplay-ss1.png "Settings Window")
+
 # Running the program
    This program is based on Python 3.10.x.  NodeJS, and Electron
    *  Please install the pre-requisites Including: Flips, Asar,

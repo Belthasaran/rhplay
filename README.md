@@ -19,9 +19,12 @@ This program is incomplete and a work in progress.
     Option to Download FLIPS and such from
       https://github.com/Belthasaran/rhtools/releases
 
-    The release is being mirrored to ArDrive - an [arweave](https://arweave.org/) backed system which provides for data preservation.
-    Release files for 0.1 beta should be in the devfiles folder 
-     If a copy of asar,  flips, or any of the required programs are not available from SMWC, then check the ArDrive.
+The release is being mirrored to ArDrive - an [arweave](https://arweave.org/) backed system which provides for data preservation.
+
+Release files for 0.1 beta should be in the devfiles folder 
+
+If a copy of asar,  flips, or any of the required programs are not available from SMWC, then check the ArDrive.
+
         drive id 58677413-8a0c-4982-944d-4a1b40454039
         devfiles folder id 270850dc-ac25-4550-a673-528016f9b457
         https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH

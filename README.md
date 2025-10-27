@@ -40,13 +40,21 @@ Installation Requirements:
 
 A.  USB2SNES  functionality requires having a  USB connection to  your SNES already established, and you must have a USB2SNES server accessible to the local host.     By default this is expected to be available on port 64213.     This is configured in the  USB2SNES websocket URL  setting after opening the application.
 
-If you use  CrowdControl  while playing  a USB2SNES enabled game:  Crowdcontrol  currently has a usb2snes server that listens on  ws://localhost:64213      -    There can only be one USB2SNES server connected to a SNES at atime, so you must use the usb2snes server provided by CrowdControl in this case.     Thus we make the decision not to include a  Usb2SNES server with this app and simply recommend that you should use  CrowdControl's usb2snes server.
+
+A. USB2SNES functionality requires having a USB connection to your SNES already established, and you must have a USB2SNES server accessible to the local host. By default this is expected to be available on port 64213. This is configured in the USB2SNES websocket URL setting after opening the application.
+
+If you use the CrowdControl app from [crowdcontrol.live](https://crowdcontrol.live/)  while playing a USB2SNES enabled game with the SNES hardware connected: Crowdcontrol currently has a usb2snes server that listen on ws://localhost:64213 -  As soon as you select  Super Mario World  in the CrowdControl app  with the USB2SNES option, and then provide a rom within the CrowdControl app.   The app provides a usb2snes host server.
+
+There can only be one USB2SNES server running on your PC at a time  that controls the  SNES over a USB port. The USB port is exclusive access.   This is not an issue if you do not run both apps at the same time, but  We do want to be able to run both apps at the same time, so we can simply have our app always running and not conflict with any CrowdControl session the user wishes to run..
+
+Therefore, we make the decision not to include a Usb2SNES server with this app and simply recommend that you should use CrowdControl's usb2snes server.   In this case:  you must use the usb2snes server provided by CrowdControl in this case, at this time -  select the game Super Mario World, choose a ROM file and USB2SNES connection,  but do not start a CrowdControl session while using the functions of this app..   You MIGHT crash your SNES or cause stability issues if you try to have both a CrowdControl session and this program active at the same time -- CrowdControl effects, and actions you take in this program's effects may conflict -  Make sure to Pause or End any CC session using your SNES hardware before uploading files from this utility.   
 
 And you need to edit the  USB2SNES options in  the "Open Settings"  dialog.
                       The default websocket url of   ws://localhost:64213    specifies the default port number.
 
-       If your Computer running this application is a Virtual Machine or separate computer from your machine running the usb2snes server:   You can open a SSH connection from that computer and  remotely forward the respective port backwards   To provide remote access to your websocket server.
-                       ssh   <Host IP>    -R  64213:127.0.0.1:64213
+If your Computer running this application is a Virtual Machine or separate computer from your machine running the usb2snes server:   You can open a SSH connection from that computer and  remotely forward the respective port backwards   To provide remote access to your websocket server.
+
+ - `ssh   <Host IP>    -R  64213:127.0.0.1:64213`
 
 
 

@@ -36,6 +36,8 @@ Note:  This software is for experimental purposes and testing only and not produ
 
 The program comes with no warranty nor usage rights, and I recommend running it in a secure isolated environment: such as a dedicated  Virtual Machine.   By running any test software inside a virtual machine you help protect your host computer system from any crashes, stability, or security issues in the software.
 
+## Requirements before Running
+
 Installation Requirements:
 
 A.  USB2SNES  functionality requires having a  USB connection to  your SNES already established, and you must have a USB2SNES server accessible to the local host.     By default this is expected to be available on port 64213.     This is configured in the  USB2SNES websocket URL  setting after opening the application.
@@ -44,6 +46,8 @@ A.  USB2SNES  functionality requires having a  USB connection to  your SNES alre
 A. USB2SNES functionality requires having a USB connection to your SNES already established, and you must have a USB2SNES server accessible to the local host. By default this is expected to be available on port 64213. This is configured in the USB2SNES websocket URL setting after opening the application.
 
 If you use the CrowdControl app from [crowdcontrol.live](https://crowdcontrol.live/)  while playing a USB2SNES enabled game with the SNES hardware connected: Crowdcontrol currently has a usb2snes server that listen on ws://localhost:64213 -  As soon as you select  Super Mario World  in the CrowdControl app  with the USB2SNES option, and then provide a rom within the CrowdControl app.   The app provides a usb2snes host server.
+
+At this time; the CrowdControl app's usb2snes server is the only Usb2snes server app tested.  Your other options such as QUSB2Snes do not necessarily work with this tool.   QUSB2SNES contains differences from the original usb2snes server which might cause problems.
 
 There can only be one USB2SNES server running on your PC at a time  that controls the  SNES over a USB port. The USB port is exclusive access.   This is not an issue if you do not run both apps at the same time, but  We do want to be able to run both apps at the same time, so we can simply have our app always running and not conflict with any CrowdControl session the user wishes to run..
 
@@ -56,6 +60,13 @@ If your Computer running this application is a Virtual Machine or separate compu
 
  - `ssh   <Host IP>    -R  64213:127.0.0.1:64213`
 
+In general ws://<remote ip>:64213  does not work as a Websocket URL, because
+most usb2snes servers accept connections from localhost only.
+
+The ssh command and ssh server are standard features on most Linux and MacOS systems, and installable features on Windows 10 and newer.
+You can also use a SSH client such as  MobaXterm to establish the reverse tunnel
+over SSH.   You have to keep a tunnel or forwarder up and running the whole
+time in order to use a Usb2snes server on a remote computer.
 
 
 B. You will currently need to install your  clientsettings.db  rhdata.db and patchbin.db  files in  %APPDATA%\rhtools\
@@ -86,7 +97,12 @@ https://www.smwcentral.net/?p=section&a=details&id=39036
 
 You should be prompted within the Settings menu of the program to provide the paths to these programs.
 
-## Base ROM
+## Older Release Information
+
+The following is historical and mainly applied to the Python rhtools GUI,
+which has been superceded.
+
+### Base ROM
 
 This program requires a legally-acquired base rom to use.
 This file should be vanilla SMW.
@@ -94,7 +110,7 @@ This file should be vanilla SMW.
 Name the file smw.sfc  and Place the file in the same folder you
 run the program from
 
-## FLIPS and ASAR
+### FLIPS and ASAR
 
 - You need the floating IPS Patcher flips And ASAR 1.71 installed.
 
@@ -125,7 +141,7 @@ Linux users can extract the archive and then copy  bin/flips and bin/asar   To  
   (Note that QUSB2snes and Windows Firewall need to be configured to accept connections on that port from the computer running the RHTools console)
 
 
-## Linux
+### Linux
 
 This program is written on Linux to run on Linux.
 
@@ -135,7 +151,7 @@ Windows users should still be able to run this program:
     * First: install Windows Subsystem for Linux (see below for details)
     * Next: download and install MobaXterm
 
-## Setup for Windows Users
+### Setup for Windows Users
 
 Windows users: Please create a directory named C:\SNESGAMING
 and put these scripts in a folder named RHTOOLS below C:\SNESGAMING
@@ -144,7 +160,7 @@ When you install ASAR and FLIPS as required,  create a
 folder called C:\SNESGAMING\bin   then copy The linux versions of
 asar and flips to that bin folder.
 
-## Windows Subsystem for Linux
+### Windows Subsystem for Linux
 
 I recommend the following article:
 https://ubuntu.com/tutorials/install-ubuntu-on-wsl2-on-windows-10#1-overview
@@ -171,7 +187,7 @@ then
     python3 gui.py
 
 
-## PIP Modules:
+### PIP Modules:
    Please install PIP modules   before running 
 
 pip3 install -r requirements.txt
@@ -192,7 +208,7 @@ Please install:
     pip3 install websockets
 
 
-## Database Maintenance
+### Database Maintenance
 
 
 PROCEDURE TO ADD A HACK TO THE DATABASE:

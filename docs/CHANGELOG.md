@@ -17,6 +17,7 @@
 - Binary attachment files saved separately with metadata in JSON
 - Two-phase import process (JSON first, then attachments with hash verification)
 - Error handling with graceful degradation and user feedback
+- Correct database relationships: gameversions.patchblob1_name → patchblobs.patchblob1_name
 
 **Database Tables Exported**:
 - `gameversions`, `gameversion_stats`, `rhpatches`, `patchblobs`, `patchblobs_extended`

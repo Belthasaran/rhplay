@@ -122,6 +122,20 @@ Each exported game creates a `{gameid}_info.json` file containing:
 - `attachments` - File attachments (metadata only)
 - Binary files saved separately with hash verification
 
+### Database Relationships
+
+**Key Relationships**:
+- `gameversions.patchblob1_name` → `patchblobs.patchblob1_name`
+- `patchblobs.pbuuid` → `patchblobs_extended.pbuuid`
+- `patchblobs.pbuuid` → `attachments.pbuuid`
+
+**Export Logic**:
+1. Collect all `patchblob1_name` values from gameversions
+2. Query patchblobs table using these names
+3. Get corresponding `pbuuid` values from patchblobs
+4. Query patchblobs_extended and attachments using these UUIDs
+5. Export binary attachment data as separate files
+
 ### Security Features
 
 **File Name Sanitization**

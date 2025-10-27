@@ -2737,24 +2737,26 @@ function registerDatabaseHandlers(dbManager) {
           };
           
           // Get patchblobs referenced by gameversions
-          const patchblobIds = new Set();
+          const patchblobNames = new Set();
           for (const gv of gameversions) {
-            if (gv.patchblob_id) {
-              patchblobIds.add(gv.patchblob_id);
+            if (gv.patchblob1_name) {
+              patchblobNames.add(gv.patchblob1_name);
             }
           }
           
-          if (patchblobIds.size > 0) {
-            const patchblobIdsArray = Array.from(patchblobIds);
-            const placeholders = patchblobIdsArray.map(() => '?').join(',');
+          if (patchblobNames.size > 0) {
+            const patchblobNamesArray = Array.from(patchblobNames);
+            const placeholders = patchblobNamesArray.map(() => '?').join(',');
             
             exportData.databases.rhdata.patchblobs = rhdataDb.prepare(`
-              SELECT * FROM patchblobs WHERE patchblob_id IN (${placeholders})
-            `).all(...patchblobIdsArray);
+              SELECT * FROM patchblobs WHERE patchblob1_name IN (${placeholders})
+            `).all(...patchblobNamesArray);
             
             exportData.databases.rhdata.patchblobs_extended = rhdataDb.prepare(`
-              SELECT * FROM patchblobs_extended WHERE patchblob_id IN (${placeholders})
-            `).all(...patchblobIdsArray);
+              SELECT * FROM patchblobs_extended WHERE pbuuid IN (
+                SELECT pbuuid FROM patchblobs WHERE patchblob1_name IN (${placeholders})
+              )
+            `).all(...patchblobNamesArray);
           }
           
           // Export from clientdata.db
@@ -2771,35 +2773,44 @@ function registerDatabaseHandlers(dbManager) {
             const attachments = [];
             const attachmentFiles = [];
             
-            if (patchblobIds.size > 0) {
-              const patchblobIdsArray = Array.from(patchblobIds);
-              const placeholders = patchblobIdsArray.map(() => '?').join(',');
+            if (patchblobNames.size > 0) {
+              // Get pbuuids from patchblobs table first
+              const patchblobNamesArray = Array.from(patchblobNames);
+              const placeholders = patchblobNamesArray.map(() => '?').join(',');
               
-              const attachmentRecords = patchbinDb.prepare(`
-                SELECT * FROM attachments WHERE patchblob_id IN (${placeholders})
-              `).all(...patchblobIdsArray);
+              const patchblobUuids = rhdataDb.prepare(`
+                SELECT pbuuid FROM patchblobs WHERE patchblob1_name IN (${placeholders})
+              `).all(...patchblobNamesArray).map(pb => pb.pbuuid);
               
-              for (const attachment of attachmentRecords) {
-                // Create attachment record without file_data
-                const attachmentRecord = { ...attachment };
-                delete attachmentRecord.file_data;
-                attachments.push(attachmentRecord);
+              if (patchblobUuids.length > 0) {
+                const uuidPlaceholders = patchblobUuids.map(() => '?').join(',');
                 
-                // Save file_data to separate file if it exists
-                if (attachment.file_data) {
-                  const fileName = sanitizeFileName(attachment.file_name) || attachment.auuid;
-                  const filePath = path.join(exportDirectory, fileName);
+                const attachmentRecords = patchbinDb.prepare(`
+                  SELECT * FROM attachments WHERE pbuuid IN (${uuidPlaceholders})
+                `).all(...patchblobUuids);
+                
+                for (const attachment of attachmentRecords) {
+                  // Create attachment record without file_data
+                  const attachmentRecord = { ...attachment };
+                  delete attachmentRecord.file_data;
+                  attachments.push(attachmentRecord);
                   
-                  // Convert base64 to buffer and save
-                  const fileBuffer = Buffer.from(attachment.file_data, 'base64');
-                  await fs.writeFile(filePath, fileBuffer);
-                  
-                  attachmentFiles.push({
-                    auuid: attachment.auuid,
-                    file_name: attachment.file_name,
-                    saved_as: fileName,
-                    file_hash_sha256: attachment.file_hash_sha256
-                  });
+                  // Save file_data to separate file if it exists
+                  if (attachment.file_data) {
+                    const fileName = sanitizeFileName(attachment.file_name) || attachment.auuid;
+                    const filePath = path.join(exportDirectory, fileName);
+                    
+                    // Convert base64 to buffer and save
+                    const fileBuffer = Buffer.from(attachment.file_data, 'base64');
+                    await fs.writeFile(filePath, fileBuffer);
+                    
+                    attachmentFiles.push({
+                      auuid: attachment.auuid,
+                      file_name: attachment.file_name,
+                      saved_as: fileName,
+                      file_hash_sha256: attachment.file_hash_sha256
+                    });
+                  }
                 }
               }
             }
@@ -2869,12 +2880,10 @@ function registerDatabaseHandlers(dbManager) {
                 try {
                   rhdataDb.prepare(`
                     INSERT OR REPLACE INTO gameversions 
-                    (gameid, version, name, author, length, combinedtype, difficulty, gametype, legacy_type, description, publicrating, demo, featured, obsoleted, removed, moderated, patchblob_id, gvjsondata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (gvuuid, section, gameid, version, removed, obsoleted, gametype, name, time, added, moderated, author, authors, submitter, demo, featured, length, difficulty, url, download_url, name_href, author_href, obsoleted_by, patchblob1_name, pat_sha224, size, description, gvjsondata, gvchange_attributes, gvchanges, tags, tags_href, fields_type, legacy_type, raw_difficulty, combinedtype, local_resource_etag, local_resource_lastmodified, local_resource_filename, gvimport_time, siglistuuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   `).run(
-                    gv.gameid, gv.version, gv.name, gv.author, gv.length, gv.combinedtype, 
-                    gv.difficulty, gv.gametype, gv.legacy_type, gv.description, gv.publicrating,
-                    gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated, gv.patchblob_id, gv.gvjsondata
+                    gv.gvuuid, gv.section, gv.gameid, gv.version, gv.removed, gv.obsoleted, gv.gametype, gv.name, gv.time, gv.added, gv.moderated, gv.author, gv.authors, gv.submitter, gv.demo, gv.featured, gv.length, gv.difficulty, gv.url, gv.download_url, gv.name_href, gv.author_href, gv.obsoleted_by, gv.patchblob1_name, gv.pat_sha224, gv.size, gv.description, gv.gvjsondata, gv.gvchange_attributes, gv.gvchanges, gv.tags, gv.tags_href, gv.fields_type, gv.legacy_type, gv.raw_difficulty, gv.combinedtype, gv.local_resource_etag, gv.local_resource_lastmodified, gv.local_resource_filename, gv.gvimport_time, gv.siglistuuid
                   );
                 } catch (insertError) {
                   console.warn(`Error inserting gameversion for ${gameId}:`, insertError);
@@ -2882,8 +2891,73 @@ function registerDatabaseHandlers(dbManager) {
               }
             }
             
-            // Import other tables similarly...
-            // (Additional table imports would go here)
+            // Import gameversion_stats
+            if (exportData.databases.rhdata.gameversion_stats) {
+              for (const gvs of exportData.databases.rhdata.gameversion_stats) {
+                try {
+                  rhdataDb.prepare(`
+                    INSERT OR REPLACE INTO gameversion_stats 
+                    (gameid, stat_name, stat_value, stat_type, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                  `).run(
+                    gvs.gameid, gvs.stat_name, gvs.stat_value, gvs.stat_type, gvs.created_at, gvs.updated_at
+                  );
+                } catch (insertError) {
+                  console.warn(`Error inserting gameversion_stats for ${gameId}:`, insertError);
+                }
+              }
+            }
+            
+            // Import rhpatches
+            if (exportData.databases.rhdata.rhpatches) {
+              for (const rhp of exportData.databases.rhdata.rhpatches) {
+                try {
+                  rhdataDb.prepare(`
+                    INSERT OR REPLACE INTO rhpatches 
+                    (rhpuuid, gameid, patch_name, siglistuuid)
+                    VALUES (?, ?, ?, ?)
+                  `).run(
+                    rhp.rhpuuid, rhp.gameid, rhp.patch_name, rhp.siglistuuid
+                  );
+                } catch (insertError) {
+                  console.warn(`Error inserting rhpatches for ${gameId}:`, insertError);
+                }
+              }
+            }
+            
+            // Import patchblobs
+            if (exportData.databases.rhdata.patchblobs) {
+              for (const pb of exportData.databases.rhdata.patchblobs) {
+                try {
+                  rhdataDb.prepare(`
+                    INSERT OR REPLACE INTO patchblobs 
+                    (pbuuid, gvuuid, patch_name, pat_sha1, pat_sha224, pat_shake_128, patchblob1_key, patchblob1_name, patchblob1_sha224, result_sha1, result_sha224, result_shake1, pbjsondata, pblobdata, pbimport_time, siglistuuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `).run(
+                    pb.pbuuid, pb.gvuuid, pb.patch_name, pb.pat_sha1, pb.pat_sha224, pb.pat_shake_128, pb.patchblob1_key, pb.patchblob1_name, pb.patchblob1_sha224, pb.result_sha1, pb.result_sha224, pb.result_shake1, pb.pbjsondata, pb.pblobdata, pb.pbimport_time, pb.siglistuuid
+                  );
+                } catch (insertError) {
+                  console.warn(`Error inserting patchblobs for ${gameId}:`, insertError);
+                }
+              }
+            }
+            
+            // Import patchblobs_extended
+            if (exportData.databases.rhdata.patchblobs_extended) {
+              for (const pbe of exportData.databases.rhdata.patchblobs_extended) {
+                try {
+                  rhdataDb.prepare(`
+                    INSERT OR REPLACE INTO patchblobs_extended 
+                    (pbuuid, patch_filename, patch_type, is_primary, zip_source, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                  `).run(
+                    pbe.pbuuid, pbe.patch_filename, pbe.patch_type, pbe.is_primary, pbe.zip_source, pbe.created_at
+                  );
+                } catch (insertError) {
+                  console.warn(`Error inserting patchblobs_extended for ${gameId}:`, insertError);
+                }
+              }
+            }
           }
           
           // Import clientdata.db tables
@@ -2903,6 +2977,29 @@ function registerDatabaseHandlers(dbManager) {
                   );
                 } catch (insertError) {
                   console.warn(`Error inserting user_game_annotations for ${gameId}:`, insertError);
+                }
+              }
+            }
+          }
+          
+          // Import patchbin.db tables
+          if (exportData.databases.patchbin) {
+            const patchbinDb = dbManager.getConnection('patchbin');
+            if (patchbinDb) {
+              // Import attachments (metadata only)
+              if (exportData.databases.patchbin.attachments) {
+                for (const att of exportData.databases.patchbin.attachments) {
+                  try {
+                    patchbinDb.prepare(`
+                      INSERT OR REPLACE INTO attachments 
+                      (auuid, pbuuid, file_name, file_hash_sha224, file_hash_sha256, file_ipfs_cidv0, file_ipfs_cidv1, file_size, file_type, created_at, updated_at)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).run(
+                      att.auuid, att.pbuuid, att.file_name, att.file_hash_sha224, att.file_hash_sha256, att.file_ipfs_cidv0, att.file_ipfs_cidv1, att.file_size, att.file_type, att.created_at, att.updated_at
+                    );
+                  } catch (insertError) {
+                    console.warn(`Error inserting attachments for ${gameId}:`, insertError);
+                  }
                 }
               }
             }

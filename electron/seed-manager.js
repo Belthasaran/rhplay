@@ -3,6 +3,7 @@
  */
 
 const crypto = require('crypto');
+const { matchesFilter } = require('./shared-filter-utils');
 
 /**
  * Characters allowed in seeds (excluding confusing: 0, O, 1, l, I)
@@ -227,12 +228,12 @@ function selectRandomGame(params) {
     throw new Error('No available games for random selection');
   }
   
-  // Get full game data from rhdata.db and apply filters
+  // Get full game data from rhdata.db and apply basic filters
   const db = dbManager.getConnection('rhdata');
   
-  const filteredGames = dbManager.withClientData('rhdata', (db) => {
+  const basicFilteredGames = dbManager.withClientData('rhdata', (db) => {
     let query = `
-      SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type
+      SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.publicrating
       FROM gameversions gv
       WHERE gv.gameid IN (${availableGameids.map(() => '?').join(',')})
         AND gv.removed = 0
@@ -253,17 +254,16 @@ function selectRandomGame(params) {
       queryParams.push(filterDifficulty);
     }
     
-    // Apply pattern filter - search name, description, and author
-    if (filterPattern && filterPattern !== '') {
-      query += ` AND (gv.name LIKE ? OR gv.description LIKE ? OR gv.author LIKE ?)`;
-      queryParams.push(`%${filterPattern}%`, `%${filterPattern}%`, `%${filterPattern}%`);
-    }
-    
     const results = db.prepare(query).all(...queryParams);
     return results;
   });
   
-  if (filteredGames.length === 0) {
+  // Apply advanced pattern filter using shared filter logic
+  const finalFilteredGames = filterPattern && filterPattern !== '' 
+    ? basicFilteredGames.filter(game => matchesFilter(game, filterPattern))
+    : basicFilteredGames;
+  
+  if (finalFilteredGames.length === 0) {
     throw new Error('No games match the filter criteria');
   }
   
@@ -273,8 +273,8 @@ function selectRandomGame(params) {
   const randomValue = seedHash.readUInt32BE(0);
   
   // Select game deterministically
-  const selectedIndex = randomValue % filteredGames.length;
-  const selectedGame = filteredGames[selectedIndex];
+  const selectedIndex = randomValue % finalFilteredGames.length;
+  const selectedGame = finalFilteredGames[selectedIndex];
   
   return {
     gameid: selectedGame.gameid,

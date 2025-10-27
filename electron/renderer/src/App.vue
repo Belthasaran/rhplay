@@ -599,7 +599,7 @@
               <option v-for="diff in randomFilterValues.difficulties" :key="diff" :value="diff">{{ diff }}</option>
             </select>
           </label>
-          <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="Optional filter pattern" />
+          <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="Advanced filter (try: rating:>3, author:Panga, Kaizo)" />
           <label>
             Count
             <input class="count" v-model.number="randomFilter.count" type="number" min="1" max="100" />
@@ -2110,6 +2110,7 @@ import {
   type ThemeName,
   type TextSize 
 } from './themeConfig';
+import { matchesFilter, getItemAttribute } from './shared-filter-utils';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -2184,95 +2185,6 @@ const selectedVersion = ref<number>(1);
 
 const normalized = (s: string) => s.toLowerCase();
 
-/**
- * Parse and apply advanced filter query
- */
-function matchesFilter(item: Item, query: string): boolean {
-  if (!query) return true;
-  
-  const q = query.trim().toLowerCase();
-  
-  // Check for attribute:value pattern
-  const attributeMatch = q.match(/^(\w+):(>|<|>=|<=)?(.+)$/);
-  
-  if (attributeMatch) {
-    const [, attr, operator, value] = attributeMatch;
-    
-    // Handle rating filters with operators
-    if (attr === 'rating') {
-      const rating = item.Publicrating ?? 0;
-      const targetValue = parseFloat(value);
-      
-      if (isNaN(targetValue)) return false;
-      
-      if (operator === '>') return rating > targetValue;
-      if (operator === '<') return rating < targetValue;
-      if (operator === '>=') return rating >= targetValue;
-      if (operator === '<=') return rating <= targetValue;
-      return rating === targetValue;
-    }
-    
-    // Handle version filters (not implemented for filtering yet, but reserved)
-    if (attr === 'version') {
-      // For now, we always search latest version unless specified
-      // This is a placeholder for future version-specific filtering
-      return true;
-    }
-    
-    // Handle other attribute searches
-    const itemValue = getItemAttribute(item, attr);
-    if (itemValue === null) return false;
-    
-    return itemValue.toLowerCase().includes(value.toLowerCase());
-  }
-  
-  // Default: search across all fields
-  const haystack = [
-    item.Id,
-    item.Name,
-    item.Type,
-    item.Author,
-    item.Length,
-    item.Status,
-    String(item.MyDifficultyRating ?? ''),
-    String(item.MyReviewRating ?? ''),
-    String(item.Publicrating ?? ''),
-    String(item.Mynotes ?? ''),
-    // Include JSON data if available
-    item.JsonData?.added ? String(item.JsonData.added) : '',
-    item.JsonData?.difficulty ? String(item.JsonData.difficulty) : '',
-  ].join(' ').toLowerCase();
-  
-  return haystack.includes(q);
-}
-
-/**
- * Get attribute value from item or its JSON data
- */
-function getItemAttribute(item: Item, attr: string): string | null {
-  // Direct properties
-  const directProps: Record<string, any> = {
-    id: item.Id,
-    name: item.Name,
-    type: item.Type,
-    author: item.Author,
-    length: item.Length,
-    status: item.Status,
-    rating: item.Publicrating,
-    notes: item.Mynotes,
-  };
-  
-  if (directProps[attr] !== undefined) {
-    return String(directProps[attr] ?? '');
-  }
-  
-  // Check JSON data attributes
-  if (item.JsonData && item.JsonData[attr] !== undefined) {
-    return String(item.JsonData[attr]);
-  }
-  
-  return null;
-}
 
 const filteredItems = computed(() => {
   const q = searchQuery.value.trim();

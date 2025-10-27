@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { app } = require('electron');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
+const { matchesFilter } = require('./shared-filter-utils');
 
 /**
  * Register all IPC handlers with the database manager
@@ -891,8 +892,9 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('rhdata');
       
+      // First get all games with basic filters (type and difficulty)
       let query = `
-        SELECT COUNT(DISTINCT gameid) as count
+        SELECT gameid, version, name, combinedtype, difficulty, gametype, legacy_type, author, length, description, publicrating
         FROM gameversions
         WHERE removed = 0 AND obsoleted = 0
       `;
@@ -910,15 +912,14 @@ function registerDatabaseHandlers(dbManager) {
         queryParams.push(filterDifficulty);
       }
       
-      // Apply pattern filter (use shared filter logic - for now simple LIKE)
-      if (filterPattern && filterPattern !== '') {
-        // TODO: Implement shared filter logic here
-        query += ` AND (name LIKE ? OR description LIKE ? OR author LIKE ?)`;
-        queryParams.push(`%${filterPattern}%`, `%${filterPattern}%`, `%${filterPattern}%`);
-      }
+      const games = db.prepare(query).all(...queryParams);
       
-      const result = db.prepare(query).get(...queryParams);
-      return { success: true, count: result.count };
+      // Apply advanced pattern filter using shared filter logic
+      const filteredGames = filterPattern && filterPattern !== '' 
+        ? games.filter(game => matchesFilter(game, filterPattern))
+        : games;
+      
+      return { success: true, count: filteredGames.length };
     } catch (error) {
       console.error('Error counting random matches:', error);
       return { success: false, error: error.message };

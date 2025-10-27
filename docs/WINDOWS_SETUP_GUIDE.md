@@ -91,7 +91,23 @@ npm install -g windows-build-tools
 npm run postinstall
 ```
 
-### **Issue 4: Permission Errors**
+### **Issue 4: Electron-builder Configuration Error**
+**Cause**: Invalid configuration properties in package.json
+
+**Error**: `configuration.win has an unknown property 'buildDependenciesFromSource'`
+
+**Solution**: Remove invalid properties from package.json:
+```json
+{
+  "build": {
+    "win": {
+      "target": [{"target": "portable", "arch": ["x64"]}]
+    }
+  }
+}
+```
+
+### **Issue 5: Permission Errors**
 **Cause**: Windows security restrictions
 
 **Solution**:

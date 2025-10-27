@@ -5,7 +5,7 @@
   "author": "RHTools Team",
   "main": "electron/main.js",
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && electron-builder install-app-deps",
     "electron:start": "cross-env ELECTRON_START_URL=http://localhost:5173 electron electron/main.js --xdg-portal-required-version=4",
     "electron:start-smart": "cd electron && ./smart-start.sh",
     "renderer:dev": "npm --prefix electron/renderer run dev",
@@ -132,9 +132,7 @@
             "x64"
           ]
         }
-      ],
-      "buildDependenciesFromSource": false,
-      "nodeGypRebuild": false
+      ]
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"

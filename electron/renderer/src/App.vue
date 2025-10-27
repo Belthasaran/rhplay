@@ -1173,7 +1173,7 @@
         </div>
 
         <div class="usb2snes-section">
-          <h4>Chat Commands (Chat Hacks + CARL)</h4>
+          <h4>Chat Commands - EXPERIMENTAL</h4>
           <div class="chat-section">
             <!-- Chat Log -->
             <div class="chat-log" ref="chatLogContainer">
@@ -1212,7 +1212,7 @@
             
             <!-- Loaded Modules -->
             <div v-if="loadedModules.length > 0" class="loaded-modules">
-              <strong>Loaded CARL Modules ({{ loadedModules.length }}):</strong>
+              <strong>Loaded CARL-Like Modules ({{ loadedModules.length }}):</strong>
               <div class="module-list">
                 <div v-for="mod in loadedModules" :key="mod.name" class="module-item">
                   {{ mod.name }} <span class="module-addr">({{ mod.addressHex }}, {{ mod.size }}B)</span>
@@ -1268,9 +1268,9 @@
             </div>
           </section>
 
-          <!-- CARL Module Commands -->
+          <!-- CARL-Like Module Commands -->
           <section class="help-section">
-            <h4>📦 CARL Module Commands</h4>
+            <h4>Experimental CARL-Like Module Commands</h4>
             <div class="command-list">
               <div class="command-item">
                 <code>!load MODULE_NAME</code>
@@ -1705,7 +1705,7 @@
 
           <!-- Loaded Modules -->
           <div v-if="loadedModules.length > 0" class="loaded-modules-fullchat">
-            <strong>Loaded CARL Modules ({{ loadedModules.length }}):</strong>
+            <strong>Loaded CARL-Like Modules ({{ loadedModules.length }}):</strong>
             <div class="module-list-inline">
               <span v-for="mod in loadedModules" :key="mod.name" class="module-chip">
                 {{ mod.name }}
@@ -2829,7 +2829,7 @@ async function sendChatCommand() {
       addToChatLog('Command sent but no response received', 'response-error');
     }
     
-    // Update loaded modules if CARL command
+    // Update loaded modules if CARL-Like command
     if (command.toLowerCase().startsWith('!load') || 
         command.toLowerCase().startsWith('!unload') || 
         command.toLowerCase().startsWith('!reload')) {

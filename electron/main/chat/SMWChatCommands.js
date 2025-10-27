@@ -14,9 +14,9 @@
  * - !powerup VALUE - Set powerup (pseudocommand)
  * - !lives VALUE - Set lives (pseudocommand)
  * - ... (50+ pseudocommands)
- * - !load MODULE_NAME - Load CARL ASM module
- * - !unload MODULE_NAME - Unload CARL ASM module
- * - !reload MODULE_NAME - Reload CARL ASM module
+ * - !load MODULE_NAME - Load CARL-Like ASM module
+ * - !unload MODULE_NAME - Unload CARL-Like ASM module
+ * - !reload MODULE_NAME - Reload CARL-Like ASM module
  */
 
 /**
@@ -358,7 +358,7 @@ class SMWChatCommands {
   }
 
   /**
-   * Execute !load command (Project CARL)
+   * Execute !load command (simulating interface of Patcdr's Project CARL)
    * Format: !load MODULE_NAME
    * 
    * @param {string} command - Full command string
@@ -380,7 +380,7 @@ class SMWChatCommands {
   }
 
   /**
-   * Execute !unload command (Project CARL)
+   * Execute !unload command (simulating interface of CARL)
    * Format: !unload MODULE_NAME
    * 
    * @param {string} command - Full command string
@@ -401,7 +401,7 @@ class SMWChatCommands {
   }
 
   /**
-   * Execute !reload command (Project CARL)
+   * Execute !reload command (simulating CARL-Like modules)
    * Format: !reload MODULE_NAME
    * 
    * @param {string} command - Full command string
@@ -422,7 +422,7 @@ class SMWChatCommands {
   }
 
   /**
-   * Execute !unloadall command (Project CARL)
+   * Execute !unloadall command (CARL-Like modules)
    * Format: !unloadall
    * 
    * @returns {Promise<Object>} Result
@@ -594,9 +594,9 @@ class SMWChatCommands {
       'reset': 'Reboot the SNES console. Usage: !reset',
       'menu': 'Return to SNES menu. Usage: !menu',
       'boot': 'Boot a ROM file. Usage: !boot FILE_PATH (e.g., !boot /work/smw.sfc)',
-      'load': 'Load CARL ASM module. Usage: !load MODULE_NAME',
-      'unload': 'Unload CARL ASM module. Usage: !unload MODULE_NAME',
-      'reload': 'Reload CARL ASM module. Usage: !reload MODULE_NAME',
+      'load': 'Load CARL-Like ASM module. Usage: !load MODULE_NAME',
+      'unload': 'Unload CARL-Like ASM module. Usage: !unload MODULE_NAME',
+      'reload': 'Reload CARL-Like ASM module. Usage: !reload MODULE_NAME',
       'powerup': 'Set powerup. Usage: !powerup VALUE (0=small, 1=big, 2=cape, 3=fire)',
       'lives': 'Set lives. Usage: !lives VALUE',
       'coins': 'Set coins. Usage: !coins VALUE',

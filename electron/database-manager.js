@@ -23,6 +23,7 @@ class DatabaseManager {
    */
   getDatabasePaths() {
     const isDev = process.env.ELECTRON_START_URL || process.env.NODE_ENV === 'development';
+    const isPackaged = process.env.ELECTRON_IS_PACKAGED || process.env.APPIMAGE;
     
     // Default paths
     let basePath;
@@ -37,17 +38,51 @@ class DatabaseManager {
         // Linux: ~/.config/rhtools/
         // macOS: ~/Library/Application Support/rhtools/
         basePath = app.getPath('userData');
+        
+        // Ensure directory exists
+        if (!fs.existsSync(basePath)) {
+          fs.mkdirSync(basePath, { recursive: true });
+        }
       }
     } catch (error) {
       // Fallback for testing
       basePath = path.join(__dirname);
     }
     
-    return {
+    const paths = {
       rhdata: process.env.RHDATA_DB_PATH || path.join(basePath, 'rhdata.db'),
       patchbin: process.env.PATCHBIN_DB_PATH || path.join(basePath, 'patchbin.db'),
       clientdata: process.env.CLIENTDATA_DB_PATH || path.join(basePath, 'clientdata.db'),
     };
+    
+    // In packaged environment, copy databases from resources if they don't exist
+    if (isPackaged && app && app.getPath) {
+      this.ensurePackagedDatabases(paths);
+    }
+    
+    return paths;
+  }
+
+  /**
+   * Ensure packaged databases are copied to user data directory
+   * @param {Object} paths - Database paths object
+   */
+  ensurePackagedDatabases(paths) {
+    const resourcePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'electron');
+    
+    for (const [dbName, dbPath] of Object.entries(paths)) {
+      if (!fs.existsSync(dbPath)) {
+        const sourcePath = path.join(resourcePath, `${dbName}.db`);
+        if (fs.existsSync(sourcePath)) {
+          try {
+            fs.copyFileSync(sourcePath, dbPath);
+            console.log(`Copied ${dbName}.db from resources to user data`);
+          } catch (error) {
+            console.error(`Failed to copy ${dbName}.db:`, error);
+          }
+        }
+      }
+    }
   }
 
   /**

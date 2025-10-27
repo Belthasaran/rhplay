@@ -1,7 +1,7 @@
 # Purpose of this Program
 This program assists with managing and launching SMW Romhack files by automating download, patching, local file management.
 
-A searchable database is provided, allowing any hack in the database to be automatically patched and loaded into RetroArch or consoles  on demand - by searching and specifying the patch number.
+A searchable cache database is provided, allowing any hack in the database to be automatically downloaded, patched and loaded into RetroArch or consoles  on demand - by searching and specifying the patch number.
 
 The database collected allows automating operations such as "Choose and launch a random game from the collection based on criteria X, Y, and Z"
 
@@ -9,66 +9,74 @@ This is a sample release.
 This program is incomplete and a work in progress.
 
 # Running the program
-   This program requires Python 3.10.x.
-   The program is written to run on Linux, or Windows Subsystem for Linux
+   This program is based on Python 3.10.x.  NodeJS, and Electron
    *  Please install the pre-requisites Including: Flips, Asar,
       and a Legally-acquired original SMW rom as discussed in the Section Pre-requisites.
-
  Download
-    Download FLIPS and  the Program from
+    Option to Download FLIPS and such from
       https://github.com/Belthasaran/rhtools/releases
 
-      For Windows users, I recommend extracting all 3 files in C:\SNESGAMING   (In this order):
-      rhtools-0.4_20230914.tar.gz
-      flips-rhtool-0.4_202309.tar.gz
-      rhtools-sampledata-20230914.tar.gz
+    The release is being mirrored to ArDrive   in the devfiles folder 
+     If a copy of asar,  flips, or any of the required programs are not available from SMWC, then check the ArDrive.
+        drive id 58677413-8a0c-4982-944d-4a1b40454039
+        devfiles folder id 270850dc-ac25-4550-a673-528016f9b457
+        https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH
+       devfiles folder:  https://app.ardrive.io/#/file/7b83e178-c8f6-48f2-972b-f8b64c88821e/view
 
-   Note that the sampledata archive would overwrite the database - If you have local hacks, then be sure to re-add the local hacks after any reinstall/update.    'python3 do_addhacks.py'  to scann the hacks/ directory 
-      
-# Graphical User Interface
+## NEW Initial Release
 
- GUI version is for test purposes, and this tool only has a limited subset of SMW game directory listings.
- (More complete data is available for the text-based Search-Only tool
-  rhinfotool https://github.com/Belthasaran/rhinfotool/releases/ )
- 
- This program contains a GUI https://github.com/Belthasaran/rhtools/blob/main/gui.py
+This program has been reconstructed from Python into NodeJS and Electron with a complete replacement of the Graphical User Interface.
 
- After installing the pre-requisites:
-    You can run the GUI by launching gui.py
-      python3 gui.py
+Initial  release set
+- RHTools-0.1.0-beta.AppImage - Linux standalone binary
 
-![ScreenShot](assets/screenshot1.png)
+- RHTools-0.1.0-beta-portable.exe - Windows standalone binary
 
-    Currently the GUI only supports listing all Hacks in
-    the database and choosing a hack.   
+Note:  This software is for experimental purposes and testing only and not production use.
 
-    The "Play this hack" button - Automatically applies the
-    patch to the vanilla SMW game and Launches the patched
-    file (If successful)
+The program comes with no warranty nor usage rights, and I recommend running it in a secure isolated environment: such as a dedicated  Virtual Machine.   By running any test software inside a virtual machine you help protect your host computer system from any crashes, stability, or security issues in the software.
 
-    You can search for Romhacks in the database from the command line:
-      python3 search.py kaizo
+Installation Requirements:
 
-    (Currently the database only contains a limited selection)
+A.  USB2SNES  functionality requires having a  USB connection to  your SNES already established, and you must have a USB2SNES server accessible to the local host.     By default this is expected to be available on port 64213.     This is configured in the  USB2SNES websocket URL  setting after opening the application.
 
-    You can automatically download, patch, and ready a hack to run
-    by launching pb_repatch.py
-       for example, to download and Patch Hack number 11374,
-       DRAM World: 
-      # python3 pb_repatch.py 11374
+If you use  CrowdControl  while playing  a USB2SNES enabled game:  Crowdcontrol  currently has a usb2snes server that listens on  ws://localhost:64213      -    There can only be one USB2SNES server connected to a SNES at atime, so you must use the usb2snes server provided by CrowdControl in this case.     Thus we make the decision not to include a  Usb2SNES server with this app and simply recommend that you should use  CrowdControl's usb2snes server.
 
-    You can send a ROM to the SNES by running pb_sendtosnes.py
-      # python3 pb_sendtosnes.py rom/blah.sfc
+And you need to edit the  USB2SNES options in  the "Open Settings"  dialog.
+                      The default websocket url of   ws://localhost:64213    specifies the default port number.
 
-       This requires an Emulator be installed Or  Usb2snes AND
-       QUSB2SNES   -- See the installation instructions for notes about setting the WebSocket addres URL wsaddress in the  rhtools_options.dat JSON file
+       If your Computer running this application is a Virtual Machine or separate computer from your machine running the usb2snes server:   You can open a SSH connection from that computer and  remotely forward the respective port backwards   To provide remote access to your websocket server.
+                       ssh   <Host IP>    -R  64213:127.0.0.1:64213
 
-      This requires Editing the llaunch_rand.sh  script
-      according to your local Needs.
 
-# Prerequisites
 
-Requires PYTHON3
+B. You will currently need to install your  clientsettings.db  rhdata.db and patchbin.db  files in  %APPDATA%\rhtools\
+manually.      The database files are Not included with standalone binary.  You have to install them.
+
+C. You must install a clean base ROM for all patching.    Please place  your base  .sfc file  (Vanilla SMW)  to   %APPDATA%\rhtools\smw.sfc   
+The file data must match these specifications to be accepted:   Filename: smw.sfc
+SHA256 checksum:  0838e531fe22c077528febe14cb3ff7c492f1f5fa8de354192bdff7137c27f5b
+SHA1 checksum: 6b47bb75d16514b6a476aa0c73a683a2a4c18765
+MD5 checksum: cdd3c8c37322978ca8669b34bc89c804
+
+** The file is required to load any patches or games based on SMW, **
+** You must supply your own ROM data.   We cannot provide you with copies of any ROMs or actual games. **
+** This program only helps you  automate the process of retrieving, caching and applying publicly available patches based on games you must already possess and own. **
+** The results or outputs of this program are solely for your own personal, private study and experimentation on the workings of SMW. **
+** You must not provide others copies of complete games, patched .SFC files, or ROM data, without license from the respective  publisher, either. **
+
+Additional programs/utilities you currently need installed:
+
+D.  Flips  - Please copy your  flips.exe to  %APPDATA%\rhtools\flips.exe
+https://github.com/Alcaro/Flips/releases
+
+E. Asar  - Please copy your asar.exe  binary from asar-1.91 to %APPDATA%\rhtools\asar.exe
+https://github.com/RPGHacker/asar/releases
+
+F. UberAsmTool21  (Version 2.1) - - Please extract all the files in your UberAsmTool21.zip  to a subdirectory of %APPDATA%\rhtools\,   so for example  the path to UberASMTool will be  %APPDATA%\rhtools\uberasmtool.exe
+https://www.smwcentral.net/?p=section&a=details&id=39036
+
+You should be prompted within the Settings menu of the program to provide the paths to these programs.
 
 ## Base ROM
 

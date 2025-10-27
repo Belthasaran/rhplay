@@ -2883,6 +2883,35 @@ function closeUploadProgress() {
 
 async function launchUploadedFile() {
   try {
+    // Check if USB2SNES is enabled in settings and auto-connect if needed
+    if (settings.usb2snesEnabled === 'yes') {
+      // Refresh status first to check if already connected
+      await refreshUsb2snesStatus();
+      
+      if (!usb2snesStatus.connected) {
+        uploadProgressStatus.value = 'Connecting to USB2SNES...';
+        
+        try {
+          const library = usb2snesCurrentLibrary.value;
+          const address = settings.usb2snesAddress;
+          const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+          
+          usb2snesStatus.connected = true;
+          usb2snesStatus.device = result.device;
+          usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
+          usb2snesStatus.versionString = result.versionString || 'N/A';
+          usb2snesStatus.romRunning = result.romRunning || 'N/A';
+          startHealthMonitoring();
+          
+          console.log('[launchUploadedFile] ✓ USB2SNES connected successfully');
+        } catch (connectError) {
+          console.error('[launchUploadedFile] Connection error:', connectError);
+          uploadProgressStatus.value = `Launch failed: Could not connect to USB2SNES - ${connectError}`;
+          return;
+        }
+      }
+    }
+    
     uploadProgressStatus.value = 'Launching file...';
     await (window as any).electronAPI.usb2snesBoot(uploadedFilePath.value);
     uploadProgressStatus.value = 'File launched!';
@@ -5002,6 +5031,37 @@ async function refreshSnesContentsList() {
 
 async function launchSnesFile(file: any) {
   try {
+    // Check if USB2SNES is enabled in settings and auto-connect if needed
+    if (settings.usb2snesEnabled === 'yes') {
+      // Refresh status first to check if already connected
+      await refreshUsb2snesStatus();
+      
+      if (!usb2snesStatus.connected) {
+        console.log('[SnesContents] USB2SNES not connected, attempting to connect...');
+        
+        try {
+          const library = usb2snesCurrentLibrary.value;
+          const address = settings.usb2snesAddress;
+          const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+          
+          usb2snesStatus.connected = true;
+          usb2snesStatus.device = result.device;
+          usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
+          usb2snesStatus.versionString = result.versionString || 'N/A';
+          usb2snesStatus.romRunning = result.romRunning || 'N/A';
+          startHealthMonitoring();
+          
+          console.log('[SnesContents] ✓ USB2SNES connected successfully');
+        } catch (connectError) {
+          console.error('[SnesContents] Connection error:', connectError);
+          alert(`Launch failed: Could not connect to USB2SNES - ${connectError}`);
+          return;
+        }
+      } else {
+        console.log('[SnesContents] ✓ USB2SNES already connected');
+      }
+    }
+    
     await (window as any).electronAPI.usb2snesBoot(file.fullpath);
     
     // Mark as launched
@@ -5223,6 +5283,37 @@ async function launchCurrentChallenge() {
   if (!currentChallenge.value || !currentChallengeSfcPath.value) return;
   
   try {
+    // Check if USB2SNES is enabled in settings and auto-connect if needed
+    if (settings.usb2snesEnabled === 'yes') {
+      // Refresh status first to check if already connected
+      await refreshUsb2snesStatus();
+      
+      if (!usb2snesStatus.connected) {
+        console.log('[launchCurrentChallenge] USB2SNES not connected, attempting to connect...');
+        
+        try {
+          const library = usb2snesCurrentLibrary.value;
+          const address = settings.usb2snesAddress;
+          const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+          
+          usb2snesStatus.connected = true;
+          usb2snesStatus.device = result.device;
+          usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
+          usb2snesStatus.versionString = result.versionString || 'N/A';
+          usb2snesStatus.romRunning = result.romRunning || 'N/A';
+          startHealthMonitoring();
+          
+          console.log('[launchCurrentChallenge] ✓ USB2SNES connected successfully');
+        } catch (connectError) {
+          console.error('[launchCurrentChallenge] Connection error:', connectError);
+          alert(`Launch failed: Could not connect to USB2SNES - ${connectError}`);
+          return;
+        }
+      } else {
+        console.log('[launchCurrentChallenge] ✓ USB2SNES already connected');
+      }
+    }
+    
     const sfcpath = currentChallengeSfcPath.value;
     const fullPath = `/work/${sfcpath}`;
     

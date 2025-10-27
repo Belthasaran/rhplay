@@ -1,5 +1,41 @@
 # RHTools Changelog
 
+## 2025-01-27 - USB2SNES Auto-Connect Enhancement
+
+### Feature: Automatic USB2SNES Connection for Launch Operations
+
+**Overview**: Enhanced USB2SNES functionality to automatically connect before launch operations, eliminating the need for users to manually click "Connect" before launching games.
+
+**Problem Solved**: Users were encountering "Error: Not attached to device" when trying to launch games via USB2SNES without being connected first.
+
+**Implementation**: Added automatic connection logic to all USB2SNES launch functions that:
+- Checks if USB2SNES is enabled in settings
+- Refreshes connection status before attempting operations
+- Automatically connects if not already connected
+- Provides clear error messages if connection fails
+- Only attempts connection when USB2SNES is enabled
+
+**Functions Enhanced**:
+- `launchSnesFile()` - SNES Files dialog launch buttons
+- `launchCurrentChallenge()` - Run challenge launch button
+- `launchUploadedFile()` - Uploaded file launch button
+- `uploadRunToSnes()` - Already had auto-connect (verified working)
+
+**Technical Details**:
+- Uses existing `refreshUsb2snesStatus()` and `connectUsb2snes()` functions
+- Maintains consistent error handling and user feedback
+- Preserves existing functionality when already connected
+- Follows same pattern as `uploadStagedToSnes()` function
+
+**Files Modified**:
+- `electron/renderer/src/App.vue` - Added auto-connect logic to launch functions
+
+**Benefits**:
+- Eliminates manual connection step for users
+- Reduces "Not attached to device" errors
+- Improves user experience with seamless USB2SNES operations
+- Maintains backward compatibility
+
 ## 2025-01-27 - Game Export/Import Feature
 
 ### New Feature: Comprehensive Game Export/Import System

@@ -17,6 +17,7 @@
     "build:win": "npm run renderer:build && electron-builder --win portable",
     "build:win-all": "npm run renderer:build && electron-builder --win nsis,portable",
     "build:linux": "npm run renderer:build && electron-builder --linux AppImage",
+    "build:mac": "npm run renderer:build && electron-builder --mac",
     "loaddata": "node loaddata.js",
     "attachblobs": "node attachblobs.js",
     "fetchpatches": "node fetchpatches.js",
@@ -148,6 +149,45 @@
         "AppImage"
       ],
       "category": "Utility"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "artifactName": "${productName}-${version}-universal.dmg",
+      "background": "assets/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "format": "UDZO"
     }
   }
 }

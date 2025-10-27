@@ -1,0 +1,9 @@
+<svg width="540" height="380" xmlns="http://www.w3.org/2000/svg">
+  <rect width="540" height="380" fill="#f0f0f0"/>
+  <text x="270" y="190" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#333">
+    RHTools
+  </text>
+  <text x="270" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#666">
+    Drag to Applications folder
+  </text>
+</svg>

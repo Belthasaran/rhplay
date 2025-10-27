@@ -199,6 +199,29 @@ build_windows() {
     fi
 }
 
+# Build macOS Intel package
+build_macos() {
+    print_status "Building macOS Intel package..."
+    
+    # Note: macOS builds on Linux have limitations
+    # For production, build on macOS machine or use GitHub Actions
+    print_status "Note: macOS builds on Linux have limitations"
+    print_status "Consider building on macOS machine for production"
+    print_status "Building Intel (x64) only - ARM64 requires macOS build machine"
+    
+    npm run build:mac
+    
+    if [ -f "dist-builds/RHTools-${VERSION_STRING}-mac.zip" ]; then
+        print_success "macOS Intel package built successfully"
+        ls -lh dist-builds/RHTools-${VERSION_STRING}-mac.zip
+        print_status "⚠️  Note: Intel Mac only - ARM64 requires macOS build machine"
+        print_status "⚠️  Note: Test the macOS package for native module compatibility"
+    else
+        print_error "macOS Intel package build failed"
+        exit 1
+    fi
+}
+
 # Verify packages
 verify_packages() {
     print_status "Verifying packages..."
@@ -213,6 +236,12 @@ verify_packages() {
     if [ -f "dist-builds/RHTools-${VERSION_STRING}-portable.exe" ]; then
         file dist-builds/RHTools-${VERSION_STRING}-portable.exe
         print_success "Windows package verified"
+    fi
+    
+    # Check macOS package
+    if [ -f "dist-builds/RHTools-${VERSION_STRING}-mac.zip" ]; then
+        file dist-builds/RHTools-${VERSION_STRING}-mac.zip
+        print_success "macOS package verified"
     fi
 }
 
@@ -234,6 +263,13 @@ create_deployment_info() {
 - **Size**: $(ls -lh RHTools-${VERSION_STRING}-portable.exe | awk '{print $5}')
 - **Type**: Self-contained portable executable
 - **Usage**: Double-click to run
+
+## macOS Package
+- **File**: RHTools-${VERSION_STRING}-mac.zip
+- **Size**: $(ls -lh RHTools-${VERSION_STRING}-mac.zip | awk '{print $5}')
+- **Type**: Intel Mac ZIP (x64 only)
+- **Usage**: Extract ZIP and drag RHTools.app to Applications folder
+- **Note**: ARM64 (Apple Silicon) builds require macOS build machine
 
 ## Included Components
 - Complete Electron runtime
@@ -272,6 +308,7 @@ main() {
     # Build packages
     build_linux
     build_windows
+    build_macos
     
     verify_packages
     create_deployment_info
@@ -280,7 +317,7 @@ main() {
     print_success "Build completed successfully!"
     echo ""
     echo "Packages created:"
-    ls -lh dist-builds/*.AppImage dist-builds/*.exe 2>/dev/null || true
+    ls -lh dist-builds/*.AppImage dist-builds/*.exe dist-builds/*.zip 2>/dev/null || true
     echo ""
     echo "Deployment information: dist-builds/DEPLOYMENT_INFO.md"
 }
@@ -306,6 +343,15 @@ case "${1:-all}" in
         build_windows
         verify_packages
         ;;
+    "macos")
+        check_prerequisites
+        prepare_databases
+        clean_builds
+        install_dependencies
+        build_renderer
+        build_macos
+        verify_packages
+        ;;
     "clean")
         clean_builds
         ;;
@@ -316,14 +362,15 @@ case "${1:-all}" in
         main
         ;;
     *)
-        echo "Usage: $0 [linux|windows|clean|deps|all]"
+        echo "Usage: $0 [linux|windows|macos|clean|deps|all]"
         echo ""
         echo "Commands:"
         echo "  linux    - Build Linux AppImage only"
         echo "  windows  - Build Windows portable only"
+        echo "  macos    - Build macOS Intel ZIP only"
         echo "  clean    - Clean build directories"
         echo "  deps     - Install dependencies only"
-        echo "  all      - Build both packages (default)"
+        echo "  all      - Build all packages (default)"
         exit 1
         ;;
 esac

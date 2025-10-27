@@ -1,0 +1,9 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#2563eb" rx="80"/>
+  <text x="256" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="120" fill="white" font-weight="bold">
+    RH
+  </text>
+  <text x="256" y="350" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" fill="white">
+    Tools
+  </text>
+</svg>

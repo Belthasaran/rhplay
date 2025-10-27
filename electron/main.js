@@ -1,7 +1,8 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { DatabaseManager } = require('./database-manager');
 const { registerDatabaseHandlers } = require('./ipc-handlers');
+const StartupPathValidator = require('./startup-path-validator');
 
 // Initialize database manager
 let dbManager = null;
@@ -23,8 +24,11 @@ function createMainWindow() {
         mainWindow.webContents.openDevTools();
     }
 
-    mainWindow.once('ready-to-show', () => {
+    mainWindow.once('ready-to-show', async () => {
         mainWindow.show();
+        
+        // Run startup path validation
+        await runStartupValidation(mainWindow);
     });
 
     if (process.env.ELECTRON_START_URL) {
@@ -107,3 +111,43 @@ app.on('before-quit', () => {
         dbManager.closeAll();
     }
 });
+
+/**
+ * Run startup path validation and open settings modal if needed
+ */
+async function runStartupValidation(mainWindow) {
+    try {
+        console.log('🚀 Starting startup path validation...');
+        
+        const validator = new StartupPathValidator(dbManager);
+        const results = await validator.validateAllPaths();
+        
+        console.log('📊 Validation results:', results);
+        
+        // If critical paths are missing, open settings modal
+        if (results.needsSettingsModal) {
+            console.log('⚠️ Critical paths missing, opening settings modal...');
+            
+            // Send validation results to renderer
+            mainWindow.webContents.send('startup-validation-results', results);
+            
+            // Open settings modal
+            mainWindow.webContents.send('open-settings-modal', {
+                reason: 'startup-validation',
+                missingPaths: results.missingCriticalPaths,
+                message: 'Critical paths need to be configured before using the application.'
+            });
+        } else {
+            console.log('✅ All critical paths validated successfully');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error during startup validation:', error);
+        
+        // Show error dialog
+        dialog.showErrorBox(
+            'Startup Validation Error',
+            'An error occurred during startup validation. Please check the console for details.'
+        );
+    }
+}

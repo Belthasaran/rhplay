@@ -3382,6 +3382,28 @@ function closeSettings() {
   settingsModalOpen.value = false;
 }
 
+// Startup validation handling
+let startupValidationResults = null;
+
+function openSettingsModal(data) {
+  console.log('Opening settings modal due to:', data);
+  settingsModalOpen.value = true;
+  
+  // Show a notification about missing critical paths
+  if (data.reason === 'startup-validation') {
+    alert(`Critical paths need to be configured:\n\n${data.missingPaths.join('\n')}\n\nPlease configure these paths in the settings.`);
+  }
+}
+
+// Listen for startup validation results
+window.electronAPI.onStartupValidationResults((results) => {
+  console.log('Startup validation results:', results);
+  startupValidationResults = results;
+});
+
+// Listen for settings modal open request
+window.electronAPI.onOpenSettingsModal(openSettingsModal);
+
 // Text size slider mapping (0-3 to text sizes)
 const textSizeOptions: TextSize[] = ['small', 'medium', 'large', 'xlarge'];
 const textSizeSliderValue = ref(textSizeOptions.indexOf(settings.textSize));

@@ -104,6 +104,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveSettings: (settings) => ipcRenderer.invoke('db:settings:set:bulk', { settings }),
   
   // =============================
+  // Startup Validation Events
+  // =============================
+  
+  /**
+   * Listen for startup validation results
+   * @param {Function} callback - Callback function
+   */
+  onStartupValidationResults: (callback) => ipcRenderer.on('startup-validation-results', callback),
+  
+  /**
+   * Listen for settings modal open request
+   * @param {Function} callback - Callback function
+   */
+  onOpenSettingsModal: (callback) => ipcRenderer.on('open-settings-modal', callback),
+  
+  // =============================
   // Run System Operations
   // =============================
   

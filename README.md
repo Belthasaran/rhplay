@@ -100,10 +100,10 @@ https://www.smwcentral.net/?p=section&a=details&id=39036
 
 You should be prompted within the Settings menu of the program to provide the paths to these programs.
 
-## Older Release Information
+# Older Release Information
 
-The following is historical and mainly applied to the Python rhtools GUI,
-which has been superceded.
+Everything beyond this pointg is mainly historical and  applied to the Python rhtools GUI,
+which has now been superceded.
 
 ### Base ROM
 

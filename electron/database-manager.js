@@ -55,12 +55,77 @@ class DatabaseManager {
       clientdata: process.env.CLIENTDATA_DB_PATH || path.join(basePath, 'clientdata.db'),
     };
     
-    // In packaged environment, copy databases from resources if they don't exist
+    // In packaged environment, handle external databases
     if (isPackaged && app && app.getPath) {
-      this.ensurePackagedDatabases(paths);
+      this.handleExternalDatabases(paths);
     }
     
     return paths;
+  }
+
+  /**
+   * Handle external databases in packaged environment
+   * @param {Object} paths - Database paths object
+   */
+  handleExternalDatabases(paths) {
+    // Check if external databases exist in user data directory
+    const externalDbs = ['rhdata.db', 'patchbin.db'];
+    const userDataDir = app.getPath('userData');
+    
+    for (const dbName of externalDbs) {
+      const externalPath = path.join(userDataDir, dbName);
+      if (fs.existsSync(externalPath)) {
+        console.log(`Using external ${dbName} from user data directory`);
+        paths[dbName.replace('.db', '')] = externalPath;
+      } else {
+        console.log(`External ${dbName} not found, will create empty database`);
+        // Create empty database if external one doesn't exist
+        this.createEmptyDatabase(paths[dbName.replace('.db', '')], dbName);
+      }
+    }
+    
+    // Always ensure clientdata.db exists (user-specific)
+    if (!fs.existsSync(paths.clientdata)) {
+      this.createEmptyDatabase(paths.clientdata, 'clientdata.db');
+    }
+  }
+
+  /**
+   * Create empty database file
+   * @param {string} dbPath - Path to create database
+   * @param {string} dbName - Name of database for logging
+   */
+  createEmptyDatabase(dbPath, dbName) {
+    try {
+      const db = new Database(dbPath);
+      
+      // Create basic tables based on database type
+      if (dbName === 'clientdata.db') {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS csettings (
+            csettinguid TEXT PRIMARY KEY,
+            csetting_name TEXT UNIQUE,
+            csetting_value TEXT
+          );
+        `);
+        console.log(`Created empty ${dbName} with basic schema`);
+      } else {
+        // For rhdata.db and patchbin.db, create minimal schema
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS info (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          );
+          INSERT OR IGNORE INTO info (key, value) VALUES ('version', '1.0.0');
+          INSERT OR IGNORE INTO info (key, value) VALUES ('created', '${new Date().toISOString()}');
+        `);
+        console.log(`Created empty ${dbName} with minimal schema`);
+      }
+      
+      db.close();
+    } catch (error) {
+      console.error(`Failed to create empty ${dbName}:`, error);
+    }
   }
 
   /**
@@ -68,18 +133,35 @@ class DatabaseManager {
    * @param {Object} paths - Database paths object
    */
   ensurePackagedDatabases(paths) {
-    const resourcePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'electron');
+    // Try multiple possible locations for packaged databases
+    const possiblePaths = [
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'electron'),
+      path.join(__dirname), // Fallback to current directory
+      path.join(process.resourcesPath, 'electron')
+    ];
     
     for (const [dbName, dbPath] of Object.entries(paths)) {
       if (!fs.existsSync(dbPath)) {
-        const sourcePath = path.join(resourcePath, `${dbName}.db`);
-        if (fs.existsSync(sourcePath)) {
+        let sourcePath = null;
+        
+        // Find the source database file
+        for (const possiblePath of possiblePaths) {
+          const testPath = path.join(possiblePath, `${dbName}.db`);
+          if (fs.existsSync(testPath)) {
+            sourcePath = testPath;
+            break;
+          }
+        }
+        
+        if (sourcePath) {
           try {
             fs.copyFileSync(sourcePath, dbPath);
-            console.log(`Copied ${dbName}.db from resources to user data`);
+            console.log(`Copied ${dbName}.db from ${sourcePath} to ${dbPath}`);
           } catch (error) {
             console.error(`Failed to copy ${dbName}.db:`, error);
           }
+        } else {
+          console.warn(`Source database ${dbName}.db not found in packaged resources`);
         }
       }
     }

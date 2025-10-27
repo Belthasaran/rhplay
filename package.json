@@ -107,6 +107,8 @@
       "!electron/backup/**/*",
       "!electron/**/*.db-shm",
       "!electron/**/*.db-wal",
+      "!electron/rhdata.db",
+      "!electron/patchbin.db",
       "Flips/asar.exe",
       "Flips/flips.exe",
       "Flips/dll/asar.dll",

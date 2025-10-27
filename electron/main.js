@@ -41,8 +41,38 @@ function createMainWindow() {
             console.log('Page loaded successfully');
         });
     } else {
-        const prodIndex = path.join(__dirname, 'renderer', 'dist', 'index.html');
-        mainWindow.loadFile(prodIndex);
+        // Production: Load from packaged renderer
+        console.log('Production mode - looking for renderer files...');
+        console.log('__dirname:', __dirname);
+        console.log('process.resourcesPath:', process.resourcesPath);
+        
+        // Try multiple possible paths for the renderer files
+        const possiblePaths = [
+            path.join(__dirname, 'renderer', 'dist', 'index.html'),
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'renderer', 'dist', 'index.html'),
+            path.join(process.resourcesPath, 'electron', 'renderer', 'dist', 'index.html'),
+            path.join(__dirname, '..', 'electron', 'renderer', 'dist', 'index.html')
+        ];
+        
+        let foundPath = null;
+        for (const testPath of possiblePaths) {
+            console.log('Checking path:', testPath);
+            if (require('fs').existsSync(testPath)) {
+                console.log('Found renderer at:', testPath);
+                foundPath = testPath;
+                break;
+            }
+        }
+        
+        if (foundPath) {
+            mainWindow.loadFile(foundPath);
+        } else {
+            console.error('Could not find renderer index.html in any expected location');
+            // Fallback: try to load from asar directly
+            const asarPath = path.join(process.resourcesPath, 'app.asar', 'electron', 'renderer', 'dist', 'index.html');
+            console.log('Trying asar path:', asarPath);
+            mainWindow.loadFile(asarPath);
+        }
     }
     
     return mainWindow;

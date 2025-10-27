@@ -304,7 +304,8 @@ async function stageRunGames(params) {
     for (let i = 0; i < expandedResults.length; i++) {
       const result = expandedResults[i];
       const sequenceNum = (i + 1).toString().padStart(2, '0');
-      const sfcPath = path.join(runFolder, `${sequenceNum}.sfc`);
+      const tmnows = Math.floor(Date.now()/1000);
+      const sfcPath = path.join(runFolder, `${sequenceNum}_{$tmnows}.sfc`);
       
       if (onProgress) {
         onProgress(i + 1, expandedResults.length, result.game_name);

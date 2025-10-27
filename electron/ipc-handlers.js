@@ -894,21 +894,22 @@ function registerDatabaseHandlers(dbManager) {
       
       // First get all games with basic filters (type and difficulty)
       let query = `
-        SELECT gameid, version, name, combinedtype, difficulty, gametype, legacy_type, author, length, description, publicrating, demo, featured, obsoleted, removed, moderated
-        FROM gameversions
-        WHERE removed = 0 AND obsoleted = 0
+        SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated, gvs.rating_value
+        FROM gameversions gv
+        LEFT JOIN gameversion_stats gvs ON gv.gameid = gvs.gameid
+        WHERE gv.removed = 0 AND gv.obsoleted = 0
       `;
       const queryParams = [];
       
       // Apply type filter (matches either gametype OR legacy_type)
       if (filterType && filterType !== '' && filterType !== 'any') {
-        query += ` AND (gametype = ? OR legacy_type = ?)`;
+        query += ` AND (gv.gametype = ? OR gv.legacy_type = ?)`;
         queryParams.push(filterType, filterType);
       }
       
       // Apply difficulty filter
       if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
-        query += ` AND difficulty = ?`;
+        query += ` AND gv.difficulty = ?`;
         queryParams.push(filterDifficulty);
       }
       

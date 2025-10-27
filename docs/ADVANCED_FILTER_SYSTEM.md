@@ -95,7 +95,7 @@ rating:>3 -added:2024         # High-rated games not added in 2024
 | `type` | Game type/genre | `type:Kaizo` |
 | `length` | Game length | `length:18` |
 | `status` | User status | `status:Finished` |
-| `rating` | Public rating | `rating:>3` |
+| `rating` | Public rating (from gameversion_stats.rating_value) | `rating:>3` |
 | `notes` | User notes | `notes:practice` |
 | `version` | Game version | `version:>2` |
 

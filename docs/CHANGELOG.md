@@ -35,6 +35,24 @@
 - Cross-platform game sharing capabilities
 - Data integrity protection through hash verification
 
+### Bug Fix: SQL Column Reference Error
+
+**Issue**: Export/import and random game selection were failing with "no such column: publicrating" error.
+
+**Root Cause**: SQL queries were trying to select `publicrating` from `gameversions` table, but this column doesn't exist. The public rating is stored in `gameversion_stats.rating_value`.
+
+**Fix Applied**:
+- Updated SQL queries to use `LEFT JOIN gameversion_stats` and select `gvs.rating_value`
+- Updated shared filter utilities to handle `rating_value` field correctly
+- Fixed both `ipc-handlers.js` and `seed-manager.js` queries
+- Updated documentation to reflect correct database schema
+
+**Files Modified**:
+- `electron/ipc-handlers.js` - Fixed SQL queries with proper JOINs
+- `electron/shared-filter-utils.js` - Updated rating field handling
+- `electron/seed-manager.js` - Fixed random game selection queries
+- `docs/ADVANCED_FILTER_SYSTEM.md` - Updated documentation
+
 ## 2025-10-26 - CARL Module Loader - Critical Crash Fixes
 
 ### Bug Fix 1: Race Condition During Patch Installation

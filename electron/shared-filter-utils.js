@@ -60,7 +60,7 @@ function evaluateTerm(game, term) {
     
     // Handle rating filters with operators
     if (attr === 'rating') {
-      const rating = game.publicrating ?? game.Publicrating ?? 0;
+      const rating = game.rating_value ?? game.publicrating ?? game.Publicrating ?? 0;
       const targetValue = parseFloat(value);
       
       if (isNaN(targetValue)) return false;
@@ -123,7 +123,7 @@ function evaluateTerm(game, term) {
     game.status ?? game.Status ?? '',
     String(game.mydifficultyrating ?? game.MyDifficultyRating ?? ''),
     String(game.myreviewrating ?? game.MyReviewRating ?? ''),
-    String(game.publicrating ?? game.Publicrating ?? ''),
+    String(game.rating_value ?? game.publicrating ?? game.Publicrating ?? ''),
     String(game.mynotes ?? game.Mynotes ?? ''),
     // Include JSON data if available
     game.added ? String(game.added) : '',
@@ -157,7 +157,7 @@ function getGameAttribute(game, attr) {
     author: game.author ?? game.Author,
     length: game.length ?? game.Length,
     status: game.status ?? game.Status,
-    rating: game.publicrating ?? game.Publicrating,
+    rating: game.rating_value ?? game.publicrating ?? game.Publicrating,
     notes: game.mynotes ?? game.Mynotes,
     gametype: game.gametype,
     difficulty: game.difficulty,

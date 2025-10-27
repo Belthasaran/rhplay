@@ -46,29 +46,18 @@ function createMainWindow() {
         console.log('__dirname:', __dirname);
         console.log('process.resourcesPath:', process.resourcesPath);
         
-        // Try multiple possible paths for the renderer files
-        const possiblePaths = [
-            path.join(__dirname, 'renderer', 'dist', 'index.html'),
-            path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'renderer', 'dist', 'index.html'),
-            path.join(process.resourcesPath, 'electron', 'renderer', 'dist', 'index.html'),
-            path.join(__dirname, '..', 'electron', 'renderer', 'dist', 'index.html')
-        ];
+        // Since we're unpacking renderer/dist files, they should be in app.asar.unpacked
+        const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'renderer', 'dist', 'index.html');
+        console.log('Loading from unpacked path:', unpackedPath);
         
-        let foundPath = null;
-        for (const testPath of possiblePaths) {
-            console.log('Checking path:', testPath);
-            if (require('fs').existsSync(testPath)) {
-                console.log('Found renderer at:', testPath);
-                foundPath = testPath;
-                break;
-            }
-        }
-        
-        if (foundPath) {
-            mainWindow.loadFile(foundPath);
+        // Check if file exists
+        if (require('fs').existsSync(unpackedPath)) {
+            console.log('Found unpacked renderer files');
+            mainWindow.loadFile(unpackedPath);
         } else {
-            console.error('Could not find renderer index.html in any expected location');
-            // Fallback: try to load from asar directly
+            console.error('Unpacked renderer files not found at:', unpackedPath);
+            
+            // Fallback: try asar path
             const asarPath = path.join(process.resourcesPath, 'app.asar', 'electron', 'renderer', 'dist', 'index.html');
             console.log('Trying asar path:', asarPath);
             mainWindow.loadFile(asarPath);

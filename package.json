@@ -9,7 +9,7 @@
     "electron:start": "cross-env ELECTRON_START_URL=http://localhost:5173 electron electron/main.js --xdg-portal-required-version=4",
     "electron:start-smart": "cd electron && ./smart-start.sh",
     "renderer:dev": "npm --prefix electron/renderer run dev",
-    "renderer:build": "npm --prefix electron/renderer run build",
+    "renderer:build": "npm --prefix electron/renderer run build && ./fix-asset-paths.sh",
     "app:dev": "run-p renderer:dev electron:start",
     "app:dev-smart": "cd electron && ./smart-start.sh",
     "app:build": "npm run renderer:build",
@@ -71,7 +71,7 @@
     "adm-zip": "^0.5.10",
     "ardrive-cli": "^3.0.3",
     "ardrive-core-js": "^3.0.3",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.4.1",
     "crc": "^4.3.2",
     "crc-32": "^1.2.2",
     "dotenv": "^16.6.1",
@@ -116,6 +116,13 @@
       "bin/flips",
       "node_modules/**/*"
     ],
+    "asarUnpack": [
+      "electron/renderer/dist/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/keccak/**/*",
+      "node_modules/lzma-native/**/*",
+      "node_modules/secp256k1/**/*"
+    ],
     "win": {
       "target": [
         {
@@ -124,7 +131,9 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "buildDependenciesFromSource": false,
+      "nodeGypRebuild": false
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"

@@ -153,6 +153,10 @@ build_renderer() {
     npm run build
     cd ../..
     
+    # Fix asset paths for packaged apps
+    print_status "Fixing asset paths..."
+    ./fix-asset-paths.sh
+    
     print_success "Renderer built"
 }
 
@@ -175,11 +179,17 @@ build_linux() {
 build_windows() {
     print_status "Building Windows portable package..."
     
+    # Note: Windows builds on Linux have native module compatibility issues
+    # For production, build on Windows machine or use GitHub Actions
+    print_status "Note: Windows builds on Linux may have native module issues"
+    print_status "Consider building on Windows machine for production"
+    
     npm run build:win
     
     if [ -f "dist-builds/RHTools-1.0.0-portable.exe" ]; then
         print_success "Windows portable package built successfully"
         ls -lh dist-builds/RHTools-1.0.0-portable.exe
+        print_status "⚠️  Note: Test the Windows package for native module compatibility"
     else
         print_error "Windows portable package build failed"
         exit 1

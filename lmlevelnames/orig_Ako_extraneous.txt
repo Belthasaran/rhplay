@@ -1,0 +1,350 @@
+Level 0x060: tubsL6teA E E E
+Level 0x061: E E E E E E E E E E
+Level 0x062: E E E E E E E E E
+Level 0x063: E EtA E E E E E
+Level 0x064: E E E E E E E E E E
+Level 0x065: E E E E E E E E E
+Level 0x066: tEA E E E E E E E
+Level 0x067: E E E E E E E E E E
+Level 0x068: E E E E E E EsA
+Level 0x069: E E E E E E E E E
+Level 0x06A: E E E E E E E E E E
+Level 0x06B: E E E E EsA E E
+Level 0x06C: E E E E E E E E E
+Level 0x06D: E E E E E E E E E E
+Level 0x06E: E E EsA E E E E
+Level 0x06F: E E E E E E E E E
+Level 0x070: E E E E E E E E E E
+Level 0x071: EsA E E E E E E
+Level 0x072: E E E E E E E E E
+Level 0x073: E E E E E E E E Es
+Level 0x074: 2A2E E E E E E E E
+Level 0x075: E E E E E E E E E
+Level 0x076: E E E E E E EteA
+Level 0x077: E E E E E E E E E E
+Level 0x078: E E E E E E E E E
+Level 0x079: E E E E EtA EtEh
+Level 0x07A: EaEtE EcEoEnEgErEaE
+Level 0x07B: tEuElEaEtEeE EyEoEu
+Level 0x07C: E.E EtEA EyEoEuE
+Level 0x07D: EcEaEnE EsEeEeE E E
+Level 0x07E: GEGE EeEmEoEtEeEsE
+Level 0x07F: EsAyEoEuE EeEvEe
+Level 0x080: EnE E EfEeEeElE EaE
+Level 0x081: sE EtEhEoEuEgEhEs
+Level 0x082: A E E EwEaEtEcEhEe
+Level 0x083: ErE'EsE E EcEhEeEeE
+Level 0x084: rEsE.E E E EsA E
+Level 0x085: EdEiEsEtEaEnEtE En
+Level 0x086: EoEiEsEeE EoEfE EtE
+Level 0x087: hEeE E EsA E E E
+Level 0x088: kEeEeEpE EyEoEuE Eh
+Level 0x089: EeEaErE EtEhEeE E E
+Level 0x08A: E Es2A E E EAEfE
+Level 0x08B: tEeErE EsEiEeEgEiEn
+Level 0x08C: EgE EtEhEeE E E E E
+Level 0x08D: teA E E E E E E E
+Level 0x08E: EWEhEyEnEoEtE E E
+Level 0x08F: E E E E E E E EtA
+Level 0x090: E E E E E E E E E
+Level 0x091: E E E E E E E E E
+Level 0x092: E E E E E EtEA E
+Level 0x093: EbEeEcEaEuEsEeE,E E
+Level 0x094: yEoEuE EkEnEoEwE.E.
+Level 0x095: E.E E EsA E E Ed
+Level 0x096: EeEsEtErEoEyE E EtE
+Level 0x097: hEeE EtEoEwEeErE E
+Level 0x098: E EsA E E EYEoEu
+Level 0x099: E EtEhEeEnE EdEeEcE
+Level 0x09A: iEdEeE EtEoE E E E
+Level 0x09B: sA E EtEhEaEnE Et
+Level 0x09C: EhEiEsE EsEhEiEnEyE
+Level 0x09D: EoErEbE.E E EsA
+Level 0x09E: EyEoEuE EfEiEnEdE
+Level 0x09F: E EnEoEtEhEiEnEgE E
+Level 0x0A0: mEoErEeE Es2AAEfE
+Level 0x0A1: tEeErE EcElEiEmEbEi
+Level 0x0A2: EnEgE EtEhEeE EtEoE
+Level 0x0A3: wEeErEteA E E E E
+Level 0x0A4: E E E E E E E E E
+Level 0x0A5: E E E E E E E E E E
+Level 0x0A6: EtA E E E E E E
+Level 0x0A7: E E E E E E E E E
+Level 0x0A8: E E E E E E E E Et
+Level 0x0A9: EA E E E E E E E E
+Level 0x0AA: E E E E E E E E E
+Level 0x0AB: E E E E E E EsA
+Level 0x0AC: E E E E E E E E E E
+Level 0x0AD: E E E E E E E E E
+Level 0x0AE: E E E E EsA E E
+Level 0x0AF: E E E E E E E E E E
+Level 0x0B0: E E E E E E E E E
+Level 0x0B1: E E EsA E E E E
+Level 0x0B2: E E E E E E E E E E
+Level 0x0B3: E E E E E E E E E
+Level 0x0B4: EsA E E E E E E
+Level 0x0B5: E E E E E E E E E E
+Level 0x0B6: E E E E E E E Es2
+Level 0x0B7: A5E E E E E E E E
+Level 0x0B8: E E E E E E E E E E
+Level 0x0B9: E E E E E EteA E
+Level 0x0BA: E E E E E E E E E
+Level 0x0BB: E E E E E E E E E E
+Level 0x0BC: E E E EtA E E E
+Level 0x0BD: E E E E E E E E E
+Level 0x0BE: E E E E E E E E E E
+Level 0x0BF: E EtEA E E E E E
+Level 0x0C0: E E E E E E E E E
+Level 0x0C1: E E E E E E E E E E
+Level 0x0C2: sA E E E E E E E
+Level 0x0C3: E E E E E E E E E
+Level 0x0C4: E E E E E E E EsA
+Level 0x0C5: E E E E E E E E E
+Level 0x0C6: E E E E E E E E E
+Level 0x0C7: E E E E E EsA E
+Level 0x0C8: E E E E E E E E E E
+Level 0x0C9: E E E E E E E E E
+Level 0x0CA: E E E EsA E E E
+Level 0x0CB: E E E E E E E E E E
+Level 0x0CC: E E E E E E E E E
+Level 0x0CD: E Es2A6E E E E E
+Level 0x0CE: E E E E E E E E E E
+Level 0x0CF: E E E E E E E E E
+Level 0x0D0: teAtEhEoEsEeE EwEh
+Level 0x0D1: EoE E EsEeEeEkE EtE
+Level 0x0D2: hEeEmE EoEuEtEtA
+Level 0x0D3: EfEuErEtEhEeErE Ec
+Level 0x0D4: EhEaElElEeEnEgEeEsE
+Level 0x0D5: EfEoErE EtEA E E
+Level 0x0D6: HEoEwEeEvEeErE EtEh
+Level 0x0D7: EeErEeE EmEaEyE EbE
+Level 0x0D8: eE E EsAqEuEeEsE
+Level 0x0D9: tE EhEaEsE EcEoEmEe
+Level 0x0DA: E EtEoE EaEnE EeEnE
+Level 0x0DB: dEsA EsEpEiEnEnE
+Level 0x0DC: iEnEgE EBEuEiEbEuEi
+Level 0x0DD: EsE.E EYEoEuErE Es
+Level 0x0DE: A EaEnEdE EdEeEfE
+Level 0x0DF: eEaEtEiEnEgE EtEhEe
+Level 0x0E0: E EfEiEvEeE EsA
+Level 0x0E1: E EtEhEeE EgEaEuEnE
+Level 0x0E2: tElEeEtE EoEfE ErEo
+Level 0x0E3: EoEmEsE Es2AMEaEk
+Level 0x0E4: EiEnEgE EyEoEuErE E
+Level 0x0E5: EwEaEyE EtEhErEoEu
+Level 0x0E6: EgEhEteA E E E E
+Level 0x0E7: E E E E E E E E E E
+Level 0x0E8: E E E E E E E E E
+Level 0x0E9: EtA E E E E E E
+Level 0x0EA: E E E E E E E E E E
+Level 0x0EB: E E E E E E E EtE
+Level 0x0EC: A E E E E E E E E
+Level 0x0ED: E E E E E E E E E E
+Level 0x0EE: E E E E E EsA E
+Level 0x0EF: E E E E E E E E E
+Level 0x0F0: E E E E E E E E E E
+Level 0x0F1: E E E EsA E E E
+Level 0x0F2: E E E E E E E E E
+Level 0x0F3: E E E E E E E E E E
+Level 0x0F4: E EsA E E E E E
+Level 0x0F5: E E E E E E E E E
+Level 0x0F6: E E E E E E E E E E
+Level 0x0F7: sA E E E E E E E
+Level 0x0F8: E E E E E E E E E
+Level 0x0F9: E E E E E E E Es2A
+Level 0x0FA: 8E E E E E E E E E
+Level 0x0FB: E E E E E E E E E
+Level 0x0FC: E E E E E EAAAAAAA
+Level 0x121: tubsL6teA E E E
+Level 0x122: E E E E E E E E E
+Level 0x123: E E E E E E E E E E
+Level 0x124: E EtA E E E E E
+Level 0x125: E E E E E E E E E
+Level 0x126: E E E E E E E E E E
+Level 0x127: tEA E E E E E E E
+Level 0x128: E E E E E E E E E
+Level 0x129: E E E E E E E EsA
+Level 0x12A: E E E E E E E E E
+Level 0x12B: E E E E E E E E E
+Level 0x12C: E E E E E EsA E
+Level 0x12D: E E E E E E E E E E
+Level 0x12E: E E E E E E E E E
+Level 0x12F: E E E EsA E E E
+Level 0x130: E E E E E E E E E E
+Level 0x131: E E E E E E E E E
+Level 0x132: E EsA E E E E E
+Level 0x133: E E E E E E E E E E
+Level 0x134: E E E E E E E E E
+Level 0x135: s2A2E E E E E E E
+Level 0x136: E E E E E E E E E E
+Level 0x137: E E E E E E EteA
+Level 0x138: E E E E E E E E E
+Level 0x139: E E E E E E E E E E
+Level 0x13A: E E E E EtA EtE
+Level 0x13B: hEaEtE EcEoEnEgErEa
+Level 0x13C: EtEuElEaEtEeE EyEoE
+Level 0x13D: uE.E EtEA EyEoEuE
+Level 0x13E: EcEaEnE EsEeEeE E
+Level 0x13F: EGEGE EeEmEoEtEeEsE
+Level 0x140: EsAyEoEuE EeEvE
+Level 0x141: eEnE E EfEeEeElE Ea
+Level 0x142: EsE EtEhEoEuEgEhEs
+Level 0x143: A E E EwEaEtEcEhE
+Level 0x144: eErE'EsE E EcEhEeEe
+Level 0x145: ErEsE.E E E EsA
+Level 0x146: E EdEiEsEtEaEnEtE E
+Level 0x147: nEoEiEsEeE EoEfE Et
+Level 0x148: EhEeE E EsA E E
+Level 0x149: EkEeEeEpE EyEoEuE E
+Level 0x14A: hEeEaErE EtEhEeE E
+Level 0x14B: E E Es2A E E EAEf
+Level 0x14C: EtEeErE EsEiEeEgEiE
+Level 0x14D: nEgE EtEhEeE E E E
+Level 0x14E: EteA E E E E E E
+Level 0x14F: E EWEhEyEnEoEtE E E
+Level 0x150: E E E E E E E Et
+Level 0x151: A E E E E E E E E
+Level 0x152: E E E E E E E E E E
+Level 0x153: E E E E E EtEA E
+Level 0x154: EbEeEcEaEuEsEeE,E
+Level 0x155: EyEoEuE EkEnEoEwE.E
+Level 0x156: .E.E E EsA E E E
+Level 0x157: dEeEsEtErEoEyE E Et
+Level 0x158: EhEeE EtEoEwEeErE E
+Level 0x159: E EsA E E EYEoE
+Level 0x15A: uE EtEhEeEnE EdEeEc
+Level 0x15B: EiEdEeE EtEoE E E E
+Level 0x15C: sA E EtEhEaEnE E
+Level 0x15D: tEhEiEsE EsEhEiEnEy
+Level 0x15E: E EoErEbE.E E EsA
+Level 0x15F: EyEoEuE EfEiEnEdE
+Level 0x160: E EnEoEtEhEiEnEgE
+Level 0x161: EmEoErEeE Es2AAEf
+Level 0x162: EtEeErE EcElEiEmEbE
+Level 0x163: iEnEgE EtEhEeE EtEo
+Level 0x164: EwEeErEteA E E E
+Level 0x165: E E E E E E E E E E
+Level 0x166: E E E E E E E E E
+Level 0x167: E EtA E E E E E
+Level 0x168: E E E E E E E E E E
+Level 0x169: E E E E E E E E E
+Level 0x16A: tEA E E E E E E E
+Level 0x16B: E E E E E E E E E E
+Level 0x16C: E E E E E E EsA
+Level 0x16D: E E E E E E E E E
+Level 0x16E: E E E E E E E E E E
+Level 0x16F: E E E E EsA E E
+Level 0x170: E E E E E E E E E
+Level 0x171: E E E E E E E E E E
+Level 0x172: E E EsA E E E E
+Level 0x173: E E E E E E E E E
+Level 0x174: E E E E E E E E E E
+Level 0x175: EsA E E E E E E
+Level 0x176: E E E E E E E E E
+Level 0x177: E E E E E E E E Es
+Level 0x178: 2A5E E E E E E E E
+Level 0x179: E E E E E E E E E
+Level 0x17A: E E E E E E EteA
+Level 0x17B: E E E E E E E E E E
+Level 0x17C: E E E E E E E E E
+Level 0x17D: E E E E EtA E E
+Level 0x17E: E E E E E E E E E E
+Level 0x17F: E E E E E E E E E
+Level 0x180: E E EtEA E E E E
+Level 0x181: E E E E E E E E E E
+Level 0x182: E E E E E E E E E
+Level 0x183: EsA E E E E E E
+Level 0x184: E E E E E E E E E E
+Level 0x185: E E E E E E E Es
+Level 0x186: A E E E E E E E E
+Level 0x187: E E E E E E E E E E
+Level 0x188: E E E E E EsA E
+Level 0x189: E E E E E E E E E
+Level 0x18A: E E E E E E E E E E
+Level 0x18B: E E E EsA E E E
+Level 0x18C: E E E E E E E E E
+Level 0x18D: E E E E E E E E E E
+Level 0x18E: E Es2A6E E E E E
+Level 0x18F: E E E E E E E E E
+Level 0x190: E E E E E E E E E E
+Level 0x191: teAtEhEoEsEeE EwE
+Level 0x192: hEoE E EsEeEeEkE Et
+Level 0x193: EhEeEmE EoEuEtEtA
+Level 0x194: EfEuErEtEhEeErE E
+Level 0x195: cEhEaElElEeEnEgEeEs
+Level 0x196: E EfEoErE EtEA E
+Level 0x197: EHEoEwEeEvEeErE EtE
+Level 0x198: hEeErEeE EmEaEyE Eb
+Level 0x199: EeE E EsAqEuEeEs
+Level 0x19A: EtE EhEaEsE EcEoEmE
+Level 0x19B: eE EtEoE EaEnE EeEn
+Level 0x19C: EdEsA EsEpEiEnEn
+Level 0x19D: EiEnEgE EBEuEiEbEuE
+Level 0x19E: iEsE.E EYEoEuErE E
+Level 0x19F: sA EaEnEdE EdEeEf
+Level 0x1A0: EeEaEtEiEnEgE EtEhE
+Level 0x1A1: eE EfEiEvEeE EsA
+Level 0x1A2: E EtEhEeE EgEaEuEn
+Level 0x1A3: EtElEeEtE EoEfE ErE
+Level 0x1A4: oEoEmEsE Es2AMEaE
+Level 0x1A5: kEiEnEgE EyEoEuErE
+Level 0x1A6: E EwEaEyE EtEhErEoE
+Level 0x1A7: uEgEhEteA E E E E
+Level 0x1A8: E E E E E E E E E
+Level 0x1A9: E E E E E E E E E E
+Level 0x1AA: EtA E E E E E E
+Level 0x1AB: E E E E E E E E E
+Level 0x1AC: E E E E E E E E Et
+Level 0x1AD: EA E E E E E E E E
+Level 0x1AE: E E E E E E E E E
+Level 0x1AF: E E E E E E EsA
+Level 0x1B0: E E E E E E E E E E
+Level 0x1B1: E E E E E E E E E
+Level 0x1B2: E E E E EsA E E
+Level 0x1B3: E E E E E E E E E E
+Level 0x1B4: E E E E E E E E E
+Level 0x1B5: E E EsA E E E E
+Level 0x1B6: E E E E E E E E E E
+Level 0x1B7: E E E E E E E E E
+Level 0x1B8: EsA E E E E E E
+Level 0x1B9: E E E E E E E E E E
+Level 0x1BA: E E E E E E E Es2
+Level 0x1BB: A8E E E E E E E E
+Level 0x1BC: E E E E E E E E E E
+Level 0x1BD: E E E E E EAAAAAA
+Level 0x1DA: AAAAAAAAAtubs A
+Level 0x1DB: NAAHBuAA9B
+Level 0x1DC: uAA9mnABtubsA
+Level 0x1DD: AA
+Level 0x1DF: 9tubsNA
+Level 0x1E0: UF) AAAAAAt
+Level 0x1E1: ubsMRdddR
+Level 0x1E2: 6?777??dddAdAR!Rq
+Level 0x1E3: qR!!RRdddR?777??
+Level 0x1E4: ddd?6?!!!??!!RAdAR
+Level 0x1E5: !RqRddRR?77ARq?ddq
+Level 0x1E6: qRRQ!Rq??!!R??!!!
+Level 0x1E7: ?DDDDDDRdddR?777?R
+Level 0x1E8: ?dddARRQ!RqqRQ!RqD
+Level 0x1E9: DDRAdAR?q!q?R?!
+Level 0x1EA: !RARRQ!RqqRQ!Rq
+Level 0x1EB: D?ddd??!!!?R?!!R
+Level 0x1EC: ARQ!RqqQ!Rq777
+Level 0x1ED: qqddddRRRQQR
+Level 0x1EE: RddR777qq
+Level 0x1EF: ddddRRQQRAARR
+Level 0x1F0: qqRRR777qqdd
+Level 0x1F1: ddRRQDQRAdARRq7q
+Level 0x1F2: RRdR777qqdddd
+Level 0x1F3: RRQDDQRAddARRq77qR
+Level 0x1F4: RddRR
+Level 0x1F6: ?wx?23q?
+Level 0x1F7: q?R?STUV?jk
+Level 0x1F8: z#?wx?23q?
+Level 0x1F9: q?STUVR?ILL?jkz#
+Level 0x1FA: ?wx?23q?STUVq
+Level 0x1FB: ?ILLR?USIY?jkz#!!
+Level 0x1FC: !!!!!!!!!!!!
+Level 0x1FD: !!!!!!
+Level 0x1FE: !!!!!!!!!!
+Level 0x1FF: !!!!!!!!

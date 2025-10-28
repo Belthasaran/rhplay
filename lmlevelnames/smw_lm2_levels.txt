@@ -1,0 +1,264 @@
+Level 0x001: MY SECRET 2
+Level 0x002: my secret 3
+Level 0x003: really cool secret
+Level 0x004: not donut mansion
+Level 0x005: plains de donut 4
+Level 0x006: plain donut 4
+Level 0x007: Morton place
+Level 0x008: green house
+Level 0x009: plain donut 3
+Level 0x00A: secret donut 2
+Level 0x00B: fortress de vanilla
+Level 0x00C: bridge de beur 2
+Level 0x00D: bridge de beur 3
+Level 0x00E: ludwig hidoeut
+Level 0x00F: cheesy bridge
+Level 0x010: mountain of cookies
+Level 0x011: pepsi lake
+Level 0x012: yellow star rod
+Level 0x013: super secret donut
+Level 0x014: Yellow custom palac
+Level 0x015: DONUT PLAINS 2
+Level 0x016: STAR ROAD
+Level 0x017: #3 MORTON'S PLAINS
+Level 0x018: SUNKEN GHOST SHIP
+Level 0x019: #3 MORTON'S PLAINS
+Level 0x01A: #7 WENDY'S CASTLE
+Level 0x01B: CHOCOLATE FORTRESS
+Level 0x01C: CHOCOLATE ISLAND 6
+Level 0x01D: CHOCOLATE ISLAND 5
+Level 0x01E: STAR ROAD
+Level 0x01F: FOREST FORTRESS
+Level 0x020: #6 ROY'S CASTLE
+Level 0x021: CHOCO-GHOST HOUSE
+Level 0x022: CHOCOLATE ISLAND 2
+Level 0x023: CHOCOLATE ISLAND 4
+Level 0x024: CHOCOLATE ISLAND 3
+Level 0x025: #2 IGGY'S CASTLE
+Level 0x026: YOSHI'S ISLAND 5
+Level 0x027: YOSHI'S ISLAND 4
+Level 0x028: YOSHI'S HOUSE
+Level 0x029: YOSHI'S ISLAND 2
+Level 0x02A: YOSHI'S ISLAND 3
+Level 0x02B: VANILLA GHOST HOUSE
+Level 0x02C: STAR ROAD
+Level 0x02D: VANILLA SECRET 2
+Level 0x02E: VANILLA DOME 4
+Level 0x02F: DONUT SECRET 3
+Level 0x030: STAR ROAD
+Level 0x031: FRONT DOOR
+Level 0x032: BACK DOOR
+Level 0x033: VALLEY OF BOWSER 5
+Level 0x034: #8 LARRY'S CASTLE
+Level 0x035: VALLEY FORTRESS
+Level 0x037: VALLEY OF BOWSER 4
+Level 0x038: VALLEY GHOST HOUSE
+Level 0x039: VALLEY OF BOWSER 3
+Level 0x03A: VALLEY OF BOWSER 2
+Level 0x03B: CHOCOLATE SECRET
+Level 0x03C: VANILLA DOME 3
+Level 0x03D: VANILLA DOME 5
+Level 0x03E: VANILLA DOME 2
+Level 0x03F: RED SWITCH PALACE
+Level 0x040: #4 LEMMY'S CASTLE
+Level 0x041: FOREST GHOST HOUSE
+Level 0x042: FOREST OFILLUSION 2
+Level 0x043: FOREST OFILLUSION 5
+Level 0x044: FOREST OFILLUSION 3
+Level 0x045: BLUE SWITCH PALACE
+Level 0x046: FOREST SECRET AREA
+Level 0x047: FOREST OFILLUSION 4
+Level 0x048: STAR ROAD
+Level 0x049: FUNKY
+Level 0x04A: OUTRAGEOUS
+Level 0x04B: MONDO
+Level 0x04C: GROOVY
+Level 0x04D: STAR ROAD
+Level 0x04E: GNARLY
+Level 0x04F: TUBULAR
+Level 0x050: WAY COOL
+Level 0x051: AWESOME
+Level 0x052: STAR ROAD
+Level 0x053: STAR ROAD
+Level 0x054: STAR WORLD 3
+Level 0x055: STAR ROAD
+Level 0x056: STAR WORLD 4
+Level 0x057: STAR ROAD
+Level 0x058: STAR WORLD 2
+Level 0x059: STAR WORLD 5
+Level 0x05A: STAR WORLD 6
+Level 0x05B: STAR ROAD
+Level 0x05C: STAR ROAD
+Level 0x060: tubsBNWelcome!
+Level 0x061: This isDinosaur Lan
+Level 0x062: d.  Inthis strange
+Level 0x063: landwe    find
+Level 0x064: thatPrincess Toadst
+Level 0x065: oolis  missing agai
+Level 0x066: n!Looks  like Bowse
+Level 0x067: ris at it again!Ho
+Level 0x068: oray!  Thank youfor
+Level 0x069: rescuing   me.My n
+Level 0x06A: ame  is Yoshi.On
+Level 0x06B: my   way   torescue
+Level 0x06C: my friends,Bowser
+Level 0x06D: trapped  mein that
+Level 0x06E: egg.This  is  a  G
+Level 0x06F: hostHouse.     Can
+Level 0x070: youfind   the   exi
+Level 0x071: t?Hee,  hee,  hee..
+Level 0x072: .Don't get lost!Yo
+Level 0x073: u can  slide thescr
+Level 0x074: een   left   orrigh
+Level 0x075: t  by pressingthe L
+Level 0x076: or R Buttonson   t
+Level 0x077: op   of  thecontrol
+Level 0x078: ler.    Youmay be a
+Level 0x079: ble to seefurther a
+Level 0x07A: head.- SWITCH PALA
+Level 0x07B: CE - The  power  of
+Level 0x07C: theswitch  you   h
+Level 0x07D: avepushed  will  tu
+Level 0x07E: rn
+Level 0x07F: into     .
+Level 0x080: Your progress willa
+Level 0x081: lso   be   saved.Th
+Level 0x082: ere   are   fiveent
+Level 0x083: rances  to  theStar
+Level 0x084: World    inDinos
+Level 0x085: aur     Land.Find
+Level 0x086: them all andyou   c
+Level 0x087: an   travelbetween
+Level 0x088: manydifferent
+Level 0x089: places.- SWITCH P
+Level 0x08A: ALACE - The  power
+Level 0x08B: of theswitch  you
+Level 0x08C: havepushed  will
+Level 0x08D: turn
+Level 0x08E: into
+Level 0x08F: .  Your progress wi
+Level 0x090: llalso   be   saved
+Level 0x091: .The red dot  areas
+Level 0x092: on  the  map  havet
+Level 0x093: wo      differentex
+Level 0x094: its.      If youhav
+Level 0x095: e  the time andskil
+Level 0x096: l,  be sure tolook
+Level 0x097: for them.Use  Mari
+Level 0x098: o's  capeto   soar
+Level 0x099: throughthe air! Ru
+Level 0x09A: n fast,jump, and ho
+Level 0x09B: ld theY Button.  To
+Level 0x09C: keepbalance,  use
+Level 0x09D: leftand  right  on
+Level 0x09E: theControl Pad.Her
+Level 0x09F: e,   the  coinsyou
+Level 0x0A0: collect   orthe t
+Level 0x0A1: ime remainingcan  c
+Level 0x0A2: hange   yourprogres
+Level 0x0A3: s.  Can youfind  th
+Level 0x0A4: e  specialgoal?Pre
+Level 0x0A5: ss Up   on  theCont
+Level 0x0A6: rol Pad  whilejumpi
+Level 0x0A7: ng   and  youcan  c
+Level 0x0A8: ling  to thefence.
+Level 0x0A9: To go inthe  doo
+Level 0x0AA: r  at  theend  of t
+Level 0x0AB: his area,use Up als
+Level 0x0AC: o.-POINT OF ADVICE
+Level 0x0AD: - One   of   Yoshi'
+Level 0x0AE: sfriends is trapped
+Level 0x0AF: in  the castle  byI
+Level 0x0B0: ggy Koopa.     Tode
+Level 0x0B1: feat  him,  pushhim
+Level 0x0B2: into  the lavapool
+Level 0x0B3: .You   get    Bonu
+Level 0x0B4: sStars  if  you cut
+Level 0x0B5: the  tape  at  thee
+Level 0x0B6: nd  of each area.If
+Level 0x0B7: you collect 299Bon
+Level 0x0B8: us  Stars   youcan
+Level 0x0B9: play  a  funbonus
+Level 0x0BA: game.If  you are
+Level 0x0BB: in anarea that you
+Level 0x0BC: havealready   clea
+Level 0x0BD: red,you can  return
+Level 0x0BE: tothe map screen
+Level 0x0BF: bypressing    START
+Level 0x0C0: ,then SELECT.When
+Level 0x0C1: you  stomp onan ene
+Level 0x0C2: my,  you canjump hi
+Level 0x0C3: gh  if  youhold
+Level 0x0C4: the   jumpbutton.
+Level 0x0C5: Use Up onthe Contro
+Level 0x0C6: l Pad tojump high
+Level 0x0C7: in  theshallow wate
+Level 0x0C8: r.-POINT OF ADVICE
+Level 0x0C9: - The big coins  ar
+Level 0x0CA: eDragon Coins.   If
+Level 0x0CB: you  pick up  fiveo
+Level 0x0CC: f  these  in  onear
+Level 0x0CD: ea,  you  get anext
+Level 0x0CE: ra Mario.Hello!
+Level 0x0CF: Sorry I'mnot  home,
+Level 0x0D0: but  Ihave    gon
+Level 0x0D1: e    torescue  my f
+Level 0x0D2: riendswho were  cap
+Level 0x0D3: turedby Bowser.
+Level 0x0D5: - Yoshi
+Level 0x0D6: 1It is possible  t
+Level 0x0D7: ofill in the dotted
+Level 0x0D8: line blocks.    Tof
+Level 0x0D9: ill in the yellowon
+Level 0x0DA: es, just go westthe
+Level 0x0DB: n north  to thetop
+Level 0x0DC: of     themount
+Level 0x0DD: ain.-POINT OF ADVI
+Level 0x0DE: CE- You  can  hold
+Level 0x0DF: anextra item  in t
+Level 0x0E0: hebox at  the top o
+Level 0x0E1: fthe screen.     To
+Level 0x0E2: use it,  press theS
+Level 0x0E3: ELECT Button.-POIN
+Level 0x0E4: T OF ADVICE- To   p
+Level 0x0E5: ick   up   ashell,
+Level 0x0E6: use  the Xor  Y  B
+Level 0x0E7: utton.  Tothrow
+Level 0x0E8: a   shellupwards,
+Level 0x0E9: look  upand let go
+Level 0x0EA: of  thebutton.To d
+Level 0x0EB: o a spin jump,press
+Level 0x0EC: the     AButton
+Level 0x0ED: .    A SuperMario
+Level 0x0EE: spin  jumpcan brea
+Level 0x0EF: k some  ofthe   blo
+Level 0x0F0: cks   anddefeat som
+Level 0x0F1: e of thetougher ene
+Level 0x0F2: mies.-POINT OF ADV
+Level 0x0F3: ICE- This   gate  m
+Level 0x0F4: arksthe middle of t
+Level 0x0F5: hisarea.   By cutti
+Level 0x0F6: ngthe tape here, yo
+Level 0x0F7: ucan continue  from
+Level 0x0F8: close   to    thisp
+Level 0x0F9: oint.- SWITCH PALA
+Level 0x0FA: CE - The  power  of
+Level 0x0FB: theswitch  you   h
+Level 0x0FC: avepushed  will  tu
+Level 0x0FD: rn
+Level 0x0FE: into     .
+Level 0x0FF: Your progress willa
+Level 0x100: A?AIA,A-A,A-APAQA
+Level 0x101: AAAAUAAAA?AIA
+Level 0x102: ,A-A,A-APAQAAAA
+Level 0x103: AUAAAA?AIA,A-A,A
+Level 0x104: -APAQAAAAAUAA
+Level 0x105: AA?AIA,A-A,A-APAQA
+Level 0x106: AAAAUAAAA?AI
+Level 0x107: A,A-A,A-APAQAAAA
+Level 0x108: AAAAAAAAAAAAAAAAAA
+Level 0x1FB: AAAAAAAAAAAAAAAAAtu
+Level 0x1FC: bsAAABACADAEAFAG
+Level 0x1FD: AHAIAJAKALAMANAOAPA
+Level 0x1FE: QARASATAUAVAWAXAYAZ
+Level 0x1FF: A!A.A-A,A?A AAAA

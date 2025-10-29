@@ -646,7 +646,8 @@ def filter_level_names(
             if len(levelset)>0 and not(normalize_lid(level_id) in levelset):
                 continue
             else:
-                print("included "+normalize_lid(level_id))
+                pass
+                #print("included "+normalize_lid(level_id))
 
             if is_likely_message_box_text(name, level_id):
                 continue  # Skip if likely message box

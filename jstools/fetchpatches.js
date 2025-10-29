@@ -20,6 +20,8 @@ const jssha = require('jssha')
 const Database = require('better-sqlite3');
 const arDriveCore = require('ardrive-core-js');
 const arweave = require('arweave');
+const fernet = require('fernet');
+const lzma = require('lzma-native');
 
 // Database paths (can be overridden by --patchbindb and --rhdatadb)
 let RHDATA_DB_PATH = path.join(__dirname, 'electron', 'rhdata.db');
@@ -707,6 +709,7 @@ function calculateShake128Filename(data) {
 	return digest.toString('base64').replace(/\+/g, '_').replace(/\//g, '-').replace(/=/g, '');
 }
 
+
 /**
  * Parse Mode 3 arguments
  */
@@ -847,7 +850,7 @@ function parseMode3Arguments(args) {
   }
   
   // Determine if this is an attribute search or direct ID search
-  const directIdSearchTypes = ['gameid', 'gvuuid', 'pbuuid', 'file_name'];
+  const directIdSearchTypes = ['gameid', 'gvuuid', 'pbuuid', 'file_name', 'patchblob1_name'];
   const hasDirectIdSearch = options.searchCriteria.some(c => directIdSearchTypes.includes(c.type));
   const hasAttributeSearch = options.searchCriteria.some(c => !directIdSearchTypes.includes(c.type));
   
@@ -1071,6 +1074,10 @@ function matchesAllCriteria(record, criteria) {
         matched = matchSearchValue(record.length, value, exact, regex);
         break;
         
+      case 'patchblob1_name':
+        matched = matchSearchValue(record.patchblob1_name, value, exact, regex);
+        break;
+        
       default:
         // Try to match against the field with same name as type
         if (record[type] !== undefined) {
@@ -1111,7 +1118,7 @@ function searchRecords(rhdataDb, patchbinDb, options) {
       );
       
       const hasDirectIdSearch = options.searchCriteria.some(c => 
-        ['gvuuid', 'pbuuid', 'file_name'].includes(c.type)
+        ['gvuuid', 'pbuuid', 'file_name', 'patchblob1_name'].includes(c.type)
       );
       
       if (hasDirectIdSearch) {
@@ -1121,11 +1128,14 @@ function searchRecords(rhdataDb, patchbinDb, options) {
             const gv = rhdataDb.prepare(`SELECT * FROM gameversions WHERE gvuuid = ?`).get(criterion.value);
             if (gv) results.gameversions = [gv];
           } else if (criterion.type === 'pbuuid') {
-            const pb = patchbinDb.prepare(`SELECT * FROM patchblobs WHERE pbuuid = ?`).get(criterion.value);
+            const pb = rhdataDb.prepare(`SELECT * FROM patchblobs WHERE pbuuid = ?`).get(criterion.value);
             if (pb) results.patchblobs = [pb];
           } else if (criterion.type === 'file_name') {
             const attachments = patchbinDb.prepare(`SELECT * FROM attachments WHERE file_name = ?`).all(criterion.value);
             results.attachments = attachments;
+          } else if (criterion.type === 'patchblob1_name') {
+            const patchblobs = rhdataDb.prepare(`SELECT * FROM patchblobs WHERE patchblob1_name = ?`).all(criterion.value);
+            results.patchblobs = patchblobs;
           }
         }
       } else if (hasGameversionsCriteria) {
@@ -1251,7 +1261,7 @@ function searchRecords(rhdataDb, patchbinDb, options) {
         }
         
         case 'pbuuid': {
-          const pb = patchbinDb.prepare(`
+          const pb = rhdataDb.prepare(`
             SELECT * FROM patchblobs WHERE pbuuid = ?
           `).get(options.searchValue);
           if (pb) results.patchblobs = [pb];
@@ -1266,6 +1276,15 @@ function searchRecords(rhdataDb, patchbinDb, options) {
           break;
         }
         
+        case 'patchblob1_name': {
+          // Search for patchblobs by patchblob1_name (patchblobs are in rhdata.db)
+          const patchblobs = rhdataDb.prepare(`
+            SELECT * FROM patchblobs WHERE patchblob1_name = ?
+          `).all(options.searchValue);
+          results.patchblobs = patchblobs;
+          break;
+        }
+        
         default:
           throw new Error(`Unsupported search type: ${options.searchBy}`);
       }
@@ -1274,8 +1293,17 @@ function searchRecords(rhdataDb, patchbinDb, options) {
     // If we found gameversions, also get related patchblobs and attachments
     if (results.gameversions.length > 0) {
       for (const gv of results.gameversions) {
+        // Get patchblobs linked to this gameversion (patchblobs are in rhdata.db)
+        const patchblobs = rhdataDb.prepare(`SELECT * FROM patchblobs WHERE gvuuid = ?`).all(gv.gvuuid);
+        for (const pb of patchblobs) {
+          if (!results.patchblobs.find(p => p.pbuuid === pb.pbuuid)) {
+            results.patchblobs.push(pb);
+          }
+        }
+        
+        // Also check if gameversion has a direct pbuuid reference (legacy)
         if (gv.pbuuid) {
-          const pb = patchbinDb.prepare(`SELECT * FROM patchblobs WHERE pbuuid = ?`).get(gv.pbuuid);
+          const pb = rhdataDb.prepare(`SELECT * FROM patchblobs WHERE pbuuid = ?`).get(gv.pbuuid);
           if (pb && !results.patchblobs.find(p => p.pbuuid === pb.pbuuid)) {
             results.patchblobs.push(pb);
           }
@@ -1286,6 +1314,15 @@ function searchRecords(rhdataDb, patchbinDb, options) {
     // If we found patchblobs, also get related attachments
     if (results.patchblobs.length > 0) {
       for (const pb of results.patchblobs) {
+        // Get attachments linked to this patchblob by pbuuid
+        const attachments = patchbinDb.prepare(`SELECT * FROM attachments WHERE pbuuid = ?`).all(pb.pbuuid);
+        for (const att of attachments) {
+          if (!results.attachments.find(a => a.auuid === att.auuid)) {
+            results.attachments.push(att);
+          }
+        }
+        
+        // Also check if patchblob has a direct auuid reference (legacy)
         if (pb.auuid) {
           const att = patchbinDb.prepare(`SELECT * FROM attachments WHERE auuid = ?`).get(pb.auuid);
           if (att && !results.attachments.find(a => a.auuid === att.auuid)) {
@@ -1303,23 +1340,99 @@ function searchRecords(rhdataDb, patchbinDb, options) {
 }
 
 /**
- * Decrypt patchblob data
+ * Decrypt patchblob data using Fernet encryption
  */
-function decryptPatchblob(encryptedData, patchblob) {
+async function decryptPatchblob(encryptedData, patchblob) {
   try {
     // Get decryption key from patchblob
-    const key = patchblob.pbkey;
-    const iv = patchblob.pbiv;
+    const patchblob1_key = patchblob.patchblob1_key;
     
-    if (!key || !iv) {
-      throw new Error('Missing encryption key or IV');
+    if (!patchblob1_key) {
+      throw new Error('Missing patchblob1_key');
     }
     
-    // Decrypt using AES-256-CBC
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key, 'hex'), Buffer.from(iv, 'hex'));
-    let decrypted = Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+    // Step 1: Decompress LZMA
+    const decompressed1 = await new Promise((resolve, reject) => {
+      lzma.decompress(encryptedData, (result, error) => {
+        if (error) reject(error);
+        else resolve(Buffer.from(result));
+      });
+    });
     
-    return decrypted;
+    // Step 2: Decrypt Fernet
+    let fernetKey;
+    try {
+      const decoded = Buffer.from(patchblob1_key, 'base64').toString('utf8');
+      if (/^[A-Za-z0-9+/\-_]+=*$/.test(decoded) && decoded.length >= 40) {
+        fernetKey = decoded;
+      } else {
+        fernetKey = patchblob1_key;
+      }
+    } catch (error) {
+      fernetKey = patchblob1_key;
+    }
+    
+    const frnsecret = new fernet.Secret(fernetKey);
+    let tokenStr;
+    try {
+      tokenStr = decompressed1.toString('utf8');
+    } catch (error) {
+      // Fallback to latin1 if UTF-8 fails
+      tokenStr = decompressed1.toString('latin1');
+    }
+    const token = new fernet.Token({ 
+      secret: frnsecret, 
+      ttl: 0, 
+      token: tokenStr
+    });
+    const decrypted = token.decode();
+    
+    // Step 3: Decompress again
+    // The `decrypted` string may contain:
+    // 1. Base64-encoded LZMA data (Python blobs)
+    // 2. Base64-encoded base64-encoded LZMA data (JavaScript blobs - double encoding)
+    // We need to auto-detect which format we have
+    
+    let lzmaData;
+    
+    // Detect if decrypted contains non-ASCII characters (Latin1-encoded binary)
+    const hasNonAscii = /[^\x00-\x7F]/.test(decrypted);
+    
+    if (hasNonAscii) {
+      // Decrypted is Latin1-encoded binary data (UTF-8 conversion failed in crypto-js)
+      // Convert directly from Latin1 string to Buffer
+      lzmaData = Buffer.from(decrypted, 'latin1');
+    } else {
+      // Decrypted is a base64 string (normal case)
+      lzmaData = Buffer.from(decrypted, 'base64');
+      
+      // Check if it starts with LZMA/XZ magic bytes (0xFD or 0x5D)
+      if (lzmaData[0] !== 0xfd && lzmaData[0] !== 0x5d) {
+        // Not LZMA magic - might be double-encoded base64 (JavaScript blobs)
+        // Try decoding one more layer
+        try {
+          const decoded1Str = lzmaData.toString('utf8');
+          lzmaData = Buffer.from(decoded1Str, 'base64');
+        } catch (e) {
+          // If UTF-8 fails, try latin1
+          try {
+            const decoded1Str = lzmaData.toString('latin1');
+            lzmaData = Buffer.from(decoded1Str, 'base64');
+          } catch (e2) {
+            // Keep original lzmaData
+          }
+        }
+      }
+    }
+    
+    const decompressed2 = await new Promise((resolve, reject) => {
+      lzma.decompress(lzmaData, (result, error) => {
+        if (error) reject(error);
+        else resolve(Buffer.from(result));
+      });
+    });
+    
+    return decompressed2;
   } catch (error) {
     throw new Error(`Decryption failed: ${error.message}`);
   }
@@ -1345,7 +1458,7 @@ async function mode3_retrieveAttachment(args) {
     console.error('  -b TYPE VALUE        Search by field (can be used multiple times)');
     console.error('                       Types: name, gametype, authors, difficulty, added,');
     console.error('                              section, version, tags, gameid, demo, length,');
-    console.error('                              gvuuid, pbuuid, file_name');
+    console.error('                              gvuuid, pbuuid, file_name, patchblob1_name');
     console.error('  --exact              Use exact matching for next -b (not fuzzy)');
     console.error('  --regex              Use regex matching for next -b');
     console.error('\nQuery Options:');
@@ -1502,7 +1615,7 @@ async function mode3_retrieveAttachment(args) {
         }
         
         const attachment = results.attachments[0];
-        const patchblob = results.patchblobs.find(pb => pb.auuid === attachment.auuid);
+        const patchblob = results.patchblobs.find(pb => pb.pbuuid === attachment.pbuuid);
         
         if (!patchblob) {
           console.error('✗ No patchblob found for this attachment');
@@ -1529,7 +1642,7 @@ async function mode3_retrieveAttachment(args) {
         }
         
         console.log('Decrypting patchblob...');
-        outputData = decryptPatchblob(attachment.file_data, patchblob);
+        outputData = await decryptPatchblob(attachment.file_data, patchblob);
         
         // Verify decoded hash
         if (patchblob.decoded_hash_sha256) {
@@ -1866,7 +1979,7 @@ async function main() {
     console.log('    -b TYPE VALUE         Search by field (can be used multiple times)');
     console.log('                          Types: name, gametype, authors, difficulty, added,');
     console.log('                                 section, version, tags, gameid, demo, length,');
-    console.log('                                 gvuuid, pbuuid, file_name');
+    console.log('                                 gvuuid, pbuuid, file_name, patchblob1_name');
     console.log('    --exact               Use exact matching for next -b (not fuzzy)');
     console.log('    --regex               Use regex matching for next -b');
     console.log('');

@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const jssha = require('jssha')
 const Database = require('better-sqlite3');
 const arDriveCore = require('ardrive-core-js');
 const arweave = require('arweave');
@@ -693,11 +694,17 @@ async function mode2_findAttachmentData(fetchLimit = DEFAULT_FETCH_LIMIT, fetchD
  * Format: base64(shake128(data).digest(24), b"_-")
  */
 function calculateShake128Filename(data) {
-  const shake = crypto.createHash('shake128', { outputLength: 24 });
-  shake.update(data);
-  const digest = shake.digest();
-  // Use URL-safe base64 encoding (+ → _, / → -)
-  return digest.toString('base64').replace(/\+/g, '_').replace(/\//g, '-').replace(/=/g, '');
+     const shaobj = new jssha("SHAKE128", "ARRAYBUFFER")
+
+     shaobj.update(data)
+     digest = shaobj.getHash("HEX", {outputLen: 192})
+
+//  const shake = crypto.createHash('shake128', { outputLength: 24 });
+//  shake.update(data);
+//  const digest = shake.digest();
+//  // Use URL-safe base64 encoding (+ → _, / → -)
+
+	return digest.toString('base64').replace(/\+/g, '_').replace(/\//g, '-').replace(/=/g, '');
 }
 
 /**
@@ -1203,6 +1210,35 @@ function searchRecords(rhdataDb, patchbinDb, options) {
             `).get(options.searchValue);
             if (gv) results.gameversions = [gv];
           }
+        //  ## qtype = attachments ?
+		 /*
+	if (options.queryType == "rawpblob" || options.queryType == "patch") {
+		//for(I#
+		for (const gv of results.gameversions) {
+			const pb1 = rhdataDb.prepare('
+				SELECT * from patchblobs pb,
+				              gameversions gv
+				WHERE pb.file_name = gv.file_name
+				AND gv.gvuuid = ?
+
+			').get(gv.uuid)
+			for(const pb of pb1) {
+				if ( results.patchblob == null ) {
+					results.patchlob = [pb]
+				} else {
+				        results.patchblob.push(pb)
+				}
+			}
+		}
+
+
+	}*/
+/*#
+#          const pb = patchbinDb.prepare(`
+#            SELECT * FROM patchblobs WHERE pbuuid = ?
+#          `).get(options.searchValue);
+#         if (pb) results.patchblobs = [pb];
+#*/
           break;
         }
         

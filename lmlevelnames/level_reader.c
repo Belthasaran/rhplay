@@ -33,6 +33,107 @@ int j_to_levelid(int j)
 abort();
 }
 
+const char* vanilla_name(int j)
+{
+	switch(j) {
+case 0x001: return "MY SECRET 1";
+case 0x002: return "my secret 2";
+case 0x003: return "really cool secret";
+case 0x004: return "not donut mansion";
+case 0x005: return "plains de donut 3";
+case 0x006: return "plain donut 3";
+case 0x007: return "Morton place";
+case 0x008: return "green house";
+case 0x009: return "plain donut 2";
+case 0x00A: return "secret donut 1";
+case 0x00B: return "fortress de vanill";
+case 0x00C: return "bridge de beur 1";
+case 0x00D: return "bridge de beur 2";
+case 0x00E: return "ludwig hidoeut";
+case 0x00F: return "cheesy bridge";
+case 0x010: return "mountain of cookie";
+case 0x011: return "pepsi lake";
+case 0x012: return "yellow star rod";
+case 0x013: return "super secret donut";
+case 0x014: return "Yellow custom pala";
+case 0x015: return "DONUT PLAINS 1";
+case 0x016: return "STAR ROAD";
+case 0x017: return "#2 MORTON'S PLAINS";
+case 0x018: return "SUNKEN GHOST SHIP";
+case 0x019: return "#2 MORTON'S PLAINS";
+case 0x01A: return "#6 WENDY'S CASTLE";
+case 0x01B: return "CHOCOLATE FORTRESS";
+case 0x01C: return "CHOCOLATE ISLAND 5";
+case 0x01D: return "CHOCOLATE ISLAND 4";
+case 0x01E: return "STAR ROAD";
+case 0x01F: return "FOREST FORTRESS";
+case 0x020: return "#5 ROY'S CASTLE";
+case 0x021: return "CHOCO-GHOST HOUSE";
+case 0x022: return "CHOCOLATE ISLAND 1";
+case 0x023: return "CHOCOLATE ISLAND 3";
+case 0x024: return "CHOCOLATE ISLAND 2";
+case 0x101: return "#1 IGGY'S CASTLE";
+case 0x102: return "YOSHI'S ISLAND 4";
+case 0x103: return "YOSHI'S ISLAND 3";
+case 0x104: return "YOSHI'S HOUSE";
+case 0x105: return "YOSHI'S ISLAND 1";
+case 0x106: return "YOSHI'S ISLAND 2";
+case 0x107: return "VANILLA GHOST HOUS";
+case 0x108: return "STAR ROAD";
+case 0x109: return "VANILLA SECRET 1";
+case 0x10A: return "VANILLA DOME 3";
+case 0x10B: return "DONUT SECRET 2";
+case 0x10C: return "STAR ROAD";
+case 0x10D: return "FRONT DOOR";
+case 0x10E: return "BACK DOOR";
+case 0x10F: return "VALLEY OF BOWSER 4";
+case 0x110: return "#7 LARRY'S CASTLE";
+case 0x111: return "VALLEY FORTRESS";
+case 0x112: return "";
+case 0x113: return "VALLEY OF BOWSER 3";
+case 0x114: return "VALLEY GHOST HOUSE";
+case 0x115: return "VALLEY OF BOWSER 2";
+case 0x116: return "VALLEY OF BOWSER 1";
+case 0x117: return "CHOCOLATE SECRET";
+case 0x118: return "VANILLA DOME 2";
+case 0x119: return "VANILLA DOME 4";
+case 0x11A: return "VANILLA DOME 1";
+case 0x11B: return "RED SWITCH PALACE";
+case 0x11C: return "#3 LEMMY'S CASTLE";
+case 0x11D: return "FOREST GHOST HOUSE";
+case 0x11E: return "FOREST OFILLUSION";
+case 0x11F: return "FOREST OFILLUSION";
+case 0x120: return "FOREST OFILLUSION";
+case 0x121: return "BLUE SWITCH PALACE";
+case 0x122: return "FOREST SECRET AREA";
+case 0x123: return "FOREST OFILLUSION";
+case 0x124: return "STAR ROAD";
+case 0x125: return "FUNKY";
+case 0x126: return "OUTRAGEOUS";
+case 0x127: return "MONDO";
+case 0x128: return "GROOVY";
+case 0x129: return "STAR ROAD";
+case 0x12A: return "GNARLY";
+case 0x12B: return "TUBULAR";
+case 0x12C: return "WAY COOL";
+case 0x12D: return "AWESOME";
+case 0x12E: return "STAR ROAD";
+case 0x12F: return "STAR ROAD";
+case 0x130: return "STAR WORLD 2";
+case 0x131: return "STAR ROAD";
+case 0x132: return "STAR WORLD 3";
+case 0x133: return "STAR ROAD";
+case 0x134: return "STAR WORLD 1";
+case 0x135: return "STAR WORLD 4";
+case 0x136: return "STAR WORLD 5";
+case 0x137: return "STAR ROAD";
+case 0x138: return "STAR ROAD";
+	}
+	return NULL;
+}
+
+
+
 int escape_json_string_static(const char *input, char *output, size_t output_buffer_size) {
     if (input == NULL || output == NULL || output_buffer_size == 0) {
         return -1; // Invalid input
@@ -283,7 +384,7 @@ int main(int argc, char *argv[])
 		long levelnames_addr = read3(fp, 0x03BB57);
 		char xb[25*6] = {0}, xa[100] = {0}, x0[100] = {0};
 
-                int i,j,k;
+                int i,j,k, need_comma=0;
 
 		//printf("deref 0x03BB57 -> %X\n", (unsigned int)levelnames_addr);
 		//printf("---\n");
@@ -316,10 +417,22 @@ int main(int argc, char *argv[])
 			xb[strlen(xb) - 1] = '\0';
 		}
 
+		if( vanilla_name( (unsigned int)j_to_levelid(j)  ) && !strcasecmp(xb,  vanilla_name( (unsigned int) j_to_levelid(j)  ))  ){
+			xb[0] = '-';
+			xb[1] = '\0';
+		}
+
 		//int escape_json_string_static(const char *input, char *output, size_t output_buffer_size) {
 		escape_json_string_static(xb, x0, sizeof(x0));
 
-		printf("      \"0x%.3X\": \"%s\"\n", (unsigned int)j_to_levelid(j), x0);
+                if ( j == 95 )  {
+			need_comma = 0;
+		} else {
+			need_comma = 1;
+		}
+
+
+		printf("      \"%.3X\": \"%s\"%s\n", (unsigned int)j_to_levelid(j), x0, need_comma ? "," : "");
 
 
 		//printf("j=%-2d  0x%-3X: [%s]\n", j, j_to_levelid(j), xb);

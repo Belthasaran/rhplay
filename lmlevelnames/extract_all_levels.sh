@@ -9,7 +9,9 @@ cd lmlevelnames
 
 # Get all unique gameids from rhdata.db
 echo "Fetching all gameids from rhdata.db..."
+if [ -z "$GAMEIDS" ] ; then
 GAMEIDS=$(sqlite3 ../electron/rhdata.db "SELECT DISTINCT gameid FROM gameversions WHERE gameid IS NOT NULL ORDER BY gameid")
+fi
 
 if [ -z "$GAMEIDS" ]; then
     echo "No gameids found in rhdata.db"
@@ -33,6 +35,7 @@ for i_gameid in $GAMEIDS; do
     VERSION=$(sqlite3 ../electron/rhdata.db "SELECT MAX(version) FROM gameversions WHERE gameid = '$i_gameid'")
     echo "  Using version: $VERSION"
     
+    set -x
     # Fetch the patch for the highest version
     ../enode.sh ../jstools/fetchpatches.js mode3 -q patch -b gameid $i_gameid -o temp/temp.bps --patchbindb=../electron/patchbin.db --rhdatadb=../electron/rhdata.db
     
@@ -63,6 +66,7 @@ for i_gameid in $GAMEIDS; do
     if [ $? -eq 0 ]; then
         echo "  ✓ Saved level names to temp/${i_gameid}_levelids.json"
     else
+        echo >> temp/${i_gameid}.failed
         echo "  ✗ Failed to extract level names for gameid $i_gameid"
     fi
     

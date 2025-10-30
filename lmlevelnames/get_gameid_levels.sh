@@ -3,7 +3,7 @@
 export DISPLAY=:1
 
 cd lmlevelnames
-for i_gameid in  26252 ; do
+for i_gameid in  $GAMEIDS ; do
 ../enode.sh ../jstools/fetchpatches.js mode3 -q patch -b gameid $i_gameid -o temp/temp.bps   --patchbindb=../electron/patchbin.db --rhdatadb=../electron/rhdata.db 
  if [ $? -ne 0 ] ; then
 	 echo "Error: no result found -- skip gameid $i_gameid"
@@ -16,6 +16,8 @@ if [ $? -ne 0  ] ; then
 fi
 
 
+SHA1_TEMP=$(sha1sum temp/temp.sfc)
+echo "SHA1 temp/temp.sfc: ${SHA1_TEMP}"
 echo "Adding SMC header"
 # Add 512-byte SMC header to ROM
 wine snesheader.exe temp/temp.sfc 1
@@ -25,7 +27,8 @@ if [ $? -ne 0 ] ; then
 fi
 
 #
-python3 levelname_extractor3.py --levelsonly --romfile temp/temp.sfc
+set -x
+python3 levelname_extractor3.py --levelsonly --gametag ${i_gameid} --romfile temp/temp.sfc
 done
 
 

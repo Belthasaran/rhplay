@@ -1,0 +1,20 @@
+Hijack_Address Length   Type    Description
+$03BA50	150 bytes	Code	Modified by Lunar Magic for a routine to implement the "no entry if level beaten" flag for overworld levels.
+$03BB00	31 bytes	Code	Modified by Lunar Magic for a routine to fix the screen exits for the bonus game and Yoshi Wings teleportation.
+$03BB1F	1 byte	Miscellaneous	One of the bytes used by Lunar Magic to detect if a ROM has been been locked. If so, this is set to $FE.
+$03BB20	52 bytes	Code	Modified by Lunar Magic for its level name hijack. The actual name data can be found in a large table at read3($03BB57), with each level getting 19 bytes.
+$03BB90	255 bytes	Code	Modified by Lunar Magic for its Message Box text hijack. A couple of notable points in this routine include:
+$03BC0B: 24-bit pointer to the message data. Not used if LM's overworld level expansion hijack is applied.
+$03BC7F: Table containing 2 bytes for each of the 8 rows of the message box's text, as the first two bytes of the line's stripe header.
+Note that this table may be moved slightly earlier to $03BC79 instead if LM's overworld level expansion hijack is applied.
+
+A table of 16-bit offsets to each individual message's data can also be found at $03BE80.
+$03BCA0	11 bytes	Code	Modified by Lunar Magic for its "display level message 1" fix. Called from $01E762.
+$03BCC0	12 bytes	Table	Used by Lunar Magic for a table of 24-bit pointers to the uncompressed alternate ExAnimation files (ExGFX60-63).
+$03BCDC	4 bytes	Jump (JML/JSL)	Used by Lunar Magic v3.00+ as a public routine for computing the screen number that Mario is on, returned in X.
+Note that this routine does not preserve Y.
+$03BCE0	182 bytes	Code	Modified by Lunar Magic for a routine to implement the additional secondary entrance bytes.
+$03BE80	384 bytes	Table	Modified by Lunar Magic for its Message Box text hijack. Specifically, this table contains 16-bit indices to the message data (a 24-bit pointer to which can be found at $03BC0B) for each message. This table is indexed as ($13BF*2+($1426-1))*2.
+
+If LM's overworld level expansion hijack is applied, this table is instead positioned dynamically with a 24-bit pointer (found at $03BBD9). Its format is also changed to instead use direct 24-bit pointers to each message's data, using the same indexing system except with *3 instead of *2. The first 256 bytes of this space are then instead used for the initial level flags (moved from $05DDA0).
+

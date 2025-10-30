@@ -681,6 +681,7 @@ Examples:
 """
     )
     
+    parser.add_argument('--gametag', required=False, help='GameID')
     parser.add_argument('--romfile', required=True, help='Path to ROM file')
     parser.add_argument('--output', '-o', help='Output file (default: stdout)')
     parser.add_argument('--tile-map', help='Custom tile mapping file')
@@ -711,19 +712,47 @@ Examples:
     try:
         if not(os.path.exists("temp")):
             sys.mkdir("temp")
-        if os.path.exists("temp/temp_lm333.sfc"):
-            os.unlink("temp/temp_lm333.sfc")
-        shutil.copy("orig_lm333_noedits.sfc", "temp/temp_lm333.sfc")
+        if os.path.exists("temp/temp_lm361.sfc"):
+            os.unlink("temp/temp_lm361.sfc")
+        shutil.copy("orig_lm361_noedits.sfc", "temp/temp_lm361.sfc")
         shutil.copy(args.romfile, "temp/temp_analyze.sfc")
+        shutil.rmtree("temp/Graphics")
+        shutil.rmtree("temp/ExGraphics")
         orig_path = os.getcwd()
         os.chdir("temp")
         for f in glob.glob("*.mwl"):
             if re.match("^.*\.mwl$", f):
                 os.remove(f)
-            #
-        print("wine ../lm333/lm333.exe -TransferOverworld temp_lm333.sfc temp_analyze.sfc")
-        os.system('wine ../lm333/lm333.exe -TransferOverworld temp_lm333.sfc temp_analyze.sfc')
-        os.system('wine ../lm333/lm333.exe -ExportMultLevels temp_analyze.sfc MWL 1')
+        #
+        #"Lunar Magic.exe" -ExpandROM "ROMFileName.smc" SizeOfROM
+        #"Lunar Magic.exe" -ExportGFX "ROMFileName.smc"
+        #"Lunar Magic.exe" -ExportExGFX "ROMFileName.smc"
+        #"Lunar Magic.exe" -ImportGFX "ROMFileName.smc"
+        #"Lunar Magic.exe" -ImportExGFX "ROMFileName.smc"
+        #"Lunar Magic.exe" -ImportAllGraphics "ROMFileName.smc"
+        #"Lunar Magic.exe" -ExportAllMap16 "ROMFileName.smc" "Map16FileName.map16"
+        #"Lunar Magic.exe" -ImportAllMap16 "ROMFileName.smc" "Map16FileName.map16"
+        #"Lunar Magic.exe" -ImportCustomPalette "ROMFileName.smc" "PalFileName.pal" LevelNumber
+        #"Lunar Magic.exe" -ExportSharedPalette "ROMFileName.smc" "PalFileName.smwpal"
+        #"Lunar Magic.exe" -ImportSharedPalette "ROMFileName.smc" "PalFileName.smwpal"
+        #"Lunar Magic.exe" -TransferLevelGlobalExAnim "DestROMFileName.smc" "SourceROMFileName.smc"
+        #"Lunar Magic.exe" -DeleteLevels "ROMFileName.smc" DeleteType [-ClearOrigLevelArea]
+
+        os.system("wine ../lm361/lm361.exe -ExpandROM temp_lm361.sfc 4MB")
+        os.system("wine ../lm361/lm361.exe -DeleteLevels temp_lm361.sfc -AllLevels -ClearOrigLevelArea")
+        os.system("wine ../lm361/lm361.exe -ExportGFX temp_analyze.sfc")
+        os.system("wine ../lm361/lm361.exe -ExportExGFX temp_analyze.sfc")
+        os.remove("temp.map16")
+        os.system("wine ../lm361/lm361.exe -ExportAllMap16 temp_analyze.sfc temp.map16")
+        os.system("wine ../lm361/lm361.exe -ImportAllMap16 temp.sfc temp.map16")
+        os.system("wine ../lm361/lm361.exe -ExportSharedPalette temp_analyze.sfc temp.smwpal")
+        os.system("wine ../lm361/lm361.exe -ImportSharedPalette temp.sfc temp.smwpal")
+        os.system("wine ../lm361/lm361.exe -ImportAllGraphics temp.sfc")
+        os.system("wine ../lm361/lm361.exe -TransferLevelGlobalExAnim temp.sfc temp_analyze.sfc")
+        print("timeout 4 wine ../lm361/lm361.exe -TransferOverworld temp_lm361.sfc temp_analyze.sfc")
+        os.system('timeout 4 wine ../lm361/lm361.exe -TransferOverworld temp_lm361.sfc temp_analyze.sfc')
+        os.system('timeout 4 wine ../lm361/lm361.exe -ExportMultLevels temp_analyze.sfc MWL 1')
+        os.system('wine ../lm361/lm361.exe -ImportMultLevels temp_lm361.sfc "./"')
         for f in glob.glob("MWL*.mwl"):
             result = re.match("^MWL ([^.]+)\.mwl$", f)
             #if len(result.groups) > 0:
@@ -731,7 +760,9 @@ Examples:
                 mgroup = result.groups(0)[0]
                 levelset.append(normalize_lid(mgroup))
         os.chdir(orig_path)
-        args.romfile = 'temp/temp_lm333.sfc'
+        if (args.gametag):
+            shutil.copy("temp/temp_lm361.sfc", "temp_lm361_" + str(args.gametag) + ".sfc")
+        args.romfile = 'temp/temp_lm361.sfc'
 
         with open(args.romfile, 'rb') as f:
             rom_data = f.read()

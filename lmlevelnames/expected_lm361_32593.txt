@@ -1,0 +1,85 @@
+LevelId Name
+001 It's Platforming
+002 Timed Platforms
+003 Kaizo Klazzics
+004 Cannon Speed
+005 Fisher of Boos
+006 Credits
+007 On-off Blocks
+009 Motor Skills
+00A Multi-Jump
+00B Controlling On-Off
+00C Reverse Gravity INC
+00D Beginner Section
+00E Platform Section
+00F Spin Section
+010 Jump Test
+011 Shell Test
+012 Surfin P Test
+013 Key to Swim Test
+014 Cape Test
+015 Spin Test
+016 Yoshi Test
+017 Random Test
+018 Torpedo Theodore
+019 Platform Test
+01A Random Section
+01B Final Test
+01C Key n Swim Section
+01E Yoshi Section
+020 Shell Section
+022 CHOCOLATE ISLAND 1
+104 Welcome
+105 YOSHI'S ISLAND 2
+106 Learn to Jump
+107 Regrabs
+108 Cape Cancel
+109 Learn 3 Spin(fly)
+10A Patched Turnaround
+10B Stuck on Kaizo
+10C Goomba(Bubble) Jump
+10D Rexes and Rhinos
+10E BACK DOOR
+10F Shell Buckets
+110 The Shell Jump
+111 Shell Nudges
+112 Assisted 3x Shell
+113 Full Double Shell
+114 Turnback and Go!
+115 Turnblocks N Moles
+116 Basic Cape Tech
+117 Caped Shell Jump
+118 Right Tight Flight
+11C Falling Spike
+11D Thwomp Jump
+11E Spring jumps
+11F Chuck Gates
+120 Mini Pits
+121 Slopes
+122 Disco Inferno
+123 P Switches
+124 Midair P Activation
+125 P Switch Yumps
+126 Yoshi learns colors
+127 MONDO
+128 Grinder Spinning
+129 Run for your life
+12A Block Grab
+12B Two Sprites
+12C Keys Keys Keys
+12D Key Jump, Vine Carry
+12E F(Y)eed(t) the Yosh
+12F Double eat
+130 Down Swim
+131 Up and Item Swim
+132 Fish out of Water
+133 Yoshi spring, shell
+134 Spin with object
+135 Lotsa spins
+136 Swim thru dolphins
+137 Chuck hell
+138 Special green shell
+139 Vines and Beans
+13A the bomb.com
+13B Hacker's Fave Tool
+

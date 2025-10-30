@@ -146,18 +146,19 @@ int read3(FILE *fp, long addr, int direct=0)
 		     case 0x15: return 'V'; case 0x16: return 'W'; case 0x17: return 'X';
 		     case 0x18: return 'Y'; case 0x19: return 'Z';
 
-		     case 0x1A: return '!'; case 0x1B: return '?'; case 0x1C: return '.';
-		     case 0x1D: return ','; case 0x1E: return '\''; case 0x1F: return ' ';
+		     case 0x1A: return '!'; case 0x1B: return '.'; case 0x1C: return '-';
+		     case 0x1D: return ','; case 0x1E: return '?'; case 0x1F: return ' ';
+		     case 0x5A: return '#';
 		 
-		     case 0x5A: return '('; case 0x5B: return ')'; case 0x5C: return '-';
-		     case 0x5D: return '\''; 
+		     case 0x5B: return '('; case 0x5C: return ')'; //case 0x5C: return '\'';
+		     //case 0x5D: return '\''; 
 		     case 0x64: return '1'; case 0x65: return '2'; case 0x66: return '3';
 		     case 0x67: return '4'; case 0x68: return '5'; case 0x69: return '6';
 		     case 0x6A: return '7'; case 0x6B: return '8'; case 0x6C: return '9';
 		     case 0x9F: return ' '; case 0xFC: return ' ';
 	 }
 
-	 return '_';
+	 return                         (char)tile_to_ascii_byte(charcode);
  }
 
 
@@ -228,7 +229,7 @@ int main(int argc, char *argv[])
 			long z = read1(fp, levelnames_addr + 19*(j) + i);
 			//printf("j=x %ld\n", z);
                         //xb[i] = (char)smw_character_lookup(z);
-			xb[i] =(char)tile_to_ascii_byte(z);
+			xb[i] = (char)smw_character_lookup(z);
 		}
 		printf("j=%-2d  0x%-3X: [%s]\n", j, j_to_levelid(j), xb);
 		}

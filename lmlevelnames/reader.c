@@ -1,5 +1,6 @@
 //
 #include <stdio.h>
+#include <string.h>
 
 const int BV_SMCHEADER = 0x1;
 const int BV_LOROM = 0x2;
@@ -122,6 +123,8 @@ int read3(FILE *fp, long addr, int direct=0)
         return result;
 }
 
+#include "default_tile_map.h"
+
  char smw_character_lookup(int charcode) {
 	 switch(charcode) {
 		     case 0x00: return 'A'; case 0x01: return 'B'; case 0x02: return 'C';
@@ -203,13 +206,22 @@ int main(int argc, char *argv[])
 
                 int i,j;
 
-		for(j=0;j<200;j++) {
-		for(i = 0 ; i < 19; i++) {
-			long z = read1(fp, levelnames_addr + i);
+		printf("deref 0x03BB57 -> %X\n", (unsigned int)levelnames_addr);
+		printf("---\n");
+		printf("%X %X %X %X\n", (unsigned int)read1(fp, levelnames_addr+0x13+0), 
+				        (unsigned int)read1(fp, levelnames_addr+0x13+1),
+		                        (unsigned int)read1(fp, levelnames_addr+0x13+2),
+		                        (unsigned int)read1(fp, levelnames_addr+0x13+3)  );
+//0x03BB57
+		for(j=1;j<97;j++) {
+			memset(xb, 0, sizeof(xb));
+		for(i = 0 ; i < 18; i++) {
+			long z = read1(fp, levelnames_addr + 19*(j) + i);
 			//printf("j=x %ld\n", z);
-                        xb[i] = smw_character_lookup(z);
+                        //xb[i] = (char)smw_character_lookup(z);
+			xb[i] =(char)tile_to_ascii_byte(z);
 		}
-		printf("j=%d : %s\n", j, xb);
+		printf("j=%-2d : [%s]\n", j, xb);
 		}
 		//smw_character_lookup
 	} else {

@@ -1,6 +1,7 @@
 //
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 const int BV_SMCHEADER = 0x1;
 const int BV_LOROM = 0x2;
@@ -22,7 +23,15 @@ struct openrom_h* get_openrom(FILE *fp){
 	return NULL;
 }
 
-
+int j_to_levelid(int j)
+{
+	 if (j >= 0x0 && j <= 0x24) 
+		 return j;
+	 if (j > 0x24 && j <= 0x5F) {
+		 return 0x100 + j - 0x24;
+	 }
+abort();
+}
 
 int get_filesize(FILE *fp)
 {
@@ -221,13 +230,10 @@ int main(int argc, char *argv[])
                         //xb[i] = (char)smw_character_lookup(z);
 			xb[i] =(char)tile_to_ascii_byte(z);
 		}
-		printf("j=%-2d : [%s]\n", j, xb);
+		printf("j=%-2d  0x%-3X: [%s]\n", j, j_to_levelid(j), xb);
 		}
 		//smw_character_lookup
 	} else {
                 fprintf(stderr, "-> %X\n", 0x049AC5);
-	}
-
+        }
 }
-
-

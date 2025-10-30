@@ -160,6 +160,7 @@ def get_level_name_pointers(rom_data: bytes, header_offset: int) -> Tuple[Option
     patch_pointer = (rom_data[rom_pointer_addr] |
                      rom_data[rom_pointer_addr + 1] << 8 |
                      rom_data[rom_pointer_addr + 2] << 16)
+    print("deref %X -> %X" % (snes_pointer_addr, patch_pointer))
     
     block_0_rom = snes_to_rom_offset(patch_pointer, header_offset)
     
@@ -246,6 +247,7 @@ def extract_level_names(
             block_offset = block_1_rom
             offset_in_block = (level_id - 0x100) * LEVEL_NAME_SIZE
         
+        #print("block_offset=%X+%X" % (block_offset,offset_in_block))
         level_offset = block_offset + offset_in_block
         
         if level_offset + LEVEL_NAME_SIZE > len(rom_data):

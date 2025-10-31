@@ -23,7 +23,7 @@ shutil.copy("orig_lm361_noedits.sfc", "temp/temp_lm361.sfc")
 shutil.copy(os.environ["ROMFILE"], "temp/temp_analyze.sfc")
 if os.path.exists("temp/Graphics"):
     shutil.rmtree("temp/Graphics")
-if os.path.exists("temp/ExGraphiocs"):
+if os.path.exists("temp/ExGraphics"):
     shutil.rmtree("temp/ExGraphics")
 orig_path = os.getcwd()
 os.chdir("temp")
@@ -80,7 +80,7 @@ if not(result==0):
 result = os.system('timeout 4 wine ../lm361/lm361.exe -ExportMultLevels temp_analyze.sfc MWL 1')
 if not(result==0):
    raise Exception("ExoprtMultLevels Failed")
-result = os.system('wine ../lm361/lm361.exe -ImportMultLevels temp_lm361.sfc "./"')
+result = os.system('timeout 4 wine ../lm361/lm361.exe -ImportMultLevels temp_lm361.sfc "./"')
 if not(result==0):
    raise Exception("ImportMultLevels Failed")
 

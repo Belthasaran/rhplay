@@ -342,6 +342,9 @@ int main(int argc, char *argv[])
 	FILE *fp = NULL;
 	long file_size = 0;
 	int headerless = 0;
+	long levelnames_addr = 0x0;
+        char xb[25*6] = {0}, xa[100] = {0}, x0[100] = {0}; // level name buffers
+        int i,j,k, need_comma=0; // loop iterators and need_comma? appended flag
 
 	if ( argc < 2 )  {
 		fprintf(stdout, "Usage: %s <filename>\n", argv[0]);
@@ -381,10 +384,8 @@ int main(int argc, char *argv[])
 
 	if (read1(fp, 0x049549) == 0x22) {
 		// 0x049549 = 0x22 indicates that Lunar Magic level names hijack applies
-		long levelnames_addr = read3(fp, 0x03BB57);
-		char xb[25*6] = {0}, xa[100] = {0}, x0[100] = {0};
 
-                int i,j,k, need_comma=0;
+		levelnames_addr = read3(fp, 0x03BB57);
 
 		//printf("deref 0x03BB57 -> %X\n", (unsigned int)levelnames_addr);
 		//printf("---\n");
@@ -403,6 +404,17 @@ int main(int argc, char *argv[])
 //      "0x003": "Eterna Forest",
 //      "0x004": "Bridge Interlude",
 
+
+	}  else {
+                  levelnames_addr = 0x049AC5;
+                  fprintf(stderr, "-> %X\n", 0x049AC5);
+                  exit(1);
+	}
+
+
+
+	 if ( 1 ) 
+	 {
 		printf (" \"levelnames\" : {\n");
 		for(j=1;j<96;j++) {
 			memset(xb, 0, sizeof(xb));
@@ -439,7 +451,5 @@ int main(int argc, char *argv[])
 		}
 		printf ("}\n");
 		//smw_character_lookup
-	} else {
-                fprintf(stderr, "-> %X\n", 0x049AC5);
-        }
+	} 
 }

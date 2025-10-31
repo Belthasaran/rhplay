@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import sys
 from typing import List
 
 
@@ -105,8 +106,12 @@ def main() -> None:
     print(",".join("{:03X}".format(x) for x in modified))
 
     if args.json and os.path.exists(args.json):
-        with open(args.json, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        try:
+            with open(args.json, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Failed to parse JSON file: {e}", file=sys.stderr)
+            return
         if 'levels' in data:
             expected = data['levels']
         else:

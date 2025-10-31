@@ -22,7 +22,7 @@ def find_pairs(root: str):
 
 
 def main():
-    root = 'testrom2'
+    root = 'testrom3'
     vanilla = 'smw.sfc' if os.path.exists('smw.sfc') else 'smw_lm.sfc'
     pairs = find_pairs(root)
     total = len(pairs)
@@ -46,7 +46,10 @@ def main():
             fail += 1
             mismatches.append((rom_path, out))
 
-    print(f"Total: {total}  Match: {ok}  Mismatch: {fail}")
+    json_errors = sum(1 for _, out in mismatches if 'JSONDecodeError' in out or 'ERROR: Failed to parse JSON' in out)
+    other_fails = fail - json_errors
+
+    print(f"Total: {total}  Match: {ok}  JSON Errors: {json_errors}  Other Mismatches: {other_fails}")
     if mismatches:
         print("\nFirst 5 mismatches (truncated):")
         for rom_path, out in mismatches[:5]:

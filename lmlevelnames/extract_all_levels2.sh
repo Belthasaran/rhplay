@@ -80,7 +80,7 @@ for i_gameid in $GAMEIDS; do
     fi
 
     # Clean up temporary files
-    rm -f temp/temp.bps temp/temp.sfc
+    rm -f temp/temp.bps temp/temp.sfc temp/temp_lm361.sfc
     
     echo ""
 done

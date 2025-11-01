@@ -1,6 +1,6 @@
 {
   "name": "rhtools",
-  "version": "0.1.0beta",
+  "version": "0.1.1beta",
   "description": "RHTools - ROM Hack Tools Application",
   "author": "RHTools Team",
   "main": "electron/main.js",

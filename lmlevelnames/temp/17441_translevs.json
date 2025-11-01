@@ -1,0 +1,261 @@
+{
+  "rom_file": "temp/temp.sfc",
+  "tables": {},
+  "translevels": [
+    {
+      "translevel": "01",
+      "level_number": "001",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 1,
+          "tile_y": 1,
+          "source": "tilemap",
+          "tile_value": 110,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "02",
+      "level_number": "002",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 6,
+          "tile_y": 1,
+          "source": "tilemap",
+          "tile_value": 110,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "03",
+      "level_number": "003",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 11,
+          "tile_y": 1,
+          "source": "tilemap",
+          "tile_value": 93,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "04",
+      "level_number": "004",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 1,
+          "tile_y": 3,
+          "source": "tilemap",
+          "tile_value": 102,
+          "exit_path": 48
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "05",
+      "level_number": "005",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 6,
+          "tile_y": 3,
+          "source": "tilemap",
+          "tile_value": 110,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "06",
+      "level_number": "006",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 11,
+          "tile_y": 3,
+          "source": "tilemap",
+          "tile_value": 99,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "07",
+      "level_number": "007",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 20,
+          "tile_y": 9,
+          "source": "tilemap",
+          "tile_value": 90,
+          "exit_path": 0
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "08",
+      "level_number": "008",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 23,
+          "tile_y": 9,
+          "source": "tilemap",
+          "tile_value": 93,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "09",
+      "level_number": "009",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 20,
+          "tile_y": 10,
+          "source": "tilemap",
+          "tile_value": 125,
+          "exit_path": 32
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "0A",
+      "level_number": "00A",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 23,
+          "tile_y": 10,
+          "source": "tilemap",
+          "tile_value": 125,
+          "exit_path": 48
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "0B",
+      "level_number": "00B",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 20,
+          "tile_y": 11,
+          "source": "tilemap",
+          "tile_value": 87,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "0C",
+      "level_number": "00C",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 23,
+          "tile_y": 11,
+          "source": "tilemap",
+          "tile_value": 125,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "0D",
+      "level_number": "00D",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 26,
+          "tile_y": 11,
+          "source": "tilemap",
+          "tile_value": 94,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "0E",
+      "level_number": "00E",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 1,
+          "tile_y": 25,
+          "source": "tilemap",
+          "tile_value": 95,
+          "exit_path": 192
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "0F",
+      "level_number": "00F",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 3,
+          "tile_y": 25,
+          "source": "tilemap",
+          "tile_value": 102,
+          "exit_path": 208
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "10",
+      "level_number": "010",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 7,
+          "tile_y": 25,
+          "source": "tilemap",
+          "tile_value": 110,
+          "exit_path": 64
+        }
+      ],
+      "events": []
+    },
+    {
+      "translevel": "11",
+      "level_number": "011",
+      "locations": [
+        {
+          "submap": 1,
+          "tile_x": 11,
+          "tile_y": 25,
+          "source": "tilemap",
+          "tile_value": 89,
+          "exit_path": 64
+        }
+      ],
+      "events": []
+    }
+  ]
+}

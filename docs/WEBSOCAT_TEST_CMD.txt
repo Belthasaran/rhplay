@@ -1,0 +1,24 @@
+websocat -t - --ws-c-uri=ws://localhost:64213 ws-c:log:tcp:localhost:64213
+{"OpCode":"DeviceList","Space":"SNES"}
+
+{"Opcode":"Attach","Space":"SNES","Operands":["COMx"]}
+{"Opcode":"Info","Space":"SNES","Operands":["COMx"]}
+{"Opcode":"MakeDir","Space":"SNES","Flags":null,"Operands":["/work/asdf"]}
+{"Opcode":"MakeDir","Space":"SNES","Flags":null,"Operands":["/work/asdf1"]}
+{"Opcode":"MakeDir","Space":"SNES","Flags":null,"Operands":["/work/asdf2"]}
+
+
+websocat -t - --header="Host:localhost:64213" --ws-c-uri=ws://localhost:20000 ws-c:log:tcp:localhost:20000   
+
+websocat -t - --ws-c-uri=ws://localhost:64213 ws-c:log:tcp:localhost:64213
+
+websocat -t - --header="Host:localhost:20000" --ws-c-uri=ws://localhost:20000 ws-c:log:tcp:localhost:64213
+
+
+
+
+
+
+###
+ websocat -t - --header="Host:localhost:64213" --ws-c-uri=ws://localhost:64213 ws-c:log:tcp:localhost:64213
+

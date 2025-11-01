@@ -1,5 +1,46 @@
 # RHTools Changelog
 
+> **Note**: For a comprehensive summary of recent USB2SNES connection enhancements, see [`devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md`](../devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md)
+
+## 2025-01-27 - USB2SNES Hosting & Proxy Options
+
+### Feature: Expanded USB2SNES Connection Options
+
+**Overview**: Added configurable hosting and proxy settings for USB2SNES connections, including experimental SOCKS proxy support and managed SSH tunneling.
+
+**New Settings UI**:
+- `USB2SNES Server - Hosting Method` selector with placeholder for future embedded server
+- `USB2SNES Proxy Option` selector with Direct, SOCKS, and SSH modes
+- SOCKS proxy URL input with example formats (`socks://user:pass@host:port`, etc.)
+- SSH configuration inputs (host, username, local/remote port, identity file picker)
+- Automatic validation and inline warnings when configuration incomplete
+
+**SOCKS Proxy Support**:
+- Added `socks-proxy-agent` dependency and integrated with Type A websocket connector
+- When SOCKS mode selected, websocket traffic now uses provided proxy URL
+
+**SSH Tunnel Manager**:
+- New managed SSH client launcher (Linux) that opens the system terminal with OpenSSH port forwarding
+- UI controls to start/stop the tunnel with real-time health indicator and error messages
+- Auto-restart logic with 15s back-off (max 4 attempts) when tunnel window is closed
+- IPC + status broadcasts so renderer stays in sync across restarts
+
+**Renderer Enhancements**:
+- Connection routines consolidate configuration through `buildUsb2snesConnectOptions()`
+- All USB2SNES entry points respect the selected proxy mode and fail early on invalid configs
+- Settings persistence updated to store new fields (hosting method, proxy mode, SOCKS URL, SSH options)
+
+**Backend Changes**:
+- `usb2snes:connect` IPC now accepts a unified options object and enforces SSH tunnel availability
+- Added `usb2snes:ssh-start`, `usb2snes:ssh-stop`, and `usb2snes:ssh-status` handlers
+- New `sshManager` module manages terminal spawning, restart logic, and status broadcasts
+- WebSocket implementation now accepts connection options and applies SOCKS agents when requested
+
+**Benefits**:
+- Prepares the UI/workflow for future embedded server support
+- Enables network scenarios that require SOCKS proxies or SSH tunneling without manual command lines
+- Provides clear guidance and recovery when tunnels drop or misconfigure
+
 ## 2025-01-27 - Run Completion Enhancement
 
 ### Feature: Proper Run Completion Handling

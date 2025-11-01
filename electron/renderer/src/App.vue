@@ -30,6 +30,139 @@
                   </span>
                 </div>
               </div>
+
+              <div v-if="settings.usb2snesProxyMode === 'ssh' || settings.usb2snesProxyMode === 'direct-with-ssh'" class="ssh-client-section">
+                <div class="ssh-connection-info">
+                  <div class="ssh-connection-row">
+                    <span class="ssh-info-label">WebSocket URL:</span>
+                    <code class="ssh-info-value">
+                      <span v-if="settings.usb2snesProxyMode === 'direct-with-ssh' && !usb2snesSshStatus.running">
+                        {{ settings.usb2snesAddress || 'Not set' }} (direct)
+                      </span>
+                      <span v-else>
+                        {{ `ws://127.0.0.1:${settings.usb2snesSshLocalPort || 64213}` }} (via SSH)
+                      </span>
+                    </code>
+                  </div>
+                  <div class="ssh-connection-row">
+                    <span class="ssh-info-label">Proxy Type:</span>
+                    <span class="ssh-info-value">
+                      <span v-if="settings.usb2snesProxyMode === 'direct-with-ssh'">
+                        {{ usb2snesSshStatus.running ? 'SSH: ' + (settings.usb2snesSshUsername || 'user') + '@' + (settings.usb2snesSshHost || 'host') : 'Direct (SSH optional)' }}
+                      </span>
+                      <span v-else>
+                        SSH: {{ settings.usb2snesSshUsername || 'user' }}@{{ settings.usb2snesSshHost || 'host' }}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+                <div class="ssh-client-row">
+                  <div class="ssh-client-controls">
+                    <button 
+                      v-if="!usb2snesSshStatus.running && usb2snesSshStatus.status !== 'restarting'"
+                      @click="startUsb2snesSsh"
+                      class="btn-secondary-small">
+                      Start SSH Client
+                    </button>
+                    <button 
+                      v-if="usb2snesSshStatus.running || usb2snesSshStatus.status === 'restarting'"
+                      @click="stopUsb2snesSsh"
+                      class="btn-danger-small">
+                      Stop SSH Client
+                    </button>
+                  </div>
+                  <div class="ssh-health">
+                    <span class="status-label">SSH:</span>
+                    <span 
+                      class="ssh-health-indicator clickable" 
+                      :class="usb2snesSshStatus.health"
+                      @click="openSshConsoleModal"
+                      :title="'Click to view SSH console history'">
+                      {{ usb2snesSshStatusLabel }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div v-if="settings.usb2snesHostingMethod === 'embedded' || settings.usb2snesHostingMethod === 'embedded-divert' || settings.usb2snesHostingMethod === 'embedded-divert-fallback'" class="ssh-client-section">
+                <div class="ssh-connection-info">
+                  <div class="ssh-connection-row">
+                    <span class="ssh-info-label">WebSocket URL:</span>
+                    <code class="ssh-info-value">
+                      ws://localhost:{{ settings.usb2snesAddress || 64213 }}
+                    </code>
+                  </div>
+                  <div class="ssh-connection-row">
+                    <span class="ssh-info-label">Server:</span>
+                    <span class="ssh-info-value">
+                      <span v-if="settings.usb2snesHostingMethod === 'embedded'">USBFXP Embedded Server</span>
+                      <span v-else-if="settings.usb2snesHostingMethod === 'embedded-divert'">USBFXP Relay Server (Always)</span>
+                      <span v-else-if="settings.usb2snesHostingMethod === 'embedded-divert-fallback'">USBFXP Relay Server (Fallback)</span>
+                    </span>
+                  </div>
+                  <div v-if="settings.usb2snesHostingMethod === 'embedded-divert' || settings.usb2snesHostingMethod === 'embedded-divert-fallback'" class="ssh-connection-row">
+                    <span class="ssh-info-label">Relay Target:</span>
+                    <code class="ssh-info-value">{{ settings.usb2snesFxpDiversionTarget || 'Not set' }}</code>
+                  </div>
+                </div>
+                <div class="ssh-client-row">
+                  <div class="ssh-client-controls">
+                    <button 
+                      v-if="!usb2snesFxpStatus.running && usb2snesFxpStatus.status !== 'retrying'"
+                      @click="startUsb2snesFxp"
+                      class="btn-secondary-small">
+                      Start Server
+                    </button>
+                    <button 
+                      v-if="usb2snesFxpStatus.running || usb2snesFxpStatus.status === 'retrying'"
+                      @click="stopUsb2snesFxp"
+                      class="btn-danger-small">
+                      Stop Server
+                    </button>
+                    <button 
+                      @click="restartUsb2snesFxp"
+                      class="btn-secondary-small"
+                      :disabled="!usb2snesFxpStatus.running && usb2snesFxpStatus.status !== 'retrying'"
+                      style="margin-left: 4px;">
+                      Restart
+                    </button>
+                  </div>
+                  <div class="ssh-health">
+                    <span class="status-label">Server:</span>
+                    <span 
+                      class="ssh-health-indicator clickable" 
+                      :class="usb2snesFxpStatus.health || 'red'"
+                      @click="openUsb2snesFxpConsoleModal"
+                      :title="'Click to view server console'">
+                      {{ getUsb2snesFxpStatusLabel() }}
+                    </span>
+                  </div>
+                </div>
+                <div 
+                  v-if="usb2snesFxpStatus.lastError"
+                  class="ssh-error-message"
+                >
+                  ⚠ {{ usb2snesFxpStatus.lastError }}
+                </div>
+              </div>
+              
+              <div v-if="settings.usb2snesProxyMode === 'socks'" class="ssh-connection-info">
+                <div class="ssh-connection-row">
+                  <span class="ssh-info-label">WebSocket URL:</span>
+                  <code class="ssh-info-value">{{ settings.usb2snesAddress || 'Not set' }}</code>
+                </div>
+                <div class="ssh-connection-row">
+                  <span class="ssh-info-label">Proxy Type:</span>
+                  <span class="ssh-info-value">SOCKS: {{ settings.usb2snesSocksProxyUrl || 'Not configured' }}</span>
+                </div>
+              </div>
+
+              <div 
+                v-if="(settings.usb2snesProxyMode === 'ssh' || settings.usb2snesProxyMode === 'direct-with-ssh') && usb2snesSshStatus.lastError"
+                class="ssh-error-message"
+              >
+                ⚠ {{ usb2snesSshStatus.lastError }}
+              </div>
               
               <div v-if="usb2snesStatus.connected" class="connection-info">
                 <span class="info-item">{{ usb2snesStatus.device }}</span>
@@ -54,6 +187,9 @@
                 </button>
                 <button @click="openUsb2snesTools" class="btn-secondary-small">
                   USB2SNES Diagnostics
+                </button>
+                <button @click="openUsbOptionsWizard" class="btn-secondary-small">
+                  USB Options
                 </button>
               </div>
               
@@ -909,16 +1045,194 @@
         </div>
 
         <div class="settings-section">
+          <div class="setting-caption warning" style="color: red; font-size: 16px; background: black;">Note: ONLY Option 1 currently works - Connect to a USB2SNES Server - Specify Websocket URL</div>
           <div class="setting-row">
-            <label class="setting-label">USB2snes Websocket address</label>
-            <div class="setting-control">
-              <input type="text" v-model="settings.usb2snesAddress" />
+            <label class="setting-label">:USB2SNES Server - Hosting Method</label>
+             <div class="Setting-control">
+              <select v-model="settings.usb2snesHostingMethod">
+                <option value="remote">Connect to a USB2SNES Server - Specify WebSocket URL</option>
+                <option value="embedded">Run an Embedded USB2SNES/FXP Server</option>
+                <option value="embedded-divert">Embedded Server - Divert Connections to another Host:Port, Always</option>
+                <option value="embedded-divert-fallback">Embedded Server - Divert Connections, With error fallback to Local USB</option>
+              </select>
             </div>
           </div>
-          <div class="setting-caption warning">
-            ⚠ USB2SNES launch requires a USB2SNES server running. <a href="https://usb2snes.com/" target="_blank">https://usb2snes.com/</a>
-          </div>
         </div>
+
+        <template v-if="settings.usb2snesHostingMethod === 'remote'">
+          <div class="settings-section">
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES WebSocket Address</label>
+              <div class="setting-control">
+                <input type="text" v-model="settings.usb2snesAddress" />
+              </div>
+            </div>
+            <div class="setting-caption warning">
+              ⚠ USB2SNES launch requires a USB2SNES server already running on your computer. <a href="https://usb2snes.com/" target="_blank">https://usb2snes.com/</a>
+              For QUSB2SNES,  Set this option to:  ws://localhost:23074<br />
+              Default is ws://localhost:64213<br />
+              Some servers use ws://localhost:80800<br />
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES Proxy Option</label>
+              <div class="setting-control">
+                <select v-model="settings.usb2snesProxyMode">
+                  <option value="direct">Direct Connect to WebSocket</option>
+                  <option value="socks">Use a SOCKS Proxy</option>
+                  <option value="ssh">SSH Connect and Forward Port</option>
+                  <option value="direct-with-ssh">Direct Connect to Target, Optional SSH Forward</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-caption warning">
+              ⚠ Only "Direct Connect to WebSocket" is fully supported today. SOCKS and SSH options are experimental.
+            </div>
+          </div>
+
+          <div v-if="settings.usb2snesProxyMode === 'socks'" class="settings-section">
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES SOCKS Proxy</label>
+              <div class="setting-control">
+                <input
+                  type="text"
+                  placeholder="socks5://username:password@proxy_host:port"
+                  v-model="settings.usb2snesSocksProxyUrl"
+                />
+              </div>
+            </div>
+            <div class="setting-caption">
+              Examples:
+              <div><code>socks://user:pass@example.com:1080</code></div>
+              <div><code>socks://proxy.example.com:1080</code></div>
+              <div><code>socks4://legacy-proxy:1080</code></div>
+            </div>
+          </div>
+
+          <div v-if="settings.usb2snesProxyMode === 'ssh' || settings.usb2snesProxyMode === 'direct-with-ssh'" class="settings-section ssh-settings">
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES SSH Hostname</label>
+              <div class="setting-control">
+                <input type="text" v-model="settings.usb2snesSshHost" placeholder="ssh.example.com" />
+              </div>
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES SSH Username</label>
+              <div class="setting-control">
+                <input type="text" v-model="settings.usb2snesSshUsername" placeholder="sshuser" />
+              </div>
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES SSH Localhost Port</label>
+              <div class="setting-control">
+                <input type="number" min="1" max="65535" v-model.number="settings.usb2snesSshLocalPort" />
+              </div>
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES SSH Remote Port</label>
+              <div class="setting-control">
+                <input type="number" min="1" max="65535" v-model.number="settings.usb2snesSshRemotePort" />
+              </div>
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">USB2SNES OpenSSH Identity File</label>
+              <div class="setting-control identity-control">
+                <input type="text" v-model="settings.usb2snesSshIdentityFile" placeholder="~/.ssh/id_ed25519" />
+                <button @click="browseUsb2snesIdentityFile">Browse</button>
+              </div>
+            </div>
+            <div class="setting-caption">
+              SSH tunneling will connect local port {{ settings.usb2snesSshLocalPort || 64213 }} to remote port {{ settings.usb2snesSshRemotePort || 64213 }} on {{ settings.usb2snesSshHost || 'remote host' }}.
+            </div>
+          </div>
+        </template>
+
+        <template v-if="settings.usb2snesHostingMethod === 'embedded' || settings.usb2snesHostingMethod === 'embedded-divert' || settings.usb2snesHostingMethod === 'embedded-divert-fallback'">
+          <div class="settings-section">
+            <div class="setting-row">
+              <label class="setting-label">USBFXP Server WebSocket Port</label>
+              <div class="setting-control">
+                <input type="number" min="1" max="65535" v-model.number="settings.usb2snesAddress" placeholder="64213" />
+              </div>
+            </div>
+            <div class="setting-caption">
+              The WebSocket port to listen on for USB2SNES/FXP server connections. Default: 64213
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="setting-row">
+              <label class="setting-label">Automatic Server Start</label>
+              <div class="setting-control">
+                <select v-model="settings.usb2snesFxpAutoStart">
+                  <option value="yes">Yes - Automatically start server when needed</option>
+                  <option value="no">No - Start server manually</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-caption">
+              When enabled, the server will automatically start on app launch or when switching to embedded mode. If disabled, you must start the server manually. When another application is using the port, the server will automatically retry every 15 seconds.
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="setting-row">
+              <label class="setting-label">Use Dummy USB Device (Testing)</label>
+              <div class="setting-control">
+                <select v-model="settings.usb2snesFxpUseDummyDevice">
+                  <option value="no">No - Use Real USB Device</option>
+                  <option value="yes">Yes - Use Simulated Dummy Device</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting-caption">
+              When enabled, the server will use a simulated dummy USB device instead of a real hardware device. This is useful for testing and development without requiring actual SD2SNES/FXPak Pro hardware.
+            </div>
+          </div>
+
+          <template v-if="settings.usb2snesHostingMethod === 'embedded-divert' || settings.usb2snesHostingMethod === 'embedded-divert-fallback'">
+            <div class="settings-section">
+              <div class="setting-row">
+                <label class="setting-label">Diversion Target Host:Port</label>
+                <div class="setting-control">
+                  <input type="text" v-model="settings.usb2snesFxpDiversionTarget" placeholder="localhost:64213" />
+                </div>
+              </div>
+              <div class="setting-caption">
+                The target host and port to relay connections to. Format: hostname:port (e.g., localhost:64213, 192.168.1.100:8080)
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="setting-row">
+                <label class="setting-label">Diversion Use a SOCKS Proxy</label>
+                <div class="setting-control">
+                  <select v-model="settings.usb2snesFxpDiversionUseSocks">
+                    <option value="no">No - Direct connection</option>
+                    <option value="yes">Yes - Use SOCKS proxy</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div v-if="settings.usb2snesFxpDiversionUseSocks === 'yes'" class="settings-section">
+              <div class="setting-row">
+                <label class="setting-label">Diversion SOCKS Proxy URL</label>
+                <div class="setting-control">
+                  <input
+                    type="text"
+                    placeholder="socks5://username:password@proxy_host:port"
+                    v-model="settings.usb2snesFxpDiversionSocksProxyUrl"
+                  />
+                </div>
+              </div>
+              <div class="setting-caption">
+                Examples:
+                <div><code>socks5://user:pass@example.com:1080</code></div>
+                <div><code>socks5://proxy.example.com:1080</code></div>
+                <div><code>socks4://legacy-proxy:1080</code></div>
+              </div>
+            </div>
+          </template>
+        </template>
 
         <div class="settings-section">
           <div class="setting-row">
@@ -1096,6 +1410,40 @@
             <label>ROM Running:</label>
             <span>{{ usb2snesStatus.romRunning || 'N/A' }}</span>
           </div>
+          
+          <div v-if="settings.usb2snesHostingMethod === 'embedded'" class="usb2snes-section" style="margin-top: 16px;">
+            <div class="setting-row" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+              <label class="setting-label" style="margin: 0; min-width: 120px;">USBFXP Server:</label>
+              <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                <button 
+                  v-if="!usb2snesFxpStatus.running && usb2snesFxpStatus.status !== 'retrying'"
+                  @click="startUsb2snesFxp"
+                  class="btn-secondary-small">
+                  Start Server
+                </button>
+                <button 
+                  v-if="usb2snesFxpStatus.running || usb2snesFxpStatus.status === 'retrying'"
+                  @click="stopUsb2snesFxp"
+                  class="btn-secondary-small">
+                  Stop Server
+                </button>
+                <button 
+                  @click="restartUsb2snesFxp"
+                  class="btn-secondary-small"
+                  :disabled="!usb2snesFxpStatus.running && usb2snesFxpStatus.status !== 'retrying'">
+                  Restart Server
+                </button>
+                <span 
+                  @click="openUsb2snesFxpConsoleModal"
+                  :class="['health-indicator', usb2snesFxpStatus.health || 'red']"
+                  style="cursor: pointer; margin-left: 12px; min-width: 120px; text-align: left;"
+                  :title="'Click to view server console'">
+                  {{ getUsb2snesFxpStatusLabel() }}
+                </span>
+              </div>
+            </div>
+          </div>
+          
           <div class="action-buttons">
             <button v-if="!usb2snesStatus.connected" @click="connectUsb2snes" class="btn-primary">Connect</button>
             <button v-if="usb2snesStatus.connected" @click="disconnectUsb2snes" class="btn-danger">Disconnect</button>
@@ -1239,6 +1587,555 @@
 
       <footer class="modal-footer">
         <button @click="closeUsb2snesTools" class="btn-primary">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- SSH Console History Modal -->
+  <div v-if="sshConsoleModalOpen" class="modal-backdrop" @click.self="closeSshConsoleModal">
+    <div class="modal ssh-console-modal">
+      <header class="modal-header">
+        <h3>🔧 SSH Console History</h3>
+        <button class="close" @click="closeSshConsoleModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="ssh-console-content">
+          <div class="ssh-command-section">
+            <h4>Current SSH Command</h4>
+            <div class="ssh-command-display">
+              <code>{{ currentSshCommand || 'No command available' }}</code>
+            </div>
+          </div>
+          
+          <div class="ssh-history-section">
+            <h4>Console History</h4>
+            <div class="ssh-history-log" ref="sshHistoryLogContainer">
+              <div 
+                v-for="(entry, index) in sshConsoleHistory" 
+                :key="index" 
+                :class="['ssh-history-entry', entry.event]">
+                <span class="ssh-history-timestamp">{{ formatHistoryTimestamp(entry.timestamp) }}</span>
+                <span class="ssh-history-event">{{ entry.event.toUpperCase() }}</span>
+                <span class="ssh-history-message">{{ entry.message }}</span>
+                <span v-if="entry.exitCode !== null && entry.exitCode !== undefined" class="ssh-history-exitcode">
+                  (exit code: {{ entry.exitCode }})
+                </span>
+              </div>
+              <div v-if="sshConsoleHistory.length === 0" class="ssh-history-empty">
+                No console history yet
+              </div>
+            </div>
+          </div>
+          
+          <div class="ssh-console-actions">
+            <button @click="refreshSshConsoleHistory" class="btn-secondary">Refresh</button>
+            <button @click="clearSshConsoleHistory" class="btn-secondary">Clear History</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- USBFXP Server Console History Modal -->
+  <div v-if="showUsb2snesFxpConsole" class="modal-backdrop" @click.self="closeUsb2snesFxpConsoleModal">
+    <div class="modal ssh-console-modal">
+      <header class="modal-header">
+        <h3>🔧 USBFXP Server Console</h3>
+        <button class="close" @click="closeUsb2snesFxpConsoleModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="ssh-console-content">
+          <div class="ssh-command-section">
+            <h4>Server Information</h4>
+            <div class="ssh-command-display">
+              <div><strong>Port:</strong> {{ usb2snesFxpStatus.port || 'N/A' }}</div>
+              <div><strong>Status:</strong> {{ usb2snesFxpStatus.status }}</div>
+              <div><strong>Clients:</strong> {{ usb2snesFxpStatus.clientCount }}</div>
+              <div><strong>USB Devices:</strong> {{ usb2snesFxpStatus.deviceCount }}</div>
+            </div>
+          </div>
+          
+          <div class="ssh-history-section">
+            <h4>Console History</h4>
+            <div class="ssh-history-log" ref="usb2snesFxpHistoryLogContainer">
+              <div 
+                v-for="(entry, index) in usb2snesFxpConsoleHistory" 
+                :key="index" 
+                :class="['ssh-history-entry', entry.event]">
+                <span class="ssh-history-timestamp">{{ formatHistoryTimestamp(entry.timestamp) }}</span>
+                <span class="ssh-history-event">{{ entry.event.toUpperCase() }}</span>
+                <span class="ssh-history-message">{{ entry.message }}</span>
+                <span v-if="entry.exitCode !== null && entry.exitCode !== undefined" class="ssh-history-exitcode">
+                  (exit code: {{ entry.exitCode }})
+                </span>
+              </div>
+              <div v-if="usb2snesFxpConsoleHistory.length === 0" class="ssh-history-empty">
+                No console history yet
+              </div>
+            </div>
+          </div>
+          
+          <div class="ssh-console-actions">
+            <button @click="refreshUsb2snesFxpConsoleHistory" class="btn-secondary">Refresh</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- USBFXP Start Server Modal -->
+  <div v-if="showUsb2snesFxpStartModal" class="modal-backdrop">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Start USBFXP Server?</h3>
+      </header>
+      <section class="modal-body">
+        <p>You have selected "Run an Embedded USB2SNES/FXP Server" as your hosting method.</p>
+        <p>Would you like to start the USBFXP server now?</p>
+      </section>
+      <footer class="modal-footer" style="padding: 16px; border-top: 1px solid #444; display: flex; gap: 8px; justify-content: flex-end;">
+        <button @click="startUsb2snesFxpFromModal" class="btn-primary">Start Server Now</button>
+        <button @click="cancelUsb2snesFxpStartModal" class="btn-secondary">Maybe Later</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- USBFXP Permission Warning Modal -->
+  <div v-if="showUsb2snesFxpPermissionModal" class="modal-backdrop">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>⚠ USB Device Permission Required</h3>
+      </header>
+      <section class="modal-body">
+        <div v-if="usb2snesFxpPermissionResult" style="line-height: 1.6;">
+          <p style="margin-bottom: 16px; font-weight: bold;">The USBFXP server requires additional permissions to access USB/serial devices.</p>
+          
+          <div v-if="usb2snesFxpPermissionResult.issues && usb2snesFxpPermissionResult.issues.length > 0" style="margin-bottom: 16px;">
+            <p style="font-weight: bold; margin-bottom: 8px;">Issues found:</p>
+            <ul style="margin-left: 20px; margin-bottom: 0;">
+              <li v-for="issue in usb2snesFxpPermissionResult.issues" :key="issue">{{ issue }}</li>
+            </ul>
+          </div>
+          
+          <div v-if="usb2snesFxpPermissionResult.instructions && usb2snesFxpPermissionResult.instructions.length > 0" style="margin-top: 16px;">
+            <p style="font-weight: bold; margin-bottom: 8px;">To fix this:</p>
+            <div style="background: #2a2a2a; padding: 12px; border-radius: 4px; font-family: monospace; font-size: 12px; margin-bottom: 0;">
+              <div v-for="(instruction, index) in usb2snesFxpPermissionResult.instructions" :key="index" style="margin-bottom: 4px;">
+                {{ instruction }}
+              </div>
+            </div>
+          </div>
+          
+          <p style="margin-top: 16px; color: #888; font-size: 14px;">
+            After fixing the permissions, you will need to <strong>restart the application</strong> (or log out and log back in) for the changes to take effect.
+          </p>
+        </div>
+        <div v-else>
+          <p>Unable to check permissions. The server may not be able to access USB devices.</p>
+        </div>
+      </section>
+      <footer class="modal-footer" style="padding: 16px; border-top: 1px solid #444; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
+        <div v-if="usb2snesFxpPermissionResult && usb2snesFxpPermissionResult.platform === 'linux'" style="width: 100%; margin-bottom: 8px;">
+          <button 
+            @click="grantUsb2snesFxpPermission" 
+            class="btn-primary"
+            :disabled="grantingPermission"
+            style="width: 100%;">
+            {{ grantingPermission ? 'Processing...' : '🔐 Click here to run command (requires password)' }}
+          </button>
+          <p v-if="permissionGrantResult" :style="{ color: permissionGrantResult.success ? '#4CAF50' : '#f44336', marginTop: '8px', fontSize: '13px' }">
+            {{ permissionGrantResult.message }}
+          </p>
+        </div>
+        <button @click="showUsb2snesFxpPermissionModal = false; startUsb2snesFxpAnyway()" class="btn-secondary">Start Anyway</button>
+        <button @click="showUsb2snesFxpPermissionModal = false" class="btn-primary">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- USB Options Wizard Modal -->
+  <div v-if="usbOptionsWizardOpen" class="modal-backdrop">
+    <div class="modal usb-options-wizard-modal" style="width: 700px; max-width: 95vw;">
+      <header class="modal-header">
+        <h3>USB2SNES Setup Wizard</h3>
+      </header>
+      
+      <div class="wizard-body" style="padding: 24px;">
+        <!-- Tab Navigation -->
+        <div class="wizard-tabs" style="display: flex; gap: 8px; border-bottom: 2px solid var(--border-primary); margin-bottom: 24px; padding-bottom: 12px; overflow-x: auto;">
+          <button 
+            v-for="(tab, index) in getWizardTabList()" 
+            :key="index"
+            @click="goToWizardTab(index)"
+            class="wizard-tab"
+            :class="{ active: usbOptionsWizardTab === index, disabled: !canNavigateToTab(index) }"
+            style="padding: 8px 16px; border: none; background: transparent; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap;"
+            :disabled="!canNavigateToTab(index)">
+            {{ tab.name }}
+          </button>
+        </div>
+        
+        <!-- Tab Content -->
+        <div class="wizard-content" style="min-height: 300px;">
+          <!-- Tab 0: Basic Settings -->
+          <div v-if="usbOptionsWizardTab === 0" class="wizard-page">
+            <h4 style="margin-bottom: 16px;">Basic USB2SNES Settings</h4>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES Enabled <span style="color: red;">*</span>
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesEnabled"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="yes">Yes - Enable USB2SNES features</option>
+                <option value="no">No - Disable USB2SNES</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                If disabled, the embedded server and all USB2SNES features will be unavailable.
+              </p>
+            </div>
+            
+            <div v-if="usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes'" class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES Server - Hosting Method <span style="color: red;">*</span>
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesHostingMethod"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="remote">Do not run server, Connect to Remote 3rd party Server instead (CrowdControl, QUSB2SNES, etc.)</option>
+                <option value="embedded">Use an Embedded Server Built into this Application</option>
+              </select>
+              <p style="font-size: 18px; color: red; text-decoration: bold; background: black;">
+                  MUST be set to Connect to Remote 3rd Party Server.  Embedded option does not yet work.
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Choose whether to use our built-in server or connect to an external server.
+              </p>
+            </div>
+            
+            <div v-if="usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes'" class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES Upload Directory (on the SNES) <span style="color: red;">*</span>
+              </label>
+              <input 
+                type="text"
+                v-model="usbOptionsWizardDraftSettings.usb2snesUploadDir"
+                placeholder="/work"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;"
+                :class="{ 'invalid': isWizardUploadDirInvalid() }">
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Required if USB2SNES is enabled. Must be a short alphanumeric path like /work.
+              </p>
+              <p v-if="isWizardUploadDirInvalid()" style="font-size: 12px; color: red; margin-top: 4px;">
+                ⚠ Invalid upload directory. Must start with / and contain only letters, numbers, underscores, and hyphens.
+              </p>
+            </div>
+          </div>
+          
+          <!-- Tab 1: Embedded Server Settings -->
+          <div v-if="usbOptionsWizardTab === 1 && usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes' && (usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded' || usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded-divert' || usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded-divert-fallback')" class="wizard-page">
+            <h4 style="margin-bottom: 16px;">Embedded Server Settings</h4>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USBFXP Server WebSocket Port <span style="color: red;">*</span>
+              </label>
+              <input 
+                type="text"
+                :value="getWizardPortNumber()"
+                @input="updateWizardPort(($event.target as any).value)"
+                placeholder="64213"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                The port number where the server will listen for connections. Default is 64213. You might choose a different port if another application is already using 64213.
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Start Server Automatically
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesFxpAutoStart"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="yes">Yes - Start automatically when application starts</option>
+                <option value="no">No - Start manually</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                If enabled, the server will start automatically when the application starts.
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Server Connection Mode
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesHostingMethod"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="embedded">Always Connect to Local USB Device</option>
+                <option value="embedded-divert">Server Always Diverts Connections</option>
+                <option value="embedded-divert-fallback">Server Diverts Connections, Try Local USB if destination unavailable</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Choose how the server handles connections. Local USB connects directly to your device. Diversion mode forwards connections to another server.
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Use Dummy USB Device for Testing
+              </label>
+              <input 
+                type="checkbox"
+                v-model="usbOptionsWizardDraftSettings.usb2snesFxpUseDummyDevice"
+                style="margin-right: 8px;">
+              <span :style="{ color: usbOptionsWizardDraftSettings?.usb2snesFxpUseDummyDevice ? 'red' : 'inherit', fontWeight: usbOptionsWizardDraftSettings?.usb2snesFxpUseDummyDevice ? '600' : 'normal' }">
+                {{ usbOptionsWizardDraftSettings?.usb2snesFxpUseDummyDevice ? '⚠ WARNING: Dummy device enabled - This is for testing only!' : 'Enable dummy device simulation' }}
+              </span>
+              <p style="font-size: 12px; color: red; margin-top: 4px; font-weight: 600;" v-if="usbOptionsWizardDraftSettings?.usb2snesFxpUseDummyDevice">
+                ⚠ WARNING: The dummy device is a simulation and will not communicate with a real SNES device. Only use this for testing!
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;" v-else>
+                Enable this only if you want to test the server without a real USB2SNES device connected.
+              </p>
+            </div>
+          </div>
+          
+          <!-- Tab 2: Diversion Target (if diversion mode) -->
+          <div v-if="usbOptionsWizardTab === 2 && usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes' && (usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded-divert' || usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded-divert-fallback')" class="wizard-page">
+            <h4 style="margin-bottom: 16px;">Diversion Target Settings</h4>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Server Diverts Connections To <span style="color: red;">*</span>
+              </label>
+              <input 
+                type="text"
+                v-model="usbOptionsWizardDraftSettings.usb2snesFxpDiversionTarget"
+                placeholder="localhost:64213"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;"
+                :class="{ 'invalid': isWizardDiversionTargetInvalid() }">
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Enter the host:port where connections should be forwarded. Example: localhost:64213 or 192.168.1.100:64213
+              </p>
+              <p v-if="isWizardDiversionTargetInvalid()" style="font-size: 12px; color: red; margin-top: 4px;">
+                ⚠ Invalid format. Must be host:port (e.g., localhost:64213)
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Connect Directly or Use a SOCKS Proxy
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesFxpDiversionUseSocks"
+                @change="handleDiversionSocksChange()"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option :value="false">Direct Connect to Host:Port</option>
+                <option :value="true">Use a SOCKS Proxy</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Choose whether to connect directly to the target or route through a SOCKS proxy.
+              </p>
+            </div>
+            
+            <div v-if="usbOptionsWizardDraftSettings?.usb2snesFxpDiversionUseSocks" class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Diversion SOCKS Proxy URL
+              </label>
+              <input 
+                type="text"
+                v-model="usbOptionsWizardDraftSettings.usb2snesFxpDiversionSocksProxyUrl"
+                placeholder="socks5://username:password@proxy_host:port"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                SOCKS proxy URL for the diversion connection. Examples: socks5://proxy.example.com:1080 or socks://user:pass@proxy.example.com:1080
+              </p>
+            </div>
+          </div>
+          
+          <!-- Tab 1 or 2: Client Settings (if remote hosting) -->
+          <div v-if="usbOptionsWizardTab === 1 && usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes' && usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'remote'" class="wizard-page">
+            <h4 style="margin-bottom: 16px;">Client Connection Settings</h4>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES WebSocket Address <span style="color: red;">*</span>
+              </label>
+              <input 
+                type="text"
+                v-model="usbOptionsWizardDraftSettings.usb2snesAddress"
+                placeholder="ws://localhost:64213"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;"
+                :class="{ 'invalid': !usbOptionsWizardDraftSettings?.usb2snesAddress }">
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                The WebSocket address of the USB2SNES server (e.g., ws://localhost:64213)<br />
+                Some apps use ws://localhost:64213 (our default)<br />
+                For QUSB2SNES - Set this to  ws://localhost:23074<br />
+                Some older servers may use port ws://localhost:8080<br />
+              </p>
+              <p v-if="!usbOptionsWizardDraftSettings?.usb2snesAddress" style="font-size: 12px; color: red; margin-top: 4px;">
+                ⚠ WebSocket address is required.
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES Proxy Options
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesProxyMode"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="direct">Direct Connect</option>
+                <option value="socks">Use a SOCKS Proxy</option>
+                <option value="ssh">SSH Connect and Forward</option>
+                <option value="direct-with-ssh">Direct Connect to Target, Optional SSH Forward</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Choose how to connect to the USB2SNES server. Direct Connect is recommended for most users.
+              </p>
+            </div>
+            
+            <div v-if="usbOptionsWizardDraftSettings?.usb2snesProxyMode === 'socks'" class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES SOCKS Proxy URL
+              </label>
+              <input 
+                type="text"
+                v-model="usbOptionsWizardDraftSettings.usb2snesSocksProxyUrl"
+                placeholder="socks5://username:password@proxy_host:port"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                SOCKS proxy URL for the USB2SNES connection. Examples: socks5://proxy.example.com:1080
+              </p>
+            </div>
+          </div>
+          
+          <!-- Launch Preferences Tab -->
+          <div v-if="usbOptionsWizardTab === getWizardTotalTabs() - 2 && usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes'" class="wizard-page">
+            <h4 style="margin-bottom: 16px;">USB Game Launching Preferences</h4>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                Game Launch Method
+              </label>
+              <select 
+                v-model="settings.launchMethod"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="usb2snes">USB2SNES</option>
+                <option value="local">Local</option>
+                <option value="custom">Custom</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Choose your preferred method for launching games.
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES Launch Preference
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesLaunchPref"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="none">None</option>
+                <option value="boot">Boot</option>
+                <option value="reset">Reset</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Note: Specific USB2SNES Launch/Upload Preference options might not always be used by the application, and some might not be implemented yet.
+              </p>
+            </div>
+            
+            <div class="wizard-field" style="margin-bottom: 20px;">
+              <label style="display: block; font-weight: 600; margin-bottom: 8px;">
+                USB2SNES Upload Preference
+              </label>
+              <select 
+                v-model="usbOptionsWizardDraftSettings.usb2snesUploadPref"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
+                <option value="none">None</option>
+                <option value="auto">Auto</option>
+                <option value="manual">Manual</option>
+              </select>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Choose how ROMs should be uploaded to the SNES device.
+              </p>
+            </div>
+          </div>
+          
+          <!-- Finish Tab -->
+          <div v-if="usbOptionsWizardTab === getWizardTotalTabs() - 1" class="wizard-page">
+            <h4 style="margin-bottom: 16px;">Finish Setup</h4>
+            
+            <div v-if="usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes' && (usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded' || usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded-divert' || usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'embedded-divert-fallback')" class="wizard-field" style="margin-bottom: 20px;">
+              <button 
+                @click="tryStartEmbeddedServerInWizard"
+                class="btn-primary"
+                style="width: 100%; padding: 12px; margin-bottom: 12px;">
+                Try Starting Embedded Server
+              </button>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Test if the embedded server can start with your current settings.
+              </p>
+            </div>
+            
+            <div v-if="usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes'" class="wizard-field" style="margin-bottom: 20px;">
+              <button 
+                @click="tryConnectUsb2snesInWizard"
+                class="btn-primary"
+                style="width: 100%; padding: 12px; margin-bottom: 12px;">
+                Try Connecting to USB2SNES
+              </button>
+              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                Test if the connection to USB2SNES works with your current settings.
+              </p>
+            </div>
+            
+            <div style="background: var(--bg-tertiary); padding: 16px; border-radius: 4px; margin-top: 24px;">
+              <p style="font-weight: 600; margin-bottom: 8px;">Ready to Save</p>
+              <p style="font-size: 14px; color: var(--text-secondary);">
+                Click "Finish" to save your settings and complete the setup. The application will try to start the server and connect automatically if those options are enabled.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <footer class="modal-footer" style="padding: 16px; border-top: 2px solid var(--border-primary); display: flex; justify-content: space-between;">
+        <button 
+          @click="closeUsbOptionsWizard" 
+          class="btn-secondary"
+          style="padding: 8px 16px;">
+          Cancel
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button 
+            v-if="usbOptionsWizardTab > 0"
+            @click="previousWizardTab"
+            class="btn-secondary"
+            style="padding: 8px 16px;">
+            ← Previous
+          </button>
+          <button 
+            v-if="usbOptionsWizardTab < getWizardTotalTabs() - 1"
+            @click="nextWizardTab"
+            class="btn-primary"
+            style="padding: 8px 16px;"
+            :disabled="!validateCurrentWizardTab()">
+            Next →
+          </button>
+          <button 
+            v-if="usbOptionsWizardTab === getWizardTotalTabs() - 1"
+            @click="finishUsbOptionsWizard"
+            class="btn-primary"
+            style="padding: 8px 16px;"
+            :disabled="!validateCurrentWizardTab()">
+            Finish
+          </button>
+        </div>
       </footer>
     </div>
   </div>
@@ -2183,6 +3080,65 @@ const usb2snesStatus = reactive({
   romRunning: ''
 });
 
+const usb2snesSshStatus = reactive({
+  running: false,
+  desired: false,
+  status: 'stopped' as 'stopped' | 'starting' | 'running' | 'restarting' | 'error',
+  health: 'red' as 'green' | 'yellow' | 'red',
+  restartAttempts: 0,
+  lastError: '',
+  lastChange: '',
+  command: ''
+});
+
+const usb2snesFxpStatus = reactive({
+  running: false,
+  desired: false,
+  status: 'stopped' as 'stopped' | 'starting' | 'running' | 'retrying' | 'port-in-use' | 'error',
+  health: 'red' as 'green' | 'yellow' | 'red',
+  port: null as number | null,
+  lastError: '',
+  lastChange: '',
+  clientCount: 0,
+  deviceCount: 0
+});
+
+const sshConsoleModalOpen = ref(false);
+const sshConsoleHistory = ref<any[]>([]);
+const currentSshCommand = ref('');
+const sshHistoryLogContainer = ref<HTMLElement | null>(null);
+
+const showUsb2snesFxpConsole = ref(false);
+const usb2snesFxpConsoleHistory = ref<any[]>([]);
+const usb2snesFxpHistoryLogContainer = ref<HTMLElement | null>(null);
+const showUsb2snesFxpStartModal = ref(false);
+const showUsb2snesFxpPermissionModal = ref(false);
+const usb2snesFxpPermissionResult = ref<any>(null);
+const grantingPermission = ref(false);
+const usbOptionsWizardOpen = ref(false);
+const usbOptionsWizardTab = ref(0);
+const usbOptionsWizardFirstTime = ref(false);
+const usbOptionsWizardDraftSettings = ref<any>(null);
+const permissionGrantResult = ref<{success: boolean, message: string} | null>(null);
+
+const usb2snesSshStatusLabel = computed(() => {
+  switch (usb2snesSshStatus.status) {
+    case 'running':
+      return 'Running';
+    case 'starting':
+      return 'Starting';
+    case 'restarting':
+      return `Restarting (${usb2snesSshStatus.restartAttempts}/4)`;
+    case 'error':
+      return usb2snesSshStatus.lastError ? 'Error' : 'Error';
+    default:
+      return 'Not running';
+  }
+});
+
+let removeUsb2snesSshStatusListener: (() => void) | null = null;
+let removeUsb2snesFxpStatusListener: (() => void) | null = null;
+
 // Version management (must be declared before watchers use it)
 const selectedVersion = ref<number>(1);
 
@@ -2432,7 +3388,99 @@ function closeUsb2snesTools() {
   usb2snesToolsModalOpen.value = false;
 }
 
+function buildUsb2snesConnectOptions() {
+  // For embedded mode: use localhost with configured port
+  if (settings.usb2snesHostingMethod === 'embedded' || 
+      settings.usb2snesHostingMethod === 'embedded-divert' || 
+      settings.usb2snesHostingMethod === 'embedded-divert-fallback') {
+    const port = Number(settings.usb2snesAddress) || 64213;
+    return {
+      library: usb2snesCurrentLibrary.value,
+      address: `ws://localhost:${port}`,
+      hostingMethod: settings.usb2snesHostingMethod,
+      proxyMode: 'direct'
+    };
+  }
+
+  if (settings.usb2snesProxyMode === 'socks' && !settings.usb2snesSocksProxyUrl) {
+    throw new Error('Enter a SOCKS proxy URL before connecting');
+  }
+
+  if (settings.usb2snesProxyMode === 'ssh') {
+    if (!settings.usb2snesSshHost || !settings.usb2snesSshUsername) {
+      throw new Error('SSH host and username are required');
+    }
+  }
+
+  const library = usb2snesCurrentLibrary.value;
+  const localPort = Number(settings.usb2snesSshLocalPort) || 64213;
+  const remotePort = Number(settings.usb2snesSshRemotePort) || 64213;
+  
+  // For direct-with-ssh mode: address will be determined at connection time based on SSH status
+  // For ssh mode: always use SSH port (will fail if SSH not running, checked later)
+  let address;
+  if (settings.usb2snesProxyMode === 'ssh') {
+    address = `ws://127.0.0.1:${localPort}`;
+  } else {
+    // For direct-with-ssh, default to direct address; will be overridden at connect time if SSH is running
+    address = settings.usb2snesAddress;
+  }
+
+  return {
+    library,
+    address,
+    hostingMethod: settings.usb2snesHostingMethod,
+    proxyMode: settings.usb2snesProxyMode,
+    socksProxyUrl: settings.usb2snesSocksProxyUrl,
+    ssh: {
+      host: settings.usb2snesSshHost,
+      username: settings.usb2snesSshUsername,
+      localPort,
+      remotePort,
+      identityFile: settings.usb2snesSshIdentityFile
+    }
+  };
+}
+
+function formatErrorMessage(error: any): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch (jsonError) {
+    return String(error);
+  }
+}
+
+function updateUsb2snesSshStatus(status: any) {
+  if (!status) return;
+
+  usb2snesSshStatus.running = Boolean(status.running);
+  usb2snesSshStatus.desired = Boolean(status.desired);
+  usb2snesSshStatus.status = (status.status || 'stopped') as typeof usb2snesSshStatus.status;
+  usb2snesSshStatus.health = (status.health || 'red') as typeof usb2snesSshStatus.health;
+  usb2snesSshStatus.restartAttempts = typeof status.restartAttempts === 'number' ? status.restartAttempts : 0;
+  usb2snesSshStatus.lastError = status.lastError || '';
+  usb2snesSshStatus.lastChange = status.lastChange || '';
+  usb2snesSshStatus.command = status.command || '';
+  
+  // Update current command when status updates
+  if (status.command) {
+    currentSshCommand.value = status.command;
+  }
+}
+
 async function connectUsb2snes() {
+  // Check if USB2SNES is enabled, if not show wizard
+  if (settings.usb2snesEnabled !== 'yes') {
+    openUsbOptionsWizard();
+    return;
+  }
+  
   usb2snesStatus.lastAttempt = new Date().toLocaleString();
   dropdownActionStatus.value = 'Connecting...';
   
@@ -2444,11 +3492,36 @@ async function connectUsb2snes() {
       dropdownActionStatus.value = '✓ Already connected';
       return;
     }
-    
-    const library = usb2snesCurrentLibrary.value;
-    const address = settings.usb2snesAddress;
-    
-    const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+
+    let connectOptions;
+    try {
+      connectOptions = buildUsb2snesConnectOptions();
+      
+      // For direct-with-ssh mode: check if SSH is running and override address if so
+      if (settings.usb2snesProxyMode === 'direct-with-ssh') {
+        try {
+          const sshStatus = await (window as any).electronAPI.usb2snesGetSshStatus();
+          if (sshStatus && sshStatus.running) {
+            const localPort = Number(settings.usb2snesSshLocalPort) || 64213;
+            connectOptions.address = `ws://127.0.0.1:${localPort}`;
+            connectOptions.proxyMode = 'ssh'; // Use SSH proxy settings for headers
+            console.log('[USB2SNES] SSH is running, using port-forwarded address');
+          } else {
+            connectOptions.address = settings.usb2snesAddress;
+            connectOptions.proxyMode = 'direct'; // Use direct connection
+            console.log('[USB2SNES] SSH is not running, using direct address');
+          }
+        } catch (error) {
+          console.warn('[USB2SNES] Could not check SSH status, using direct address:', error);
+          // Fallback to direct address if we can't check SSH status
+        }
+      }
+    } catch (configError: any) {
+      dropdownActionStatus.value = `✗ ${configError.message}`;
+      return;
+    }
+
+    const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
     
     usb2snesStatus.connected = true;
     usb2snesStatus.device = result.device;
@@ -2465,7 +3538,7 @@ async function connectUsb2snes() {
     usb2snesStatus.lastError = String(error);
     usb2snesStatus.connected = false;
     stopHealthMonitoring();
-    dropdownActionStatus.value = `✗ Connection failed: ${error}`;
+    dropdownActionStatus.value = `✗ Connection failed: ${formatErrorMessage(error)}`;
   }
 }
 
@@ -2521,10 +3594,15 @@ async function reconnectUsb2snes() {
     }
     
     // Now connect
-    const library = usb2snesCurrentLibrary.value;
-    const address = settings.usb2snesAddress;
-    
-    const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+    let connectOptions;
+    try {
+      connectOptions = buildUsb2snesConnectOptions();
+    } catch (configError: any) {
+      dropdownActionStatus.value = `✗ ${configError.message}`;
+      return;
+    }
+
+    const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
     
     usb2snesStatus.connected = true;
     usb2snesStatus.device = result.device;
@@ -2541,7 +3619,345 @@ async function reconnectUsb2snes() {
     usb2snesStatus.lastError = String(error);
     usb2snesStatus.connected = false;
     stopHealthMonitoring();
-    dropdownActionStatus.value = `✗ Reconnection failed: ${error}`;
+    dropdownActionStatus.value = `✗ Reconnection failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function startUsb2snesSsh() {
+  if (!isElectronAvailable()) {
+    alert('SSH control requires Electron environment');
+    return;
+  }
+
+  if (settings.usb2snesProxyMode !== 'ssh' && settings.usb2snesProxyMode !== 'direct-with-ssh') {
+    dropdownActionStatus.value = '✗ SSH client is only available when proxy mode is set to SSH or Direct with SSH';
+    return;
+  }
+
+  if (!settings.usb2snesSshHost || !settings.usb2snesSshUsername) {
+    dropdownActionStatus.value = '✗ SSH host and username are required';
+    return;
+  }
+
+  const localPort = Number(settings.usb2snesSshLocalPort) || 64213;
+  const remotePort = Number(settings.usb2snesSshRemotePort) || 64213;
+
+  if (localPort <= 0 || localPort > 65535 || remotePort <= 0 || remotePort > 65535) {
+    dropdownActionStatus.value = '✗ SSH ports must be between 1 and 65535';
+    return;
+  }
+
+  if (usb2snesSshStatus.running || usb2snesSshStatus.status === 'starting') {
+    dropdownActionStatus.value = 'SSH client is already running';
+    return;
+  }
+
+  dropdownActionStatus.value = 'Starting SSH client...';
+
+  try {
+    const result = await (window as any).electronAPI.usb2snesStartSsh({
+      host: settings.usb2snesSshHost,
+      username: settings.usb2snesSshUsername,
+      localPort,
+      remotePort,
+      identityFile: settings.usb2snesSshIdentityFile || null
+    });
+
+    if (!result || !result.success) {
+      const message = result && result.error ? result.error : 'Failed to launch SSH client';
+      dropdownActionStatus.value = `✗ ${message}`;
+      if (result && result.status) {
+        updateUsb2snesSshStatus(result.status);
+      }
+      return;
+    }
+
+    dropdownActionStatus.value = '✓ SSH client started';
+    if (result.status) {
+      updateUsb2snesSshStatus(result.status);
+    }
+  } catch (error) {
+    console.error('[USB2SNES] SSH start error:', error);
+    dropdownActionStatus.value = `✗ SSH start failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function stopUsb2snesSsh() {
+  if (!isElectronAvailable()) {
+    alert('SSH control requires Electron environment');
+    return;
+  }
+
+  if (!usb2snesSshStatus.running && usb2snesSshStatus.status !== 'starting' && usb2snesSshStatus.status !== 'restarting') {
+    dropdownActionStatus.value = 'SSH client is already stopped';
+    return;
+  }
+
+  dropdownActionStatus.value = 'Stopping SSH client...';
+
+  try {
+    const result = await (window as any).electronAPI.usb2snesStopSsh();
+    if (!result || !result.success) {
+      const message = result && result.error ? result.error : 'Failed to stop SSH client';
+      dropdownActionStatus.value = `✗ ${message}`;
+      if (result && result.status) {
+        updateUsb2snesSshStatus(result.status);
+      }
+      return;
+    }
+
+    dropdownActionStatus.value = 'SSH client stopped';
+    if (result.status) {
+      updateUsb2snesSshStatus(result.status);
+    }
+  } catch (error) {
+    console.error('[USB2SNES] SSH stop error:', error);
+    dropdownActionStatus.value = `✗ SSH stop failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function openSshConsoleModal() {
+  if (!isElectronAvailable()) {
+    alert('SSH console requires Electron environment');
+    return;
+  }
+
+  // Refresh SSH status to get the latest command
+  try {
+    const sshStatus = await (window as any).electronAPI.usb2snesGetSshStatus();
+    if (sshStatus) {
+      updateUsb2snesSshStatus(sshStatus);
+    }
+  } catch (error) {
+    console.warn('[USB2SNES] Failed to fetch SSH status:', error);
+  }
+
+  sshConsoleModalOpen.value = true;
+  await refreshSshConsoleHistory();
+}
+
+function closeSshConsoleModal() {
+  sshConsoleModalOpen.value = false;
+}
+
+async function refreshSshConsoleHistory() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+
+  try {
+    const history = await (window as any).electronAPI.usb2snesGetSshConsoleHistory();
+    sshConsoleHistory.value = history || [];
+    
+    // Auto-scroll to bottom
+    nextTick(() => {
+      const container = sshHistoryLogContainer.value;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+  } catch (error) {
+    console.error('[USB2SNES] Failed to get SSH console history:', error);
+  }
+}
+
+async function clearSshConsoleHistory() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+
+  if (!confirm('Clear SSH console history? This action cannot be undone.')) {
+    return;
+  }
+
+  // Note: Currently the backend doesn't have a clear method, so we'll just clear the UI
+  // In the future, we could add a clear endpoint to sshManager if needed
+  sshConsoleHistory.value = [];
+  alert('Console history cleared from display');
+}
+
+function formatHistoryTimestamp(timestamp: string): string {
+  if (!timestamp) return '';
+  try {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { 
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch {
+    return timestamp;
+  }
+}
+
+const usb2snesFxpStatusLabel = computed(() => {
+  switch (usb2snesFxpStatus.status) {
+    case 'running':
+      return 'Running';
+    case 'starting':
+      return 'Starting';
+    case 'retrying':
+      return 'Retrying...';
+    case 'port-in-use':
+      return 'Port in use';
+    case 'error':
+      return usb2snesFxpStatus.lastError ? 'Error' : 'Error';
+    default:
+      return 'Not running';
+  }
+});
+
+function getUsb2snesFxpStatusLabel() {
+  return usb2snesFxpStatusLabel.value;
+}
+
+function updateUsb2snesFxpStatus(status: any) {
+  if (!status) return;
+
+  usb2snesFxpStatus.running = Boolean(status.running);
+  usb2snesFxpStatus.desired = Boolean(status.desired);
+  usb2snesFxpStatus.status = (status.status || 'stopped') as typeof usb2snesFxpStatus.status;
+  usb2snesFxpStatus.health = (status.health || 'red') as typeof usb2snesFxpStatus.health;
+  usb2snesFxpStatus.port = status.port || null;
+  usb2snesFxpStatus.lastError = status.lastError || '';
+  usb2snesFxpStatus.lastChange = status.lastChange || '';
+  usb2snesFxpStatus.clientCount = typeof status.clientCount === 'number' ? status.clientCount : 0;
+  usb2snesFxpStatus.deviceCount = typeof status.deviceCount === 'number' ? status.deviceCount : 0;
+}
+
+async function startUsb2snesFxp() {
+  if (!isElectronAvailable()) {
+    alert('USBFXP server requires Electron environment');
+    return;
+  }
+
+  // Check permissions before starting
+  try {
+    const permCheck = await (window as any).electronAPI.usb2snesCheckFxpPermissions();
+    
+    if (!permCheck.hasPermissions) {
+      // Show permission modal
+      showUsb2snesFxpPermissionModal.value = true;
+      usb2snesFxpPermissionResult.value = permCheck;
+      return;
+    }
+  } catch (error) {
+    console.warn('[USB2SNES] Permission check failed, continuing anyway:', error);
+    // Continue with start attempt even if check fails
+  }
+
+  try {
+    const port = Number(settings.usb2snesAddress) || 64213;
+    const config = { 
+      port, 
+      address: `ws://localhost:${port}`,
+      useDummyDevice: settings.usb2snesFxpUseDummyDevice === 'yes'
+    };
+    const result = await (window as any).electronAPI.usb2snesFxpStart(config);
+    
+    if (result.success) {
+      updateUsb2snesFxpStatus(result.status);
+      dropdownActionStatus.value = '✓ USBFXP server started';
+    } else {
+      updateUsb2snesFxpStatus(result.status);
+      dropdownActionStatus.value = `✗ Server start failed: ${result.error || 'Unknown error'}`;
+    }
+  } catch (error) {
+    console.error('[USB2SNES] FXP start error:', error);
+    dropdownActionStatus.value = `✗ Server start failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function stopUsb2snesFxp() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+
+  try {
+    const result = await (window as any).electronAPI.usb2snesFxpStop();
+    updateUsb2snesFxpStatus(result.status);
+    dropdownActionStatus.value = '✓ USBFXP server stopped';
+  } catch (error) {
+    console.error('[USB2SNES] FXP stop error:', error);
+    dropdownActionStatus.value = `✗ Server stop failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function restartUsb2snesFxp() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+
+  // Check permissions before restarting
+  try {
+    const permCheck = await (window as any).electronAPI.usb2snesCheckFxpPermissions();
+    
+    if (!permCheck.hasPermissions) {
+      // Show permission modal
+      showUsb2snesFxpPermissionModal.value = true;
+      usb2snesFxpPermissionResult.value = permCheck;
+      return;
+    }
+  } catch (error) {
+    console.warn('[USB2SNES] Permission check failed, continuing anyway:', error);
+    // Continue with restart attempt even if check fails
+  }
+
+  try {
+    const port = Number(settings.usb2snesAddress) || 64213;
+    const config = { 
+      port, 
+      address: `ws://localhost:${port}`,
+      useDummyDevice: settings.usb2snesFxpUseDummyDevice === 'yes'
+    };
+    const result = await (window as any).electronAPI.usb2snesFxpRestart(config);
+    
+    if (result.success) {
+      updateUsb2snesFxpStatus(result.status);
+      dropdownActionStatus.value = '✓ USBFXP server restarted';
+    } else {
+      updateUsb2snesFxpStatus(result.status);
+      dropdownActionStatus.value = `✗ Server restart failed: ${result.error || 'Unknown error'}`;
+    }
+  } catch (error) {
+    console.error('[USB2SNES] FXP restart error:', error);
+    dropdownActionStatus.value = `✗ Server restart failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function openUsb2snesFxpConsoleModal() {
+  if (!isElectronAvailable()) {
+    alert('USBFXP console requires Electron environment');
+    return;
+  }
+
+  showUsb2snesFxpConsole.value = true;
+  await refreshUsb2snesFxpConsoleHistory();
+}
+
+function closeUsb2snesFxpConsoleModal() {
+  showUsb2snesFxpConsole.value = false;
+}
+
+async function refreshUsb2snesFxpConsoleHistory() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+
+  try {
+    const history = await (window as any).electronAPI.usb2snesGetFxpConsoleHistory();
+    usb2snesFxpConsoleHistory.value = history || [];
+    
+    // Auto-scroll to bottom
+    nextTick(() => {
+      const container = usb2snesFxpHistoryLogContainer.value;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+  } catch (error) {
+    console.error('[USB2SNES] Failed to get FXP console history:', error);
   }
 }
 
@@ -2891,10 +4307,16 @@ async function launchUploadedFile() {
       if (!usb2snesStatus.connected) {
         uploadProgressStatus.value = 'Connecting to USB2SNES...';
         
+        let connectOptions;
         try {
-          const library = usb2snesCurrentLibrary.value;
-          const address = settings.usb2snesAddress;
-          const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+          connectOptions = buildUsb2snesConnectOptions();
+        } catch (configError: any) {
+          uploadProgressStatus.value = `Launch failed: ${configError.message}`;
+          return;
+        }
+
+        try {
+          const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
           
           usb2snesStatus.connected = true;
           usb2snesStatus.device = result.device;
@@ -2906,7 +4328,7 @@ async function launchUploadedFile() {
           console.log('[launchUploadedFile] ✓ USB2SNES connected successfully');
         } catch (connectError) {
           console.error('[launchUploadedFile] Connection error:', connectError);
-          uploadProgressStatus.value = `Launch failed: Could not connect to USB2SNES - ${connectError}`;
+          uploadProgressStatus.value = `Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`;
           return;
         }
       }
@@ -3044,6 +4466,12 @@ async function toggleUsb2snesDropdown() {
   // Refresh status when opening dropdown
   if (usb2snesDropdownOpen.value) {
     await refreshUsb2snesStatus();
+    
+    // Auto-show wizard if USB2SNES is not enabled (first time)
+    if (settings.usb2snesEnabled !== 'yes' && !usbOptionsWizardFirstTime.value) {
+      usbOptionsWizardFirstTime.value = true;
+      openUsbOptionsWizard();
+    }
   }
 }
 
@@ -3172,8 +4600,347 @@ function openFullChatModal() {
   fullChatModalOpen.value = true;
 }
 
+// USB Options Wizard Functions
+function openUsbOptionsWizard() {
+  // Initialize draft settings with current settings
+  // Convert 'yes'/'no' strings to boolean for useDummyDevice if needed
+  // Default to false (unchecked) unless explicitly set to 'yes'
+  let useDummyDevice = false;
+  if (settings.usb2snesFxpUseDummyDevice) {
+    if (typeof settings.usb2snesFxpUseDummyDevice === 'string') {
+      useDummyDevice = settings.usb2snesFxpUseDummyDevice === 'yes';
+    } else if (typeof settings.usb2snesFxpUseDummyDevice === 'boolean') {
+      useDummyDevice = settings.usb2snesFxpUseDummyDevice;
+    }
+  }
+  
+  usbOptionsWizardDraftSettings.value = {
+    usb2snesEnabled: settings.usb2snesEnabled || 'no',
+    usb2snesHostingMethod: settings.usb2snesHostingMethod || 'remote',
+    usb2snesAddress: settings.usb2snesAddress || 'ws://localhost:64213',
+    usb2snesFxpAutoStart: settings.usb2snesFxpAutoStart || 'yes',
+    usb2snesFxpUseDummyDevice: useDummyDevice,
+    usb2snesFxpDiversionTarget: settings.usb2snesFxpDiversionTarget || '',
+    usb2snesFxpDiversionUseSocks: settings.usb2snesFxpDiversionUseSocks || false,
+    usb2snesFxpDiversionSocksProxyUrl: settings.usb2snesFxpDiversionSocksProxyUrl || '',
+    usb2snesProxyMode: settings.usb2snesProxyMode || 'direct',
+    usb2snesSocksProxyUrl: settings.usb2snesSocksProxyUrl || '',
+    usb2snesLaunchPref: settings.usb2snesLaunchPref || 'none',
+    usb2snesUploadPref: settings.usb2snesUploadPref || 'none',
+    usb2snesUploadDir: settings.usb2snesUploadDir || '/work'
+  };
+  usbOptionsWizardTab.value = 0;
+  usbOptionsWizardOpen.value = true;
+}
+
+function closeUsbOptionsWizard() {
+  usbOptionsWizardOpen.value = false;
+  usbOptionsWizardDraftSettings.value = null;
+}
+
+function nextWizardTab() {
+  if (validateCurrentWizardTab()) {
+    const totalTabs = getWizardTotalTabs();
+    if (usbOptionsWizardTab.value < totalTabs - 1) {
+      usbOptionsWizardTab.value++;
+    }
+  }
+}
+
+function previousWizardTab() {
+  if (usbOptionsWizardTab.value > 0) {
+    usbOptionsWizardTab.value--;
+  }
+}
+
+function goToWizardTab(index: number) {
+  if (index >= 0 && index < getWizardTotalTabs()) {
+    // Validate all previous tabs before allowing navigation
+    for (let i = 0; i < index; i++) {
+      const prevTab = i;
+      if (!validateWizardTab(prevTab)) {
+        return; // Don't allow navigation if previous tab is invalid
+      }
+    }
+    usbOptionsWizardTab.value = index;
+  }
+}
+
+function validateCurrentWizardTab(): boolean {
+  return validateWizardTab(usbOptionsWizardTab.value);
+}
+
+function validateWizardTab(tabIndex: number): boolean {
+  if (!usbOptionsWizardDraftSettings.value) return false;
+  const draft = usbOptionsWizardDraftSettings.value;
+  
+  switch (tabIndex) {
+    case 0: // Basic settings
+      // USB2SNES Enabled must be 'yes' or 'no'
+      if (draft.usb2snesEnabled !== 'yes' && draft.usb2snesEnabled !== 'no') {
+        return false;
+      }
+      // If enabled, hosting method must be set
+      if (draft.usb2snesEnabled === 'yes' && !draft.usb2snesHostingMethod) {
+        return false;
+      }
+      // If enabled, upload directory must be set
+      if (draft.usb2snesEnabled === 'yes' && (!draft.usb2snesUploadDir || !/^\/[a-zA-Z0-9_\-]+$/.test(draft.usb2snesUploadDir))) {
+        return false;
+      }
+      return true;
+      
+    case 1: // Embedded server settings
+      // Only validate if embedded server is selected
+      if (draft.usb2snesEnabled === 'yes' && 
+          (draft.usb2snesHostingMethod === 'embedded' || 
+           draft.usb2snesHostingMethod === 'embedded-divert' || 
+           draft.usb2snesHostingMethod === 'embedded-divert-fallback')) {
+        // Port must be valid number
+        const address = draft.usb2snesAddress || 'ws://localhost:64213';
+        const match = address.match(/:(\d+)/);
+        if (!match || !match[1] || parseInt(match[1]) < 1 || parseInt(match[1]) > 65535) {
+          return false;
+        }
+      }
+      return true;
+      
+    case 2: // Diversion target
+      // Only validate if diversion mode is selected
+      if (draft.usb2snesEnabled === 'yes' && 
+          (draft.usb2snesHostingMethod === 'embedded-divert' || 
+           draft.usb2snesHostingMethod === 'embedded-divert-fallback')) {
+        if (!draft.usb2snesFxpDiversionTarget || !/^[\w\.\-]+:\d+$/.test(draft.usb2snesFxpDiversionTarget)) {
+          return false;
+        }
+      }
+      return true;
+      
+    case 3: // Client settings
+      // Only validate if remote hosting is selected
+      if (draft.usb2snesEnabled === 'yes' && draft.usb2snesHostingMethod === 'remote') {
+        if (!draft.usb2snesAddress) {
+          return false;
+        }
+      }
+      return true;
+      
+    default:
+      return true;
+  }
+}
+
+function getWizardTotalTabs(): number {
+  if (!usbOptionsWizardDraftSettings.value) return 1;
+  const draft = usbOptionsWizardDraftSettings.value;
+  
+  let tabs = 2; // Tab 0: Basic, Tab N: Finish
+  
+  if (draft.usb2snesEnabled === 'yes') {
+    if (draft.usb2snesHostingMethod === 'embedded' || 
+        draft.usb2snesHostingMethod === 'embedded-divert' || 
+        draft.usb2snesHostingMethod === 'embedded-divert-fallback') {
+      tabs += 1; // Tab 1: Embedded server settings
+      
+      if (draft.usb2snesHostingMethod === 'embedded-divert' || 
+          draft.usb2snesHostingMethod === 'embedded-divert-fallback') {
+        tabs += 1; // Tab 2: Diversion target
+      }
+    } else if (draft.usb2snesHostingMethod === 'remote') {
+      tabs += 1; // Tab 1: Client settings
+    }
+    
+    tabs += 1; // Tab: Launch preferences
+  }
+  
+  return tabs;
+}
+
+async function finishUsbOptionsWizard() {
+  if (!validateCurrentWizardTab()) {
+    return;
+  }
+  
+  if (!usbOptionsWizardDraftSettings.value) return;
+  const draft = usbOptionsWizardDraftSettings.value;
+  
+  // Apply draft settings to actual settings
+  settings.usb2snesEnabled = draft.usb2snesEnabled;
+  settings.usb2snesHostingMethod = draft.usb2snesHostingMethod;
+  settings.usb2snesAddress = draft.usb2snesAddress;
+  settings.usb2snesFxpAutoStart = draft.usb2snesFxpAutoStart;
+  // Convert boolean back to 'yes'/'no' string for settings
+  settings.usb2snesFxpUseDummyDevice = draft.usb2snesFxpUseDummyDevice ? 'yes' : 'no';
+  settings.usb2snesFxpDiversionTarget = draft.usb2snesFxpDiversionTarget;
+  settings.usb2snesFxpDiversionUseSocks = draft.usb2snesFxpDiversionUseSocks;
+  settings.usb2snesFxpDiversionSocksProxyUrl = draft.usb2snesFxpDiversionSocksProxyUrl;
+  settings.usb2snesProxyMode = draft.usb2snesProxyMode;
+  settings.usb2snesSocksProxyUrl = draft.usb2snesSocksProxyUrl;
+  settings.usb2snesLaunchPref = draft.usb2snesLaunchPref;
+  settings.usb2snesUploadPref = draft.usb2snesUploadPref;
+  settings.usb2snesUploadDir = draft.usb2snesUploadDir;
+  
+  // Save settings
+  await saveSettings();
+  
+  // Close wizard
+  closeUsbOptionsWizard();
+  
+  // If embedded server is enabled and should auto-start, try starting it
+  if (settings.usb2snesEnabled === 'yes' && 
+      (settings.usb2snesHostingMethod === 'embedded' || 
+       settings.usb2snesHostingMethod === 'embedded-divert' || 
+       settings.usb2snesHostingMethod === 'embedded-divert-fallback') &&
+      settings.usb2snesFxpAutoStart === 'yes') {
+    try {
+      await startUsb2snesFxp();
+    } catch (error) {
+      console.warn('[USB Options] Failed to auto-start server:', error);
+    }
+  }
+  
+  // If USB2SNES is enabled, try connecting
+  if (settings.usb2snesEnabled === 'yes') {
+    try {
+      await connectUsb2snes();
+    } catch (error) {
+      console.warn('[USB Options] Failed to auto-connect:', error);
+    }
+  }
+}
+
+async function tryStartEmbeddedServerInWizard() {
+  if (!usbOptionsWizardDraftSettings.value) return;
+  const draft = usbOptionsWizardDraftSettings.value;
+  
+  // Temporarily apply draft settings for server start
+  const oldConfig = {
+    usb2snesAddress: settings.usb2snesAddress,
+    usb2snesFxpUseDummyDevice: settings.usb2snesFxpUseDummyDevice,
+    usb2snesFxpDiversionTarget: settings.usb2snesFxpDiversionTarget,
+    usb2snesFxpDiversionUseSocks: settings.usb2snesFxpDiversionUseSocks,
+    usb2snesFxpDiversionSocksProxyUrl: settings.usb2snesFxpDiversionSocksProxyUrl
+  };
+  
+  settings.usb2snesAddress = draft.usb2snesAddress;
+  // Convert boolean to 'yes'/'no' string for settings
+  settings.usb2snesFxpUseDummyDevice = draft.usb2snesFxpUseDummyDevice ? 'yes' : 'no';
+  settings.usb2snesFxpDiversionTarget = draft.usb2snesFxpDiversionTarget;
+  settings.usb2snesFxpDiversionUseSocks = draft.usb2snesFxpDiversionUseSocks;
+  settings.usb2snesFxpDiversionSocksProxyUrl = draft.usb2snesFxpDiversionSocksProxyUrl;
+  
+  try {
+    await startUsb2snesFxp();
+  } finally {
+    // Restore old settings
+    Object.assign(settings, oldConfig);
+  }
+}
+
+async function tryConnectUsb2snesInWizard() {
+  if (!usbOptionsWizardDraftSettings.value) return;
+  const draft = usbOptionsWizardDraftSettings.value;
+  
+  // Temporarily apply draft settings for connection
+  const oldSettings = {
+    usb2snesEnabled: settings.usb2snesEnabled,
+    usb2snesHostingMethod: settings.usb2snesHostingMethod,
+    usb2snesAddress: settings.usb2snesAddress,
+    usb2snesProxyMode: settings.usb2snesProxyMode,
+    usb2snesSocksProxyUrl: settings.usb2snesSocksProxyUrl
+  };
+  
+  settings.usb2snesEnabled = draft.usb2snesEnabled;
+  settings.usb2snesHostingMethod = draft.usb2snesHostingMethod;
+  settings.usb2snesAddress = draft.usb2snesAddress;
+  settings.usb2snesProxyMode = draft.usb2snesProxyMode;
+  settings.usb2snesSocksProxyUrl = draft.usb2snesSocksProxyUrl;
+  
+  try {
+    await connectUsb2snes();
+  } finally {
+    // Restore old settings
+    Object.assign(settings, oldSettings);
+  }
+}
+
 function closeFullChatModal() {
   fullChatModalOpen.value = false;
+}
+
+// Helper functions for wizard
+function getWizardTabList() {
+  if (!usbOptionsWizardDraftSettings.value) return [{ name: 'Basic', index: 0 }];
+  const draft = usbOptionsWizardDraftSettings.value;
+  const tabs = [{ name: 'Basic', index: 0 }];
+  
+  if (draft.usb2snesEnabled === 'yes') {
+    if (draft.usb2snesHostingMethod === 'embedded' || 
+        draft.usb2snesHostingMethod === 'embedded-divert' || 
+        draft.usb2snesHostingMethod === 'embedded-divert-fallback') {
+      tabs.push({ name: 'Server', index: 1 });
+      
+      if (draft.usb2snesHostingMethod === 'embedded-divert' || 
+          draft.usb2snesHostingMethod === 'embedded-divert-fallback') {
+        tabs.push({ name: 'Diversion', index: 2 });
+      }
+    } else if (draft.usb2snesHostingMethod === 'remote') {
+      tabs.push({ name: 'Connection', index: 1 });
+    }
+    
+    tabs.push({ name: 'Launch', index: tabs.length });
+  }
+  
+  tabs.push({ name: 'Finish', index: tabs.length });
+  return tabs;
+}
+
+function canNavigateToTab(index: number): boolean {
+  // Can always navigate to tab 0
+  if (index === 0) return true;
+  
+  // Validate all previous tabs
+  for (let i = 0; i < index; i++) {
+    if (!validateWizardTab(i)) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function getWizardPortNumber(): string {
+  if (!usbOptionsWizardDraftSettings.value) return '64213';
+  const address = usbOptionsWizardDraftSettings.value.usb2snesAddress || 'ws://localhost:64213';
+  const match = address.match(/:(\d+)/);
+  return match ? match[1] : '64213';
+}
+
+function updateWizardPort(portValue: string) {
+  if (!usbOptionsWizardDraftSettings.value) return;
+  usbOptionsWizardDraftSettings.value.usb2snesAddress = `ws://localhost:${portValue}`;
+}
+
+function isWizardUploadDirInvalid(): boolean {
+  if (!usbOptionsWizardDraftSettings.value) return false;
+  const draft = usbOptionsWizardDraftSettings.value;
+  if (draft.usb2snesEnabled !== 'yes') return false;
+  if (!draft.usb2snesUploadDir) return true;
+  return !/^\/[a-zA-Z0-9_\-]+$/.test(draft.usb2snesUploadDir);
+}
+
+function isWizardDiversionTargetInvalid(): boolean {
+  if (!usbOptionsWizardDraftSettings.value) return false;
+  const draft = usbOptionsWizardDraftSettings.value;
+  if (!draft.usb2snesFxpDiversionTarget) return true;
+  return !/^[\w\.\-]+:\d+$/.test(draft.usb2snesFxpDiversionTarget);
+}
+
+function handleDiversionSocksChange() {
+  if (!usbOptionsWizardDraftSettings.value) return;
+  if (!usbOptionsWizardDraftSettings.value.usb2snesFxpDiversionUseSocks) {
+    usbOptionsWizardDraftSettings.value.usb2snesFxpDiversionSocksProxyUrl = '';
+  }
 }
 
 // Mini Chat Functions
@@ -3496,7 +5263,20 @@ const settings = reactive({
   launchMethod: 'manual' as 'manual' | 'program' | 'usb2snes',
   launchProgram: '',
   launchProgramArgs: '%file',
+  usb2snesHostingMethod: 'remote' as 'remote' | 'embedded' | 'embedded-divert' | 'embedded-divert-fallback',
   usb2snesAddress: 'ws://localhost:64213',
+  usb2snesFxpAutoStart: 'yes' as 'yes' | 'no',
+  usb2snesFxpUseDummyDevice: 'no' as 'yes' | 'no',
+  usb2snesFxpDiversionTarget: 'localhost:64213',
+  usb2snesFxpDiversionUseSocks: 'no' as 'yes' | 'no',
+  usb2snesFxpDiversionSocksProxyUrl: '',
+  usb2snesProxyMode: 'direct' as 'direct' | 'socks' | 'ssh',
+  usb2snesSocksProxyUrl: '',
+  usb2snesSshHost: '',
+  usb2snesSshUsername: '',
+  usb2snesSshLocalPort: 64213,
+  usb2snesSshRemotePort: 64213,
+  usb2snesSshIdentityFile: '',
   usb2snesEnabled: 'no' as 'yes' | 'no',
   usb2snesLibrary: 'usb2snes_a' as 'usb2snes_a' | 'usb2snes_b' | 'qusb2snes' | 'node-usb',
   usb2snesLaunchPref: 'auto' as 'auto' | 'manual' | 'reset',
@@ -3595,7 +5375,20 @@ async function saveSettings() {
       launchMethod: settings.launchMethod,
       launchProgram: settings.launchProgram,
       launchProgramArgs: settings.launchProgramArgs,
+      usb2snesHostingMethod: settings.usb2snesHostingMethod,
       usb2snesAddress: settings.usb2snesAddress,
+      usb2snesFxpAutoStart: settings.usb2snesFxpAutoStart,
+      usb2snesFxpUseDummyDevice: settings.usb2snesFxpUseDummyDevice,
+      usb2snesFxpDiversionTarget: settings.usb2snesFxpDiversionTarget,
+      usb2snesFxpDiversionUseSocks: settings.usb2snesFxpDiversionUseSocks,
+      usb2snesFxpDiversionSocksProxyUrl: settings.usb2snesFxpDiversionSocksProxyUrl,
+      usb2snesProxyMode: settings.usb2snesProxyMode,
+      usb2snesSocksProxyUrl: settings.usb2snesSocksProxyUrl,
+      usb2snesSshHost: settings.usb2snesSshHost,
+      usb2snesSshUsername: settings.usb2snesSshUsername,
+      usb2snesSshLocalPort: String(settings.usb2snesSshLocalPort),
+      usb2snesSshRemotePort: String(settings.usb2snesSshRemotePort),
+      usb2snesSshIdentityFile: settings.usb2snesSshIdentityFile,
       usb2snesEnabled: settings.usb2snesEnabled,
       usb2snesLaunchPref: settings.usb2snesLaunchPref,
       usb2snesUploadPref: settings.usb2snesUploadPref,
@@ -3607,6 +5400,47 @@ async function saveSettings() {
     const result = await (window as any).electronAPI.saveSettings(settingsToSave);
     if (result.success) {
       console.log('Settings saved successfully');
+      
+      // Handle USBFXP server lifecycle
+      if (isElectronAvailable()) {
+        const newHostingMethod = settings.usb2snesHostingMethod;
+        const fxpStatus = usb2snesFxpStatus;
+        
+        // If switching away from embedded modes, stop the server
+        if (newHostingMethod !== 'embedded' && 
+            newHostingMethod !== 'embedded-divert' && 
+            newHostingMethod !== 'embedded-divert-fallback' && 
+            fxpStatus.running) {
+          try {
+            await (window as any).electronAPI.usb2snesFxpStop();
+            console.log('[USB2SNES] Stopped FXP server (switching away from embedded mode)');
+          } catch (error) {
+            console.warn('[USB2SNES] Error stopping FXP server:', error);
+          }
+        }
+        
+        // If switching to embedded mode and server is not running, ask user if they want to start it (only if auto-start is enabled)
+        if ((newHostingMethod === 'embedded' || 
+             newHostingMethod === 'embedded-divert' || 
+             newHostingMethod === 'embedded-divert-fallback') && 
+            !fxpStatus.running && 
+            settings.usb2snesFxpAutoStart === 'yes') {
+          // Check permissions first before showing start modal
+          try {
+            const permCheck = await (window as any).electronAPI.usb2snesCheckFxpPermissions();
+            if (!permCheck.hasPermissions) {
+              // Show permission warning instead
+              showUsb2snesFxpPermissionModal.value = true;
+              usb2snesFxpPermissionResult.value = permCheck;
+            } else {
+              showUsb2snesFxpStartModal.value = true;
+            }
+          } catch (error) {
+            console.warn('[USB2SNES] Permission check failed, showing start modal anyway:', error);
+            showUsb2snesFxpStartModal.value = true;
+          }
+        }
+      }
     } else {
       console.error('Failed to save settings:', result.error);
       alert(`Error saving settings: ${result.error}`);
@@ -3617,6 +5451,105 @@ async function saveSettings() {
   }
   
   closeSettings();
+}
+
+async function startUsb2snesFxpFromModal() {
+  showUsb2snesFxpStartModal.value = false;
+  
+  // Check permissions before starting
+  try {
+    const permCheck = await (window as any).electronAPI.usb2snesCheckFxpPermissions();
+    
+    if (!permCheck.hasPermissions) {
+      // Show permission modal instead
+      showUsb2snesFxpPermissionModal.value = true;
+      usb2snesFxpPermissionResult.value = permCheck;
+      return;
+    }
+  } catch (error) {
+    console.warn('[USB2SNES] Permission check failed, continuing anyway:', error);
+    // Continue with start attempt even if check fails
+  }
+  
+  await startUsb2snesFxp();
+}
+
+function cancelUsb2snesFxpStartModal() {
+  showUsb2snesFxpStartModal.value = false;
+}
+
+async function startUsb2snesFxpAnyway() {
+  // Start server without permission check (user acknowledged the warning)
+  if (!isElectronAvailable()) {
+    alert('USBFXP server requires Electron environment');
+    return;
+  }
+
+  try {
+    const port = Number(settings.usb2snesAddress) || 64213;
+    const config = { 
+      port, 
+      address: `ws://localhost:${port}`,
+      useDummyDevice: settings.usb2snesFxpUseDummyDevice === 'yes'
+    };
+    const result = await (window as any).electronAPI.usb2snesFxpStart(config);
+    
+    if (result.success) {
+      updateUsb2snesFxpStatus(result.status);
+      dropdownActionStatus.value = '✓ USBFXP server started (permissions may be limited)';
+    } else {
+      updateUsb2snesFxpStatus(result.status);
+      dropdownActionStatus.value = `✗ Server start failed: ${result.error || 'Unknown error'}`;
+    }
+  } catch (error) {
+    console.error('[USB2SNES] FXP start error:', error);
+    dropdownActionStatus.value = `✗ Server start failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function grantUsb2snesFxpPermission() {
+  if (!isElectronAvailable()) {
+    alert('Permission grant requires Electron environment');
+    return;
+  }
+
+  grantingPermission.value = true;
+  permissionGrantResult.value = null;
+
+  try {
+    const result = await (window as any).electronAPI.usb2snesGrantFxpPermission();
+    permissionGrantResult.value = {
+      success: result.success,
+      message: result.message
+    };
+
+    if (result.success) {
+      // Re-check permissions after granting
+      setTimeout(async () => {
+        try {
+          const permCheck = await (window as any).electronAPI.usb2snesCheckFxpPermissions();
+          usb2snesFxpPermissionResult.value = permCheck;
+          
+          if (permCheck.hasPermissions) {
+            // Permissions are now OK, but user needs to restart app for it to take effect
+            permissionGrantResult.value = {
+              success: true,
+              message: 'Permissions granted! Please restart the application for changes to take effect.'
+            };
+          }
+        } catch (error) {
+          console.warn('[USB2SNES] Permission re-check failed:', error);
+        }
+      }, 500);
+    }
+  } catch (error) {
+    permissionGrantResult.value = {
+      success: false,
+      message: `Error: ${formatErrorMessage(error)}`
+    };
+  } finally {
+    grantingPermission.value = false;
+  }
 }
 
 // File import handlers
@@ -3799,6 +5732,28 @@ async function browseLaunchProgram() {
   } catch (error: any) {
     console.error('Error browsing launch program:', error);
     alert('Error selecting launch program: ' + error.message);
+  }
+}
+
+async function browseUsb2snesIdentityFile() {
+  if (!isElectronAvailable()) {
+    alert('File selection requires Electron environment');
+    return;
+  }
+
+  try {
+    const result = await (window as any).electronAPI.showOpenDialog({
+      title: 'Select OpenSSH Identity File',
+      properties: ['openFile']
+    });
+
+    if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+      settings.usb2snesSshIdentityFile = result.filePaths[0];
+      console.log('✓ SSH identity file set:', result.filePaths[0]);
+    }
+  } catch (error: any) {
+    console.error('Error browsing SSH identity file:', error);
+    alert('Error selecting SSH identity file: ' + error.message);
   }
 }
 
@@ -4874,10 +6829,16 @@ async function uploadStagedToSnes(andBoot: boolean = false) {
     if (!usb2snesStatus.connected) {
       quickLaunchActionStatus.value = 'Connecting to USB2SNES...';
       
+      let connectOptions;
       try {
-        const library = usb2snesCurrentLibrary.value;
-        const address = settings.usb2snesAddress;
-        const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+        connectOptions = buildUsb2snesConnectOptions();
+      } catch (configError: any) {
+        quickLaunchActionStatus.value = `✗ ${configError.message}`;
+        return;
+      }
+
+      try {
+        const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
         
         usb2snesStatus.connected = true;
         usb2snesStatus.device = result.device;
@@ -4886,7 +6847,7 @@ async function uploadStagedToSnes(andBoot: boolean = false) {
         usb2snesStatus.romRunning = result.romRunning || 'N/A';
         startHealthMonitoring();
       } catch (connectError) {
-        quickLaunchActionStatus.value = `✗ Connection failed: ${connectError}`;
+        quickLaunchActionStatus.value = `✗ Connection failed: ${formatErrorMessage(connectError)}`;
         return;
       }
     }
@@ -5073,10 +7034,16 @@ async function launchSnesFile(file: any) {
       if (!usb2snesStatus.connected) {
         console.log('[SnesContents] USB2SNES not connected, attempting to connect...');
         
+        let connectOptions;
         try {
-          const library = usb2snesCurrentLibrary.value;
-          const address = settings.usb2snesAddress;
-          const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+          connectOptions = buildUsb2snesConnectOptions();
+        } catch (configError: any) {
+          alert(`Launch failed: ${configError.message}`);
+          return;
+        }
+
+        try {
+          const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
           
           usb2snesStatus.connected = true;
           usb2snesStatus.device = result.device;
@@ -5088,7 +7055,7 @@ async function launchSnesFile(file: any) {
           console.log('[SnesContents] ✓ USB2SNES connected successfully');
         } catch (connectError) {
           console.error('[SnesContents] Connection error:', connectError);
-          alert(`Launch failed: Could not connect to USB2SNES - ${connectError}`);
+          alert(`Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`);
           return;
         }
       } else {
@@ -5325,10 +7292,16 @@ async function launchCurrentChallenge() {
       if (!usb2snesStatus.connected) {
         console.log('[launchCurrentChallenge] USB2SNES not connected, attempting to connect...');
         
+        let connectOptions;
         try {
-          const library = usb2snesCurrentLibrary.value;
-          const address = settings.usb2snesAddress;
-          const result = await (window as any).electronAPI.usb2snesConnect(library, address);
+          connectOptions = buildUsb2snesConnectOptions();
+        } catch (configError: any) {
+          alert(`Launch failed: ${configError.message}`);
+          return;
+        }
+
+        try {
+          const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
           
           usb2snesStatus.connected = true;
           usb2snesStatus.device = result.device;
@@ -5340,7 +7313,7 @@ async function launchCurrentChallenge() {
           console.log('[launchCurrentChallenge] ✓ USB2SNES connected successfully');
         } catch (connectError) {
           console.error('[launchCurrentChallenge] Connection error:', connectError);
-          alert(`Launch failed: Could not connect to USB2SNES - ${connectError}`);
+          alert(`Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`);
           return;
         }
       } else {
@@ -6154,7 +8127,26 @@ async function loadSettings() {
     if (savedSettings.launchMethod) settings.launchMethod = savedSettings.launchMethod as any;
     if (savedSettings.launchProgram) settings.launchProgram = savedSettings.launchProgram;
     if (savedSettings.launchProgramArgs) settings.launchProgramArgs = savedSettings.launchProgramArgs;
+    if (savedSettings.usb2snesHostingMethod) settings.usb2snesHostingMethod = savedSettings.usb2snesHostingMethod as any;
     if (savedSettings.usb2snesAddress) settings.usb2snesAddress = savedSettings.usb2snesAddress;
+    if (savedSettings.usb2snesFxpAutoStart) settings.usb2snesFxpAutoStart = savedSettings.usb2snesFxpAutoStart as any;
+    if (savedSettings.usb2snesFxpUseDummyDevice) settings.usb2snesFxpUseDummyDevice = savedSettings.usb2snesFxpUseDummyDevice as any;
+    if (savedSettings.usb2snesFxpDiversionTarget) settings.usb2snesFxpDiversionTarget = savedSettings.usb2snesFxpDiversionTarget;
+    if (savedSettings.usb2snesFxpDiversionUseSocks) settings.usb2snesFxpDiversionUseSocks = savedSettings.usb2snesFxpDiversionUseSocks as any;
+    if (savedSettings.usb2snesFxpDiversionSocksProxyUrl) settings.usb2snesFxpDiversionSocksProxyUrl = savedSettings.usb2snesFxpDiversionSocksProxyUrl;
+    if (savedSettings.usb2snesProxyMode) settings.usb2snesProxyMode = savedSettings.usb2snesProxyMode as any;
+    if (savedSettings.usb2snesSocksProxyUrl) settings.usb2snesSocksProxyUrl = savedSettings.usb2snesSocksProxyUrl;
+    if (savedSettings.usb2snesSshHost) settings.usb2snesSshHost = savedSettings.usb2snesSshHost;
+    if (savedSettings.usb2snesSshUsername) settings.usb2snesSshUsername = savedSettings.usb2snesSshUsername;
+    if (savedSettings.usb2snesSshLocalPort) {
+      const parsedLocal = parseInt(savedSettings.usb2snesSshLocalPort, 10);
+      settings.usb2snesSshLocalPort = Number.isFinite(parsedLocal) ? parsedLocal : 64213;
+    }
+    if (savedSettings.usb2snesSshRemotePort) {
+      const parsedRemote = parseInt(savedSettings.usb2snesSshRemotePort, 10);
+      settings.usb2snesSshRemotePort = Number.isFinite(parsedRemote) ? parsedRemote : 64213;
+    }
+    if (savedSettings.usb2snesSshIdentityFile) settings.usb2snesSshIdentityFile = savedSettings.usb2snesSshIdentityFile;
     if (savedSettings.usb2snesEnabled) settings.usb2snesEnabled = savedSettings.usb2snesEnabled as any;
     if (savedSettings.usb2snesLaunchPref) settings.usb2snesLaunchPref = savedSettings.usb2snesLaunchPref as any;
     if (savedSettings.usb2snesUploadPref) settings.usb2snesUploadPref = savedSettings.usb2snesUploadPref as any;
@@ -6284,6 +8276,63 @@ onMounted(async () => {
       console.error('Error refreshing USB2SNES status:', error);
     }
   }
+
+  if (isElectronAvailable()) {
+    try {
+      const sshStatus = await (window as any).electronAPI.usb2snesGetSshStatus();
+      if (sshStatus) {
+        updateUsb2snesSshStatus(sshStatus);
+      }
+    } catch (error) {
+      console.warn('[USB2SNES] Failed to fetch SSH status:', error);
+    }
+
+    if (typeof (window as any).electronAPI.onUsb2snesSshStatus === 'function') {
+      removeUsb2snesSshStatusListener = (window as any).electronAPI.onUsb2snesSshStatus((status: any) => {
+        updateUsb2snesSshStatus(status);
+      });
+    }
+
+    // Initialize USBFXP server status
+    if (isElectronAvailable()) {
+      try {
+        const fxpStatus = await (window as any).electronAPI.usb2snesGetFxpStatus();
+        if (fxpStatus) {
+          updateUsb2snesFxpStatus(fxpStatus);
+        }
+      } catch (error) {
+        console.warn('[USB2SNES] Failed to fetch FXP status:', error);
+      }
+
+      if (typeof (window as any).electronAPI.onUsb2snesFxpStatus === 'function') {
+        removeUsb2snesFxpStatusListener = (window as any).electronAPI.onUsb2snesFxpStatus((status: any) => {
+          updateUsb2snesFxpStatus(status);
+        });
+      }
+      
+      // Check if embedded server option is selected but server is not running (only if auto-start is enabled)
+      if ((settings.usb2snesHostingMethod === 'embedded' || 
+           settings.usb2snesHostingMethod === 'embedded-divert' || 
+           settings.usb2snesHostingMethod === 'embedded-divert-fallback') && 
+          !usb2snesFxpStatus.running && 
+          settings.usb2snesFxpAutoStart === 'yes') {
+        // Check permissions first before showing start modal
+        try {
+          const permCheck = await (window as any).electronAPI.usb2snesCheckFxpPermissions();
+          if (!permCheck.hasPermissions) {
+            // Show permission warning instead
+            showUsb2snesFxpPermissionModal.value = true;
+            usb2snesFxpPermissionResult.value = permCheck;
+          } else {
+            showUsb2snesFxpStartModal.value = true;
+          }
+        } catch (error) {
+          console.warn('[USB2SNES] Permission check failed, showing start modal anyway:', error);
+          showUsb2snesFxpStartModal.value = true;
+        }
+      }
+    }
+  }
   
   console.log('=== INITIALIZATION COMPLETE ===');
 });
@@ -6294,6 +8343,14 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown);
   window.removeEventListener('click', handleGlobalClick);
+  if (removeUsb2snesSshStatusListener) {
+    removeUsb2snesSshStatusListener();
+    removeUsb2snesSshStatusListener = null;
+  }
+  if (removeUsb2snesFxpStatusListener) {
+    removeUsb2snesFxpStatusListener();
+    removeUsb2snesFxpStatusListener = null;
+  }
 });
 
 /**
@@ -7152,6 +9209,9 @@ button:disabled {
 }
 .setting-caption a { color: var(--accent-primary); text-decoration: none; }
 .setting-caption a:hover { text-decoration: underline; }
+.identity-control input[type="text"] { flex: 1; }
+.identity-control button { white-space: nowrap; }
+.ssh-settings .setting-caption { margin-left: 300px; }
 .setting-current-path { 
   font-size: var(--small-font-size); 
   color: var(--success-color); 
@@ -9006,6 +11066,101 @@ button:disabled {
   color: #F44336;
 }
 
+.ssh-client-section {
+  margin-top: 8px;
+}
+
+.ssh-connection-info {
+  margin-bottom: 12px;
+  padding: 8px;
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.ssh-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ssh-connection-row:last-child {
+  margin-bottom: 0;
+}
+
+.ssh-info-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.ssh-info-value {
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.ssh-info-value code {
+  background-color: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.ssh-client-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ssh-client-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.ssh-health {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ssh-health-indicator {
+  font-weight: 600;
+}
+
+.ssh-health-indicator.green {
+  color: #4CAF50;
+}
+
+.ssh-health-indicator.yellow {
+  color: #FFC107;
+}
+
+.ssh-health-indicator.red {
+  color: #F44336;
+}
+
+.ssh-health-indicator.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.ssh-health-indicator.clickable:hover {
+  opacity: 0.8;
+}
+
+.ssh-error-message {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--warning-color);
+}
+
 .connection-info {
   display: flex;
   gap: 8px;
@@ -9200,6 +11355,134 @@ button:disabled {
 .minichat-input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ===========================================================================
+   SSH CONSOLE MODAL STYLING
+   =========================================================================== */
+
+.ssh-console-modal {
+  width: 900px;
+  max-width: 95vw;
+  max-height: 90vh;
+}
+
+.ssh-console-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ssh-command-section h4,
+.ssh-history-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ssh-command-display {
+  padding: 10px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  word-break: break-all;
+  overflow-x: auto;
+}
+
+.ssh-command-display code {
+  color: var(--text-primary);
+  background: transparent;
+  padding: 0;
+}
+
+.ssh-history-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ssh-history-log {
+  flex: 1;
+  min-height: 300px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.ssh-history-entry {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-primary);
+  align-items: flex-start;
+}
+
+.ssh-history-entry:last-child {
+  border-bottom: none;
+}
+
+.ssh-history-entry.start {
+  color: #4CAF50;
+}
+
+.ssh-history-entry.stop {
+  color: #2196F3;
+}
+
+.ssh-history-entry.error {
+  color: #F44336;
+}
+
+.ssh-history-entry.exit {
+  color: #FF9800;
+}
+
+.ssh-history-entry.restart {
+  color: #FFC107;
+}
+
+.ssh-history-timestamp {
+  color: var(--text-tertiary);
+  min-width: 70px;
+  font-size: 10px;
+}
+
+.ssh-history-event {
+  font-weight: 600;
+  min-width: 80px;
+  font-size: 10px;
+}
+
+.ssh-history-message {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.ssh-history-exitcode {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.ssh-history-empty {
+  color: var(--text-tertiary);
+  font-style: italic;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.ssh-console-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 /* ===========================================================================

@@ -5,18 +5,51 @@
  * Provides database access, game data, user annotations, and settings
  */
 
-const { ipcMain, dialog } = require('electron');
+const { ipcMain, dialog, BrowserWindow } = require('electron');
 const crypto = require('crypto');
 const { app } = require('electron');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
 const { matchesFilter } = require('./shared-filter-utils');
+const sshManager = require('./main/usb2snes/sshManager');
+const usbfxpServer = require('./main/usb2snes/usbfxpServer');
 
 /**
  * Register all IPC handlers with the database manager
  * @param {DatabaseManager} dbManager - Database manager instance
  */
 function registerDatabaseHandlers(dbManager) {
+  const broadcastUsb2snesSshStatus = (status) => {
+    try {
+      const windows = BrowserWindow.getAllWindows();
+      windows.forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('usb2snes:ssh-status', status);
+        }
+      });
+    } catch (error) {
+      console.warn('[USB2SNES][SSH] Failed to broadcast status:', error);
+    }
+  };
+
+  sshManager.on('status', broadcastUsb2snesSshStatus);
+  broadcastUsb2snesSshStatus(sshManager.getStatus());
+
+  const broadcastUsb2snesFxpStatus = (status) => {
+    try {
+      const windows = BrowserWindow.getAllWindows();
+      windows.forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('usb2snes:fxp-status', status);
+        }
+      });
+    } catch (error) {
+      console.warn('[USB2SNES][FXP] Failed to broadcast status:', error);
+    }
+  };
+
+  usbfxpServer.on('status', broadcastUsb2snesFxpStatus);
+  broadcastUsb2snesFxpStatus(usbfxpServer.getStatus());
   
   // ===========================================================================
   // GAME DATA OPERATIONS (rhdata.db)
@@ -1766,22 +1799,31 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Connect to USB2SNES server
    * Channel: usb2snes:connect
-   * @param {string} library - Implementation type ('usb2snes_a', etc.)
-   * @param {string} address - WebSocket address
+   * @param {Object} options - Connection options (library, address, proxy)
    * @returns {Object} Connection info (device, firmware, etc.)
    */
-  ipcMain.handle('usb2snes:connect', async (event, library, address) => {
+  ipcMain.handle('usb2snes:connect', async (event, options = {}) => {
     try {
+      const { library, proxyMode } = options;
+      if (!library) {
+        throw new Error('USB2SNES library not specified.');
+      }
+
+      if (proxyMode === 'ssh') {
+        const sshStatus = sshManager.getStatus();
+        if (!sshStatus.running) {
+          throw new Error('SSH client is not running. Start the SSH client before connecting.');
+        }
+      }
+
       const wrapper = getSnesWrapper();
-      
-      // Full connect: set implementation, connect, attach to first device
-      const result = await wrapper.fullConnect(library, address);
-      
+      const result = await wrapper.fullConnect(library, options);
+
       console.log('[USB2SNES] Connected successfully:', result);
-      
+
       // Notify renderer that device is responding
       event.sender.send('usb2snes:operation-success');
-      
+
       return {
         connected: true,
         device: result.device,
@@ -1794,6 +1836,129 @@ function registerDatabaseHandlers(dbManager) {
       console.error('[USB2SNES] Connection error:', error);
       throw error;
     }
+  });
+
+  ipcMain.handle('usb2snes:ssh-start', async (_event, config) => {
+    try {
+      const result = await sshManager.start(config || {});
+      const status = sshManager.getStatus();
+      broadcastUsb2snesSshStatus(status);
+
+      if (result && result.manual) {
+        dialog.showMessageBox({
+          type: 'info',
+          buttons: ['OK'],
+          title: 'USB2SNES SSH Tunnel',
+          message: 'SSH tunnel started',
+          detail: 'Keep the SSH client terminal window open while the tunnel is active. Closing the window will stop the connection.'
+        });
+      }
+
+      return { success: true, status };
+    } catch (error) {
+      console.error('[USB2SNES][SSH] Start error:', error);
+      const status = sshManager.getStatus();
+      broadcastUsb2snesSshStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:ssh-stop', async () => {
+    try {
+      const result = sshManager.stop();
+      broadcastUsb2snesSshStatus(result.status);
+      return result;
+    } catch (error) {
+      console.error('[USB2SNES][SSH] Stop error:', error);
+      const status = sshManager.getStatus();
+      broadcastUsb2snesSshStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:ssh-status', async () => {
+    return sshManager.getStatus();
+  });
+
+  ipcMain.handle('usb2snes:ssh-console-history', async () => {
+    return sshManager.getConsoleHistory();
+  });
+
+  // ===========================================================================
+  // USB2SNES EMBEDDED SERVER (USBFXP) OPERATIONS
+  // ===========================================================================
+
+  ipcMain.handle('usb2snes:fxp-start', async (_event, config) => {
+    try {
+      const result = await usbfxpServer.start(config || {});
+      const status = usbfxpServer.getStatus();
+      broadcastUsb2snesFxpStatus(status);
+      return { success: true, status };
+    } catch (error) {
+      console.error('[USB2SNES][FXP] Start error:', error);
+      const status = usbfxpServer.getStatus();
+      broadcastUsb2snesFxpStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:fxp-stop', async () => {
+    try {
+      const result = usbfxpServer.stop();
+      broadcastUsb2snesFxpStatus(result.status);
+      return result;
+    } catch (error) {
+      console.error('[USB2SNES][FXP] Stop error:', error);
+      const status = usbfxpServer.getStatus();
+      broadcastUsb2snesFxpStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:fxp-restart', async (_event, config) => {
+    try {
+      // Update config if provided
+      if (config) {
+        usbfxpServer.config = usbfxpServer._normalizeConfig(config);
+      }
+      const result = await usbfxpServer.restart();
+      const status = usbfxpServer.getStatus();
+      broadcastUsb2snesFxpStatus(status);
+      return { success: true, status };
+    } catch (error) {
+      console.error('[USB2SNES][FXP] Restart error:', error);
+      const status = usbfxpServer.getStatus();
+      broadcastUsb2snesFxpStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:fxp-status', async () => {
+    return usbfxpServer.getStatus();
+  });
+
+  ipcMain.handle('usb2snes:fxp-console-history', async () => {
+    return usbfxpServer.getConsoleHistory();
+  });
+
+  /**
+   * Check USB/serial device permissions
+   * Channel: usb2snes:fxp-check-permissions
+   * @returns {Promise<Object>} Permission check result
+   */
+  ipcMain.handle('usb2snes:fxp-check-permissions', async () => {
+    const { checkUsbPermissions } = require('./main/usb2snes/usbPermissions');
+    return await checkUsbPermissions();
+  });
+
+  /**
+   * Grant dialout group permission using pkexec
+   * Channel: usb2snes:fxp-grant-permission
+   * @returns {Promise<{success: boolean, message: string, error?: string}>}
+   */
+  ipcMain.handle('usb2snes:fxp-grant-permission', async () => {
+    const { grantDialoutPermission } = require('./main/usb2snes/usbPermissions');
+    return await grantDialoutPermission();
   });
 
   /**

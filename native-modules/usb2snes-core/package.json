@@ -1,0 +1,38 @@
+{
+  "name": "usb2snes-core",
+  "version": "0.1.0",
+  "description": "Native Rust-based USB2SNES core implementation, ported from Core",
+  "main": "index.js",
+  "napi": {
+    "name": "usb2snes-core",
+    "triples": {
+      "additional": [
+        "x86_64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "cargo build --release && npm run copy-binary",
+    "build:debug": "cargo build && npm run copy-binary",
+    "copy-binary": "cp target/release/libusb2snes_core.so index.node 2>/dev/null || cp target/release/usb2snes_core.dll index.node 2>/dev/null || cp target/release/libusb2snes_core.dylib index.node 2>/dev/null || echo 'Binary not found - run cargo build first'",
+    "install": "npm run build"
+  },
+  "keywords": [
+    "usb2snes",
+    "sd2snes",
+    "native",
+    "serialport",
+    "rust"
+  ],
+  "author": "RHTools Team",
+  "license": "MIT",
+  "devDependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
+

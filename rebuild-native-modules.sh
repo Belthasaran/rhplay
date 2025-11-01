@@ -23,6 +23,7 @@ if [ "$1" = "windows" ]; then
     rm -rf node_modules/keccak/build
     rm -rf node_modules/lzma-native/build
     rm -rf node_modules/secp256k1/build
+    rm -rf native-modules/serialport-nonblock/build
     
     echo "✅ Native modules cleaned for Windows rebuild"
 else

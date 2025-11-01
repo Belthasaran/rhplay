@@ -118,12 +118,13 @@ class SNESWrapper {
   /**
    * Connect to USB2SNES server/device
    * @param {string} address - WebSocket address (default: 'ws://localhost:64213')
+   * @param {Object} options - Additional connection options (proxy, etc.)
    * @returns {Promise<void>}
    */
-  async connect(address = 'ws://localhost:64213') {
+  async connect(address = 'ws://localhost:64213', options = {}) {
     this._ensureImplementation();
     console.log(`[SNESWrapper] Connecting to ${address} using ${this.implementationType}`);
-    return await this.implementationInstance.connect(address);
+    return await this.implementationInstance.connect(address, options);
   }
 
   /**
@@ -387,21 +388,21 @@ class SNESWrapper {
    * @param {string} address - WebSocket address
    * @returns {Promise<void>}
    */
-  async quickConnect(implementation, address = 'ws://localhost:64213') {
+  async quickConnect(implementation, address = 'ws://localhost:64213', options = {}) {
     await this.setImplementation(implementation);
-    await this.connect(address);
+    await this.connect(address, options);
   }
 
   /**
    * Full connect flow: Connect, get devices, attach to first device
    * @param {string} implementation - Implementation type
-   * @param {string} address - WebSocket address
-   * @param {string|null} deviceName - Specific device to attach to, or null for first device
+   * @param {Object} options - Connection options ({ address, deviceName, proxyMode, ... })
    * @returns {Promise<Object>} Connection info (device, info)
    */
-  async fullConnect(implementation, address = 'ws://localhost:64213', deviceName = null) {
+  async fullConnect(implementation, options = {}) {
+    const { address = 'ws://localhost:64213', deviceName = null } = options;
     await this.setImplementation(implementation);
-    await this.connect(address);
+    await this.connect(address, options);
     
     const devices = await this.DeviceList();
     if (!devices || devices.length === 0) {

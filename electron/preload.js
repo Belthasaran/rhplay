@@ -348,11 +348,89 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   /**
    * Connect to USB2SNES server
-   * @param {string} library - Implementation type ('usb2snes_a', etc.)
-   * @param {string} address - WebSocket address
+   * @param {Object} options - Connection options (library, address, proxy settings)
    * @returns {Promise<Object>} Connection info
    */
-  usb2snesConnect: (library, address) => ipcRenderer.invoke('usb2snes:connect', library, address),
+  usb2snesConnect: (options) => ipcRenderer.invoke('usb2snes:connect', options),
+  /**
+   * Start managed SSH client for USB2SNES tunneling
+   * @param {Object} config - SSH configuration
+   * @returns {Promise<{success: boolean, status?: Object, error?: string}>}
+   */
+  usb2snesStartSsh: (config) => ipcRenderer.invoke('usb2snes:ssh-start', config),
+  /**
+   * Stop managed SSH client
+   * @returns {Promise<{success: boolean, status?: Object, error?: string}>}
+   */
+  usb2snesStopSsh: () => ipcRenderer.invoke('usb2snes:ssh-stop'),
+  /**
+   * Get current SSH client status
+   * @returns {Promise<Object>} Status info
+   */
+  usb2snesGetSshStatus: () => ipcRenderer.invoke('usb2snes:ssh-status'),
+  /**
+   * Subscribe to SSH status updates
+   * @param {Function} callback - (status) => void
+   * @returns {Function} Cleanup function
+   */
+  onUsb2snesSshStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('usb2snes:ssh-status', handler);
+    return () => ipcRenderer.removeListener('usb2snes:ssh-status', handler);
+  },
+  /**
+   * Get SSH console history
+   * @returns {Promise<Array>} Console history entries
+   */
+  usb2snesGetSshConsoleHistory: () => ipcRenderer.invoke('usb2snes:ssh-console-history'),
+  
+  /**
+   * Start USBFXP embedded server
+   * @param {Object} config - Server configuration (port, address)
+   * @returns {Promise<{success: boolean, status?: Object, error?: string}>}
+   */
+  usb2snesFxpStart: (config) => ipcRenderer.invoke('usb2snes:fxp-start', config),
+  /**
+   * Stop USBFXP embedded server
+   * @returns {Promise<{success: boolean, status?: Object, error?: string}>}
+   */
+  usb2snesFxpStop: () => ipcRenderer.invoke('usb2snes:fxp-stop'),
+  /**
+   * Restart USBFXP embedded server
+   * @param {Object} config - Server configuration (port, address)
+   * @returns {Promise<{success: boolean, status?: Object, error?: string}>}
+   */
+  usb2snesFxpRestart: (config) => ipcRenderer.invoke('usb2snes:fxp-restart', config),
+  /**
+   * Get current USBFXP server status
+   * @returns {Promise<Object>} Status info
+   */
+  usb2snesGetFxpStatus: () => ipcRenderer.invoke('usb2snes:fxp-status'),
+  /**
+   * Subscribe to USBFXP server status updates
+   * @param {Function} callback - (status) => void
+   * @returns {Function} Cleanup function
+   */
+  onUsb2snesFxpStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('usb2snes:fxp-status', handler);
+    return () => ipcRenderer.removeListener('usb2snes:fxp-status', handler);
+  },
+  /**
+   * Get USBFXP console history
+   * @returns {Promise<Array>} Console history entries
+   */
+  usb2snesGetFxpConsoleHistory: () => ipcRenderer.invoke('usb2snes:fxp-console-history'),
+  /**
+   * Check USB/serial device permissions
+   * @returns {Promise<{hasPermissions: boolean, platform: string, issues: string[], instructions: string[]}>}
+   */
+  usb2snesCheckFxpPermissions: () => ipcRenderer.invoke('usb2snes:fxp-check-permissions'),
+  /**
+   * Grant dialout group permission using pkexec
+   * @returns {Promise<{success: boolean, message: string, error?: string}>}
+   */
+  usb2snesGrantFxpPermission: () => ipcRenderer.invoke('usb2snes:fxp-grant-permission'),
   
   /**
    * Disconnect from USB2SNES server

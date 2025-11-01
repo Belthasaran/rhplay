@@ -18,14 +18,23 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      - name: Setup build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3
+
       - name: Install dependencies
         run: npm ci
-
-      - name: Rebuild native modules for Electron
-        run: npm run postinstall
-
-      - name: Make helper scripts executable
-        run: chmod +x enode.sh
+        
+      - name: Verify native module build
+        run: |
+          if [ -f "native-modules/serialport-nonblock/build/Release/serialport_nonblock.node" ]; then
+            echo "✓ Native module built successfully in CI"
+            file native-modules/serialport-nonblock/build/Release/serialport_nonblock.node
+          else
+            echo "⚠ Warning: Native module not found"
+            exit 1
+          fi
 
       - name: Run CI tests
         run: npm run test:ci

@@ -34,9 +34,10 @@ class BaseUsb2snes {
   /**
    * Connect to USB2SNES server/device
    * @param {string} address - WebSocket address (e.g., 'ws://localhost:64213')
+   * @param {Object} options - Additional connection options (proxy, etc.)
    * @returns {Promise<void>}
    */
-  async connect(address) {
+  async connect(address, options) {
     throw new Error("connect() must be implemented by subclass");
   }
 

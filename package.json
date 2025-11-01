@@ -1,11 +1,12 @@
 {
   "name": "rhtools",
-  "version": "0.1.1beta",
+  "version": "0.1.0beta",
   "description": "RHTools - ROM Hack Tools Application",
   "author": "RHTools Team",
   "main": "electron/main.js",
   "scripts": {
-    "postinstall": "patch-package && electron-builder install-app-deps",
+    "postinstall": "cd native-modules/serialport-nonblock && npm install && cd ../.. && patch-package && electron-builder install-app-deps",
+    "rebuild:native": "cd native-modules/serialport-nonblock && npm run install && cd ../.. && electron-rebuild",
     "electron:start": "cross-env ELECTRON_START_URL=http://localhost:5173 electron electron/main.js --xdg-portal-required-version=4",
     "electron:start-smart": "cd electron && ./smart-start.sh",
     "renderer:dev": "npm --prefix electron/renderer run dev",
@@ -55,7 +56,7 @@
     "test:usb2snes-mkdir": "node tests/test_usb2snes_mkdir.js",
     "test:usb2snes-putfile": "node tests/test_usb2snes_putfile.js",
     "test:usb2snes-full": "node tests/test_usb2snes_mkdir_then_upload.js",
-    "test:migrations": "./enode.sh tests/test_migrations.js",
+    "test:migrations": "node tests/test_migrations.js",
     "test:ci": "npm-run-all -s test:migrations",
     "utils:identify-keys": "node identify-incompatible-keys.js",
     "utils:reprocess-attachments": "node reprocess-attachments.js",
@@ -72,6 +73,7 @@
   },
   "dependencies": {
     "@poeticode/js-lzma": "^1.0.0",
+    "@serialport/parser-readline": "^13.0.0",
     "adm-zip": "^0.5.10",
     "ardrive-cli": "^3.0.3",
     "ardrive-core-js": "^3.0.3",
@@ -85,7 +87,10 @@
     "lzma-native": "^8.0.6",
     "multiformats": "^9.9.0",
     "node-jose": "^2.2.0",
+    "serialport": "^13.0.0",
+    "socks": "^2.8.7",
     "urlsafe-base64": "^1.0.0",
+    "usb": "^2.11.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
@@ -126,7 +131,8 @@
       "node_modules/better-sqlite3/**/*",
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
-      "node_modules/secp256k1/**/*"
+      "node_modules/secp256k1/**/*",
+      "native-modules/serialport-nonblock/build/**/*"
     ],
     "win": {
       "target": [

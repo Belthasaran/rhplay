@@ -1,0 +1,29 @@
+{
+  "name": "serialport-nonblock",
+  "version": "1.0.0",
+  "description": "Native module to set O_NONBLOCK flag on file descriptors",
+  "main": "index.js",
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "test": "node test/test.js"
+  },
+  "gypfile": true,
+  "keywords": [
+    "serialport",
+    "nonblock",
+    "fcntl",
+    "native"
+  ],
+  "author": "RHTools Team",
+  "license": "MIT",
+  "dependencies": {
+    "node-addon-api": "^7.0.0"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
+

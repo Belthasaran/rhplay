@@ -26,6 +26,7 @@ const {
 
 // WebSocket library - using 'ws' package
 const WebSocket = require('ws');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 
 // ========================================
 // CONFIGURATION CONSTANTS
@@ -93,9 +94,10 @@ class Usb2snesTypeA extends BaseUsb2snes {
   /**
    * Connect to USB2SNES WebSocket server
    * @param {string} address - WebSocket address (e.g., 'ws://localhost:64213')
+   * @param {Object} options - Additional connection options
    * @returns {Promise<void>}
    */
-  async connect(address = 'ws://localhost:64213') {
+  async connect(address = 'ws://localhost:64213', options = {}) {
     if (this.socket !== null) {
       console.log('[usb2snesTypeA] Already connected');
       return;
@@ -106,11 +108,28 @@ class Usb2snesTypeA extends BaseUsb2snes {
     console.log(`[usb2snesTypeA] Connecting to ${address}...`);
 
     try {
-      // Create WebSocket connection
-      this.socket = new WebSocket(address, {
-        // Disable automatic ping/pong to match Python implementation
+      const wsOptions = {
         perMessageDeflate: false
-      });
+      };
+
+      if (options && options.proxyMode === 'socks' && options.socksProxyUrl) {
+        console.log(`[usb2snesTypeA] Using SOCKS proxy ${options.socksProxyUrl}`);
+        wsOptions.agent = new SocksProxyAgent(options.socksProxyUrl);
+      }
+
+      // For SSH port forwarding, override the Host header to use localhost:remotePort
+      // This is required because the remote server expects connections to come from localhost
+      if (options && options.proxyMode === 'ssh' && options.ssh && options.ssh.remotePort) {
+        const remotePort = options.ssh.remotePort;
+        if (!wsOptions.headers) {
+          wsOptions.headers = {};
+        }
+        wsOptions.headers['Host'] = `localhost:${remotePort}`;
+        console.log(`[usb2snesTypeA] SSH port forwarding: Setting Host header to localhost:${remotePort}`);
+      }
+
+      // Create WebSocket connection
+      this.socket = new WebSocket(address, wsOptions);
 
       // Set up event handlers
       await this._setupWebSocket();
@@ -159,16 +178,18 @@ class Usb2snesTypeA extends BaseUsb2snes {
    * @private
    */
   _startRecvLoop() {
-    this.socket.on('message', (data) => {
+    this.socket.on('message', (data, isBinary) => {
       // Queue incoming data
       this.recvQueue.push(data);
       
       // Debug: Log what we received
       try {
-        const parsed = JSON.parse(data.toString());
-        console.log('[usb2snesTypeA] Received message:', parsed.Opcode || 'no opcode', 'Results:', parsed.Results ? parsed.Results.length : 'none');
+        // Try to parse as JSON regardless of binary flag - WebSocket can send text as binary
+        const textData = Buffer.isBuffer(data) ? data.toString('utf8') : (typeof data === 'string' ? data : data.toString());
+        const parsed = JSON.parse(textData);
+        console.log('[usb2snesTypeA] Received message:', parsed.Opcode || 'no opcode', 'Results:', parsed.Results ? parsed.Results.length : 'none', 'isBinary:', isBinary);
       } catch (e) {
-        console.log('[usb2snesTypeA] Received binary data:', data.length, 'bytes');
+        console.log('[usb2snesTypeA] Received binary/non-JSON data:', data.length || data.toString().length, 'bytes', 'isBinary:', isBinary);
       }
     });
   }
@@ -209,10 +230,17 @@ class Usb2snesTypeA extends BaseUsb2snes {
         Space: "SNES"
       };
 
-      this.socket.send(JSON.stringify(request));
+      const requestJson = JSON.stringify(request);
+      console.log('[usb2snesTypeA] Sending DeviceList request:', requestJson);
+      console.log('[usb2snesTypeA] Socket state:', this.socket.readyState, 'OPEN=', WebSocket.OPEN);
+      
+      this.socket.send(requestJson);
+      console.log('[usb2snesTypeA] DeviceList request sent, waiting for response...');
+      console.log('[usb2snesTypeA] Current recvQueue length:', this.recvQueue.length);
 
       // Wait for response with timeout
       const reply = await this._waitForResponse(5000);
+      console.log('[usb2snesTypeA] Received DeviceList response:', reply);
       const devices = reply.Results && reply.Results.length > 0 ? reply.Results : null;
 
       if (!devices) {
@@ -246,24 +274,31 @@ class Usb2snesTypeA extends BaseUsb2snes {
     }
 
     try {
+      // Ensure device is a string
+      const deviceName = typeof device === 'string' ? device : String(device || '');
+      if (!deviceName) {
+        throw new Error('Invalid device name: device must be a non-empty string');
+      }
+
       const request = {
         Opcode: "Attach",
         Space: "SNES",
-        Operands: [device]
+        Operands: [deviceName]
       };
 
       this.socket.send(JSON.stringify(request));
       this.state = SNES_ATTACHED;
 
       // Detect if SD2SNES device
-      if (device.toLowerCase().includes('sd2snes') || (device.length === 4 && device.substring(0, 3) === 'COM')) {
+      const deviceLower = deviceName.toLowerCase();
+      if (deviceLower.includes('sd2snes') || (deviceName.length === 4 && deviceName.substring(0, 3) === 'COM')) {
         this.isSD2SNES = true;
       } else {
         this.isSD2SNES = false;
       }
 
-      this.device = device;
-      console.log(`[usb2snesTypeA] Attached to ${device}, isSD2SNES: ${this.isSD2SNES}`);
+      this.device = deviceName;
+      console.log(`[usb2snesTypeA] Attached to ${deviceName}, isSD2SNES: ${this.isSD2SNES}`);
     } catch (error) {
       if (this.socket) {
         this.socket.close();
@@ -1644,7 +1679,9 @@ class Usb2snesTypeA extends BaseUsb2snes {
     this.consecutiveTimeouts = 0;
     
     const msg = this.recvQueue.shift();
-    return JSON.parse(msg.toString());
+    // Handle both Buffer and string messages
+    const textData = Buffer.isBuffer(msg) ? msg.toString('utf8') : (typeof msg === 'string' ? msg : msg.toString());
+    return JSON.parse(textData);
   }
 
   /**

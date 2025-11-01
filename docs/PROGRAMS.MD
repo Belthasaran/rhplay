@@ -536,6 +536,99 @@ python3 create_blob_python.py <patch_file> <gameid> <blobs_dir> <pat_sha224> [re
 
 ---
 
+## USB2SNES Server Testing
+
+### test_usbfxp_server.js
+**Purpose**: Standalone test utility for the embedded USB2SNES/FXP server
+
+**Usage**:
+```bash
+enode.sh test_usbfxp_server.js [options]
+```
+
+**Key Options**:
+- `--port, -p <number>` - WebSocket port (default: 64213)
+- `--dummy, -d` - Use dummy USB device for testing
+
+---
+
+### test_usbfxp_server_rust.js
+**Purpose**: Standalone test utility for the embedded USB2SNES/FXP server using Rust native module
+
+**Usage**:
+```bash
+enode.sh test_usbfxp_server_rust.js [options]
+```
+
+**Key Options**:
+- `--start-server, -s` - Start the server within this script (for standalone testing)
+- `--port, -p <number>` - WebSocket port when starting server (default: 64213)
+- `--dummy, -d` - Use dummy USB device for testing
+- `--verbose` - Show detailed logs
+- `-i, --info` - Test Info command
+- `-r, --reset` - Test Reset command
+- `-b, --boot` - Test Boot command
+- `-m, --menu` - Test Menu command
+- `--putfile` - Test PutFile command
+- `--list` - Test List command
+- `--all` - Run all tests
+
+**Examples**:
+```bash
+# Test Info command (server must be running separately)
+enode.sh test_usbfxp_server_rust.js --info
+
+# Start server and test Info command (standalone mode)
+enode.sh test_usbfxp_server_rust.js --start-server --info --verbose
+
+# Test Reset command with server auto-start
+enode.sh test_usbfxp_server_rust.js --start-server --reset
+
+# Run all tests with server auto-start and dummy device
+enode.sh test_usbfxp_server_rust.js --start-server --dummy --all --verbose
+```
+
+**What it tests**:
+- Server startup and initialization
+- WebSocket connection to server
+- Device attachment
+- Info command (firmware version, ROM name)
+- Reset command (SNES reset)
+- Boot/Menu/List/PutFile commands
+- Rust native module integration
+- `--verbose, -v` - Enable verbose logging
+- `--help, -h` - Show help message
+
+**Examples**:
+```bash
+# Test with default settings
+enode.sh test_usbfxp_server.js
+
+# Test with dummy device
+enode.sh test_usbfxp_server.js --dummy
+
+# Test on different port with verbose logging
+enode.sh test_usbfxp_server.js --port 8080 --verbose
+```
+
+**What it tests**:
+- Server startup and initialization
+- WebSocket connection to server
+- DeviceList command
+- Attach command
+- Info command (device information)
+- Server shutdown
+
+**Exit Codes**:
+- `0` - All tests passed
+- `1` - Server failed to start
+- `2` - Connection failed
+- `3` - Test failures
+
+**Use Case**: Quick testing of the USB2SNES/FXP server without launching the full Electron app
+
+---
+
 ## Testing
 
 ### tests/test_blob_compatibility.js

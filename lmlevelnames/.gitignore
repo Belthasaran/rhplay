@@ -1,7 +1,11 @@
+*.sfc
+*.smc
 lm333
 lm333/*.exe
 lm333/*.chm
 lm333/*.txt
 x64
 Lunar*.exe
+level_reader
+reader
 

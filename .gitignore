@@ -1,5 +1,6 @@
 blobs/*
 smw.sfc
+*.smc
 *.sfc
 *.sfc.new
 *.sfcjson.new

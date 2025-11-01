@@ -65,7 +65,7 @@ for i_gameid in $GAMEIDS; do
     export GAMEVER=$VERSION
     export ROMFILE=temp/temp.sfc
     echo ""
-    echo "{ \"${i_gameid}\": {" >> temp/temp.json
+    echo "{ \"${i_gameid}\": {" > temp/temp.json
     python try_lmfilter.py temp/temp.json
     if [ $? -eq 0 ] ; then
          ROMFILE=temp/temp_lm361.sfc
@@ -74,8 +74,15 @@ for i_gameid in $GAMEIDS; do
     ./level_reader ${ROMFILE}  >> temp/temp.json
     if [ $? -eq 0 ] ; then
 	    echo -e "}}\n" >> temp/temp.json  && mv temp/temp.json temp/${i_gameid}_levelids.json
+	    #python findtranslevels/find_translevels.py --romfile temp/temp_lm361xf_quickie.sfc
+	    python leveldetector/detect_modified_by_pointers.py --romfile ${ROMFILE} --vanillarom smw.sfc --start 000 --end 1FF >> temp/olev.new
+	    mv temp/olev.new temp/${i_gameid}_detect.csv
+	     #--json temp/${i_gameid}_detect.json
+	    python findtranslevels/find_translevels.py --romfile ${ROMFILE} > temp/txlev.new
+	    mv temp/txlev.new temp/${i_gameid}_translevs.json
 	    echo " Saved level names to temp/${i_gameid}_levelids.json"
     else
+	    touch temp/${i_gameid}_failed.txt
             echo "  Failed to extract level names for gameid $i_gameid"
     fi
 

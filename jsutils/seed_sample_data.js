@@ -18,6 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const { spawnSync } = require('child_process');
 
 function parseArgs(argv) {
   const args = {};
@@ -61,11 +62,26 @@ function tableExists(db, table) {
   return !!row;
 }
 
+function decompressXZ(sourcePath, destPath) {
+  const outFd = fs.openSync(destPath, 'w');
+  const result = spawnSync('xz', ['-dc', sourcePath], { stdio: ['ignore', outFd, 'inherit'] });
+  fs.closeSync(outFd);
+  if (result.error) {
+    throw new Error(`Failed to decompress ${sourcePath}: ${result.error.message}. Ensure the 'xz' binary is installed and available in PATH.`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`Failed to decompress ${sourcePath} (xz exit code ${result.status}).`);
+  }
+}
+
 function findSourceFile(sourceDir, candidates, prefixFallback) {
   for (const candidate of candidates) {
     const candidatePath = path.join(sourceDir, candidate);
     if (fileExists(candidatePath)) {
       return candidatePath;
+    }
+    if (fileExists(`${candidatePath}.xz`)) {
+      return `${candidatePath}.xz`;
     }
   }
   if (prefixFallback) {
@@ -73,8 +89,8 @@ function findSourceFile(sourceDir, candidates, prefixFallback) {
     const match = entries.find((entry) => entry.startsWith(prefixFallback));
     if (match) {
       const fallbackPath = path.join(sourceDir, match);
-      if (fileExists(fallbackPath)) {
-        return fallbackPath;
+      if (fileExists(fallbackPath) || fileExists(`${fallbackPath}.xz`)) {
+        return fileExists(fallbackPath) ? fallbackPath : `${fallbackPath}.xz`;
       }
     }
   }
@@ -94,9 +110,16 @@ function copyDbFiles(sourceDir, outputDir, verbose) {
       throw new Error(`Source database not found for ${mapping.target} in ${sourceDir}`);
     }
     const dest = path.join(outputDir, mapping.target);
-    fs.copyFileSync(sourcePath, dest);
-    if (verbose) {
-      console.log(`Copied ${sourcePath} -> ${dest}`);
+    if (sourcePath.endsWith('.xz')) {
+      if (verbose) {
+        console.log(`Decompressing ${sourcePath} -> ${dest}`);
+      }
+      decompressXZ(sourcePath, dest);
+    } else {
+      fs.copyFileSync(sourcePath, dest);
+      if (verbose) {
+        console.log(`Copied ${sourcePath} -> ${dest}`);
+      }
     }
   }
 }

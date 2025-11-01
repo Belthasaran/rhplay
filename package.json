@@ -55,7 +55,7 @@
     "test:usb2snes-mkdir": "node tests/test_usb2snes_mkdir.js",
     "test:usb2snes-putfile": "node tests/test_usb2snes_putfile.js",
     "test:usb2snes-full": "node tests/test_usb2snes_mkdir_then_upload.js",
-    "test:migrations": "node tests/test_migrations.js",
+    "test:migrations": "./enode.sh tests/test_migrations.js",
     "test:ci": "npm-run-all -s test:migrations",
     "utils:identify-keys": "node identify-incompatible-keys.js",
     "utils:reprocess-attachments": "node reprocess-attachments.js",

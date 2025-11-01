@@ -24,8 +24,8 @@ const fernet = require('fernet');
 const lzma = require('lzma-native');
 
 // Database paths (can be overridden by --patchbindb and --rhdatadb)
-let RHDATA_DB_PATH = path.join(__dirname, 'electron', 'rhdata.db');
-let PATCHBIN_DB_PATH = path.join(__dirname, 'electron', 'patchbin.db');
+let RHDATA_DB_PATH = path.join(__dirname, '..', 'electron', 'rhdata.db');
+let PATCHBIN_DB_PATH = path.join(__dirname, '..', 'electron', 'patchbin.db');
 
 // ArDrive configuration
 const DEFAULT_GATEWAY = 'https://arweave.net:443';

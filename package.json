@@ -88,6 +88,7 @@
     "node-jose": "^2.2.0",
     "serialport": "^13.0.0",
     "socks": "^2.8.7",
+    "socks-proxy-agent": "^8.0.3",
     "urlsafe-base64": "^1.0.0",
     "usb": "^2.11.0",
     "ws": "^8.18.3"

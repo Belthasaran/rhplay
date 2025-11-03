@@ -78,6 +78,7 @@ function registerDatabaseHandlers(dbManager) {
             uga.user_difficulty_rating as MyDifficultyRating,
             uga.user_review_rating as MyReviewRating,
             uga.user_skill_rating as MySkillRating,
+            uga.user_skill_rating_when_beat as MySkillRatingWhenBeat,
             COALESCE(uga.hidden, 0) as Hidden,
             COALESCE(uga.exclude_from_random, 0) as ExcludeFromRandom,
             uga.user_notes as Mynotes
@@ -156,6 +157,7 @@ function registerDatabaseHandlers(dbManager) {
             COALESCE(ugva.user_difficulty_rating, uga.user_difficulty_rating) as MyDifficultyRating,
             COALESCE(ugva.user_review_rating, uga.user_review_rating) as MyReviewRating,
             COALESCE(ugva.user_skill_rating, uga.user_skill_rating) as MySkillRating,
+            COALESCE(ugva.user_skill_rating_when_beat, uga.user_skill_rating_when_beat) as MySkillRatingWhenBeat,
             COALESCE(ugva.user_recommendation_rating, uga.user_recommendation_rating) as MyRecommendationRating,
             COALESCE(ugva.user_importance_rating, uga.user_importance_rating) as MyImportanceRating,
             COALESCE(ugva.user_technical_quality_rating, uga.user_technical_quality_rating) as MyTechnicalQualityRating,
@@ -250,7 +252,14 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      if (mySkillRatingWhenBeat !== null && mySkillRatingWhenBeat !== undefined) {
+        if (mySkillRatingWhenBeat < 0 || mySkillRatingWhenBeat > 10) {
+          throw new Error('Skill rating when beat must be 0-10');
+        }
+      }
+      
       const {
+        mySkillRatingWhenBeat,
         myRecommendationRating,
         myImportanceRating,
         myTechnicalQualityRating,
@@ -263,18 +272,19 @@ function registerDatabaseHandlers(dbManager) {
       
       db.prepare(`
         INSERT OR REPLACE INTO user_game_annotations
-          (gameid, status, user_difficulty_rating, user_review_rating, user_skill_rating,
+          (gameid, status, user_difficulty_rating, user_review_rating, user_skill_rating, user_skill_rating_when_beat,
            user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
            user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
            user_story_rating, user_soundtrack_graphics_rating,
            hidden, exclude_from_random, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         gameid,
         status || 'Default',
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        mySkillRatingWhenBeat,
         myRecommendationRating,
         myImportanceRating,
         myTechnicalQualityRating,
@@ -310,6 +320,7 @@ function registerDatabaseHandlers(dbManager) {
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        mySkillRatingWhenBeat,
         myRecommendationRating,
         myImportanceRating,
         myTechnicalQualityRating,
@@ -330,11 +341,11 @@ function registerDatabaseHandlers(dbManager) {
       db.prepare(`
         INSERT OR REPLACE INTO user_game_version_annotations
           (annotation_key, gameid, version, status, 
-           user_difficulty_rating, user_review_rating, user_skill_rating,
+           user_difficulty_rating, user_review_rating, user_skill_rating, user_skill_rating_when_beat,
            user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
            user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
            user_story_rating, user_soundtrack_graphics_rating, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         annotationKey,
         gameid,
@@ -343,6 +354,7 @@ function registerDatabaseHandlers(dbManager) {
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        mySkillRatingWhenBeat,
         myRecommendationRating,
         myImportanceRating,
         myTechnicalQualityRating,

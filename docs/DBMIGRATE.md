@@ -1260,6 +1260,43 @@ RHDATA_DB_PATH=/path/to/rhdata.db node electron/sql/migrations/011_populate_cont
 
 ---
 
+## Migration 013: Add Skill Rating When Beat
+
+### Date Added
+January XX, 2025
+
+### Purpose
+Add `user_skill_rating_when_beat` column to track skill level when the game was beaten (separate from rating time).
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/013_add_skill_rating_when_beat.sql
+```
+
+### What It Does
+- Adds `user_skill_rating_when_beat` column to `user_game_annotations` table
+- Adds `user_skill_rating_when_beat` column to `user_game_version_annotations` table
+- Creates indexes on new column for query performance
+- Supports 0-10 stars or NULL (empty)
+
+### Prerequisites
+- Database electron/clientdata.db must exist
+- Backup recommended before running
+
+### Expected Outcome
+- One new column added to each table (2 total columns)
+- Two new indexes created (1 per table)
+- No data loss
+- Existing queries continue to work
+- New column starts as NULL (empty)
+
+### Warnings
+- Safe to run multiple times (SQLite will error if column exists, but won't corrupt data)
+- New column allows NULL values (0-10 stars or empty)
+- Existing skill rating data is not affected
+
+---
+
 ## Migration 012: Add Extended Rating Columns
 
 ### Date Added

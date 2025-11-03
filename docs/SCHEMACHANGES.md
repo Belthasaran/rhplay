@@ -116,6 +116,34 @@ A separate JavaScript migration script (`011_populate_contest_racelevel_from_jso
 
 ---
 
+## 2025-01-XX: Skill Rating When Beat (Migration 013)
+
+### Date
+January XX, 2025
+
+### Description
+Added `user_skill_rating_when_beat` column to `user_game_annotations` and `user_game_version_annotations` tables to track skill level when the game was beaten.
+
+### Rationale
+- **Skill Tracking**: Separate skill rating for when the game was beaten vs when it was rated
+- **Progress Tracking**: Allows users to track their skill progression
+- **Data Analysis**: Enable analysis of skill level differences between rating and completion
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**Tables**: `user_game_annotations`, `user_game_version_annotations`
+
+**New Columns** (applied to both tables):
+1. `user_skill_rating_when_beat` (INTEGER): Skill rating when game was beaten (0-10)
+
+**Constraints**: Allows NULL or values 0-10
+
+**Indexes Created**: Indexes created on new column for query performance
+
+---
+
 ## 2025-01-XX: Extended Rating Columns (Migration 012)
 
 ### Date

@@ -605,11 +605,11 @@
                       <span 
                         v-for="n in 6" 
                         :key="'diff-' + (n-1)"
-                        @click="selectedItem.MyDifficultyRating = n - 1"
+                        @click="selectedItem.MyDifficultyRating = n - 1; saveAnnotation()"
                         :class="{ filled: (n - 1) <= (selectedItem.MyDifficultyRating ?? -1) }"
                         class="star"
                       >★</span>
-                      <button @click="selectedItem.MyDifficultyRating = null" class="btn-clear-rating">✕</button>
+                      <button @click="selectedItem.MyDifficultyRating = null; saveAnnotation()" class="btn-clear-rating">✕</button>
                       <span class="rating-label">{{ difficultyLabel(selectedItem.MyDifficultyRating) }}</span>
                     </div>
                   </td>
@@ -631,23 +631,45 @@
                   </td>
                 </tr>
                 <tr>
-                  <th>My Skill Level</th>
+                  <th>My Skill (At time I rated this)</th>
                   <td>
                     <div class="skill-rating-container">
                       <div class="star-rating skill-rating">
                         <span 
                           v-for="n in 11" 
                           :key="'skill-' + (n-1)"
-                          @click="selectedItem.MySkillRating = n - 1"
+                          @click="selectedItem.MySkillRating = n - 1; saveAnnotation()"
                           :class="{ filled: (n - 1) <= (selectedItem.MySkillRating ?? -1) }"
                           :title="skillRatingHoverText(n - 1)"
                           class="star star-small"
                         >★</span>
-                        <button @click="selectedItem.MySkillRating = null" class="btn-clear-rating">✕</button>
+                        <button @click="selectedItem.MySkillRating = null; saveAnnotation()" class="btn-clear-rating">✕</button>
                         <span class="rating-label">{{ skillLabel(selectedItem.MySkillRating) }}</span>
                       </div>
                       <div class="skill-caption" v-if="selectedItem.MySkillRating !== null && selectedItem.MySkillRating !== undefined">
                         {{ skillRatingHoverText(selectedItem.MySkillRating) }}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <th>My Skill (At time I beat this game)</th>
+                  <td>
+                    <div class="skill-rating-container">
+                      <div class="star-rating skill-rating">
+                        <span 
+                          v-for="n in 11" 
+                          :key="'skill-beat-' + (n-1)"
+                          @click="selectedItem.MySkillRatingWhenBeat = n - 1; saveAnnotation()"
+                          :class="{ filled: (n - 1) <= (selectedItem.MySkillRatingWhenBeat ?? -1) }"
+                          :title="skillRatingHoverText(n - 1)"
+                          class="star star-small"
+                        >★</span>
+                        <button @click="selectedItem.MySkillRatingWhenBeat = null; saveAnnotation()" class="btn-clear-rating">✕</button>
+                        <span class="rating-label">{{ skillLabel(selectedItem.MySkillRatingWhenBeat) }}</span>
+                      </div>
+                      <div class="skill-caption" v-if="selectedItem.MySkillRatingWhenBeat !== null && selectedItem.MySkillRatingWhenBeat !== undefined">
+                        {{ skillRatingHoverText(selectedItem.MySkillRatingWhenBeat) }}
                       </div>
                     </div>
                   </td>
@@ -985,7 +1007,10 @@
       <section class="modal-body rating-sheet-body">
         <div class="rating-components">
           <div class="rating-component">
-            <label class="rating-label">Overall (My Review)</label>
+            <div class="rating-header">
+              <label class="rating-label">Overall (My Review)</label>
+              <span class="rating-label-text">{{ reviewLabel(ratingSheetData.MyReviewRating) }}</span>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -995,13 +1020,13 @@
                 class="star"
               >★</span>
               <button @click="updateRating('MyReviewRating', null)" class="btn-clear-rating">✕</button>
-              <span class="rating-label-text">{{ reviewLabel(ratingSheetData.MyReviewRating) }}</span>
             </div>
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Recommendation</label>
-            <p class="rating-description">Level to which you would recommend the game, regardless of its qualities.</p>
+            <div class="rating-header">
+              <label class="rating-label">Recommendation <span class="rating-description-inline">(Level to which you would recommend the game, regardless of its qualities)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1015,8 +1040,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Importance</label>
-            <p class="rating-description">Your rating on whether the game is considered Influential or Important regardless of its review qualities.</p>
+            <div class="rating-header">
+              <label class="rating-label">Importance <span class="rating-description-inline">(Whether the game is considered Influential or Important regardless of its review qualities)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1030,8 +1056,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Technical Quality</label>
-            <p class="rating-description">How fully functional, Free of major bugs, glitches - Example: Game crashes, visual glitches, object colors blending with background</p>
+            <div class="rating-header">
+              <label class="rating-label">Technical Quality <span class="rating-description-inline">(How fully functional, free of major bugs/glitches - crashes, visual glitches, object colors blending with background)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1045,8 +1072,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Gameplay Design</label>
-            <p class="rating-description">Enjoyable Gameplay, Interesting Mechanics, Relatively free of obstacles that impede a player for reason other than their skill (Example: Blind jumps).</p>
+            <div class="rating-header">
+              <label class="rating-label">Gameplay Design <span class="rating-description-inline">(Enjoyable gameplay, interesting mechanics, free of obstacles that impede player for reasons other than skill - e.g., blind jumps)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1060,8 +1088,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Originality / Creativity</label>
-            <p class="rating-description">The game is significantly unique and interesting</p>
+            <div class="rating-header">
+              <label class="rating-label">Originality / Creativity <span class="rating-description-inline">(The game is significantly unique and interesting)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1075,8 +1104,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Visual Aesthetics</label>
-            <p class="rating-description">Overworld and Levels are well designed visually free of floating muncher stacks, naked pipes, etc.</p>
+            <div class="rating-header">
+              <label class="rating-label">Visual Aesthetics <span class="rating-description-inline">(Overworld and levels well designed visually - free of floating muncher stacks, naked pipes, etc.)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1090,8 +1120,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Story</label>
-            <p class="rating-description">Does the game have a compelling or interesting story?</p>
+            <div class="rating-header">
+              <label class="rating-label">Story <span class="rating-description-inline">(Does the game have a compelling or interesting story?)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -1105,8 +1136,9 @@
           </div>
           
           <div class="rating-component">
-            <label class="rating-label">Soundtrack and Graphics</label>
-            <p class="rating-description">Quality of soundtrack and graphics presentation</p>
+            <div class="rating-header">
+              <label class="rating-label">Soundtrack and Graphics <span class="rating-description-inline">(Quality of soundtrack and graphics presentation)</span></label>
+            </div>
             <div class="star-rating">
               <span 
                 v-for="n in 6" 
@@ -3277,6 +3309,7 @@ type Item = {
   MyDifficultyRating?: number | null;  // 0-5
   MyReviewRating?: number | null;      // 0-5
   MySkillRating?: number | null;       // 0-10
+  MySkillRatingWhenBeat?: number | null;  // 0-10
   MyRecommendationRating?: number | null;  // 0-5
   MyImportanceRating?: number | null;  // 0-5
   MyTechnicalQualityRating?: number | null;  // 0-5
@@ -8436,6 +8469,7 @@ const debouncedSaveAnnotation = debounce(async (item: Item) => {
       myDifficultyRating: item.MyDifficultyRating,
       myReviewRating: item.MyReviewRating,
       mySkillRating: item.MySkillRating,
+      mySkillRatingWhenBeat: item.MySkillRatingWhenBeat,
       myRecommendationRating: item.MyRecommendationRating,
       myImportanceRating: item.MyImportanceRating,
       myTechnicalQualityRating: item.MyTechnicalQualityRating,
@@ -12167,40 +12201,53 @@ button:disabled {
 
 /* Rating Sheet Modal */
 .rating-sheet-modal .rating-components {
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  max-height: 75vh;
+  gap: 10px;
+  max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
 
 .rating-sheet-modal .rating-component {
-  padding: 16px;
+  padding: 10px 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: 6px;
+}
+
+.rating-sheet-modal .rating-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 12px;
 }
 
 .rating-sheet-modal .rating-label {
   font-weight: 600;
-  font-size: 16px;
-  margin-bottom: 8px;
+  font-size: 14px;
   color: var(--text-primary);
-  display: block;
+  display: inline;
+  line-height: 1.4;
 }
 
-.rating-sheet-modal .rating-description {
-  font-size: 13px;
+.rating-sheet-modal .rating-description-inline {
+  font-weight: normal;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 12px;
-  line-height: 1.5;
+  font-style: italic;
 }
 
 .rating-sheet-modal .rating-label-text {
-  margin-left: 8px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.rating-sheet-modal .star-rating {
+  margin-top: 4px;
 }
 
 /* Clickable elements */

@@ -533,6 +533,57 @@
                 <tr><th>Length</th><td class="readonly-field">{{ selectedItem.Length }}</td></tr>
                 <tr><th>Public Difficulty</th><td class="readonly-field">{{ selectedItem.PublicDifficulty || '—' }}</td></tr>
                 <tr><th>Public Rating</th><td class="readonly-field">{{ selectedItem.Publicrating || '—' }}</td></tr>
+                <tr v-if="selectedItem.Demo && selectedItem.Demo.toLowerCase() === 'yes'"><th>Demo</th><td class="readonly-field">{{ selectedItem.Demo }}</td></tr>
+                <tr v-if="selectedItem.Contest"><th>Contest</th><td class="readonly-field">{{ selectedItem.Contest }}</td></tr>
+                <tr v-if="selectedItem.Racelevel"><th>Race Level</th><td class="readonly-field">{{ selectedItem.Racelevel }}</td></tr>
+                
+                <!-- Tags Row -->
+                <tr v-if="selectedItem.Tags && (Array.isArray(selectedItem.Tags) ? selectedItem.Tags.length > 0 : selectedItem.Tags)">
+                  <th>Tags</th>
+                  <td class="readonly-field">
+                    <div class="tags-container">
+                      <span 
+                        v-if="Array.isArray(selectedItem.Tags)"
+                        class="tags-display"
+                        @click="openTagsModal"
+                        @mouseenter="showTagsTooltip = true"
+                        @mouseleave="showTagsTooltip = false"
+                        :title="formatTagsForTooltip(selectedItem.Tags)"
+                      >
+                        {{ formatTagsShort(selectedItem.Tags) }}
+                      </span>
+                      <span 
+                        v-else
+                        class="tags-display"
+                        @click="openTagsModal"
+                        @mouseenter="showTagsTooltip = true"
+                        @mouseleave="showTagsTooltip = false"
+                        :title="selectedItem.Tags"
+                      >
+                        {{ truncateText(selectedItem.Tags, 60) }}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                
+                <!-- Description Row -->
+                <tr v-if="selectedItem.Description">
+                  <th>Description</th>
+                  <td class="readonly-field">
+                    <div class="description-container">
+                      <span
+                        class="description-display"
+                        @click="openDescriptionModal"
+                        @mouseenter="showDescriptionTooltip = true"
+                        @mouseleave="showDescriptionTooltip = false"
+                        :title="selectedItem.Description"
+                      >
+                        {{ truncateText(selectedItem.Description, 60) }}
+                        <span v-if="selectedItem.Description && selectedItem.Description.length > 60" class="ellipsis-indicator clickable" @click.stop="openDescriptionModal" title="Click to view full description">...</span>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
                 
                 <!-- User-Editable Fields -->
                 <tr>
@@ -566,16 +617,16 @@
                 <tr>
                   <th>My Review</th>
                   <td>
-                    <div class="star-rating">
+                    <div class="star-rating clickable" @click="openRatingSheetModal">
                       <span 
                         v-for="n in 6" 
                         :key="'rev-' + (n-1)"
-                        @click="selectedItem.MyReviewRating = n - 1"
                         :class="{ filled: (n - 1) <= (selectedItem.MyReviewRating ?? -1) }"
                         class="star"
                       >★</span>
-                      <button @click="selectedItem.MyReviewRating = null" class="btn-clear-rating">✕</button>
+                      <button @click.stop="selectedItem.MyReviewRating = null; saveAnnotation()" class="btn-clear-rating">✕</button>
                       <span class="rating-label">{{ reviewLabel(selectedItem.MyReviewRating) }}</span>
+                      <span class="click-hint">(Click to open rating sheet)</span>
                     </div>
                   </td>
                 </tr>
@@ -880,6 +931,197 @@
       </section>
       <footer class="modal-footer">
         <button @click="closeJsonModal">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Tags Modal -->
+  <div v-if="tagsModalOpen" class="modal-backdrop" @click.self="closeTagsModal">
+    <div class="modal tags-modal">
+      <header class="modal-header">
+        <h3>Tags</h3>
+        <button class="close" @click="closeTagsModal">✕</button>
+      </header>
+      <section class="modal-body tags-body">
+        <div v-if="Array.isArray(selectedItem?.Tags)" class="tags-list">
+          <span v-for="tag in selectedItem.Tags" :key="tag" class="tag-item">{{ tag }}</span>
+        </div>
+        <div v-else-if="selectedItem?.Tags" class="tags-text">
+          {{ selectedItem.Tags }}
+        </div>
+        <div v-else class="empty-state">
+          No tags available.
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeTagsModal">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Description Modal -->
+  <div v-if="descriptionModalOpen" class="modal-backdrop" @click.self="closeDescriptionModal">
+    <div class="modal description-modal">
+      <header class="modal-header">
+        <h3>Description</h3>
+        <button class="close" @click="closeDescriptionModal">✕</button>
+      </header>
+      <section class="modal-body description-body">
+        <div class="description-content" v-html="selectedItem?.Description || 'No description available.'"></div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeDescriptionModal">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Rating Sheet Modal -->
+  <div v-if="ratingSheetModalOpen" class="modal-backdrop" @click.self="closeRatingSheetModal">
+    <div class="modal rating-sheet-modal">
+      <header class="modal-header">
+        <h3>Rating Sheet - {{ selectedItem?.Name }}</h3>
+        <button class="close" @click="closeRatingSheetModal">✕</button>
+      </header>
+      <section class="modal-body rating-sheet-body">
+        <div class="rating-components">
+          <div class="rating-component">
+            <label class="rating-label">Overall (My Review)</label>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'overall-' + (n-1)"
+                @click="updateRating('MyReviewRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyReviewRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyReviewRating', null)" class="btn-clear-rating">✕</button>
+              <span class="rating-label-text">{{ reviewLabel(ratingSheetData.MyReviewRating) }}</span>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Recommendation</label>
+            <p class="rating-description">Level to which you would recommend the game, regardless of its qualities.</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'rec-' + (n-1)"
+                @click="updateRating('MyRecommendationRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyRecommendationRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyRecommendationRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Importance</label>
+            <p class="rating-description">Your rating on whether the game is considered Influential or Important regardless of its review qualities.</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'imp-' + (n-1)"
+                @click="updateRating('MyImportanceRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyImportanceRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyImportanceRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Technical Quality</label>
+            <p class="rating-description">How fully functional, Free of major bugs, glitches - Example: Game crashes, visual glitches, object colors blending with background</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'tech-' + (n-1)"
+                @click="updateRating('MyTechnicalQualityRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyTechnicalQualityRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyTechnicalQualityRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Gameplay Design</label>
+            <p class="rating-description">Enjoyable Gameplay, Interesting Mechanics, Relatively free of obstacles that impede a player for reason other than their skill (Example: Blind jumps).</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'gameplay-' + (n-1)"
+                @click="updateRating('MyGameplayDesignRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyGameplayDesignRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyGameplayDesignRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Originality / Creativity</label>
+            <p class="rating-description">The game is significantly unique and interesting</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'orig-' + (n-1)"
+                @click="updateRating('MyOriginalityRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyOriginalityRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyOriginalityRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Visual Aesthetics</label>
+            <p class="rating-description">Overworld and Levels are well designed visually free of floating muncher stacks, naked pipes, etc.</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'visual-' + (n-1)"
+                @click="updateRating('MyVisualAestheticsRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyVisualAestheticsRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyVisualAestheticsRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Story</label>
+            <p class="rating-description">Does the game have a compelling or interesting story?</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'story-' + (n-1)"
+                @click="updateRating('MyStoryRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MyStoryRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MyStoryRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <label class="rating-label">Soundtrack and Graphics</label>
+            <p class="rating-description">Quality of soundtrack and graphics presentation</p>
+            <div class="star-rating">
+              <span 
+                v-for="n in 6" 
+                :key="'sound-' + (n-1)"
+                @click="updateRating('MySoundtrackGraphicsRating', n - 1)"
+                :class="{ filled: (n - 1) <= (ratingSheetData.MySoundtrackGraphicsRating ?? -1) }"
+                class="star"
+              >★</span>
+              <button @click="updateRating('MySoundtrackGraphicsRating', null)" class="btn-clear-rating">✕</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeRatingSheetModal">Close</button>
       </footer>
     </div>
   </div>
@@ -3035,6 +3277,14 @@ type Item = {
   MyDifficultyRating?: number | null;  // 0-5
   MyReviewRating?: number | null;      // 0-5
   MySkillRating?: number | null;       // 0-10
+  MyRecommendationRating?: number | null;  // 0-5
+  MyImportanceRating?: number | null;  // 0-5
+  MyTechnicalQualityRating?: number | null;  // 0-5
+  MyGameplayDesignRating?: number | null;  // 0-5
+  MyOriginalityRating?: number | null;  // 0-5
+  MyVisualAestheticsRating?: number | null;  // 0-5
+  MyStoryRating?: number | null;  // 0-5
+  MySoundtrackGraphicsRating?: number | null;  // 0-5
   Publicrating?: number;
   Hidden: boolean;
   ExcludeFromRandom?: boolean;
@@ -3042,6 +3292,11 @@ type Item = {
   JsonData?: any;
   AvailableVersions?: number[];
   CurrentVersion?: number;
+  Demo?: string;
+  Contest?: string;
+  Racelevel?: string;
+  Tags?: string[] | string;
+  Description?: string;
 };
 
 // Loading and error states
@@ -8163,6 +8418,11 @@ async function loadSettings() {
 /**
  * Save annotation to database (debounced)
  */
+async function saveAnnotation() {
+  if (!selectedItem.value) return;
+  return debouncedSaveAnnotation(selectedItem.value);
+}
+
 const debouncedSaveAnnotation = debounce(async (item: Item) => {
   if (!isElectronAvailable()) {
     console.log('Mock mode: Would save annotation for', item.Id);
@@ -8176,6 +8436,14 @@ const debouncedSaveAnnotation = debounce(async (item: Item) => {
       myDifficultyRating: item.MyDifficultyRating,
       myReviewRating: item.MyReviewRating,
       mySkillRating: item.MySkillRating,
+      myRecommendationRating: item.MyRecommendationRating,
+      myImportanceRating: item.MyImportanceRating,
+      myTechnicalQualityRating: item.MyTechnicalQualityRating,
+      myGameplayDesignRating: item.MyGameplayDesignRating,
+      myOriginalityRating: item.MyOriginalityRating,
+      myVisualAestheticsRating: item.MyVisualAestheticsRating,
+      myStoryRating: item.MyStoryRating,
+      mySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating,
       hidden: item.Hidden,
       excludeFromRandom: item.ExcludeFromRandom,
       mynotes: item.Mynotes
@@ -8468,6 +8736,84 @@ function viewJsonDetails() {
 
 function closeJsonModal() {
   jsonModalOpen.value = false;
+}
+
+// Tags Modal
+const tagsModalOpen = ref(false);
+const showTagsTooltip = ref(false);
+
+function openTagsModal() {
+  tagsModalOpen.value = true;
+}
+
+function closeTagsModal() {
+  tagsModalOpen.value = false;
+}
+
+// Description Modal
+const descriptionModalOpen = ref(false);
+const showDescriptionTooltip = ref(false);
+
+function openDescriptionModal() {
+  descriptionModalOpen.value = true;
+}
+
+function closeDescriptionModal() {
+  descriptionModalOpen.value = false;
+}
+
+// Rating Sheet Modal
+const ratingSheetModalOpen = ref(false);
+const ratingSheetData = ref<any>({});
+
+function openRatingSheetModal() {
+  if (!selectedItem.value) return;
+  // Copy current ratings to modal data
+  ratingSheetData.value = {
+    MyReviewRating: selectedItem.value.MyReviewRating,
+    MyRecommendationRating: selectedItem.value.MyRecommendationRating,
+    MyImportanceRating: selectedItem.value.MyImportanceRating,
+    MyTechnicalQualityRating: selectedItem.value.MyTechnicalQualityRating,
+    MyGameplayDesignRating: selectedItem.value.MyGameplayDesignRating,
+    MyOriginalityRating: selectedItem.value.MyOriginalityRating,
+    MyVisualAestheticsRating: selectedItem.value.MyVisualAestheticsRating,
+    MyStoryRating: selectedItem.value.MyStoryRating,
+    MySoundtrackGraphicsRating: selectedItem.value.MySoundtrackGraphicsRating,
+  };
+  ratingSheetModalOpen.value = true;
+}
+
+function closeRatingSheetModal() {
+  ratingSheetModalOpen.value = false;
+}
+
+async function updateRating(field: string, value: number | null) {
+  if (!selectedItem.value) return;
+  
+  // Update both modal data and selected item
+  ratingSheetData.value[field] = value;
+  (selectedItem.value as any)[field] = value;
+  
+  // Save immediately
+  await saveAnnotation();
+}
+
+// Helper functions
+function truncateText(text: string | null | undefined, maxLength: number): string {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength);
+}
+
+function formatTagsShort(tags: string[]): string {
+  if (!tags || tags.length === 0) return '';
+  if (tags.length <= 3) return tags.join(', ');
+  return tags.slice(0, 3).join(', ') + '...';
+}
+
+function formatTagsForTooltip(tags: string[]): string {
+  if (!tags || tags.length === 0) return '';
+  return tags.join(', ');
 }
 
 // Version-specific rating
@@ -11740,6 +12086,138 @@ button:disabled {
 .challenge-desc {
   font-size: 12px;
   opacity: 0.9;
+}
+
+/* Tags Display */
+.tags-container {
+  display: flex;
+  align-items: center;
+}
+
+.tags-display {
+  cursor: pointer;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.tags-display:hover {
+  color: var(--accent-primary);
+  text-decoration-color: var(--accent-primary);
+}
+
+.tags-modal .tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+}
+
+.tags-modal .tag-item {
+  display: inline-block;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+/* Description Display */
+.description-container {
+  display: flex;
+  align-items: flex-start;
+}
+
+.description-display {
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.description-display:hover {
+  color: var(--accent-primary);
+}
+
+.ellipsis-indicator {
+  color: var(--accent-primary);
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.ellipsis-indicator.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  transition: all 0.2s;
+}
+
+.ellipsis-indicator.clickable:hover {
+  color: var(--accent-secondary);
+  transform: scale(1.1);
+}
+
+.description-modal .description-content {
+  padding: 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+/* Rating Sheet Modal */
+.rating-sheet-modal .rating-components {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.rating-sheet-modal .rating-component {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+}
+
+.rating-sheet-modal .rating-label {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  display: block;
+}
+
+.rating-sheet-modal .rating-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.rating-sheet-modal .rating-label-text {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Clickable elements */
+.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clickable:hover {
+  opacity: 0.8;
+}
+
+.click-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  font-style: italic;
 }
 
 </style>

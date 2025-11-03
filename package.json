@@ -119,6 +119,8 @@
       "!electron/**/*.db-wal",
       "!electron/rhdata.db",
       "!electron/patchbin.db",
+      "jsutils/migratedb.js",
+      "electron/sql/migrations/**/*",
       "Flips/asar.exe",
       "Flips/flips.exe",
       "Flips/dll/asar.dll",
@@ -132,7 +134,9 @@
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
       "node_modules/secp256k1/**/*",
-      "native-modules/serialport-nonblock/build/**/*"
+      "native-modules/serialport-nonblock/build/**/*",
+      "jsutils/**/*",
+      "electron/sql/migrations/**/*"
     ],
     "win": {
       "target": [

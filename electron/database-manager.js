@@ -9,12 +9,20 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
+const { spawnSync } = require('child_process');
 
 class DatabaseManager {
-  constructor() {
+  constructor(options = {}) {
     this.connections = {};
     this.paths = this.getDatabasePaths();
+    // Option to auto-apply migrations (disabled by default)
+    // Set to true for GUI mode, false for external scripts
+    this.autoApplyMigrations = options.autoApplyMigrations || false;
+    this.migrationsApplied = new Set(); // Track which DBs have had migrations applied
     console.log('Database paths:', this.paths);
+    if (this.autoApplyMigrations) {
+      console.log('Auto-apply migrations: ENABLED');
+    }
   }
 
   /**
@@ -179,6 +187,12 @@ class DatabaseManager {
       // Ensure database exists
       this.ensureDatabaseExists(dbName, dbPath);
       
+      // Auto-apply migrations if enabled and not already applied
+      if (this.autoApplyMigrations && !this.migrationsApplied.has(dbName)) {
+        this.checkAndApplyMigrations(dbName, dbPath);
+        this.migrationsApplied.add(dbName);
+      }
+      
       // Create connection
       console.log(`Opening database: ${dbName} at ${dbPath}`);
       this.connections[dbName] = new Database(dbPath);
@@ -191,6 +205,110 @@ class DatabaseManager {
     }
     
     return this.connections[dbName];
+  }
+
+  /**
+   * Check if migrations are needed and apply them
+   * @param {string} dbName - Database name (rhdata, patchbin, or clientdata)
+   * @param {string} dbPath - Path to database file
+   */
+  checkAndApplyMigrations(dbName, dbPath) {
+    if (!fs.existsSync(dbPath)) {
+      console.log(`Database ${dbName} does not exist, skipping migration check`);
+      return;
+    }
+
+    try {
+      // Load migration runner from jsutils
+      const migratedbPath = this.getMigratedbPath();
+      if (!migratedbPath || !fs.existsSync(migratedbPath)) {
+        console.warn(`Migration runner not found at ${migratedbPath}, skipping migrations`);
+        return;
+      }
+
+      console.log(`Checking migrations for ${dbName}...`);
+      
+      // Determine which database type to migrate
+      const dbArgMap = {
+        'rhdata': '--rhdatadb',
+        'patchbin': '--patchbindb',
+        'clientdata': '--clientdata'
+      };
+      
+      const dbArg = dbArgMap[dbName];
+      if (!dbArg) {
+        console.warn(`Unknown database type: ${dbName}, skipping migrations`);
+        return;
+      }
+
+      // Set up environment for migration script
+      // Migration script needs to find migration files in the correct location
+      const env = { 
+        ...process.env, 
+        NODE_ENV: process.env.NODE_ENV || 'production',
+        // Ensure migration script can find migration files
+        ELECTRON_IS_PACKAGED: process.env.ELECTRON_IS_PACKAGED || (process.resourcesPath ? '1' : '0'),
+      };
+      
+      // If we're in a packaged environment, set resourcesPath so migratedb can find files
+      if (process.resourcesPath) {
+        env.RESOURCES_PATH = process.resourcesPath;
+      }
+
+      // Run migration script with specific database
+      // Use the directory containing migratedb.js as cwd, or fallback to project root
+      const cwd = path.dirname(migratedbPath);
+      const result = spawnSync(process.execPath, [migratedbPath, `${dbArg}=${dbPath}`, '--verbose'], {
+        cwd: fs.existsSync(cwd) ? cwd : path.dirname(__dirname),
+        env: env,
+        stdio: 'pipe',
+        encoding: 'utf8'
+      });
+
+      if (result.status === 0) {
+        const output = result.stdout.toString();
+        if (output.includes('already applied') || output.includes('already satisfied') || output.includes('Completed migration')) {
+          console.log(`Migrations check completed for ${dbName}`);
+        } else {
+          console.log(`Migrations applied for ${dbName}`);
+        }
+      } else {
+        const error = result.stderr.toString();
+        console.warn(`Migration check for ${dbName} had issues:`, error || result.stdout.toString());
+      }
+    } catch (error) {
+      console.error(`Error checking/applying migrations for ${dbName}:`, error.message);
+      // Don't throw - allow app to continue even if migrations fail
+    }
+  }
+
+  /**
+   * Get path to migratedb.js script
+   * Handles both development and packaged environments
+   * @returns {string|null} Path to migratedb.js or null if not found
+   */
+  getMigratedbPath() {
+    // Try multiple possible locations
+    const possiblePaths = [
+      // Development path (relative to electron/)
+      path.join(__dirname, '..', 'jsutils', 'migratedb.js'),
+      // Packaged paths
+      process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'jsutils', 'migratedb.js') : null,
+      process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'jsutils', 'migratedb.js') : null,
+      // Fallback paths
+      path.join(__dirname, '..', '..', 'jsutils', 'migratedb.js'),
+      // Absolute paths if resourcesPath is available
+      process.resourcesPath ? path.join(process.resourcesPath, 'jsutils', 'migratedb.js') : null,
+    ].filter(p => p !== null);
+
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        return possiblePath;
+      }
+    }
+
+    console.warn('migratedb.js not found in any of these locations:', possiblePaths);
+    return null;
   }
 
   /**

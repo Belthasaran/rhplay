@@ -18,7 +18,32 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const Database = require('better-sqlite3');
 
-const ROOT = path.resolve(__dirname, '..');
+// Determine ROOT directory - handle both development and packaged environments
+function getProjectRoot() {
+  // In packaged environment, use RESOURCES_PATH if available
+  const resourcesPath = process.env.RESOURCES_PATH || process.resourcesPath;
+  
+  // In packaged environment, we might be in app.asar or app.asar.unpacked
+  // Look for electron/sql/migrations to determine the root
+  const possibleRoots = [
+    path.resolve(__dirname, '..'), // Development: parent of jsutils
+    path.resolve(__dirname, '../..'), // Alternative structure
+    resourcesPath ? path.join(resourcesPath, 'app.asar') : null,
+    resourcesPath ? path.join(resourcesPath, 'app.asar.unpacked') : null,
+  ].filter(p => p !== null);
+  
+  for (const root of possibleRoots) {
+    const testPath = path.join(root, 'electron', 'sql', 'migrations');
+    if (fs.existsSync(testPath)) {
+      return root;
+    }
+  }
+  
+  // Fallback to parent of jsutils
+  return path.resolve(__dirname, '..');
+}
+
+const ROOT = getProjectRoot();
 
 function parseArgs(argv) {
   const args = {};
@@ -60,7 +85,21 @@ function printUsage() {
 }
 
 function resolveRelative(...segments) {
-  return path.resolve(ROOT, ...segments);
+  const resolved = path.resolve(ROOT, ...segments);
+  // In packaged environment, try both asar and unpacked locations
+  if (!fs.existsSync(resolved) && process.resourcesPath) {
+    // Try unpacked location
+    const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', ...segments);
+    if (fs.existsSync(unpackedPath)) {
+      return unpackedPath;
+    }
+    // Try asar location
+    const asarPath = path.join(process.resourcesPath, 'app.asar', ...segments);
+    if (fs.existsSync(asarPath)) {
+      return asarPath;
+    }
+  }
+  return resolved;
 }
 
 function fileExists(p) {
@@ -200,6 +239,22 @@ const MIGRATIONS = {
         ensureTranslevelsStructures(db);
       },
     },
+    {
+      id: 'rhdata_011_add_contest_racelevel',
+      description: 'Add contest and racelevel columns to gameversions',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/010_add_contest_racelevel_to_gameversions.sql'),
+      skipIf(db) {
+        return columnExists(db, 'gameversions', 'contest')
+          && columnExists(db, 'gameversions', 'racelevel');
+      },
+    },
+    {
+      id: 'rhdata_012_populate_contest_racelevel',
+      description: 'Populate contest and racelevel from gvjsondata JSON',
+      type: 'js',
+      file: resolveRelative('electron/sql/migrations/011_populate_contest_racelevel_from_json.js'),
+    },
   ],
   clientdata: [
     {
@@ -281,6 +336,32 @@ const MIGRATIONS = {
       type: 'sql',
       file: resolveRelative('electron/sql/migrations/008_clientdata_snes_contents_cache.sql'),
     },
+    {
+      id: 'clientdata_012_extended_ratings',
+      description: 'Add extended rating columns for detailed reviews',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/012_add_extended_ratings_to_clientdata.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_game_annotations', 'user_recommendation_rating')
+          && columnExists(db, 'user_game_annotations', 'user_importance_rating')
+          && columnExists(db, 'user_game_annotations', 'user_technical_quality_rating')
+          && columnExists(db, 'user_game_annotations', 'user_gameplay_design_rating')
+          && columnExists(db, 'user_game_annotations', 'user_originality_rating')
+          && columnExists(db, 'user_game_annotations', 'user_visual_aesthetics_rating')
+          && columnExists(db, 'user_game_annotations', 'user_story_rating')
+          && columnExists(db, 'user_game_annotations', 'user_soundtrack_graphics_rating');
+      },
+    },
+    {
+      id: 'clientdata_013_skill_rating_when_beat',
+      description: 'Add skill rating when beat column',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/013_add_skill_rating_when_beat.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_game_annotations', 'user_skill_rating_when_beat')
+          && columnExists(db, 'user_game_version_annotations', 'user_skill_rating_when_beat');
+      },
+    },
   ],
   patchbin: [],
 };
@@ -306,7 +387,13 @@ function runJsMigration(dbPath, file) {
   if (!fileExists(scriptPath)) {
     throw new Error(`JS migration file not found: ${scriptPath}`);
   }
-  const env = { ...process.env, DB_PATH: dbPath };
+  // For rhdata migrations, use RHDATA_DB_PATH; for others, use DB_PATH
+  const env = { ...process.env };
+  if (dbPath.includes('rhdata.db')) {
+    env.RHDATA_DB_PATH = dbPath;
+  } else {
+    env.DB_PATH = dbPath;
+  }
   const result = spawnSync(process.execPath, [scriptPath], { env, stdio: 'inherit' });
   if (result.status !== 0) {
     throw new Error(`JS migration ${scriptPath} failed with exit code ${result.status}`);

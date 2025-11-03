@@ -72,10 +72,10 @@ function createMainWindow() {
 }
 
 app.whenReady().then(() => {
-    // Initialize database manager
+    // Initialize database manager with auto-migrations enabled for GUI mode
     try {
-        dbManager = new DatabaseManager();
-        console.log('Database manager initialized');
+        dbManager = new DatabaseManager({ autoApplyMigrations: true });
+        console.log('Database manager initialized with auto-migrations enabled');
         
         // Register IPC handlers
         registerDatabaseHandlers(dbManager);

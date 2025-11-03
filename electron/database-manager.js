@@ -301,115 +301,127 @@ class DatabaseManager {
   }
 
   /**
-   * Run migration via spawn (fallback method)
+   * Run migration via direct module require (preferred method)
    * @param {string} dbName - Database name
    * @param {string} dbPath - Database path
    */
   runMigrationViaSpawn(dbName, dbPath) {
     try {
-      // Load migration runner from jsutils
-      const migratedbPath = this.getMigratedbPath();
-      if (!migratedbPath) {
-        console.warn(`Migration runner not found, skipping migrations`);
-        return;
+      // Instead of spawning, require the migration module directly
+      // This avoids the infinite recursion issue with process.execPath
+      let migrateDb;
+      try {
+        // Try to require the module - works from ASAR too
+        const migratedbPath = path.join(__dirname, '..', 'jsutils', 'migratedb.js');
+        migrateDb = require(migratedbPath);
+      } catch (requireError) {
+        // Try alternative paths
+        const resourcesPath = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
+        const possiblePaths = [
+          path.join(resourcesPath, 'app.asar.unpacked', 'jsutils', 'migratedb.js'),
+          path.join(resourcesPath, 'app.asar', 'jsutils', 'migratedb.js'),
+        ];
+        
+        let found = false;
+        for (const possiblePath of possiblePaths) {
+          try {
+            if (fs.existsSync(possiblePath)) {
+              migrateDb = require(possiblePath);
+              found = true;
+              break;
+            }
+          } catch (e) {
+            // Continue to next path
+          }
+        }
+        
+        if (!found) {
+          throw new Error(`Could not require migratedb.js: ${requireError.message}`);
+        }
       }
 
       // Determine which database type to migrate
-      const dbArgMap = {
-        'rhdata': '--rhdatadb',
-        'patchbin': '--patchbindb',
-        'clientdata': '--clientdata'
+      const dbTypeMap = {
+        'rhdata': 'rhdata',
+        'patchbin': 'patchbin',
+        'clientdata': 'clientdata'
       };
       
-      const dbArg = dbArgMap[dbName];
-      if (!dbArg) {
+      const dbType = dbTypeMap[dbName];
+      if (!dbType) {
         console.warn(`Unknown database type: ${dbName}, skipping migrations`);
         return;
       }
 
-      // If the script is in ASAR, we need to copy it to a temp location first
-      // ASAR files can't be executed directly - they're read-only virtual filesystems
-      let scriptToRun = migratedbPath;
-      let tempScript = null;
+      // Get the MIGRATIONS object from the module
+      // The module exports MIGRATIONS, but we need to access it
+      // Since it's not exported, we'll need to call applyMigrations directly
+      // Let's use a workaround: temporarily modify process.argv to simulate CLI args
+      const originalArgv = process.argv.slice();
+      const originalEnv = { ...process.env };
       
-      // Check if the path contains .asar (even if not literally in the path name, it might be an ASAR resource)
-      // Also check if it exists - if it doesn't exist, it might be in ASAR
-      if (migratedbPath.includes('.asar') || !fs.existsSync(migratedbPath)) {
-        try {
-          // Copy ASAR script to temp location
-          const os = require('os');
-          const tempDir = path.join(os.tmpdir(), 'rhtools-migrations');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-          tempScript = path.join(tempDir, 'migratedb.js');
-          
-          // Read from ASAR and write to temp (ASAR files can be read but not executed)
-          const scriptContent = fs.readFileSync(migratedbPath, 'utf8');
-          fs.writeFileSync(tempScript, scriptContent, 'utf8');
-          scriptToRun = tempScript;
-          console.log(`Copied migration script from ASAR to temp location: ${tempScript}`);
-        } catch (copyError) {
-          console.error(`Failed to copy migration script from ASAR: ${copyError.message}`);
-          // Try to run from ASAR anyway (might work in some cases)
+      try {
+        // Set up environment for migrations
+        if (process.resourcesPath) {
+          process.env.RESOURCES_PATH = process.resourcesPath;
         }
-      }
-
-      // Set up environment for migration script
-      const env = { 
-        ...process.env, 
-        NODE_ENV: process.env.NODE_ENV || 'production',
-        ELECTRON_IS_PACKAGED: process.env.ELECTRON_IS_PACKAGED || (process.resourcesPath ? '1' : '0'),
-      };
-      
-      if (process.resourcesPath) {
-        env.RESOURCES_PATH = process.resourcesPath;
-      }
-
-      const workingDir = path.dirname(scriptToRun);
-      
-      console.log(`Running migration script: ${scriptToRun}`);
-      console.log(`Working directory: ${workingDir}`);
-      
-      const result = spawnSync(process.execPath, [scriptToRun, `${dbArg}=${dbPath}`, '--verbose'], {
-        cwd: workingDir,
-        env: env,
-        stdio: 'pipe',
-        encoding: 'utf8'
-      });
-
-      // Clean up temp file
-      if (tempScript && fs.existsSync(tempScript)) {
-        try {
-          fs.unlinkSync(tempScript);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
-
-      const stdout = result.stdout ? result.stdout.toString() : '';
-      const stderr = result.stderr ? result.stderr.toString() : '';
-      
-      if (result.status === 0 || result.status === null) {
-        if (stdout.includes('already applied') || stdout.includes('already satisfied') || stdout.includes('Completed migration')) {
-          console.log(`Migrations check completed for ${dbName}`);
-          if (stdout) {
-            console.log(`Migration output: ${stdout.substring(0, 500)}`);
+        process.env.ELECTRON_IS_PACKAGED = process.env.ELECTRON_IS_PACKAGED || (process.resourcesPath ? '1' : '0');
+        
+        // Call the migration logic directly
+        // We need to access the internal functions - let's use a different approach
+        // Actually, we can't easily access internal functions, so let's use fork instead
+        // But fork also has the same issue...
+        
+        // Best solution: directly require and call the applyMigrations function
+        // Since it's not exported, we need to refactor or use eval (not recommended)
+        // Let's use a safer approach: spawn with 'node' from PATH as fallback
+        // But first check if we're in Electron - if so, don't spawn at all
+        
+        // Actually, the safest is to directly evaluate the migration logic
+        // But that's complex. Let's use a simpler approach: check if we can find node
+        // and only spawn if we're not in a packaged Electron app
+        
+        if (process.versions.electron) {
+          // We're in Electron - call migration logic directly
+          // The module now exports applyMigrations
+          const migrations = migrateDb.MIGRATIONS[dbType];
+          if (migrations) {
+            console.log(`Applying migrations directly for ${dbName}...`);
+            migrateDb.applyMigrations(dbPath, migrations, { verbose: true });
+            console.log(`Migrations completed for ${dbName}`);
+          } else {
+            console.warn(`No migrations found for ${dbType}`);
           }
         } else {
-          console.log(`Migrations applied for ${dbName}`);
-          if (stdout) {
-            console.log(`Migration output: ${stdout.substring(0, 500)}`);
+          // Not in Electron - safe to spawn
+          const result = spawnSync('node', [require.resolve('../jsutils/migratedb.js'), `--${dbType}db=${dbPath}`, '--verbose'], {
+            stdio: 'pipe',
+            encoding: 'utf8'
+          });
+          
+          const stdout = result.stdout ? result.stdout.toString() : '';
+          const stderr = result.stderr ? result.stderr.toString() : '';
+          
+          if (result.status === 0) {
+            console.log(`Migrations applied for ${dbName}`);
+            if (stdout) {
+              console.log(`Migration output: ${stdout.substring(0, 500)}`);
+            }
+          } else {
+            console.error(`Migration check for ${dbName} failed`);
+            if (stderr) console.error(`Migration stderr: ${stderr}`);
           }
         }
-      } else {
-        console.error(`Migration check for ${dbName} failed with exit code ${result.status}`);
-        if (stderr) {
-          console.error(`Migration stderr: ${stderr}`);
-        }
-        if (stdout) {
-          console.error(`Migration stdout: ${stdout}`);
-        }
+      } finally {
+        // Restore original argv and env
+        process.argv = originalArgv;
+        Object.keys(process.env).forEach(key => {
+          if (!(key in originalEnv)) {
+            delete process.env[key];
+          } else {
+            process.env[key] = originalEnv[key];
+          }
+        });
       }
     } catch (error) {
       console.error(`Error in runMigrationViaSpawn: ${error.message}`);

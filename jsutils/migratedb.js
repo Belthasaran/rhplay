@@ -174,6 +174,11 @@ function ensureTranslevelsStructures(db) {
   END;`);
 }
 
+// Export applyMigrations for use by Electron app
+function applyMigrationsForDatabase(dbPath, migrations, options = {}) {
+  return applyMigrations(dbPath, migrations, options);
+}
+
 const MIGRATIONS = {
   rhdata: [
     {
@@ -526,3 +531,10 @@ function main() {
 if (require.main === module) {
   main();
 }
+
+// Export for programmatic use
+module.exports = {
+  MIGRATIONS,
+  applyMigrations: applyMigrationsForDatabase,
+  applyMigrationsForDatabase
+};

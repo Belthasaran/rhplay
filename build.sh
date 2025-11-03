@@ -224,22 +224,24 @@ build_windows() {
 build_macos() {
     print_status "Building macOS Intel package..."
     
-    # Check if icon.icns is valid, if not try to regenerate from iconset
+    # Check if icon.icns is valid, if not skip macOS build
     if [ -f "assets/icon.icns" ]; then
         ICON_TYPE=$(file -b assets/icon.icns)
         if echo "$ICON_TYPE" | grep -q "PNG"; then
             print_warning "icon.icns is a PNG file, not a valid ICNS"
             print_warning "macOS builds require a valid ICNS file"
-            print_warning "Please regenerate icon.icns from assets/icon.iconset/"
-            print_warning "On macOS: iconutil -c icns assets/icon.iconset -o assets/icon.icns"
-            print_error "Cannot build macOS package without valid icon.icns"
-            print_error "Run create-macos-assets.sh on macOS to generate proper icon.icns"
-            exit 1
+            print_warning "Skipping macOS build - icon.icns needs to be regenerated"
+            print_warning "To generate proper icon.icns, run on macOS:"
+            print_warning "  iconutil -c icns assets/icon.iconset -o assets/icon.icns"
+            print_warning "Or run create-macos-assets.sh on macOS"
+            return 0  # Skip build but don't fail the overall process
         fi
     else
-        print_error "icon.icns not found in assets/"
-        print_error "Cannot build macOS package without icon.icns"
-        exit 1
+        print_warning "icon.icns not found in assets/"
+        print_warning "Skipping macOS build - icon.icns is required"
+        print_warning "To generate icon.icns, run on macOS:"
+        print_warning "  iconutil -c icns assets/icon.iconset -o assets/icon.icns"
+        return 0  # Skip build but don't fail the overall process
     fi
     
     # Note: macOS builds on Linux have limitations

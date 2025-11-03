@@ -258,23 +258,44 @@ class DatabaseManager {
       // Run migration script with specific database
       // Use the directory containing migratedb.js as cwd, or fallback to project root
       const cwd = path.dirname(migratedbPath);
+      const workingDir = fs.existsSync(cwd) ? cwd : (process.resourcesPath || path.dirname(__dirname));
+      
+      console.log(`Running migration script: ${migratedbPath}`);
+      console.log(`Working directory: ${workingDir}`);
+      console.log(`Database path: ${dbPath}`);
+      
       const result = spawnSync(process.execPath, [migratedbPath, `${dbArg}=${dbPath}`, '--verbose'], {
-        cwd: fs.existsSync(cwd) ? cwd : path.dirname(__dirname),
+        cwd: workingDir,
         env: env,
         stdio: 'pipe',
         encoding: 'utf8'
       });
 
+      // Log output for debugging
+      const stdout = result.stdout ? result.stdout.toString() : '';
+      const stderr = result.stderr ? result.stderr.toString() : '';
+      
       if (result.status === 0) {
-        const output = result.stdout.toString();
-        if (output.includes('already applied') || output.includes('already satisfied') || output.includes('Completed migration')) {
+        if (stdout.includes('already applied') || stdout.includes('already satisfied') || stdout.includes('Completed migration')) {
           console.log(`Migrations check completed for ${dbName}`);
+          if (stdout) {
+            console.log(`Migration output: ${stdout.substring(0, 500)}`); // First 500 chars
+          }
         } else {
           console.log(`Migrations applied for ${dbName}`);
+          if (stdout) {
+            console.log(`Migration output: ${stdout.substring(0, 500)}`);
+          }
         }
       } else {
-        const error = result.stderr.toString();
-        console.warn(`Migration check for ${dbName} had issues:`, error || result.stdout.toString());
+        console.error(`Migration check for ${dbName} failed with exit code ${result.status}`);
+        if (stderr) {
+          console.error(`Migration stderr: ${stderr}`);
+        }
+        if (stdout) {
+          console.error(`Migration stdout: ${stdout}`);
+        }
+        console.warn(`Migration check for ${dbName} had issues - continuing anyway`);
       }
     } catch (error) {
       console.error(`Error checking/applying migrations for ${dbName}:`, error.message);
@@ -292,22 +313,34 @@ class DatabaseManager {
     const possiblePaths = [
       // Development path (relative to electron/)
       path.join(__dirname, '..', 'jsutils', 'migratedb.js'),
-      // Packaged paths
-      process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'jsutils', 'migratedb.js') : null,
+      // Packaged paths - Windows portable executable structure
       process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'jsutils', 'migratedb.js') : null,
+      process.resourcesPath ? path.join(process.resourcesPath, 'jsutils', 'migratedb.js') : null,
+      // Packaged paths - ASAR archive (if not unpacked)
+      process.resourcesPath ? path.join(process.resourcesPath, 'app.asar', 'jsutils', 'migratedb.js') : null,
+      // Windows portable executable might be in same dir as exe
+      process.execPath ? path.join(path.dirname(process.execPath), 'resources', 'app.asar.unpacked', 'jsutils', 'migratedb.js') : null,
+      process.execPath ? path.join(path.dirname(process.execPath), 'jsutils', 'migratedb.js') : null,
       // Fallback paths
       path.join(__dirname, '..', '..', 'jsutils', 'migratedb.js'),
-      // Absolute paths if resourcesPath is available
-      process.resourcesPath ? path.join(process.resourcesPath, 'jsutils', 'migratedb.js') : null,
+      // Additional Windows paths
+      process.execPath ? path.join(path.dirname(process.execPath), '..', 'app.asar.unpacked', 'jsutils', 'migratedb.js') : null,
     ].filter(p => p !== null);
 
     for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        return possiblePath;
+      try {
+        if (fs.existsSync(possiblePath)) {
+          console.log(`Found migratedb.js at: ${possiblePath}`);
+          return possiblePath;
+        }
+      } catch (error) {
+        // Continue to next path if this one fails
+        continue;
       }
     }
 
-    console.warn('migratedb.js not found in any of these locations:', possiblePaths);
+    console.warn('migratedb.js not found in any of these locations:');
+    possiblePaths.forEach(p => console.warn(`  - ${p}`));
     return null;
   }
 

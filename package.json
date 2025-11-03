@@ -124,8 +124,7 @@
       "Flips/dll/asar.dll",
       "bin/asar",
       "bin/flips",
-      "node_modules/**/*",
-      "!node_modules/@serialport/parser-readline/**/*"
+      "node_modules/**/*"
     ],
     "asarUnpack": [
       "electron/renderer/dist/**/*",
@@ -133,6 +132,7 @@
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
       "node_modules/secp256k1/**/*",
+      "node_modules/socks-proxy-agent/**/*",
       "native-modules/serialport-nonblock/build/**/*"
     ],
     "win": {

@@ -132,7 +132,6 @@
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
       "node_modules/secp256k1/**/*",
-      "node_modules/socks-proxy-agent/**/*",
       "native-modules/serialport-nonblock/build/**/*"
     ],
     "win": {

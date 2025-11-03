@@ -8,11 +8,11 @@ This is a Rust-based native module that ports the `Core` implementation to provi
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - **Native performance**: Rust provides memory safety without GC overhead
 - **Direct serial access**: Uses `serialport` crate for direct system-level serial port control
-- **No flow control**: Properly disables flow control (matching C# `Handshake.None`)
+- **No flow control**: Properly disables flow control (matching `Handshake.None`)
 
 ## Serial Port Configuration
 
-Matches C# `RebuildPort()` settings exactly:
+Matches `RebuildPort()` settings exactly:
 - BaudRate: 9600
 - Parity: None
 - DataBits: 8

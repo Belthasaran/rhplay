@@ -291,7 +291,7 @@ class DummyUsbDevice extends EventEmitter {
   _buildResponsePacket(opcode, space, flags) {
     const packet = Buffer.alloc(512);
     
-    // Magic header: "USBA" (matching C# reference and QUSB2Snes)
+    // Magic header: "USBA" (matching C reference and QUSB2Snes)
     packet[0] = 0x55; // 'U'
     packet[1] = 0x53; // 'S'
     packet[2] = 0x42; // 'B'
@@ -314,7 +314,7 @@ class DummyUsbDevice extends EventEmitter {
    * @private
    */
   _handleInfo(response) {
-    // INFO response format (from C# Core.cs lines 911-934)
+    // INFO response format (from Core lines 911-934)
     // [firmwareversion, versionstring, romrunning, flag1, flag2]
     
     // Firmware version at byte 260
@@ -384,7 +384,7 @@ class DummyUsbDevice extends EventEmitter {
         };
       });
     
-    // Format: (type byte, filename null-terminated) pairs (from C# Core.cs lines 490-533)
+    // Format: (type byte, filename null-terminated) pairs (from Core lines 490-533)
     for (const file of files) {
       if (offset >= 512 - 2) break; // Leave room for null terminator
       

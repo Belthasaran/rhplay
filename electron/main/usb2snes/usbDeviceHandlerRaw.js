@@ -3,10 +3,10 @@
  * 
  * This is an alternative implementation that uses raw file descriptors
  * (fs.openSync, fs.readSync, fs.writeSync) instead of the serialport library.
- * This approach is more similar to how the C# reference implementation works
+ * This approach is more similar to how the C reference implementation works
  * with synchronous blocking reads.
  * 
- * Based on the C# Core.cs implementation which uses:
+ * Based on the C Core implementation which uses:
  * - SafeSerialPort with ReadTimeout = 5000
  * - Synchronous blocking Read() calls
  * - Direct serial port file handle operations

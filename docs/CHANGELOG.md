@@ -1527,7 +1527,7 @@ and try to have a similar module system
 - Foundation for Phase 4: ROM analysis, live patching, savestate slots
 
 **Advanced Features Study**
-- Comprehensive analysis of advanced USB2SNES features in C#/C/Rust implementations
+- Comprehensive analysis of advanced USB2SNES features in C/Rust implementations
 - Identified missing features for future implementation:
   1. GetFile/GetFileBlocking - Download files from console ✅ IMPLEMENTED (Phase 1)
   2. GetAddresses - Batch memory read for efficient polling ✅ IMPLEMENTED (Phase 2)

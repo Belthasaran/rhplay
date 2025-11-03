@@ -17,17 +17,17 @@ This Rust native module ports the `Core` implementation to provide cross-platfor
 ### ✅ Created Structure
 - Cargo.toml with dependencies
 - Basic Rust implementation with N-API bindings
-- Serial port configuration matching C# exactly
+- Serial port configuration matching C exactly
 
 ### 🔄 Needs Completion
 
-1. **Argument Encoding**: Port the full argument encoding logic from C# `SendCommand`:
+1. **Argument Encoding**: Port the full argument encoding format from `SendCommand`:
    - GET/PUT: Address/size encoding at bytes 252-255
    - LS/MKDIR/RM/MV/BOOT: String encoding at bytes 8+
    - VGET/VPUT: Multiple (address, size) pairs at bytes 32+
    - INFO/RESET: No arguments
 
-2. **Response Parsing**: Port response parsing logic:
+2. **Response Parsing**: Port the response format:
    - INFO response parsing (firmware version, ROM name, flags)
    - LS response parsing (file listings)
    - GET/VGET response handling

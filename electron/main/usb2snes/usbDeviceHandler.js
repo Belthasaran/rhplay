@@ -19,7 +19,7 @@ if (process.platform === 'linux') {
 /**
  * USB Device Handler for SD2SNES/FXPak Pro
  * 
- * Implements the binary USB protocol as defined in the C# reference implementation.
+ * Implements the binary USB protocol as defined in the C reference implementation.
  * Protocol uses 512-byte binary packets with "USBA" magic header.
  * Serial port configuration: 9600 baud, 8N1, DTR enabled
  */
@@ -39,7 +39,6 @@ class UsbDeviceHandler {
     this.dataBuffer = Buffer.alloc(0);
     this.pendingDataSize = 0;
     
-    // Protocol opcode enums (from usbint_server_opcode_e.cs)
     this.OPCODES = {
       GET: 0,
       PUT: 1,
@@ -59,7 +58,6 @@ class UsbDeviceHandler {
       RESPONSE: 15
     };
     
-    // Protocol space enums (from usbint_server_space_e.cs)
     this.SPACES = {
       FILE: 0,
       SNES: 1,
@@ -68,7 +66,6 @@ class UsbDeviceHandler {
       CONFIG: 4
     };
     
-    // Protocol flags (from usbint_server_flags_e.cs)
     this.FLAGS = {
       NONE: 0,
       SKIPRESET: 1,
@@ -261,28 +258,28 @@ class UsbDeviceHandler {
           }).finally(() => {
             // Continue with port opening after stty configuration (success or failure)
             try {
-              // Serial port configuration from C# reference: 9600 baud, 8N1, DTR enabled
+              // Serial port configuration from C reference: 9600 baud, 8N1, DTR enabled
               // CRITICAL: On Linux, we've already applied stty configuration
               // The serialport library should match those settings
               const port = new SerialPort({
               path: portPath,
-              baudRate: 9600, // CRITICAL: C# uses 9600, not 921600!
+              baudRate: 9600, // CRITICAL: C uses 9600, not 921600!
               dataBits: 8,
               stopBits: 1,
               parity: 'none',
               autoOpen: false,
               // DTR/RTS control - may not be supported on all Linux systems
               // Will fall back to RESET opcode if DTR control fails
-              dtr: true, // DTR enabled as per C# reference (may not work on all systems)
+              dtr: true, // DTR enabled as per C reference (may not work on all systems)
               rts: false,
-              // Flow control - match C# reference: Handshake.None = no hardware flow control
+              // Flow control - match C reference: Handshake.None = no hardware flow control
               hupcl: false, // Don't hang up on close
-              // Explicitly disable hardware flow control (matching C# Handshake.None)
+              // Explicitly disable hardware flow control (matching C Handshake.None)
               xon: false,
               xoff: false,
               xany: false,
               // CRITICAL: Disable any buffering that might interfere with reading
-              // Set read timeout to match C# ReadTimeout = 5000
+              // Set read timeout to match C ReadTimeout = 5000
               // Note: serialport library doesn't directly expose ReadTimeout/WriteTimeout
               // but we can use low-level options if available
               highWaterMark: 512 // Buffer size for reading (match packet size)
@@ -362,7 +359,7 @@ class UsbDeviceHandler {
               this._configureSerialPortStty(portPath).then(async () => {
                 console.log(`[UsbDeviceHandler] stty configuration re-applied after port open`);
                 
-                // CRITICAL: Clear input buffer after stty (matching C# DiscardInBuffer)
+                // CRITICAL: Clear input buffer after stty (matching C DiscardInBuffer)
                 // This ensures we start with a clean state and can receive responses
                 try {
                   // Clear our internal buffers
@@ -370,7 +367,7 @@ class UsbDeviceHandler {
                   this.dataBuffer = Buffer.alloc(0);
                   
                   // Try to read and discard any stale data from hardware buffer
-                  // This mimics C# DiscardInBuffer() behavior
+                  // This mimics C DiscardInBuffer() behavior
                   let staleDataCleared = 0;
                   for (let i = 0; i < 10; i++) {
                     if (port.readable) {
@@ -595,7 +592,7 @@ class UsbDeviceHandler {
   _buildPacket(opcode, space, flags) {
     const packet = Buffer.alloc(512); // 0x200 bytes
     
-    // Magic header: "USBA" (bytes 0-3) - matching C# reference and QUSB2Snes
+    // Magic header: "USBA" (bytes 0-3) - matching C reference and QUSB2Snes
     packet[0] = 0x55; // 'U'
     packet[1] = 0x53; // 'S'
     packet[2] = 0x42; // 'B'
@@ -769,7 +766,7 @@ class UsbDeviceHandler {
           }
         };
 
-        // CRITICAL: Clear input buffer before sending command (matching C# DiscardInBuffer)
+        // CRITICAL: Clear input buffer before sending command (matching C DiscardInBuffer)
         // This ensures we don't have stale data interfering
         try {
           if (this.port.flush) {
@@ -838,7 +835,7 @@ class UsbDeviceHandler {
             (async () => {
               try {
                 // Wait briefly for device to receive command and start processing
-                // C# reference uses ReadTimeout = 5000ms and reads synchronously, so device has time to respond
+                // C reference uses ReadTimeout = 5000ms and reads synchronously, so device has time to respond
                 // QUSB2Snes writes, then immediately starts polling for data (no tcdrain!)
                 console.log(`[UsbDeviceHandler] Waiting 50ms after write for device to receive command...`);
                 await new Promise(resolve => setTimeout(resolve, 50));
@@ -892,7 +889,7 @@ class UsbDeviceHandler {
                 console.log(`[UsbDeviceHandler] Write buffer drained, data should be sent`);
                 
                 // CRITICAL: After draining, actively try to read response using blocking-style approach
-                // The C# reference uses blocking reads with timeout
+                // The C reference uses blocking reads with timeout
                 // Try to read immediately after drain completes
                 console.log(`[UsbDeviceHandler] Starting blocking read attempt after drain...`);
                 if (this.useRawFD) {
@@ -912,7 +909,7 @@ class UsbDeviceHandler {
 
   /**
    * Read full 512-byte response packet using raw file descriptor
-   * Matches C# behavior of reading immediately after write and accumulating bytes
+   * Matches C behavior of reading immediately after write and accumulating bytes
    * @private
    */
   _readRawResponsePacket(timeoutId, resolve, reject) {
@@ -1151,7 +1148,7 @@ class UsbDeviceHandler {
 
   /**
    * Try blocking-style read to get response immediately
-   * This mimics the C# synchronous Read() approach
+   * This mimics the C synchronous Read() approach
    * @private
    */
   _tryBlockingRead() {
@@ -1205,18 +1202,18 @@ class UsbDeviceHandler {
   }
 
   /**
-   * Build command packet with proper operand encoding based on C# reference
+   * Build command packet with proper operand encoding based on C reference
    * @private
    */
   _buildCommandPacket(opcode, space, flags, args) {
     const packet = this._buildPacket(opcode, space, flags);
     
-    // Encode operands based on opcode type (from C# Core.cs SendCommand)
+    // Encode operands based on opcode type (from C Core SendCommand)
     if (opcode === this.OPCODES.GET || opcode === this.OPCODES.PUT) {
       // GET/PUT: args[0] = address (uint), args[1] = size (uint)
-      // From C# line 797: num3 = (uint) args[1] (size)
-      // From C# line 831: num4 = (uint) args[0] (address)
-      // Address at bytes 252-255 (big-endian) - from C# lines 862, 820, 679, 504
+      // From C line 797: num3 = (uint) args[1] (size)
+      // From C line 831: num4 = (uint) args[0] (address)
+      // Address at bytes 252-255 (big-endian) - from C lines 862, 820, 679, 504
       if (args.length >= 1 && args[0] != null) {
         const address = typeof args[0] === 'number' ? args[0] : parseInt(args[0], 16);
         packet[252] = (address >> 24) & 0xFF;
@@ -1333,19 +1330,6 @@ class UsbDeviceHandler {
         this.pendingResponse = null;
       }
       
-      // CRITICAL: C# reference uses DTR toggle, NOT the RESET opcode!
-      // From C# Core.cs line 232-236:
-      //   public void Reset()
-      //   {
-      //     this._serial_port.DtrEnable = false;
-      //     Thread.Sleep(500);
-      //   }
-      // QUSB2Snes uses ioctl(TIOCMBIC, TIOCM_DTR) which is the same as setting DTR to false
-      // We should use DTR toggle directly, matching the C# behavior exactly
-      
-      // CRITICAL: Reset the SNES console, NOT the USB connection
-      // This uses DTR (Data Terminal Ready) line to trigger SNES hardware reset
-      // The C# reference sets DtrEnable=false and waits 500ms (doesn't restore)
       // QUSB2Snes uses ioctl(TIOCMGET) then ioctl(TIOCMBIC, TIOCM_DTR) - gets status, then clears DTR
       // Matching QUSB2Snes behavior: check DTR status, ensure it's high, then clear it
       if (this.useRawFD && this.port && this.port.getDTR && this.port.clearDTR) {
@@ -1364,16 +1348,16 @@ class UsbDeviceHandler {
           await new Promise(resolve => setTimeout(resolve, 50)); // Brief delay for transition
         }
         
-        // Step 3: Clear DTR (set to LOW) - matching C#: DtrEnable = false and QUSB2Snes: TIOCMBIC
+        // Step 3: Clear DTR (set to LOW) - matching C: DtrEnable = false and QUSB2Snes: TIOCMBIC
         const dtrCleared = this.port.clearDTR();
         if (dtrCleared) {
           console.log('[UsbDeviceHandler] DTR cleared (HIGH->LOW transition detected by SNES), waiting 500ms...');
           
-          // Step 4: Wait 500ms (matching C#: Thread.Sleep(500))
+          // Step 4: Wait 500ms (matching C: Thread.Sleep(500))
           // This gives the SNES console time to process the reset signal
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // Note: QUSB2Snes and C# reference do NOT restore DTR to high after reset
+          // Note: QUSB2Snes and C reference do NOT restore DTR to high after reset
           // They leave it low. The device will handle it or it will be restored on next command
           
           // Clear command buffers and locks after reset
@@ -1382,7 +1366,7 @@ class UsbDeviceHandler {
           this.pendingResponse = null;
           this.commandLock = false;
           
-          console.log('[UsbDeviceHandler] SNES console reset complete (DTR LOW for 500ms, matching QUSB2Snes and C# reference)');
+          console.log('[UsbDeviceHandler] SNES console reset complete (DTR LOW for 500ms, matching QUSB2Snes and C reference)');
           return true;
         } else {
           console.warn('[UsbDeviceHandler] Failed to clear DTR via native ioctl, trying fallback...');
@@ -1403,12 +1387,12 @@ class UsbDeviceHandler {
       }
       
       // Fallback to serialport library DTR control
-      // Note: C# implementation only sets DTR to false and waits 500ms - it doesn't restore to true
-      // This matches the C# behavior exactly
+      // Note: C implementation only sets DTR to false and waits 500ms - it doesn't restore to true
+      // This matches the C behavior exactly
       return new Promise((resolve) => {
         // Try port.set first (some platforms support it)
         if (this.port.set) {
-          console.log('[UsbDeviceHandler] Attempting DTR toggle (port.set) - matching C# behavior...');
+          console.log('[UsbDeviceHandler] Attempting DTR toggle (port.set) - matching C behavior...');
           this.port.set({ dtr: false }, (err) => {
             if (err) {
               console.warn('[UsbDeviceHandler] DTR toggle via port.set failed:', err.message);
@@ -1424,15 +1408,15 @@ class UsbDeviceHandler {
               return;
             }
             
-            console.log('[UsbDeviceHandler] DTR set to false (matching C#: DtrEnable = false), waiting 500ms...');
-            // Match C# behavior: set DTR to false, wait 500ms, done (no restore to true)
+            console.log('[UsbDeviceHandler] DTR set to false (matching C: DtrEnable = false), waiting 500ms...');
+            // Match C behavior: set DTR to false, wait 500ms, done (no restore to true)
             setTimeout(() => {
               // Clear buffers
               this.responseBuffer = Buffer.alloc(0);
               this.dataBuffer = Buffer.alloc(0);
               this.pendingResponse = null;
               this.commandLock = false;
-              console.log('[UsbDeviceHandler] Reset complete (DTR held low for 500ms, matching C# behavior)');
+              console.log('[UsbDeviceHandler] Reset complete (DTR held low for 500ms, matching C behavior)');
               resolve(true);
             }, 500);
           });
@@ -1442,12 +1426,12 @@ class UsbDeviceHandler {
           try {
             this.port.dtr = false;
             setTimeout(() => {
-              // Match C# behavior: don't restore DTR to true, just wait 500ms
+              // Match C behavior: don't restore DTR to true, just wait 500ms
               this.responseBuffer = Buffer.alloc(0);
               this.dataBuffer = Buffer.alloc(0);
               this.pendingResponse = null;
               this.commandLock = false;
-              console.log('[UsbDeviceHandler] Reset complete via direct DTR property (matching C# behavior)');
+              console.log('[UsbDeviceHandler] Reset complete via direct DTR property (matching C behavior)');
               resolve(true);
             }, 500);
           } catch (dtrError) {
@@ -1610,7 +1594,7 @@ class UsbDeviceHandler {
         [address, size]
       );
       
-      // Response packet contains size at bytes 252-255 (from C# line 675)
+      // Response packet contains size at bytes 252-255 (from C line 675)
       const sizeField = (response[252] << 24) | (response[253] << 16) | 
                        (response[254] << 8) | response[255];
       
@@ -1890,7 +1874,7 @@ class UsbDeviceHandler {
    * @private
    */
   _parseDirectoryListing(response) {
-    // Format: (type byte, filename null-terminated) pairs starting at byte 0 (from C# Core.cs lines 490-533)
+    // Format: (type byte, filename null-terminated) pairs starting at byte 0 (from  Core lines 490-533)
     const files = [];
     let offset = 0;
     
@@ -1926,7 +1910,7 @@ class UsbDeviceHandler {
    */
   async makeDirectory(dirPath) {
     try {
-      // MKDIR uses NORESP flag (fire-and-forget) - from C# Core.cs line 874
+      // MKDIR uses NORESP flag (fire-and-forget) - from C Core line 874
       // Don't wait for response
       const packet = this._buildCommandPacket(
         this.OPCODES.MKDIR,
@@ -2049,7 +2033,7 @@ class UsbDeviceHandler {
    */
   async putIPS(ipsPath) {
     try {
-      // PutIPS uses MV (move) opcode - from C# Scheduler.cs line 373-377
+      // PutIPS uses MV (move) opcode - from C Scheduler line 373-377
       // The IPS file path is passed as operand
       if (this.useDummy && this.dummyDevice) {
         const response = await this.dummyDevice.sendCommand(
@@ -2083,7 +2067,7 @@ class UsbDeviceHandler {
   async rename(sourcePath, destPath) {
     try {
       // Rename uses MV (move) opcode with both source and dest paths
-      // From C# Scheduler.cs line 649-653, it passes operands[0] and operands[1]
+      // From C Scheduler line 649-653, it passes operands[0] and operands[1]
       if (this.useDummy && this.dummyDevice) {
         const response = await this.dummyDevice.sendCommand(
           this.OPCODES.MV,
@@ -2134,7 +2118,7 @@ class UsbDeviceHandler {
       console.log(`[UsbDeviceHandler] Response magic: ${response[0].toString(16)} ${response[1].toString(16)} ${response[2].toString(16)} ${response[3].toString(16)}`);
       console.log(`[UsbDeviceHandler] Response opcode: ${response[4]}, expected RESPONSE=${this.OPCODES.RESPONSE}`);
       
-      // Parse INFO response (from C# Core.cs lines 911-934)
+      // Parse INFO response (from C Core lines 911-934)
       // Format: [firmwareversion, versionstring, romrunning, flag1, flag2]
       // firmwareVersion: UTF-8 string starting at byte 260, null-terminated
       const firmwareVersionOffset = 260;
@@ -2144,7 +2128,7 @@ class UsbDeviceHandler {
         ? response.slice(firmwareVersionOffset, firmwareVersionEnd).toString('utf8')
         : '';
       
-      // versionString: 32-bit integer at bytes 256-259, converted to hex (uppercase, no padding in C#)
+      // versionString: 32-bit integer at bytes 256-259, converted to hex (uppercase, no padding in C)
       const versionStringValue = (response[256] << 24) | (response[257] << 16) | 
                                  (response[258] << 8) | response[259];
       const versionString = versionStringValue > 0 
@@ -2165,7 +2149,7 @@ class UsbDeviceHandler {
       console.log(`  Raw bytes 260-300 (firmwareVersion): ${response.slice(260, 300).toString('hex')}`);
       console.log(`  Parsed: firmwareVersion="${firmwareVersion}", versionString="${versionString}", romRunning="${romRunning}"`);
       
-      // Flags at byte 6 (from C# lines 915-932)
+      // Flags at byte 6 (from C lines 915-932)
       const flags = response[6];
       const featureFlags = [];
       if (flags & 1) featureFlags.push('FEAT_DSPX');

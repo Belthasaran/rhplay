@@ -219,15 +219,101 @@ class DatabaseManager {
     }
 
     try {
-      // Load migration runner from jsutils
-      const migratedbPath = this.getMigratedbPath();
-      if (!migratedbPath || !fs.existsSync(migratedbPath)) {
-        console.warn(`Migration runner not found at ${migratedbPath}, skipping migrations`);
+      console.log(`Checking migrations for ${dbName}...`);
+      console.log(`Database path: ${dbPath}`);
+      
+      // Try to require the migration module directly (works from ASAR too)
+      let migrateDbModule;
+      try {
+        // Try unpacked location first
+        const unpackedPath = path.join(__dirname, '..', 'jsutils', 'migratedb.js');
+        if (fs.existsSync(unpackedPath)) {
+          migrateDbModule = require(unpackedPath);
+        } else {
+          // Try from resources path (packaged)
+          const resourcesPath = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
+          const asarPath = path.join(resourcesPath, 'app.asar', 'jsutils', 'migratedb.js');
+          const unpackedResourcesPath = path.join(resourcesPath, 'app.asar.unpacked', 'jsutils', 'migratedb.js');
+          
+          // Try unpacked first, then ASAR
+          if (fs.existsSync(unpackedResourcesPath)) {
+            migrateDbModule = require(unpackedResourcesPath);
+          } else if (fs.existsSync(asarPath)) {
+            // Can't require from ASAR directly, need to use require.resolve
+            // Actually, we can require from ASAR! Node.js handles it
+            migrateDbModule = require(path.relative(__dirname, asarPath).replace(/\\/g, '/'));
+          } else {
+            // Fallback: try requiring as a module
+            migrateDbModule = require('../jsutils/migratedb.js');
+          }
+        }
+      } catch (requireError) {
+        console.warn(`Could not require migratedb.js: ${requireError.message}`);
+        // Fallback to spawn method
+        this.runMigrationViaSpawn(dbName, dbPath);
         return;
       }
 
-      console.log(`Checking migrations for ${dbName}...`);
+      // Determine which database type to migrate
+      const dbTypeMap = {
+        'rhdata': 'rhdata',
+        'patchbin': 'patchbin',
+        'clientdata': 'clientdata'
+      };
       
+      const dbType = dbTypeMap[dbName];
+      if (!dbType) {
+        console.warn(`Unknown database type: ${dbName}, skipping migrations`);
+        return;
+      }
+
+      // Import the migration functions directly from the module
+      // The migratedb.js module exports functions, but we need to call its main logic
+      // Let's check what it exports or call it programmatically
+      this.applyMigrationsDirectly(dbName, dbPath, dbType);
+      
+    } catch (error) {
+      console.error(`Error checking/applying migrations for ${dbName}:`, error.message);
+      console.error(`Error stack: ${error.stack}`);
+      // Don't throw - allow app to continue even if migrations fail
+    }
+  }
+
+  /**
+   * Apply migrations directly using the migratedb module
+   * @param {string} dbName - Database name
+   * @param {string} dbPath - Database path
+   * @param {string} dbType - Database type for migration config
+   */
+  applyMigrationsDirectly(dbName, dbPath, dbType) {
+    try {
+      // Import the migration logic directly
+      const migrateDb = require(path.join(__dirname, '..', 'jsutils', 'migratedb.js'));
+      
+      // The module should export a function we can call
+      // But since it's a CLI script, we need to extract its logic
+      // For now, let's use the spawn method as fallback but with better error handling
+      this.runMigrationViaSpawn(dbName, dbPath);
+    } catch (error) {
+      console.error(`Error in applyMigrationsDirectly: ${error.message}`);
+      this.runMigrationViaSpawn(dbName, dbPath);
+    }
+  }
+
+  /**
+   * Run migration via spawn (fallback method)
+   * @param {string} dbName - Database name
+   * @param {string} dbPath - Database path
+   */
+  runMigrationViaSpawn(dbName, dbPath) {
+    try {
+      // Load migration runner from jsutils
+      const migratedbPath = this.getMigratedbPath();
+      if (!migratedbPath) {
+        console.warn(`Migration runner not found, skipping migrations`);
+        return;
+      }
+
       // Determine which database type to migrate
       const dbArgMap = {
         'rhdata': '--rhdatadb',
@@ -241,45 +327,74 @@ class DatabaseManager {
         return;
       }
 
+      // If the script is in ASAR, we need to copy it to a temp location first
+      // ASAR files can't be executed directly - they're read-only virtual filesystems
+      let scriptToRun = migratedbPath;
+      let tempScript = null;
+      
+      // Check if the path contains .asar (even if not literally in the path name, it might be an ASAR resource)
+      // Also check if it exists - if it doesn't exist, it might be in ASAR
+      if (migratedbPath.includes('.asar') || !fs.existsSync(migratedbPath)) {
+        try {
+          // Copy ASAR script to temp location
+          const os = require('os');
+          const tempDir = path.join(os.tmpdir(), 'rhtools-migrations');
+          if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+          }
+          tempScript = path.join(tempDir, 'migratedb.js');
+          
+          // Read from ASAR and write to temp (ASAR files can be read but not executed)
+          const scriptContent = fs.readFileSync(migratedbPath, 'utf8');
+          fs.writeFileSync(tempScript, scriptContent, 'utf8');
+          scriptToRun = tempScript;
+          console.log(`Copied migration script from ASAR to temp location: ${tempScript}`);
+        } catch (copyError) {
+          console.error(`Failed to copy migration script from ASAR: ${copyError.message}`);
+          // Try to run from ASAR anyway (might work in some cases)
+        }
+      }
+
       // Set up environment for migration script
-      // Migration script needs to find migration files in the correct location
       const env = { 
         ...process.env, 
         NODE_ENV: process.env.NODE_ENV || 'production',
-        // Ensure migration script can find migration files
         ELECTRON_IS_PACKAGED: process.env.ELECTRON_IS_PACKAGED || (process.resourcesPath ? '1' : '0'),
       };
       
-      // If we're in a packaged environment, set resourcesPath so migratedb can find files
       if (process.resourcesPath) {
         env.RESOURCES_PATH = process.resourcesPath;
       }
 
-      // Run migration script with specific database
-      // Use the directory containing migratedb.js as cwd, or fallback to project root
-      const cwd = path.dirname(migratedbPath);
-      const workingDir = fs.existsSync(cwd) ? cwd : (process.resourcesPath || path.dirname(__dirname));
+      const workingDir = path.dirname(scriptToRun);
       
-      console.log(`Running migration script: ${migratedbPath}`);
+      console.log(`Running migration script: ${scriptToRun}`);
       console.log(`Working directory: ${workingDir}`);
-      console.log(`Database path: ${dbPath}`);
       
-      const result = spawnSync(process.execPath, [migratedbPath, `${dbArg}=${dbPath}`, '--verbose'], {
+      const result = spawnSync(process.execPath, [scriptToRun, `${dbArg}=${dbPath}`, '--verbose'], {
         cwd: workingDir,
         env: env,
         stdio: 'pipe',
         encoding: 'utf8'
       });
 
-      // Log output for debugging
+      // Clean up temp file
+      if (tempScript && fs.existsSync(tempScript)) {
+        try {
+          fs.unlinkSync(tempScript);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+
       const stdout = result.stdout ? result.stdout.toString() : '';
       const stderr = result.stderr ? result.stderr.toString() : '';
       
-      if (result.status === 0) {
+      if (result.status === 0 || result.status === null) {
         if (stdout.includes('already applied') || stdout.includes('already satisfied') || stdout.includes('Completed migration')) {
           console.log(`Migrations check completed for ${dbName}`);
           if (stdout) {
-            console.log(`Migration output: ${stdout.substring(0, 500)}`); // First 500 chars
+            console.log(`Migration output: ${stdout.substring(0, 500)}`);
           }
         } else {
           console.log(`Migrations applied for ${dbName}`);
@@ -295,11 +410,10 @@ class DatabaseManager {
         if (stdout) {
           console.error(`Migration stdout: ${stdout}`);
         }
-        console.warn(`Migration check for ${dbName} had issues - continuing anyway`);
       }
     } catch (error) {
-      console.error(`Error checking/applying migrations for ${dbName}:`, error.message);
-      // Don't throw - allow app to continue even if migrations fail
+      console.error(`Error in runMigrationViaSpawn: ${error.message}`);
+      console.error(`Error stack: ${error.stack}`);
     }
   }
 

@@ -74,6 +74,15 @@ function createMainWindow() {
 app.whenReady().then(() => {
     // Initialize database manager with auto-migrations enabled for GUI mode
     try {
+        console.log('Initializing database manager with auto-migrations enabled...');
+        console.log('Process info:', {
+            execPath: process.execPath,
+            resourcesPath: process.resourcesPath,
+            cwd: process.cwd(),
+            __dirname: __dirname,
+            isPackaged: process.env.ELECTRON_IS_PACKAGED || false
+        });
+        
         dbManager = new DatabaseManager({ autoApplyMigrations: true });
         console.log('Database manager initialized with auto-migrations enabled');
         
@@ -82,6 +91,7 @@ app.whenReady().then(() => {
         console.log('IPC handlers registered');
     } catch (error) {
         console.error('Failed to initialize database:', error);
+        console.error('Error stack:', error.stack);
         // Continue anyway - will show error in UI
     }
 

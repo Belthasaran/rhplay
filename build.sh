@@ -166,7 +166,28 @@ build_renderer() {
 build_linux() {
     print_status "Building Linux AppImage..."
     
+    # Temporarily rename invalid icon.icns if it exists and is not a valid ICNS file
+    # This prevents electron-builder from trying to process it during Linux builds
+    if [ -f "assets/icon.icns" ]; then
+        ICON_TYPE=$(file -b assets/icon.icns)
+        if echo "$ICON_TYPE" | grep -q "PNG"; then
+            print_warning "icon.icns is actually a PNG file, temporarily renaming to avoid build errors"
+            mv assets/icon.icns assets/icon.icns.bak
+            ICON_BACKED_UP=true
+        else
+            ICON_BACKED_UP=false
+        fi
+    else
+        ICON_BACKED_UP=false
+    fi
+    
     npm run build:linux
+    
+    # Restore icon file if it was backed up
+    if [ "$ICON_BACKED_UP" = true ]; then
+        mv assets/icon.icns.bak assets/icon.icns
+        print_status "Restored icon.icns file"
+    fi
     
     if [ -f "dist-builds/RHTools-${VERSION_STRING}.AppImage" ] ; then
         print_success "Linux AppImage built successfully"
@@ -202,6 +223,24 @@ build_windows() {
 # Build macOS Intel package
 build_macos() {
     print_status "Building macOS Intel package..."
+    
+    # Check if icon.icns is valid, if not try to regenerate from iconset
+    if [ -f "assets/icon.icns" ]; then
+        ICON_TYPE=$(file -b assets/icon.icns)
+        if echo "$ICON_TYPE" | grep -q "PNG"; then
+            print_warning "icon.icns is a PNG file, not a valid ICNS"
+            print_warning "macOS builds require a valid ICNS file"
+            print_warning "Please regenerate icon.icns from assets/icon.iconset/"
+            print_warning "On macOS: iconutil -c icns assets/icon.iconset -o assets/icon.icns"
+            print_error "Cannot build macOS package without valid icon.icns"
+            print_error "Run create-macos-assets.sh on macOS to generate proper icon.icns"
+            exit 1
+        fi
+    else
+        print_error "icon.icns not found in assets/"
+        print_error "Cannot build macOS package without icon.icns"
+        exit 1
+    fi
     
     # Note: macOS builds on Linux have limitations
     # For production, build on macOS machine or use GitHub Actions
@@ -349,6 +388,8 @@ case "${1:-all}" in
         clean_builds
         install_dependencies
         build_renderer
+        # Note: macOS build requires valid icon.icns file
+        # Run create-macos-assets.sh on macOS to generate it
         build_macos
         verify_packages
         ;;

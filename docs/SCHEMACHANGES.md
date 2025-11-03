@@ -84,6 +84,73 @@ None - new table
 
 ---
 
+## 2025-01-XX: Contest and Racelevel Columns (Migration 010)
+
+### Date
+January XX, 2025
+
+### Description
+Added `contest` and `racelevel` columns to the `gameversions` table for enhanced game categorization.
+
+### Rationale
+- **Game Categorization**: Support for contest and race level attributes from JSON data
+- **Data Extraction**: Extract contest and racelevel from gvjsondata JSON field
+- **Query Performance**: Enable filtering and searching by contest and race level
+
+### Tables/Columns Affected
+
+**Database**: `rhdata.db`
+
+**Table**: `gameversions`
+
+**New Columns**:
+1. `contest` (VARCHAR(255)): Contest information extracted from JSON data
+2. `racelevel` (VARCHAR(255)): Race level information extracted from JSON data
+
+**Indexes Created**:
+- `idx_gameversions_contest` on `contest` column
+- `idx_gameversions_racelevel` on `racelevel` column
+
+### Data Migration
+A separate JavaScript migration script (`011_populate_contest_racelevel_from_json.js`) populates these columns by parsing the `gvjsondata` JSON field.
+
+---
+
+## 2025-01-XX: Extended Rating Columns (Migration 012)
+
+### Date
+January XX, 2025
+
+### Description
+Added extended rating columns to `user_game_annotations` and `user_game_version_annotations` tables for detailed game reviews.
+
+### Rationale
+- **Detailed Reviews**: Support multiple rating dimensions beyond overall review
+- **Comprehensive Feedback**: Allow users to rate games on various aspects
+- **Data Analysis**: Enable filtering and analysis by specific rating criteria
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**Tables**: `user_game_annotations`, `user_game_version_annotations`
+
+**New Columns** (applied to both tables):
+1. `user_recommendation_rating` (INTEGER): Recommendation level (0-5)
+2. `user_importance_rating` (INTEGER): Importance/influence rating (0-5)
+3. `user_technical_quality_rating` (INTEGER): Technical quality rating (0-5)
+4. `user_gameplay_design_rating` (INTEGER): Gameplay design rating (0-5)
+5. `user_originality_rating` (INTEGER): Originality/creativity rating (0-5)
+6. `user_visual_aesthetics_rating` (INTEGER): Visual aesthetics rating (0-5)
+7. `user_story_rating` (INTEGER): Story rating (0-5)
+8. `user_soundtrack_graphics_rating` (INTEGER): Soundtrack and graphics rating (0-5)
+
+**Constraints**: All rating columns allow NULL or values 0-5
+
+**Indexes Created**: Indexes created on all new rating columns for query performance
+
+---
+
 ## 2025-10-12: Local Resource Tracking Fields (Migration 004)
 
 ### Date

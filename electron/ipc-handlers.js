@@ -146,11 +146,24 @@ function registerDatabaseHandlers(dbManager) {
             gv.difficulty as PublicDifficulty,
             gv.version as CurrentVersion,
             gv.gvjsondata as JsonData,
+            gv.demo as Demo,
+            gv.contest as Contest,
+            gv.racelevel as Racelevel,
+            gv.tags as Tags,
+            gv.description as Description,
             -- Check for version-specific annotation first, fall back to game-wide
             COALESCE(ugva.status, uga.status, 'Default') as Status,
             COALESCE(ugva.user_difficulty_rating, uga.user_difficulty_rating) as MyDifficultyRating,
             COALESCE(ugva.user_review_rating, uga.user_review_rating) as MyReviewRating,
             COALESCE(ugva.user_skill_rating, uga.user_skill_rating) as MySkillRating,
+            COALESCE(ugva.user_recommendation_rating, uga.user_recommendation_rating) as MyRecommendationRating,
+            COALESCE(ugva.user_importance_rating, uga.user_importance_rating) as MyImportanceRating,
+            COALESCE(ugva.user_technical_quality_rating, uga.user_technical_quality_rating) as MyTechnicalQualityRating,
+            COALESCE(ugva.user_gameplay_design_rating, uga.user_gameplay_design_rating) as MyGameplayDesignRating,
+            COALESCE(ugva.user_originality_rating, uga.user_originality_rating) as MyOriginalityRating,
+            COALESCE(ugva.user_visual_aesthetics_rating, uga.user_visual_aesthetics_rating) as MyVisualAestheticsRating,
+            COALESCE(ugva.user_story_rating, uga.user_story_rating) as MyStoryRating,
+            COALESCE(ugva.user_soundtrack_graphics_rating, uga.user_soundtrack_graphics_rating) as MySoundtrackGraphicsRating,
             COALESCE(uga.hidden, 0) as Hidden,
             COALESCE(uga.exclude_from_random, 0) as ExcludeFromRandom,
             COALESCE(ugva.user_notes, uga.user_notes) as Mynotes,
@@ -165,9 +178,21 @@ function registerDatabaseHandlers(dbManager) {
         
         if (!game) return null;
         
+        // Parse tags if it's a JSON string
+        let tagsParsed = null;
+        if (game.Tags) {
+          try {
+            tagsParsed = JSON.parse(game.Tags);
+          } catch (e) {
+            // If not JSON, treat as string
+            tagsParsed = game.Tags;
+          }
+        }
+        
         return {
           ...game,
           JsonData: game.JsonData ? JSON.parse(game.JsonData) : null,
+          Tags: tagsParsed,
           Hidden: Boolean(game.Hidden),
           ExcludeFromRandom: Boolean(game.ExcludeFromRandom),
           HasVersionSpecific: Boolean(game.HasVersionSpecific),
@@ -225,17 +250,39 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      const {
+        myRecommendationRating,
+        myImportanceRating,
+        myTechnicalQualityRating,
+        myGameplayDesignRating,
+        myOriginalityRating,
+        myVisualAestheticsRating,
+        myStoryRating,
+        mySoundtrackGraphicsRating
+      } = annotation;
+      
       db.prepare(`
         INSERT OR REPLACE INTO user_game_annotations
           (gameid, status, user_difficulty_rating, user_review_rating, user_skill_rating,
+           user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
+           user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
+           user_story_rating, user_soundtrack_graphics_rating,
            hidden, exclude_from_random, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         gameid,
         status || 'Default',
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        myRecommendationRating,
+        myImportanceRating,
+        myTechnicalQualityRating,
+        myGameplayDesignRating,
+        myOriginalityRating,
+        myVisualAestheticsRating,
+        myStoryRating,
+        mySoundtrackGraphicsRating,
         hidden ? 1 : 0,
         excludeFromRandom ? 1 : 0,
         mynotes || null
@@ -263,6 +310,14 @@ function registerDatabaseHandlers(dbManager) {
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        myRecommendationRating,
+        myImportanceRating,
+        myTechnicalQualityRating,
+        myGameplayDesignRating,
+        myOriginalityRating,
+        myVisualAestheticsRating,
+        myStoryRating,
+        mySoundtrackGraphicsRating,
         mynotes
       } = annotation;
       
@@ -275,8 +330,11 @@ function registerDatabaseHandlers(dbManager) {
       db.prepare(`
         INSERT OR REPLACE INTO user_game_version_annotations
           (annotation_key, gameid, version, status, 
-           user_difficulty_rating, user_review_rating, user_skill_rating, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           user_difficulty_rating, user_review_rating, user_skill_rating,
+           user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
+           user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
+           user_story_rating, user_soundtrack_graphics_rating, user_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         annotationKey,
         gameid,
@@ -285,6 +343,14 @@ function registerDatabaseHandlers(dbManager) {
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        myRecommendationRating,
+        myImportanceRating,
+        myTechnicalQualityRating,
+        myGameplayDesignRating,
+        myOriginalityRating,
+        myVisualAestheticsRating,
+        myStoryRating,
+        mySoundtrackGraphicsRating,
         mynotes
       );
       

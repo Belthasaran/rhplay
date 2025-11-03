@@ -1185,3 +1185,115 @@ sqlite3 electron/clientdata.db "ALTER TABLE run_results ADD COLUMN sfcpath TEXT 
 
 ---
 
+## Migration 010: Add Contest and Racelevel Columns
+
+### Date Added
+January XX, 2025
+
+### Purpose
+Add `contest` and `racelevel` columns to the `gameversions` table for enhanced game categorization.
+
+### Command
+```bash
+sqlite3 electron/rhdata.db < electron/sql/migrations/010_add_contest_racelevel_to_gameversions.sql
+```
+
+### What It Does
+- Adds `contest` column (VARCHAR 255)
+- Adds `racelevel` column (VARCHAR 255)
+- Creates indexes for query performance
+
+### Prerequisites
+- Database electron/rhdata.db must exist
+- Backup recommended before running
+
+### Expected Outcome
+- Two new columns appear in gameversions table
+- Two new indexes created
+- No data loss
+- Existing queries continue to work
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS checks)
+- No existing data is modified (columns are empty after creation)
+
+---
+
+## Migration 011: Populate Contest and Racelevel from JSON
+
+### Date Added
+January XX, 2025
+
+### Purpose
+Populate `contest` and `racelevel` columns by extracting values from `gvjsondata` JSON field.
+
+### Command
+```bash
+node electron/sql/migrations/011_populate_contest_racelevel_from_json.js
+```
+
+Or with custom database path:
+```bash
+RHDATA_DB_PATH=/path/to/rhdata.db node electron/sql/migrations/011_populate_contest_racelevel_from_json.js
+```
+
+### What It Does
+- Reads all gameversions records with gvjsondata
+- Parses JSON and extracts contest and racelevel attributes
+- Updates the columns with extracted values
+
+### Prerequisites
+- Migration 010 must be run first (columns must exist)
+- Database electron/rhdata.db must exist
+- Node.js must be installed
+- better-sqlite3 must be available
+
+### Expected Outcome
+- Contest and racelevel columns populated from JSON data
+- Console output shows number of records processed and updated
+- No data loss (only updates columns with new values)
+
+### Warnings
+- Safe to run multiple times (only updates if values differ)
+- May take time on large databases
+- Logs warnings for records with invalid JSON
+
+---
+
+## Migration 012: Add Extended Rating Columns
+
+### Date Added
+January XX, 2025
+
+### Purpose
+Add extended rating columns to `user_game_annotations` and `user_game_version_annotations` tables for detailed game reviews.
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/012_add_extended_ratings_to_clientdata.sql
+```
+
+### What It Does
+- Adds 8 new rating columns to `user_game_annotations` table
+- Adds 8 new rating columns to `user_game_version_annotations` table
+- Creates indexes on all new rating columns for query performance
+- All rating columns support 0-5 stars or NULL (empty)
+
+### Prerequisites
+- Database electron/clientdata.db must exist
+- Backup recommended before running
+
+### Expected Outcome
+- 8 new columns added to each table (16 total columns)
+- 16 new indexes created (8 per table)
+- No data loss
+- Existing queries continue to work
+- New columns start as NULL (empty)
+
+### Warnings
+- Safe to run multiple times (SQLite will error if columns exist, but won't corrupt data)
+- All new rating columns allow NULL values (0-5 stars or empty)
+- Existing rating data is not affected
+
+---
+

@@ -224,9 +224,18 @@ function registerDatabaseHandlers(dbManager) {
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
+        mySkillRatingWhenBeat,
         hidden,
         excludeFromRandom,
-        mynotes
+        mynotes,
+        myRecommendationRating,
+        myImportanceRating,
+        myTechnicalQualityRating,
+        myGameplayDesignRating,
+        myOriginalityRating,
+        myVisualAestheticsRating,
+        myStoryRating,
+        mySoundtrackGraphicsRating
       } = annotation;
       
       // Validate inputs
@@ -257,18 +266,6 @@ function registerDatabaseHandlers(dbManager) {
           throw new Error('Skill rating when beat must be 0-10');
         }
       }
-      
-      const {
-        mySkillRatingWhenBeat,
-        myRecommendationRating,
-        myImportanceRating,
-        myTechnicalQualityRating,
-        myGameplayDesignRating,
-        myOriginalityRating,
-        myVisualAestheticsRating,
-        myStoryRating,
-        mySoundtrackGraphicsRating
-      } = annotation;
       
       db.prepare(`
         INSERT OR REPLACE INTO user_game_annotations

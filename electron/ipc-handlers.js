@@ -3561,11 +3561,13 @@ function registerDatabaseHandlers(dbManager) {
         const ml_dsa44 = mlDsaModule.ml_dsa44;
         
         // Generate keypair
-        const { publicKey, privateKey } = ml_dsa44.keygen();
+        // Note: @noble/post-quantum uses 'secretKey' not 'privateKey'
+        const { publicKey, secretKey } = ml_dsa44.keygen();
         
         // Convert Uint8Array to hex for storage
         const publicKeyHex = Buffer.from(publicKey).toString('hex');
-        const privateKeyHex = Buffer.from(privateKey).toString('hex');
+        const privateKeyHex = Buffer.from(secretKey).toString('hex');
+        const privateKey = secretKey; // Alias for consistency
         
         // Generate fingerprint from public key
         const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
@@ -3600,11 +3602,13 @@ function registerDatabaseHandlers(dbManager) {
         const ml_dsa87 = mlDsaModule.ml_dsa87;
         
         // Generate keypair
-        const { publicKey, privateKey } = ml_dsa87.keygen();
+        // Note: @noble/post-quantum uses 'secretKey' not 'privateKey'
+        const { publicKey, secretKey } = ml_dsa87.keygen();
         
         // Convert Uint8Array to hex for storage
         const publicKeyHex = Buffer.from(publicKey).toString('hex');
-        const privateKeyHex = Buffer.from(privateKey).toString('hex');
+        const privateKeyHex = Buffer.from(secretKey).toString('hex');
+        const privateKey = secretKey; // Alias for consistency
         
         // Generate fingerprint from public key
         const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');

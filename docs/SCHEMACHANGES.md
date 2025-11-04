@@ -127,7 +127,19 @@ Added `user_skill_rating_when_beat` column to `user_game_annotations` and `user_
 ### Rationale
 - **Skill Tracking**: Separate skill rating for when the game was beaten vs when it was rated
 - **Progress Tracking**: Allows users to track their skill progression
-- **Data Analysis**: Enable analysis of skill level differences between rating and completion
+
+## 2025-01-XX: Rating Comment Columns (Migration 014)
+
+### Date
+January XX, 2025
+
+### Description
+Added comment text columns for all rating components to `user_game_annotations` and `user_game_version_annotations` tables, allowing users to add optional comments for each rating dimension.
+
+### Rationale
+- **Detailed Feedback**: Users can provide context and explanations for their ratings
+- **Optional Comments**: Comments are optional and don't interfere with rating-only usage
+- **Rating Context**: Helps users remember why they gave specific ratings
 
 ### Tables/Columns Affected
 
@@ -135,12 +147,20 @@ Added `user_skill_rating_when_beat` column to `user_game_annotations` and `user_
 
 **Tables**: `user_game_annotations`, `user_game_version_annotations`
 
-**New Columns** (applied to both tables):
-1. `user_skill_rating_when_beat` (INTEGER): Skill rating when game was beaten (0-10)
+**New Columns**:
+- `user_review_comment` (TEXT)
+- `user_recommendation_comment` (TEXT)
+- `user_importance_comment` (TEXT)
+- `user_technical_quality_comment` (TEXT)
+- `user_gameplay_design_comment` (TEXT)
+- `user_originality_comment` (TEXT)
+- `user_visual_aesthetics_comment` (TEXT)
+- `user_story_comment` (TEXT)
+- `user_soundtrack_graphics_comment` (TEXT)
 
-**Constraints**: Allows NULL or values 0-10
-
-**Indexes Created**: Indexes created on new column for query performance
+### Data Type Changes
+- All comment columns are TEXT type, allowing unlimited length comments
+- NULL values are allowed (comments are optional)
 
 ---
 

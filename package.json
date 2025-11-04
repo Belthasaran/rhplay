@@ -117,6 +117,7 @@
       "!electron/backup/**/*",
       "!electron/**/*.db-shm",
       "!electron/**/*.db-wal",
+      "!electron/**/*.db_bak",
       "!electron/rhdata.db",
       "!electron/patchbin.db",
       "jsutils/migratedb.js",

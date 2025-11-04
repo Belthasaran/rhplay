@@ -1011,15 +1011,24 @@
               <label class="rating-label">Overall (My Review)</label>
               <span class="rating-label-text">{{ reviewLabel(ratingSheetData.MyReviewRating) }}</span>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'overall-' + (n-1)"
-                @click="updateRating('MyReviewRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyReviewRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyReviewRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'overall-' + (n-1)"
+                  @click="updateRating('MyReviewRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyReviewRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyReviewRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyReviewComment"
+                @input="updateComment('MyReviewComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1027,15 +1036,24 @@
             <div class="rating-header">
               <label class="rating-label">Recommendation <span class="rating-description-inline">(Level to which you would recommend the game, regardless of its qualities)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'rec-' + (n-1)"
-                @click="updateRating('MyRecommendationRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyRecommendationRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyRecommendationRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'rec-' + (n-1)"
+                  @click="updateRating('MyRecommendationRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyRecommendationRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyRecommendationRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyRecommendationComment"
+                @input="updateComment('MyRecommendationComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1043,15 +1061,24 @@
             <div class="rating-header">
               <label class="rating-label">Importance <span class="rating-description-inline">(Whether the game is considered Influential or Important regardless of its review qualities)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'imp-' + (n-1)"
-                @click="updateRating('MyImportanceRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyImportanceRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyImportanceRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'imp-' + (n-1)"
+                  @click="updateRating('MyImportanceRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyImportanceRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyImportanceRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyImportanceComment"
+                @input="updateComment('MyImportanceComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1059,15 +1086,24 @@
             <div class="rating-header">
               <label class="rating-label">Technical Quality <span class="rating-description-inline">(How fully functional, free of major bugs/glitches - crashes, visual glitches, object colors blending with background)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'tech-' + (n-1)"
-                @click="updateRating('MyTechnicalQualityRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyTechnicalQualityRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyTechnicalQualityRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'tech-' + (n-1)"
+                  @click="updateRating('MyTechnicalQualityRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyTechnicalQualityRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyTechnicalQualityRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyTechnicalQualityComment"
+                @input="updateComment('MyTechnicalQualityComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1075,15 +1111,24 @@
             <div class="rating-header">
               <label class="rating-label">Gameplay Design <span class="rating-description-inline">(Enjoyable gameplay, interesting mechanics, free of obstacles that impede player for reasons other than skill - e.g., blind jumps)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'gameplay-' + (n-1)"
-                @click="updateRating('MyGameplayDesignRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyGameplayDesignRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyGameplayDesignRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'gameplay-' + (n-1)"
+                  @click="updateRating('MyGameplayDesignRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyGameplayDesignRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyGameplayDesignRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyGameplayDesignComment"
+                @input="updateComment('MyGameplayDesignComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1091,15 +1136,24 @@
             <div class="rating-header">
               <label class="rating-label">Originality / Creativity <span class="rating-description-inline">(The game is significantly unique and interesting)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'orig-' + (n-1)"
-                @click="updateRating('MyOriginalityRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyOriginalityRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyOriginalityRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'orig-' + (n-1)"
+                  @click="updateRating('MyOriginalityRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyOriginalityRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyOriginalityRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyOriginalityComment"
+                @input="updateComment('MyOriginalityComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1107,15 +1161,24 @@
             <div class="rating-header">
               <label class="rating-label">Visual Aesthetics <span class="rating-description-inline">(Overworld and levels well designed visually - free of floating muncher stacks, naked pipes, etc.)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'visual-' + (n-1)"
-                @click="updateRating('MyVisualAestheticsRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyVisualAestheticsRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyVisualAestheticsRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'visual-' + (n-1)"
+                  @click="updateRating('MyVisualAestheticsRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyVisualAestheticsRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyVisualAestheticsRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyVisualAestheticsComment"
+                @input="updateComment('MyVisualAestheticsComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1123,15 +1186,24 @@
             <div class="rating-header">
               <label class="rating-label">Story <span class="rating-description-inline">(Does the game have a compelling or interesting story?)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'story-' + (n-1)"
-                @click="updateRating('MyStoryRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MyStoryRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MyStoryRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'story-' + (n-1)"
+                  @click="updateRating('MyStoryRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyStoryRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyStoryRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyStoryComment"
+                @input="updateComment('MyStoryComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
           
@@ -1139,15 +1211,24 @@
             <div class="rating-header">
               <label class="rating-label">Soundtrack and Graphics <span class="rating-description-inline">(Quality of soundtrack and graphics presentation)</span></label>
             </div>
-            <div class="star-rating">
-              <span 
-                v-for="n in 6" 
-                :key="'sound-' + (n-1)"
-                @click="updateRating('MySoundtrackGraphicsRating', n - 1)"
-                :class="{ filled: (n - 1) <= (ratingSheetData.MySoundtrackGraphicsRating ?? -1) }"
-                class="star"
-              >★</span>
-              <button @click="updateRating('MySoundtrackGraphicsRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'sound-' + (n-1)"
+                  @click="updateRating('MySoundtrackGraphicsRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MySoundtrackGraphicsRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MySoundtrackGraphicsRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MySoundtrackGraphicsComment"
+                @input="updateComment('MySoundtrackGraphicsComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
             </div>
           </div>
         </div>
@@ -8466,6 +8547,15 @@ const debouncedSaveAnnotation = debounce(async (item: Item) => {
     const annotation = {
       gameid: item.Id,
       status: item.Status,
+      myReviewComment: (item as any).MyReviewComment || null,
+      myRecommendationComment: (item as any).MyRecommendationComment || null,
+      myImportanceComment: (item as any).MyImportanceComment || null,
+      myTechnicalQualityComment: (item as any).MyTechnicalQualityComment || null,
+      myGameplayDesignComment: (item as any).MyGameplayDesignComment || null,
+      myOriginalityComment: (item as any).MyOriginalityComment || null,
+      myVisualAestheticsComment: (item as any).MyVisualAestheticsComment || null,
+      myStoryComment: (item as any).MyStoryComment || null,
+      mySoundtrackGraphicsComment: (item as any).MySoundtrackGraphicsComment || null,
       myDifficultyRating: item.MyDifficultyRating,
       myReviewRating: item.MyReviewRating,
       mySkillRating: item.MySkillRating,
@@ -8802,7 +8892,7 @@ const ratingSheetData = ref<any>({});
 
 function openRatingSheetModal() {
   if (!selectedItem.value) return;
-  // Copy current ratings to modal data
+  // Copy current ratings and comments to modal data
   ratingSheetData.value = {
     MyReviewRating: selectedItem.value.MyReviewRating,
     MyRecommendationRating: selectedItem.value.MyRecommendationRating,
@@ -8813,6 +8903,15 @@ function openRatingSheetModal() {
     MyVisualAestheticsRating: selectedItem.value.MyVisualAestheticsRating,
     MyStoryRating: selectedItem.value.MyStoryRating,
     MySoundtrackGraphicsRating: selectedItem.value.MySoundtrackGraphicsRating,
+    MyReviewComment: selectedItem.value.MyReviewComment || '',
+    MyRecommendationComment: selectedItem.value.MyRecommendationComment || '',
+    MyImportanceComment: selectedItem.value.MyImportanceComment || '',
+    MyTechnicalQualityComment: selectedItem.value.MyTechnicalQualityComment || '',
+    MyGameplayDesignComment: selectedItem.value.MyGameplayDesignComment || '',
+    MyOriginalityComment: selectedItem.value.MyOriginalityComment || '',
+    MyVisualAestheticsComment: selectedItem.value.MyVisualAestheticsComment || '',
+    MyStoryComment: selectedItem.value.MyStoryComment || '',
+    MySoundtrackGraphicsComment: selectedItem.value.MySoundtrackGraphicsComment || '',
   };
   ratingSheetModalOpen.value = true;
 }
@@ -8829,6 +8928,17 @@ async function updateRating(field: string, value: number | null) {
   (selectedItem.value as any)[field] = value;
   
   // Save immediately
+  await saveAnnotation();
+}
+
+async function updateComment(field: string) {
+  if (!selectedItem.value) return;
+  
+  // Update both modal data and selected item
+  const commentValue = ratingSheetData.value[field] || '';
+  (selectedItem.value as any)[field] = commentValue || null;
+  
+  // Save immediately (debounced)
   await saveAnnotation();
 }
 
@@ -12244,6 +12354,39 @@ button:disabled {
   font-size: 12px;
   font-weight: normal;
   white-space: nowrap;
+}
+
+.rating-sheet-modal .rating-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.rating-sheet-modal .rating-row .star-rating {
+  flex-shrink: 0;
+}
+
+.rating-sheet-modal .rating-comment-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-color);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.rating-sheet-modal .rating-comment-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
+}
+
+.rating-sheet-modal .rating-comment-input::placeholder {
+  color: var(--text-muted);
 }
 
 .rating-sheet-modal .star-rating {

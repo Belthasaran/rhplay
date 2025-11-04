@@ -367,6 +367,17 @@ const MIGRATIONS = {
           && columnExists(db, 'user_game_version_annotations', 'user_skill_rating_when_beat');
       },
     },
+    {
+      id: 'clientdata_014_rating_comments',
+      description: 'Add rating comment columns',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/014_add_rating_comments_to_clientdata.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_game_annotations', 'user_review_comment')
+          && columnExists(db, 'user_game_annotations', 'user_recommendation_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_review_comment');
+      },
+    },
   ],
   patchbin: [],
 };

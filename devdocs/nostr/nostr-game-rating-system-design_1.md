@@ -516,7 +516,7 @@ Your database schema differs from the generic example. Here's how it maps to Nos
 ```
 
 **Key Points:**
-- The entire JSON structure is encrypted
+- The entire JSON structure is encrypted by default. (Optionally, an attribute can be added to indicate a non-encrypted update)
 - `patchblob1_name` references the patch file to download
 - `patchbin.attachments` contains download information (IPFS CIDs, Arweave paths, hashes)
 - `filekey` is used to decrypt the downloaded patch file

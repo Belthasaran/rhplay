@@ -70,12 +70,31 @@ if command -v convert &> /dev/null; then
     
     # Create ICNS file
     if command -v iconutil &> /dev/null; then
+        # macOS: use native iconutil
         iconutil -c icns assets/icon.iconset -o assets/icon.icns
         echo "✅ macOS icon created: assets/icon.icns"
+    elif command -v python3 &> /dev/null; then
+        # Linux: use Python script to create ICNS (if Pillow available)
+        if python3 -c "import PIL" 2>/dev/null; then
+            echo "Using Python script to create ICNS file..."
+            python3 scripts/create-icns-linux.py assets/icon.iconset assets/icon.icns
+            if [ $? -eq 0 ]; then
+                echo "✅ macOS icon created: assets/icon.icns (via Python)"
+            else
+                echo "⚠️  Failed to create ICNS file with Python script"
+                echo "   electron-builder will auto-generate ICNS from PNG/ICO"
+            fi
+        else
+            echo "⚠️  Pillow not installed. Install with: pip install Pillow"
+            echo "   electron-builder will auto-generate ICNS from PNG/ICO if available"
+        fi
     else
-        echo "⚠️  iconutil not found. Please run this script on macOS to create ICNS file."
-        echo "   Or manually convert the PNG files in assets/icon.iconset/ to ICNS format."
+        echo "⚠️  iconutil not found (macOS only) and Python3 not available."
+        echo "   electron-builder will auto-generate ICNS from PNG/ICO if available"
     fi
+    
+    # Note: electron-builder can auto-generate ICNS from PNG/ICO files
+    # So having a valid ICNS is not strictly required
 else
     echo "⚠️  ImageMagick not found. Please convert assets/icon.svg to ICO and ICNS manually."
     echo "   Or install ImageMagick: sudo apt install imagemagick"

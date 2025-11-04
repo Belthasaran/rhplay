@@ -166,6 +166,15 @@ function registerDatabaseHandlers(dbManager) {
             COALESCE(ugva.user_visual_aesthetics_rating, uga.user_visual_aesthetics_rating) as MyVisualAestheticsRating,
             COALESCE(ugva.user_story_rating, uga.user_story_rating) as MyStoryRating,
             COALESCE(ugva.user_soundtrack_graphics_rating, uga.user_soundtrack_graphics_rating) as MySoundtrackGraphicsRating,
+            COALESCE(ugva.user_review_comment, uga.user_review_comment) as MyReviewComment,
+            COALESCE(ugva.user_recommendation_comment, uga.user_recommendation_comment) as MyRecommendationComment,
+            COALESCE(ugva.user_importance_comment, uga.user_importance_comment) as MyImportanceComment,
+            COALESCE(ugva.user_technical_quality_comment, uga.user_technical_quality_comment) as MyTechnicalQualityComment,
+            COALESCE(ugva.user_gameplay_design_comment, uga.user_gameplay_design_comment) as MyGameplayDesignComment,
+            COALESCE(ugva.user_originality_comment, uga.user_originality_comment) as MyOriginalityComment,
+            COALESCE(ugva.user_visual_aesthetics_comment, uga.user_visual_aesthetics_comment) as MyVisualAestheticsComment,
+            COALESCE(ugva.user_story_comment, uga.user_story_comment) as MyStoryComment,
+            COALESCE(ugva.user_soundtrack_graphics_comment, uga.user_soundtrack_graphics_comment) as MySoundtrackGraphicsComment,
             COALESCE(uga.hidden, 0) as Hidden,
             COALESCE(uga.exclude_from_random, 0) as ExcludeFromRandom,
             COALESCE(ugva.user_notes, uga.user_notes) as Mynotes,
@@ -235,7 +244,16 @@ function registerDatabaseHandlers(dbManager) {
         myOriginalityRating,
         myVisualAestheticsRating,
         myStoryRating,
-        mySoundtrackGraphicsRating
+        mySoundtrackGraphicsRating,
+        myReviewComment,
+        myRecommendationComment,
+        myImportanceComment,
+        myTechnicalQualityComment,
+        myGameplayDesignComment,
+        myOriginalityComment,
+        myVisualAestheticsComment,
+        myStoryComment,
+        mySoundtrackGraphicsComment
       } = annotation;
       
       // Validate inputs
@@ -273,8 +291,11 @@ function registerDatabaseHandlers(dbManager) {
            user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
            user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
            user_story_rating, user_soundtrack_graphics_rating,
+           user_review_comment, user_recommendation_comment, user_importance_comment,
+           user_technical_quality_comment, user_gameplay_design_comment, user_originality_comment,
+           user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
            hidden, exclude_from_random, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         gameid,
         status || 'Default',
@@ -290,6 +311,15 @@ function registerDatabaseHandlers(dbManager) {
         myVisualAestheticsRating,
         myStoryRating,
         mySoundtrackGraphicsRating,
+        myReviewComment || null,
+        myRecommendationComment || null,
+        myImportanceComment || null,
+        myTechnicalQualityComment || null,
+        myGameplayDesignComment || null,
+        myOriginalityComment || null,
+        myVisualAestheticsComment || null,
+        myStoryComment || null,
+        mySoundtrackGraphicsComment || null,
         hidden ? 1 : 0,
         excludeFromRandom ? 1 : 0,
         mynotes || null
@@ -326,6 +356,15 @@ function registerDatabaseHandlers(dbManager) {
         myVisualAestheticsRating,
         myStoryRating,
         mySoundtrackGraphicsRating,
+        myReviewComment,
+        myRecommendationComment,
+        myImportanceComment,
+        myTechnicalQualityComment,
+        myGameplayDesignComment,
+        myOriginalityComment,
+        myVisualAestheticsComment,
+        myStoryComment,
+        mySoundtrackGraphicsComment,
         mynotes
       } = annotation;
       
@@ -341,8 +380,12 @@ function registerDatabaseHandlers(dbManager) {
            user_difficulty_rating, user_review_rating, user_skill_rating, user_skill_rating_when_beat,
            user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
            user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
-           user_story_rating, user_soundtrack_graphics_rating, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           user_story_rating, user_soundtrack_graphics_rating,
+           user_review_comment, user_recommendation_comment, user_importance_comment,
+           user_technical_quality_comment, user_gameplay_design_comment, user_originality_comment,
+           user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
+           user_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         annotationKey,
         gameid,
@@ -360,7 +403,16 @@ function registerDatabaseHandlers(dbManager) {
         myVisualAestheticsRating,
         myStoryRating,
         mySoundtrackGraphicsRating,
-        mynotes
+        myReviewComment || null,
+        myRecommendationComment || null,
+        myImportanceComment || null,
+        myTechnicalQualityComment || null,
+        myGameplayDesignComment || null,
+        myOriginalityComment || null,
+        myVisualAestheticsComment || null,
+        myStoryComment || null,
+        mySoundtrackGraphicsComment || null,
+        mynotes || null
       );
       
       return { success: true };

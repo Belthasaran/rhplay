@@ -1274,26 +1274,66 @@ sqlite3 electron/clientdata.db < electron/sql/migrations/013_add_skill_rating_wh
 ```
 
 ### What It Does
-- Adds `user_skill_rating_when_beat` column to `user_game_annotations` table
-- Adds `user_skill_rating_when_beat` column to `user_game_version_annotations` table
-- Creates indexes on new column for query performance
-- Supports 0-10 stars or NULL (empty)
+- Adds `user_skill_rating_when_beat` column (INTEGER, 0-10) to both annotation tables
+- Creates indexes for query performance
 
 ### Prerequisites
 - Database electron/clientdata.db must exist
-- Backup recommended before running
+- Migration 012 must be applied first
 
 ### Expected Outcome
-- One new column added to each table (2 total columns)
-- Two new indexes created (1 per table)
+- New column appears in both `user_game_annotations` and `user_game_version_annotations` tables
+- New indexes created
 - No data loss
 - Existing queries continue to work
-- New column starts as NULL (empty)
 
 ### Warnings
-- Safe to run multiple times (SQLite will error if column exists, but won't corrupt data)
-- New column allows NULL values (0-10 stars or empty)
-- Existing skill rating data is not affected
+- Safe to run multiple times (uses IF NOT EXISTS)
+- No existing data is modified
+
+---
+
+## Migration 014: Add Rating Comment Columns
+
+### Date Added
+January XX, 2025
+
+### Purpose
+Add comment text columns for all rating components to allow users to add optional comments for each rating dimension (Review, Recommendation, Importance, Technical Quality, Gameplay Design, Originality, Visual Aesthetics, Story, Soundtrack and Graphics).
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/014_add_rating_comments_to_clientdata.sql
+```
+
+### What It Does
+- Adds 9 comment columns (TEXT) to `user_game_annotations` table:
+  - `user_review_comment`
+  - `user_recommendation_comment`
+  - `user_importance_comment`
+  - `user_technical_quality_comment`
+  - `user_gameplay_design_comment`
+  - `user_originality_comment`
+  - `user_visual_aesthetics_comment`
+  - `user_story_comment`
+  - `user_soundtrack_graphics_comment`
+- Adds the same 9 comment columns to `user_game_version_annotations` table
+- All comment columns are optional (NULL allowed)
+
+### Prerequisites
+- Database electron/clientdata.db must exist
+- Migration 013 must be applied first
+
+### Expected Outcome
+- 9 new comment columns appear in both `user_game_annotations` and `user_game_version_annotations` tables
+- No data loss
+- Existing queries continue to work
+- Users can now add comments to their ratings in the Rating Sheet modal
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS)
+- No existing data is modified
+- Comments are optional - users can rate without commenting
 
 ---
 

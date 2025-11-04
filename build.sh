@@ -224,24 +224,42 @@ build_windows() {
 build_macos() {
     print_status "Building macOS Intel package..."
     
-    # Check if icon.icns is valid, if not skip macOS build
+    # Check if icon.icns is valid, if not try to generate it or remove invalid one
+    # electron-builder can auto-generate ICNS from PNG/ICO, so we don't need to fail
     if [ -f "assets/icon.icns" ]; then
         ICON_TYPE=$(file -b assets/icon.icns)
         if echo "$ICON_TYPE" | grep -q "PNG"; then
             print_warning "icon.icns is a PNG file, not a valid ICNS"
-            print_warning "macOS builds require a valid ICNS file"
-            print_warning "Skipping macOS build - icon.icns needs to be regenerated"
-            print_warning "To generate proper icon.icns, run on macOS:"
-            print_warning "  iconutil -c icns assets/icon.iconset -o assets/icon.icns"
-            print_warning "Or run create-macos-assets.sh on macOS"
-            return 0  # Skip build but don't fail the overall process
+            print_warning "Removing invalid ICNS - electron-builder will auto-generate from PNG/ICO"
+            # Remove invalid ICNS so electron-builder can use PNG/ICO
+            rm -f assets/icon.icns
         fi
-    else
-        print_warning "icon.icns not found in assets/"
-        print_warning "Skipping macOS build - icon.icns is required"
-        print_warning "To generate icon.icns, run on macOS:"
-        print_warning "  iconutil -c icns assets/icon.iconset -o assets/icon.icns"
-        return 0  # Skip build but don't fail the overall process
+    fi
+    
+    # Try to generate ICNS from iconset if available (optional)
+    if [ ! -f "assets/icon.icns" ] && [ -d "assets/icon.iconset" ]; then
+        print_status "Attempting to generate icon.icns from iconset..."
+        if command -v iconutil &> /dev/null; then
+            iconutil -c icns assets/icon.iconset -o assets/icon.icns
+            if [ $? -eq 0 ]; then
+                print_success "Generated icon.icns using iconutil"
+            fi
+        elif command -v python3 &> /dev/null && python3 -c "import PIL" 2>/dev/null; then
+            python3 scripts/create-icns-linux.py assets/icon.iconset assets/icon.icns
+            if [ $? -eq 0 ]; then
+                print_success "Generated icon.icns using Python script"
+            fi
+        fi
+    fi
+    
+    # electron-builder can auto-generate ICNS from PNG/ICO automatically
+    # So we don't need to fail if ICNS is missing - just continue
+    if [ ! -f "assets/icon.icns" ]; then
+        print_status "icon.icns not found - electron-builder will auto-generate from PNG/ICO if available"
+        # If we have icon.ico or a large PNG, electron-builder can use it
+        if [ -f "assets/icon.ico" ]; then
+            print_status "Found icon.ico - electron-builder will convert it to ICNS"
+        fi
     fi
     
     # Note: macOS builds on Linux have limitations

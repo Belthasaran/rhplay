@@ -295,7 +295,7 @@ function registerDatabaseHandlers(dbManager) {
            user_technical_quality_comment, user_gameplay_design_comment, user_originality_comment,
            user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
            hidden, exclude_from_random, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         gameid,
         status || 'Default',
@@ -385,7 +385,7 @@ function registerDatabaseHandlers(dbManager) {
            user_technical_quality_comment, user_gameplay_design_comment, user_originality_comment,
            user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
            user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         annotationKey,
         gameid,

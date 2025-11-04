@@ -1588,8 +1588,8 @@
 
   <!-- Profile Guard Password Prompt Modal (High Security Mode) -->
   <!-- This modal cannot be closed - user must unlock or delete secrets -->
-  <div v-if="showProfileGuardPasswordPrompt" class="modal-backdrop profile-guard-blocking">
-    <div class="modal">
+  <div v-if="showProfileGuardPasswordPrompt" class="modal-backdrop profile-guard-blocking" @click.stop>
+    <div class="modal" @click.stop>
       <header class="modal-header">
         <h3>Unlock Profile Guard</h3>
         <p class="modal-warning-text">Profile Guard must be unlocked to continue using the application.</p>
@@ -1601,18 +1601,21 @@
             type="password" 
             v-model="profileGuardPasswordPrompt"
             @keydown.enter="profileGuardForgotPassword ? deleteProfileGuardSecrets() : confirmProfileGuardPassword()"
+            @click.stop
             placeholder="Enter master password"
             class="modal-input"
             :disabled="profileGuardForgotPassword"
+            ref="profileGuardPasswordInput"
             autofocus
           />
         </div>
         <div class="modal-field">
-          <label class="forgot-password-toggle">
+          <label class="forgot-password-toggle" @click.stop>
             <input 
               type="checkbox" 
               v-model="profileGuardForgotPassword"
               @change="handleForgotPasswordToggle"
+              @click.stop
             />
             <span class="forgot-password-label">
               I forgot my password.
@@ -1624,14 +1627,14 @@
         <div class="modal-actions">
           <button 
             v-if="!profileGuardForgotPassword"
-            @click="confirmProfileGuardPassword" 
+            @click.stop="confirmProfileGuardPassword" 
             class="btn-primary-small" 
             :disabled="!profileGuardPasswordPrompt">
             Unlock Profile Guard
           </button>
           <button 
             v-else
-            @click="deleteProfileGuardSecrets" 
+            @click.stop="deleteProfileGuardSecrets" 
             class="btn-danger-small"
             :disabled="!profileGuardForgotPassword">
             Delete my Secrets and Profile guard information
@@ -5248,6 +5251,7 @@ const profileGuardPasswordPrompt = ref('');
 const profileGuardPasswordError = ref('');
 const profileGuardUnlocked = ref(false);
 const profileGuardForgotPassword = ref(false);
+const profileGuardPasswordInput = ref<HTMLInputElement | null>(null);
 
 // Profile Creation Wizard state
 const showProfileCreationWizard = ref(false);
@@ -5859,11 +5863,22 @@ async function checkProfileGuardStatus() {
     profileGuardEnabled.value = status.enabled || false;
     profileGuardHighSecurityMode.value = status.highSecurityMode || false;
     
+    // If Profile Guard is already unlocked, don't show the modal again
+    if (profileGuardUnlocked.value) {
+      return;
+    }
+    
     // If Profile Guard is enabled, check if we need to prompt
-    if (profileGuardEnabled.value) {
-      if (profileGuardHighSecurityMode.value && !profileGuardUnlocked.value) {
+    if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
+      if (profileGuardHighSecurityMode.value) {
         // High Security Mode: Always prompt for password
         showProfileGuardPasswordPrompt.value = true;
+        // Auto-focus password input when modal opens
+        nextTick(() => {
+          if (profileGuardPasswordInput.value) {
+            profileGuardPasswordInput.value.focus();
+          }
+        });
       } else if (!profileGuardHighSecurityMode.value) {
         // Normal mode: Try to unlock automatically
         try {
@@ -5876,11 +5891,23 @@ async function checkProfileGuardStatus() {
       } else {
         // If auto-unlock failed, prompt for password
         showProfileGuardPasswordPrompt.value = true;
+        // Auto-focus password input when modal opens
+        nextTick(() => {
+          if (profileGuardPasswordInput.value) {
+            profileGuardPasswordInput.value.focus();
+          }
+        });
       }
         } catch (error) {
           console.error('Error auto-unlocking Profile Guard:', error);
           // If auto-unlock failed, prompt for password
           showProfileGuardPasswordPrompt.value = true;
+          // Auto-focus password input when modal opens
+          nextTick(() => {
+            if (profileGuardPasswordInput.value) {
+              profileGuardPasswordInput.value.focus();
+            }
+          });
         }
       }
     }
@@ -5984,6 +6011,12 @@ async function confirmProfileGuardPassword() {
     } else {
       profileGuardPasswordError.value = result.error || 'Invalid password';
       profileGuardPasswordPrompt.value = ''; // Clear password on error
+      // Refocus password input after error
+      nextTick(() => {
+        if (profileGuardPasswordInput.value) {
+          profileGuardPasswordInput.value.focus();
+        }
+      });
     }
   } catch (error) {
     console.error('Error verifying password:', error);
@@ -6001,6 +6034,13 @@ function handleForgotPasswordToggle() {
     // Clear password field when "forgot password" is checked
     profileGuardPasswordPrompt.value = '';
     profileGuardPasswordError.value = '';
+  } else {
+    // Refocus password input when "forgot password" is unchecked
+    nextTick(() => {
+      if (profileGuardPasswordInput.value) {
+        profileGuardPasswordInput.value.focus();
+      }
+    });
   }
 }
 
@@ -7034,6 +7074,11 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 // Close dropdown when clicking outside
 function handleGlobalClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  
+  // Don't close dropdowns if Profile Guard modal is open
+  if (showProfileGuardPasswordPrompt.value) {
+    return;
+  }
   
   // Close all dropdowns unless clicking inside them
   const allDropdowns = document.querySelectorAll('.filter-dropdown-container, .snes-contents-dropdown-container');

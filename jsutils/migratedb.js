@@ -392,16 +392,55 @@ function runJsMigration(dbPath, file) {
   if (!fileExists(scriptPath)) {
     throw new Error(`JS migration file not found: ${scriptPath}`);
   }
-  // For rhdata migrations, use RHDATA_DB_PATH; for others, use DB_PATH
-  const env = { ...process.env };
-  if (dbPath.includes('rhdata.db')) {
-    env.RHDATA_DB_PATH = dbPath;
+  
+  // In Electron, process.execPath is the Electron executable, not Node.js
+  // This causes infinite recursion. We need to require the module directly instead.
+  if (process.versions.electron) {
+    // We're in Electron - require the module directly instead of spawning
+    console.log(`Running JS migration directly: ${scriptPath}`);
+    
+    // Set up environment variables for the migration script
+    const originalRhd = process.env.RHDATA_DB_PATH;
+    const originalDb = process.env.DB_PATH;
+    try {
+      if (dbPath.includes('rhdata.db')) {
+        process.env.RHDATA_DB_PATH = dbPath;
+        delete process.env.DB_PATH; // Clear DB_PATH if it exists
+      } else {
+        process.env.DB_PATH = dbPath;
+        delete process.env.RHDATA_DB_PATH; // Clear RHDATA_DB_PATH if it exists
+      }
+      
+      // Require and execute the migration script
+      delete require.cache[require.resolve(scriptPath)]; // Clear cache to allow re-running
+      require(scriptPath);
+      
+      console.log(`JS migration completed: ${scriptPath}`);
+    } finally {
+      // Restore original environment
+      if (originalRhd !== undefined) {
+        process.env.RHDATA_DB_PATH = originalRhd;
+      } else {
+        delete process.env.RHDATA_DB_PATH;
+      }
+      if (originalDb !== undefined) {
+        process.env.DB_PATH = originalDb;
+      } else {
+        delete process.env.DB_PATH;
+      }
+    }
   } else {
-    env.DB_PATH = dbPath;
-  }
-  const result = spawnSync(process.execPath, [scriptPath], { env, stdio: 'inherit' });
-  if (result.status !== 0) {
-    throw new Error(`JS migration ${scriptPath} failed with exit code ${result.status}`);
+    // Not in Electron - safe to spawn
+    const env = { ...process.env };
+    if (dbPath.includes('rhdata.db')) {
+      env.RHDATA_DB_PATH = dbPath;
+    } else {
+      env.DB_PATH = dbPath;
+    }
+    const result = spawnSync(process.execPath, [scriptPath], { env, stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`JS migration ${scriptPath} failed with exit code ${result.status}`);
+    }
   }
 }
 

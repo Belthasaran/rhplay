@@ -9,7 +9,6 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
-const { spawnSync } = require('child_process');
 
 class DatabaseManager {
   constructor(options = {}) {
@@ -223,12 +222,12 @@ class DatabaseManager {
       console.log(`Database path: ${dbPath}`);
       
       // Try to require the migration module directly (works from ASAR too)
-      let migrateDbModule;
+      let migrateDb;
       try {
         // Try unpacked location first
         const unpackedPath = path.join(__dirname, '..', 'jsutils', 'migratedb.js');
         if (fs.existsSync(unpackedPath)) {
-          migrateDbModule = require(unpackedPath);
+          migrateDb = require(unpackedPath);
         } else {
           // Try from resources path (packaged)
           const resourcesPath = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
@@ -237,20 +236,25 @@ class DatabaseManager {
           
           // Try unpacked first, then ASAR
           if (fs.existsSync(unpackedResourcesPath)) {
-            migrateDbModule = require(unpackedResourcesPath);
+            migrateDb = require(unpackedResourcesPath);
           } else if (fs.existsSync(asarPath)) {
-            // Can't require from ASAR directly, need to use require.resolve
-            // Actually, we can require from ASAR! Node.js handles it
-            migrateDbModule = require(path.relative(__dirname, asarPath).replace(/\\/g, '/'));
+            // Can require from ASAR! Node.js handles it
+            // Use require.resolve to get the proper path
+            try {
+              migrateDb = require(asarPath);
+            } catch (e) {
+              // If direct require fails, try relative path
+              const relativePath = path.relative(__dirname, asarPath);
+              migrateDb = require(relativePath.replace(/\\/g, '/'));
+            }
           } else {
             // Fallback: try requiring as a module
-            migrateDbModule = require('../jsutils/migratedb.js');
+            migrateDb = require('../jsutils/migratedb.js');
           }
         }
       } catch (requireError) {
-        console.warn(`Could not require migratedb.js: ${requireError.message}`);
-        // Fallback to spawn method
-        this.runMigrationViaSpawn(dbName, dbPath);
+        console.error(`Could not require migratedb.js: ${requireError.message}`);
+        console.error(`Skipping migrations for ${dbName}`);
         return;
       }
 
@@ -267,165 +271,26 @@ class DatabaseManager {
         return;
       }
 
-      // Import the migration functions directly from the module
-      // The migratedb.js module exports functions, but we need to call its main logic
-      // Let's check what it exports or call it programmatically
-      this.applyMigrationsDirectly(dbName, dbPath, dbType);
+      // Set up environment for migrations
+      if (process.resourcesPath) {
+        process.env.RESOURCES_PATH = process.resourcesPath;
+      }
+      process.env.ELECTRON_IS_PACKAGED = process.env.ELECTRON_IS_PACKAGED || (process.resourcesPath ? '1' : '0');
+      
+      // Call migrations directly - NO SPAWNING
+      const migrations = migrateDb.MIGRATIONS[dbType];
+      if (migrations) {
+        console.log(`Applying migrations directly for ${dbName}...`);
+        migrateDb.applyMigrations(dbPath, migrations, { verbose: true });
+        console.log(`Migrations completed for ${dbName}`);
+      } else {
+        console.warn(`No migrations found for ${dbType}`);
+      }
       
     } catch (error) {
       console.error(`Error checking/applying migrations for ${dbName}:`, error.message);
       console.error(`Error stack: ${error.stack}`);
       // Don't throw - allow app to continue even if migrations fail
-    }
-  }
-
-  /**
-   * Apply migrations directly using the migratedb module
-   * @param {string} dbName - Database name
-   * @param {string} dbPath - Database path
-   * @param {string} dbType - Database type for migration config
-   */
-  applyMigrationsDirectly(dbName, dbPath, dbType) {
-    try {
-      // Import the migration logic directly
-      const migrateDb = require(path.join(__dirname, '..', 'jsutils', 'migratedb.js'));
-      
-      // The module should export a function we can call
-      // But since it's a CLI script, we need to extract its logic
-      // For now, let's use the spawn method as fallback but with better error handling
-      this.runMigrationViaSpawn(dbName, dbPath);
-    } catch (error) {
-      console.error(`Error in applyMigrationsDirectly: ${error.message}`);
-      this.runMigrationViaSpawn(dbName, dbPath);
-    }
-  }
-
-  /**
-   * Run migration via direct module require (preferred method)
-   * @param {string} dbName - Database name
-   * @param {string} dbPath - Database path
-   */
-  runMigrationViaSpawn(dbName, dbPath) {
-    try {
-      // Instead of spawning, require the migration module directly
-      // This avoids the infinite recursion issue with process.execPath
-      let migrateDb;
-      try {
-        // Try to require the module - works from ASAR too
-        const migratedbPath = path.join(__dirname, '..', 'jsutils', 'migratedb.js');
-        migrateDb = require(migratedbPath);
-      } catch (requireError) {
-        // Try alternative paths
-        const resourcesPath = process.resourcesPath || path.join(path.dirname(process.execPath), 'resources');
-        const possiblePaths = [
-          path.join(resourcesPath, 'app.asar.unpacked', 'jsutils', 'migratedb.js'),
-          path.join(resourcesPath, 'app.asar', 'jsutils', 'migratedb.js'),
-        ];
-        
-        let found = false;
-        for (const possiblePath of possiblePaths) {
-          try {
-            if (fs.existsSync(possiblePath)) {
-              migrateDb = require(possiblePath);
-              found = true;
-              break;
-            }
-          } catch (e) {
-            // Continue to next path
-          }
-        }
-        
-        if (!found) {
-          throw new Error(`Could not require migratedb.js: ${requireError.message}`);
-        }
-      }
-
-      // Determine which database type to migrate
-      const dbTypeMap = {
-        'rhdata': 'rhdata',
-        'patchbin': 'patchbin',
-        'clientdata': 'clientdata'
-      };
-      
-      const dbType = dbTypeMap[dbName];
-      if (!dbType) {
-        console.warn(`Unknown database type: ${dbName}, skipping migrations`);
-        return;
-      }
-
-      // Get the MIGRATIONS object from the module
-      // The module exports MIGRATIONS, but we need to access it
-      // Since it's not exported, we'll need to call applyMigrations directly
-      // Let's use a workaround: temporarily modify process.argv to simulate CLI args
-      const originalArgv = process.argv.slice();
-      const originalEnv = { ...process.env };
-      
-      try {
-        // Set up environment for migrations
-        if (process.resourcesPath) {
-          process.env.RESOURCES_PATH = process.resourcesPath;
-        }
-        process.env.ELECTRON_IS_PACKAGED = process.env.ELECTRON_IS_PACKAGED || (process.resourcesPath ? '1' : '0');
-        
-        // Call the migration logic directly
-        // We need to access the internal functions - let's use a different approach
-        // Actually, we can't easily access internal functions, so let's use fork instead
-        // But fork also has the same issue...
-        
-        // Best solution: directly require and call the applyMigrations function
-        // Since it's not exported, we need to refactor or use eval (not recommended)
-        // Let's use a safer approach: spawn with 'node' from PATH as fallback
-        // But first check if we're in Electron - if so, don't spawn at all
-        
-        // Actually, the safest is to directly evaluate the migration logic
-        // But that's complex. Let's use a simpler approach: check if we can find node
-        // and only spawn if we're not in a packaged Electron app
-        
-        if (process.versions.electron) {
-          // We're in Electron - call migration logic directly
-          // The module now exports applyMigrations
-          const migrations = migrateDb.MIGRATIONS[dbType];
-          if (migrations) {
-            console.log(`Applying migrations directly for ${dbName}...`);
-            migrateDb.applyMigrations(dbPath, migrations, { verbose: true });
-            console.log(`Migrations completed for ${dbName}`);
-          } else {
-            console.warn(`No migrations found for ${dbType}`);
-          }
-        } else {
-          // Not in Electron - safe to spawn
-          const result = spawnSync('node', [require.resolve('../jsutils/migratedb.js'), `--${dbType}db=${dbPath}`, '--verbose'], {
-            stdio: 'pipe',
-            encoding: 'utf8'
-          });
-          
-          const stdout = result.stdout ? result.stdout.toString() : '';
-          const stderr = result.stderr ? result.stderr.toString() : '';
-          
-          if (result.status === 0) {
-            console.log(`Migrations applied for ${dbName}`);
-            if (stdout) {
-              console.log(`Migration output: ${stdout.substring(0, 500)}`);
-            }
-          } else {
-            console.error(`Migration check for ${dbName} failed`);
-            if (stderr) console.error(`Migration stderr: ${stderr}`);
-          }
-        }
-      } finally {
-        // Restore original argv and env
-        process.argv = originalArgv;
-        Object.keys(process.env).forEach(key => {
-          if (!(key in originalEnv)) {
-            delete process.env[key];
-          } else {
-            process.env[key] = originalEnv[key];
-          }
-        });
-      }
-    } catch (error) {
-      console.error(`Error in runMigrationViaSpawn: ${error.message}`);
-      console.error(`Error stack: ${error.stack}`);
     }
   }
 

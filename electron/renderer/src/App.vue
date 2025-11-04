@@ -73,7 +73,7 @@
                 
                 <div v-if="!onlineProfile?.primaryKeypair" class="profile-empty">
                   <p>No profile created yet. Create a profile to use online features.</p>
-                  <button @click="createNewProfile" class="btn-primary-small">
+                  <button @click="openProfileCreationWizard" class="btn-primary-small">
                     Create Profile
                   </button>
                 </div>
@@ -1773,7 +1773,7 @@
       </header>
       <section class="modal-body">
         <!-- Step 1: Profile Information -->
-        <div v-if="profileCreationWizardStep === 1" class="wizard-step">
+        <div v-if="profileCreationWizardStep === 1" class="wizard-step" :key="'wizard-step-1'">
           <p class="wizard-description">
             Let's set up your basic profile information. You can always edit this later.
           </p>
@@ -1834,7 +1834,13 @@
                 <button @click="removeSocialId(index)" class="btn-link-small">Remove</button>
               </div>
               <div class="add-social-id-row">
-                <select v-model="newSocialIdType" class="modal-input social-id-select">
+                <select 
+                  v-model="newSocialIdType" 
+                  class="modal-input social-id-select" 
+                  @change.stop
+                  @input.stop
+                  @click.stop
+                >
                   <option value="discord">Discord Username</option>
                   <option value="twitch">Twitch Username</option>
                   <option value="smwcentral">SMWCentral Username</option>
@@ -1848,10 +1854,12 @@
                   type="text" 
                   v-model="newSocialIdValue"
                   @keydown.enter="addSocialId"
+                  @click.stop
+                  @input.stop
                   :placeholder="getSocialIdPlaceholder(newSocialIdType)"
                   class="modal-input social-id-input"
                 />
-                <button @click="addSocialId" class="btn-secondary-small" :disabled="!newSocialIdValue.trim()">
+                <button @click.stop.prevent="addSocialId" class="btn-secondary-small" :disabled="!newSocialIdValue.trim()">
                   Add
                 </button>
               </div>
@@ -5256,7 +5264,9 @@ const profileGuardPasswordInput = ref<HTMLInputElement | null>(null);
 // Profile Creation Wizard state
 const showProfileCreationWizard = ref(false);
 const profileCreationWizardStep = ref(1); // 1 = profile info, 2 = keypair generation
+const profileCreationWizardInitialized = ref(false); // Track if wizard has been initialized
 const profileCreationData = ref({
+  profileId: '',
   username: '',
   displayName: '',
   homepage: '',
@@ -5705,21 +5715,49 @@ async function loadOnlineProfile() {
 }
 
 async function checkAndCreateProfileIfNeeded() {
-  if (!isElectronAvailable() || !profileGuardUnlocked.value) {
+  if (!isElectronAvailable()) {
+    console.log('[Profile Wizard] Electron not available');
     return;
   }
   
+  // If Profile Guard is enabled, it must be unlocked to create a profile
+  // (because we need to encrypt the keypair)
+  if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
+    console.log('[Profile Wizard] Profile Guard is enabled but not unlocked - cannot create profile yet');
+    return;
+  }
+  
+  // Load profile first to check current state
+  await loadOnlineProfile();
+  
+  console.log('[Profile Wizard] Checking profile:', {
+    hasProfile: !!onlineProfile.value,
+    hasPrimaryKeypair: !!(onlineProfile.value?.primaryKeypair),
+    profileGuardUnlocked: profileGuardUnlocked.value,
+    profileGuardEnabled: profileGuardEnabled.value
+  });
+  
   // Check if profile exists and has primary keypair
   if (!onlineProfile.value || !onlineProfile.value.primaryKeypair) {
-    // Load profile first to check
-    await loadOnlineProfile();
-    
-    // If still no profile or no primary keypair, show wizard
-    if (!onlineProfile.value || !onlineProfile.value.primaryKeypair) {
+    console.log('[Profile Wizard] Profile or primary keypair missing, showing wizard');
+    if (!showProfileCreationWizard.value) {
+      // Only initialize if wizard is not already open
       showProfileCreationWizard.value = true;
       profileCreationWizardStep.value = 1;
       initializeProfileCreationWizard();
     }
+  } else {
+    console.log('[Profile Wizard] Profile and primary keypair exist, no wizard needed');
+  }
+}
+
+function openProfileCreationWizard() {
+  // Allow manual opening of wizard
+  if (!showProfileCreationWizard.value) {
+    // Only initialize if wizard is not already open
+    showProfileCreationWizard.value = true;
+    profileCreationWizardStep.value = 1;
+    initializeProfileCreationWizard();
   }
 }
 
@@ -6276,6 +6314,14 @@ async function exportAllAdminKeypairs() {
 
 // Profile Creation Wizard functions
 function initializeProfileCreationWizard() {
+  // Only initialize if not already initialized or if data is empty
+  if (profileCreationWizardInitialized.value && profileCreationData.value.profileId) {
+    console.log('[Profile Wizard] Already initialized, preserving existing data');
+    return;
+  }
+  
+  console.log('[Profile Wizard] Initializing wizard...');
+  
   // Generate UUID - we'll use a simple UUID v4 generator
   function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -6285,19 +6331,34 @@ function initializeProfileCreationWizard() {
     });
   }
   
+  // Check if there's an existing profile to load data from
+  const existingProfile = onlineProfile.value;
+  
+  // Only generate new UUID if profile doesn't exist or has no profileId
+  const profileId = existingProfile?.profileId || generateUUID();
+  
+  // Initialize with existing data if available, otherwise use defaults
   profileCreationData.value = {
-    profileId: generateUUID(),
-    username: '',
-    displayName: '',
-    homepage: '',
-    socialIds: [],
-    bio: '',
+    profileId: profileId,
+    username: existingProfile?.username || '',
+    displayName: existingProfile?.displayName || '',
+    homepage: existingProfile?.homepage || '',
+    socialIds: existingProfile?.socialIds || [],
+    bio: existingProfile?.bio || '',
     keypairType: 'ML-DSA-44'
   };
-  newSocialIdType.value = 'discord';
-  newSocialIdValue.value = '';
+  
+  // Only reset these if starting fresh (not preserving data)
+  if (!existingProfile || !existingProfile.profileId) {
+    newSocialIdType.value = 'discord';
+    newSocialIdValue.value = '';
+  }
+  
   usernameError.value = '';
   socialIdError.value = '';
+  profileCreationWizardInitialized.value = true;
+  
+  console.log('[Profile Wizard] Initialized with profileId:', profileId);
 }
 
 function validateUsername() {
@@ -6329,37 +6390,51 @@ function validateUsername() {
   usernameError.value = '';
 }
 
-function addSocialId() {
+function addSocialId(event?: Event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  
   const value = newSocialIdValue.value.trim();
   if (!value) {
     socialIdError.value = 'Please enter a value';
     return;
   }
   
+  const selectedType = newSocialIdType.value;
+  console.log('[Social ID] Attempting to add:', { type: selectedType, value });
+  
   // Validate based on type
-  if (newSocialIdType.value === 'youtube' && !value.startsWith('http') && !value.startsWith('www.')) {
+  if (selectedType === 'youtube' && !value.startsWith('http') && !value.startsWith('www.')) {
     socialIdError.value = 'YouTube channel should be a URL';
     return;
   }
   
-  if (newSocialIdType.value === 'keyoxide' && !value.startsWith('http') && !value.includes('@')) {
+  if (selectedType === 'keyoxide' && !value.startsWith('http') && !value.includes('@')) {
     socialIdError.value = 'Keyoxide should be a URL or hash';
     return;
   }
   
   // Check for duplicates
-  if (profileCreationData.value.socialIds.some(sid => sid.type === newSocialIdType.value && sid.value === value)) {
+  if (profileCreationData.value.socialIds.some(sid => sid.type === selectedType && sid.value === value)) {
     socialIdError.value = 'This social ID is already added';
     return;
   }
   
+  // Add the social ID
   profileCreationData.value.socialIds.push({
-    type: newSocialIdType.value,
+    type: selectedType,
     value: value
   });
   
+  // Clear input but keep the selected type
   newSocialIdValue.value = '';
   socialIdError.value = '';
+  
+  console.log('[Social ID] Added successfully:', selectedType, value);
+  console.log('[Social ID] Current list:', profileCreationData.value.socialIds);
+  console.log('[Social ID] Selected type after add:', newSocialIdType.value);
 }
 
 function removeSocialId(index: number) {
@@ -6417,12 +6492,20 @@ function nextWizardStep() {
     return;
   }
   
+  // Advance to next step - preserve all data
   profileCreationWizardStep.value = 2;
+  console.log('[Profile Wizard] Moving to step 2, preserving data:', profileCreationData.value);
 }
 
 async function completeProfileCreation() {
-  if (!isElectronAvailable() || !profileGuardUnlocked.value) {
-    alert('Profile Guard must be unlocked to create profile');
+  if (!isElectronAvailable()) {
+    alert('Profile creation requires Electron environment');
+    return;
+  }
+  
+  // If Profile Guard is enabled, it must be unlocked to encrypt the keypair
+  if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
+    alert('Profile Guard must be unlocked to create profile (keys need to be encrypted)');
     return;
   }
   
@@ -6466,9 +6549,10 @@ async function completeProfileCreation() {
     // Update local state
     onlineProfile.value = profileData;
     
-    // Close wizard
+    // Close wizard and reset initialization flag
     showProfileCreationWizard.value = false;
     profileCreationWizardStep.value = 1;
+    profileCreationWizardInitialized.value = false;
     
     alert('Profile created successfully! Make sure to export and backup your profile.');
   } catch (error) {

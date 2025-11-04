@@ -72,6 +72,7 @@
     "upload:list-ardrive": "node list-unuploaded-blobs.js --provider=ardrive"
   },
   "dependencies": {
+    "@noble/post-quantum": "^1.0.0",
     "@poeticode/js-lzma": "^1.0.0",
     "adm-zip": "^0.5.10",
     "ardrive-cli": "^3.0.3",

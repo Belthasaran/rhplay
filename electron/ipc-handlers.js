@@ -3554,32 +3554,68 @@ function registerDatabaseHandlers(dbManager) {
         };
       }
       
-      case 'ML-DSA-44':
-      case 'ML-DSA-87': {
-        // ML-DSA is a post-quantum algorithm (FIPS 204)
-        // Node.js crypto doesn't support ML-DSA yet, so we'll generate placeholder keys
-        // TODO: Implement actual ML-DSA keypair generation using a library like @noble/hashes
-        // For now, generate a deterministic placeholder based on random data
-        const randomBytes = crypto.randomBytes(32);
-        const seed = crypto.randomBytes(48); // ML-DSA uses seeds
+      case 'ML-DSA-44': {
+        // ML-DSA-44: Post-quantum algorithm (FIPS 204)
+        const { ml_dsa44 } = require('@noble/post-quantum/ml-dsa');
         
-        // Placeholder public/private keys (will need proper ML-DSA implementation)
-        const publicKeyPlaceholder = `-----BEGIN ML-DSA-${keyType.split('-')[1]} PUBLIC KEY-----\n` +
-          Buffer.from(seed).toString('base64') + '\n' +
-          `-----END ML-DSA-${keyType.split('-')[1]} PUBLIC KEY-----`;
+        // Generate keypair
+        const { publicKey, privateKey } = ml_dsa44.keygen();
         
-        const privateKeyPlaceholder = `-----BEGIN ML-DSA-${keyType.split('-')[1]} PRIVATE KEY-----\n` +
-          Buffer.from(seed).toString('base64') + '\n' +
-          `-----END ML-DSA-${keyType.split('-')[1]} PRIVATE KEY-----`;
+        // Convert Uint8Array to hex for storage
+        const publicKeyHex = Buffer.from(publicKey).toString('hex');
+        const privateKeyHex = Buffer.from(privateKey).toString('hex');
         
-        // Generate fingerprint from seed
-        const fingerprint = crypto.createHash('sha256').update(seed).digest('hex');
+        // Generate fingerprint from public key
+        const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
+        
+        // Convert to PEM-like format for consistency with other key types
+        const publicKeyPem = `-----BEGIN ML-DSA-44 PUBLIC KEY-----\n` +
+          Buffer.from(publicKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          `-----END ML-DSA-44 PUBLIC KEY-----`;
+        
+        const privateKeyPem = `-----BEGIN ML-DSA-44 PRIVATE KEY-----\n` +
+          Buffer.from(privateKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          `-----END ML-DSA-44 PRIVATE KEY-----`;
         
         return {
-          type: keyType,
-          publicKey: publicKeyPlaceholder,
-          privateKey: privateKeyPlaceholder,
-          publicKeyHex: seed.toString('hex'),
+          type: 'ML-DSA-44',
+          publicKey: publicKeyPem,
+          privateKey: privateKeyPem,
+          publicKeyHex: publicKeyHex,
+          privateKeyRaw: privateKeyHex, // Store raw private key for encryption
+          fingerprint: fingerprint
+        };
+      }
+      
+      case 'ML-DSA-87': {
+        // ML-DSA-87: Post-quantum algorithm (FIPS 204) - higher security level
+        const { ml_dsa87 } = require('@noble/post-quantum/ml-dsa');
+        
+        // Generate keypair
+        const { publicKey, privateKey } = ml_dsa87.keygen();
+        
+        // Convert Uint8Array to hex for storage
+        const publicKeyHex = Buffer.from(publicKey).toString('hex');
+        const privateKeyHex = Buffer.from(privateKey).toString('hex');
+        
+        // Generate fingerprint from public key
+        const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
+        
+        // Convert to PEM-like format for consistency with other key types
+        const publicKeyPem = `-----BEGIN ML-DSA-87 PUBLIC KEY-----\n` +
+          Buffer.from(publicKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          `-----END ML-DSA-87 PUBLIC KEY-----`;
+        
+        const privateKeyPem = `-----BEGIN ML-DSA-87 PRIVATE KEY-----\n` +
+          Buffer.from(privateKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          `-----END ML-DSA-87 PRIVATE KEY-----`;
+        
+        return {
+          type: 'ML-DSA-87',
+          publicKey: publicKeyPem,
+          privateKey: privateKeyPem,
+          publicKeyHex: publicKeyHex,
+          privateKeyRaw: privateKeyHex, // Store raw private key for encryption
           fingerprint: fingerprint
         };
       }
@@ -3668,14 +3704,22 @@ function registerDatabaseHandlers(dbManager) {
       const keyguardKey = getKeyguardKey(event);
       if (keyguardKey) {
         // Encrypt private key
+        // For ML-DSA, use privateKeyRaw if available (hex format), otherwise use PEM format
+        const keyToEncrypt = keypair.privateKeyRaw || keypair.privateKey;
+        const keyData = keypair.privateKeyRaw ? Buffer.from(keyToEncrypt, 'hex') : Buffer.from(keyToEncrypt, 'utf8');
+        
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-        let encrypted = cipher.update(keypair.privateKey, 'utf8', 'hex');
-        encrypted += cipher.final('hex');
+        let encrypted = cipher.update(keyData);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
         
-        // Store encrypted private key instead
-        keypair.privateKey = iv.toString('hex') + ':' + encrypted;
+        // Store encrypted private key as hex string
+        keypair.privateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+        // Store format indicator for decryption
+        keypair.privateKeyFormat = keypair.privateKeyRaw ? 'hex' : 'pem';
         keypair.encrypted = true;
+        // Remove raw private key from unencrypted output
+        delete keypair.privateKeyRaw;
       } else {
         // Check if Profile Guard is enabled (user needs to unlock)
         const db = dbManager.getConnection('clientdata');
@@ -3736,19 +3780,32 @@ function registerDatabaseHandlers(dbManager) {
         createdAt: new Date().toISOString()
       };
       
+      // Include privateKeyRaw if available (for ML-DSA encryption)
+      if (keypairData.privateKeyRaw) {
+        keypair.privateKeyRaw = keypairData.privateKeyRaw;
+      }
+      
       // Encrypt private key with Profile Guard if available
       const keyguardKey = getKeyguardKey(event);
       if (keyguardKey) {
         const crypto = require('crypto');
         // Encrypt private key
+        // For ML-DSA, use privateKeyRaw if available (hex format), otherwise use PEM format
+        const keyToEncrypt = keypair.privateKeyRaw || keypair.privateKey;
+        const keyData = keypair.privateKeyRaw ? Buffer.from(keyToEncrypt, 'hex') : Buffer.from(keyToEncrypt, 'utf8');
+        
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-        let encrypted = cipher.update(keypair.privateKey, 'utf8', 'hex');
-        encrypted += cipher.final('hex');
+        let encrypted = cipher.update(keyData);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
         
-        // Store encrypted private key instead
-        keypair.privateKey = iv.toString('hex') + ':' + encrypted;
+        // Store encrypted private key as hex string
+        keypair.privateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+        // Store format indicator for decryption
+        keypair.privateKeyFormat = keypair.privateKeyRaw ? 'hex' : 'pem';
         keypair.encrypted = true;
+        // Remove raw private key from unencrypted output
+        delete keypair.privateKeyRaw;
       } else {
         // Check if Profile Guard is enabled (user needs to unlock)
         const db = dbManager.getConnection('clientdata');

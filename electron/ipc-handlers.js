@@ -3357,6 +3357,698 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // ===========================================================================
+  // ONLINE/NOSTR PROFILE OPERATIONS
+  // ===========================================================================
+
+  /**
+   * Get online profile
+   * Channel: online:profile:get
+   */
+  ipcMain.handle('online:profile:get', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Load profile from csettings
+      const profileJson = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_profile');
+      
+      if (profileJson) {
+        return JSON.parse(profileJson.csetting_value);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting online profile:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Create new online profile
+   * Channel: online:profile:create
+   */
+  ipcMain.handle('online:profile:create', async (event, { keyType }) => {
+    try {
+      // TODO: Implement actual keypair generation using cryptographic libraries
+      // For now, return a placeholder structure
+      const profile = {
+        displayName: '',
+        bio: '',
+        primaryKeypair: {
+          type: keyType || 'ML-DSA-44',
+          publicKey: 'PLACEHOLDER_PUBLIC_KEY_' + Date.now(),
+          privateKey: 'PLACEHOLDER_PRIVATE_KEY_' + Date.now() // Never transmitted
+        },
+        additionalKeypairs: [],
+        adminKeypairs: [],
+        isAdmin: false
+      };
+      
+      // Save to database
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      const uuid = crypto.randomUUID();
+      
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'online_profile', JSON.stringify(profile));
+      
+      return { success: true, profile };
+    } catch (error) {
+      console.error('Error creating online profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Save online profile
+   * Channel: online:profile:save
+   */
+  ipcMain.handle('online:profile:save', async (event, profile) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      const uuid = crypto.randomUUID();
+      
+      // Remove private keys before saving (they should never leave the client)
+      const profileToSave = JSON.parse(JSON.stringify(profile));
+      if (profileToSave.primaryKeypair?.privateKey) {
+        delete profileToSave.primaryKeypair.privateKey;
+      }
+      if (profileToSave.additionalKeypairs) {
+        profileToSave.additionalKeypairs.forEach(kp => {
+          if (kp.privateKey) delete kp.privateKey;
+        });
+      }
+      if (profileToSave.adminKeypairs) {
+        profileToSave.adminKeypairs.forEach(kp => {
+          if (kp.privateKey) delete kp.privateKey;
+        });
+      }
+      
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving online profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get Profile Guard key for encryption
+   * Helper function to get the keyguard key from session or storage
+   */
+  function getKeyguardKey(event) {
+    // First try to get from session (if unlocked in high security mode)
+    if (event.sender.session.keyguardKey) {
+      return event.sender.session.keyguardKey;
+    }
+    
+    // Otherwise try to get from safeStorage
+    const { safeStorage } = require('electron');
+    if (safeStorage.isEncryptionAvailable()) {
+      const db = dbManager.getConnection('clientdata');
+      const encryptedKeyRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_key_encrypted');
+      
+      if (encryptedKeyRow) {
+        try {
+          const encryptedKey = Buffer.from(encryptedKeyRow.csetting_value, 'base64');
+          const keyHex = safeStorage.decryptString(encryptedKey);
+          return Buffer.from(keyHex, 'hex');
+        } catch (error) {
+          console.warn('Error decrypting keyguard key:', error);
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Create online keypair
+   * Channel: online:keypair:create
+   */
+  ipcMain.handle('online:keypair:create', async (event, { profileId, keyType, isPrimary, isAdmin }) => {
+    try {
+      const crypto = require('crypto');
+      
+      // TODO: Implement actual keypair generation based on keyType
+      // For now, generate placeholder keypair
+      const keypair = {
+        type: keyType || 'ML-DSA-44',
+        publicKey: 'PLACEHOLDER_PUBLIC_KEY_' + Date.now() + '_' + Math.random(),
+        privateKey: 'PLACEHOLDER_PRIVATE_KEY_' + Date.now() + '_' + Math.random()
+      };
+      
+      // Encrypt private key with Profile Guard if available
+      const keyguardKey = getKeyguardKey(event);
+      if (keyguardKey) {
+        // Encrypt private key
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        let encrypted = cipher.update(keypair.privateKey, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        
+        // Store encrypted private key instead
+        keypair.privateKey = iv.toString('hex') + ':' + encrypted;
+        keypair.encrypted = true;
+      } else {
+        // Check if Profile Guard is enabled (user needs to unlock)
+        const db = dbManager.getConnection('clientdata');
+        const saltRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('keyguardsalt');
+        
+        if (saltRow) {
+          return { success: false, error: 'Profile Guard is enabled but not unlocked. Please unlock Profile Guard first.' };
+        }
+      }
+      
+      return { success: true, keypair };
+    } catch (error) {
+      console.error('Error creating keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Regenerate online keypair
+   * Channel: online:keypair:regenerate
+   */
+  ipcMain.handle('online:keypair:regenerate', async (event, { profileId, keyType, isPrimary }) => {
+    try {
+      // TODO: Implement actual keypair regeneration
+      const keypair = {
+        type: keyType || 'ML-DSA-44',
+        publicKey: 'PLACEHOLDER_PUBLIC_KEY_REGEN_' + Date.now() + '_' + Math.random(),
+        privateKey: 'PLACEHOLDER_PRIVATE_KEY_REGEN_' + Date.now() + '_' + Math.random()
+      };
+      
+      return { success: true, keypair };
+    } catch (error) {
+      console.error('Error regenerating keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get admin master keys
+   * Channel: online:master-keys:get
+   */
+  ipcMain.handle('online:master-keys:get', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const masterKeysJson = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_master_keys');
+      
+      if (masterKeysJson) {
+        return JSON.parse(masterKeysJson.csetting_value);
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error getting master keys:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Save admin master keys
+   * Channel: online:master-keys:save
+   */
+  ipcMain.handle('online:master-keys:save', async (event, masterKeys) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      const uuid = crypto.randomUUID();
+      
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'online_master_keys', JSON.stringify(masterKeys));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving master keys:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Copy text to clipboard
+   * Channel: clipboard:write
+   */
+  ipcMain.handle('clipboard:write', async (event, text) => {
+    try {
+      const { clipboard } = require('electron');
+      clipboard.writeText(text);
+      return { success: true };
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ===========================================================================
+  // PROFILE GUARD OPERATIONS
+  // ===========================================================================
+
+  /**
+   * Check Profile Guard status
+   * Channel: profile-guard:check
+   */
+  ipcMain.handle('profile-guard:check', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const { safeStorage } = require('electron');
+      
+      // Check if keyguard salt exists (indicates Profile Guard is set up)
+      const saltRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguardsalt');
+      
+      if (!saltRow) {
+        return { enabled: false };
+      }
+      
+      // Check high security mode setting
+      const highSecurityRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_high_security_mode');
+      
+      const highSecurityMode = highSecurityRow?.csetting_value === 'true';
+      
+      // Check if key is stored in safeStorage (only if not in high security mode)
+      let keyStored = false;
+      if (!highSecurityMode && safeStorage.isEncryptionAvailable()) {
+        try {
+          const stored = db.prepare(`
+            SELECT csetting_value FROM csettings WHERE csetting_name = ?
+          `).get('keyguard_key_stored');
+          keyStored = stored !== null;
+        } catch (error) {
+          // Key not stored
+        }
+      }
+      
+      return { 
+        enabled: true,
+        highSecurityMode: highSecurityMode,
+        keyStored: keyStored
+      };
+    } catch (error) {
+      console.error('Error checking Profile Guard status:', error);
+      return { enabled: false };
+    }
+  });
+
+  /**
+   * Set up Profile Guard
+   * Channel: profile-guard:setup
+   */
+  ipcMain.handle('profile-guard:setup', async (event, { password, highSecurityMode }) => {
+    try {
+      const crypto = require('crypto');
+      const { safeStorage } = require('electron');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Generate random 32-byte salt
+      const salt = crypto.randomBytes(32);
+      
+      // Derive encryption key from password using PBKDF2
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Create SHA512 hash of the derived key for verification
+      const keyHash = crypto.createHash('sha512').update(key).digest('hex');
+      
+      // Store salt in database
+      const uuid1 = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid1, 'keyguardsalt', salt.toString('hex'));
+      
+      // Store SHA512 hash of key for verification
+      const uuid2 = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid2, 'keyguard_key_hash', keyHash);
+      
+      // Store high security mode setting
+      const uuid3 = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid3, 'keyguard_high_security_mode', highSecurityMode ? 'true' : 'false');
+      
+      // Store key in safeStorage if not in high security mode
+      if (!highSecurityMode && safeStorage.isEncryptionAvailable()) {
+        try {
+          const encryptedKey = safeStorage.encryptString(key.toString('hex'));
+          const uuid4 = crypto.randomUUID();
+          db.prepare(`
+            INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+            VALUES (?, ?, ?)
+            ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+          `).run(uuid4, 'keyguard_key_encrypted', encryptedKey.toString('base64'));
+          
+          const uuid5 = crypto.randomUUID();
+          db.prepare(`
+            INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+            VALUES (?, ?, ?)
+            ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+          `).run(uuid5, 'keyguard_key_stored', 'true');
+        } catch (error) {
+          console.warn('Could not store key in safeStorage:', error);
+        }
+      }
+      
+      return { success: true, highSecurityMode: highSecurityMode };
+    } catch (error) {
+      console.error('Error setting up Profile Guard:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update Profile Guard security mode
+   * Channel: profile-guard:update-security-mode
+   */
+  ipcMain.handle('profile-guard:update-security-mode', async (event, { highSecurityMode }) => {
+    try {
+      const { safeStorage } = require('electron');
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Update high security mode setting
+      const uuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'keyguard_high_security_mode', highSecurityMode ? 'true' : 'false');
+      
+      if (highSecurityMode) {
+        // Remove stored key if switching to high security mode
+        db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_encrypted');
+        db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_stored');
+      } else {
+        // Store key if switching away from high security mode
+        // Need to get the key from password - but we can't do that without the password
+        // So we'll just mark that it needs to be stored next time user unlocks
+        // For now, we'll require user to change password to enable saving
+        return { success: false, error: 'Please change your master password to enable key storage' };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating security mode:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Verify Profile Guard password (for High Security Mode)
+   * Channel: profile-guard:verify-password
+   */
+  ipcMain.handle('profile-guard:verify-password', async (event, { password }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get salt and stored hash
+      const saltRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguardsalt');
+      
+      const hashRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_key_hash');
+      
+      if (!saltRow || !hashRow) {
+        return { success: false, error: 'Profile Guard not set up' };
+      }
+      
+      const salt = Buffer.from(saltRow.csetting_value, 'hex');
+      const storedHash = hashRow.csetting_value;
+      
+      // Derive key from password
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Compute hash of derived key
+      const computedHash = crypto.createHash('sha512').update(key).digest('hex');
+      
+      // Verify against stored hash
+      if (computedHash !== storedHash) {
+        return { success: false, error: 'Invalid password' };
+      }
+      
+      // Store key in memory for this session (not persisted)
+      // This will be used for encrypting/decrypting keys
+      event.sender.session.keyguardKey = key;
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error verifying password:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Unlock Profile Guard (auto-unlock if not in high security mode)
+   * Channel: profile-guard:unlock
+   */
+  ipcMain.handle('profile-guard:unlock', async (event) => {
+    try {
+      const { safeStorage } = require('electron');
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Check high security mode
+      const highSecurityRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_high_security_mode');
+      
+      const highSecurityMode = highSecurityRow?.csetting_value === 'true';
+      
+      if (highSecurityMode) {
+        // Can't auto-unlock in high security mode
+        return { success: false, error: 'Password required in high security mode' };
+      }
+      
+      // Try to get key from safeStorage
+      if (!safeStorage.isEncryptionAvailable()) {
+        return { success: false, error: 'Encryption not available on this platform' };
+      }
+      
+      const encryptedKeyRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_key_encrypted');
+      
+      if (!encryptedKeyRow) {
+        return { success: false, error: 'Key not stored' };
+      }
+      
+      try {
+        const encryptedKey = Buffer.from(encryptedKeyRow.csetting_value, 'base64');
+        const keyHex = safeStorage.decryptString(encryptedKey);
+        const key = Buffer.from(keyHex, 'hex');
+        
+        // Store key in memory for this session
+        event.sender.session.keyguardKey = key;
+        
+        return { success: true };
+      } catch (error) {
+        console.error('Error decrypting key:', error);
+        return { success: false, error: 'Failed to decrypt stored key' };
+      }
+    } catch (error) {
+      console.error('Error unlocking Profile Guard:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Remove Profile Guard
+   * Channel: profile-guard:remove
+   */
+  ipcMain.handle('profile-guard:remove', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Remove all Profile Guard settings
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguardsalt');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_hash');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_encrypted');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_stored');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_high_security_mode');
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error removing Profile Guard:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Export online profile with password-based encryption
+   * Channel: online:profile:export
+   */
+  ipcMain.handle('online:profile:export', async (event, { profile, password }) => {
+    try {
+      const crypto = require('crypto');
+      const { dialog } = require('electron');
+      
+      // Derive encryption key from password using PBKDF2
+      const salt = crypto.randomBytes(32);
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Encrypt profile data
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      let encrypted = cipher.update(JSON.stringify(profile), 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      
+      // Create export data structure
+      const exportData = {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        salt: salt.toString('hex'),
+        iv: iv.toString('hex'),
+        encrypted: encrypted
+      };
+      
+      // Show save dialog
+      const result = await dialog.showSaveDialog({
+        title: 'Export Profile Backup',
+        defaultPath: 'rhtools-profile-backup.json',
+        filters: [
+          { name: 'JSON Files', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      
+      if (result.canceled) {
+        return { success: false, error: 'Export cancelled' };
+      }
+      
+      // Write to file
+      const fs = require('fs');
+      fs.writeFileSync(result.filePath, JSON.stringify(exportData, null, 2));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error exporting profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Export keypair with password-based encryption
+   * Channel: online:keypair:export
+   */
+  ipcMain.handle('online:keypair:export', async (event, { keypair, password }) => {
+    try {
+      const crypto = require('crypto');
+      const { dialog } = require('electron');
+      
+      // Derive encryption key from password using PBKDF2
+      const salt = crypto.randomBytes(32);
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Encrypt keypair data
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      let encrypted = cipher.update(JSON.stringify(keypair), 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      
+      // Create export data structure
+      const exportData = {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        type: 'keypair',
+        salt: salt.toString('hex'),
+        iv: iv.toString('hex'),
+        encrypted: encrypted
+      };
+      
+      // Show save dialog
+      const result = await dialog.showSaveDialog({
+        title: 'Export Keypair',
+        defaultPath: `rhtools-keypair-${keypair.type}-${Date.now()}.json`,
+        filters: [
+          { name: 'JSON Files', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      
+      if (result.canceled) {
+        return { success: false, error: 'Export cancelled' };
+      }
+      
+      // Write to file
+      const fs = require('fs');
+      fs.writeFileSync(result.filePath, JSON.stringify(exportData, null, 2));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error exporting keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Import keypair with password-based decryption
+   * Channel: online:keypair:import
+   */
+  ipcMain.handle('online:keypair:import', async (event, { encryptedData, password }) => {
+    try {
+      const crypto = require('crypto');
+      
+      // Parse export data
+      const exportData = JSON.parse(encryptedData);
+      
+      if (exportData.version !== '1.0') {
+        return { success: false, error: 'Unsupported export format version' };
+      }
+      
+      // Derive decryption key from password using PBKDF2
+      const salt = Buffer.from(exportData.salt, 'hex');
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Decrypt keypair data
+      const iv = Buffer.from(exportData.iv, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(exportData.encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      
+      const keypair = JSON.parse(decrypted);
+      
+      return { success: true, keypair };
+    } catch (error) {
+      console.error('Error importing keypair:', error);
+      return { success: false, error: error.message || 'Invalid password or file format' };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 

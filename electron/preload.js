@@ -625,4 +625,126 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean}>}
    */
   snesContentsDelete: (fullpath) => ipcRenderer.invoke('snesContents:delete', fullpath),
+  
+  // =============================
+  // Online/NOSTR Profile Operations
+  // =============================
+  
+  /**
+   * Get online profile
+   * @returns {Promise<Object|null>} Profile object or null
+   */
+  getOnlineProfile: () => ipcRenderer.invoke('online:profile:get'),
+  
+  /**
+   * Create new online profile
+   * @param {Object} params - {keyType: string}
+   * @returns {Promise<{success: boolean, profile?: Object, error?: string}>}
+   */
+  createOnlineProfile: (params) => ipcRenderer.invoke('online:profile:create', params),
+  
+  /**
+   * Save online profile
+   * @param {Object} profile - Profile object
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  saveOnlineProfile: (profile) => ipcRenderer.invoke('online:profile:save', profile),
+  
+  /**
+   * Create online keypair
+   * @param {Object} params - {profileId: Object, keyType: string, isPrimary: boolean, isAdmin?: boolean}
+   * @returns {Promise<{success: boolean, keypair?: Object, error?: string}>}
+   */
+  createOnlineKeypair: (params) => ipcRenderer.invoke('online:keypair:create', params),
+  
+  /**
+   * Regenerate online keypair
+   * @param {Object} params - {profileId: Object, keyType: string, isPrimary: boolean}
+   * @returns {Promise<{success: boolean, keypair?: Object, error?: string}>}
+   */
+  regenerateOnlineKeypair: (params) => ipcRenderer.invoke('online:keypair:regenerate', params),
+  
+  /**
+   * Get admin master keys
+   * @returns {Promise<Array>} Array of master keys
+   */
+  getOnlineMasterKeys: () => ipcRenderer.invoke('online:master-keys:get'),
+  
+  /**
+   * Save admin master keys
+   * @param {Array} masterKeys - Array of master keys
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  saveOnlineMasterKeys: (masterKeys) => ipcRenderer.invoke('online:master-keys:save', masterKeys),
+  
+  /**
+   * Copy text to clipboard
+   * @param {string} text - Text to copy
+   * @returns {Promise<{success: boolean}>}
+   */
+  copyToClipboard: (text) => ipcRenderer.invoke('clipboard:write', text),
+  
+  // =============================
+  // Profile Guard Operations
+  // =============================
+  
+  /**
+   * Check Profile Guard status
+   * @returns {Promise<{enabled: boolean, highSecurityMode?: boolean}>}
+   */
+  checkProfileGuard: () => ipcRenderer.invoke('profile-guard:check'),
+  
+  /**
+   * Set up Profile Guard
+   * @param {Object} params - {password: string, highSecurityMode: boolean}
+   * @returns {Promise<{success: boolean, highSecurityMode?: boolean, error?: string}>}
+   */
+  setupProfileGuard: (params) => ipcRenderer.invoke('profile-guard:setup', params),
+  
+  /**
+   * Update Profile Guard security mode
+   * @param {Object} params - {highSecurityMode: boolean}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  updateProfileGuardSecurityMode: (params) => ipcRenderer.invoke('profile-guard:update-security-mode', params),
+  
+  /**
+   * Verify Profile Guard password (for High Security Mode)
+   * @param {Object} params - {password: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  verifyProfileGuardPassword: (params) => ipcRenderer.invoke('profile-guard:verify-password', params),
+  
+  /**
+   * Unlock Profile Guard (auto-unlock if not in high security mode)
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  unlockProfileGuard: () => ipcRenderer.invoke('profile-guard:unlock'),
+  
+  /**
+   * Remove Profile Guard
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  removeProfileGuard: () => ipcRenderer.invoke('profile-guard:remove'),
+  
+  /**
+   * Export online profile with password-based encryption
+   * @param {Object} params - {profile: Object, password: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  exportOnlineProfile: (params) => ipcRenderer.invoke('online:profile:export', params),
+  
+  /**
+   * Export keypair with password-based encryption
+   * @param {Object} params - {keypair: Object, password: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  exportKeypair: (params) => ipcRenderer.invoke('online:keypair:export', params),
+  
+  /**
+   * Import keypair with password-based decryption
+   * @param {Object} params - {encryptedData: string, password: string}
+   * @returns {Promise<{success: boolean, keypair?: Object, error?: string}>}
+   */
+  importKeypair: (params) => ipcRenderer.invoke('online:keypair:import', params),
 });

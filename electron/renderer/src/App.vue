@@ -4,6 +4,243 @@
       <div class="left-controls">
         <button @click="openSettings">Open settings</button>
         
+        <!-- Online Dropdown Button -->
+        <div class="online-dropdown-container">
+          <button @click="toggleOnlineDropdown" class="online-dropdown-btn">
+            <span class="dropdown-icon">🌐</span>
+            <span>Online</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+
+          <div v-if="onlineDropdownOpen" class="online-dropdown" @click.stop>
+            <div class="online-dropdown-header">
+              <h3>Online Profile & Settings</h3>
+              <button @click="closeOnlineDropdown" class="close">✕</button>
+            </div>
+
+            <div class="online-dropdown-body">
+              <!-- Admin Options Toggle -->
+              <div class="online-section">
+                <label class="admin-toggle">
+                  <input type="checkbox" v-model="onlineShowAdminOptions" />
+                  Show admin options
+                </label>
+              </div>
+
+              <!-- Profile Guard Section -->
+              <div class="online-section">
+                <h4>Profile Guard</h4>
+                <p class="profile-guard-note">
+                  Profile Guard encrypts your secret keys using a master password. The derived encryption key is stored securely using your OS credential manager.
+                </p>
+                
+                <div v-if="!profileGuardEnabled" class="profile-guard-setup">
+                  <p class="warning-text">⚠️ Profile Guard is not set up. Your secret keys will not be encrypted.</p>
+                  <button @click="setupProfileGuard" class="btn-primary-small">
+                    Set Up Profile Guard
+                  </button>
+                </div>
+
+                <div v-else class="profile-guard-status">
+                  <div class="profile-guard-status-item">
+                    <span class="status-indicator connected">●</span>
+                    <span>Profile Guard is active</span>
+                  </div>
+                  <div class="profile-guard-mode">
+                    <label class="security-mode-toggle">
+                      <input 
+                        type="checkbox" 
+                        v-model="profileGuardHighSecurityMode"
+                        @change="updateProfileGuardSecurityMode"
+                      />
+                      High Security Mode: Prompt for master password every time (do not save)
+                    </label>
+                  </div>
+                  <div class="profile-guard-actions">
+                    <button @click="changeProfileGuardKey" class="btn-secondary-small">
+                      Change Master Password
+                    </button>
+                    <button @click="removeProfileGuard" class="btn-danger-small">
+                      Remove Profile Guard
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Profile Management Section -->
+              <div class="online-section">
+                <h4>My Profile</h4>
+                
+                <div v-if="!onlineProfile?.primaryKeypair" class="profile-empty">
+                  <p>No profile created yet. Create a profile to use online features.</p>
+                  <button @click="createNewProfile" class="btn-primary-small">
+                    Create Profile
+                  </button>
+                </div>
+
+                <div v-else class="profile-info">
+                  <div class="profile-field">
+                    <label>Display Name:</label>
+                    <input 
+                      type="text" 
+                      v-model="onlineProfile.displayName"
+                      @input="updateOnlineProfile"
+                      placeholder="Your display name"
+                      class="profile-input"
+                    />
+                  </div>
+
+                  <div class="profile-field">
+                    <label>Bio:</label>
+                    <textarea 
+                      v-model="onlineProfile.bio"
+                      @input="updateOnlineProfile"
+                      placeholder="Tell us about yourself..."
+                      class="profile-textarea"
+                      rows="3"
+                    ></textarea>
+                  </div>
+
+                  <!-- Backup Warning -->
+                  <div v-if="onlineProfile.primaryKeypair || (onlineProfile.additionalKeypairs && onlineProfile.additionalKeypairs.length > 0)" class="backup-warning">
+                    <p class="warning-text">
+                      ⚠️ <strong>Important:</strong> After generating keys, make sure to export and backup your profile.
+                      If you lose your Profile Guard key, you will not be able to decrypt your secret keys.
+                    </p>
+                    <button @click="exportFullProfile" class="btn-primary-small">
+                      Export Profile Backup
+                    </button>
+                  </div>
+
+                  <!-- Primary Keypair -->
+                  <div class="keypair-section">
+                    <h5>Primary Keypair</h5>
+                    <div class="keypair-info">
+                      <div class="keypair-field">
+                        <label>Type:</label>
+                        <span class="keypair-type">{{ onlineProfile.primaryKeypair?.type || 'Not set' }}</span>
+                      </div>
+                      <div class="keypair-field">
+                        <label>Public Key:</label>
+                        <code class="keypair-public-key">{{ onlineProfile.primaryKeypair?.publicKey || 'Not set' }}</code>
+                        <button @click="copyToClipboard(onlineProfile.primaryKeypair?.publicKey)" class="btn-link-small">Copy</button>
+                      </div>
+                      <div class="keypair-actions">
+                        <button @click="regeneratePrimaryKeypair" class="btn-secondary-small">
+                          Regenerate Primary Keypair
+                        </button>
+                        <button @click="exportKeypair('primary')" class="btn-secondary-small">
+                          Export Keypair
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Additional Keypairs -->
+                  <div class="keypair-section">
+                    <h5>Additional Keypairs</h5>
+                    <div v-for="(keypair, index) in onlineProfile.additionalKeypairs" :key="index" class="keypair-item">
+                      <div class="keypair-field">
+                        <label>Type:</label>
+                        <span class="keypair-type">{{ keypair.type }}</span>
+                      </div>
+                      <div class="keypair-field">
+                        <label>Public Key:</label>
+                        <code class="keypair-public-key">{{ keypair.publicKey }}</code>
+                        <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
+                      </div>
+                      <div class="keypair-actions">
+                        <button @click="exportKeypair('additional', index)" class="btn-secondary-small">
+                          Export
+                        </button>
+                        <button @click="importKeypair('additional', index)" class="btn-secondary-small">
+                          Import
+                        </button>
+                        <button @click="removeAdditionalKeypair(index)" class="btn-danger-small">
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                    <button @click="showAddKeypairModal = true" class="btn-secondary-small">
+                      Add Keypair
+                    </button>
+                  </div>
+
+                  <!-- Admin Keypairs (shown if admin) -->
+                  <div v-if="onlineShowAdminOptions && onlineProfile.isAdmin" class="keypair-section admin-section">
+                    <h5>Admin Keypairs</h5>
+                    <p class="admin-note">Admin profiles require at least one additional keypair for admin operations.</p>
+                    <div v-if="onlineProfile.adminKeypairs && onlineProfile.adminKeypairs.length > 0">
+                      <div v-for="(keypair, index) in onlineProfile.adminKeypairs" :key="index" class="keypair-item">
+                        <div class="keypair-field">
+                          <label>Type:</label>
+                          <span class="keypair-type">{{ keypair.type }}</span>
+                        </div>
+                        <div class="keypair-field">
+                          <label>Public Key:</label>
+                          <code class="keypair-public-key">{{ keypair.publicKey }}</code>
+                          <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
+                        </div>
+                        <div class="keypair-actions">
+                          <button @click="exportKeypair('admin', index)" class="btn-secondary-small">
+                            Export
+                          </button>
+                          <button @click="importKeypair('admin', index)" class="btn-secondary-small">
+                            Import
+                          </button>
+                          <button @click="removeAdminKeypair(index)" class="btn-danger-small">
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="keypair-actions">
+                      <button @click="showAddAdminKeypairModal = true" class="btn-secondary-small">
+                        Add Admin Keypair
+                      </button>
+                      <button @click="exportAllAdminKeypairs" class="btn-secondary-small">
+                        Export All Admin Keypairs
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Admin Master Keys Section (shown if admin options enabled) -->
+              <div v-if="onlineShowAdminOptions" class="online-section admin-section">
+                <h4>Admin Master Keys</h4>
+                <p class="admin-note">Master admin keys are used to sign trust declarations for operational admins.</p>
+                
+                <div class="master-keys-list">
+                  <div v-for="(masterKey, index) in onlineMasterKeys" :key="index" class="master-key-item">
+                    <div class="master-key-info">
+                      <div class="master-key-field">
+                        <label>Type:</label>
+                        <span class="keypair-type">{{ masterKey.type }}</span>
+                      </div>
+                      <div class="master-key-field">
+                        <label>Public Key:</label>
+                        <code class="keypair-public-key">{{ masterKey.publicKey }}</code>
+                        <button @click="copyToClipboard(masterKey.publicKey)" class="btn-link-small">Copy</button>
+                      </div>
+                      <div class="master-key-field">
+                        <label>Trust Level:</label>
+                        <span>{{ masterKey.trustLevel || 'Standard' }}</span>
+                      </div>
+                    </div>
+                    <button @click="removeMasterKey(index)" class="btn-danger-small">
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <button @click="showAddMasterKeyModal = true" class="btn-secondary-small">
+                  Add Master Key
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- USB2SNES Dropdown Button -->
         <div v-if="settings.usb2snesEnabled === 'yes'" class="usb2snes-dropdown-container">
           <button @click="toggleUsb2snesDropdown" class="usb2snes-dropdown-btn">
@@ -1236,6 +1473,300 @@
       <footer class="modal-footer">
         <button @click="closeRatingSheetModal">Close</button>
       </footer>
+    </div>
+  </div>
+
+  <!-- Add Keypair Modal -->
+  <div v-if="showAddKeypairModal" class="modal-backdrop" @click.self="showAddKeypairModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Add Keypair</h3>
+        <button class="close" @click="showAddKeypairModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Keypair Type:</label>
+          <select v-model="newKeypairType" class="modal-input">
+            <option value="ML-DSA-44">ML-DSA-44 (Default)</option>
+            <option value="ML-DSA-87">ML-DSA-87</option>
+            <option value="ED25519">ED25519</option>
+            <option value="RSA-2048">RSA-2048</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button @click="addKeypair" class="btn-primary-small">Add Keypair</button>
+          <button @click="showAddKeypairModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Add Admin Keypair Modal -->
+  <div v-if="showAddAdminKeypairModal" class="modal-backdrop" @click.self="showAddAdminKeypairModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Add Admin Keypair</h3>
+        <button class="close" @click="showAddAdminKeypairModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Keypair Type:</label>
+          <select v-model="newKeypairType" class="modal-input">
+            <option value="ML-DSA-44">ML-DSA-44</option>
+            <option value="ML-DSA-87">ML-DSA-87</option>
+            <option value="ED25519">ED25519</option>
+            <option value="RSA-2048">RSA-2048</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button @click="addAdminKeypair" class="btn-primary-small">Add Admin Keypair</button>
+          <button @click="showAddAdminKeypairModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Profile Guard Setup Modal -->
+  <div v-if="showProfileGuardSetupModal" class="modal-backdrop" @click.self="showProfileGuardSetupModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Set Up Profile Guard</h3>
+        <button class="close" @click="showProfileGuardSetupModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Enter a master password for Profile Guard:</label>
+          <input 
+            type="password" 
+            v-model="profileGuardPassword"
+            @keydown.enter="confirmSetupProfileGuard"
+            placeholder="Enter master password"
+            class="modal-input"
+            autofocus
+          />
+        </div>
+        <div class="modal-field">
+          <label>Confirm password:</label>
+          <input 
+            type="password" 
+            v-model="profileGuardPasswordConfirm"
+            @keydown.enter="confirmSetupProfileGuard"
+            placeholder="Confirm master password"
+            class="modal-input"
+          />
+        </div>
+        <div class="modal-field">
+          <label class="security-mode-toggle">
+            <input 
+              type="checkbox" 
+              v-model="profileGuardHighSecurityMode"
+            />
+            High Security Mode: Prompt for master password every time (do not save)
+          </label>
+        </div>
+        <p class="modal-note">
+          The master password will be used to derive an encryption key. In High Security Mode, you'll be prompted every time you start RHTools.
+          Otherwise, the derived key will be securely stored in your OS credential manager.
+        </p>
+        <div class="modal-actions">
+          <button @click="confirmSetupProfileGuard" class="btn-primary-small" :disabled="!profileGuardPassword || profileGuardPassword !== profileGuardPasswordConfirm">
+            Set Up Profile Guard
+          </button>
+          <button @click="showProfileGuardSetupModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Profile Guard Password Prompt Modal (High Security Mode) -->
+  <div v-if="showProfileGuardPasswordPrompt" class="modal-backdrop" @click.self="showProfileGuardPasswordPrompt = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Enter Profile Guard Password</h3>
+        <button class="close" @click="cancelProfileGuardPasswordPrompt">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Master password:</label>
+          <input 
+            type="password" 
+            v-model="profileGuardPasswordPrompt"
+            @keydown.enter="confirmProfileGuardPassword"
+            placeholder="Enter master password"
+            class="modal-input"
+            autofocus
+          />
+        </div>
+        <p v-if="profileGuardPasswordError" class="error-text">{{ profileGuardPasswordError }}</p>
+        <div class="modal-actions">
+          <button @click="confirmProfileGuardPassword" class="btn-primary-small" :disabled="!profileGuardPasswordPrompt">
+            Unlock Profile Guard
+          </button>
+          <button @click="cancelProfileGuardPasswordPrompt" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Profile Export Modal -->
+  <div v-if="showProfileExportModal" class="modal-backdrop" @click.self="showProfileExportModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Export Profile Backup</h3>
+        <button class="close" @click="showProfileExportModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Enter password to encrypt backup:</label>
+          <input 
+            type="password" 
+            v-model="profileExportPassword"
+            @keydown.enter="confirmExportProfile"
+            placeholder="Enter encryption password"
+            class="modal-input"
+            autofocus
+          />
+        </div>
+        <div class="modal-field">
+          <label>Confirm password:</label>
+          <input 
+            type="password" 
+            v-model="profileExportPasswordConfirm"
+            @keydown.enter="confirmExportProfile"
+            placeholder="Confirm encryption password"
+            class="modal-input"
+          />
+        </div>
+        <p class="modal-note">
+          Your profile will be encrypted with a key derived from this password using PBKDF2.
+          Keep this password safe - you'll need it to restore your profile.
+        </p>
+        <div class="modal-actions">
+          <button @click="confirmExportProfile" class="btn-primary-small" :disabled="!profileExportPassword || profileExportPassword !== profileExportPasswordConfirm">
+            Export Profile
+          </button>
+          <button @click="showProfileExportModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Keypair Export Modal -->
+  <div v-if="showKeypairExportModal" class="modal-backdrop" @click.self="showKeypairExportModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Export Keypair</h3>
+        <button class="close" @click="showKeypairExportModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Enter password to encrypt keypair:</label>
+          <input 
+            type="password" 
+            v-model="keypairExportPassword"
+            @keydown.enter="confirmExportKeypair"
+            placeholder="Enter encryption password"
+            class="modal-input"
+            autofocus
+          />
+        </div>
+        <div class="modal-field">
+          <label>Confirm password:</label>
+          <input 
+            type="password" 
+            v-model="keypairExportPasswordConfirm"
+            @keydown.enter="confirmExportKeypair"
+            placeholder="Confirm encryption password"
+            class="modal-input"
+          />
+        </div>
+        <div class="modal-actions">
+          <button @click="confirmExportKeypair" class="btn-primary-small" :disabled="!keypairExportPassword || keypairExportPassword !== keypairExportPasswordConfirm">
+            Export Keypair
+          </button>
+          <button @click="showKeypairExportModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Keypair Import Modal -->
+  <div v-if="showKeypairImportModal" class="modal-backdrop" @click.self="showKeypairImportModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Import Keypair</h3>
+        <button class="close" @click="showKeypairImportModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Enter password to decrypt keypair:</label>
+          <input 
+            type="password" 
+            v-model="keypairImportPassword"
+            @keydown.enter="confirmImportKeypair"
+            placeholder="Enter decryption password"
+            class="modal-input"
+            autofocus
+          />
+        </div>
+        <div class="modal-field">
+          <label>Select keypair file:</label>
+          <input 
+            type="file" 
+            @change="handleKeypairFileSelect"
+            accept=".json"
+            class="modal-input"
+          />
+        </div>
+        <div class="modal-actions">
+          <button @click="confirmImportKeypair" class="btn-primary-small" :disabled="!keypairImportPassword || !selectedKeypairFile">
+            Import Keypair
+          </button>
+          <button @click="showKeypairImportModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Add Master Key Modal -->
+  <div v-if="showAddMasterKeyModal" class="modal-backdrop" @click.self="showAddMasterKeyModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Add Admin Master Key</h3>
+        <button class="close" @click="showAddMasterKeyModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Keypair Type:</label>
+          <select v-model="newMasterKeyType" class="modal-input">
+            <option value="ML-DSA-87">ML-DSA-87 (Master Admin)</option>
+            <option value="RSA-2048">RSA-2048 (Master Admin)</option>
+            <option value="ED25519">ED25519 (Master Admin)</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>Public Key:</label>
+          <textarea 
+            v-model="newMasterKeyPublicKey"
+            class="modal-input"
+            placeholder="Paste the public key here..."
+            rows="4"
+          ></textarea>
+        </div>
+        <div class="modal-field">
+          <label>Trust Level:</label>
+          <input 
+            type="text" 
+            v-model="newMasterKeyTrustLevel"
+            class="modal-input"
+            placeholder="Standard"
+          />
+        </div>
+        <div class="modal-actions">
+          <button @click="addMasterKey" class="btn-primary-small">Add Master Key</button>
+          <button @click="showAddMasterKeyModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -3428,6 +3959,8 @@ const bulkStatus = ref('');
 
 // Filter dropdown state
 const filterDropdownOpen = ref(false);
+const onlineDropdownOpen = ref(false);
+const onlineShowAdminOptions = ref(false);
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
 // Select dropdown state
@@ -4476,6 +5009,58 @@ const uploadSuccess = ref(false);
 // USB2SNES Dropdown state
 const usb2snesDropdownOpen = ref(false);
 
+// Online/NOSTR profile state
+type KeypairType = 'ML-DSA-44' | 'ML-DSA-87' | 'ED25519' | 'RSA-2048';
+type Keypair = {
+  type: KeypairType;
+  publicKey: string;
+  privateKey?: string; // Only stored locally, never transmitted
+};
+
+type OnlineProfile = {
+  displayName?: string;
+  bio?: string;
+  primaryKeypair?: Keypair;
+  additionalKeypairs: Keypair[];
+  adminKeypairs?: Keypair[];
+  isAdmin?: boolean;
+};
+
+const onlineProfile = ref<OnlineProfile | null>(null);
+const onlineMasterKeys = ref<Array<{ type: KeypairType; publicKey: string; trustLevel?: string }>>([]);
+const showAddKeypairModal = ref(false);
+const showAddAdminKeypairModal = ref(false);
+const showAddMasterKeyModal = ref(false);
+const newKeypairType = ref<KeypairType>('ML-DSA-44');
+const newMasterKeyType = ref<KeypairType>('ML-DSA-87');
+const newMasterKeyPublicKey = ref('');
+const newMasterKeyTrustLevel = ref('Standard');
+
+// Profile Guard state
+const profileGuardEnabled = ref(false);
+const profileGuardHighSecurityMode = ref(false);
+const showProfileGuardSetupModal = ref(false);
+const showProfileGuardPasswordPrompt = ref(false);
+const profileGuardPassword = ref('');
+const profileGuardPasswordConfirm = ref('');
+const profileGuardPasswordPrompt = ref('');
+const profileGuardPasswordError = ref('');
+const profileGuardUnlocked = ref(false);
+
+// Profile Export/Import state
+const showProfileExportModal = ref(false);
+const profileExportPassword = ref('');
+const profileExportPasswordConfirm = ref('');
+
+// Keypair Export/Import state
+const showKeypairExportModal = ref(false);
+const showKeypairImportModal = ref(false);
+const keypairExportPassword = ref('');
+const keypairExportPasswordConfirm = ref('');
+const keypairImportPassword = ref('');
+const selectedKeypairFile = ref<File | null>(null);
+const keypairExportContext = ref<{ type: 'primary' | 'additional' | 'admin', index?: number } | null>(null);
+
 // Connection Health Monitoring
 const connectionHealth = ref<'green' | 'yellow' | 'red'>('red');
 const lastCommandTime = ref(0);
@@ -4846,6 +5431,487 @@ async function toggleUsb2snesDropdown() {
 
 function closeUsb2snesDropdown() {
   usb2snesDropdownOpen.value = false;
+}
+
+// Online dropdown functions
+function toggleOnlineDropdown() {
+  onlineDropdownOpen.value = !onlineDropdownOpen.value;
+  if (onlineDropdownOpen.value) {
+    loadOnlineProfile();
+    loadOnlineMasterKeys();
+    checkProfileGuardStatus();
+  }
+}
+
+function closeOnlineDropdown() {
+  onlineDropdownOpen.value = false;
+}
+
+// Online profile functions
+async function loadOnlineProfile() {
+  if (!isElectronAvailable()) {
+    // Mock data for development
+    return;
+  }
+  
+  try {
+    const profile = await (window as any).electronAPI.getOnlineProfile();
+    onlineProfile.value = profile || null;
+  } catch (error) {
+    console.error('Error loading online profile:', error);
+    onlineProfile.value = null;
+  }
+}
+
+async function loadOnlineMasterKeys() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const masterKeys = await (window as any).electronAPI.getOnlineMasterKeys();
+    onlineMasterKeys.value = masterKeys || [];
+  } catch (error) {
+    console.error('Error loading master keys:', error);
+    onlineMasterKeys.value = [];
+  }
+}
+
+async function createNewProfile() {
+  if (!isElectronAvailable()) {
+    alert('Profile creation requires Electron environment');
+    return;
+  }
+  
+  try {
+    // Create default ML-DSA-44 keypair
+    const result = await (window as any).electronAPI.createOnlineProfile({
+      keyType: 'ML-DSA-44'
+    });
+    
+    if (result.success) {
+      onlineProfile.value = result.profile;
+      await updateOnlineProfile();
+    } else {
+      alert(`Failed to create profile: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error creating profile:', error);
+    alert(`Error creating profile: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function updateOnlineProfile() {
+  if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.saveOnlineProfile(onlineProfile.value);
+    if (!result.success) {
+      console.error('Failed to save profile:', result.error);
+    }
+  } catch (error) {
+    console.error('Error saving profile:', error);
+  }
+}
+
+async function regeneratePrimaryKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to regenerate your primary keypair? This will invalidate your current keypair.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.regenerateOnlineKeypair({
+      profileId: onlineProfile.value,
+      keyType: 'ML-DSA-44',
+      isPrimary: true
+    });
+    
+    if (result.success) {
+      onlineProfile.value.primaryKeypair = result.keypair;
+      await updateOnlineProfile();
+    } else {
+      alert(`Failed to regenerate keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error regenerating keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+function removeAdditionalKeypair(index: number) {
+  if (!onlineProfile.value) return;
+  onlineProfile.value.additionalKeypairs.splice(index, 1);
+  updateOnlineProfile();
+}
+
+function removeAdminKeypair(index: number) {
+  if (!onlineProfile.value || !onlineProfile.value.adminKeypairs) return;
+  onlineProfile.value.adminKeypairs.splice(index, 1);
+  updateOnlineProfile();
+}
+
+function removeMasterKey(index: number) {
+  onlineMasterKeys.value.splice(index, 1);
+  saveOnlineMasterKeys();
+}
+
+async function saveOnlineMasterKeys() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    await (window as any).electronAPI.saveOnlineMasterKeys(onlineMasterKeys.value);
+  } catch (error) {
+    console.error('Error saving master keys:', error);
+  }
+}
+
+async function copyToClipboard(text?: string) {
+  if (!text) return;
+  
+  if (isElectronAvailable()) {
+    try {
+      await (window as any).electronAPI.copyToClipboard(text);
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+    }
+  } else {
+    // Fallback for browser
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+    }
+  }
+}
+
+// Profile Guard functions
+async function checkProfileGuardStatus() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const status = await (window as any).electronAPI.checkProfileGuard();
+    profileGuardEnabled.value = status.enabled || false;
+    profileGuardHighSecurityMode.value = status.highSecurityMode || false;
+    
+    // If High Security Mode is enabled, prompt for password on startup
+    if (profileGuardEnabled.value && profileGuardHighSecurityMode.value && !profileGuardUnlocked.value) {
+      showProfileGuardPasswordPrompt.value = true;
+    } else if (profileGuardEnabled.value && !profileGuardHighSecurityMode.value) {
+      // Try to unlock automatically if not in high security mode
+      try {
+        const unlockResult = await (window as any).electronAPI.unlockProfileGuard();
+        if (unlockResult.success) {
+          profileGuardUnlocked.value = true;
+        }
+      } catch (error) {
+        console.error('Error auto-unlocking Profile Guard:', error);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking Profile Guard status:', error);
+    profileGuardEnabled.value = false;
+  }
+}
+
+function setupProfileGuard() {
+  showProfileGuardSetupModal.value = true;
+  profileGuardPassword.value = '';
+  profileGuardPasswordConfirm.value = '';
+}
+
+async function confirmSetupProfileGuard() {
+  if (!isElectronAvailable()) {
+    alert('Profile Guard setup requires Electron environment');
+    return;
+  }
+  
+  if (profileGuardPassword.value !== profileGuardPasswordConfirm.value) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  if (!profileGuardPassword.value || profileGuardPassword.value.length < 8) {
+    alert('Password must be at least 8 characters long');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.setupProfileGuard({
+      password: profileGuardPassword.value,
+      highSecurityMode: profileGuardHighSecurityMode.value
+    });
+    
+    if (result.success) {
+      profileGuardEnabled.value = true;
+      profileGuardHighSecurityMode.value = result.highSecurityMode || false;
+      profileGuardUnlocked.value = true;
+      showProfileGuardSetupModal.value = false;
+      profileGuardPassword.value = '';
+      profileGuardPasswordConfirm.value = '';
+    } else {
+      alert(`Failed to set up Profile Guard: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error setting up Profile Guard:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function updateProfileGuardSecurityMode() {
+  if (!isElectronAvailable() || !profileGuardEnabled.value) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.updateProfileGuardSecurityMode({
+      highSecurityMode: profileGuardHighSecurityMode.value
+    });
+    
+    if (!result.success) {
+      alert(`Failed to update security mode: ${result.error}`);
+      // Revert checkbox
+      profileGuardHighSecurityMode.value = !profileGuardHighSecurityMode.value;
+    }
+  } catch (error) {
+    console.error('Error updating security mode:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    // Revert checkbox
+    profileGuardHighSecurityMode.value = !profileGuardHighSecurityMode.value;
+  }
+}
+
+async function confirmProfileGuardPassword() {
+  if (!isElectronAvailable() || !profileGuardPasswordPrompt.value) {
+    return;
+  }
+  
+  profileGuardPasswordError.value = '';
+  
+  try {
+    const result = await (window as any).electronAPI.verifyProfileGuardPassword({
+      password: profileGuardPasswordPrompt.value
+    });
+    
+    if (result.success) {
+      profileGuardUnlocked.value = true;
+      showProfileGuardPasswordPrompt.value = false;
+      profileGuardPasswordPrompt.value = '';
+      profileGuardPasswordError.value = '';
+    } else {
+      profileGuardPasswordError.value = result.error || 'Invalid password';
+    }
+  } catch (error) {
+    console.error('Error verifying password:', error);
+    profileGuardPasswordError.value = 'Error verifying password';
+  }
+}
+
+function cancelProfileGuardPasswordPrompt() {
+  showProfileGuardPasswordPrompt.value = false;
+  profileGuardPasswordPrompt.value = '';
+  profileGuardPasswordError.value = '';
+  // Note: User can't proceed without unlocking in high security mode
+}
+
+async function changeProfileGuardKey() {
+  if (!confirm('Changing the Profile Guard key will require re-encrypting all your secret keys. Continue?')) {
+    return;
+  }
+  
+  setupProfileGuard();
+}
+
+async function removeProfileGuard() {
+  if (!confirm('Removing Profile Guard will decrypt all your secret keys. This is irreversible. Continue?')) {
+    return;
+  }
+  
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.removeProfileGuard();
+    if (result.success) {
+      profileGuardEnabled.value = false;
+    } else {
+      alert(`Failed to remove Profile Guard: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error removing Profile Guard:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+// Profile Export functions
+function exportFullProfile() {
+  showProfileExportModal.value = true;
+  profileExportPassword.value = '';
+  profileExportPasswordConfirm.value = '';
+}
+
+async function confirmExportProfile() {
+  if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  if (profileExportPassword.value !== profileExportPasswordConfirm.value) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportOnlineProfile({
+      profile: onlineProfile.value,
+      password: profileExportPassword.value
+    });
+    
+    if (result.success) {
+      showProfileExportModal.value = false;
+      profileExportPassword.value = '';
+      profileExportPasswordConfirm.value = '';
+      alert('Profile exported successfully!');
+    } else {
+      alert(`Failed to export profile: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error exporting profile:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+// Keypair Export/Import functions
+function exportKeypair(type: 'primary' | 'additional' | 'admin', index?: number) {
+  keypairExportContext.value = { type, index };
+  showKeypairExportModal.value = true;
+  keypairExportPassword.value = '';
+  keypairExportPasswordConfirm.value = '';
+}
+
+async function confirmExportKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value || !keypairExportContext.value) {
+    return;
+  }
+  
+  if (keypairExportPassword.value !== keypairExportPasswordConfirm.value) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  let keypair: Keypair | null = null;
+  
+  if (keypairExportContext.value.type === 'primary') {
+    keypair = onlineProfile.value.primaryKeypair || null;
+  } else if (keypairExportContext.value.type === 'additional' && keypairExportContext.value.index !== undefined) {
+    keypair = onlineProfile.value.additionalKeypairs[keypairExportContext.value.index] || null;
+  } else if (keypairExportContext.value.type === 'admin' && keypairExportContext.value.index !== undefined) {
+    keypair = onlineProfile.value.adminKeypairs?.[keypairExportContext.value.index] || null;
+  }
+  
+  if (!keypair) {
+    alert('Keypair not found');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportKeypair({
+      keypair,
+      password: keypairExportPassword.value
+    });
+    
+    if (result.success) {
+      showKeypairExportModal.value = false;
+      keypairExportPassword.value = '';
+      keypairExportPasswordConfirm.value = '';
+      keypairExportContext.value = null;
+      alert('Keypair exported successfully!');
+    } else {
+      alert(`Failed to export keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error exporting keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+function importKeypair(type: 'additional' | 'admin', index?: number) {
+  keypairExportContext.value = { type, index };
+  showKeypairImportModal.value = true;
+  keypairImportPassword.value = '';
+  selectedKeypairFile.value = null;
+}
+
+function handleKeypairFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    selectedKeypairFile.value = target.files[0];
+  }
+}
+
+async function confirmImportKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value || !selectedKeypairFile.value || !keypairExportContext.value) {
+    return;
+  }
+  
+  try {
+    const fileContent = await selectedKeypairFile.value.text();
+    const result = await (window as any).electronAPI.importKeypair({
+      encryptedData: fileContent,
+      password: keypairImportPassword.value
+    });
+    
+    if (result.success && result.keypair) {
+      if (keypairExportContext.value.type === 'additional') {
+        if (keypairExportContext.value.index !== undefined) {
+          onlineProfile.value.additionalKeypairs[keypairExportContext.value.index] = result.keypair;
+        } else {
+          if (!onlineProfile.value.additionalKeypairs) {
+            onlineProfile.value.additionalKeypairs = [];
+          }
+          onlineProfile.value.additionalKeypairs.push(result.keypair);
+        }
+      } else if (keypairExportContext.value.type === 'admin') {
+        if (!onlineProfile.value.adminKeypairs) {
+          onlineProfile.value.adminKeypairs = [];
+        }
+        if (keypairExportContext.value.index !== undefined) {
+          onlineProfile.value.adminKeypairs[keypairExportContext.value.index] = result.keypair;
+        } else {
+          onlineProfile.value.adminKeypairs.push(result.keypair);
+        }
+      }
+      
+      await updateOnlineProfile();
+      showKeypairImportModal.value = false;
+      keypairImportPassword.value = '';
+      selectedKeypairFile.value = null;
+      keypairExportContext.value = null;
+      alert('Keypair imported successfully!');
+    } else {
+      alert(`Failed to import keypair: ${result.error || 'Invalid password or file format'}`);
+    }
+  } catch (error) {
+    console.error('Error importing keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function exportAllAdminKeypairs() {
+  if (!isElectronAvailable() || !onlineProfile.value || !onlineProfile.value.adminKeypairs || onlineProfile.value.adminKeypairs.length === 0) {
+    return;
+  }
+  
+  exportFullProfile(); // Export all admin keypairs as part of full profile export
 }
 
 // Health Monitoring System
@@ -5437,6 +6503,9 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && snesContentsDropdownOpen.value) {
     closeSnesContentsDropdown();
   }
+  if (e.key === 'Escape' && onlineDropdownOpen.value) {
+    closeOnlineDropdown();
+  }
 }
 
 // Close dropdown when clicking outside
@@ -5459,11 +6528,18 @@ function handleGlobalClick(e: MouseEvent) {
     clickedInsideAnyDropdown = true;
   }
   
+  // Check Online dropdown separately
+  const onlineDropdown = document.querySelector('.online-dropdown-container');
+  if (onlineDropdown && onlineDropdown.contains(target)) {
+    clickedInsideAnyDropdown = true;
+  }
+  
   if (!clickedInsideAnyDropdown) {
     closeFilterDropdown();
     closeSelectDropdown();
     closeManageDropdown();
     closeSnesContentsDropdown();
+    closeOnlineDropdown();
   }
 }
 
@@ -11416,6 +12492,347 @@ button:disabled {
 /* ===========================================================================
    USB2SNES DROPDOWN STYLING
    =========================================================================== */
+
+/* Online Dropdown Styling */
+.online-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.online-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.online-dropdown-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+.online-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 600px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.online-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-primary);
+  background-color: var(--bg-secondary);
+}
+
+.online-dropdown-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.online-dropdown-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.online-section {
+  margin-bottom: 24px;
+}
+
+.online-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.online-section h5 {
+  margin: 12px 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.admin-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.profile-empty {
+  padding: 20px;
+  text-align: center;
+  background-color: var(--bg-secondary);
+  border: 1px dashed var(--border-primary);
+  border-radius: 4px;
+}
+
+.profile-empty p {
+  margin: 0 0 16px 0;
+  color: var(--text-secondary);
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.profile-input,
+.profile-textarea {
+  padding: 8px 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.profile-input:focus,
+.profile-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
+}
+
+.profile-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.keypair-section {
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.keypair-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keypair-item {
+  padding: 10px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keypair-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.keypair-field label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 80px;
+}
+
+.keypair-type {
+  font-weight: 600;
+  color: var(--accent-primary);
+  font-family: monospace;
+}
+
+.keypair-public-key {
+  flex: 1;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+  padding: 4px 8px;
+  border-radius: 3px;
+  word-break: break-all;
+}
+
+.admin-section {
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 16px;
+}
+
+.admin-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0 0 12px 0;
+}
+
+.master-keys-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.master-key-item {
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.master-key-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.master-key-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.master-key-field label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 100px;
+}
+
+.profile-guard-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.profile-guard-setup {
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border: 1px dashed var(--border-primary);
+  border-radius: 4px;
+}
+
+.profile-guard-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-guard-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.backup-warning {
+  padding: 12px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.backup-warning .warning-text {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #856404;
+  line-height: 1.4;
+}
+
+.keypair-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-guard-mode {
+  margin: 8px 0;
+}
+
+.security-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.security-mode-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.profile-guard-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.error-text {
+  color: #F44336;
+  font-size: 12px;
+  margin: 8px 0 0 0;
+}
+
+.modal-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 12px 0 0 0;
+  line-height: 1.4;
+}
 
 .usb2snes-dropdown-container {
   position: relative;

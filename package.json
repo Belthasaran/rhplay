@@ -72,6 +72,8 @@
     "upload:list-ardrive": "node list-unuploaded-blobs.js --provider=ardrive"
   },
   "dependencies": {
+    "hddserial" : "^0.0.7",
+    "node-machine-id": "^1.1.12",
     "@noble/post-quantum": "^0.5.2",
     "@poeticode/js-lzma": "^1.0.0",
     "adm-zip": "^0.5.10",

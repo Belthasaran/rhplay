@@ -637,6 +637,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getOnlineProfile: () => ipcRenderer.invoke('online:profile:get'),
   
   /**
+   * List all profiles
+   * @returns {Promise<Array>} Array of profile metadata
+   */
+  listOnlineProfiles: () => ipcRenderer.invoke('online:profiles:list'),
+  
+  /**
+   * Switch to a different profile
+   * @param {Object} params - {profileId: string}
+   * @returns {Promise<{success: boolean, profile?: Object, error?: string}>}
+   */
+  switchOnlineProfile: (params) => ipcRenderer.invoke('online:profile:switch', params),
+  
+  /**
    * Create new online profile
    * @param {Object} params - {keyType: string}
    * @returns {Promise<{success: boolean, profile?: Object, error?: string}>}
@@ -644,11 +657,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createOnlineProfile: (params) => ipcRenderer.invoke('online:profile:create', params),
   
   /**
+   * Create a new profile (add to standby or make current)
+   * @param {Object} params - {profileData: Object}
+   * @returns {Promise<{success: boolean, profile?: Object, isCurrent?: boolean, error?: string}>}
+   */
+  createNewOnlineProfile: (params) => ipcRenderer.invoke('online:profile:create-new', params),
+  
+  /**
    * Save online profile
    * @param {Object} profile - Profile object
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   saveOnlineProfile: (profile) => ipcRenderer.invoke('online:profile:save', profile),
+  
+  /**
+   * Import profile from encrypted file
+   * @param {Object} params - {filePath: string, password: string, overwriteExisting: boolean}
+   * @returns {Promise<{success: boolean, profile?: Object, isCurrent?: boolean, error?: string}>}
+   */
+  importOnlineProfile: (params) => ipcRenderer.invoke('online:profile:import', params),
+  
+  /**
+   * Export profile to encrypted file
+   * @param {Object} params - {profileId: string, password: string, filePath: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  exportOnlineProfile: (params) => ipcRenderer.invoke('online:profile:export', params),
   
   /**
    * Create online keypair

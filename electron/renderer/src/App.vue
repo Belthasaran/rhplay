@@ -78,131 +78,14 @@
                   </button>
                 </div>
 
-                <div v-else class="profile-info">
-                  <div class="profile-field">
-                    <label>Display Name:</label>
-                    <input 
-                      type="text" 
-                      v-model="onlineProfile.displayName"
-                      @input="updateOnlineProfile"
-                      placeholder="Your display name"
-                      class="profile-input"
-                    />
+                <div v-else class="profile-summary">
+                  <div class="profile-summary-info">
+                    <span class="profile-summary-label">My Current Profile:</span>
+                    <span class="profile-summary-username">{{ onlineProfile.username || 'Unknown' }}</span>
                   </div>
-
-                  <div class="profile-field">
-                    <label>Bio:</label>
-                    <textarea 
-                      v-model="onlineProfile.bio"
-                      @input="updateOnlineProfile"
-                      placeholder="Tell us about yourself..."
-                      class="profile-textarea"
-                      rows="3"
-                    ></textarea>
-                  </div>
-
-                  <!-- Backup Warning -->
-                  <div v-if="onlineProfile.primaryKeypair || (onlineProfile.additionalKeypairs && onlineProfile.additionalKeypairs.length > 0)" class="backup-warning">
-                    <p class="warning-text">
-                      ⚠️ <strong>Important:</strong> After generating keys, make sure to export and backup your profile.
-                      If you lose your Profile Guard key, you will not be able to decrypt your secret keys.
-                    </p>
-                    <button @click="exportFullProfile" class="btn-primary-small">
-                      Export Profile Backup
-                    </button>
-                  </div>
-
-                  <!-- Primary Keypair -->
-                  <div class="keypair-section">
-                    <h5>Primary Keypair</h5>
-                    <div class="keypair-info">
-                      <div class="keypair-field">
-                        <label>Type:</label>
-                        <span class="keypair-type">{{ onlineProfile.primaryKeypair?.type || 'Not set' }}</span>
-                      </div>
-                      <div class="keypair-field">
-                        <label>Public Key:</label>
-                        <code class="keypair-public-key">{{ onlineProfile.primaryKeypair?.publicKey || 'Not set' }}</code>
-                        <button @click="copyToClipboard(onlineProfile.primaryKeypair?.publicKey)" class="btn-link-small">Copy</button>
-                      </div>
-                      <div class="keypair-actions">
-                        <button @click="regeneratePrimaryKeypair" class="btn-secondary-small">
-                          Regenerate Primary Keypair
-                        </button>
-                        <button @click="exportKeypair('primary')" class="btn-secondary-small">
-                          Export Keypair
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Additional Keypairs -->
-                  <div class="keypair-section">
-                    <h5>Additional Keypairs</h5>
-                    <div v-for="(keypair, index) in onlineProfile.additionalKeypairs" :key="index" class="keypair-item">
-                      <div class="keypair-field">
-                        <label>Type:</label>
-                        <span class="keypair-type">{{ keypair.type }}</span>
-                      </div>
-                      <div class="keypair-field">
-                        <label>Public Key:</label>
-                        <code class="keypair-public-key">{{ keypair.publicKey }}</code>
-                        <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
-                      </div>
-                      <div class="keypair-actions">
-                        <button @click="exportKeypair('additional', index)" class="btn-secondary-small">
-                          Export
-                        </button>
-                        <button @click="importKeypair('additional', index)" class="btn-secondary-small">
-                          Import
-                        </button>
-                        <button @click="removeAdditionalKeypair(index)" class="btn-danger-small">
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                    <button @click="showAddKeypairModal = true" class="btn-secondary-small">
-                      Add Keypair
-                    </button>
-                  </div>
-
-                  <!-- Admin Keypairs (shown if admin) -->
-                  <div v-if="onlineShowAdminOptions && onlineProfile.isAdmin" class="keypair-section admin-section">
-                    <h5>Admin Keypairs</h5>
-                    <p class="admin-note">Admin profiles require at least one additional keypair for admin operations.</p>
-                    <div v-if="onlineProfile.adminKeypairs && onlineProfile.adminKeypairs.length > 0">
-                      <div v-for="(keypair, index) in onlineProfile.adminKeypairs" :key="index" class="keypair-item">
-                        <div class="keypair-field">
-                          <label>Type:</label>
-                          <span class="keypair-type">{{ keypair.type }}</span>
-                        </div>
-                        <div class="keypair-field">
-                          <label>Public Key:</label>
-                          <code class="keypair-public-key">{{ keypair.publicKey }}</code>
-                          <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
-                        </div>
-                        <div class="keypair-actions">
-                          <button @click="exportKeypair('admin', index)" class="btn-secondary-small">
-                            Export
-                          </button>
-                          <button @click="importKeypair('admin', index)" class="btn-secondary-small">
-                            Import
-                          </button>
-                          <button @click="removeAdminKeypair(index)" class="btn-danger-small">
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="keypair-actions">
-                      <button @click="showAddAdminKeypairModal = true" class="btn-secondary-small">
-                        Add Admin Keypair
-                      </button>
-                      <button @click="exportAllAdminKeypairs" class="btn-secondary-small">
-                        Export All Admin Keypairs
-                      </button>
-                    </div>
-                  </div>
+                  <button @click="openProfileDetailsModal" class="btn-secondary-small">
+                    Details/Edit
+                  </button>
                 </div>
               </div>
 
@@ -1927,6 +1810,269 @@
           </button>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Profile Details Modal -->
+  <div v-if="showProfileDetailsModal" class="modal-backdrop" @click.self="showProfileDetailsModal = false">
+    <div class="modal profile-details-modal">
+      <header class="modal-header">
+        <h3>Profile Details</h3>
+        <button class="close" @click="showProfileDetailsModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <!-- Profile List and Actions -->
+        <div class="profile-list-section">
+          <div class="profile-list-header">
+            <label>Select Profile:</label>
+            <select 
+              v-model="selectedProfileId" 
+              @change="switchProfile"
+              class="profile-select"
+            >
+              <option v-for="profile in onlineProfilesList" :key="profile.profileId" :value="profile.profileId">
+                {{ profile.displayName || profile.username }} {{ profile.isCurrent ? '(Current)' : '' }}
+              </option>
+            </select>
+          </div>
+          <div class="profile-actions">
+            <button @click="createNewProfileFromDetails" class="btn-secondary-small">
+              New Profile
+            </button>
+            <button @click="importProfileFromDetails" class="btn-secondary-small">
+              Import
+            </button>
+            <button 
+              v-if="selectedProfileId" 
+              @click="exportProfileFromDetails" 
+              class="btn-secondary-small"
+            >
+              Export
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!onlineProfile?.primaryKeypair" class="profile-empty">
+          <p>No profile created yet. Create a profile to use online features.</p>
+          <button @click="showProfileDetailsModal = false; openProfileCreationWizard()" class="btn-primary-small">
+            Create Profile
+          </button>
+        </div>
+
+        <div v-else class="profile-info">
+          <!-- Profile ID (locked) -->
+          <div class="profile-field">
+            <label>Profile ID (UUID) <span class="locked-indicator">🔒 Locked</span>:</label>
+            <input 
+              type="text" 
+              :value="onlineProfile.profileId || 'Not set'"
+              disabled
+              class="profile-input locked"
+            />
+          </div>
+
+          <!-- Username (locked) -->
+          <div class="profile-field">
+            <label>Username <span class="locked-indicator">🔒 Locked</span>:</label>
+            <input 
+              type="text" 
+              :value="onlineProfile.username || 'Not set'"
+              disabled
+              class="profile-input locked"
+            />
+          </div>
+
+          <!-- Display Name -->
+          <div class="profile-field">
+            <label>Display Name:</label>
+            <input 
+              type="text" 
+              v-model="onlineProfile.displayName"
+              @input="updateOnlineProfile"
+              placeholder="Your display name"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Homepage -->
+          <div class="profile-field">
+            <label>Homepage (optional):</label>
+            <input 
+              type="url" 
+              v-model="onlineProfile.homepage"
+              @input="updateOnlineProfile"
+              placeholder="https://example.com"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Social IDs -->
+          <div class="profile-field">
+            <label>Social IDs (at least 1 required):</label>
+            <div class="social-ids-container">
+              <div v-for="(socialId, index) in onlineProfile.socialIds || []" :key="index" class="social-id-item">
+                <span class="social-id-type">{{ getSocialIdTypeLabel(socialId.type) }}:</span>
+                <span class="social-id-value">{{ socialId.value }}</span>
+                <button @click="removeSocialIdFromProfile(index)" class="btn-link-small">Remove</button>
+              </div>
+              <div class="add-social-id-row">
+                <select 
+                  v-model="newSocialIdType" 
+                  class="modal-input social-id-select" 
+                  @change.stop
+                  @input.stop
+                  @click.stop
+                >
+                  <option value="discord">Discord Username</option>
+                  <option value="twitch">Twitch Username</option>
+                  <option value="smwcentral">SMWCentral Username</option>
+                  <option value="youtube">YouTube Channel Link</option>
+                  <option value="keyoxide">Keyoxide Profile Link or Hash</option>
+                  <option value="steam">Steam Name</option>
+                  <option value="playtracker">Playtracker Name</option>
+                  <option value="gamerprofiles">Gamerprofiles Name</option>
+                </select>
+                <input 
+                  type="text" 
+                  v-model="newSocialIdValue"
+                  @keydown.enter="addSocialIdToProfile"
+                  @click.stop
+                  @input.stop
+                  :placeholder="getSocialIdPlaceholder(newSocialIdType)"
+                  class="modal-input social-id-input"
+                />
+                <button @click.stop.prevent="addSocialIdToProfile" class="btn-secondary-small" :disabled="!newSocialIdValue.trim()">
+                  Add
+                </button>
+              </div>
+              <p v-if="socialIdError" class="error-text">{{ socialIdError }}</p>
+            </div>
+          </div>
+
+          <!-- Bio -->
+          <div class="profile-field">
+            <label>Bio (optional):</label>
+            <textarea 
+              v-model="onlineProfile.bio"
+              @input="updateOnlineProfile"
+              placeholder="Tell us about yourself..."
+              class="profile-textarea"
+              rows="3"
+            ></textarea>
+          </div>
+
+          <!-- Backup Warning -->
+          <div v-if="onlineProfile.primaryKeypair || (onlineProfile.additionalKeypairs && onlineProfile.additionalKeypairs.length > 0)" class="backup-warning">
+            <p class="warning-text">
+              ⚠️ <strong>Important:</strong> After generating keys, make sure to export and backup your profile.
+              If you lose your Profile Guard key, you will not be able to decrypt your secret keys.
+            </p>
+            <button @click="exportFullProfile" class="btn-primary-small">
+              Export Profile Backup
+            </button>
+          </div>
+
+          <!-- Primary Keypair (locked if profile has keys) -->
+          <div class="keypair-section">
+            <h5>Primary Keypair <span v-if="profileHasKeys" class="locked-indicator">🔒 Locked</span></h5>
+            <div class="keypair-info">
+              <div class="keypair-field">
+                <label>Type:</label>
+                <span class="keypair-type">{{ onlineProfile.primaryKeypair?.type || 'Not set' }}</span>
+              </div>
+              <div class="keypair-field">
+                <label>Public Key:</label>
+                <code class="keypair-public-key">{{ onlineProfile.primaryKeypair?.publicKey || 'Not set' }}</code>
+                <button @click="copyToClipboard(onlineProfile.primaryKeypair?.publicKey)" class="btn-link-small">Copy</button>
+              </div>
+              <div class="keypair-actions" v-if="!profileHasKeys">
+                <button @click="regeneratePrimaryKeypair" class="btn-secondary-small">
+                  Regenerate Primary Keypair
+                </button>
+                <button @click="exportKeypair('primary')" class="btn-secondary-small">
+                  Export Keypair
+                </button>
+              </div>
+              <div class="keypair-actions" v-else>
+                <p class="keypair-locked-note">Keypairs cannot be edited directly. Use key rotation process.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Additional Keypairs (locked if profile has keys) -->
+          <div class="keypair-section">
+            <h5>Additional Keypairs <span v-if="profileHasKeys" class="locked-indicator">🔒 Locked</span></h5>
+            <div v-for="(keypair, index) in onlineProfile.additionalKeypairs || []" :key="index" class="keypair-item">
+              <div class="keypair-field">
+                <label>Type:</label>
+                <span class="keypair-type">{{ keypair.type }}</span>
+              </div>
+              <div class="keypair-field">
+                <label>Public Key:</label>
+                <code class="keypair-public-key">{{ keypair.publicKey }}</code>
+                <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
+              </div>
+              <div class="keypair-actions" v-if="!profileHasKeys">
+                <button @click="exportKeypair('additional', index)" class="btn-secondary-small">
+                  Export
+                </button>
+                <button @click="importKeypair('additional', index)" class="btn-secondary-small">
+                  Import
+                </button>
+                <button @click="removeAdditionalKeypair(index)" class="btn-danger-small">
+                  Remove
+                </button>
+              </div>
+            </div>
+            <button v-if="!profileHasKeys" @click="showAddKeypairModal = true" class="btn-secondary-small">
+              Add Keypair
+            </button>
+            <p v-else class="keypair-locked-note">Keypairs cannot be edited directly. Use key rotation process.</p>
+          </div>
+
+          <!-- Admin Keypairs (shown if admin, locked if profile has keys) -->
+          <div v-if="onlineShowAdminOptions && onlineProfile.isAdmin" class="keypair-section admin-section">
+            <h5>Admin Keypairs <span v-if="profileHasKeys" class="locked-indicator">🔒 Locked</span></h5>
+            <p class="admin-note">Admin profiles require at least one additional keypair for admin operations.</p>
+            <div v-if="onlineProfile.adminKeypairs && onlineProfile.adminKeypairs.length > 0">
+              <div v-for="(keypair, index) in onlineProfile.adminKeypairs" :key="index" class="keypair-item">
+                <div class="keypair-field">
+                  <label>Type:</label>
+                  <span class="keypair-type">{{ keypair.type }}</span>
+                </div>
+                <div class="keypair-field">
+                  <label>Public Key:</label>
+                  <code class="keypair-public-key">{{ keypair.publicKey }}</code>
+                  <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
+                </div>
+                <div class="keypair-actions" v-if="!profileHasKeys">
+                  <button @click="exportKeypair('admin', index)" class="btn-secondary-small">
+                    Export
+                  </button>
+                  <button @click="importKeypair('admin', index)" class="btn-secondary-small">
+                    Import
+                  </button>
+                  <button @click="removeAdminKeypair(index)" class="btn-danger-small">
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="keypair-actions" v-if="!profileHasKeys">
+              <button @click="showAddAdminKeypairModal = true" class="btn-secondary-small">
+                Add Admin Keypair
+              </button>
+              <button @click="exportAllAdminKeypairs" class="btn-secondary-small">
+                Export All Admin Keypairs
+              </button>
+            </div>
+            <p v-else class="keypair-locked-note">Keypairs cannot be edited directly. Use key rotation process.</p>
+          </div>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="showProfileDetailsModal = false" class="btn-primary-small">Close</button>
+      </footer>
     </div>
   </div>
 
@@ -5245,7 +5391,12 @@ type OnlineProfile = {
 };
 
 const onlineProfile = ref<OnlineProfile | null>(null);
+const onlineProfilesList = ref<Array<{ profileId: string; username: string; displayName: string; isCurrent: boolean }>>([]);
 const onlineMasterKeys = ref<Array<{ type: KeypairType; publicKey: string; trustLevel?: string }>>([]);
+const selectedProfileId = ref<string | null>(null);
+const profileHasKeys = computed(() => {
+  return onlineProfile.value?.primaryKeypair !== null && onlineProfile.value?.primaryKeypair !== undefined;
+});
 const showAddKeypairModal = ref(false);
 const showAddAdminKeypairModal = ref(false);
 const showAddMasterKeyModal = ref(false);
@@ -5268,6 +5419,7 @@ const profileGuardForgotPassword = ref(false);
 const profileGuardPasswordInput = ref<HTMLInputElement | null>(null);
 
 // Profile Creation Wizard state
+const showProfileDetailsModal = ref(false);
 const showProfileCreationWizard = ref(false);
 const profileCreationWizardStep = ref(1); // 1 = profile info, 2 = keypair generation
 const profileCreationWizardInitialized = ref(false); // Track if wizard has been initialized
@@ -5714,10 +5866,216 @@ async function loadOnlineProfile() {
   try {
     const profile = await (window as any).electronAPI.getOnlineProfile();
     onlineProfile.value = profile || null;
+    if (profile) {
+      selectedProfileId.value = profile.profileId || null;
+    }
   } catch (error) {
     console.error('Error loading online profile:', error);
     onlineProfile.value = null;
   }
+}
+
+async function loadOnlineProfilesList() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const profiles = await (window as any).electronAPI.listOnlineProfiles();
+    onlineProfilesList.value = profiles || [];
+    // Set selected profile ID to current profile
+    const currentProfile = profiles?.find((p: any) => p.isCurrent);
+    if (currentProfile) {
+      selectedProfileId.value = currentProfile.profileId;
+    } else if (profiles && profiles.length > 0) {
+      selectedProfileId.value = profiles[0].profileId;
+    }
+  } catch (error) {
+    console.error('Error loading profiles list:', error);
+    onlineProfilesList.value = [];
+  }
+}
+
+async function switchProfile() {
+  if (!isElectronAvailable() || !selectedProfileId.value) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.switchOnlineProfile({
+      profileId: selectedProfileId.value
+    });
+    
+    if (result.success) {
+      onlineProfile.value = result.profile;
+      await loadOnlineProfilesList(); // Refresh list to update current indicator
+      await loadOnlineProfile(); // Refresh current profile
+    } else {
+      alert(`Failed to switch profile: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error switching profile:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function createNewProfileFromDetails() {
+  showProfileDetailsModal.value = false;
+  openProfileCreationWizard();
+}
+
+async function importProfileFromDetails() {
+  if (!isElectronAvailable()) {
+    alert('Import requires Electron environment');
+    return;
+  }
+  
+  try {
+    // Use IPC to show file dialog
+    const result = await (window as any).electronAPI.selectFiles({
+      title: 'Import Profile',
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+    
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+    
+    const filePath = result.filePaths[0];
+    const password = prompt('Enter decryption password for the profile:');
+    if (!password) {
+      return;
+    }
+    
+    // Check if profile already exists
+    const checkResult = await (window as any).electronAPI.importOnlineProfile({
+      filePath,
+      password,
+      overwriteExisting: false
+    });
+    
+    if (!checkResult.success && checkResult.error?.includes('already exists')) {
+      const overwrite = confirm('This profile already exists. Overwrite it?');
+      if (!overwrite) {
+        return;
+      }
+      
+      const importResult = await (window as any).electronAPI.importOnlineProfile({
+        filePath,
+        password,
+        overwriteExisting: true
+      });
+      
+      if (importResult.success) {
+        await loadOnlineProfilesList();
+        await loadOnlineProfile();
+        alert('Profile imported successfully!');
+      } else {
+        alert(`Failed to import profile: ${importResult.error}`);
+      }
+    } else if (checkResult.success) {
+      await loadOnlineProfilesList();
+      await loadOnlineProfile();
+      alert('Profile imported successfully!');
+    } else {
+      alert(`Failed to import profile: ${checkResult.error}`);
+    }
+  } catch (error) {
+    console.error('Error importing profile:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function exportProfileFromDetails() {
+  if (!isElectronAvailable() || !selectedProfileId.value) {
+    return;
+  }
+  
+  try {
+    const password = prompt('Enter encryption password for the profile export:');
+    if (!password) {
+      return;
+    }
+    
+    const passwordConfirm = prompt('Confirm encryption password:');
+    if (password !== passwordConfirm) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    // The export handler will show the save dialog internally
+    const exportResult = await (window as any).electronAPI.exportOnlineProfile({
+      profileId: selectedProfileId.value,
+      password
+      // filePath will be determined by IPC handler showing save dialog
+    });
+    
+    if (exportResult.success) {
+      alert('Profile exported successfully!');
+    } else {
+      alert(`Failed to export profile: ${exportResult.error}`);
+    }
+  } catch (error) {
+    console.error('Error exporting profile:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+function addSocialIdToProfile() {
+  if (!newSocialIdValue.value.trim()) {
+    return;
+  }
+  
+  // Validate social ID
+  const type = newSocialIdType.value;
+  const value = newSocialIdValue.value.trim();
+  
+  // Basic validation
+  if (type === 'youtube' || type === 'keyoxide') {
+    // URL validation
+    try {
+      new URL(value);
+    } catch {
+      socialIdError.value = 'Invalid URL format';
+      return;
+    }
+  }
+  
+  if (!onlineProfile.value) {
+    onlineProfile.value = {
+      profileId: '',
+      username: '',
+      displayName: '',
+      socialIds: [],
+      additionalKeypairs: []
+    };
+  }
+  
+  if (!onlineProfile.value.socialIds) {
+    onlineProfile.value.socialIds = [];
+  }
+  
+  onlineProfile.value.socialIds.push({
+    type,
+    value
+  });
+  
+  newSocialIdValue.value = '';
+  socialIdError.value = '';
+  updateOnlineProfile();
+}
+
+function removeSocialIdFromProfile(index: number) {
+  if (!onlineProfile.value || !onlineProfile.value.socialIds) {
+    return;
+  }
+  
+  onlineProfile.value.socialIds.splice(index, 1);
+  updateOnlineProfile();
 }
 
 async function checkAndCreateProfileIfNeeded() {
@@ -5803,6 +6161,12 @@ async function createNewProfile() {
     console.error('Error creating profile:', error);
     alert(`Error creating profile: ${formatErrorMessage(error)}`);
   }
+}
+
+function openProfileDetailsModal() {
+  showProfileDetailsModal.value = true;
+  loadOnlineProfilesList();
+  loadOnlineProfile();
 }
 
 async function updateOnlineProfile() {
@@ -6611,8 +6975,19 @@ async function completeProfileCreation() {
       createdAt: String(keypairResult.keypair.createdAt || new Date().toISOString())
     };
     
-    // Save profile - ensure profileData is fully serializable
-    const saveResult = await (window as any).electronAPI.saveOnlineProfile(JSON.parse(JSON.stringify(profileData)));
+    // Save profile - use createNewOnlineProfile if a profile already exists
+    const hasExistingProfile = onlineProfile.value && onlineProfile.value.primaryKeypair;
+    
+    let saveResult;
+    if (hasExistingProfile) {
+      // Use createNewOnlineProfile to add as standby profile
+      saveResult = await (window as any).electronAPI.createNewOnlineProfile({
+        profileData: JSON.parse(JSON.stringify(profileData))
+      });
+    } else {
+      // Use saveOnlineProfile for first profile
+      saveResult = await (window as any).electronAPI.saveOnlineProfile(JSON.parse(JSON.stringify(profileData)));
+    }
     
     if (!saveResult.success) {
       alert(`Failed to save profile: ${saveResult.error}`);
@@ -6620,14 +6995,24 @@ async function completeProfileCreation() {
     }
     
     // Update local state
-    onlineProfile.value = profileData;
+    if (hasExistingProfile) {
+      // If added to standby, refresh lists
+      await loadOnlineProfilesList();
+      await loadOnlineProfile();
+    } else {
+      onlineProfile.value = profileData;
+    }
     
     // Close wizard and reset initialization flag
     showProfileCreationWizard.value = false;
     profileCreationWizardStep.value = 1;
     profileCreationWizardInitialized.value = false;
     
-    alert('Profile created successfully! Make sure to export and backup your profile.');
+    if (hasExistingProfile) {
+      alert('New profile created successfully! You can switch to it in Profile Details. Make sure to export and backup your profile.');
+    } else {
+      alert('Profile created successfully! Make sure to export and backup your profile.');
+    }
   } catch (error) {
     console.error('Error creating profile:', error);
     alert(`Error: ${formatErrorMessage(error)}`);
@@ -13280,6 +13665,99 @@ button:disabled {
   padding: 16px;
   overflow-y: auto;
   flex: 1;
+}
+
+.profile-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+}
+
+.profile-summary-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-summary-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.profile-summary-username {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-list-section {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.profile-list-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.profile-list-header label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.profile-select {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.profile-select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.locked-indicator {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.profile-input.locked {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.keypair-locked-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
 }
 
 .online-section {

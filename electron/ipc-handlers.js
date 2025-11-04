@@ -3369,13 +3369,21 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('clientdata');
       
+      // Load current profile ID
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
       // Load profile from csettings
       const profileJson = db.prepare(`
         SELECT csetting_value FROM csettings WHERE csetting_name = ?
       `).get('online_profile');
       
       if (profileJson) {
-        return JSON.parse(profileJson.csetting_value);
+        const profile = JSON.parse(profileJson.csetting_value);
+        return profile;
       }
       
       return null;
@@ -3386,7 +3394,545 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
-   * Create new online profile
+   * List all profiles
+   * Channel: online:profiles:list
+   */
+  ipcMain.handle('online:profiles:list', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Get current profile ID
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      // Get current profile
+      const currentProfileRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_profile');
+      
+      const profiles = [];
+      
+      // Add current profile if exists
+      if (currentProfileRow && currentProfileId) {
+        const currentProfile = JSON.parse(currentProfileRow.csetting_value);
+        profiles.push({
+          profileId: currentProfileId,
+          username: currentProfile.username || 'Unknown',
+          displayName: currentProfile.displayName || '',
+          isCurrent: true
+        });
+      }
+      
+      // Get standby profiles (encrypted)
+      const standbyProfilesRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_standby_profiles');
+      
+      if (standbyProfilesRow) {
+        const standbyProfilesJson = standbyProfilesRow.csetting_value;
+        
+        // Try to decrypt standby profiles
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          try {
+            const encryptedData = JSON.parse(standbyProfilesJson);
+            const iv = Buffer.from(encryptedData.iv, 'hex');
+            const encrypted = Buffer.from(encryptedData.data, 'hex');
+            
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+            
+            // Add each standby profile (only metadata, not full profile)
+            standbyProfiles.forEach((profile) => {
+              if (profile.profileId !== currentProfileId) {
+                profiles.push({
+                  profileId: profile.profileId,
+                  username: profile.username || 'Unknown',
+                  displayName: profile.displayName || '',
+                  isCurrent: false
+                });
+              }
+            });
+          } catch (error) {
+            console.error('Error decrypting standby profiles:', error);
+          }
+        }
+      }
+      
+      return profiles;
+    } catch (error) {
+      console.error('Error listing profiles:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Switch to a different profile
+   * Channel: online:profile:switch
+   */
+  ipcMain.handle('online:profile:switch', async (event, { profileId }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Get current profile
+      const currentProfileRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_profile');
+      const currentProfile = currentProfileRow ? JSON.parse(currentProfileRow.csetting_value) : null;
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      // If switching to the same profile, do nothing
+      if (profileId === currentProfileId) {
+        return { success: true, profile: currentProfile };
+      }
+      
+      // Get keyguard key for encryption
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to switch profiles' };
+      }
+      
+      // Save current profile to standby profiles if it exists
+      // We need to get the full profile with private keys from somewhere
+      // For now, we'll need to load it differently - the current profile in DB may not have private keys
+      // Let's check if we need to get it from standby profiles first
+      if (currentProfile && currentProfileId) {
+        // Get existing standby profiles
+        const standbyProfilesRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_standby_profiles');
+        
+        let standbyProfiles = [];
+        if (standbyProfilesRow) {
+          try {
+            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+            const iv = Buffer.from(encryptedData.iv, 'hex');
+            const encrypted = Buffer.from(encryptedData.data, 'hex');
+            
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+          } catch (error) {
+            console.error('Error decrypting standby profiles:', error);
+            standbyProfiles = [];
+          }
+        }
+        
+        // Check if current profile exists in standby with full data
+        const fullCurrentProfile = standbyProfiles.find((p) => p.profileId === currentProfileId);
+        
+        // Remove profile from standby if it exists
+        standbyProfiles = standbyProfiles.filter((p) => p.profileId !== currentProfileId);
+        
+        // Use full profile if found, otherwise use current profile (may not have private keys)
+        const profileToSave = fullCurrentProfile || currentProfile;
+        
+        // Merge any updates from currentProfile into the full profile
+        if (fullCurrentProfile) {
+          // Update displayName, bio, etc. from currentProfile but keep private keys
+          Object.keys(currentProfile).forEach(key => {
+            if (key !== 'primaryKeypair' && key !== 'additionalKeypairs' && key !== 'adminKeypairs') {
+              profileToSave[key] = currentProfile[key];
+            }
+          });
+        }
+        
+        standbyProfiles.push(profileToSave);
+        
+        // Encrypt and save standby profiles
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        const standbyProfilesJson = JSON.stringify(standbyProfiles);
+        let encrypted = cipher.update(standbyProfilesJson, 'utf8');
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        
+        const encryptedData = {
+          iv: iv.toString('hex'),
+          data: encrypted.toString('hex')
+        };
+        
+        const uuid = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+      }
+      
+      // Load the target profile from standby profiles
+      const standbyProfilesRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_standby_profiles');
+      
+      let targetProfile = null;
+      if (standbyProfilesRow) {
+        try {
+          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+          const iv = Buffer.from(encryptedData.iv, 'hex');
+          const encrypted = Buffer.from(encryptedData.data, 'hex');
+          
+          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+          let decrypted = decipher.update(encrypted);
+          decrypted = Buffer.concat([decrypted, decipher.final()]);
+          
+          const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+          targetProfile = standbyProfiles.find((p) => p.profileId === profileId);
+        } catch (error) {
+          console.error('Error decrypting standby profiles:', error);
+        }
+      }
+      
+      if (!targetProfile) {
+        return { success: false, error: 'Profile not found' };
+      }
+      
+      // Remove target profile from standby
+      const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+      const iv = Buffer.from(encryptedData.iv, 'hex');
+      const encrypted = Buffer.from(encryptedData.data, 'hex');
+      
+      const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      let standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+      standbyProfiles = standbyProfiles.filter((p) => p.profileId !== profileId);
+      
+      // Encrypt and save updated standby profiles
+      const newIv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, newIv);
+      const standbyProfilesJson = JSON.stringify(standbyProfiles);
+      let newEncrypted = cipher.update(standbyProfilesJson, 'utf8');
+      newEncrypted = Buffer.concat([newEncrypted, cipher.final()]);
+      
+      const newEncryptedData = {
+        iv: newIv.toString('hex'),
+        data: newEncrypted.toString('hex')
+      };
+      
+      const uuid2 = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid2, 'online_standby_profiles', JSON.stringify(newEncryptedData));
+      
+      // Save target profile as current
+      const profileToSave = JSON.parse(JSON.stringify(targetProfile));
+      // Remove private keys before saving (they should never leave the client)
+      if (profileToSave.primaryKeypair?.privateKey) {
+        delete profileToSave.primaryKeypair.privateKey;
+      }
+      if (profileToSave.additionalKeypairs) {
+        profileToSave.additionalKeypairs.forEach((kp) => {
+          if (kp.privateKey) delete kp.privateKey;
+        });
+      }
+      if (profileToSave.adminKeypairs) {
+        profileToSave.adminKeypairs.forEach((kp) => {
+          if (kp.privateKey) delete kp.privateKey;
+        });
+      }
+      
+      const uuid3 = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid3, 'online_profile', JSON.stringify(profileToSave));
+      
+      // Update current profile ID
+      const uuid4 = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid4, 'online_current_profile_id', profileId);
+      
+      return { success: true, profile: targetProfile };
+    } catch (error) {
+      console.error('Error switching profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create a new profile (add to standby or make current if no current profile)
+   * Channel: online:profile:create-new
+   */
+  ipcMain.handle('online:profile:create-new', async (event, { profileData }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Check if there's a current profile
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      const hasCurrentProfile = !!currentProfileIdRow?.csetting_value;
+      
+      // Get keyguard key for encryption
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
+      }
+      
+      // If no current profile, make this the current profile
+      if (!hasCurrentProfile) {
+        const profileToSave = JSON.parse(JSON.stringify(profileData));
+        // Remove private keys before saving
+        if (profileToSave.primaryKeypair?.privateKey) {
+          delete profileToSave.primaryKeypair.privateKey;
+        }
+        if (profileToSave.additionalKeypairs) {
+          profileToSave.additionalKeypairs.forEach((kp) => {
+            if (kp.privateKey) delete kp.privateKey;
+          });
+        }
+        if (profileToSave.adminKeypairs) {
+          profileToSave.adminKeypairs.forEach((kp) => {
+            if (kp.privateKey) delete kp.privateKey;
+          });
+        }
+        
+        const uuid = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
+        
+        const uuid2 = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid2, 'online_current_profile_id', profileData.profileId);
+        
+        return { success: true, profile: profileData, isCurrent: true };
+      } else {
+        // Add to standby profiles
+        const standbyProfilesRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_standby_profiles');
+        
+        let standbyProfiles = [];
+        if (standbyProfilesRow) {
+          try {
+            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+            const iv = Buffer.from(encryptedData.iv, 'hex');
+            const encrypted = Buffer.from(encryptedData.data, 'hex');
+            
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+          } catch (error) {
+            console.error('Error decrypting standby profiles:', error);
+            standbyProfiles = [];
+          }
+        }
+        
+        // Add new profile
+        standbyProfiles.push(profileData);
+        
+        // Encrypt and save
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        const standbyProfilesJson = JSON.stringify(standbyProfiles);
+        let encrypted = cipher.update(standbyProfilesJson, 'utf8');
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        
+        const encryptedData = {
+          iv: iv.toString('hex'),
+          data: encrypted.toString('hex')
+        };
+        
+        const uuid = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+        
+        return { success: true, profile: profileData, isCurrent: false };
+      }
+    } catch (error) {
+      console.error('Error creating new profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Import profile from encrypted file
+   * Channel: online:profile:import
+   */
+  ipcMain.handle('online:profile:import', async (event, { filePath, password, overwriteExisting }) => {
+    try {
+      const fs = require('fs');
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Read encrypted file
+      const encryptedData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      
+      // Derive key from password using PBKDF2
+      const salt = Buffer.from(encryptedData.salt, 'hex');
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Decrypt profile
+      const iv = Buffer.from(encryptedData.iv, 'hex');
+      const encrypted = Buffer.from(encryptedData.data, 'hex');
+      
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const importedProfile = JSON.parse(decrypted.toString('utf8'));
+      
+      // Check if profile already exists
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      let profileExists = false;
+      if (importedProfile.profileId === currentProfileId) {
+        profileExists = true;
+      } else {
+        // Check standby profiles
+        const standbyProfilesRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_standby_profiles');
+        
+        if (standbyProfilesRow) {
+          const keyguardKey = getKeyguardKey(event);
+          if (keyguardKey) {
+            try {
+              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+              const iv = Buffer.from(encryptedData.iv, 'hex');
+              const encrypted = Buffer.from(encryptedData.data, 'hex');
+              
+              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+              let decrypted = decipher.update(encrypted);
+              decrypted = Buffer.concat([decrypted, decipher.final()]);
+              
+              const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+              profileExists = standbyProfiles.some((p) => p.profileId === importedProfile.profileId);
+            } catch (error) {
+              console.error('Error checking standby profiles:', error);
+            }
+          }
+        }
+      }
+      
+      if (profileExists && !overwriteExisting) {
+        return { success: false, error: 'Profile already exists. Enable overwrite to replace it.' };
+      }
+      
+      // Get keyguard key for saving
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to import profiles' };
+      }
+      
+      // If overwriting current profile
+      if (importedProfile.profileId === currentProfileId) {
+        const profileToSave = JSON.parse(JSON.stringify(importedProfile));
+        // Remove private keys before saving
+        if (profileToSave.primaryKeypair?.privateKey) {
+          delete profileToSave.primaryKeypair.privateKey;
+        }
+        if (profileToSave.additionalKeypairs) {
+          profileToSave.additionalKeypairs.forEach((kp) => {
+            if (kp.privateKey) delete kp.privateKey;
+          });
+        }
+        if (profileToSave.adminKeypairs) {
+          profileToSave.adminKeypairs.forEach((kp) => {
+            if (kp.privateKey) delete kp.privateKey;
+          });
+        }
+        
+        const uuid = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
+        
+        return { success: true, profile: importedProfile, isCurrent: true };
+      } else {
+        // Add to standby profiles (or replace if exists)
+        const standbyProfilesRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_standby_profiles');
+        
+        let standbyProfiles = [];
+        if (standbyProfilesRow) {
+          try {
+            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+            const iv = Buffer.from(encryptedData.iv, 'hex');
+            const encrypted = Buffer.from(encryptedData.data, 'hex');
+            
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+            // Remove existing profile if overwriting
+            standbyProfiles = standbyProfiles.filter((p) => p.profileId !== importedProfile.profileId);
+          } catch (error) {
+            console.error('Error decrypting standby profiles:', error);
+            standbyProfiles = [];
+          }
+        }
+        
+        // Add imported profile
+        standbyProfiles.push(importedProfile);
+        
+        // Encrypt and save
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        const standbyProfilesJson = JSON.stringify(standbyProfiles);
+        let encrypted = cipher.update(standbyProfilesJson, 'utf8');
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        
+        const encryptedData2 = {
+          iv: iv.toString('hex'),
+          data: encrypted.toString('hex')
+        };
+        
+        const uuid = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData2));
+        
+        return { success: true, profile: importedProfile, isCurrent: false };
+      }
+    } catch (error) {
+      console.error('Error importing profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create new online profile (legacy - kept for compatibility)
    * Channel: online:profile:create
    */
   ipcMain.handle('online:profile:create', async (event, { keyType }) => {
@@ -3427,34 +3973,130 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Save online profile
    * Channel: online:profile:save
+   * Note: This saves the current profile. Private keys are stored encrypted in standby profiles.
    */
   ipcMain.handle('online:profile:save', async (event, profile) => {
     try {
       const db = dbManager.getConnection('clientdata');
       const crypto = require('crypto');
-      const uuid = crypto.randomUUID();
       
-      // Remove private keys before saving (they should never leave the client)
+      // Get current profile ID
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      let currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      // If no current profile ID but profile has profileId, use it
+      if (!currentProfileId && profile.profileId) {
+        currentProfileId = profile.profileId;
+      }
+      
+      // Get keyguard key for encryption
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to save profiles' };
+      }
+      
+      // Get existing standby profiles to preserve full profile with private keys
+      const standbyProfilesRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_standby_profiles');
+      
+      let standbyProfiles = [];
+      if (standbyProfilesRow) {
+        try {
+          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+          const iv = Buffer.from(encryptedData.iv, 'hex');
+          const encrypted = Buffer.from(encryptedData.data, 'hex');
+          
+          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+          let decrypted = decipher.update(encrypted);
+          decrypted = Buffer.concat([decrypted, decipher.final()]);
+          
+          standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+        } catch (error) {
+          console.error('Error decrypting standby profiles:', error);
+          standbyProfiles = [];
+        }
+      }
+      
+      // Find existing full profile in standby
+      const existingFullProfileIndex = standbyProfiles.findIndex((p) => p.profileId === currentProfileId);
+      
+      // Merge updates into full profile, preserving private keys
+      if (existingFullProfileIndex >= 0) {
+        const fullProfile = standbyProfiles[existingFullProfileIndex];
+        // Update all fields except keypairs (which need special handling)
+        Object.keys(profile).forEach(key => {
+          if (key !== 'primaryKeypair' && key !== 'additionalKeypairs' && key !== 'adminKeypairs') {
+            fullProfile[key] = profile[key];
+          }
+        });
+        // Update keypair metadata but preserve private keys
+        if (profile.primaryKeypair && fullProfile.primaryKeypair) {
+          Object.keys(profile.primaryKeypair).forEach(key => {
+            if (key !== 'privateKey') {
+              fullProfile.primaryKeypair[key] = profile.primaryKeypair[key];
+            }
+          });
+        }
+        standbyProfiles[existingFullProfileIndex] = fullProfile;
+      } else {
+        // If not in standby, add it (profile was just created or switched)
+        standbyProfiles.push(profile);
+      }
+      
+      // Encrypt and save standby profiles
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+      const standbyProfilesJson = JSON.stringify(standbyProfiles);
+      let encrypted = cipher.update(standbyProfilesJson, 'utf8');
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
+      
+      const encryptedData = {
+        iv: iv.toString('hex'),
+        data: encrypted.toString('hex')
+      };
+      
+      const uuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+      
+      // Save current profile without private keys (for display)
       const profileToSave = JSON.parse(JSON.stringify(profile));
       if (profileToSave.primaryKeypair?.privateKey) {
         delete profileToSave.primaryKeypair.privateKey;
       }
       if (profileToSave.additionalKeypairs) {
-        profileToSave.additionalKeypairs.forEach(kp => {
+        profileToSave.additionalKeypairs.forEach((kp) => {
           if (kp.privateKey) delete kp.privateKey;
         });
       }
       if (profileToSave.adminKeypairs) {
-        profileToSave.adminKeypairs.forEach(kp => {
+        profileToSave.adminKeypairs.forEach((kp) => {
           if (kp.privateKey) delete kp.privateKey;
         });
       }
       
+      const uuid2 = crypto.randomUUID();
       db.prepare(`
         INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
         VALUES (?, ?, ?)
         ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
+      `).run(uuid2, 'online_profile', JSON.stringify(profileToSave));
+      
+      // Update current profile ID if not set
+      if (!currentProfileId && profile.profileId) {
+        const uuid3 = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid3, 'online_current_profile_id', profile.profileId);
+      }
       
       return { success: true };
     } catch (error) {
@@ -4225,48 +4867,164 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Export online profile with password-based encryption
    * Channel: online:profile:export
+   * Supports both legacy format ({profile, password}) and new format ({profileId, password, filePath})
    */
-  ipcMain.handle('online:profile:export', async (event, { profile, password }) => {
+  ipcMain.handle('online:profile:export', async (event, params) => {
     try {
       const crypto = require('crypto');
       const { dialog } = require('electron');
+      const fs = require('fs');
+      const db = dbManager.getConnection('clientdata');
       
-      // Derive encryption key from password using PBKDF2
+      let profileToExport = null;
+      let filePath = null;
+      let password = null;
+      
+      // Support both legacy and new formats
+      if (params.profileId) {
+        // New format: profileId, password, filePath
+        profileToExport = null;
+        password = params.password;
+        filePath = params.filePath;
+        
+        // Get keyguard key for decryption
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to export profiles' };
+        }
+        
+        // Get current profile ID
+        const currentProfileIdRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_current_profile_id');
+        const currentProfileId = currentProfileIdRow?.csetting_value || null;
+        
+        // If exporting current profile, try to get full version from standby first
+        if (params.profileId === currentProfileId) {
+          // Check standby profiles first for full version
+          const standbyProfilesRow = db.prepare(`
+            SELECT csetting_value FROM csettings WHERE csetting_name = ?
+          `).get('online_standby_profiles');
+          
+          if (standbyProfilesRow) {
+            try {
+              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+              const iv = Buffer.from(encryptedData.iv, 'hex');
+              const encrypted = Buffer.from(encryptedData.data, 'hex');
+              
+              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+              let decrypted = decipher.update(encrypted);
+              decrypted = Buffer.concat([decrypted, decipher.final()]);
+              
+              const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+              profileToExport = standbyProfiles.find((p) => p.profileId === params.profileId);
+            } catch (error) {
+              console.error('Error decrypting standby profiles:', error);
+            }
+          }
+          
+          // If not found in standby, get from current profile
+          if (!profileToExport) {
+            const currentProfileRow = db.prepare(`
+              SELECT csetting_value FROM csettings WHERE csetting_name = ?
+            `).get('online_profile');
+            if (currentProfileRow) {
+              profileToExport = JSON.parse(currentProfileRow.csetting_value);
+            }
+          }
+        } else {
+          // Get from standby profiles
+          const standbyProfilesRow = db.prepare(`
+            SELECT csetting_value FROM csettings WHERE csetting_name = ?
+          `).get('online_standby_profiles');
+          
+          if (standbyProfilesRow) {
+            try {
+              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+              const iv = Buffer.from(encryptedData.iv, 'hex');
+              const encrypted = Buffer.from(encryptedData.data, 'hex');
+              
+              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+              let decrypted = decipher.update(encrypted);
+              decrypted = Buffer.concat([decrypted, decipher.final()]);
+              
+              const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+              profileToExport = standbyProfiles.find((p) => p.profileId === params.profileId);
+            } catch (error) {
+              console.error('Error decrypting standby profiles:', error);
+            }
+          }
+        }
+        
+        if (!profileToExport) {
+          return { success: false, error: 'Profile not found' };
+        }
+        
+        // If filePath not provided, show dialog
+        if (!filePath) {
+          const result = await dialog.showSaveDialog({
+            title: 'Export Profile Backup',
+            defaultPath: `rhtools-profile-${profileToExport.username || 'backup'}.json`,
+            filters: [
+              { name: 'JSON Files', extensions: ['json'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          });
+          
+          if (result.canceled) {
+            return { success: false, error: 'Export cancelled' };
+          }
+          
+          filePath = result.filePath;
+        }
+      } else if (params.profile) {
+        // Legacy format: profile, password
+        profileToExport = params.profile;
+        password = params.password;
+        
+        // Show save dialog
+        const result = await dialog.showSaveDialog({
+          title: 'Export Profile Backup',
+          defaultPath: 'rhtools-profile-backup.json',
+          filters: [
+            { name: 'JSON Files', extensions: ['json'] },
+            { name: 'All Files', extensions: ['*'] }
+          ]
+        });
+        
+        if (result.canceled) {
+          return { success: false, error: 'Export cancelled' };
+        }
+        
+        filePath = result.filePath;
+      } else {
+        return { success: false, error: 'Invalid parameters' };
+      }
+      
+      if (!profileToExport || !password || !filePath) {
+        return { success: false, error: 'Missing required parameters' };
+      }
+      
+      // Derive key from password using PBKDF2
       const salt = crypto.randomBytes(32);
       const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
       
-      // Encrypt profile data
+      // Encrypt profile
       const iv = crypto.randomBytes(16);
       const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-      let encrypted = cipher.update(JSON.stringify(profile), 'utf8', 'hex');
-      encrypted += cipher.final('hex');
+      const profileJson = JSON.stringify(profileToExport);
+      let encrypted = cipher.update(profileJson, 'utf8');
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
       
-      // Create export data structure
       const exportData = {
-        version: '1.0',
-        timestamp: new Date().toISOString(),
+        version: 1,
         salt: salt.toString('hex'),
         iv: iv.toString('hex'),
-        encrypted: encrypted
+        data: encrypted.toString('hex')
       };
       
-      // Show save dialog
-      const result = await dialog.showSaveDialog({
-        title: 'Export Profile Backup',
-        defaultPath: 'rhtools-profile-backup.json',
-        filters: [
-          { name: 'JSON Files', extensions: ['json'] },
-          { name: 'All Files', extensions: ['*'] }
-        ]
-      });
-      
-      if (result.canceled) {
-        return { success: false, error: 'Export cancelled' };
-      }
-      
       // Write to file
-      const fs = require('fs');
-      fs.writeFileSync(result.filePath, JSON.stringify(exportData, null, 2));
+      fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2));
       
       return { success: true };
     } catch (error) {

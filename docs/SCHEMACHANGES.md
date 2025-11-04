@@ -1,7 +1,7 @@
 # Database Schema Changes Log
 
 ## Purpose
-This document tracks all database schema changes made to the rhtools project databases (rhdata.db and patchbin.db) as required by project rules.
+This document tracks all database schema changes made to the rhtools project databases (rhdata.db, patchbin.db, and clientdata.db) as required by project rules.
 
 ---
 
@@ -868,7 +868,53 @@ Scripts importing JSON data must exclude these fields.
 
 ---
 
-*Last Updated: October 12, 2025*  
+## 2025-01-XX: Admin Keypair Profile UUID (Migration 018)
+
+### Date
+January XX, 2025
+
+### Description
+Added `profile_uuid` column to the `admin_keypairs` table to distinguish between global admin keypairs (NULL) and User Op keys (bound to a specific profile).
+
+### Rationale
+- **Conceptual Separation**: Distinguish between system-wide admin keypairs and profile-specific admin keypairs (User Op keys)
+- **Profile Binding**: Allow admin keypairs to be bound to specific user profiles
+- **Query Efficiency**: Enable efficient filtering by profile UUID
+- **Terminology**: "User Op Keys" are admin keypairs bound to a specific profile, while "Global Admin Keypairs" are system-wide
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**Table**: `admin_keypairs`
+
+**New Column**:
+- `profile_uuid` (TEXT): UUID of the profile that owns this keypair, or NULL for global admin keypairs
+
+**Index Created**:
+- `idx_admin_keypairs_profile_uuid` on `profile_uuid` column
+
+### Data Type Changes
+- New nullable TEXT column
+- NULL indicates global admin keypair
+- Non-NULL value indicates User Op key bound to that profile
+
+### Constraints
+- No foreign key constraint (allows NULL for global admin keypairs)
+- Index created for efficient profile-based queries
+
+### Related Code Changes
+- `online:admin-keypairs:list` IPC handler now filters to only return global admin keypairs (`WHERE profile_uuid IS NULL`)
+- `online:admin-keypair:create` and `online:admin-keypair:add` set `profile_uuid` to NULL for global admin keypairs
+- Future IPC handlers will support creating User Op keys with `profile_uuid` set to the profile's UUID
+
+### Terminology
+- **Global Admin Keypairs**: System-wide admin keypairs with `profile_uuid IS NULL`
+- **User Op Keys**: Admin keypairs bound to a specific profile with `profile_uuid = <profile UUID>`
+
+---
+
+*Last Updated: January 2025*  
 *Next Migration: TBD*
 
 

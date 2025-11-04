@@ -251,6 +251,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectFiles: (options) => ipcRenderer.invoke('dialog:selectFiles', options),
   
   /**
+   * Read file content
+   * @param {Object} params - {filePath: string}
+   * @returns {Promise<{success: boolean, content?: string, error?: string}>}
+   */
+  readFile: (params) => ipcRenderer.invoke('dialog:readFile', params),
+  
+  /**
    * Pause a run
    * @param {string} runUuid - Run UUID
    * @returns {Promise<{success: boolean}>}
@@ -641,6 +648,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Array>} Array of profile metadata
    */
   listOnlineProfiles: () => ipcRenderer.invoke('online:profiles:list'),
+  deleteOnlineProfile: (profileId) => ipcRenderer.invoke('online:profile:delete', { profileId }),
   
   /**
    * Switch to a different profile
@@ -702,14 +710,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * Get admin master keys
    * @returns {Promise<Array>} Array of master keys
    */
-  getOnlineMasterKeys: () => ipcRenderer.invoke('online:master-keys:get'),
+  // Admin master keys are now accessed via listAdminKeypairs() and filtered by key_usage = 'master-admin-signing'
   
   /**
    * Save admin master keys
    * @param {Array} masterKeys - Array of master keys
    * @returns {Promise<{success: boolean, error?: string}>}
    */
-  saveOnlineMasterKeys: (masterKeys) => ipcRenderer.invoke('online:master-keys:save', masterKeys),
+  // Admin master keys are now saved via createAdminKeypair/addAdminKeypair with keyUsage = 'master-admin-signing'
   
   /**
    * Copy text to clipboard
@@ -787,4 +795,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, keypair?: Object, error?: string}>}
    */
   importKeypair: (params) => ipcRenderer.invoke('online:keypair:import', params),
+  // Admin keypair operations (database-backed)
+  listAdminKeypairs: () => ipcRenderer.invoke('online:admin-keypairs:list'),
+  getAdminKeypair: (keypairUuid) => ipcRenderer.invoke('online:admin-keypair:get', { keypairUuid }),
+  createAdminKeypair: (options) => ipcRenderer.invoke('online:admin-keypair:create', options),
+  addAdminKeypair: (options) => ipcRenderer.invoke('online:admin-keypair:add', options),
+  updateAdminKeypairStorageStatus: (keypairUuid, storageStatus, privateKey) => ipcRenderer.invoke('online:admin-keypair:update-storage-status', { keypairUuid, storageStatus, privateKey }),
+  deleteAdminKeypair: (keypairUuid) => ipcRenderer.invoke('online:admin-keypair:delete', { keypairUuid }),
+  updateAdminKeypairMetadata: (keypairUuid, name, label, comments) => ipcRenderer.invoke('online:admin-keypair:update-metadata', { keypairUuid, name, label, comments }),
+  exportAdminKeypairSecretPKCS: (keypairUuid, password) => ipcRenderer.invoke('online:admin-keypair:export-secret-pkcs', { keypairUuid, password }),
+  importAdminKeypairSecretPKCS: (keypairUuid, filePath, password) => ipcRenderer.invoke('online:admin-keypair:import-secret-pkcs', { keypairUuid, filePath, password }),
+  removeAdminKeypairSecret: (keypairUuid) => ipcRenderer.invoke('online:admin-keypair:remove-secret', { keypairUuid }),
+  
+  // Encryption key operations
+  listEncryptionKeys: () => ipcRenderer.invoke('online:encryption-keys:list'),
+  getEncryptionKey: (params) => ipcRenderer.invoke('online:encryption-key:get', params),
+  createEncryptionKey: (options) => ipcRenderer.invoke('online:encryption-key:create', options),
+  updateEncryptionKeyMetadata: (params) => ipcRenderer.invoke('online:encryption-key:update-metadata', params),
+  deleteEncryptionKey: (params) => ipcRenderer.invoke('online:encryption-key:delete', params),
+  exportEncryptionKey: (params) => ipcRenderer.invoke('online:encryption-key:export', params),
+  importEncryptionKey: (params) => ipcRenderer.invoke('online:encryption-key:import', params),
+  
+  // Trust Declaration operations
+  listTrustDeclarations: () => ipcRenderer.invoke('online:trust-declarations:list'),
+  getTrustDeclaration: (params) => ipcRenderer.invoke('online:trust-declaration:get', params),
+  createTrustDeclaration: (declarationData) => ipcRenderer.invoke('online:trust-declaration:create', declarationData),
+  updateTrustDeclarationMetadata: (params) => ipcRenderer.invoke('online:trust-declaration:update-metadata', params),
+  deleteTrustDeclaration: (params) => ipcRenderer.invoke('online:trust-declaration:delete', params),
+  
+  // User Op keypair operations (profile-bound admin keypairs)
+  listUserOpKeypairs: (profileUuid) => ipcRenderer.invoke('online:user-op-keypairs:list', { profileUuid }),
+  getUserOpKeypair: (keypairUuid) => ipcRenderer.invoke('online:user-op-keypair:get', { keypairUuid }),
+  createUserOpKeypair: (options) => ipcRenderer.invoke('online:user-op-keypair:create', options),
+  addUserOpKeypair: (options) => ipcRenderer.invoke('online:user-op-keypair:add', options),
+  updateUserOpKeypairStorageStatus: (keypairUuid, storageStatus) => ipcRenderer.invoke('online:user-op-keypair:update-storage-status', { keypairUuid, storageStatus }),
+  deleteUserOpKeypair: (keypairUuid) => ipcRenderer.invoke('online:user-op-keypair:delete', { keypairUuid }),
+  updateUserOpKeypairMetadata: (keypairUuid, name, label, comments) => ipcRenderer.invoke('online:user-op-keypair:update-metadata', { keypairUuid, name, label, comments }),
+  exportUserOpKeypairSecretPKCS: (keypairUuid, password) => ipcRenderer.invoke('online:user-op-keypair:export-secret-pkcs', { keypairUuid, password }),
+  importUserOpKeypairSecretPKCS: (keypairUuid, pkcsDataJson, password) => ipcRenderer.invoke('online:user-op-keypair:import-secret-pkcs', { keypairUuid, pkcsDataJson, password }),
+  removeUserOpKeypairSecret: (keypairUuid) => ipcRenderer.invoke('online:user-op-keypair:remove-secret', { keypairUuid }),
 });

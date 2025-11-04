@@ -18,11 +18,30 @@
               <button @click="closeOnlineDropdown" class="close">✕</button>
             </div>
 
+            <!-- Tab Navigation -->
+            <div class="online-tabs">
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'profile-keys' }]"
+                @click="onlineActiveTab = 'profile-keys'"
+              >
+                Profile & Keys
+              </button>
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'trust-declarations' }]"
+                @click="onlineActiveTab = 'trust-declarations'"
+              >
+                Trust Declarations
+              </button>
+            </div>
+
             <div class="online-dropdown-body">
+              <!-- Profile & Keys Tab -->
+              <div v-if="onlineActiveTab === 'profile-keys'" class="tab-content">
+              <p style="font-size: 16px; font-weight: bold; background: black; color: white;">Prototype UI:  In the future; this feature would allow you to share your game ratings and hacks/mods publicly through a decentralized network based on <a href="https://en.wikipedia.org/wiki/Nostr" style="color: lightgray;" target="_blank">Nostr</a> and IPFS.</p>
               <!-- Admin Options Toggle -->
               <div class="online-section">
                 <label class="admin-toggle">
-                  <input type="checkbox" v-model="onlineShowAdminOptions" />
+                  <input type="checkbox" v-model="onlineShowAdminOptions" @change="onAdminOptionsToggle" />
                   Show admin options
                 </label>
               </div>
@@ -89,37 +108,372 @@
                 </div>
               </div>
 
+              <!-- Encryption Keys Section (shown if admin options enabled) -->
+              <div v-if="onlineShowAdminOptions" class="online-section admin-section">
+                <h4>Encryption Keys</h4>
+                <p class="admin-note">Symmetric encryption keys (typically AES256/AES128) for various use cases. Keys can be encrypted with Profile Guard for protection.</p>
+                
+                <!-- Encryption Keys List Widget -->
+                <div class="keypairs-list-widget">
+                  <div class="keypairs-list-container">
+                    <table class="keypairs-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 40px;"></th>
+                          <th>Name</th>
+                          <th>Algorithm</th>
+                          <th>Type</th>
+                          <th>Encrypted</th>
+                          <th>Hash Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr 
+                          v-for="key in encryptionKeysList" 
+                          :key="key.uuid"
+                          :class="{ 'selected': selectedEncryptionKeyUuid === key.uuid }"
+                          @click="selectEncryptionKey(key.uuid)"
+                        >
+                          <td @click.stop>
+                            <input 
+                              type="checkbox" 
+                              :checked="selectedEncryptionKeyUuid === key.uuid"
+                              @change.stop="selectEncryptionKey(key.uuid)"
+                              @click.stop
+                            />
+                          </td>
+                          <td>{{ key.name || key.label || 'Unnamed' }}</td>
+                          <td>{{ key.algorithm }}</td>
+                          <td>{{ key.keyType }}</td>
+                          <td>{{ key.encrypted ? 'Yes' : 'No' }}</td>
+                          <td><code style="font-size: 10px;">{{ key.hashValue ? key.hashValue.substring(0, 16) + '...' : 'N/A' }}</code></td>
+                        </tr>
+                        <tr v-if="encryptionKeysList.length === 0">
+                          <td colspan="6" class="empty-message">No encryption keys found. Use the menu to create or import one.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <!-- Dropdown menu on the right -->
+                  <div class="keypairs-menu-container">
+                    <div class="dropdown-container">
+                      <button @click.stop="toggleEncryptionKeyActionDropdown" class="btn-secondary-small dropdown-toggle">
+                        Actions ▼
+                      </button>
+                      <div v-if="showEncryptionKeyActionDropdown" class="dropdown-menu" @click.stop>
+                        <button @click="showGenerateEncryptionKeyModal = true; showEncryptionKeyActionDropdown = false" class="dropdown-item">Generate new Key</button>
+                        <button @click="importEncryptionKeyBackup(); showEncryptionKeyActionDropdown = false" class="dropdown-item">Import Backup Key</button>
+                        <div class="dropdown-divider"></div>
+                        <button 
+                          v-if="selectedEncryptionKeyUuid" 
+                          @click="openEncryptionKeyDetailsModal(); showEncryptionKeyActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          View/Edit
+                        </button>
+                        <button 
+                          v-if="selectedEncryptionKeyUuid" 
+                          @click="backupSelectedEncryptionKey(); showEncryptionKeyActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          Export Key
+                        </button>
+                        <button 
+                          v-if="selectedEncryptionKeyUuid" 
+                          @click="deleteSelectedEncryptionKey(); showEncryptionKeyActionDropdown = false" 
+                          class="dropdown-item danger"
+                        >
+                          Delete Key
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Admin Master Keys Section (shown if admin options enabled) -->
               <div v-if="onlineShowAdminOptions" class="online-section admin-section">
                 <h4>Admin Master Keys</h4>
-                <p class="admin-note">Master admin keys are used to sign trust declarations for operational admins.</p>
+                <p class="admin-note">Master admin keys are used to sign trust declarations for operational admins. These are admin keypairs with key usage "Master admin signing".</p>
                 
-                <div class="master-keys-list">
-                  <div v-for="(masterKey, index) in onlineMasterKeys" :key="index" class="master-key-item">
-                    <div class="master-key-info">
-                      <div class="master-key-field">
-                        <label>Type:</label>
-                        <span class="keypair-type">{{ masterKey.type }}</span>
-                      </div>
-                      <div class="master-key-field">
-                        <label>Public Key:</label>
-                        <code class="keypair-public-key">{{ masterKey.publicKey }}</code>
-                        <button @click="copyToClipboard(masterKey.publicKey)" class="btn-link-small">Copy</button>
-                      </div>
-                      <div class="master-key-field">
-                        <label>Trust Level:</label>
-                        <span>{{ masterKey.trustLevel || 'Standard' }}</span>
+                <!-- Keypairs List Widget (filtered for master-admin-signing) -->
+                <div class="keypairs-list-widget">
+                  <div class="keypairs-list-container">
+                    <table class="keypairs-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 40px;"></th>
+                          <th>Name</th>
+                          <th>Type</th>
+                          <th>Algorithm</th>
+                          <th>Usage</th>
+                          <th>Trust</th>
+                          <th>Storage Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr 
+                          v-for="kp in masterAdminKeypairsList" 
+                          :key="kp.uuid"
+                          :class="{ 'selected': selectedMasterKeypairUuid === kp.uuid }"
+                          @click="selectMasterKeypair(kp.uuid)"
+                        >
+                          <td @click.stop>
+                            <input 
+                              type="checkbox" 
+                              :checked="selectedMasterKeypairUuid === kp.uuid"
+                              @change.stop="selectMasterKeypair(kp.uuid)"
+                              @click.stop
+                            />
+                          </td>
+                          <td>{{ kp.name || kp.localName || 'Unnamed' }}</td>
+                          <td>{{ kp.type }}</td>
+                          <td>{{ getAlgorithmName(kp.type) }}</td>
+                          <td>{{ getKeyUsageLabel(kp.keyUsage) }}</td>
+                          <td>{{ kp.trustLevel || 'Standard' }}</td>
+                          <td>{{ getStorageStatusLabel(kp.storageStatus) }}</td>
+                        </tr>
+                        <tr v-if="masterAdminKeypairsList.length === 0">
+                          <td colspan="7" class="empty-message">No master admin keypairs found. Use the menu to create or import one.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <!-- Dropdown menu on the right -->
+                  <div class="keypairs-menu-container">
+                    <div class="dropdown-container">
+                      <button @click.stop="toggleMasterKeypairActionDropdown" class="btn-secondary-small dropdown-toggle">
+                        Actions ▼
+                      </button>
+                      <div v-if="showMasterKeypairActionDropdown" class="dropdown-menu" @click.stop>
+                        <button @click="showGenerateMasterKeypairModal = true; showMasterKeypairActionDropdown = false" class="dropdown-item">Generate new Keypair</button>
+                        <button @click="showAddMasterKeypairModal = true; showMasterKeypairActionDropdown = false" class="dropdown-item">Add Existing Keypair</button>
+                        <button @click="importMasterKeypairBackup(); showMasterKeypairActionDropdown = false" class="dropdown-item">Import Backup Keypair</button>
+                        <div class="dropdown-divider"></div>
+                        <button 
+                          v-if="selectedMasterKeypairUuid" 
+                          @click="openMasterKeypairDetailsModal(); showMasterKeypairActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          View/Edit
+                        </button>
+                        <button 
+                          v-if="selectedMasterKeypairUuid" 
+                          @click="backupSelectedMasterKeypair(); showMasterKeypairActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          Backup Keypair
+                        </button>
+                        <button 
+                          v-if="selectedMasterKeypairUuid" 
+                          @click="deleteSelectedMasterKeypair(); showMasterKeypairActionDropdown = false" 
+                          class="dropdown-item danger"
+                        >
+                          Delete Keypair
+                        </button>
                       </div>
                     </div>
-                    <button @click="removeMasterKey(index)" class="btn-danger-small">
-                      Remove
-                    </button>
                   </div>
                 </div>
-                <button @click="showAddMasterKeyModal = true" class="btn-secondary-small">
-                  Add Master Key
-                </button>
               </div>
+              
+              <!-- Admin Keypairs Section (shown if admin options enabled) -->
+              <div v-if="onlineShowAdminOptions" class="online-section admin-section">
+                <h4>Admin Keypairs</h4>
+                <p class="admin-note">Admin keypairs are used for signing trust declarations and granting privileges. (Master admin keypairs are shown separately above.)</p>
+                
+                <!-- Keypairs List Widget (excluding master-admin-signing) -->
+                <div class="keypairs-list-widget">
+                  <div class="keypairs-list-container">
+                    <table class="keypairs-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 40px;"></th>
+                          <th>Name</th>
+                          <th>Type</th>
+                          <th>Algorithm</th>
+                          <th>Usage</th>
+                          <th>Trust</th>
+                          <th>Storage Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr 
+                          v-for="kp in nonMasterAdminKeypairsList" 
+                          :key="kp.uuid"
+                          :class="{ 'selected': selectedAdminKeypairUuid === kp.uuid }"
+                          @click="selectAdminKeypair(kp.uuid)"
+                        >
+                          <td @click.stop>
+                            <input 
+                              type="checkbox" 
+                              :checked="selectedAdminKeypairUuid === kp.uuid"
+                              @change.stop="selectAdminKeypair(kp.uuid)"
+                              @click.stop
+                            />
+                          </td>
+                          <td>{{ kp.name || kp.localName || 'Unnamed' }}</td>
+                          <td>{{ kp.type }}</td>
+                          <td>{{ getAlgorithmName(kp.type) }}</td>
+                          <td>{{ getKeyUsageLabel(kp.keyUsage) }}</td>
+                          <td>{{ kp.trustLevel || 'Standard' }}</td>
+                          <td>{{ getStorageStatusLabel(kp.storageStatus) }}</td>
+                        </tr>
+                        <tr v-if="nonMasterAdminKeypairsList.length === 0">
+                          <td colspan="7" class="empty-message">No admin keypairs found. Use the menu to create or import one.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <!-- Dropdown menu on the right -->
+                  <div class="keypairs-menu-container">
+                    <div class="dropdown-container">
+                      <button @click.stop="toggleAdminKeypairActionDropdown" class="btn-secondary-small dropdown-toggle">
+                        Actions ▼
+                      </button>
+                      <div v-if="showAdminKeypairActionDropdown" class="dropdown-menu" @click.stop>
+                        <button @click="showGenerateAdminKeypairModal = true; showAdminKeypairActionDropdown = false" class="dropdown-item">Generate new Keypair</button>
+                        <button @click="showAddAdminKeypairModal = true; showAdminKeypairActionDropdown = false" class="dropdown-item">Add Existing Keypair</button>
+                        <button @click="importAdminKeypairBackup(); showAdminKeypairActionDropdown = false" class="dropdown-item">Import Backup Keypair</button>
+                        <div class="dropdown-divider"></div>
+                        <button 
+                          v-if="selectedAdminKeypairUuid" 
+                          @click="openAdminKeypairDetailsModal(); showAdminKeypairActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          View/Edit
+                        </button>
+                        <button 
+                          v-if="selectedAdminKeypairUuid" 
+                          @click="backupSelectedAdminKeypair(); showAdminKeypairActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          Backup Keypair
+                        </button>
+                        <button 
+                          v-if="selectedAdminKeypairUuid" 
+                          @click="deleteSelectedAdminKeypair(); showAdminKeypairActionDropdown = false" 
+                          class="dropdown-item danger"
+                        >
+                          Delete Keypair
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </div>
+              <!-- End Profile & Keys Tab -->
+
+              <!-- Trust Declarations Tab -->
+              <div v-if="onlineActiveTab === 'trust-declarations'" class="tab-content">
+                <div class="online-section">
+                  <h4>Trust Declarations</h4>
+                  <p class="admin-note">Trust declarations establish trust relationships between public keys. These can be preconfigured or learned from the network.</p>
+                  
+                  <!-- Trust Declarations List Widget -->
+                  <div class="keypairs-list-widget">
+                    <div class="keypairs-list-container">
+                      <table class="keypairs-table">
+                        <thead>
+                          <tr>
+                            <th style="width: 40px;"></th>
+                            <th>Issuing Key</th>
+                            <th>Subject Key</th>
+                            <th>Trust Level</th>
+                            <th>Valid From</th>
+                            <th>Valid To</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr 
+                            v-for="decl in trustDeclarationsList" 
+                            :key="decl.declaration_uuid"
+                            :class="{ 'selected': selectedTrustDeclarationUuid === decl.declaration_uuid }"
+                            @click="selectTrustDeclaration(decl.declaration_uuid)"
+                          >
+                            <td @click.stop>
+                              <input 
+                                type="checkbox" 
+                                :checked="selectedTrustDeclarationUuid === decl.declaration_uuid"
+                                @change.stop="selectTrustDeclaration(decl.declaration_uuid)"
+                                @click.stop
+                              />
+                            </td>
+                            <td><code style="font-size: 10px;">{{ decl.issuing_fingerprint ? decl.issuing_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
+                            <td><code style="font-size: 10px;">{{ decl.subject_fingerprint ? decl.subject_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
+                            <td>{{ decl.subject_trust_level || 'N/A' }}</td>
+                            <td>{{ formatDate(decl.valid_starting) }}</td>
+                            <td>{{ decl.valid_ending ? formatDate(decl.valid_ending) : 'No expiration' }}</td>
+                            <td>
+                              <span :class="getTrustDeclarationStatusClass(decl)">
+                                {{ getTrustDeclarationStatus(decl) }}
+                              </span>
+                            </td>
+                          </tr>
+                          <tr v-if="trustDeclarationsList.length === 0">
+                            <td colspan="7" class="empty-message">No trust declarations found. Use the menu to create or import one.</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    <!-- Dropdown menu on the right -->
+                    <div class="keypairs-menu-container">
+                      <div class="dropdown-container">
+                        <button @click.stop="toggleTrustDeclarationActionDropdown" class="btn-secondary-small dropdown-toggle">
+                          Actions ▼
+                        </button>
+                        <div v-if="showTrustDeclarationActionDropdown" class="dropdown-menu" @click.stop>
+                          <button @click="showCreateTrustDeclarationModal = true; showTrustDeclarationActionDropdown = false" class="dropdown-item">Create New Declaration</button>
+                          <button @click="importTrustDeclarationBackup(); showTrustDeclarationActionDropdown = false" class="dropdown-item">Import Declaration</button>
+                          <div class="dropdown-divider"></div>
+                          <button 
+                            v-if="selectedTrustDeclarationUuid" 
+                            @click="openTrustDeclarationDetailsModal(); showTrustDeclarationActionDropdown = false" 
+                            class="dropdown-item"
+                          >
+                            View/Edit
+                          </button>
+                          <button 
+                            v-if="selectedTrustDeclarationUuid && canSignTrustDeclaration()" 
+                            @click="signTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
+                            class="dropdown-item"
+                          >
+                            Add Countersignature
+                          </button>
+                          <button 
+                            v-if="selectedTrustDeclarationUuid" 
+                            @click="publishTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
+                            class="dropdown-item"
+                          >
+                            Publish Declaration
+                          </button>
+                          <button 
+                            v-if="selectedTrustDeclarationUuid" 
+                            @click="exportTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
+                            class="dropdown-item"
+                          >
+                            Export Declaration
+                          </button>
+                          <button 
+                            v-if="selectedTrustDeclarationUuid" 
+                            @click="deleteTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
+                            class="dropdown-item danger"
+                          >
+                            Delete Declaration
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- End Trust Declarations Tab -->
             </div>
           </div>
         </div>
@@ -1378,7 +1732,8 @@
         <div class="modal-field">
           <label>Keypair Type:</label>
           <select v-model="newKeypairType" class="modal-input">
-            <option value="ML-DSA-44">ML-DSA-44 (Default)</option>
+            <option value="Nostr">Nostr</option>
+            <option value="ML-DSA-44">ML-DSA-44</option>
             <option value="ML-DSA-87">ML-DSA-87</option>
             <option value="ED25519">ED25519</option>
             <option value="RSA-2048">RSA-2048</option>
@@ -1396,22 +1751,378 @@
   <div v-if="showAddAdminKeypairModal" class="modal-backdrop" @click.self="showAddAdminKeypairModal = false">
     <div class="modal">
       <header class="modal-header">
-        <h3>Add Admin Keypair</h3>
+        <h3>Add Existing Admin Keypair</h3>
         <button class="close" @click="showAddAdminKeypairModal = false">✕</button>
       </header>
       <section class="modal-body">
         <div class="modal-field">
           <label>Keypair Type:</label>
           <select v-model="newKeypairType" class="modal-input">
+            <option value="Nostr">Nostr</option>
             <option value="ML-DSA-44">ML-DSA-44</option>
             <option value="ML-DSA-87">ML-DSA-87</option>
             <option value="ED25519">ED25519</option>
             <option value="RSA-2048">RSA-2048</option>
           </select>
         </div>
+        <div class="modal-field">
+          <label>Key Usage:</label>
+          <select v-model="newAdminKeypairUsage" class="modal-input">
+            <option value="">Select key usage...</option>
+            <option value="master-admin-signing">Master admin signing keypair (Signs operating admin signers only)</option>
+            <option value="operating-admin-signing">Operating admin signing keypair (Signs authorized admin keypairs only)</option>
+            <option value="authorized-admin">Authorized admin keypair (Signs admin actions, General metadata updates, Recipient of perms from declarations signed by operating admin signing keypairs)</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>Public Key (optional):</label>
+          <textarea 
+            v-model="newAdminKeypairPublicKey"
+            class="modal-input"
+            placeholder="Paste the public key here if adding an existing keypair..."
+            rows="4"
+          ></textarea>
+        </div>
         <div class="modal-actions">
           <button @click="addAdminKeypair" class="btn-primary-small">Add Admin Keypair</button>
           <button @click="showAddAdminKeypairModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Generate Admin Keypair Modal -->
+  <div v-if="showGenerateAdminKeypairModal" class="modal-backdrop" @click.self="showGenerateAdminKeypairModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Generate New Admin Keypair</h3>
+        <button class="close" @click="showGenerateAdminKeypairModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Keypair Type:</label>
+          <select v-model="newKeypairType" class="modal-input">
+            <option value="Nostr">Nostr</option>
+            <option value="ML-DSA-44">ML-DSA-44</option>
+            <option value="ML-DSA-87">ML-DSA-87</option>
+            <option value="ED25519">ED25519</option>
+            <option value="RSA-2048">RSA-2048</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>Key Usage:</label>
+          <select v-model="newAdminKeypairUsage" class="modal-input">
+            <option value="">Select key usage...</option>
+            <option value="master-admin-signing">Master admin signing keypair (Signs operating admin signers only)</option>
+            <option value="operating-admin-signing">Operating admin signing keypair (Signs authorized admin keypairs only)</option>
+            <option value="authorized-admin">Authorized admin keypair (Signs admin actions, General metadata updates, Recipient of perms from declarations signed by operating admin signing keypairs)</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button @click="generateAdminKeypair" class="btn-primary-small">Generate Keypair</button>
+          <button @click="showGenerateAdminKeypairModal = false; showAdminKeypairActionDropdown = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Admin Keypair Details Modal -->
+  <div v-if="showAdminKeypairDetailsModal" class="modal-backdrop" @click.self="showAdminKeypairDetailsModal = false">
+    <div class="modal large-modal">
+      <header class="modal-header">
+        <h3>Admin Keypair Details</h3>
+        <button class="close" @click="showAdminKeypairDetailsModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div v-if="!selectedAdminKeypair" class="loading-message">Loading keypair details...</div>
+        <template v-else>
+        <div class="modal-field">
+          <label>Name:</label>
+          <input 
+            type="text" 
+            v-model="editingKeypairMetadata.name"
+            placeholder="Enter keypair name"
+            class="modal-input"
+          />
+        </div>
+        
+        <div class="modal-field">
+          <label>Label:</label>
+          <input 
+            type="text" 
+            v-model="editingKeypairMetadata.label"
+            placeholder="Enter keypair label"
+            class="modal-input"
+          />
+        </div>
+        
+        <div class="modal-field">
+          <label>Comments:</label>
+          <textarea 
+            v-model="editingKeypairMetadata.comments"
+            placeholder="Enter comments about this keypair"
+            class="modal-textarea"
+            rows="3"
+          ></textarea>
+        </div>
+        
+        <div class="modal-field">
+          <label>Type:</label>
+          <span class="readonly-field">{{ selectedAdminKeypair.type }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Algorithm:</label>
+          <span class="readonly-field">{{ getAlgorithmName(selectedAdminKeypair.type) }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Key Usage:</label>
+          <span class="readonly-field">{{ getKeyUsageLabel(selectedAdminKeypair.keyUsage) }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Trust Level:</label>
+          <span class="readonly-field">{{ selectedAdminKeypair.trustLevel || 'Standard' }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Storage Status:</label>
+          <span class="readonly-field">{{ getStorageStatusLabel(selectedAdminKeypair.storageStatus) }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Secret Key:</label>
+          <span class="readonly-field">
+            {{ selectedAdminKeypair.storageStatus === 'full' ? 'Present (encrypted)' : 
+               selectedAdminKeypair.storageStatus === 'full-offline' ? 'Stored offline' : 
+               'Not stored' }}
+          </span>
+        </div>
+        
+        <div class="modal-field" v-if="selectedAdminKeypair.fingerprint">
+          <label>Fingerprint:</label>
+          <code class="readonly-field">{{ selectedAdminKeypair.fingerprint }}</code>
+          <button @click="copyToClipboard(selectedAdminKeypair.fingerprint)" class="btn-link-small">Copy</button>
+        </div>
+        
+        <div class="modal-field">
+          <label>Public Key:</label>
+          <code class="readonly-field public-key-display">{{ selectedAdminKeypair.publicKey }}</code>
+          <button @click="copyToClipboard(selectedAdminKeypair.publicKey)" class="btn-link-small">Copy</button>
+        </div>
+        
+        <div class="modal-actions">
+          <button @click="saveAdminKeypairMetadata" class="btn-primary-small">Save Changes</button>
+          <button @click="exportAdminKeypairSecretPKCS" class="btn-secondary-small">Export Secret Key (PKCS)</button>
+          <button @click="importAdminKeypairSecretPKCS" class="btn-secondary-small">Import Secret Key (PKCS)</button>
+          <button @click="removeAdminKeypairSecret" class="btn-secondary-small">Remove Secret Key</button>
+          <button @click="showAdminKeypairDetailsModal = false" class="btn-secondary-small">Close</button>
+        </div>
+        </template>
+      </section>
+    </div>
+  </div>
+
+  <!-- Encryption Key Details Modal -->
+  <div v-if="showEncryptionKeyDetailsModal" class="modal-backdrop" @click.self="showEncryptionKeyDetailsModal = false">
+    <div class="modal large-modal">
+      <header class="modal-header">
+        <h3>Encryption Key Details</h3>
+        <button class="close" @click="showEncryptionKeyDetailsModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div v-if="!selectedEncryptionKey" class="loading-message">Loading key details...</div>
+        <template v-else>
+        <div class="modal-field">
+          <label>Name:</label>
+          <input 
+            type="text" 
+            v-model="editingEncryptionKeyMetadata.name"
+            placeholder="Enter key name"
+            class="modal-input"
+          />
+        </div>
+        
+        <div class="modal-field">
+          <label>Label:</label>
+          <input 
+            type="text" 
+            v-model="editingEncryptionKeyMetadata.label"
+            placeholder="Enter key label"
+            class="modal-input"
+          />
+        </div>
+        
+        <div class="modal-field">
+          <label>Description:</label>
+          <textarea 
+            v-model="editingEncryptionKeyMetadata.description"
+            placeholder="Enter description"
+            class="modal-textarea"
+            rows="3"
+          ></textarea>
+        </div>
+        
+        <div class="modal-field">
+          <label>Algorithm:</label>
+          <span class="readonly-field">{{ selectedEncryptionKey.algorithm }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Type:</label>
+          <span class="readonly-field">{{ selectedEncryptionKey.keyType }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>Encrypted:</label>
+          <span class="readonly-field">{{ selectedEncryptionKey.encrypted ? 'Yes' : 'No' }}</span>
+        </div>
+        
+        <div class="modal-field" v-if="selectedEncryptionKey.hashAlgorithm">
+          <label>Hash Algorithm:</label>
+          <span class="readonly-field">{{ selectedEncryptionKey.hashAlgorithm }}</span>
+        </div>
+        
+        <div class="modal-field" v-if="selectedEncryptionKey.hashValue">
+          <label>Hash Value:</label>
+          <code class="readonly-field public-key-display">{{ selectedEncryptionKey.hashValue }}</code>
+          <button @click="copyToClipboard(selectedEncryptionKey.hashValue)" class="btn-link-small">Copy</button>
+        </div>
+        
+        <div class="modal-field" v-if="selectedEncryptionKey.selectionIdentifier">
+          <label>Selection Identifier (JSON):</label>
+          <textarea 
+            :value="selectedEncryptionKey.selectionIdentifier"
+            readonly
+            class="modal-textarea"
+            rows="4"
+          ></textarea>
+        </div>
+        
+        <div class="modal-field">
+          <label>Start Date:</label>
+          <span class="readonly-field">{{ selectedEncryptionKey.startDate || 'Not set' }}</span>
+        </div>
+        
+        <div class="modal-field">
+          <label>End Date:</label>
+          <input 
+            type="datetime-local" 
+            v-model="editingEncryptionKeyMetadata.endDate"
+            class="modal-input"
+            placeholder="Leave empty for no expiration"
+          />
+        </div>
+        
+        <div class="modal-field" v-if="selectedEncryptionKey.keydata">
+          <label>Key Data (hex):</label>
+          <code class="readonly-field public-key-display" style="word-break: break-all;">{{ selectedEncryptionKey.keydata }}</code>
+          <button @click="copyToClipboard(selectedEncryptionKey.keydata)" class="btn-link-small">Copy</button>
+        </div>
+        
+        <div class="modal-actions">
+          <button @click="saveEncryptionKeyMetadata" class="btn-primary-small">Save Changes</button>
+          <button @click="exportEncryptionKey" class="btn-secondary-small">Export Key</button>
+          <button @click="showEncryptionKeyDetailsModal = false" class="btn-secondary-small">Close</button>
+        </div>
+        </template>
+      </section>
+    </div>
+  </div>
+
+  <!-- Generate Encryption Key Modal -->
+  <div v-if="showGenerateEncryptionKeyModal" class="modal-backdrop" @click.self="showGenerateEncryptionKeyModal = false">
+    <div class="modal large-modal">
+      <header class="modal-header">
+        <h3>Generate Encryption Key</h3>
+        <button class="close" @click="showGenerateEncryptionKeyModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Name:</label>
+          <input 
+            type="text" 
+            v-model="newEncryptionKeyName"
+            placeholder="Enter key name"
+            class="modal-input"
+          />
+        </div>
+        
+        <div class="modal-field">
+          <label>Label:</label>
+          <input 
+            type="text" 
+            v-model="newEncryptionKeyLabel"
+            placeholder="Enter key label"
+            class="modal-input"
+          />
+        </div>
+        
+        <div class="modal-field">
+          <label>Algorithm:</label>
+          <select v-model="newEncryptionKeyAlgorithm" class="modal-input">
+            <option value="AES256">AES256</option>
+            <option value="AES128">AES128</option>
+          </select>
+        </div>
+        
+        <div class="modal-field">
+          <label>Type:</label>
+          <select v-model="newEncryptionKeyType" class="modal-input">
+            <option value="Shared Preinstalled">Shared Preinstalled</option>
+            <option value="Shared General">Shared General</option>
+            <option value="Shared Selective">Shared Selective</option>
+            <option value="Group">Group</option>
+            <option value="Individual">Individual</option>
+          </select>
+        </div>
+        
+        <div class="modal-field">
+          <label>
+            <input 
+              type="checkbox" 
+              v-model="newEncryptionKeyEncrypted"
+            />
+            Encrypt with Profile Guard
+          </label>
+          <p class="modal-note">If checked, the key will be encrypted with your Profile Guard key. Typically Yes for Group and Individual keys, No for Shared General and Shared Preinstalled keys.</p>
+        </div>
+        
+        <div class="modal-field">
+          <label>Selection Identifier (JSON):</label>
+          <textarea 
+            v-model="newEncryptionKeySelectionIdentifier"
+            placeholder='{"groups": ["group1"], "users": ["user1", "user2"]}'
+            class="modal-textarea"
+            rows="4"
+          ></textarea>
+          <p class="modal-note">JSON text indicating where the key applies. For Individual keys, list profiles. For Group keys, list groups. For Shared keys, can scope when/where to use.</p>
+        </div>
+        
+        <div class="modal-field">
+          <label>Description:</label>
+          <textarea 
+            v-model="newEncryptionKeyDescription"
+            placeholder="Optional description"
+            class="modal-textarea"
+            rows="3"
+          ></textarea>
+        </div>
+        
+        <div class="modal-field">
+          <label>End Date (optional):</label>
+          <input 
+            type="datetime-local" 
+            v-model="newEncryptionKeyEndDate"
+            class="modal-input"
+            placeholder="Leave empty for no expiration"
+          />
+        </div>
+        
+        <div class="modal-actions">
+          <button @click="generateEncryptionKey" class="btn-primary-small">Generate Key</button>
+          <button @click="showGenerateEncryptionKeyModal = false" class="btn-secondary-small">Cancel</button>
         </div>
       </section>
     </div>
@@ -1770,12 +2481,13 @@
           <div class="modal-field">
             <label>Keypair Type:</label>
             <select v-model="profileCreationData.keypairType" class="modal-input">
-              <option value="ML-DSA-44">ML-DSA-44 (Default, Recommended)</option>
+              <option value="Nostr">Nostr (Default, Required for first profile)</option>
+              <option value="ML-DSA-44">ML-DSA-44</option>
               <option value="ML-DSA-87">ML-DSA-87</option>
               <option value="ED25519">ED25519</option>
               <option value="RSA-2048">RSA-2048</option>
             </select>
-            <p class="field-help">The default ML-DSA-44 is recommended for most users.</p>
+            <p class="field-help">Nostr is required for your first profile key. Additional keypairs can use other types.</p>
           </div>
           
           <div class="wizard-warning">
@@ -1808,6 +2520,12 @@
             class="btn-secondary-small">
             Back
           </button>
+          <button 
+            v-if="profileCreationWizardMode === 'new-profile'"
+            @click="cancelProfileCreationWizard" 
+            class="btn-secondary-small">
+            Cancel
+          </button>
         </div>
       </section>
     </div>
@@ -1838,6 +2556,13 @@
           <div class="profile-actions">
             <button @click="createNewProfileFromDetails" class="btn-secondary-small">
               New Profile
+            </button>
+            <button 
+              v-if="selectedProfileId" 
+              @click="deleteProfileFromDetails" 
+              class="btn-danger-small"
+            >
+              Delete
             </button>
             <button @click="importProfileFromDetails" class="btn-secondary-small">
               Import
@@ -2030,43 +2755,91 @@
             <p v-else class="keypair-locked-note">Keypairs cannot be edited directly. Use key rotation process.</p>
           </div>
 
-          <!-- Admin Keypairs (shown if admin, locked if profile has keys) -->
-          <div v-if="onlineShowAdminOptions && onlineProfile.isAdmin" class="keypair-section admin-section">
-            <h5>Admin Keypairs <span v-if="profileHasKeys" class="locked-indicator">🔒 Locked</span></h5>
-            <p class="admin-note">Admin profiles require at least one additional keypair for admin operations.</p>
-            <div v-if="onlineProfile.adminKeypairs && onlineProfile.adminKeypairs.length > 0">
-              <div v-for="(keypair, index) in onlineProfile.adminKeypairs" :key="index" class="keypair-item">
-                <div class="keypair-field">
-                  <label>Type:</label>
-                  <span class="keypair-type">{{ keypair.type }}</span>
-                </div>
-                <div class="keypair-field">
-                  <label>Public Key:</label>
-                  <code class="keypair-public-key">{{ keypair.publicKey }}</code>
-                  <button @click="copyToClipboard(keypair.publicKey)" class="btn-link-small">Copy</button>
-                </div>
-                <div class="keypair-actions" v-if="!profileHasKeys">
-                  <button @click="exportKeypair('admin', index)" class="btn-secondary-small">
-                    Export
+          <!-- User Op Keys (shown if admin options enabled) -->
+          <div v-if="onlineShowAdminOptions" class="keypair-section admin-section">
+            <h5>User Op Keys</h5>
+            <p class="admin-note">User Op keys are admin keypairs bound to this specific profile. These have the same properties as global admin keypairs but are bound to a specific user profile.</p>
+            
+            <!-- Keypairs List Widget -->
+            <div class="keypairs-list-widget">
+              <div class="keypairs-list-container">
+                <table class="keypairs-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 40px;"></th>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Algorithm</th>
+                      <th>Usage</th>
+                      <th>Trust</th>
+                      <th>Storage Type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr 
+                      v-for="kp in userOpKeypairsList" 
+                      :key="kp.uuid"
+                      :class="{ 'selected': selectedUserOpKeypairUuid === kp.uuid }"
+                      @click="selectUserOpKeypair(kp.uuid)"
+                    >
+                      <td @click.stop>
+                        <input 
+                          type="checkbox" 
+                          :checked="selectedUserOpKeypairUuid === kp.uuid"
+                          @change.stop="selectUserOpKeypair(kp.uuid)"
+                          @click.stop
+                        />
+                      </td>
+                      <td>{{ kp.name || kp.localName || 'Unnamed' }}</td>
+                      <td>{{ kp.type }}</td>
+                      <td>{{ getAlgorithmName(kp.type) }}</td>
+                      <td>{{ getKeyUsageLabel(kp.keyUsage) }}</td>
+                      <td>{{ kp.trustLevel || 'Standard' }}</td>
+                      <td>{{ getStorageStatusLabel(kp.storageStatus) }}</td>
+                    </tr>
+                    <tr v-if="userOpKeypairsList.length === 0">
+                      <td colspan="7" class="empty-message">No User Op keypairs found. Use the menu to create or import one.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              
+              <!-- Dropdown menu on the right -->
+              <div class="keypairs-menu-container">
+                <div class="dropdown-container">
+                  <button @click="toggleUserOpKeypairActionDropdown" class="btn-secondary-small dropdown-toggle">
+                    Actions ▼
                   </button>
-                  <button @click="importKeypair('admin', index)" class="btn-secondary-small">
-                    Import
-                  </button>
-                  <button @click="removeAdminKeypair(index)" class="btn-danger-small">
-                    Remove
-                  </button>
+                  <div v-if="showUserOpKeypairActionDropdown" class="dropdown-menu">
+                    <button @click="showGenerateUserOpKeypairModal = true; showUserOpKeypairActionDropdown = false" class="dropdown-item">Generate new Keypair</button>
+                    <button @click="showAddUserOpKeypairModal = true; showUserOpKeypairActionDropdown = false" class="dropdown-item">Add Existing Keypair</button>
+                    <button @click="importUserOpKeypairBackup(); showUserOpKeypairActionDropdown = false" class="dropdown-item">Import Backup Keypair</button>
+                    <div class="dropdown-divider"></div>
+                    <button 
+                      v-if="selectedUserOpKeypairUuid" 
+                      @click="openUserOpKeypairDetailsModal(); showUserOpKeypairActionDropdown = false" 
+                      class="dropdown-item"
+                    >
+                      View/Edit
+                    </button>
+                    <button 
+                      v-if="selectedUserOpKeypairUuid" 
+                      @click="backupSelectedUserOpKeypair(); showUserOpKeypairActionDropdown = false" 
+                      class="dropdown-item"
+                    >
+                      Backup Keypair
+                    </button>
+                    <button 
+                      v-if="selectedUserOpKeypairUuid" 
+                      @click="deleteSelectedUserOpKeypair(); showUserOpKeypairActionDropdown = false" 
+                      class="dropdown-item danger"
+                    >
+                      Delete Keypair
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="keypair-actions" v-if="!profileHasKeys">
-              <button @click="showAddAdminKeypairModal = true" class="btn-secondary-small">
-                Add Admin Keypair
-              </button>
-              <button @click="exportAllAdminKeypairs" class="btn-secondary-small">
-                Export All Admin Keypairs
-              </button>
-            </div>
-            <p v-else class="keypair-locked-note">Keypairs cannot be edited directly. Use key rotation process.</p>
           </div>
         </div>
       </section>
@@ -2076,17 +2849,17 @@
     </div>
   </div>
 
-  <!-- Add Master Key Modal -->
-  <div v-if="showAddMasterKeyModal" class="modal-backdrop" @click.self="showAddMasterKeyModal = false">
+  <!-- Add Master Keypair Modal -->
+  <div v-if="showAddMasterKeypairModal" class="modal-backdrop" @click.self="showAddMasterKeypairModal = false">
     <div class="modal">
       <header class="modal-header">
-        <h3>Add Admin Master Key</h3>
-        <button class="close" @click="showAddMasterKeyModal = false">✕</button>
+        <h3>Add Existing Admin Master Keypair</h3>
+        <button class="close" @click="showAddMasterKeypairModal = false">✕</button>
       </header>
       <section class="modal-body">
         <div class="modal-field">
           <label>Keypair Type:</label>
-          <select v-model="newMasterKeyType" class="modal-input">
+          <select v-model="newKeypairType" class="modal-input">
             <option value="ML-DSA-87">ML-DSA-87 (Master Admin)</option>
             <option value="RSA-2048">RSA-2048 (Master Admin)</option>
             <option value="ED25519">ED25519 (Master Admin)</option>
@@ -2095,24 +2868,41 @@
         <div class="modal-field">
           <label>Public Key:</label>
           <textarea 
-            v-model="newMasterKeyPublicKey"
+            v-model="newAdminKeypairPublicKey"
             class="modal-input"
             placeholder="Paste the public key here..."
             rows="4"
           ></textarea>
         </div>
-        <div class="modal-field">
-          <label>Trust Level:</label>
-          <input 
-            type="text" 
-            v-model="newMasterKeyTrustLevel"
-            class="modal-input"
-            placeholder="Standard"
-          />
-        </div>
+        <p class="modal-note">Note: This will be added as a master admin signing keypair (key usage: master-admin-signing).</p>
         <div class="modal-actions">
-          <button @click="addMasterKey" class="btn-primary-small">Add Master Key</button>
-          <button @click="showAddMasterKeyModal = false" class="btn-secondary-small">Cancel</button>
+          <button @click="addMasterKeypair" class="btn-primary-small">Add Master Keypair</button>
+          <button @click="showAddMasterKeypairModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Generate Master Keypair Modal -->
+  <div v-if="showGenerateMasterKeypairModal" class="modal-backdrop" @click.self="showGenerateMasterKeypairModal = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Generate New Admin Master Keypair</h3>
+        <button class="close" @click="showGenerateMasterKeypairModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Keypair Type:</label>
+          <select v-model="newKeypairType" class="modal-input">
+            <option value="ML-DSA-87">ML-DSA-87 (Master Admin)</option>
+            <option value="RSA-2048">RSA-2048 (Master Admin)</option>
+            <option value="ED25519">ED25519 (Master Admin)</option>
+          </select>
+        </div>
+        <p class="modal-note">Note: This will be generated as a master admin signing keypair (key usage: master-admin-signing).</p>
+        <div class="modal-actions">
+          <button @click="generateMasterKeypair" class="btn-primary-small">Generate Keypair</button>
+          <button @click="showGenerateMasterKeypairModal = false" class="btn-secondary-small">Cancel</button>
         </div>
       </section>
     </div>
@@ -4309,6 +5099,7 @@ const bulkStatus = ref('');
 const filterDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
+const onlineActiveTab = ref<'profile-keys' | 'trust-declarations'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
 // Select dropdown state
@@ -5360,6 +6151,7 @@ const usb2snesDropdownOpen = ref(false);
 // Online/NOSTR profile state
 type KeypairType = 'ML-DSA-44' | 'ML-DSA-87' | 'ED25519' | 'RSA-2048';
 type Keypair = {
+  storageStatus?: 'public-only' | 'full' | 'full-offline';
   type: KeypairType;
   publicKey: string;
   privateKey?: string; // Only stored locally, never transmitted
@@ -5392,18 +6184,76 @@ type OnlineProfile = {
 
 const onlineProfile = ref<OnlineProfile | null>(null);
 const onlineProfilesList = ref<Array<{ profileId: string; username: string; displayName: string; isCurrent: boolean }>>([]);
-const onlineMasterKeys = ref<Array<{ type: KeypairType; publicKey: string; trustLevel?: string }>>([]);
 const selectedProfileId = ref<string | null>(null);
 const profileHasKeys = computed(() => {
   return onlineProfile.value?.primaryKeypair !== null && onlineProfile.value?.primaryKeypair !== undefined;
 });
 const showAddKeypairModal = ref(false);
 const showAddAdminKeypairModal = ref(false);
-const showAddMasterKeyModal = ref(false);
-const newKeypairType = ref<KeypairType>('ML-DSA-44');
-const newMasterKeyType = ref<KeypairType>('ML-DSA-87');
-const newMasterKeyPublicKey = ref('');
-const newMasterKeyTrustLevel = ref('Standard');
+const showAddMasterKeypairModal = ref(false);
+const showGenerateMasterKeypairModal = ref(false);
+const newKeypairType = ref<KeypairType>('ML-DSA-44'); // Default for admin keypairs (user profiles use Nostr)
+const selectedMasterKeypairUuid = ref<string | null>(null);
+const selectedMasterKeypair = ref<any>(null);
+const showMasterKeypairActionDropdown = ref(false);
+
+const showGenerateAdminKeypairModal = ref(false);
+const newAdminKeypairUsage = ref('');
+const newAdminKeypairPublicKey = ref('');
+const activeAdminKeypairDropdown = ref<number | null>(null);
+const showAdminKeypairActionDropdown = ref(false);
+const adminKeypairsList = ref<Array<{uuid: string, type: string, keyUsage?: string, storageStatus?: string, publicKey: string, fingerprint?: string, trustLevel?: string, name?: string, label?: string, comments?: string, localName?: string}>>([]);
+const selectedAdminKeypairUuid = ref<string | null>(null);
+const selectedAdminKeypair = ref<any>(null);
+
+// User Op keypairs (profile-bound admin keypairs)
+const userOpKeypairsList = ref<Array<{uuid: string, type: string, keyUsage?: string, storageStatus?: string, publicKey: string, fingerprint?: string, trustLevel?: string, name?: string, label?: string, comments?: string, localName?: string}>>([]);
+const selectedUserOpKeypairUuid = ref<string | null>(null);
+const selectedUserOpKeypair = ref<any>(null);
+const showUserOpKeypairActionDropdown = ref(false);
+const showGenerateUserOpKeypairModal = ref(false);
+const showAddUserOpKeypairModal = ref(false);
+
+// Encryption Keys
+const encryptionKeysList = ref<Array<{uuid: string, name?: string, label?: string, algorithm: string, keyType: string, encrypted: boolean, hashValue?: string, hashAlgorithm?: string, selectionIdentifier?: string, description?: string, startDate?: string, endDate?: string}>>([]);
+const selectedEncryptionKeyUuid = ref<string | null>(null);
+const selectedEncryptionKey = ref<any>(null);
+const showEncryptionKeyActionDropdown = ref(false);
+const showGenerateEncryptionKeyModal = ref(false);
+const showEncryptionKeyDetailsModal = ref(false);
+const editingEncryptionKeyMetadata = ref<{name?: string, label?: string, description?: string, endDate?: string}>({});
+
+// Generate Encryption Key form data
+const newEncryptionKeyName = ref('');
+const newEncryptionKeyLabel = ref('');
+const newEncryptionKeyAlgorithm = ref<'AES256' | 'AES128'>('AES256');
+const newEncryptionKeyType = ref('Shared General');
+const newEncryptionKeyEncrypted = ref(false);
+const newEncryptionKeySelectionIdentifier = ref('');
+const newEncryptionKeyDescription = ref('');
+const newEncryptionKeyEndDate = ref('');
+
+// Trust Declarations
+const trustDeclarationsList = ref<Array<{declaration_uuid: string, issuing_canonical_name?: string, issuing_fingerprint: string, issued_at?: string, updated_at?: string, subject_canonical_name?: string, subject_fingerprint: string, valid_starting: string, valid_ending?: string, subject_trust_level?: string, subject_usagetypes?: string, subject_scopes?: string, scope_permissions?: string, signature_hash_algorithm?: string, signature_hash_value?: string, signature?: string, countersignatures?: string}>>([]);
+const selectedTrustDeclarationUuid = ref<string | null>(null);
+const selectedTrustDeclaration = ref<any>(null);
+const showTrustDeclarationActionDropdown = ref(false);
+const showCreateTrustDeclarationModal = ref(false);
+const showTrustDeclarationDetailsModal = ref(false);
+const editingTrustDeclaration = ref<any>({});
+
+// Master admin keypairs are just admin keypairs filtered by key_usage = 'master-admin-signing'
+const masterAdminKeypairsList = computed(() => {
+  return adminKeypairsList.value.filter(kp => kp.keyUsage === 'master-admin-signing');
+});
+
+// Non-master admin keypairs (for the Admin Keypairs section)
+const nonMasterAdminKeypairsList = computed(() => {
+  return adminKeypairsList.value.filter(kp => kp.keyUsage !== 'master-admin-signing');
+});
+const showSelectedAdminKeypairDropdown = ref(false);
+const showAdminKeypairDetailsModal = ref(false);
+const editingKeypairMetadata = ref<{name?: string, label?: string, comments?: string}>({});
 
 // Profile Guard state
 const profileGuardEnabled = ref(false);
@@ -5423,6 +6273,13 @@ const showProfileDetailsModal = ref(false);
 const showProfileCreationWizard = ref(false);
 const profileCreationWizardStep = ref(1); // 1 = profile info, 2 = keypair generation
 const profileCreationWizardInitialized = ref(false); // Track if wizard has been initialized
+const profileCreationWizardMode = ref<'create-first' | 'new-profile'>('create-first'); // 'create-first' = wizard opened automatically, 'new-profile' = opened from New Profile button
+
+// Computed property to check if selected profile is the current one
+const isCurrentProfile = computed(() => {
+  return selectedProfileId.value && onlineProfilesList.value.find(p => p.profileId === selectedProfileId.value)?.isCurrent === true;
+});
+
 const profileCreationData = ref({
   profileId: '',
   username: '',
@@ -5430,7 +6287,7 @@ const profileCreationData = ref({
   homepage: '',
   socialIds: [] as SocialId[],
   bio: '',
-  keypairType: 'ML-DSA-44' as KeypairType
+  keypairType: 'Nostr' as KeypairType
 });
 const newSocialIdType = ref<SocialIdType>('discord');
 const newSocialIdValue = ref('');
@@ -5837,7 +6694,9 @@ function toggleOnlineDropdown() {
   onlineDropdownOpen.value = !onlineDropdownOpen.value;
   if (onlineDropdownOpen.value) {
     loadOnlineProfile();
-    loadOnlineMasterKeys();
+    if (onlineShowAdminOptions.value) {
+      loadAdminKeypairsList();
+    }
     checkProfileGuardStatus().then(() => {
       // After checking Profile Guard status, check if profile needs creation
       if (profileGuardUnlocked.value) {
@@ -5910,6 +6769,10 @@ async function switchProfile() {
       onlineProfile.value = result.profile;
       await loadOnlineProfilesList(); // Refresh list to update current indicator
       await loadOnlineProfile(); // Refresh current profile
+      // Reload User Op keypairs for the newly selected profile
+      if (onlineProfile.value?.profileId) {
+        await loadUserOpKeypairsList(onlineProfile.value.profileId);
+      }
     } else {
       alert(`Failed to switch profile: ${result.error}`);
     }
@@ -5921,7 +6784,73 @@ async function switchProfile() {
 
 async function createNewProfileFromDetails() {
   showProfileDetailsModal.value = false;
-  openProfileCreationWizard();
+  openProfileCreationWizard('new-profile');
+}
+
+async function deleteProfileFromDetails() {
+  if (!selectedProfileId.value) {
+    return;
+  }
+  
+  if (!confirm(`Are you sure you want to delete this profile? This action cannot be undone.`)) {
+    return;
+  }
+  
+  if (!isElectronAvailable()) {
+    alert('Delete requires Electron environment');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteOnlineProfile(selectedProfileId.value);
+    if (result.success) {
+      await loadOnlineProfilesList();
+      
+      // If this was the last profile, close the modal and trigger the setup wizard
+      if (onlineProfilesList.value.length === 0) {
+        showProfileDetailsModal.value = false;
+        selectedProfileId.value = null;
+        onlineProfile.value = null;
+        // Trigger the profile creation wizard
+        showProfileCreationWizard.value = true;
+        profileCreationWizardStep.value = 1;
+        profileCreationWizardMode.value = 'create-first';
+        initializeProfileCreationWizard('create-first');
+        alert('Last profile deleted. Please create a new profile.');
+      } else {
+        // Switch to the first available profile
+        selectedProfileId.value = onlineProfilesList.value[0].profileId;
+        await switchProfile();
+        alert('Profile deleted successfully');
+      }
+    } else {
+      alert(`Failed to delete profile: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting profile:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+function cancelProfileCreationWizard() {
+  showProfileCreationWizard.value = false;
+  profileCreationWizardStep.value = 1;
+  profileCreationWizardInitialized.value = false;
+  profileCreationWizardMode.value = 'create-first';
+  // Reset wizard data
+  profileCreationData.value = {
+    profileId: '',
+    username: '',
+    displayName: '',
+    homepage: '',
+    socialIds: [],
+    bio: '',
+    keypairType: 'Nostr'
+  };
+  newSocialIdType.value = 'discord';
+  newSocialIdValue.value = '';
+  usernameError.value = '';
+  socialIdError.value = '';
 }
 
 async function importProfileFromDetails() {
@@ -6108,36 +7037,25 @@ async function checkAndCreateProfileIfNeeded() {
       // Only initialize if wizard is not already open
       showProfileCreationWizard.value = true;
       profileCreationWizardStep.value = 1;
-      initializeProfileCreationWizard();
+      initializeProfileCreationWizard('create-first');
     }
   } else {
     console.log('[Profile Wizard] Profile and primary keypair exist, no wizard needed');
   }
 }
 
-function openProfileCreationWizard() {
+function openProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'create-first') {
   // Allow manual opening of wizard
   if (!showProfileCreationWizard.value) {
     // Only initialize if wizard is not already open
     showProfileCreationWizard.value = true;
     profileCreationWizardStep.value = 1;
-    initializeProfileCreationWizard();
+    profileCreationWizardMode.value = mode;
+    initializeProfileCreationWizard(mode);
   }
 }
 
-async function loadOnlineMasterKeys() {
-  if (!isElectronAvailable()) {
-    return;
-  }
-  
-  try {
-    const masterKeys = await (window as any).electronAPI.getOnlineMasterKeys();
-    onlineMasterKeys.value = masterKeys || [];
-  } catch (error) {
-    console.error('Error loading master keys:', error);
-    onlineMasterKeys.value = [];
-  }
-}
+// Master admin keypairs are loaded via loadAdminKeypairsList() and filtered by masterAdminKeypairsList computed
 
 async function createNewProfile() {
   if (!isElectronAvailable()) {
@@ -6163,10 +7081,14 @@ async function createNewProfile() {
   }
 }
 
-function openProfileDetailsModal() {
+async function openProfileDetailsModal() {
   showProfileDetailsModal.value = true;
-  loadOnlineProfilesList();
-  loadOnlineProfile();
+  await loadOnlineProfilesList();
+  await loadOnlineProfile();
+  // Load User Op keypairs for the current profile
+  if (onlineProfile.value?.profileId) {
+    await loadUserOpKeypairsList(onlineProfile.value.profileId);
+  }
 }
 
 async function updateOnlineProfile() {
@@ -6229,7 +7151,7 @@ async function addKeypair() {
       onlineProfile.value.additionalKeypairs.push(result.keypair);
       await updateOnlineProfile();
       showAddKeypairModal.value = false;
-      newKeypairType.value = 'ML-DSA-44'; // Reset to default
+      newKeypairType.value = 'ML-DSA-44'; // Reset to default (admin keypairs use ML-DSA-44, not Nostr)
     } else {
       alert(`Failed to create keypair: ${result.error}`);
     }
@@ -6245,54 +7167,1471 @@ function removeAdditionalKeypair(index: number) {
   updateOnlineProfile();
 }
 
-async function addAdminKeypair() {
-  if (!isElectronAvailable() || !onlineProfile.value) {
-    return;
-  }
-  
-  try {
-    const result = await (window as any).electronAPI.createOnlineKeypair({
-      keyType: newKeypairType.value,
-      username: onlineProfile.value.username
-    });
-    
-    if (result.success) {
-      if (!onlineProfile.value.adminKeypairs) {
-        onlineProfile.value.adminKeypairs = [];
-      }
-      onlineProfile.value.adminKeypairs.push(result.keypair);
-      await updateOnlineProfile();
-      showAddAdminKeypairModal.value = false;
-      newKeypairType.value = 'ML-DSA-44'; // Reset to default
-    } else {
-      alert(`Failed to create admin keypair: ${result.error}`);
-    }
-  } catch (error) {
-    console.error('Error creating admin keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
-  }
-}
-
 function removeAdminKeypair(index: number) {
   if (!onlineProfile.value || !onlineProfile.value.adminKeypairs) return;
   onlineProfile.value.adminKeypairs.splice(index, 1);
   updateOnlineProfile();
 }
 
-function removeMasterKey(index: number) {
-  onlineMasterKeys.value.splice(index, 1);
-  saveOnlineMasterKeys();
+function toggleMasterKeypairActionDropdown() {
+  // Close admin keypair dropdown if open
+  if (showAdminKeypairActionDropdown.value) {
+    showAdminKeypairActionDropdown.value = false;
+  }
+  showMasterKeypairActionDropdown.value = !showMasterKeypairActionDropdown.value;
 }
 
-async function saveOnlineMasterKeys() {
+function selectMasterKeypair(keypairUuid: string) {
+  if (keypairUuid === selectedMasterKeypairUuid.value) {
+    selectedMasterKeypairUuid.value = null;
+    selectedMasterKeypair.value = null;
+  } else {
+    selectedMasterKeypairUuid.value = keypairUuid;
+    loadSelectedMasterKeypair();
+  }
+}
+
+async function loadSelectedMasterKeypair() {
+  if (!isElectronAvailable() || !selectedMasterKeypairUuid.value) {
+    selectedMasterKeypair.value = null;
+    selectedAdminKeypair.value = null;
+    selectedAdminKeypairUuid.value = null;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getAdminKeypair(selectedMasterKeypairUuid.value);
+    if (result.success) {
+      selectedMasterKeypair.value = result.keypair;
+      // Also set selectedAdminKeypair and UUID so the modal can display it
+      selectedAdminKeypair.value = result.keypair;
+      selectedAdminKeypairUuid.value = selectedMasterKeypairUuid.value;
+      editingKeypairMetadata.value = {
+        name: result.keypair.name || '',
+        label: result.keypair.label || '',
+        comments: result.keypair.comments || ''
+      };
+    } else {
+      alert(`Failed to load master keypair: ${result.error}`);
+      selectedMasterKeypair.value = null;
+      selectedAdminKeypair.value = null;
+      selectedAdminKeypairUuid.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading master keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    selectedMasterKeypair.value = null;
+    selectedAdminKeypair.value = null;
+    selectedAdminKeypairUuid.value = null;
+  }
+}
+
+async function openMasterKeypairDetailsModal() {
+  if (!selectedMasterKeypairUuid.value) {
+    alert('Please select a master keypair first');
+    return;
+  }
+  await loadSelectedMasterKeypair();
+  showAdminKeypairDetailsModal.value = true;
+}
+
+function toggleAdminKeypairDropdown(index: number) {
+  activeAdminKeypairDropdown.value = activeAdminKeypairDropdown.value === index ? null : index;
+}
+
+function toggleAdminKeypairActionDropdown() {
+  // Close master keypair dropdown if open
+  if (showMasterKeypairActionDropdown.value) {
+    showMasterKeypairActionDropdown.value = false;
+  }
+  showAdminKeypairActionDropdown.value = !showAdminKeypairActionDropdown.value;
+}
+
+async function generateMasterKeypair() {
   if (!isElectronAvailable()) {
     return;
   }
   
   try {
-    await (window as any).electronAPI.saveOnlineMasterKeys(onlineMasterKeys.value);
+    const result = await (window as any).electronAPI.createAdminKeypair({
+      keyType: newKeypairType.value,
+      keyUsage: 'master-admin-signing',
+      trustLevel: 'Standard',
+      username: onlineProfile.value?.username || 'admin'
+    });
+    
+    if (result.success) {
+      await loadAdminKeypairsList();
+      showGenerateMasterKeypairModal.value = false;
+      // Automatically open details modal to edit name/label/comments
+      selectedMasterKeypairUuid.value = result.keypair.uuid;
+      await openMasterKeypairDetailsModal();
+    } else {
+      alert(`Failed to generate master keypair: ${result.error}`);
+    }
   } catch (error) {
-    console.error('Error saving master keys:', error);
+    console.error('Error generating master keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function addMasterKeypair() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  if (!newAdminKeypairPublicKey.value.trim()) {
+    alert('Please provide a public key');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.addAdminKeypair({
+      keyType: newKeypairType.value,
+      publicKey: newAdminKeypairPublicKey.value.trim(),
+      keyUsage: 'master-admin-signing',
+      trustLevel: 'Standard',
+      storageStatus: 'public-only'
+    });
+    
+    if (result.success) {
+      await loadAdminKeypairsList();
+      showAddMasterKeypairModal.value = false;
+      newAdminKeypairPublicKey.value = '';
+      // Automatically open details modal to edit name/label/comments
+      selectedMasterKeypairUuid.value = result.keypair.uuid;
+      await openMasterKeypairDetailsModal();
+    } else {
+      alert(`Failed to add master keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error adding master keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function backupSelectedMasterKeypair() {
+  if (!isElectronAvailable() || !selectedMasterKeypairUuid.value) {
+    alert('Please select a master keypair first');
+    return;
+  }
+  
+  const password = prompt('Enter a password to encrypt the backup:');
+  if (!password) {
+    return;
+  }
+  
+  const confirmPassword = prompt('Confirm password:');
+  if (password !== confirmPassword) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportAdminKeypairSecretPKCS(selectedMasterKeypairUuid.value, password);
+    if (result.success) {
+      alert('Master keypair backup exported successfully');
+    } else {
+      alert(`Failed to export backup: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error backing up master keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function importMasterKeypairBackup() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.selectFiles({
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+    
+    const filePath = result.filePaths[0];
+    const password = prompt('Enter the password to decrypt the backup:');
+    if (!password) {
+      return;
+    }
+    
+    // Import as admin keypair with master-admin-signing usage
+    const importResult = await (window as any).electronAPI.importAdminKeypairSecretPKCS(null, filePath, password);
+    if (importResult.success) {
+      // Update the keypair to have master-admin-signing usage
+      // Note: This requires the keypair UUID from the import - we may need to adjust the import flow
+      await loadAdminKeypairsList();
+      alert('Master keypair imported successfully');
+    } else {
+      alert(`Failed to import backup: ${importResult.error}`);
+    }
+  } catch (error) {
+    console.error('Error importing master keypair backup:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function deleteSelectedMasterKeypair() {
+  if (!isElectronAvailable() || !selectedMasterKeypairUuid.value) {
+    alert('Please select a master keypair first');
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to delete this master keypair? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteAdminKeypair(selectedMasterKeypairUuid.value);
+    if (result.success) {
+      await loadAdminKeypairsList();
+      selectedMasterKeypairUuid.value = null;
+      selectedMasterKeypair.value = null;
+    } else {
+      alert(`Failed to delete master keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting master keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function loadAdminKeypairsList() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const keypairs = await (window as any).electronAPI.listAdminKeypairs();
+    adminKeypairsList.value = keypairs || [];
+  } catch (error) {
+    console.error('Error loading admin keypairs list:', error);
+    adminKeypairsList.value = [];
+  }
+}
+
+function selectAdminKeypair(keypairUuid: string) {
+  if (keypairUuid === selectedAdminKeypairUuid.value) {
+    // Deselect if clicking the same row
+    selectedAdminKeypairUuid.value = null;
+    selectedAdminKeypair.value = null;
+  } else {
+    // Select new keypair
+    selectedAdminKeypairUuid.value = keypairUuid;
+    // Load keypair details when selected
+    loadSelectedAdminKeypair();
+  }
+}
+
+async function loadSelectedAdminKeypair() {
+  if (!isElectronAvailable() || !selectedAdminKeypairUuid.value) {
+    selectedAdminKeypair.value = null;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getAdminKeypair(selectedAdminKeypairUuid.value);
+    if (result.success) {
+      selectedAdminKeypair.value = result.keypair;
+      // Initialize editing metadata
+      editingKeypairMetadata.value = {
+        name: result.keypair.name || '',
+        label: result.keypair.label || '',
+        comments: result.keypair.comments || ''
+      };
+    } else {
+      alert(`Failed to load admin keypair: ${result.error}`);
+      selectedAdminKeypair.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading admin keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    selectedAdminKeypair.value = null;
+  }
+}
+
+async function openAdminKeypairDetailsModal() {
+  if (!selectedAdminKeypairUuid.value) {
+    alert('Please select a keypair first');
+    return;
+  }
+  await loadSelectedAdminKeypair();
+  showAdminKeypairDetailsModal.value = true;
+}
+
+function getAlgorithmName(keyType: string): string {
+  const algorithmMap: {[key: string]: string} = {
+    'Nostr': 'secp256k1 (Schnorr)',
+    'ML-DSA-44': 'ML-DSA-44',
+    'ML-DSA-87': 'ML-DSA-87',
+    'ED25519': 'Edwards-Curve Digital Signature Algorithm (EdDSA)',
+    'RSA-2048': 'RSA (2048-bit)'
+  };
+  return algorithmMap[keyType] || keyType;
+}
+
+function getKeyUsageLabel(keyUsage?: string): string {
+  if (!keyUsage) return 'Not specified';
+  const usageMap: {[key: string]: string} = {
+    'master-admin-signing': 'Master Admin Signing',
+    'operating-admin-signing': 'Operating Admin Signing',
+    'authorized-admin': 'Authorized Admin'
+  };
+  return usageMap[keyUsage] || keyUsage;
+}
+
+async function generateAdminKeypair() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  if (!newAdminKeypairUsage.value) {
+    alert('Please select a key usage');
+    return;
+  }
+  
+  try {
+    // Get username from profile if available, otherwise use 'admin'
+    const username = onlineProfile.value?.username || 'admin';
+    
+    const result = await (window as any).electronAPI.createAdminKeypair({
+      keyType: newKeypairType.value,
+      keyUsage: newAdminKeypairUsage.value,
+      trustLevel: 'Standard',
+      username: username
+    });
+    
+    if (result.success) {
+      await loadAdminKeypairsList();
+      selectedAdminKeypairUuid.value = result.keypair.uuid;
+      showGenerateAdminKeypairModal.value = false;
+      showAdminKeypairActionDropdown.value = false;
+      newAdminKeypairUsage.value = '';
+      newKeypairType.value = 'ML-DSA-44';
+      alert('Admin keypair generated successfully!');
+      // Open details modal to allow setting name/label
+      showAdminKeypairDetailsModal.value = true;
+      await loadSelectedAdminKeypair();
+    } else {
+      alert(`Failed to generate admin keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error generating admin keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function addAdminKeypair() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    if (!newAdminKeypairPublicKey.value.trim()) {
+      alert('Please provide a public key or use Generate new Keypair');
+      return;
+    }
+    
+    // Calculate fingerprint from public key if needed
+    let fingerprint: string | undefined = undefined;
+    let publicKeyHex: string | undefined = undefined;
+    
+    // Try to extract hex from PEM or use as-is
+    const publicKey = newAdminKeypairPublicKey.value.trim();
+    if (publicKey.startsWith('-----BEGIN')) {
+      // PEM format - would need to extract hex, but for now just store as-is
+      publicKeyHex = undefined;
+    } else if (/^[0-9a-fA-F]+$/.test(publicKey)) {
+      // Hex format
+      publicKeyHex = publicKey;
+    }
+    
+    const result = await (window as any).electronAPI.addAdminKeypair({
+      keyType: newKeypairType.value,
+      keyUsage: newAdminKeypairUsage.value || undefined,
+      publicKey: publicKey,
+      publicKeyHex: publicKeyHex,
+      fingerprint: fingerprint,
+      trustLevel: 'Standard',
+      storageStatus: 'public-only' // Public key only by default when adding
+    });
+    
+    if (result.success) {
+      await loadAdminKeypairsList();
+      selectedAdminKeypairUuid.value = result.keypair.uuid;
+      showAddAdminKeypairModal.value = false;
+      showAdminKeypairActionDropdown.value = false;
+      newKeypairType.value = 'ML-DSA-44';
+      newAdminKeypairUsage.value = '';
+      newAdminKeypairPublicKey.value = '';
+      alert('Admin keypair added successfully!');
+      // Open details modal to allow setting name/label
+      showAdminKeypairDetailsModal.value = true;
+      await loadSelectedAdminKeypair();
+    } else {
+      alert(`Failed to add admin keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error adding admin keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function updateAdminKeypairStorageStatus(keypairUuid: string, newStatus: string) {
+  if (!isElectronAvailable() || !keypairUuid) {
+    return;
+  }
+  
+  const previousStatus = selectedAdminKeypair.value?.storageStatus || 'public-only';
+  let privateKey: string | undefined = undefined;
+  
+  // If changing to "full" from "full-offline" or "public-only", prompt for secret key
+  if (newStatus === 'full' && previousStatus !== 'full') {
+    const secretKey = prompt('Enter the secret/private key for this keypair (PEM format or hex):');
+    if (!secretKey || !secretKey.trim()) {
+      alert('Secret key is required for full keypair storage. Storage status unchanged.');
+      return;
+    }
+    privateKey = secretKey.trim();
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.updateAdminKeypairStorageStatus(
+      keypairUuid,
+      newStatus,
+      privateKey
+    );
+    
+    if (result.success) {
+      await loadSelectedAdminKeypair(); // Reload to get updated status
+      await loadAdminKeypairsList(); // Refresh list
+    } else {
+      alert(`Failed to update storage status: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error updating admin keypair storage status:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+function toggleSelectedAdminKeypairDropdown() {
+  showSelectedAdminKeypairDropdown.value = !showSelectedAdminKeypairDropdown.value;
+}
+
+function onAdminOptionsToggle() {
+  if (onlineShowAdminOptions.value) {
+    loadAdminKeypairsList();
+    loadEncryptionKeysList();
+  } else {
+    selectedAdminKeypairUuid.value = null;
+    selectedAdminKeypair.value = null;
+  }
+}
+
+// Trust Declaration functions
+async function loadTrustDeclarationsList() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const declarations = await (window as any).electronAPI.listTrustDeclarations();
+    trustDeclarationsList.value = declarations || [];
+  } catch (error) {
+    console.error('Error loading trust declarations list:', error);
+    trustDeclarationsList.value = [];
+  }
+}
+
+function selectTrustDeclaration(declarationUuid: string) {
+  if (declarationUuid === selectedTrustDeclarationUuid.value) {
+    selectedTrustDeclarationUuid.value = null;
+    selectedTrustDeclaration.value = null;
+  } else {
+    selectedTrustDeclarationUuid.value = declarationUuid;
+    loadSelectedTrustDeclaration();
+  }
+}
+
+async function loadSelectedTrustDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+    selectedTrustDeclaration.value = null;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getTrustDeclaration({ declarationUuid: selectedTrustDeclarationUuid.value });
+    if (result.success) {
+      selectedTrustDeclaration.value = result.declaration;
+      editingTrustDeclaration.value = { ...result.declaration };
+    } else {
+      alert(`Failed to load trust declaration: ${result.error}`);
+      selectedTrustDeclaration.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading trust declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    selectedTrustDeclaration.value = null;
+  }
+}
+
+function toggleTrustDeclarationActionDropdown() {
+  // Close other dropdowns if open
+  if (showMasterKeypairActionDropdown.value) {
+    showMasterKeypairActionDropdown.value = false;
+  }
+  if (showAdminKeypairActionDropdown.value) {
+    showAdminKeypairActionDropdown.value = false;
+  }
+  if (showEncryptionKeyActionDropdown.value) {
+    showEncryptionKeyActionDropdown.value = false;
+  }
+  showTrustDeclarationActionDropdown.value = !showTrustDeclarationActionDropdown.value;
+}
+
+async function openTrustDeclarationDetailsModal() {
+  if (!selectedTrustDeclarationUuid.value) {
+    alert('Please select a trust declaration first');
+    return;
+  }
+  await loadSelectedTrustDeclaration();
+  showTrustDeclarationDetailsModal.value = true;
+}
+
+function canSignTrustDeclaration(): boolean {
+  // Check if user has admin keypairs available for signing
+  return masterAdminKeypairsList.value.length > 0 || adminKeypairsList.value.length > 0;
+}
+
+function getTrustDeclarationStatus(decl: any): string {
+  const now = new Date();
+  const validFrom = new Date(decl.valid_starting);
+  const validTo = decl.valid_ending ? new Date(decl.valid_ending) : null;
+  
+  if (validFrom > now) {
+    return 'Pending';
+  }
+  if (validTo && validTo < now) {
+    return 'Expired';
+  }
+  if (decl.signature && decl.signature_hash_value) {
+    return 'Signed';
+  }
+  return 'Unsigned';
+}
+
+function getTrustDeclarationStatusClass(decl: any): string {
+  const status = getTrustDeclarationStatus(decl);
+  if (status === 'Signed') return 'status-active';
+  if (status === 'Expired') return 'status-expired';
+  if (status === 'Pending') return 'status-pending';
+  return 'status-inactive';
+}
+
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return dateString;
+  }
+}
+
+async function signTrustDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+    alert('Please select a trust declaration first');
+    return;
+  }
+  
+  // TODO: Implement signing logic
+  alert('Signing trust declarations is not yet implemented');
+}
+
+async function publishTrustDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+    alert('Please select a trust declaration first');
+    return;
+  }
+  
+  // TODO: Implement publishing logic
+  alert('Publishing trust declarations is not yet implemented');
+}
+
+async function exportTrustDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+    alert('Please select a trust declaration first');
+    return;
+  }
+  
+  // TODO: Implement export logic
+  alert('Exporting trust declarations is not yet implemented');
+}
+
+async function importTrustDeclarationBackup() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // TODO: Implement import logic
+  alert('Importing trust declarations is not yet implemented');
+}
+
+async function deleteTrustDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+    alert('Please select a trust declaration first');
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to delete this trust declaration? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteTrustDeclaration({ declarationUuid: selectedTrustDeclarationUuid.value });
+    
+    if (result.success) {
+      await loadTrustDeclarationsList();
+      selectedTrustDeclarationUuid.value = null;
+      selectedTrustDeclaration.value = null;
+      showTrustDeclarationActionDropdown.value = false;
+      alert('Trust declaration deleted successfully');
+    } else {
+      alert(`Failed to delete trust declaration: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting trust declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+// Load trust declarations when switching to Trust Declarations tab
+watch(onlineActiveTab, (newTab) => {
+  if (newTab === 'trust-declarations') {
+    loadTrustDeclarationsList();
+  }
+});
+
+// Encryption Key functions
+async function loadEncryptionKeysList() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const keys = await (window as any).electronAPI.listEncryptionKeys();
+    encryptionKeysList.value = keys || [];
+  } catch (error) {
+    console.error('Error loading encryption keys list:', error);
+    encryptionKeysList.value = [];
+  }
+}
+
+function selectEncryptionKey(keyUuid: string) {
+  if (keyUuid === selectedEncryptionKeyUuid.value) {
+    selectedEncryptionKeyUuid.value = null;
+    selectedEncryptionKey.value = null;
+  } else {
+    selectedEncryptionKeyUuid.value = keyUuid;
+    loadSelectedEncryptionKey();
+  }
+}
+
+async function loadSelectedEncryptionKey() {
+  if (!isElectronAvailable() || !selectedEncryptionKeyUuid.value) {
+    selectedEncryptionKey.value = null;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getEncryptionKey({ keyUuid: selectedEncryptionKeyUuid.value });
+    if (result.success) {
+      selectedEncryptionKey.value = result.key;
+      editingEncryptionKeyMetadata.value = {
+        name: result.key.name || '',
+        label: result.key.label || '',
+        description: result.key.description || '',
+        endDate: result.key.endDate || ''
+      };
+    } else {
+      alert(`Failed to load encryption key: ${result.error}`);
+      selectedEncryptionKey.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading encryption key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    selectedEncryptionKey.value = null;
+  }
+}
+
+function toggleEncryptionKeyActionDropdown() {
+  // Close other dropdowns if open
+  if (showMasterKeypairActionDropdown.value) {
+    showMasterKeypairActionDropdown.value = false;
+  }
+  if (showAdminKeypairActionDropdown.value) {
+    showAdminKeypairActionDropdown.value = false;
+  }
+  showEncryptionKeyActionDropdown.value = !showEncryptionKeyActionDropdown.value;
+}
+
+async function openEncryptionKeyDetailsModal() {
+  if (!selectedEncryptionKeyUuid.value) {
+    alert('Please select an encryption key first');
+    return;
+  }
+  await loadSelectedEncryptionKey();
+  showEncryptionKeyDetailsModal.value = true;
+}
+
+async function generateEncryptionKey() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    // Generate random key based on algorithm using Web Crypto API
+    const keyLength = newEncryptionKeyAlgorithm.value === 'AES256' ? 32 : 16; // 32 bytes for AES256, 16 bytes for AES128
+    const randomArray = new Uint8Array(keyLength);
+    crypto.getRandomValues(randomArray);
+    // Convert to hex string
+    const keydataHex = Array.from(randomArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Validate selection identifier JSON if provided
+    let selectionIdentifierJson = null;
+    if (newEncryptionKeySelectionIdentifier.value.trim()) {
+      try {
+        JSON.parse(newEncryptionKeySelectionIdentifier.value.trim());
+        selectionIdentifierJson = newEncryptionKeySelectionIdentifier.value.trim();
+      } catch (error) {
+        alert('Selection Identifier must be valid JSON');
+        return;
+      }
+    }
+    
+    // Convert end date to ISO string if provided
+    let endDateIso = null;
+    if (newEncryptionKeyEndDate.value) {
+      endDateIso = new Date(newEncryptionKeyEndDate.value).toISOString();
+    }
+    
+    const result = await (window as any).electronAPI.createEncryptionKey({
+      name: newEncryptionKeyName.value.trim() || null,
+      label: newEncryptionKeyLabel.value.trim() || null,
+      algorithm: newEncryptionKeyAlgorithm.value,
+      keyType: newEncryptionKeyType.value,
+      encrypted: newEncryptionKeyEncrypted.value,
+      keydata: keydataHex,
+      selectionIdentifier: selectionIdentifierJson,
+      description: newEncryptionKeyDescription.value.trim() || null,
+      endDate: endDateIso
+    });
+    
+    if (result.success) {
+      await loadEncryptionKeysList();
+      selectedEncryptionKeyUuid.value = result.keyUuid;
+      showGenerateEncryptionKeyModal.value = false;
+      showEncryptionKeyActionDropdown.value = false;
+      
+      // Reset form
+      newEncryptionKeyName.value = '';
+      newEncryptionKeyLabel.value = '';
+      newEncryptionKeyAlgorithm.value = 'AES256';
+      newEncryptionKeyType.value = 'Shared General';
+      newEncryptionKeyEncrypted.value = false;
+      newEncryptionKeySelectionIdentifier.value = '';
+      newEncryptionKeyDescription.value = '';
+      newEncryptionKeyEndDate.value = '';
+      
+      alert('Encryption key generated successfully!');
+      // Open details modal
+      await openEncryptionKeyDetailsModal();
+    } else {
+      alert(`Failed to generate encryption key: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error generating encryption key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function saveEncryptionKeyMetadata() {
+  if (!isElectronAvailable() || !selectedEncryptionKeyUuid.value) {
+    return;
+  }
+  
+  try {
+    // Convert end date to ISO string if provided
+    let endDateIso = null;
+    if (editingEncryptionKeyMetadata.value.endDate) {
+      endDateIso = new Date(editingEncryptionKeyMetadata.value.endDate).toISOString();
+    }
+    
+    const result = await (window as any).electronAPI.updateEncryptionKeyMetadata({
+      keyUuid: selectedEncryptionKeyUuid.value,
+      name: editingEncryptionKeyMetadata.value.name || null,
+      label: editingEncryptionKeyMetadata.value.label || null,
+      description: editingEncryptionKeyMetadata.value.description || null,
+      endDate: endDateIso
+    });
+    
+    if (result.success) {
+      await loadEncryptionKeysList();
+      await loadSelectedEncryptionKey();
+      alert('Metadata saved successfully');
+    } else {
+      alert(`Failed to save metadata: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error saving encryption key metadata:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function exportEncryptionKey() {
+  if (!isElectronAvailable() || !selectedEncryptionKeyUuid.value) {
+    alert('Please select an encryption key first');
+    return;
+  }
+  
+  const password = prompt('Enter a password to encrypt the export:');
+  if (!password) {
+    return;
+  }
+  
+  const passwordConfirm = prompt('Confirm password:');
+  if (password !== passwordConfirm) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportEncryptionKey({
+      keyUuid: selectedEncryptionKeyUuid.value,
+      password: password
+    });
+    
+    if (result.success) {
+      alert('Encryption key exported successfully!');
+    } else {
+      alert(`Failed to export encryption key: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error exporting encryption key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function backupSelectedEncryptionKey() {
+  await exportEncryptionKey();
+}
+
+async function importEncryptionKeyBackup() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.selectFiles({
+      title: 'Import Encryption Key',
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+    
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+    
+    const filePath = result.filePaths[0];
+    // Read file via IPC
+    const readResult = await (window as any).electronAPI.readFile({ filePath });
+    if (!readResult.success) {
+      alert(`Failed to read file: ${readResult.error}`);
+      return;
+    }
+    const fileContent = readResult.content;
+    
+    const password = prompt('Enter the password to decrypt the import:');
+    if (!password) {
+      return;
+    }
+    
+    // Ask if user wants to encrypt with Profile Guard
+    const encryptWithProfileGuard = confirm('Encrypt this key with Profile Guard? (Recommended for Group and Individual keys)');
+    
+    const importResult = await (window as any).electronAPI.importEncryptionKey({
+      encryptedData: fileContent,
+      password: password,
+      encrypted: encryptWithProfileGuard
+    });
+    
+    if (importResult.success) {
+      await loadEncryptionKeysList();
+      selectedEncryptionKeyUuid.value = importResult.keyUuid;
+      showEncryptionKeyActionDropdown.value = false;
+      alert('Encryption key imported successfully!');
+      // Open details modal
+      await openEncryptionKeyDetailsModal();
+    } else {
+      alert(`Failed to import encryption key: ${importResult.error}`);
+    }
+  } catch (error) {
+    console.error('Error importing encryption key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function deleteSelectedEncryptionKey() {
+  if (!isElectronAvailable() || !selectedEncryptionKeyUuid.value) {
+    alert('Please select an encryption key first');
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to delete this encryption key? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteEncryptionKey({ keyUuid: selectedEncryptionKeyUuid.value });
+    
+    if (result.success) {
+      await loadEncryptionKeysList();
+      selectedEncryptionKeyUuid.value = null;
+      selectedEncryptionKey.value = null;
+      showEncryptionKeyActionDropdown.value = false;
+      alert('Encryption key deleted successfully');
+    } else {
+      alert(`Failed to delete encryption key: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting encryption key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+// User Op keypair functions (profile-bound admin keypairs)
+async function loadUserOpKeypairsList(profileUuid: string) {
+  if (!isElectronAvailable() || !profileUuid) {
+    return;
+  }
+  
+  try {
+    const keypairs = await (window as any).electronAPI.listUserOpKeypairs(profileUuid);
+    userOpKeypairsList.value = keypairs || [];
+  } catch (error) {
+    console.error('Error loading User Op keypairs list:', error);
+    userOpKeypairsList.value = [];
+  }
+}
+
+function selectUserOpKeypair(keypairUuid: string) {
+  if (keypairUuid === selectedUserOpKeypairUuid.value) {
+    selectedUserOpKeypairUuid.value = null;
+    selectedUserOpKeypair.value = null;
+  } else {
+    selectedUserOpKeypairUuid.value = keypairUuid;
+    loadSelectedUserOpKeypair();
+  }
+}
+
+async function loadSelectedUserOpKeypair() {
+  if (!isElectronAvailable() || !selectedUserOpKeypairUuid.value) {
+    selectedUserOpKeypair.value = null;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getUserOpKeypair(selectedUserOpKeypairUuid.value);
+    if (result.success) {
+      selectedUserOpKeypair.value = result.keypair;
+      editingKeypairMetadata.value = {
+        name: result.keypair.name || '',
+        label: result.keypair.label || '',
+        comments: result.keypair.comments || ''
+      };
+    } else {
+      alert(`Failed to load User Op keypair: ${result.error}`);
+      selectedUserOpKeypair.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading User Op keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    selectedUserOpKeypair.value = null;
+  }
+}
+
+async function openUserOpKeypairDetailsModal() {
+  if (!selectedUserOpKeypairUuid.value) {
+    alert('Please select a User Op keypair first');
+    return;
+  }
+  await loadSelectedUserOpKeypair();
+  showAdminKeypairDetailsModal.value = true;
+}
+
+function toggleUserOpKeypairActionDropdown() {
+  showUserOpKeypairActionDropdown.value = !showUserOpKeypairActionDropdown.value;
+}
+
+async function generateUserOpKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value?.profileId) {
+    alert('Please select a profile first');
+    return;
+  }
+  
+  try {
+    const username = onlineProfile.value?.username || 'user';
+    const result = await (window as any).electronAPI.createUserOpKeypair({
+      profileUuid: onlineProfile.value.profileId,
+      keyType: newKeypairType.value,
+      keyUsage: newAdminKeypairUsage.value,
+      trustLevel: 'Standard',
+      username: username
+    });
+    
+    if (result.success) {
+      await loadUserOpKeypairsList(onlineProfile.value.profileId);
+      selectedUserOpKeypairUuid.value = result.keypair.uuid;
+      showGenerateUserOpKeypairModal.value = false;
+      showUserOpKeypairActionDropdown.value = false;
+      newAdminKeypairUsage.value = '';
+      newKeypairType.value = 'ML-DSA-44';
+      alert('User Op keypair generated successfully!');
+      showAdminKeypairDetailsModal.value = true;
+      await loadSelectedUserOpKeypair();
+    } else {
+      alert(`Failed to generate User Op keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error generating User Op keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function addUserOpKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value?.profileId) {
+    alert('Please select a profile first');
+    return;
+  }
+  
+  try {
+    if (!newAdminKeypairPublicKey.value.trim()) {
+      alert('Please provide a public key or use Generate new Keypair');
+      return;
+    }
+    
+    let fingerprint: string | undefined = undefined;
+    let publicKeyHex: string | undefined = undefined;
+    
+    const publicKey = newAdminKeypairPublicKey.value.trim();
+    if (publicKey.startsWith('-----BEGIN')) {
+      publicKeyHex = undefined;
+    } else if (/^[0-9a-fA-F]+$/.test(publicKey)) {
+      publicKeyHex = publicKey;
+    }
+    
+    const result = await (window as any).electronAPI.addUserOpKeypair({
+      profileUuid: onlineProfile.value.profileId,
+      keyType: newKeypairType.value,
+      keyUsage: newAdminKeypairUsage.value || undefined,
+      publicKey: publicKey,
+      publicKeyHex: publicKeyHex,
+      fingerprint: fingerprint,
+      trustLevel: 'Standard',
+      storageStatus: 'public-only'
+    });
+    
+    if (result.success) {
+      await loadUserOpKeypairsList(onlineProfile.value.profileId);
+      selectedUserOpKeypairUuid.value = result.keypair.uuid;
+      showAddUserOpKeypairModal.value = false;
+      showUserOpKeypairActionDropdown.value = false;
+      newKeypairType.value = 'ML-DSA-44';
+      newAdminKeypairUsage.value = '';
+      newAdminKeypairPublicKey.value = '';
+      alert('User Op keypair added successfully!');
+      showAdminKeypairDetailsModal.value = true;
+      await loadSelectedUserOpKeypair();
+    } else {
+      alert(`Failed to add User Op keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error adding User Op keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function backupSelectedUserOpKeypair() {
+  if (!isElectronAvailable() || !selectedUserOpKeypairUuid.value) {
+    return;
+  }
+  
+  const password = prompt('Enter a password to encrypt the backup:');
+  if (!password) {
+    return;
+  }
+  
+  const confirmPassword = prompt('Confirm password:');
+  if (password !== confirmPassword) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportUserOpKeypairSecretPKCS(selectedUserOpKeypairUuid.value, password);
+    if (result.success) {
+      alert('User Op keypair backup exported successfully');
+    } else {
+      alert(`Failed to export backup: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error backing up User Op keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function importUserOpKeypairBackup() {
+  if (!isElectronAvailable() || !onlineProfile.value?.profileId) {
+    alert('Please select a profile first');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.selectFiles({
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+    
+    const filePath = result.filePaths[0];
+    const password = prompt('Enter the password to decrypt the backup:');
+    if (!password) {
+      return;
+    }
+    
+    const importResult = await (window as any).electronAPI.importUserOpKeypairSecretPKCS(null, filePath, password);
+    if (importResult.success) {
+      await loadUserOpKeypairsList(onlineProfile.value.profileId);
+      alert('User Op keypair imported successfully');
+    } else {
+      alert(`Failed to import backup: ${importResult.error}`);
+    }
+  } catch (error) {
+    console.error('Error importing User Op keypair backup:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function deleteSelectedUserOpKeypair() {
+  if (!isElectronAvailable() || !selectedUserOpKeypairUuid.value || !onlineProfile.value?.profileId) {
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to delete this User Op keypair? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteUserOpKeypair(selectedUserOpKeypairUuid.value);
+    if (result.success) {
+      await loadUserOpKeypairsList(onlineProfile.value.profileId);
+      selectedUserOpKeypairUuid.value = null;
+      selectedUserOpKeypair.value = null;
+    } else {
+      alert(`Failed to delete User Op keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting User Op keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+function getStorageStatusLabel(status?: string): string {
+  switch (status) {
+    case 'public-only':
+      return 'Public key only (trust only)';
+    case 'full':
+      return 'Full keypair (public + secret key)';
+    case 'full-offline':
+      return 'Full keypair, secret offline (prompt for secret when needed)';
+    default:
+      return 'Not specified';
+  }
+}
+
+async function backupSelectedAdminKeypair() {
+  if (!isElectronAvailable() || !selectedAdminKeypair.value) {
+    return;
+  }
+  
+  // Prompt for password
+  const password = prompt('Enter a password to encrypt the backup:');
+  if (!password) {
+    return;
+  }
+  
+  const confirmPassword = prompt('Confirm password:');
+  if (password !== confirmPassword) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportKeypair({
+      keypair: selectedAdminKeypair.value,
+      password: password,
+      context: 'admin-keypair'
+    });
+    
+    if (result.success) {
+      alert('Admin keypair backup exported successfully');
+    } else {
+      alert(`Failed to export backup: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error backing up admin keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+  
+  showSelectedAdminKeypairDropdown.value = false;
+}
+
+async function importAdminKeypairBackup() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.selectFiles({
+      filters: [
+        { name: 'JSON Files', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+    
+    const filePath = result.filePaths[0];
+    const password = prompt('Enter the password to decrypt the backup:');
+    if (!password) {
+      return;
+    }
+    
+    const importResult = await (window as any).electronAPI.importKeypair({
+      encryptedData: await (await fetch(`file://${filePath}`)).text(),
+      password: password
+    });
+    
+    if (importResult.success && importResult.keypair) {
+      // Add to database using addAdminKeypair
+      const addResult = await (window as any).electronAPI.addAdminKeypair({
+        keyType: importResult.keypair.type,
+        keyUsage: importResult.keypair.keyUsage,
+        publicKey: importResult.keypair.publicKey,
+        publicKeyHex: importResult.keypair.publicKeyHex,
+        fingerprint: importResult.keypair.fingerprint,
+        trustLevel: importResult.keypair.trustLevel || 'Standard',
+        privateKey: importResult.keypair.privateKey,
+        storageStatus: importResult.keypair.privateKey ? 'full' : 'public-only'
+      });
+      
+      if (addResult.success) {
+        await loadAdminKeypairsList();
+        selectedAdminKeypairUuid.value = addResult.keypair.uuid;
+        await loadSelectedAdminKeypair();
+        alert('Admin keypair imported successfully');
+      } else {
+        alert(`Failed to add imported keypair: ${addResult.error}`);
+      }
+    } else {
+      alert(`Failed to import backup: ${importResult.error || 'Invalid password or file format'}`);
+    }
+  } catch (error) {
+    console.error('Error importing admin keypair backup:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function deleteSelectedAdminKeypair() {
+  if (!isElectronAvailable() || !selectedAdminKeypair.value) {
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to delete this admin keypair? This action cannot be undone.')) {
+    showSelectedAdminKeypairDropdown.value = false;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteAdminKeypair(selectedAdminKeypair.value.uuid);
+    
+    if (result.success) {
+      selectedAdminKeypair.value = null;
+      selectedAdminKeypairUuid.value = null;
+      await loadAdminKeypairsList();
+      alert('Admin keypair deleted successfully');
+    } else {
+      alert(`Failed to delete admin keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error deleting admin keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+  
+  showSelectedAdminKeypairDropdown.value = false;
+}
+
+async function saveAdminKeypairMetadata() {
+  // Determine which UUID to use - check both master and admin keypair UUIDs
+  const keypairUuid = selectedAdminKeypairUuid.value || selectedMasterKeypairUuid.value;
+  
+  if (!isElectronAvailable() || !keypairUuid) {
+    alert('No keypair selected');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.updateAdminKeypairMetadata(
+      keypairUuid,
+      editingKeypairMetadata.value.name || null,
+      editingKeypairMetadata.value.label || null,
+      editingKeypairMetadata.value.comments || null
+    );
+    
+    if (result.success) {
+      await loadAdminKeypairsList();
+      // Reload the appropriate keypair based on which one was selected
+      if (selectedMasterKeypairUuid.value) {
+        await loadSelectedMasterKeypair();
+      } else if (selectedAdminKeypairUuid.value) {
+        await loadSelectedAdminKeypair();
+      }
+      alert('Metadata saved successfully');
+    } else {
+      alert(`Failed to save metadata: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error saving admin keypair metadata:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function exportAdminKeypairSecretPKCS() {
+  if (!isElectronAvailable() || !selectedAdminKeypairUuid.value) {
+    return;
+  }
+  
+  const password = prompt('Enter a password to encrypt the secret key:');
+  if (!password) {
+    return;
+  }
+  
+  const confirmPassword = prompt('Confirm password:');
+  if (password !== confirmPassword) {
+    alert('Passwords do not match');
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportAdminKeypairSecretPKCS(
+      selectedAdminKeypairUuid.value,
+      password
+    );
+    
+    if (result.success) {
+      alert(`Secret key exported successfully to: ${result.filePath}`);
+      await loadSelectedAdminKeypair();
+    } else {
+      alert(`Failed to export secret key: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error exporting secret key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function importAdminKeypairSecretPKCS() {
+  if (!isElectronAvailable() || !selectedAdminKeypairUuid.value) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.selectFiles({
+      filters: [
+        { name: 'PKCS Files', extensions: ['pem', 'key', 'json'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+    
+    const filePath = result.filePaths[0];
+    const password = prompt('Enter the password to decrypt the secret key:');
+    if (!password) {
+      return;
+    }
+    
+    const importResult = await (window as any).electronAPI.importAdminKeypairSecretPKCS(
+      selectedAdminKeypairUuid.value,
+      filePath,
+      password
+    );
+    
+    if (importResult.success) {
+      alert('Secret key imported successfully');
+      await loadSelectedAdminKeypair();
+      await loadAdminKeypairsList();
+    } else {
+      alert(`Failed to import secret key: ${importResult.error}`);
+    }
+  } catch (error) {
+    console.error('Error importing secret key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function removeAdminKeypairSecret() {
+  if (!isElectronAvailable() || !selectedAdminKeypairUuid.value) {
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to remove the secret key? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.removeAdminKeypairSecret(selectedAdminKeypairUuid.value);
+    
+    if (result.success) {
+      alert('Secret key removed successfully');
+      await loadSelectedAdminKeypair();
+      await loadAdminKeypairsList();
+    } else {
+      alert(`Failed to remove secret key: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error removing secret key:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
   }
 }
 
@@ -6428,10 +8767,29 @@ async function confirmSetupProfileGuard() {
 }
 
 async function updateProfileGuardSecurityMode() {
-  if (!isElectronAvailable() || !profileGuardEnabled.value) {
+  if (!isElectronAvailable()) {
     return;
   }
   
+  // If Profile Guard is already set up, open the Change Master Password window
+  // with the High Security Mode checkbox toggled to match the new requested value
+  if (profileGuardEnabled.value) {
+    // Store the new desired value
+    const newHighSecurityMode = profileGuardHighSecurityMode.value;
+    
+    // Open the Change Master Password window (setup modal works for changing too)
+    showProfileGuardSetupModal.value = true;
+    profileGuardPassword.value = '';
+    profileGuardPasswordConfirm.value = '';
+    // Set the checkbox to the new desired value
+    profileGuardHighSecurityMode.value = newHighSecurityMode;
+    
+    // Revert the checkbox in the main dialog since we're opening the change window
+    profileGuardHighSecurityMode.value = !newHighSecurityMode;
+    return;
+  }
+  
+  // If Profile Guard is not set up yet, just update normally (shouldn't happen, but handle it)
   try {
     const result = await (window as any).electronAPI.updateProfileGuardSecurityMode({
       highSecurityMode: profileGuardHighSecurityMode.value
@@ -6551,7 +8909,11 @@ async function changeProfileGuardKey() {
     return;
   }
   
-  setupProfileGuard();
+  // Open the setup modal (which works for changing the password too)
+  showProfileGuardSetupModal.value = true;
+  profileGuardPassword.value = '';
+  profileGuardPasswordConfirm.value = '';
+  // Keep the current high security mode setting
 }
 
 async function removeProfileGuard() {
@@ -6707,10 +9069,15 @@ async function confirmImportKeypair() {
         if (!onlineProfile.value.adminKeypairs) {
           onlineProfile.value.adminKeypairs = [];
         }
+        // Set storage status based on whether private key is present
+        const importedKeypair = {
+          ...result.keypair,
+          storageStatus: result.keypair.privateKey ? 'full' : 'public-only'
+        };
         if (keypairExportContext.value.index !== undefined) {
-          onlineProfile.value.adminKeypairs[keypairExportContext.value.index] = result.keypair;
+          onlineProfile.value.adminKeypairs[keypairExportContext.value.index] = importedKeypair;
         } else {
-          onlineProfile.value.adminKeypairs.push(result.keypair);
+          onlineProfile.value.adminKeypairs.push(importedKeypair);
         }
       }
       
@@ -6738,14 +9105,14 @@ async function exportAllAdminKeypairs() {
 }
 
 // Profile Creation Wizard functions
-function initializeProfileCreationWizard() {
+function initializeProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'create-first') {
   // Only initialize if not already initialized or if data is empty
-  if (profileCreationWizardInitialized.value && profileCreationData.value.profileId) {
+  if (profileCreationWizardInitialized.value && profileCreationData.value.profileId && mode === 'create-first') {
     console.log('[Profile Wizard] Already initialized, preserving existing data');
     return;
   }
   
-  console.log('[Profile Wizard] Initializing wizard...');
+  console.log('[Profile Wizard] Initializing wizard in mode:', mode);
   
   // Generate UUID - we'll use a simple UUID v4 generator
   function generateUUID() {
@@ -6756,7 +9123,27 @@ function initializeProfileCreationWizard() {
     });
   }
   
-  // Check if there's an existing profile to load data from
+  // In 'new-profile' mode, always start with blank data and new UUID
+  if (mode === 'new-profile') {
+    profileCreationData.value = {
+      profileId: generateUUID(),
+      username: '',
+      displayName: '',
+      homepage: '',
+      socialIds: [],
+      bio: '',
+      keypairType: 'ML-DSA-44'
+    };
+    newSocialIdType.value = 'discord';
+    newSocialIdValue.value = '';
+    usernameError.value = '';
+    socialIdError.value = '';
+    profileCreationWizardInitialized.value = true;
+    console.log('[Profile Wizard] Initialized new profile with profileId:', profileCreationData.value.profileId);
+    return;
+  }
+  
+  // In 'create-first' mode, check if there's an existing profile to load data from
   const existingProfile = onlineProfile.value;
   
   // Only generate new UUID if profile doesn't exist or has no profileId
@@ -7003,12 +9390,16 @@ async function completeProfileCreation() {
       onlineProfile.value = profileData;
     }
     
+    // Save mode before resetting
+    const wasNewProfileMode = profileCreationWizardMode.value === 'new-profile';
+    
     // Close wizard and reset initialization flag
     showProfileCreationWizard.value = false;
     profileCreationWizardStep.value = 1;
     profileCreationWizardInitialized.value = false;
+    profileCreationWizardMode.value = 'create-first';
     
-    if (hasExistingProfile) {
+    if (wasNewProfileMode || hasExistingProfile) {
       alert('New profile created successfully! You can switch to it in Profile Details. Make sure to export and backup your profile.');
     } else {
       alert('Profile created successfully! Make sure to export and backup your profile.');
@@ -7650,6 +10041,12 @@ function handleGlobalClick(e: MouseEvent) {
     closeManageDropdown();
     closeSnesContentsDropdown();
     closeOnlineDropdown();
+    showMasterKeyActionDropdown.value = false;
+    activeAdminKeypairDropdown.value = null;
+    showAdminKeypairActionDropdown.value = false;
+    showMasterKeypairActionDropdown.value = false;
+    showEncryptionKeyActionDropdown.value = false;
+    showTrustDeclarationActionDropdown.value = false;
   }
 }
 
@@ -11831,6 +14228,12 @@ button:disabled {
 
 /* Settings Modal */
 .settings-modal { width: 800px; max-width: 95vw; }
+
+.profile-details-modal {
+  width: 95vw;
+  max-width: 95vw;
+  max-height: 90vh;
+}
 .settings-body { 
   padding: 20px; 
   max-height: 70vh; 
@@ -13629,11 +16032,11 @@ button:disabled {
 }
 
 .online-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  width: 600px;
-  max-width: 90vw;
+  position: fixed;
+  top: 60px;
+  left: 10px;
+  width: calc(95vw - 20px);
+  max-width: calc(95vw - 20px);
   max-height: 80vh;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-primary);
@@ -13643,6 +16046,40 @@ button:disabled {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.online-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.tab-button.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+  background: var(--bg-primary);
+}
+
+.tab-content {
+  padding: 16px;
 }
 
 .online-dropdown-header {
@@ -13853,6 +16290,149 @@ button:disabled {
   margin-top: 12px;
 }
 
+.keypairs-list-widget {
+  display: flex;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.keypairs-list-container {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.keypairs-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-primary);
+}
+
+.keypairs-table thead {
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.keypairs-table th {
+  padding: 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.keypairs-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.keypairs-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.keypairs-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.keypairs-table tbody tr.selected {
+  background: var(--accent-color);
+  color: var(--text-on-accent);
+  border-left: 4px solid var(--accent-primary);
+  font-weight: 500;
+}
+
+.keypairs-table tbody tr.selected td {
+  color: var(--text-on-accent);
+}
+
+.keypairs-table tbody tr.selected:hover {
+  background: var(--accent-hover);
+}
+
+.keypairs-table .empty-message {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.keypairs-menu-container {
+  flex-shrink: 0;
+  position: relative;
+}
+
+.keypairs-menu-container .dropdown-container {
+  position: relative;
+}
+
+.keypairs-menu-container .dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: var(--modal-bg);
+  border: 2px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.keypairs-menu-container .dropdown-item {
+  padding: 8px 16px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.keypairs-menu-container .dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.keypairs-menu-container .dropdown-item.danger {
+  color: #F44336;
+}
+
+.keypairs-menu-container .dropdown-item.danger:hover {
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 5px 0;
+}
+
+.large-modal {
+  max-width: 800px;
+  width: 90%;
+}
+
+.readonly-field {
+  color: var(--text-secondary);
+  font-family: monospace;
+  padding: 5px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.public-key-display {
+  word-break: break-all;
+  max-width: 500px;
+  display: block;
+  margin-top: 5px;
+}
+
 .keypair-info {
   display: flex;
   flex-direction: column;
@@ -13898,6 +16478,26 @@ button:disabled {
   padding: 4px 8px;
   border-radius: 3px;
   word-break: break-all;
+}
+
+.storage-status-select {
+  padding: 4px 8px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  min-width: 200px;
+}
+
+.storage-status-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.storage-status-display {
+  color: var(--text-primary);
+  font-size: 12px;
 }
 
 .admin-section {

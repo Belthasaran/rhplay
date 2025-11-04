@@ -71,7 +71,7 @@ function createMainWindow() {
     return mainWindow;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     // Initialize database manager with auto-migrations enabled for GUI mode
     try {
         console.log('Initializing database manager with auto-migrations enabled...');
@@ -89,6 +89,10 @@ app.whenReady().then(() => {
         // Register IPC handlers
         registerDatabaseHandlers(dbManager);
         console.log('IPC handlers registered');
+        
+        // Ensure createdfp is populated
+        const { ensureCreatedFp } = require('./ipc-handlers');
+        await ensureCreatedFp(dbManager);
     } catch (error) {
         console.error('Failed to initialize database:', error);
         console.error('Error stack:', error.stack);

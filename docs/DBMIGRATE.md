@@ -1374,3 +1374,186 @@ sqlite3 electron/clientdata.db < electron/sql/migrations/012_add_extended_rating
 
 ---
 
+## Migration 015: Admin Keypairs Table (clientdata.db)
+
+### Date Added
+January 2025
+
+### Purpose
+Create `admin_keypairs` table in `clientdata.db` to store admin keypairs with public keys (public) and encrypted secret keys (private).
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/015_clientdata_admin_keypairs.sql
+```
+
+Or use the migration runner:
+```bash
+CLIENTDATA_DB_PATH=/path/to/clientdata.db
+./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+```
+
+### What It Does
+Creates a new table `admin_keypairs` with:
+- Keypair metadata (type, usage, storage status)
+- Public keys (PEM and hex formats)
+- Fingerprints for identification
+- Encrypted private keys (encrypted with Profile Guard key)
+- Trust levels and naming conventions
+
+Also creates:
+- 4 indexes for query performance
+- 1 trigger for auto-updating timestamps
+
+### Prerequisites
+- Database `clientdata.db` must exist
+- Profile Guard should be set up (for encrypting secret keys)
+- If migrating existing installation, backup recommended
+
+### Expected Outcome
+- New `admin_keypairs` table in `clientdata.db`
+- Admin keypairs can be stored with encrypted secret keys
+- Public keys and trust status can be included in client program for end users
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS)
+- Secret keys are encrypted with Profile Guard key - ensure Profile Guard is unlocked when creating keypairs
+- Public keys are stored unencrypted and can be distributed
+
+---
+
+## Migration 016: Admin Declarations Table (clientdata.db)
+
+### Date Added
+January 2025
+
+### Purpose
+Create `admindeclarations` table in `clientdata.db` to store admin declarations (trust declarations, privilege grants/revocations).
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/016_clientdata_admindeclarations.sql
+```
+
+Or use the migration runner:
+```bash
+CLIENTDATA_DB_PATH=/path/to/clientdata.db
+./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+```
+
+### What It Does
+Creates a new table `admindeclarations` with:
+- Declaration type and content (JSON)
+- SHA256 hash of declaration content
+- Digital signature
+- Signing keypair information
+- Target keypair or user profile information
+- Validity period (start/end dates)
+
+Also creates:
+- 6 indexes for query performance
+- 1 trigger for auto-updating timestamps
+
+### Prerequisites
+- Database `clientdata.db` must exist
+- `admin_keypairs` table should exist (Migration 015)
+- If migrating existing installation, backup recommended
+
+### Expected Outcome
+- New `admindeclarations` table in `clientdata.db`
+- Admin declarations can be stored with signatures
+- Trust declarations and privilege grants/revocations can be tracked
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS)
+- Declarations require valid signatures from trusted admin keypairs
+- Multi-signature support requires at least 3 trusted keys
+
+---
+
+## Migration 017: Admin Keypair Name, Label, and Comments (clientdata.db)
+
+### Date Added
+January 2025
+
+### Purpose
+Add `name`, `label`, and `comments` columns to the `admin_keypairs` table to allow users to add custom names, labels, and comments to keypairs.
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/017_add_admin_keypair_name_label_comments.sql
+```
+
+Or use the migration runner:
+```bash
+CLIENTDATA_DB_PATH=/path/to/clientdata.db
+./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+```
+
+### What It Does
+Adds three new columns to the `admin_keypairs` table:
+- `name` (TEXT): User-friendly name for the keypair
+- `label` (TEXT): Optional label for the keypair
+- `comments` (TEXT): Optional comments/notes about the keypair
+
+### Prerequisites
+- Migration 015 (Admin Keypairs Table) must be run first
+- Database must be accessible
+
+### Expected Outcome
+- Three new columns appear in `admin_keypairs` table
+- Two new indexes created (`idx_admin_keypairs_name`, `idx_admin_keypairs_label`)
+- Existing keypairs have NULL values for these fields (can be set later)
+- No data loss
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS)
+- Existing records have NULL values until updated
+
+---
+
+## Migration 018: Admin Keypair Profile UUID (clientdata.db)
+
+### Date Added
+January 2025
+
+### Purpose
+Add `profile_uuid` column to the `admin_keypairs` table to distinguish between global admin keypairs (NULL) and User Op keys (bound to a specific profile).
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/018_add_admin_keypair_profile_uuid.sql
+```
+
+Or use the migration runner:
+```bash
+CLIENTDATA_DB_PATH=/path/to/clientdata.db
+./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+```
+
+### What It Does
+Adds `profile_uuid` column to the `admin_keypairs` table:
+- `profile_uuid` (TEXT): UUID of the profile that owns this keypair, or NULL for global admin keypairs
+- Creates index `idx_admin_keypairs_profile_uuid` for efficient querying
+
+**Distinction**:
+- **Global Admin Keypairs**: `profile_uuid IS NULL` - These are system-wide admin keypairs not bound to any profile
+- **User Op Keys**: `profile_uuid = <profile UUID>` - These are admin keypairs bound to a specific user profile
+
+### Prerequisites
+- Migration 015 (Admin Keypairs Table) must be run first
+- Database must be accessible
+
+### Expected Outcome
+- New column `profile_uuid` appears in `admin_keypairs` table
+- New index created for efficient profile-based queries
+- Existing keypairs have NULL values (treated as global admin keypairs)
+- No data loss
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS)
+- Existing records have NULL values (treated as global admin keypairs)
+- The `online:admin-keypairs:list` IPC handler now filters to only return global admin keypairs (`WHERE profile_uuid IS NULL`)
+
+---
+

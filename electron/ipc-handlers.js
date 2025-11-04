@@ -13,6 +13,16 @@ const gameStager = require('./game-stager');
 const { matchesFilter } = require('./shared-filter-utils');
 const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
+const { HostFP } = require('./main/HostFP');
+
+/**
+ * Get keyguard key from session (for encryption/decryption)
+ * @param {Object} event - IPC event object
+ * @returns {Buffer|null} Keyguard key or null if not available
+ */
+function getKeyguardKey(event) {
+  return event?.sender?.session?.keyguardKey || null;
+}
 
 /**
  * Register all IPC handlers with the database manager
@@ -3006,6 +3016,21 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Read file content
+   * Channel: dialog:readFile
+   */
+  ipcMain.handle('dialog:readFile', async (event, { filePath }) => {
+    try {
+      const fs = require('fs');
+      const content = fs.readFileSync(filePath, 'utf8');
+      return { success: true, content };
+    } catch (error) {
+      console.error('Error reading file:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // ===========================================================================
   // GAME EXPORT/IMPORT OPERATIONS
   // ===========================================================================
@@ -3365,7 +3390,7 @@ function registerDatabaseHandlers(dbManager) {
    * Get online profile
    * Channel: online:profile:get
    */
-  ipcMain.handle('online:profile:get', async () => {
+  ipcMain.handle('online:profile:get', async (event) => {
     try {
       const db = dbManager.getConnection('clientdata');
       
@@ -3383,6 +3408,69 @@ function registerDatabaseHandlers(dbManager) {
       
       if (profileJson) {
         const profile = JSON.parse(profileJson.csetting_value);
+        
+        // Ensure current profile exists in standby profiles
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey && currentProfileId) {
+          // Get standby profiles
+          const standbyProfilesRow = db.prepare(`
+            SELECT csetting_value FROM csettings WHERE csetting_name = ?
+          `).get('online_standby_profiles');
+          
+          let standbyProfiles = [];
+          let needsUpdate = false;
+          
+          if (standbyProfilesRow) {
+            try {
+              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+              const iv = Buffer.from(encryptedData.iv, 'hex');
+              const encrypted = Buffer.from(encryptedData.data, 'hex');
+              
+              const crypto = require('crypto');
+              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+              let decrypted = decipher.update(encrypted);
+              decrypted = Buffer.concat([decrypted, decipher.final()]);
+              
+              standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+            } catch (error) {
+              console.error('Error decrypting standby profiles:', error);
+              standbyProfiles = [];
+            }
+          }
+          
+          // Check if current profile exists in standby
+          const existsInStandby = standbyProfiles.some((p) => p.profileId === currentProfileId);
+          
+          if (!existsInStandby) {
+            // Add current profile to standby (with full data from standby if available)
+            // For now, we'll add the profile as-is (may not have private keys, but that's OK)
+            standbyProfiles.push(profile);
+            needsUpdate = true;
+          }
+          
+          // Update standby profiles if needed
+          if (needsUpdate) {
+            const crypto = require('crypto');
+            const iv = crypto.randomBytes(16);
+            const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+            const standbyProfilesJson = JSON.stringify(standbyProfiles);
+            let encrypted = cipher.update(standbyProfilesJson, 'utf8');
+            encrypted = Buffer.concat([encrypted, cipher.final()]);
+            
+            const encryptedData = {
+              iv: iv.toString('hex'),
+              data: encrypted.toString('hex')
+            };
+            
+            const uuid = crypto.randomUUID();
+            db.prepare(`
+              INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+              VALUES (?, ?, ?)
+              ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+            `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+          }
+        }
+        
         return profile;
       }
       
@@ -3689,6 +3777,10 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
       }
       
+      // Calculate and set fp attribute for the profile
+      const profileFp = await calculateProfileFp(profileData.profileId);
+      profileData.fp = profileFp;
+      
       // If no current profile, make this the current profile
       if (!hasCurrentProfile) {
         const profileToSave = JSON.parse(JSON.stringify(profileData));
@@ -3777,6 +3869,173 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Delete a profile (remove from standby or current, if it's the current profile then switch to another or clear)
+   * Channel: online:profile:delete
+   */
+  ipcMain.handle('online:profile:delete', async (event, { profileId }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Get keyguard key for decryption
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to delete profiles' };
+      }
+      
+      // Check if this is the current profile
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      const isCurrentProfile = profileId === currentProfileId;
+      
+      // If it's the current profile, we need to handle it differently
+      if (isCurrentProfile) {
+        // Delete the current profile entry
+        db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_profile');
+        db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_current_profile_id');
+        
+        // Try to switch to another profile if available
+        const standbyProfilesRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_standby_profiles');
+        
+        if (standbyProfilesRow) {
+          try {
+            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+            const iv = Buffer.from(encryptedData.iv, 'hex');
+            const encrypted = Buffer.from(encryptedData.data, 'hex');
+            
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+            
+            // If there are other profiles, switch to the first one
+            if (standbyProfiles.length > 0) {
+              const newCurrentProfile = standbyProfiles[0];
+              const remainingProfiles = standbyProfiles.slice(1);
+              
+              // Save the new current profile
+              const profileToSave = JSON.parse(JSON.stringify(newCurrentProfile));
+              if (profileToSave.primaryKeypair?.privateKey) {
+                delete profileToSave.primaryKeypair.privateKey;
+              }
+              if (profileToSave.additionalKeypairs) {
+                profileToSave.additionalKeypairs.forEach((kp) => {
+                  if (kp.privateKey) delete kp.privateKey;
+                });
+              }
+              if (profileToSave.adminKeypairs) {
+                profileToSave.adminKeypairs.forEach((kp) => {
+                  if (kp.privateKey) delete kp.privateKey;
+                });
+              }
+              
+              const uuid = crypto.randomUUID();
+              db.prepare(`
+                INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+              `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
+              
+              const uuid2 = crypto.randomUUID();
+              db.prepare(`
+                INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+              `).run(uuid2, 'online_current_profile_id', newCurrentProfile.profileId);
+              
+              // Update standby profiles with remaining profiles
+              if (remainingProfiles.length > 0) {
+                const newIv = crypto.randomBytes(16);
+                const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, newIv);
+                const standbyProfilesJson = JSON.stringify(remainingProfiles);
+                let newEncrypted = cipher.update(standbyProfilesJson, 'utf8');
+                newEncrypted = Buffer.concat([newEncrypted, cipher.final()]);
+                
+                const newEncryptedData = {
+                  iv: newIv.toString('hex'),
+                  data: newEncrypted.toString('hex')
+                };
+                
+                const uuid3 = crypto.randomUUID();
+                db.prepare(`
+                  INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+                  VALUES (?, ?, ?)
+                  ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+                `).run(uuid3, 'online_standby_profiles', JSON.stringify(newEncryptedData));
+              } else {
+                // No more standby profiles, delete the entry
+                db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_standby_profiles');
+              }
+            } else {
+              // No more profiles, delete standby profiles entry
+              db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_standby_profiles');
+            }
+          } catch (error) {
+            console.error('Error handling profile switch after deletion:', error);
+          }
+        }
+      } else {
+        // Delete from standby profiles
+        const standbyProfilesRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_standby_profiles');
+        
+        if (standbyProfilesRow) {
+          try {
+            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+            const iv = Buffer.from(encryptedData.iv, 'hex');
+            const encrypted = Buffer.from(encryptedData.data, 'hex');
+            
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            let standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+            standbyProfiles = standbyProfiles.filter((p) => p.profileId !== profileId);
+            
+            if (standbyProfiles.length > 0) {
+              // Encrypt and save updated standby profiles
+              const newIv = crypto.randomBytes(16);
+              const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, newIv);
+              const standbyProfilesJson = JSON.stringify(standbyProfiles);
+              let newEncrypted = cipher.update(standbyProfilesJson, 'utf8');
+              newEncrypted = Buffer.concat([newEncrypted, cipher.final()]);
+              
+              const newEncryptedData = {
+                iv: newIv.toString('hex'),
+                data: newEncrypted.toString('hex')
+              };
+              
+              const uuid = crypto.randomUUID();
+              db.prepare(`
+                INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+              `).run(uuid, 'online_standby_profiles', JSON.stringify(newEncryptedData));
+            } else {
+              // No more standby profiles, delete the entry
+              db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_standby_profiles');
+            }
+          } catch (error) {
+            console.error('Error deleting profile from standby:', error);
+            return { success: false, error: error.message };
+          }
+        }
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Import profile from encrypted file
    * Channel: online:profile:import
    */
@@ -3848,6 +4107,10 @@ function registerDatabaseHandlers(dbManager) {
       if (!keyguardKey) {
         return { success: false, error: 'Profile Guard must be unlocked to import profiles' };
       }
+      
+      // Calculate and set fp attribute for the imported profile
+      const profileFp = await calculateProfileFp(importedProfile.profileId);
+      importedProfile.fp = profileFp;
       
       // If overwriting current profile
       if (importedProfile.profileId === currentProfileId) {
@@ -3937,15 +4200,21 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profile:create', async (event, { keyType }) => {
     try {
-      // TODO: Implement actual keypair generation using cryptographic libraries
-      // For now, return a placeholder structure
+      // Users' first profile key must be a Nostr key
+      const actualKeyType = keyType || 'Nostr';
+      
+      // Generate the actual keypair
+      const keypair = await generateKeypair(actualKeyType);
+      
       const profile = {
         displayName: '',
         bio: '',
         primaryKeypair: {
-          type: keyType || 'ML-DSA-44',
-          publicKey: 'PLACEHOLDER_PUBLIC_KEY_' + Date.now(),
-          privateKey: 'PLACEHOLDER_PRIVATE_KEY_' + Date.now() // Never transmitted
+          type: keypair.type,
+          publicKey: keypair.publicKey,
+          privateKey: keypair.privateKey, // Will be encrypted with Profile Guard
+          publicKeyHex: keypair.publicKeyHex,
+          fingerprint: keypair.fingerprint
         },
         additionalKeypairs: [],
         adminKeypairs: [],
@@ -4020,6 +4289,10 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // Calculate and set fp attribute for the profile
+      const profileFp = await calculateProfileFp(profile.profileId);
+      profile.fp = profileFp;
+      
       // Find existing full profile in standby
       const existingFullProfileIndex = standbyProfiles.findIndex((p) => p.profileId === currentProfileId);
       
@@ -4040,6 +4313,8 @@ function registerDatabaseHandlers(dbManager) {
             }
           });
         }
+        // Update fp attribute
+        fullProfile.fp = profileFp;
         standbyProfiles[existingFullProfileIndex] = fullProfile;
       } else {
         // If not in standby, add it (profile was just created or switched)
@@ -4138,14 +4413,87 @@ function registerDatabaseHandlers(dbManager) {
   }
 
   /**
+   * Calculate fingerprint for a profile
+   * @param {string} profileUuid - Profile UUID
+   * @returns {Promise<string>} Base64-encoded fingerprint
+   */
+  async function calculateProfileFp(profileUuid) {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get keyguard_key_hash from csettings
+      const keyHashRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_key_hash');
+      
+      if (!keyHashRow || !keyHashRow.csetting_value) {
+        // If no keyguard_key_hash, use empty string
+        const hostFP = new HostFP();
+        return await hostFP.getv(profileUuid || '', '');
+      }
+      
+      // Get first 32 bytes (64 hex chars) of the keyguard_key_hash
+      const keyHash = keyHashRow.csetting_value;
+      const keyHashFirst32Bytes = keyHash.substring(0, 64);
+      
+      // Calculate fingerprint using HostFP
+      const hostFP = new HostFP();
+      return await hostFP.getv(profileUuid || '', keyHashFirst32Bytes);
+    } catch (error) {
+      console.error('Error calculating profile fingerprint:', error);
+      // Fallback to empty fingerprint
+      const hostFP = new HostFP();
+      return await hostFP.getv(profileUuid || '', '');
+    }
+  }
+
+  /**
    * Generate keypair based on type
-   * @param {string} keyType - ML-DSA-44, ML-DSA-87, ED25519, or RSA-2048
+   * @param {string} keyType - Nostr, ML-DSA-44, ML-DSA-87, ED25519, or RSA-2048
    * @returns {Promise<Object>} Keypair with publicKey, privateKey, and metadata
    */
   async function generateKeypair(keyType) {
     const crypto = require('crypto');
     
     switch (keyType) {
+      case 'Nostr': {
+        // Nostr uses secp256k1 elliptic curve with Schnorr signatures
+        const { generatePrivateKey, getPublicKey } = require('nostr-tools');
+        const nip19 = require('nostr-tools/nip19');
+        
+        // Generate a 32-byte private key (secp256k1) - returns hex string
+        const privateKeyHex = generatePrivateKey();
+        
+        // Get public key in hex format (not npub format)
+        const publicKeyHex = getPublicKey(privateKeyHex);
+        
+        // Convert hex private key to Buffer for fingerprint calculation
+        const privateKeyBuffer = Buffer.from(privateKeyHex, 'hex');
+        const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
+        
+        // Generate fingerprint from public key
+        const fingerprint = crypto.createHash('sha256').update(publicKeyBuffer).digest('hex');
+        
+        // Convert to PEM-like format for consistency
+        const privateKeyBase64 = privateKeyBuffer.toString('base64');
+        const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g) ? privateKeyBase64.match(/.{1,64}/g).join('\n') : privateKeyBase64;
+        const privateKeyPem = `-----BEGIN NOSTR PRIVATE KEY-----\n` +
+          privateKeyWrapped + '\n' +
+          `-----END NOSTR PRIVATE KEY-----`;
+        
+        // Convert public key to npub format for display
+        const npub = nip19.npubEncode(publicKeyHex);
+        
+        return {
+          type: 'Nostr',
+          publicKey: npub, // Store as npub format for display
+          privateKey: privateKeyPem,
+          publicKeyHex: publicKeyHex, // Store hex for internal use
+          privateKeyRaw: privateKeyHex, // Store raw hex for encryption
+          fingerprint: fingerprint
+        };
+      }
+      
       case 'ED25519': {
         const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
           publicKeyEncoding: {
@@ -4488,51 +4836,8 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
-  /**
-   * Get admin master keys
-   * Channel: online:master-keys:get
-   */
-  ipcMain.handle('online:master-keys:get', async () => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      const masterKeysJson = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_master_keys');
-      
-      if (masterKeysJson) {
-        return JSON.parse(masterKeysJson.csetting_value);
-      }
-      
-      return [];
-    } catch (error) {
-      console.error('Error getting master keys:', error);
-      return [];
-    }
-  });
-
-  /**
-   * Save admin master keys
-   * Channel: online:master-keys:save
-   */
-  ipcMain.handle('online:master-keys:save', async (event, masterKeys) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
-      const uuid = crypto.randomUUID();
-      
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid, 'online_master_keys', JSON.stringify(masterKeys));
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error saving master keys:', error);
-      return { success: false, error: error.message };
-    }
-  });
+  // Note: Admin master keys are now stored in the admin_keypairs table with key_usage = 'master-admin-signing'
+  // The old online:master-keys:get and online:master-keys:save handlers have been removed.
 
   /**
    * Copy text to clipboard
@@ -4606,7 +4911,7 @@ function registerDatabaseHandlers(dbManager) {
    * Set up Profile Guard
    * Channel: profile-guard:setup
    */
-  ipcMain.handle('profile-guard:setup', async (event, { password, highSecurityMode }) => {
+  ipcMain.handle('profile-guard:setup', async (event, { password, highSecurityMode, changePassword }) => {
     try {
       const crypto = require('crypto');
       const { safeStorage } = require('electron');
@@ -5121,6 +5426,1706 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // ===========================================================================
+  // ADMIN KEYPAIR OPERATIONS (clientdata.db - admin_keypairs table)
+  // ===========================================================================
+
+  /**
+   * List all admin keypairs (public info only)
+   * Channel: online:admin-keypairs:list
+   */
+  ipcMain.handle('online:admin-keypairs:list', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypairs = db.prepare(`
+        SELECT 
+          keypair_uuid,
+          keypair_type,
+          key_usage,
+          storage_status,
+          public_key,
+          public_key_hex,
+          fingerprint,
+          trust_level,
+          local_name,
+          canonical_name,
+          name,
+          label,
+          comments,
+          profile_uuid,
+          created_at
+        FROM admin_keypairs
+        WHERE profile_uuid IS NULL
+        ORDER BY COALESCE(name, local_name, canonical_name), created_at DESC
+      `).all();
+      
+      return keypairs.map(kp => ({
+        uuid: kp.keypair_uuid,
+        type: kp.keypair_type,
+        keyUsage: kp.key_usage,
+        storageStatus: kp.storage_status || 'public-only',
+        publicKey: kp.public_key,
+        publicKeyHex: kp.public_key_hex,
+        fingerprint: kp.fingerprint,
+        trustLevel: kp.trust_level,
+        localName: kp.local_name,
+        canonicalName: kp.canonical_name,
+        name: kp.name,
+        label: kp.label,
+        comments: kp.comments,
+        profileUuid: kp.profile_uuid,
+        createdAt: kp.created_at
+      }));
+    } catch (error) {
+      console.error('Error listing admin keypairs:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Get admin keypair (with decrypted secret key if Profile Guard is unlocked)
+   * Channel: online:admin-keypair:get
+   */
+  ipcMain.handle('online:admin-keypair:get', async (event, { keypairUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT * FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      const result = {
+        uuid: keypair.keypair_uuid,
+        type: keypair.keypair_type,
+        keyUsage: keypair.key_usage,
+        storageStatus: keypair.storage_status || 'public-only',
+        publicKey: keypair.public_key,
+        publicKeyHex: keypair.public_key_hex,
+        fingerprint: keypair.fingerprint,
+        trustLevel: keypair.trust_level,
+        localName: keypair.local_name,
+        canonicalName: keypair.canonical_name,
+        name: keypair.name,
+        label: keypair.label,
+        comments: keypair.comments,
+        profileUuid: keypair.profile_uuid,
+        createdAt: keypair.created_at
+      };
+      
+      // Decrypt private key if Profile Guard is unlocked and encrypted_private_key exists
+      const keyguardKey = getKeyguardKey(event);
+      if (keyguardKey && keypair.encrypted_private_key) {
+        try {
+          const parts = keypair.encrypted_private_key.split(':');
+          if (parts.length === 2) {
+            const iv = Buffer.from(parts[0], 'hex');
+            const encrypted = Buffer.from(parts[1], 'hex');
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            // Convert back to original format
+            if (keypair.private_key_format === 'hex') {
+              result.privateKey = decrypted.toString('hex');
+            } else {
+              result.privateKey = decrypted.toString('utf8');
+            }
+          }
+        } catch (error) {
+          console.error('Error decrypting admin keypair:', error);
+          return { success: false, error: 'Failed to decrypt private key' };
+        }
+      } else if (keypair.storage_status === 'full-offline') {
+        // For offline storage, we don't have the private key stored
+        result.privateKey = null;
+      }
+      
+      return { success: true, keypair: result };
+    } catch (error) {
+      console.error('Error getting admin keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create admin keypair
+   * Channel: online:admin-keypair:create
+   */
+  ipcMain.handle('online:admin-keypair:create', async (event, { keyType, keyUsage, trustLevel, username }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get username from profile if not provided
+      let usernameForName = username;
+      if (!usernameForName) {
+        const profileJson = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_profile');
+        
+        if (profileJson) {
+          const profile = JSON.parse(profileJson.csetting_value);
+          usernameForName = profile.username || 'admin';
+        } else {
+          usernameForName = 'admin';
+        }
+      }
+      
+      // Generate actual keypair
+      const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
+      
+      // Generate names
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      
+      // Encrypt private key with Profile Guard
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to create admin keypairs' };
+      }
+      
+      // Encrypt private key
+      const keyToEncrypt = keypairData.privateKeyRaw || keypairData.privateKey;
+      const keyData = keypairData.privateKeyRaw ? Buffer.from(keyToEncrypt, 'hex') : Buffer.from(keyToEncrypt, 'utf8');
+      
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+      let encrypted = cipher.update(keyData);
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
+      
+      const encryptedPrivateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+      const privateKeyFormat = keypairData.privateKeyRaw ? 'hex' : 'pem';
+      
+      // Save to database
+      const keypairUuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO admin_keypairs (
+          keypair_uuid, keypair_type, key_usage, storage_status,
+          public_key, public_key_hex, fingerprint,
+          encrypted_private_key, private_key_format,
+          trust_level, local_name, canonical_name,
+          name, label, comments, profile_uuid
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        keypairUuid,
+        keypairData.type,
+        keyUsage || null,
+        'full', // Generated keypairs have full storage by default
+        String(keypairData.publicKey),
+        String(keypairData.publicKeyHex),
+        String(keypairData.fingerprint),
+        encryptedPrivateKey,
+        privateKeyFormat,
+        trustLevel || 'Standard',
+        localName,
+        canonicalName,
+        null, // name - can be set later
+        null, // label - can be set later
+        null, // comments - can be set later
+        null  // profile_uuid - NULL for global admin keypairs
+      );
+      
+      return {
+        success: true,
+        keypair: {
+          uuid: keypairUuid,
+          type: keypairData.type,
+          keyUsage: keyUsage,
+          storageStatus: 'full',
+          publicKey: String(keypairData.publicKey),
+          publicKeyHex: String(keypairData.publicKeyHex),
+          fingerprint: String(keypairData.fingerprint),
+          trustLevel: trustLevel || 'Standard',
+          localName: localName,
+          canonicalName: canonicalName,
+          name: null,
+          label: null,
+          comments: null,
+          profileUuid: null,
+          createdAt: new Date().toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Error creating admin keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Add existing admin keypair (public key only or full)
+   * Channel: online:admin-keypair:add
+   */
+  ipcMain.handle('online:admin-keypair:add', async (event, { keyType, publicKey, publicKeyHex, privateKey, privateKeyFormat, keyUsage, storageStatus, trustLevel }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      // Calculate fingerprint from public key
+      const calculatedFingerprint = publicKeyHex ? crypto.createHash('sha256').update(Buffer.from(publicKeyHex, 'hex')).digest('hex').substring(0, 32) : null;
+      
+      // Generate names
+      const localName = calculatedFingerprint ? generateLocalKeypairName('admin', keyType, calculatedFingerprint) : null;
+      const canonicalName = calculatedFingerprint ? generateCanonicalKeypairName(keyType, calculatedFingerprint, publicKeyHex) : null;
+      
+      // Encrypt private key if provided
+      let encryptedPrivateKey = null;
+      let privateKeyFormatValue = privateKeyFormat || 'pem';
+      
+      if (privateKey) {
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to add keypairs with private keys' };
+        }
+        
+        const keyData = privateKeyFormatValue === 'hex' ? Buffer.from(privateKey, 'hex') : Buffer.from(privateKey, 'utf8');
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        let encrypted = cipher.update(keyData);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        encryptedPrivateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+      }
+      
+      // Save to database
+      const keypairUuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO admin_keypairs (
+          keypair_uuid, keypair_type, key_usage, storage_status,
+          public_key, public_key_hex, fingerprint,
+          encrypted_private_key, private_key_format,
+          trust_level, local_name, canonical_name,
+          name, label, comments, profile_uuid
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        keypairUuid,
+        keyType,
+        keyUsage || null,
+        storageStatus || 'public-only',
+        publicKey,
+        publicKeyHex || null,
+        calculatedFingerprint || null,
+        encryptedPrivateKey,
+        privateKeyFormatValue,
+        trustLevel || 'Standard',
+        localName,
+        canonicalName,
+        null, // name - can be set later
+        null, // label - can be set later
+        null, // comments - can be set later
+        null  // profile_uuid - NULL for global admin keypairs
+      );
+      
+      return {
+        success: true,
+        keypair: {
+          uuid: keypairUuid,
+          type: keyType,
+          keyUsage: keyUsage,
+          storageStatus: storageStatus || 'public-only',
+          publicKey: publicKey,
+          publicKeyHex: publicKeyHex,
+          fingerprint: calculatedFingerprint,
+          trustLevel: trustLevel || 'Standard',
+          localName: localName,
+          canonicalName: canonicalName,
+          name: null,
+          label: null,
+          comments: null,
+          profileUuid: null,
+          createdAt: new Date().toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Error adding admin keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update admin keypair storage status
+   * Channel: online:admin-keypair:update-storage-status
+   */
+  ipcMain.handle('online:admin-keypair:update-storage-status', async (event, { keypairUuid, storageStatus }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT encrypted_private_key, storage_status FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      // If changing to public-only, remove encrypted private key
+      if (storageStatus === 'public-only') {
+        db.prepare(`
+          UPDATE admin_keypairs 
+          SET storage_status = ?, encrypted_private_key = NULL, private_key_format = NULL
+          WHERE keypair_uuid = ?
+        `).run(storageStatus, keypairUuid);
+      } else if (storageStatus === 'full' && !keypair.encrypted_private_key) {
+        // If changing to full but no private key, can't do that
+        return { success: false, error: 'Cannot set storage status to full without a private key' };
+      } else {
+        // Just update storage status
+        db.prepare(`
+          UPDATE admin_keypairs 
+          SET storage_status = ?
+          WHERE keypair_uuid = ?
+        `).run(storageStatus, keypairUuid);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating admin keypair storage status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete admin keypair
+   * Channel: online:admin-keypair:delete
+   */
+  ipcMain.handle('online:admin-keypair:delete', async (event, { keypairUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        DELETE FROM admin_keypairs WHERE keypair_uuid = ?
+      `).run(keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting admin keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update admin keypair metadata (name, label, comments)
+   * Channel: online:admin-keypair:update-metadata
+   */
+  ipcMain.handle('online:admin-keypair:update-metadata', async (event, { keypairUuid, name, label, comments }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET name = ?, label = ?, comments = ?
+        WHERE keypair_uuid = ?
+      `).run(name || null, label || null, comments || null, keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating admin keypair metadata:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Export admin keypair secret key in PKCS format
+   * Channel: online:admin-keypair:export-secret-pkcs
+   */
+  ipcMain.handle('online:admin-keypair:export-secret-pkcs', async (event, { keypairUuid, password }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT encrypted_private_key, private_key_format FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair || !keypair.encrypted_private_key) {
+        return { success: false, error: 'Keypair not found or has no private key' };
+      }
+      
+      // Decrypt private key
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to export secret keys' };
+      }
+      
+      const parts = keypair.encrypted_private_key.split(':');
+      if (parts.length !== 2) {
+        return { success: false, error: 'Invalid encrypted private key format' };
+      }
+      
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = Buffer.from(parts[1], 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const privateKey = keypair.private_key_format === 'hex' ? decrypted.toString('hex') : decrypted.toString('utf8');
+      
+      // Encrypt with user-provided password using PBKDF2
+      const salt = crypto.randomBytes(16);
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const exportIv = crypto.randomBytes(16);
+      const exportCipher = crypto.createCipheriv('aes-256-cbc', key, exportIv);
+      let passwordEncrypted = exportCipher.update(privateKey, 'utf8');
+      passwordEncrypted = Buffer.concat([passwordEncrypted, exportCipher.final()]);
+      
+      // Create PKCS-like JSON format
+      const pkcsData = {
+        format: 'RHTools-PKCS-v1',
+        keypairUuid: keypairUuid,
+        privateKeyFormat: keypair.private_key_format,
+        encryptedData: {
+          iv: exportIv.toString('hex'),
+          salt: salt.toString('hex'),
+          data: passwordEncrypted.toString('hex')
+        }
+      };
+      
+      return { success: true, pkcsData: JSON.stringify(pkcsData) };
+    } catch (error) {
+      console.error('Error exporting admin keypair secret PKCS:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Import admin keypair secret key from PKCS format
+   * Channel: online:admin-keypair:import-secret-pkcs
+   */
+  ipcMain.handle('online:admin-keypair:import-secret-pkcs', async (event, { keypairUuid, pkcsDataJson, password }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const pkcsData = JSON.parse(pkcsDataJson);
+      
+      if (pkcsData.format !== 'RHTools-PKCS-v1') {
+        return { success: false, error: 'Invalid PKCS format' };
+      }
+      
+      // Decrypt with user-provided password
+      const salt = Buffer.from(pkcsData.encryptedData.salt, 'hex');
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const iv = Buffer.from(pkcsData.encryptedData.iv, 'hex');
+      const encrypted = Buffer.from(pkcsData.encryptedData.data, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const privateKey = decrypted.toString('utf8');
+      
+      // Re-encrypt with Profile Guard key
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to import secret keys' };
+      }
+      
+      const privateKeyData = pkcsData.privateKeyFormat === 'hex' ? Buffer.from(privateKey, 'hex') : Buffer.from(privateKey, 'utf8');
+      const reencryptIv = crypto.randomBytes(16);
+      const reencryptCipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, reencryptIv);
+      let reencrypted = reencryptCipher.update(privateKeyData);
+      reencrypted = Buffer.concat([reencrypted, reencryptCipher.final()]);
+      
+      const encryptedPrivateKey = reencryptIv.toString('hex') + ':' + reencrypted.toString('hex');
+      
+      // Update database
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET encrypted_private_key = ?, private_key_format = ?, storage_status = 'full'
+        WHERE keypair_uuid = ?
+      `).run(encryptedPrivateKey, pkcsData.privateKeyFormat, keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error importing admin keypair secret PKCS:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Remove admin keypair secret key
+   * Channel: online:admin-keypair:remove-secret
+   */
+  ipcMain.handle('online:admin-keypair:remove-secret', async (event, { keypairUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET encrypted_private_key = NULL, private_key_format = NULL, storage_status = 'public-only'
+        WHERE keypair_uuid = ?
+      `).run(keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error removing admin keypair secret:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ===========================================================================
+  // USER OP KEYPAIR OPERATIONS (clientdata.db - admin_keypairs table with profile_uuid)
+  // ===========================================================================
+
+  /**
+   * List User Op keypairs for a specific profile (public info only)
+   * Channel: online:user-op-keypairs:list
+   */
+  ipcMain.handle('online:user-op-keypairs:list', async (event, { profileUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypairs = db.prepare(`
+        SELECT 
+          keypair_uuid,
+          keypair_type,
+          key_usage,
+          storage_status,
+          public_key,
+          public_key_hex,
+          fingerprint,
+          trust_level,
+          local_name,
+          canonical_name,
+          name,
+          label,
+          comments,
+          profile_uuid,
+          created_at
+        FROM admin_keypairs
+        WHERE profile_uuid = ?
+        ORDER BY COALESCE(name, local_name, canonical_name), created_at DESC
+      `).all(profileUuid);
+      
+      return keypairs.map(kp => ({
+        uuid: kp.keypair_uuid,
+        type: kp.keypair_type,
+        keyUsage: kp.key_usage,
+        storageStatus: kp.storage_status || 'public-only',
+        publicKey: kp.public_key,
+        publicKeyHex: kp.public_key_hex,
+        fingerprint: kp.fingerprint,
+        trustLevel: kp.trust_level,
+        localName: kp.local_name,
+        canonicalName: kp.canonical_name,
+        name: kp.name,
+        label: kp.label,
+        comments: kp.comments,
+        profileUuid: kp.profile_uuid,
+        createdAt: kp.created_at
+      }));
+    } catch (error) {
+      console.error('Error listing User Op keypairs:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Get User Op keypair (with decrypted secret key if Profile Guard is unlocked)
+   * Channel: online:user-op-keypair:get
+   */
+  ipcMain.handle('online:user-op-keypair:get', async (event, { keypairUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT * FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      const result = {
+        uuid: keypair.keypair_uuid,
+        type: keypair.keypair_type,
+        keyUsage: keypair.key_usage,
+        storageStatus: keypair.storage_status || 'public-only',
+        publicKey: keypair.public_key,
+        publicKeyHex: keypair.public_key_hex,
+        fingerprint: keypair.fingerprint,
+        trustLevel: keypair.trust_level,
+        localName: keypair.local_name,
+        canonicalName: keypair.canonical_name,
+        name: keypair.name,
+        label: keypair.label,
+        comments: keypair.comments,
+        profileUuid: keypair.profile_uuid,
+        createdAt: keypair.created_at
+      };
+      
+      // Decrypt private key if Profile Guard is unlocked and encrypted_private_key exists
+      const keyguardKey = getKeyguardKey(event);
+      if (keyguardKey && keypair.encrypted_private_key) {
+        try {
+          const parts = keypair.encrypted_private_key.split(':');
+          if (parts.length === 2) {
+            const iv = Buffer.from(parts[0], 'hex');
+            const encrypted = Buffer.from(parts[1], 'hex');
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            // Convert back to original format
+            if (keypair.private_key_format === 'hex') {
+              result.privateKey = decrypted.toString('hex');
+            } else {
+              result.privateKey = decrypted.toString('utf8');
+            }
+          }
+        } catch (error) {
+          console.error('Error decrypting User Op keypair:', error);
+          return { success: false, error: 'Failed to decrypt private key' };
+        }
+      } else if (keypair.storage_status === 'full-offline') {
+        // For offline storage, we don't have the private key stored
+        result.privateKey = null;
+      }
+      
+      return { success: true, keypair: result };
+    } catch (error) {
+      console.error('Error getting User Op keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create User Op keypair
+   * Channel: online:user-op-keypair:create
+   */
+  ipcMain.handle('online:user-op-keypair:create', async (event, { profileUuid, keyType, keyUsage, trustLevel, username }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      if (!profileUuid) {
+        return { success: false, error: 'Profile UUID is required for User Op keypairs' };
+      }
+      
+      // Get username from profile if not provided
+      let usernameForName = username;
+      if (!usernameForName) {
+        const profileJson = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_profile');
+        
+        if (profileJson) {
+          const profile = JSON.parse(profileJson.csetting_value);
+          usernameForName = profile.username || 'user';
+        } else {
+          usernameForName = 'user';
+        }
+      }
+      
+      // Generate actual keypair
+      const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
+      
+      // Generate names
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      
+      // Encrypt private key with Profile Guard
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to create User Op keypairs' };
+      }
+      
+      // Encrypt private key
+      const keyToEncrypt = keypairData.privateKeyRaw || keypairData.privateKey;
+      const keyData = keypairData.privateKeyRaw ? Buffer.from(keyToEncrypt, 'hex') : Buffer.from(keyToEncrypt, 'utf8');
+      
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+      let encrypted = cipher.update(keyData);
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
+      
+      const encryptedPrivateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+      const privateKeyFormat = keypairData.privateKeyRaw ? 'hex' : 'pem';
+      
+      // Save to database
+      const keypairUuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO admin_keypairs (
+          keypair_uuid, keypair_type, key_usage, storage_status,
+          public_key, public_key_hex, fingerprint,
+          encrypted_private_key, private_key_format,
+          trust_level, local_name, canonical_name,
+          name, label, comments, profile_uuid
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        keypairUuid,
+        keypairData.type,
+        keyUsage || null,
+        'full', // Generated keypairs have full storage by default
+        String(keypairData.publicKey),
+        String(keypairData.publicKeyHex),
+        String(keypairData.fingerprint),
+        encryptedPrivateKey,
+        privateKeyFormat,
+        trustLevel || 'Standard',
+        localName,
+        canonicalName,
+        null, // name - can be set later
+        null, // label - can be set later
+        null, // comments - can be set later
+        profileUuid  // profile_uuid - set to profile UUID for User Op keypairs
+      );
+      
+      return {
+        success: true,
+        keypair: {
+          uuid: keypairUuid,
+          type: keypairData.type,
+          keyUsage: keyUsage,
+          storageStatus: 'full',
+          publicKey: String(keypairData.publicKey),
+          publicKeyHex: String(keypairData.publicKeyHex),
+          fingerprint: String(keypairData.fingerprint),
+          trustLevel: trustLevel || 'Standard',
+          localName: localName,
+          canonicalName: canonicalName,
+          name: null,
+          label: null,
+          comments: null,
+          profileUuid: profileUuid,
+          createdAt: new Date().toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Error creating User Op keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Add existing User Op keypair (public key only or full)
+   * Channel: online:user-op-keypair:add
+   */
+  ipcMain.handle('online:user-op-keypair:add', async (event, { profileUuid, keyType, publicKey, publicKeyHex, privateKey, privateKeyFormat, keyUsage, storageStatus, trustLevel }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      if (!profileUuid) {
+        return { success: false, error: 'Profile UUID is required for User Op keypairs' };
+      }
+      
+      // Calculate fingerprint from public key
+      const calculatedFingerprint = publicKeyHex ? crypto.createHash('sha256').update(Buffer.from(publicKeyHex, 'hex')).digest('hex').substring(0, 32) : null;
+      
+      // Generate names
+      const localName = calculatedFingerprint ? generateLocalKeypairName('user', keyType, calculatedFingerprint) : null;
+      const canonicalName = calculatedFingerprint ? generateCanonicalKeypairName(keyType, calculatedFingerprint, publicKeyHex) : null;
+      
+      // Encrypt private key if provided
+      let encryptedPrivateKey = null;
+      let privateKeyFormatValue = privateKeyFormat || 'pem';
+      
+      if (privateKey) {
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to add keypairs with private keys' };
+        }
+        
+        const keyData = privateKeyFormatValue === 'hex' ? Buffer.from(privateKey, 'hex') : Buffer.from(privateKey, 'utf8');
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        let encrypted = cipher.update(keyData);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        encryptedPrivateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+      }
+      
+      // Save to database
+      const keypairUuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO admin_keypairs (
+          keypair_uuid, keypair_type, key_usage, storage_status,
+          public_key, public_key_hex, fingerprint,
+          encrypted_private_key, private_key_format,
+          trust_level, local_name, canonical_name,
+          name, label, comments, profile_uuid
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        keypairUuid,
+        keyType,
+        keyUsage || null,
+        storageStatus || 'public-only',
+        publicKey,
+        publicKeyHex || null,
+        calculatedFingerprint || null,
+        encryptedPrivateKey,
+        privateKeyFormatValue,
+        trustLevel || 'Standard',
+        localName,
+        canonicalName,
+        null, // name - can be set later
+        null, // label - can be set later
+        null, // comments - can be set later
+        profileUuid  // profile_uuid - set to profile UUID for User Op keypairs
+      );
+      
+      return {
+        success: true,
+        keypair: {
+          uuid: keypairUuid,
+          type: keyType,
+          keyUsage: keyUsage,
+          storageStatus: storageStatus || 'public-only',
+          publicKey: publicKey,
+          publicKeyHex: publicKeyHex,
+          fingerprint: calculatedFingerprint,
+          trustLevel: trustLevel || 'Standard',
+          localName: localName,
+          canonicalName: canonicalName,
+          name: null,
+          label: null,
+          comments: null,
+          profileUuid: profileUuid,
+          createdAt: new Date().toISOString()
+        }
+      };
+    } catch (error) {
+      console.error('Error adding User Op keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update User Op keypair storage status
+   * Channel: online:user-op-keypair:update-storage-status
+   */
+  ipcMain.handle('online:user-op-keypair:update-storage-status', async (event, { keypairUuid, storageStatus }) => {
+    try {
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT encrypted_private_key, storage_status FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      // If changing to public-only, remove encrypted private key
+      if (storageStatus === 'public-only') {
+        db.prepare(`
+          UPDATE admin_keypairs 
+          SET storage_status = ?, encrypted_private_key = NULL, private_key_format = NULL
+          WHERE keypair_uuid = ?
+        `).run(storageStatus, keypairUuid);
+      } else if (storageStatus === 'full' && !keypair.encrypted_private_key) {
+        // If changing to full but no private key, can't do that
+        return { success: false, error: 'Cannot set storage status to full without a private key' };
+      } else {
+        // Just update storage status
+        db.prepare(`
+          UPDATE admin_keypairs 
+          SET storage_status = ?
+          WHERE keypair_uuid = ?
+        `).run(storageStatus, keypairUuid);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating User Op keypair storage status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete User Op keypair
+   * Channel: online:user-op-keypair:delete
+   */
+  ipcMain.handle('online:user-op-keypair:delete', async (event, { keypairUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        DELETE FROM admin_keypairs WHERE keypair_uuid = ?
+      `).run(keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting User Op keypair:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update User Op keypair metadata (name, label, comments)
+   * Channel: online:user-op-keypair:update-metadata
+   */
+  ipcMain.handle('online:user-op-keypair:update-metadata', async (event, { keypairUuid, name, label, comments }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET name = ?, label = ?, comments = ?
+        WHERE keypair_uuid = ?
+      `).run(name || null, label || null, comments || null, keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating User Op keypair metadata:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Export User Op keypair secret key in PKCS format
+   * Channel: online:user-op-keypair:export-secret-pkcs
+   */
+  ipcMain.handle('online:user-op-keypair:export-secret-pkcs', async (event, { keypairUuid, password }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT encrypted_private_key, private_key_format FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair || !keypair.encrypted_private_key) {
+        return { success: false, error: 'Keypair not found or has no private key' };
+      }
+      
+      // Decrypt private key
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to export secret keys' };
+      }
+      
+      const parts = keypair.encrypted_private_key.split(':');
+      if (parts.length !== 2) {
+        return { success: false, error: 'Invalid encrypted private key format' };
+      }
+      
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = Buffer.from(parts[1], 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const privateKey = keypair.private_key_format === 'hex' ? decrypted.toString('hex') : decrypted.toString('utf8');
+      
+      // Encrypt with user-provided password using PBKDF2
+      const salt = crypto.randomBytes(16);
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const exportIv = crypto.randomBytes(16);
+      const exportCipher = crypto.createCipheriv('aes-256-cbc', key, exportIv);
+      let passwordEncrypted = exportCipher.update(privateKey, 'utf8');
+      passwordEncrypted = Buffer.concat([passwordEncrypted, exportCipher.final()]);
+      
+      // Create PKCS-like JSON format
+      const pkcsData = {
+        format: 'RHTools-PKCS-v1',
+        keypairUuid: keypairUuid,
+        privateKeyFormat: keypair.private_key_format,
+        encryptedData: {
+          iv: exportIv.toString('hex'),
+          salt: salt.toString('hex'),
+          data: passwordEncrypted.toString('hex')
+        }
+      };
+      
+      return { success: true, pkcsData: JSON.stringify(pkcsData) };
+    } catch (error) {
+      console.error('Error exporting User Op keypair secret PKCS:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Import User Op keypair secret key from PKCS format
+   * Channel: online:user-op-keypair:import-secret-pkcs
+   */
+  ipcMain.handle('online:user-op-keypair:import-secret-pkcs', async (event, { keypairUuid, pkcsDataJson, password }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const pkcsData = JSON.parse(pkcsDataJson);
+      
+      if (pkcsData.format !== 'RHTools-PKCS-v1') {
+        return { success: false, error: 'Invalid PKCS format' };
+      }
+      
+      // Decrypt with user-provided password
+      const salt = Buffer.from(pkcsData.encryptedData.salt, 'hex');
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const iv = Buffer.from(pkcsData.encryptedData.iv, 'hex');
+      const encrypted = Buffer.from(pkcsData.encryptedData.data, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const privateKey = decrypted.toString('utf8');
+      
+      // Re-encrypt with Profile Guard key
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to import secret keys' };
+      }
+      
+      const privateKeyData = pkcsData.privateKeyFormat === 'hex' ? Buffer.from(privateKey, 'hex') : Buffer.from(privateKey, 'utf8');
+      const reencryptIv = crypto.randomBytes(16);
+      const reencryptCipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, reencryptIv);
+      let reencrypted = reencryptCipher.update(privateKeyData);
+      reencrypted = Buffer.concat([reencrypted, reencryptCipher.final()]);
+      
+      const encryptedPrivateKey = reencryptIv.toString('hex') + ':' + reencrypted.toString('hex');
+      
+      // Update database
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET encrypted_private_key = ?, private_key_format = ?, storage_status = 'full'
+        WHERE keypair_uuid = ?
+      `).run(encryptedPrivateKey, pkcsData.privateKeyFormat, keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error importing User Op keypair secret PKCS:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Remove User Op keypair secret key
+   * Channel: online:user-op-keypair:remove-secret
+   */
+  ipcMain.handle('online:user-op-keypair:remove-secret', async (event, { keypairUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET encrypted_private_key = NULL, private_key_format = NULL, storage_status = 'public-only'
+        WHERE keypair_uuid = ?
+      `).run(keypairUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error removing User Op keypair secret:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ===========================================================================
+  // ENCRYPTION KEY OPERATIONS (clientdata.db - encryption_keys table)
+  // ===========================================================================
+
+  /**
+   * List all encryption keys (public info only)
+   * Channel: online:encryption-keys:list
+   */
+  ipcMain.handle('online:encryption-keys:list', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keys = db.prepare(`
+        SELECT 
+          key_uuid,
+          name,
+          label,
+          algorithm,
+          key_type,
+          encrypted,
+          keyguard_hash,
+          hash_algorithm,
+          hash_value,
+          selection_identifier,
+          description,
+          start_date,
+          end_date,
+          created_at,
+          updated_at
+        FROM encryption_keys
+        ORDER BY COALESCE(name, label), created_at DESC
+      `).all();
+      
+      return keys.map(k => ({
+        uuid: k.key_uuid,
+        name: k.name,
+        label: k.label,
+        algorithm: k.algorithm,
+        keyType: k.key_type,
+        encrypted: Boolean(k.encrypted),
+        keyguardHash: k.keyguard_hash,
+        hashAlgorithm: k.hash_algorithm,
+        hashValue: k.hash_value,
+        selectionIdentifier: k.selection_identifier,
+        description: k.description,
+        startDate: k.start_date,
+        endDate: k.end_date,
+        createdAt: k.created_at,
+        updatedAt: k.updated_at
+      }));
+    } catch (error) {
+      console.error('Error listing encryption keys:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Get encryption key details (decrypts keydata if encrypted)
+   * Channel: online:encryption-key:get
+   */
+  ipcMain.handle('online:encryption-key:get', async (event, { keyUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      const key = db.prepare(`
+        SELECT * FROM encryption_keys WHERE key_uuid = ?
+      `).get(keyUuid);
+      
+      if (!key) {
+        return { success: false, error: 'Encryption key not found' };
+      }
+      
+      let decryptedKeydata = null;
+      
+      // If encrypted, decrypt the keydata
+      if (key.encrypted === 1) {
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to view encrypted key data' };
+        }
+        
+        // Verify keyguard hash if present
+        if (key.keyguard_hash) {
+          const keyguardHash = crypto.createHash('sha256').update(keyguardKey).digest('hex');
+          if (keyguardHash !== key.keyguard_hash) {
+            return { success: false, error: 'Keyguard hash mismatch - key may be encrypted with different profile guard' };
+          }
+        }
+        
+        // Decrypt keydata (format: iv:encrypted)
+        const parts = key.keydata.split(':');
+        if (parts.length !== 2) {
+          return { success: false, error: 'Invalid encrypted key format' };
+        }
+        
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+        let decrypted = decipher.update(encrypted);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        decryptedKeydata = decrypted.toString('hex');
+      } else {
+        decryptedKeydata = key.keydata;
+      }
+      
+      return {
+        success: true,
+        key: {
+          uuid: key.key_uuid,
+          name: key.name,
+          label: key.label,
+          algorithm: key.algorithm,
+          keyType: key.key_type,
+          encrypted: Boolean(key.encrypted),
+          keyguardHash: key.keyguard_hash,
+          hashAlgorithm: key.hash_algorithm,
+          hashValue: key.hash_value,
+          keydata: decryptedKeydata,
+          selectionIdentifier: key.selection_identifier,
+          description: key.description,
+          startDate: key.start_date,
+          endDate: key.end_date,
+          createdAt: key.created_at,
+          updatedAt: key.updated_at
+        }
+      };
+    } catch (error) {
+      console.error('Error getting encryption key:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create new encryption key
+   * Channel: online:encryption-key:create
+   */
+  ipcMain.handle('online:encryption-key:create', async (event, { name, label, algorithm, keyType, encrypted, keydata, selectionIdentifier, description, startDate, endDate }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Validate algorithm
+      if (algorithm !== 'AES256' && algorithm !== 'AES128') {
+        return { success: false, error: 'Algorithm must be AES256 or AES128' };
+      }
+      
+      // Validate key type
+      const validKeyTypes = ['Shared Preinstalled', 'Shared General', 'Shared Selective', 'Group', 'Individual'];
+      if (!validKeyTypes.includes(keyType)) {
+        return { success: false, error: 'Invalid key type' };
+      }
+      
+      // Generate UUID
+      const keyUuid = crypto.randomUUID();
+      
+      // Generate hash of raw key value
+      const rawKeyBuffer = Buffer.from(keydata, 'hex');
+      const hashValue = crypto.createHash('sha256').update(rawKeyBuffer).digest('hex');
+      
+      let finalKeydata = keydata;
+      let keyguardHash = null;
+      
+      // If encrypted flag is set, encrypt the keydata with Profile Guard key
+      if (encrypted) {
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to create encrypted keys' };
+        }
+        
+        // Create keyguard hash
+        keyguardHash = crypto.createHash('sha256').update(keyguardKey).digest('hex');
+        
+        // Encrypt keydata
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        const keydataBuffer = Buffer.from(keydata, 'hex');
+        let encrypted = cipher.update(keydataBuffer);
+        encrypted = Buffer.concat([encrypted, cipher.final()]);
+        
+        finalKeydata = iv.toString('hex') + ':' + encrypted.toString('hex');
+      }
+      
+      // Set start_date to current time if not provided
+      const finalStartDate = startDate || new Date().toISOString();
+      
+      // Insert into database
+      db.prepare(`
+        INSERT INTO encryption_keys (
+          key_uuid, name, label, algorithm, key_type, encrypted, keyguard_hash,
+          hash_algorithm, hash_value, keydata, selection_identifier, description,
+          start_date, end_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        keyUuid,
+        name || null,
+        label || null,
+        algorithm,
+        keyType,
+        encrypted ? 1 : 0,
+        keyguardHash,
+        'SHA-256',
+        hashValue,
+        finalKeydata,
+        selectionIdentifier || null,
+        description || null,
+        finalStartDate,
+        endDate || null
+      );
+      
+      return { success: true, keyUuid };
+    } catch (error) {
+      console.error('Error creating encryption key:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update encryption key metadata
+   * Channel: online:encryption-key:update-metadata
+   */
+  ipcMain.handle('online:encryption-key:update-metadata', async (event, { keyUuid, name, label, description, endDate }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`
+        UPDATE encryption_keys 
+        SET name = ?, label = ?, description = ?, end_date = ?
+        WHERE key_uuid = ?
+      `).run(
+        name || null,
+        label || null,
+        description || null,
+        endDate || null,
+        keyUuid
+      );
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating encryption key metadata:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete encryption key
+   * Channel: online:encryption-key:delete
+   */
+  ipcMain.handle('online:encryption-key:delete', async (event, { keyUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      db.prepare(`DELETE FROM encryption_keys WHERE key_uuid = ?`).run(keyUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting encryption key:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Export encryption key (password-encrypted backup)
+   * Channel: online:encryption-key:export
+   */
+  ipcMain.handle('online:encryption-key:export', async (event, { keyUuid, password }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      const { dialog } = require('electron');
+      
+      // Get key
+      const key = db.prepare(`
+        SELECT * FROM encryption_keys WHERE key_uuid = ?
+      `).get(keyUuid);
+      
+      if (!key) {
+        return { success: false, error: 'Encryption key not found' };
+      }
+      
+      // Decrypt keydata if encrypted
+      let decryptedKeydata = key.keydata;
+      if (key.encrypted === 1) {
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to export encrypted keys' };
+        }
+        
+        const parts = key.keydata.split(':');
+        if (parts.length !== 2) {
+          return { success: false, error: 'Invalid encrypted key format' };
+        }
+        
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+        let decrypted = decipher.update(encrypted);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        decryptedKeydata = decrypted.toString('hex');
+      }
+      
+      // Create export data
+      const exportData = {
+        uuid: key.key_uuid,
+        name: key.name,
+        label: key.label,
+        algorithm: key.algorithm,
+        keyType: key.key_type,
+        encrypted: Boolean(key.encrypted),
+        hashAlgorithm: key.hash_algorithm,
+        hashValue: key.hash_value,
+        keydata: decryptedKeydata,
+        selectionIdentifier: key.selection_identifier,
+        description: key.description,
+        startDate: key.start_date,
+        endDate: key.end_date
+      };
+      
+      // Encrypt with password
+      const salt = crypto.randomBytes(32);
+      const keyFromPassword = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', keyFromPassword, iv);
+      const exportJson = JSON.stringify(exportData);
+      let encrypted = cipher.update(exportJson, 'utf8');
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
+      
+      const finalExport = {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        type: 'encryption-key',
+        salt: salt.toString('hex'),
+        iv: iv.toString('hex'),
+        encrypted: encrypted.toString('hex')
+      };
+      
+      // Show save dialog
+      const result = await dialog.showSaveDialog({
+        title: 'Export Encryption Key',
+        defaultPath: `rhtools-encryption-key-${key.name || keyUuid}.json`,
+        filters: [
+          { name: 'JSON Files', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      
+      if (result.canceled) {
+        return { success: false, error: 'Export cancelled' };
+      }
+      
+      // Write to file
+      const fs = require('fs');
+      fs.writeFileSync(result.filePath, JSON.stringify(finalExport, null, 2));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error exporting encryption key:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Import encryption key (password-encrypted backup)
+   * Channel: online:encryption-key:import
+   */
+  ipcMain.handle('online:encryption-key:import', async (event, { encryptedData, password, encrypted }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Parse export data
+      const exportData = JSON.parse(encryptedData);
+      
+      if (exportData.version !== '1.0') {
+        return { success: false, error: 'Unsupported export format version' };
+      }
+      
+      // Decrypt with password
+      const salt = Buffer.from(exportData.salt, 'hex');
+      const keyFromPassword = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const iv = Buffer.from(exportData.iv, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', keyFromPassword, iv);
+      const encryptedBuffer = Buffer.from(exportData.encrypted, 'hex');
+      let decrypted = decipher.update(encryptedBuffer);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const keyData = JSON.parse(decrypted.toString('utf8'));
+      
+      // Generate new UUID for imported key
+      const keyUuid = crypto.randomUUID();
+      
+      // Generate hash of raw key value
+      const rawKeyBuffer = Buffer.from(keyData.keydata, 'hex');
+      const hashValue = crypto.createHash('sha256').update(rawKeyBuffer).digest('hex');
+      
+      let finalKeydata = keyData.keydata;
+      let keyguardHash = null;
+      
+      // If encrypted flag is set, encrypt with Profile Guard key
+      if (encrypted) {
+        const keyguardKey = getKeyguardKey(event);
+        if (!keyguardKey) {
+          return { success: false, error: 'Profile Guard must be unlocked to import encrypted keys' };
+        }
+        
+        // Create keyguard hash
+        keyguardHash = crypto.createHash('sha256').update(keyguardKey).digest('hex');
+        
+        // Encrypt keydata
+        const encryptIv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, encryptIv);
+        const keydataBuffer = Buffer.from(keyData.keydata, 'hex');
+        let encryptedKeydata = cipher.update(keydataBuffer);
+        encryptedKeydata = Buffer.concat([encryptedKeydata, cipher.final()]);
+        
+        finalKeydata = encryptIv.toString('hex') + ':' + encryptedKeydata.toString('hex');
+      }
+      
+      // Insert into database
+      db.prepare(`
+        INSERT INTO encryption_keys (
+          key_uuid, name, label, algorithm, key_type, encrypted, keyguard_hash,
+          hash_algorithm, hash_value, keydata, selection_identifier, description,
+          start_date, end_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        keyUuid,
+        keyData.name || null,
+        keyData.label || null,
+        keyData.algorithm,
+        keyData.keyType,
+        encrypted ? 1 : 0,
+        keyguardHash,
+        keyData.hashAlgorithm || 'SHA-256',
+        hashValue,
+        finalKeydata,
+        keyData.selectionIdentifier || null,
+        keyData.description || null,
+        keyData.startDate || new Date().toISOString(),
+        keyData.endDate || null
+      );
+      
+      return { success: true, keyUuid };
+    } catch (error) {
+      console.error('Error importing encryption key:', error);
+      return { success: false, error: error.message || 'Invalid password or file format' };
+    }
+  });
+
+  // ===========================================================================
+  // TRUST DECLARATIONS OPERATIONS (clientdata.db)
+  // ===========================================================================
+
+  /**
+   * List all trust declarations
+   * Channel: online:trust-declarations:list
+   */
+  ipcMain.handle('online:trust-declarations:list', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const declarations = db.prepare(`
+        SELECT * FROM trust_declarations
+        ORDER BY issued_at DESC
+      `).all();
+      
+      return declarations || [];
+    } catch (error) {
+      console.error('Error listing trust declarations:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Get a specific trust declaration
+   * Channel: online:trust-declaration:get
+   */
+  ipcMain.handle('online:trust-declaration:get', async (event, { declarationUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const declaration = db.prepare(`
+        SELECT * FROM trust_declarations
+        WHERE declaration_uuid = ?
+      `).get(declarationUuid);
+      
+      if (!declaration) {
+        return { success: false, error: 'Trust declaration not found' };
+      }
+      
+      return { success: true, declaration };
+    } catch (error) {
+      console.error('Error getting trust declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create a new trust declaration
+   * Channel: online:trust-declaration:create
+   */
+  ipcMain.handle('online:trust-declaration:create', async (event, declarationData) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      const declarationUuid = declarationData.declaration_uuid || crypto.randomUUID();
+      const now = new Date().toISOString();
+      
+      db.prepare(`
+        INSERT INTO trust_declarations (
+          declaration_uuid,
+          issuing_canonical_name,
+          issuing_fingerprint,
+          issued_at,
+          updated_at,
+          subject_canonical_name,
+          subject_fingerprint,
+          valid_starting,
+          valid_ending,
+          subject_trust_level,
+          subject_usagetypes,
+          subject_scopes,
+          scope_permissions,
+          signature_hash_algorithm,
+          signature_hash_value,
+          signature,
+          countersignatures
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        declarationUuid,
+        declarationData.issuing_canonical_name || null,
+        declarationData.issuing_fingerprint,
+        declarationData.issued_at || now,
+        now,
+        declarationData.subject_canonical_name || null,
+        declarationData.subject_fingerprint,
+        declarationData.valid_starting,
+        declarationData.valid_ending || null,
+        declarationData.subject_trust_level || null,
+        declarationData.subject_usagetypes ? JSON.stringify(declarationData.subject_usagetypes) : null,
+        declarationData.subject_scopes ? JSON.stringify(declarationData.subject_scopes) : null,
+        declarationData.scope_permissions ? JSON.stringify(declarationData.scope_permissions) : null,
+        declarationData.signature_hash_algorithm || null,
+        declarationData.signature_hash_value || null,
+        declarationData.signature ? JSON.stringify(declarationData.signature) : null,
+        declarationData.countersignatures ? JSON.stringify(declarationData.countersignatures) : null
+      );
+      
+      return { success: true, declarationUuid };
+    } catch (error) {
+      console.error('Error creating trust declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update trust declaration metadata
+   * Channel: online:trust-declaration:update-metadata
+   */
+  ipcMain.handle('online:trust-declaration:update-metadata', async (event, { declarationUuid, updates }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const now = new Date().toISOString();
+      
+      const fields = [];
+      const values = [];
+      
+      if (updates.valid_ending !== undefined) {
+        fields.push('valid_ending = ?');
+        values.push(updates.valid_ending || null);
+      }
+      
+      if (updates.subject_trust_level !== undefined) {
+        fields.push('subject_trust_level = ?');
+        values.push(updates.subject_trust_level || null);
+      }
+      
+      if (fields.length === 0) {
+        return { success: false, error: 'No fields to update' };
+      }
+      
+      fields.push('updated_at = ?');
+      values.push(now);
+      values.push(declarationUuid);
+      
+      db.prepare(`
+        UPDATE trust_declarations
+        SET ${fields.join(', ')}
+        WHERE declaration_uuid = ?
+      `).run(...values);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating trust declaration metadata:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete a trust declaration
+   * Channel: online:trust-declaration:delete
+   */
+  ipcMain.handle('online:trust-declaration:delete', async (event, { declarationUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        DELETE FROM trust_declarations
+        WHERE declaration_uuid = ?
+      `).run(declarationUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting trust declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 
@@ -5139,6 +7144,89 @@ function sanitizeFileName(fileName) {
   return sanitized;
 }
 
-module.exports = { registerDatabaseHandlers };
+/**
+ * Check and populate createdfp in csettings if it doesn't exist
+ * @param {DatabaseManager} dbManager - Database manager instance
+ */
+async function ensureCreatedFp(dbManager) {
+  try {
+    const db = dbManager.getConnection('clientdata');
+    
+    // Check if createdfp exists
+    const createdFpRow = db.prepare(`
+      SELECT csetting_value FROM csettings WHERE csetting_name = ?
+    `).get('createdfp');
+    
+    if (!createdFpRow || !createdFpRow.csetting_value) {
+      // Calculate createdfp using getv("","")
+      const { HostFP } = require('./main/HostFP');
+      const hostFP = new HostFP();
+      const createdFp = await hostFP.getv('', '');
+      
+      // Save to database
+      const crypto = require('crypto');
+      const uuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'createdfp', createdFp);
+      
+      console.log('Created and saved createdfp:', createdFp);
+    }
+  } catch (error) {
+    console.error('Error ensuring createdfp:', error);
+  }
+}
 
+// Helper function to sanitize file names
+function sanitizeFileName(fileName) {
+  if (!fileName) return null;
+  
+  // Only allow alphanumeric characters, hyphens, and underscores
+  const sanitized = fileName.replace(/[^a-zA-Z0-9\-_]/g, '_');
+  
+  // Ensure it's not empty and not just underscores
+  if (sanitized.length === 0 || sanitized.match(/^_+$/)) {
+    return null;
+  }
+  
+  return sanitized;
+}
 
+/**
+ * Check and populate createdfp in csettings if it doesn't exist
+ * @param {DatabaseManager} dbManager - Database manager instance
+ */
+async function ensureCreatedFp(dbManager) {
+  try {
+    const db = dbManager.getConnection('clientdata');
+    
+    // Check if createdfp exists
+    const createdFpRow = db.prepare(`
+      SELECT csetting_value FROM csettings WHERE csetting_name = ?
+    `).get('createdfp');
+    
+    if (!createdFpRow || !createdFpRow.csetting_value) {
+      // Calculate createdfp using getv("","")
+      const { HostFP } = require('./main/HostFP');
+      const hostFP = new HostFP();
+      const createdFp = await hostFP.getv('', '');
+      
+      // Save to database
+      const crypto = require('crypto');
+      const uuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'createdfp', createdFp);
+      
+      console.log('Created and saved createdfp:', createdFp);
+    }
+  } catch (error) {
+    console.error('Error ensuring createdfp:', error);
+  }
+}
+
+module.exports = { registerDatabaseHandlers, ensureCreatedFp };

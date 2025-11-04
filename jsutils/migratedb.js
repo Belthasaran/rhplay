@@ -378,6 +378,62 @@ const MIGRATIONS = {
           && columnExists(db, 'user_game_version_annotations', 'user_review_comment');
       },
     },
+    {
+      id: 'clientdata_015_admin_keypairs',
+      description: 'Add admin keypairs table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/015_clientdata_admin_keypairs.sql'),
+      skipIf(db) {
+        return tableExists(db, 'admin_keypairs');
+      },
+    },
+    {
+      id: 'clientdata_016_admindeclarations',
+      description: 'Add admin declarations table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/016_clientdata_admindeclarations.sql'),
+      skipIf(db) {
+        return tableExists(db, 'admindeclarations');
+      },
+    },
+    {
+      id: 'clientdata_017_admin_keypair_name_label_comments',
+      description: 'Add name, label, and comments columns to admin_keypairs',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/017_add_admin_keypair_name_label_comments.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admin_keypairs', 'name')
+          && columnExists(db, 'admin_keypairs', 'label')
+          && columnExists(db, 'admin_keypairs', 'comments');
+      },
+    },
+    {
+      id: 'clientdata_018_admin_keypair_profile_uuid',
+      description: 'Add profile_uuid column to admin_keypairs to distinguish User Op keys from global admin keypairs',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/018_add_admin_keypair_profile_uuid.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admin_keypairs', 'profile_uuid');
+      },
+    },
+    {
+      id: 'clientdata_019_encryption_keys',
+      description: 'Add encryption_keys table for symmetric encryption keys (AES256/AES128)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/019_clientdata_encryption_keys.sql'),
+      skipIf(db) {
+        return tableExists(db, 'encryption_keys');
+      },
+    },
+    {
+      id: 'clientdata_020_trust_declarations',
+      description: 'Add trust_declarations table for managing trust declarations for public keys',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/020_clientdata_trust_declarations.sql'),
+      skipIf(db) {
+        return tableExists(db, 'trust_declarations');
+      },
+    },
   ],
   patchbin: [],
 };

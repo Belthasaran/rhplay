@@ -3936,6 +3936,36 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Delete Profile Guard secrets (forgot password option)
+   * Channel: profile-guard:delete-secrets
+   * This deletes Profile Guard and all encrypted secret keys/keypairs
+   */
+  ipcMain.handle('profile-guard:delete-secrets', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Remove all Profile Guard settings
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguardsalt');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_hash');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_encrypted');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_key_stored');
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_high_security_mode');
+      
+      // Delete online profile (which contains encrypted keypairs)
+      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_profile');
+      
+      // Clear any session-stored keys
+      // Note: This is per-session, so we can't clear it from here
+      // But the profile deletion above will prevent access to encrypted data
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting Profile Guard secrets:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Export online profile with password-based encryption
    * Channel: online:profile:export
    */

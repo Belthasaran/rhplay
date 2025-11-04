@@ -728,6 +728,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeProfileGuard: () => ipcRenderer.invoke('profile-guard:remove'),
   
   /**
+   * Delete Profile Guard secrets (forgot password option)
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  deleteProfileGuardSecrets: () => ipcRenderer.invoke('profile-guard:delete-secrets'),
+  
+  /**
    * Export online profile with password-based encryption
    * @param {Object} params - {profile: Object, password: string}
    * @returns {Promise<{success: boolean, error?: string}>}

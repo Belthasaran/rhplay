@@ -3498,9 +3498,9 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Generate keypair based on type
    * @param {string} keyType - ML-DSA-44, ML-DSA-87, ED25519, or RSA-2048
-   * @returns {Object} Keypair with publicKey, privateKey, and metadata
+   * @returns {Promise<Object>} Keypair with publicKey, privateKey, and metadata
    */
-  function generateKeypair(keyType) {
+  async function generateKeypair(keyType) {
     const crypto = require('crypto');
     
     switch (keyType) {
@@ -3556,7 +3556,9 @@ function registerDatabaseHandlers(dbManager) {
       
       case 'ML-DSA-44': {
         // ML-DSA-44: Post-quantum algorithm (FIPS 204)
-        const { ml_dsa44 } = require('@noble/post-quantum/ml-dsa');
+        // Use dynamic import since @noble/post-quantum is an ES module
+        const mlDsaModule = await import('@noble/post-quantum/ml-dsa.js');
+        const ml_dsa44 = mlDsaModule.ml_dsa44;
         
         // Generate keypair
         const { publicKey, privateKey } = ml_dsa44.keygen();
@@ -3593,7 +3595,9 @@ function registerDatabaseHandlers(dbManager) {
       
       case 'ML-DSA-87': {
         // ML-DSA-87: Post-quantum algorithm (FIPS 204) - higher security level
-        const { ml_dsa87 } = require('@noble/post-quantum/ml-dsa');
+        // Use dynamic import since @noble/post-quantum is an ES module
+        const mlDsaModule = await import('@noble/post-quantum/ml-dsa.js');
+        const ml_dsa87 = mlDsaModule.ml_dsa87;
         
         // Generate keypair
         const { publicKey, privateKey } = ml_dsa87.keygen();
@@ -3690,7 +3694,7 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // Generate actual keypair
-      const keypairData = generateKeypair(keyType || 'ML-DSA-44');
+      const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
       
       // Generate names
       const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
@@ -3775,7 +3779,7 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // Generate new keypair (same as create)
-      const keypairData = generateKeypair(keyType || 'ML-DSA-44');
+      const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
       
       // Generate names
       const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);

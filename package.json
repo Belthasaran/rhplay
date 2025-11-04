@@ -136,6 +136,7 @@
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
       "node_modules/secp256k1/**/*",
+      "node_modules/@noble/post-quantum/**/*",
       "native-modules/serialport-nonblock/build/**/*",
       "jsutils/**/*",
       "electron/sql/migrations/**/*"

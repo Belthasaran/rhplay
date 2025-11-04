@@ -3569,12 +3569,16 @@ function registerDatabaseHandlers(dbManager) {
         const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
         
         // Convert to PEM-like format for consistency with other key types
+        const publicKeyBase64 = Buffer.from(publicKey).toString('base64');
+        const publicKeyWrapped = publicKeyBase64.match(/.{1,64}/g) ? publicKeyBase64.match(/.{1,64}/g).join('\n') : publicKeyBase64;
         const publicKeyPem = `-----BEGIN ML-DSA-44 PUBLIC KEY-----\n` +
-          Buffer.from(publicKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          publicKeyWrapped + '\n' +
           `-----END ML-DSA-44 PUBLIC KEY-----`;
         
+        const privateKeyBase64 = Buffer.from(privateKey).toString('base64');
+        const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g) ? privateKeyBase64.match(/.{1,64}/g).join('\n') : privateKeyBase64;
         const privateKeyPem = `-----BEGIN ML-DSA-44 PRIVATE KEY-----\n` +
-          Buffer.from(privateKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          privateKeyWrapped + '\n' +
           `-----END ML-DSA-44 PRIVATE KEY-----`;
         
         return {
@@ -3602,12 +3606,16 @@ function registerDatabaseHandlers(dbManager) {
         const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
         
         // Convert to PEM-like format for consistency with other key types
+        const publicKeyBase64 = Buffer.from(publicKey).toString('base64');
+        const publicKeyWrapped = publicKeyBase64.match(/.{1,64}/g) ? publicKeyBase64.match(/.{1,64}/g).join('\n') : publicKeyBase64;
         const publicKeyPem = `-----BEGIN ML-DSA-87 PUBLIC KEY-----\n` +
-          Buffer.from(publicKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          publicKeyWrapped + '\n' +
           `-----END ML-DSA-87 PUBLIC KEY-----`;
         
+        const privateKeyBase64 = Buffer.from(privateKey).toString('base64');
+        const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g) ? privateKeyBase64.match(/.{1,64}/g).join('\n') : privateKeyBase64;
         const privateKeyPem = `-----BEGIN ML-DSA-87 PRIVATE KEY-----\n` +
-          Buffer.from(privateKey).toString('base64').match(/.{1,64}/g).join('\n') + '\n' +
+          privateKeyWrapped + '\n' +
           `-----END ML-DSA-87 PRIVATE KEY-----`;
         
         return {
@@ -3699,6 +3707,11 @@ function registerDatabaseHandlers(dbManager) {
         canonicalName: canonicalName,
         createdAt: new Date().toISOString()
       };
+      
+      // Include privateKeyRaw if available (for ML-DSA encryption)
+      if (keypairData.privateKeyRaw) {
+        keypair.privateKeyRaw = keypairData.privateKeyRaw;
+      }
       
       // Encrypt private key with Profile Guard if available
       const keyguardKey = getKeyguardKey(event);

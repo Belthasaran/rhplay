@@ -21,7 +21,26 @@ function assert(condition, message) {
 }
 
 function runNodeScript(scriptPath, args = []) {
-  const result = spawnSync(process.execPath, [scriptPath, ...args], { stdio: 'inherit' });
+  // Use enode.sh if available (when running via enode.sh or in Electron)
+  // Otherwise use system node
+  const root = path.resolve(__dirname, '..');
+  const enodeScript = path.join(root, 'enode.sh');
+  
+  let command;
+  let execArgs;
+  
+  // Check if we're running in Electron OR if enode.sh exists (meaning we were called via enode.sh)
+  if ((process.versions.electron || process.env.ELECTRON_RUN_AS_NODE) && fs.existsSync(enodeScript)) {
+    // Running in Electron or via enode.sh - use enode.sh for child scripts too
+    command = 'bash';
+    execArgs = [enodeScript, scriptPath, ...args];
+  } else {
+    // Running in system Node.js - use process.execPath
+    command = process.execPath;
+    execArgs = [scriptPath, ...args];
+  }
+  
+  const result = spawnSync(command, execArgs, { stdio: 'inherit' });
   if (result.status !== 0) {
     throw new Error(`${path.basename(scriptPath)} exited with status ${result.status}`);
   }

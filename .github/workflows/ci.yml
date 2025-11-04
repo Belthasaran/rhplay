@@ -26,6 +26,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
         
+      - name: Rebuild native modules for Electron
+        run: |
+          echo "Rebuilding native modules for Electron..."
+          # Rebuild better-sqlite3 and other native modules for Electron
+          npx electron-rebuild -f -w better-sqlite3 || echo "Note: better-sqlite3 rebuild may have failed"
+          npm run rebuild:native || echo "Note: Some modules may need electron-builder to rebuild"
+        
+      - name: Make enode.sh executable
+        run: chmod +x enode.sh
+        
       - name: Verify native module build
         run: |
           if [ -f "native-modules/serialport-nonblock/build/Release/serialport_nonblock.node" ]; then

@@ -5217,6 +5217,12 @@ type Keypair = {
   type: KeypairType;
   publicKey: string;
   privateKey?: string; // Only stored locally, never transmitted
+  publicKeyHex?: string; // Public key in hex format
+  fingerprint?: string; // SHA256 fingerprint of public key
+  localName?: string; // Local name: username_type_digits
+  canonicalName?: string; // Canonical remote name: type_fingerprint or type_publickey
+  encrypted?: boolean; // Whether private key is encrypted
+  createdAt?: string; // ISO timestamp
 };
 
 type SocialIdType = 'discord' | 'twitch' | 'smwcentral' | 'youtube' | 'keyoxide' | 'steam' | 'playtracker' | 'gamerprofiles';
@@ -5825,9 +5831,8 @@ async function regeneratePrimaryKeypair() {
   
   try {
     const result = await (window as any).electronAPI.regenerateOnlineKeypair({
-      profileId: onlineProfile.value,
-      keyType: 'ML-DSA-44',
-      isPrimary: true
+      keyType: onlineProfile.value.primaryKeypair?.type || 'ML-DSA-44',
+      username: onlineProfile.value.username
     });
     
     if (result.success) {
@@ -5842,10 +5847,66 @@ async function regeneratePrimaryKeypair() {
   }
 }
 
+async function addKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.createOnlineKeypair({
+      keyType: newKeypairType.value,
+      username: onlineProfile.value.username
+    });
+    
+    if (result.success) {
+      if (!onlineProfile.value.additionalKeypairs) {
+        onlineProfile.value.additionalKeypairs = [];
+      }
+      onlineProfile.value.additionalKeypairs.push(result.keypair);
+      await updateOnlineProfile();
+      showAddKeypairModal.value = false;
+      newKeypairType.value = 'ML-DSA-44'; // Reset to default
+    } else {
+      alert(`Failed to create keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error creating keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
 function removeAdditionalKeypair(index: number) {
   if (!onlineProfile.value) return;
   onlineProfile.value.additionalKeypairs.splice(index, 1);
   updateOnlineProfile();
+}
+
+async function addAdminKeypair() {
+  if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.createOnlineKeypair({
+      keyType: newKeypairType.value,
+      username: onlineProfile.value.username
+    });
+    
+    if (result.success) {
+      if (!onlineProfile.value.adminKeypairs) {
+        onlineProfile.value.adminKeypairs = [];
+      }
+      onlineProfile.value.adminKeypairs.push(result.keypair);
+      await updateOnlineProfile();
+      showAddAdminKeypairModal.value = false;
+      newKeypairType.value = 'ML-DSA-44'; // Reset to default
+    } else {
+      alert(`Failed to create admin keypair: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Error creating admin keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
 }
 
 function removeAdminKeypair(index: number) {
@@ -6527,7 +6588,8 @@ async function completeProfileCreation() {
     // Create primary keypair
     const keypairResult = await (window as any).electronAPI.createOnlineKeypair({
       keyType: profileCreationData.value.keypairType,
-      isPrimary: true
+      isPrimary: true,
+      username: profileCreationData.value.username
     });
     
     if (!keypairResult.success) {

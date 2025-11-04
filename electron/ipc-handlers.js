@@ -3496,19 +3496,172 @@ function registerDatabaseHandlers(dbManager) {
   }
 
   /**
+   * Generate keypair based on type
+   * @param {string} keyType - ML-DSA-44, ML-DSA-87, ED25519, or RSA-2048
+   * @returns {Object} Keypair with publicKey, privateKey, and metadata
+   */
+  function generateKeypair(keyType) {
+    const crypto = require('crypto');
+    
+    switch (keyType) {
+      case 'ED25519': {
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
+          publicKeyEncoding: {
+            type: 'spki',
+            format: 'pem'
+          },
+          privateKeyEncoding: {
+            type: 'pkcs8',
+            format: 'pem'
+          }
+        });
+        
+        // Convert to hex for fingerprint calculation
+        const publicKeyDer = crypto.createPublicKey(publicKey).export({ type: 'spki', format: 'der' });
+        const fingerprint = crypto.createHash('sha256').update(publicKeyDer).digest('hex');
+        
+        return {
+          type: 'ED25519',
+          publicKey: publicKey,
+          privateKey: privateKey,
+          publicKeyHex: publicKeyDer.toString('hex'),
+          fingerprint: fingerprint
+        };
+      }
+      
+      case 'RSA-2048': {
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+          modulusLength: 2048,
+          publicKeyEncoding: {
+            type: 'spki',
+            format: 'pem'
+          },
+          privateKeyEncoding: {
+            type: 'pkcs8',
+            format: 'pem'
+          }
+        });
+        
+        const publicKeyDer = crypto.createPublicKey(publicKey).export({ type: 'spki', format: 'der' });
+        const fingerprint = crypto.createHash('sha256').update(publicKeyDer).digest('hex');
+        
+        return {
+          type: 'RSA-2048',
+          publicKey: publicKey,
+          privateKey: privateKey,
+          publicKeyHex: publicKeyDer.toString('hex'),
+          fingerprint: fingerprint
+        };
+      }
+      
+      case 'ML-DSA-44':
+      case 'ML-DSA-87': {
+        // ML-DSA is a post-quantum algorithm (FIPS 204)
+        // Node.js crypto doesn't support ML-DSA yet, so we'll generate placeholder keys
+        // TODO: Implement actual ML-DSA keypair generation using a library like @noble/hashes
+        // For now, generate a deterministic placeholder based on random data
+        const randomBytes = crypto.randomBytes(32);
+        const seed = crypto.randomBytes(48); // ML-DSA uses seeds
+        
+        // Placeholder public/private keys (will need proper ML-DSA implementation)
+        const publicKeyPlaceholder = `-----BEGIN ML-DSA-${keyType.split('-')[1]} PUBLIC KEY-----\n` +
+          Buffer.from(seed).toString('base64') + '\n' +
+          `-----END ML-DSA-${keyType.split('-')[1]} PUBLIC KEY-----`;
+        
+        const privateKeyPlaceholder = `-----BEGIN ML-DSA-${keyType.split('-')[1]} PRIVATE KEY-----\n` +
+          Buffer.from(seed).toString('base64') + '\n' +
+          `-----END ML-DSA-${keyType.split('-')[1]} PRIVATE KEY-----`;
+        
+        // Generate fingerprint from seed
+        const fingerprint = crypto.createHash('sha256').update(seed).digest('hex');
+        
+        return {
+          type: keyType,
+          publicKey: publicKeyPlaceholder,
+          privateKey: privateKeyPlaceholder,
+          publicKeyHex: seed.toString('hex'),
+          fingerprint: fingerprint
+        };
+      }
+      
+      default:
+        throw new Error(`Unsupported key type: ${keyType}`);
+    }
+  }
+
+  /**
+   * Generate local name for keypair
+   * Format: username_type_digits
+   * @param {string} username - User's username
+   * @param {string} keyType - Key type (ML-DSA-44, ED25519, etc.)
+   * @param {string} fingerprint - SHA256 fingerprint
+   * @returns {string} Local name
+   */
+  function generateLocalKeypairName(username, keyType, fingerprint) {
+    // Use last 6 hex digits of fingerprint as distinguishing digits
+    const digits = fingerprint.slice(-6);
+    const typeNormalized = keyType.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    return `${username}_${typeNormalized}_${digits}`;
+  }
+
+  /**
+   * Generate canonical remote name for keypair
+   * Format: type_fingerprint or type_publickey
+   * @param {string} keyType - Key type
+   * @param {string} fingerprint - SHA256 fingerprint
+   * @param {string} publicKeyHex - Public key in hex format (optional)
+   * @param {boolean} usePublicKey - If true, use full public key instead of fingerprint
+   * @returns {string} Canonical remote name
+   */
+  function generateCanonicalKeypairName(keyType, fingerprint, publicKeyHex, usePublicKey = false) {
+    const typeNormalized = keyType.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    if (usePublicKey && publicKeyHex) {
+      return `${typeNormalized}_${publicKeyHex}`;
+    }
+    return `${typeNormalized}_${fingerprint}`;
+  }
+
+  /**
    * Create online keypair
    * Channel: online:keypair:create
    */
-  ipcMain.handle('online:keypair:create', async (event, { profileId, keyType, isPrimary, isAdmin }) => {
+  ipcMain.handle('online:keypair:create', async (event, { keyType, isPrimary, username }) => {
     try {
       const crypto = require('crypto');
       
-      // TODO: Implement actual keypair generation based on keyType
-      // For now, generate placeholder keypair
+      // Get username from profile if not provided
+      let usernameForName = username;
+      if (!usernameForName) {
+        const db = dbManager.getConnection('clientdata');
+        const profileJson = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_profile');
+        
+        if (profileJson) {
+          const profile = JSON.parse(profileJson.csetting_value);
+          usernameForName = profile.username || 'user';
+        } else {
+          usernameForName = 'user';
+        }
+      }
+      
+      // Generate actual keypair
+      const keypairData = generateKeypair(keyType || 'ML-DSA-44');
+      
+      // Generate names
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      
+      // Create keypair object
       const keypair = {
-        type: keyType || 'ML-DSA-44',
-        publicKey: 'PLACEHOLDER_PUBLIC_KEY_' + Date.now() + '_' + Math.random(),
-        privateKey: 'PLACEHOLDER_PRIVATE_KEY_' + Date.now() + '_' + Math.random()
+        type: keypairData.type,
+        publicKey: keypairData.publicKey,
+        privateKey: keypairData.privateKey,
+        publicKeyHex: keypairData.publicKeyHex,
+        fingerprint: keypairData.fingerprint,
+        localName: localName,
+        canonicalName: canonicalName,
+        createdAt: new Date().toISOString()
       };
       
       // Encrypt private key with Profile Guard if available
@@ -3546,21 +3699,47 @@ function registerDatabaseHandlers(dbManager) {
    * Regenerate online keypair
    * Channel: online:keypair:regenerate
    */
-  ipcMain.handle('online:keypair:regenerate', async (event, { profileId, keyType, isPrimary }) => {
+  ipcMain.handle('online:keypair:regenerate', async (event, { keyType, username }) => {
     try {
-      const crypto = require('crypto');
+      // Get username from profile if not provided
+      let usernameForName = username;
+      if (!usernameForName) {
+        const db = dbManager.getConnection('clientdata');
+        const profileJson = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('online_profile');
+        
+        if (profileJson) {
+          const profile = JSON.parse(profileJson.csetting_value);
+          usernameForName = profile.username || 'user';
+        } else {
+          usernameForName = 'user';
+        }
+      }
       
-      // TODO: Implement actual keypair regeneration based on keyType
-      // For now, generate placeholder keypair
+      // Generate new keypair (same as create)
+      const keypairData = generateKeypair(keyType || 'ML-DSA-44');
+      
+      // Generate names
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      
+      // Create keypair object
       const keypair = {
-        type: keyType || 'ML-DSA-44',
-        publicKey: 'PLACEHOLDER_PUBLIC_KEY_REGEN_' + Date.now() + '_' + Math.random(),
-        privateKey: 'PLACEHOLDER_PRIVATE_KEY_REGEN_' + Date.now() + '_' + Math.random()
+        type: keypairData.type,
+        publicKey: keypairData.publicKey,
+        privateKey: keypairData.privateKey,
+        publicKeyHex: keypairData.publicKeyHex,
+        fingerprint: keypairData.fingerprint,
+        localName: localName,
+        canonicalName: canonicalName,
+        createdAt: new Date().toISOString()
       };
       
       // Encrypt private key with Profile Guard if available
       const keyguardKey = getKeyguardKey(event);
       if (keyguardKey) {
+        const crypto = require('crypto');
         // Encrypt private key
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);

@@ -8743,16 +8743,16 @@ function skillLabel(rating?: number | null): string {
 function skillRatingHoverText(rating: number): string {
   const texts = [
     'I saw someone play Mario once - "Will you play my level?"',  // 0
-    'Casual',                     // 1
-    'Apprentice',                 // 2
-    'Advanced',                   // 3
-    'Expert',                     // 4
-    'Master',                     // 5
-    'I am one of the greats: Glitchcat7, jaku, shovda, juzcook, MrMightymouse, Panga, Stew_, Calco, Noblet, MitchFlowerPower, GPB, Aurateur, Pmiller, Barb, ThaBeast, DaWildGrim, or have world record, etc', // 6
-    'I beat Hackers Dragon or JUMP, Responsible World 1.0, Casio, and Fruit Dealer RTA', // 7
-    'I would run several of these again, back-to-back',  // 8
-    'I thought of speedrunning more than a few hacks like these', // 9
-    'I speedran many of them'       // 10
+    'Casual - I beat Vanilla SMW 96 exits, or similar', // 1
+    'Apprentice - Vanilla is too easy for me, I look for more challenging things',  // 2
+    'Advanced - Some Kaizo or Advanced hacks even, are too easy for me', // 3
+    'Expert - I confidently beat expert level hacks (DRAM, Kaizo 1 Any%, POO World, etc)',                  // 4
+    'Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days like Glitchcat7, jaku, shovda, juzcook, MrMightymouse, Panga, Stew_, Calco, Noblet, MitchFlowerPower, GPB, Aurateur, Pmiller, Barb, ThaBeast, DaWildGrim, etc', // 5
+    'Master - That, and a rank above Expert+ now, or I got world record or top 3 once on  Master+ level hacks',  // 6
+    'I beat a long list of varied above Master-level hacks Perchance, Hacks Dream, or JUMP, Responsible World 1.0, Casio, and Fruit Dealer RTA', // 7
+    'I found Master hacks not enough challenge for me, and play several of these again regularly, back-to-back',  // 8
+    'I thought of tryiong to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these', // 9
+    'I speedran numerous above Master level hacks - and enjoy it'       // 10
   ];
   return texts[rating] || '';
 }

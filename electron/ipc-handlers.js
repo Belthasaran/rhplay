@@ -3564,13 +3564,12 @@ function registerDatabaseHandlers(dbManager) {
         // Note: @noble/post-quantum uses 'secretKey' not 'privateKey'
         const { publicKey, secretKey } = ml_dsa44.keygen();
         
-        // Convert Uint8Array to hex for storage
+        // Convert Uint8Array to hex for storage (must convert immediately to avoid cloning issues)
         const publicKeyHex = Buffer.from(publicKey).toString('hex');
         const privateKeyHex = Buffer.from(secretKey).toString('hex');
-        const privateKey = secretKey; // Alias for consistency
         
-        // Generate fingerprint from public key
-        const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
+        // Generate fingerprint from public key (must use Buffer, not Uint8Array directly)
+        const fingerprint = crypto.createHash('sha256').update(Buffer.from(publicKey)).digest('hex');
         
         // Convert to PEM-like format for consistency with other key types
         const publicKeyBase64 = Buffer.from(publicKey).toString('base64');
@@ -3579,7 +3578,7 @@ function registerDatabaseHandlers(dbManager) {
           publicKeyWrapped + '\n' +
           `-----END ML-DSA-44 PUBLIC KEY-----`;
         
-        const privateKeyBase64 = Buffer.from(privateKey).toString('base64');
+        const privateKeyBase64 = Buffer.from(secretKey).toString('base64');
         const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g) ? privateKeyBase64.match(/.{1,64}/g).join('\n') : privateKeyBase64;
         const privateKeyPem = `-----BEGIN ML-DSA-44 PRIVATE KEY-----\n` +
           privateKeyWrapped + '\n' +
@@ -3605,13 +3604,12 @@ function registerDatabaseHandlers(dbManager) {
         // Note: @noble/post-quantum uses 'secretKey' not 'privateKey'
         const { publicKey, secretKey } = ml_dsa87.keygen();
         
-        // Convert Uint8Array to hex for storage
+        // Convert Uint8Array to hex for storage (must convert immediately to avoid cloning issues)
         const publicKeyHex = Buffer.from(publicKey).toString('hex');
         const privateKeyHex = Buffer.from(secretKey).toString('hex');
-        const privateKey = secretKey; // Alias for consistency
         
-        // Generate fingerprint from public key
-        const fingerprint = crypto.createHash('sha256').update(publicKey).digest('hex');
+        // Generate fingerprint from public key (must use Buffer, not Uint8Array directly)
+        const fingerprint = crypto.createHash('sha256').update(Buffer.from(publicKey)).digest('hex');
         
         // Convert to PEM-like format for consistency with other key types
         const publicKeyBase64 = Buffer.from(publicKey).toString('base64');
@@ -3620,7 +3618,7 @@ function registerDatabaseHandlers(dbManager) {
           publicKeyWrapped + '\n' +
           `-----END ML-DSA-87 PUBLIC KEY-----`;
         
-        const privateKeyBase64 = Buffer.from(privateKey).toString('base64');
+        const privateKeyBase64 = Buffer.from(secretKey).toString('base64');
         const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g) ? privateKeyBase64.match(/.{1,64}/g).join('\n') : privateKeyBase64;
         const privateKeyPem = `-----BEGIN ML-DSA-87 PRIVATE KEY-----\n` +
           privateKeyWrapped + '\n' +
@@ -3704,21 +3702,22 @@ function registerDatabaseHandlers(dbManager) {
       const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
       const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
       
-      // Create keypair object
+      // Create keypair object with only serializable values (strings, numbers)
+      // Ensure all values are plain JavaScript types for IPC serialization
       const keypair = {
-        type: keypairData.type,
-        publicKey: keypairData.publicKey,
-        privateKey: keypairData.privateKey,
-        publicKeyHex: keypairData.publicKeyHex,
-        fingerprint: keypairData.fingerprint,
-        localName: localName,
-        canonicalName: canonicalName,
-        createdAt: new Date().toISOString()
+        type: String(keypairData.type),
+        publicKey: String(keypairData.publicKey),
+        privateKey: String(keypairData.privateKey),
+        publicKeyHex: String(keypairData.publicKeyHex),
+        fingerprint: String(keypairData.fingerprint),
+        localName: String(localName),
+        canonicalName: String(canonicalName),
+        createdAt: String(new Date().toISOString())
       };
       
-      // Include privateKeyRaw if available (for ML-DSA encryption)
+      // Include privateKeyRaw if available (for ML-DSA encryption) - ensure it's a string
       if (keypairData.privateKeyRaw) {
-        keypair.privateKeyRaw = keypairData.privateKeyRaw;
+        keypair.privateKeyRaw = String(keypairData.privateKeyRaw);
       }
       
       // Encrypt private key with Profile Guard if available
@@ -3789,21 +3788,22 @@ function registerDatabaseHandlers(dbManager) {
       const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
       const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
       
-      // Create keypair object
+      // Create keypair object with only serializable values (strings, numbers)
+      // Ensure all values are plain JavaScript types for IPC serialization
       const keypair = {
-        type: keypairData.type,
-        publicKey: keypairData.publicKey,
-        privateKey: keypairData.privateKey,
-        publicKeyHex: keypairData.publicKeyHex,
-        fingerprint: keypairData.fingerprint,
-        localName: localName,
-        canonicalName: canonicalName,
-        createdAt: new Date().toISOString()
+        type: String(keypairData.type),
+        publicKey: String(keypairData.publicKey),
+        privateKey: String(keypairData.privateKey),
+        publicKeyHex: String(keypairData.publicKeyHex),
+        fingerprint: String(keypairData.fingerprint),
+        localName: String(localName),
+        canonicalName: String(canonicalName),
+        createdAt: String(new Date().toISOString())
       };
       
-      // Include privateKeyRaw if available (for ML-DSA encryption)
+      // Include privateKeyRaw if available (for ML-DSA encryption) - ensure it's a string
       if (keypairData.privateKeyRaw) {
-        keypair.privateKeyRaw = keypairData.privateKeyRaw;
+        keypair.privateKeyRaw = String(keypairData.privateKeyRaw);
       }
       
       // Encrypt private key with Profile Guard if available

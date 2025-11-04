@@ -681,7 +681,15 @@
       </div>
     </header>
 
-    <section class="content">
+    <!-- Block content if Profile Guard is locked -->
+    <div v-if="showProfileGuardPasswordPrompt" class="content-blocked">
+      <div class="blocked-message">
+        <p>Profile Guard must be unlocked to access the application.</p>
+        <p>Please enter your master password in the unlock dialog.</p>
+      </div>
+    </div>
+
+    <section class="content" :class="{ 'blocked': showProfileGuardPasswordPrompt }">
       <div class="table-wrapper">
         <!-- Loading indicator -->
         <div v-if="isLoading" class="loading-overlay">
@@ -1579,11 +1587,12 @@
   </div>
 
   <!-- Profile Guard Password Prompt Modal (High Security Mode) -->
-  <div v-if="showProfileGuardPasswordPrompt" class="modal-backdrop" @click.self="showProfileGuardPasswordPrompt = false">
+  <!-- This modal cannot be closed - user must unlock or delete secrets -->
+  <div v-if="showProfileGuardPasswordPrompt" class="modal-backdrop profile-guard-blocking">
     <div class="modal">
       <header class="modal-header">
-        <h3>Enter Profile Guard Password</h3>
-        <button class="close" @click="cancelProfileGuardPasswordPrompt">✕</button>
+        <h3>Unlock Profile Guard</h3>
+        <p class="modal-warning-text">Profile Guard must be unlocked to continue using the application.</p>
       </header>
       <section class="modal-body">
         <div class="modal-field">
@@ -1591,18 +1600,42 @@
           <input 
             type="password" 
             v-model="profileGuardPasswordPrompt"
-            @keydown.enter="confirmProfileGuardPassword"
+            @keydown.enter="profileGuardForgotPassword ? deleteProfileGuardSecrets() : confirmProfileGuardPassword()"
             placeholder="Enter master password"
             class="modal-input"
+            :disabled="profileGuardForgotPassword"
             autofocus
           />
         </div>
+        <div class="modal-field">
+          <label class="forgot-password-toggle">
+            <input 
+              type="checkbox" 
+              v-model="profileGuardForgotPassword"
+              @change="handleForgotPasswordToggle"
+            />
+            <span class="forgot-password-label">
+              I forgot my password.
+              <span class="forgot-password-warning">Warning: This will delete your profile guard keys and all protected passwords and keypairs.</span>
+            </span>
+          </label>
+        </div>
         <p v-if="profileGuardPasswordError" class="error-text">{{ profileGuardPasswordError }}</p>
         <div class="modal-actions">
-          <button @click="confirmProfileGuardPassword" class="btn-primary-small" :disabled="!profileGuardPasswordPrompt">
+          <button 
+            v-if="!profileGuardForgotPassword"
+            @click="confirmProfileGuardPassword" 
+            class="btn-primary-small" 
+            :disabled="!profileGuardPasswordPrompt">
             Unlock Profile Guard
           </button>
-          <button @click="cancelProfileGuardPasswordPrompt" class="btn-secondary-small">Cancel</button>
+          <button 
+            v-else
+            @click="deleteProfileGuardSecrets" 
+            class="btn-danger-small"
+            :disabled="!profileGuardForgotPassword">
+            Delete my Secrets and Profile guard information
+          </button>
         </div>
       </section>
     </div>
@@ -1723,6 +1756,164 @@
             Import Keypair
           </button>
           <button @click="showKeypairImportModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Profile Creation Wizard Modal -->
+  <div v-if="showProfileCreationWizard" class="modal-backdrop profile-guard-blocking">
+    <div class="modal profile-creation-wizard">
+      <header class="modal-header">
+        <h3 v-if="profileCreationWizardStep === 1">Create Your Profile</h3>
+        <h3 v-else>Generate Primary Keypair</h3>
+      </header>
+      <section class="modal-body">
+        <!-- Step 1: Profile Information -->
+        <div v-if="profileCreationWizardStep === 1" class="wizard-step">
+          <p class="wizard-description">
+            Let's set up your basic profile information. You can always edit this later.
+          </p>
+          
+          <div class="modal-field">
+            <label>Profile ID (read-only):</label>
+            <input 
+              type="text" 
+              :value="profileCreationData.profileId || 'Will be generated'"
+              class="modal-input"
+              readonly
+              disabled
+            />
+          </div>
+          
+          <div class="modal-field">
+            <label>Username <span class="required">*</span>:</label>
+            <input 
+              type="text" 
+              v-model="profileCreationData.username"
+              @input="validateUsername"
+              placeholder="myusername"
+              class="modal-input"
+              :class="{ 'error': usernameError }"
+              autofocus
+            />
+            <p v-if="usernameError" class="error-text">{{ usernameError }}</p>
+            <p class="field-help">Lowercase, 4-25 characters, letters/numbers/underscore only, must start with letter or underscore</p>
+          </div>
+          
+          <div class="modal-field">
+            <label>Display Name <span class="required">*</span>:</label>
+            <input 
+              type="text" 
+              v-model="profileCreationData.displayName"
+              placeholder="My Display Name"
+              class="modal-input"
+              autofocus
+            />
+          </div>
+          
+          <div class="modal-field">
+            <label>Homepage (optional):</label>
+            <input 
+              type="url" 
+              v-model="profileCreationData.homepage"
+              placeholder="https://example.com"
+              class="modal-input"
+            />
+          </div>
+          
+          <div class="modal-field">
+            <label>Social IDs <span class="required">*</span> (at least 1 required):</label>
+            <div class="social-ids-container">
+              <div v-for="(socialId, index) in profileCreationData.socialIds" :key="index" class="social-id-item">
+                <span class="social-id-type">{{ getSocialIdTypeLabel(socialId.type) }}:</span>
+                <span class="social-id-value">{{ socialId.value }}</span>
+                <button @click="removeSocialId(index)" class="btn-link-small">Remove</button>
+              </div>
+              <div class="add-social-id-row">
+                <select v-model="newSocialIdType" class="modal-input social-id-select">
+                  <option value="discord">Discord Username</option>
+                  <option value="twitch">Twitch Username</option>
+                  <option value="smwcentral">SMWCentral Username</option>
+                  <option value="youtube">YouTube Channel Link</option>
+                  <option value="keyoxide">Keyoxide Profile Link or Hash</option>
+                  <option value="steam">Steam Name</option>
+                  <option value="playtracker">Playtracker Name</option>
+                  <option value="gamerprofiles">Gamerprofiles Name</option>
+                </select>
+                <input 
+                  type="text" 
+                  v-model="newSocialIdValue"
+                  @keydown.enter="addSocialId"
+                  :placeholder="getSocialIdPlaceholder(newSocialIdType)"
+                  class="modal-input social-id-input"
+                />
+                <button @click="addSocialId" class="btn-secondary-small" :disabled="!newSocialIdValue.trim()">
+                  Add
+                </button>
+              </div>
+              <p v-if="socialIdError" class="error-text">{{ socialIdError }}</p>
+            </div>
+          </div>
+          
+          <div class="modal-field">
+            <label>Bio (optional):</label>
+            <textarea 
+              v-model="profileCreationData.bio"
+              placeholder="Tell us about yourself..."
+              class="modal-input"
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+        
+        <!-- Step 2: Keypair Generation -->
+        <div v-if="profileCreationWizardStep === 2" class="wizard-step">
+          <p class="wizard-description">
+            Now let's generate your primary keypair. This will be used to sign your messages and verify your identity.
+          </p>
+          
+          <div class="modal-field">
+            <label>Keypair Type:</label>
+            <select v-model="profileCreationData.keypairType" class="modal-input">
+              <option value="ML-DSA-44">ML-DSA-44 (Default, Recommended)</option>
+              <option value="ML-DSA-87">ML-DSA-87</option>
+              <option value="ED25519">ED25519</option>
+              <option value="RSA-2048">RSA-2048</option>
+            </select>
+            <p class="field-help">The default ML-DSA-44 is recommended for most users.</p>
+          </div>
+          
+          <div class="wizard-warning">
+            <p class="warning-text">
+              ⚠️ <strong>Important:</strong> After generating your keypair, make sure to export and backup your profile.
+              Your secret keys are encrypted with Profile Guard, but if you lose your Profile Guard password,
+              you will not be able to decrypt your keys.
+            </p>
+          </div>
+        </div>
+        
+        <div class="wizard-actions">
+          <button 
+            v-if="profileCreationWizardStep === 1"
+            @click="nextWizardStep" 
+            class="btn-primary-small"
+            :disabled="!canProceedToKeypairStep">
+            Next: Generate Keypair
+          </button>
+          <button 
+            v-if="profileCreationWizardStep === 2"
+            @click="completeProfileCreation" 
+            class="btn-primary-small"
+            :disabled="!profileCreationData.keypairType">
+            Complete Profile Creation
+          </button>
+          <button 
+            v-if="profileCreationWizardStep > 1"
+            @click="profileCreationWizardStep--" 
+            class="btn-secondary-small">
+            Back
+          </button>
         </div>
       </section>
     </div>
@@ -5017,8 +5208,18 @@ type Keypair = {
   privateKey?: string; // Only stored locally, never transmitted
 };
 
+type SocialIdType = 'discord' | 'twitch' | 'smwcentral' | 'youtube' | 'keyoxide' | 'steam' | 'playtracker' | 'gamerprofiles';
+type SocialId = {
+  type: SocialIdType;
+  value: string;
+};
+
 type OnlineProfile = {
+  profileId?: string; // UUID, read-only
+  username?: string;
   displayName?: string;
+  homepage?: string;
+  socialIds?: SocialId[];
   bio?: string;
   primaryKeypair?: Keypair;
   additionalKeypairs: Keypair[];
@@ -5046,6 +5247,32 @@ const profileGuardPasswordConfirm = ref('');
 const profileGuardPasswordPrompt = ref('');
 const profileGuardPasswordError = ref('');
 const profileGuardUnlocked = ref(false);
+const profileGuardForgotPassword = ref(false);
+
+// Profile Creation Wizard state
+const showProfileCreationWizard = ref(false);
+const profileCreationWizardStep = ref(1); // 1 = profile info, 2 = keypair generation
+const profileCreationData = ref({
+  username: '',
+  displayName: '',
+  homepage: '',
+  socialIds: [] as SocialId[],
+  bio: '',
+  keypairType: 'ML-DSA-44' as KeypairType
+});
+const newSocialIdType = ref<SocialIdType>('discord');
+const newSocialIdValue = ref('');
+const usernameError = ref('');
+const socialIdError = ref('');
+
+// Profile Creation Wizard computed
+const canProceedToKeypairStep = computed(() => {
+  return profileCreationData.value.username.trim() !== '' &&
+         !usernameError.value &&
+         profileCreationData.value.displayName.trim() !== '' &&
+         profileCreationData.value.socialIds.length > 0 &&
+         !socialIdError.value;
+});
 
 // Profile Export/Import state
 const showProfileExportModal = ref(false);
@@ -5439,12 +5666,22 @@ function toggleOnlineDropdown() {
   if (onlineDropdownOpen.value) {
     loadOnlineProfile();
     loadOnlineMasterKeys();
-    checkProfileGuardStatus();
+    checkProfileGuardStatus().then(() => {
+      // After checking Profile Guard status, check if profile needs creation
+      if (profileGuardUnlocked.value) {
+        checkAndCreateProfileIfNeeded();
+      }
+    });
   }
 }
 
 function closeOnlineDropdown() {
   onlineDropdownOpen.value = false;
+  
+  // Check if profile needs to be created when opening Online dropdown
+  if (profileGuardUnlocked.value) {
+    checkAndCreateProfileIfNeeded();
+  }
 }
 
 // Online profile functions
@@ -5460,6 +5697,25 @@ async function loadOnlineProfile() {
   } catch (error) {
     console.error('Error loading online profile:', error);
     onlineProfile.value = null;
+  }
+}
+
+async function checkAndCreateProfileIfNeeded() {
+  if (!isElectronAvailable() || !profileGuardUnlocked.value) {
+    return;
+  }
+  
+  // Check if profile exists and has primary keypair
+  if (!onlineProfile.value || !onlineProfile.value.primaryKeypair) {
+    // Load profile first to check
+    await loadOnlineProfile();
+    
+    // If still no profile or no primary keypair, show wizard
+    if (!onlineProfile.value || !onlineProfile.value.primaryKeypair) {
+      showProfileCreationWizard.value = true;
+      profileCreationWizardStep.value = 1;
+      initializeProfileCreationWizard();
+    }
   }
 }
 
@@ -5603,18 +5859,29 @@ async function checkProfileGuardStatus() {
     profileGuardEnabled.value = status.enabled || false;
     profileGuardHighSecurityMode.value = status.highSecurityMode || false;
     
-    // If High Security Mode is enabled, prompt for password on startup
-    if (profileGuardEnabled.value && profileGuardHighSecurityMode.value && !profileGuardUnlocked.value) {
-      showProfileGuardPasswordPrompt.value = true;
-    } else if (profileGuardEnabled.value && !profileGuardHighSecurityMode.value) {
-      // Try to unlock automatically if not in high security mode
-      try {
-        const unlockResult = await (window as any).electronAPI.unlockProfileGuard();
-        if (unlockResult.success) {
-          profileGuardUnlocked.value = true;
+    // If Profile Guard is enabled, check if we need to prompt
+    if (profileGuardEnabled.value) {
+      if (profileGuardHighSecurityMode.value && !profileGuardUnlocked.value) {
+        // High Security Mode: Always prompt for password
+        showProfileGuardPasswordPrompt.value = true;
+      } else if (!profileGuardHighSecurityMode.value) {
+        // Normal mode: Try to unlock automatically
+        try {
+          const unlockResult = await (window as any).electronAPI.unlockProfileGuard();
+      if (unlockResult.success) {
+        profileGuardUnlocked.value = true;
+        
+        // Check if profile needs to be created after auto-unlock
+        await checkAndCreateProfileIfNeeded();
+      } else {
+        // If auto-unlock failed, prompt for password
+        showProfileGuardPasswordPrompt.value = true;
+      }
+        } catch (error) {
+          console.error('Error auto-unlocking Profile Guard:', error);
+          // If auto-unlock failed, prompt for password
+          showProfileGuardPasswordPrompt.value = true;
         }
-      } catch (error) {
-        console.error('Error auto-unlocking Profile Guard:', error);
       }
     }
   } catch (error) {
@@ -5658,6 +5925,9 @@ async function confirmSetupProfileGuard() {
       showProfileGuardSetupModal.value = false;
       profileGuardPassword.value = '';
       profileGuardPasswordConfirm.value = '';
+      
+      // Check if profile needs to be created after setup
+      await checkAndCreateProfileIfNeeded();
     } else {
       alert(`Failed to set up Profile Guard: ${result.error}`);
     }
@@ -5707,8 +5977,13 @@ async function confirmProfileGuardPassword() {
       showProfileGuardPasswordPrompt.value = false;
       profileGuardPasswordPrompt.value = '';
       profileGuardPasswordError.value = '';
+      profileGuardForgotPassword.value = false;
+      
+      // Check if profile needs to be created
+      await checkAndCreateProfileIfNeeded();
     } else {
       profileGuardPasswordError.value = result.error || 'Invalid password';
+      profileGuardPasswordPrompt.value = ''; // Clear password on error
     }
   } catch (error) {
     console.error('Error verifying password:', error);
@@ -5717,10 +5992,55 @@ async function confirmProfileGuardPassword() {
 }
 
 function cancelProfileGuardPasswordPrompt() {
-  showProfileGuardPasswordPrompt.value = false;
-  profileGuardPasswordPrompt.value = '';
-  profileGuardPasswordError.value = '';
-  // Note: User can't proceed without unlocking in high security mode
+  // Modal cannot be closed - user must unlock or delete secrets
+  // This function is kept for compatibility but should not be called
+}
+
+function handleForgotPasswordToggle() {
+  if (profileGuardForgotPassword.value) {
+    // Clear password field when "forgot password" is checked
+    profileGuardPasswordPrompt.value = '';
+    profileGuardPasswordError.value = '';
+  }
+}
+
+async function deleteProfileGuardSecrets() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // Double confirmation
+  if (!confirm('Are you absolutely sure? This will permanently delete:\n\n- Profile Guard keys\n- All encrypted secret keys\n- All protected keypairs\n\nThis action cannot be undone.')) {
+    profileGuardForgotPassword.value = false;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.deleteProfileGuardSecrets();
+    
+    if (result.success) {
+      // Reset Profile Guard state
+      profileGuardEnabled.value = false;
+      profileGuardHighSecurityMode.value = false;
+      profileGuardUnlocked.value = false;
+      showProfileGuardPasswordPrompt.value = false;
+      profileGuardPasswordPrompt.value = '';
+      profileGuardPasswordError.value = '';
+      profileGuardForgotPassword.value = false;
+      
+      // Clear online profile if it exists
+      onlineProfile.value = null;
+      
+      alert('Profile Guard and all protected secrets have been deleted. You can now continue using the application.');
+    } else {
+      alert(`Failed to delete secrets: ${result.error}`);
+      profileGuardForgotPassword.value = false;
+    }
+  } catch (error) {
+    console.error('Error deleting secrets:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    profileGuardForgotPassword.value = false;
+  }
 }
 
 async function changeProfileGuardKey() {
@@ -5912,6 +6232,209 @@ async function exportAllAdminKeypairs() {
   }
   
   exportFullProfile(); // Export all admin keypairs as part of full profile export
+}
+
+// Profile Creation Wizard functions
+function initializeProfileCreationWizard() {
+  // Generate UUID - we'll use a simple UUID v4 generator
+  function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  
+  profileCreationData.value = {
+    profileId: generateUUID(),
+    username: '',
+    displayName: '',
+    homepage: '',
+    socialIds: [],
+    bio: '',
+    keypairType: 'ML-DSA-44'
+  };
+  newSocialIdType.value = 'discord';
+  newSocialIdValue.value = '';
+  usernameError.value = '';
+  socialIdError.value = '';
+}
+
+function validateUsername() {
+  const username = profileCreationData.value.username.trim();
+  
+  if (username === '') {
+    usernameError.value = '';
+    return;
+  }
+  
+  // Must be lowercase
+  if (username !== username.toLowerCase()) {
+    usernameError.value = 'Username must be lowercase';
+    return;
+  }
+  
+  // Must start with letter or underscore
+  if (!/^[a-z_]/.test(username)) {
+    usernameError.value = 'Username must start with a letter or underscore';
+    return;
+  }
+  
+  // Only US alphanumeric and underscore, 4-25 characters
+  if (!/^[a-z0-9_]{4,25}$/.test(username)) {
+    usernameError.value = 'Username must be 4-25 characters, lowercase letters, numbers, and underscores only';
+    return;
+  }
+  
+  usernameError.value = '';
+}
+
+function addSocialId() {
+  const value = newSocialIdValue.value.trim();
+  if (!value) {
+    socialIdError.value = 'Please enter a value';
+    return;
+  }
+  
+  // Validate based on type
+  if (newSocialIdType.value === 'youtube' && !value.startsWith('http') && !value.startsWith('www.')) {
+    socialIdError.value = 'YouTube channel should be a URL';
+    return;
+  }
+  
+  if (newSocialIdType.value === 'keyoxide' && !value.startsWith('http') && !value.includes('@')) {
+    socialIdError.value = 'Keyoxide should be a URL or hash';
+    return;
+  }
+  
+  // Check for duplicates
+  if (profileCreationData.value.socialIds.some(sid => sid.type === newSocialIdType.value && sid.value === value)) {
+    socialIdError.value = 'This social ID is already added';
+    return;
+  }
+  
+  profileCreationData.value.socialIds.push({
+    type: newSocialIdType.value,
+    value: value
+  });
+  
+  newSocialIdValue.value = '';
+  socialIdError.value = '';
+}
+
+function removeSocialId(index: number) {
+  profileCreationData.value.socialIds.splice(index, 1);
+}
+
+function getSocialIdTypeLabel(type: SocialIdType): string {
+  const labels = {
+    discord: 'Discord',
+    twitch: 'Twitch',
+    smwcentral: 'SMWCentral',
+    youtube: 'YouTube',
+    keyoxide: 'Keyoxide',
+    steam: 'Steam',
+    playtracker: 'Playtracker',
+    gamerprofiles: 'Gamerprofiles'
+  };
+  return labels[type] || type;
+}
+
+function getSocialIdPlaceholder(type: SocialIdType): string {
+  const placeholders = {
+    discord: 'username#1234',
+    twitch: 'username',
+    smwcentral: 'username',
+    youtube: 'https://youtube.com/@channel',
+    keyoxide: 'https://keyoxide.org/... or hash',
+    steam: 'Steam Name',
+    playtracker: 'Playtracker Name',
+    gamerprofiles: 'Gamerprofiles Name'
+  };
+  return placeholders[type] || 'Enter value';
+}
+
+function nextWizardStep() {
+  // Validate before proceeding
+  validateUsername();
+  
+  if (!profileCreationData.value.username.trim()) {
+    usernameError.value = 'Username is required';
+    return;
+  }
+  
+  if (!profileCreationData.value.displayName.trim()) {
+    alert('Display name is required');
+    return;
+  }
+  
+  if (profileCreationData.value.socialIds.length === 0) {
+    socialIdError.value = 'At least one social ID is required';
+    return;
+  }
+  
+  if (usernameError.value || socialIdError.value) {
+    return;
+  }
+  
+  profileCreationWizardStep.value = 2;
+}
+
+async function completeProfileCreation() {
+  if (!isElectronAvailable() || !profileGuardUnlocked.value) {
+    alert('Profile Guard must be unlocked to create profile');
+    return;
+  }
+  
+  try {
+    // First create the profile with basic info
+    const profileData = {
+      profileId: profileCreationData.value.profileId,
+      username: profileCreationData.value.username.trim().toLowerCase(),
+      displayName: profileCreationData.value.displayName.trim(),
+      homepage: profileCreationData.value.homepage.trim() || undefined,
+      socialIds: profileCreationData.value.socialIds,
+      bio: profileCreationData.value.bio.trim() || undefined,
+      primaryKeypair: null, // Will be created next
+      additionalKeypairs: [],
+      adminKeypairs: [],
+      isAdmin: false
+    };
+    
+    // Create primary keypair
+    const keypairResult = await (window as any).electronAPI.createOnlineKeypair({
+      keyType: profileCreationData.value.keypairType,
+      isPrimary: true
+    });
+    
+    if (!keypairResult.success) {
+      alert(`Failed to create keypair: ${keypairResult.error}`);
+      return;
+    }
+    
+    // Add keypair to profile
+    profileData.primaryKeypair = keypairResult.keypair;
+    
+    // Save profile
+    const saveResult = await (window as any).electronAPI.saveOnlineProfile(profileData);
+    
+    if (!saveResult.success) {
+      alert(`Failed to save profile: ${saveResult.error}`);
+      return;
+    }
+    
+    // Update local state
+    onlineProfile.value = profileData;
+    
+    // Close wizard
+    showProfileCreationWizard.value = false;
+    profileCreationWizardStep.value = 1;
+    
+    alert('Profile created successfully! Make sure to export and backup your profile.');
+  } catch (error) {
+    console.error('Error creating profile:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
 }
 
 // Health Monitoring System
@@ -12824,6 +13347,191 @@ button:disabled {
   color: #F44336;
   font-size: 12px;
   margin: 8px 0 0 0;
+}
+
+.profile-guard-blocking {
+  pointer-events: all !important;
+  z-index: 10000 !important;
+}
+
+.profile-guard-blocking .modal {
+  pointer-events: all;
+}
+
+.modal-warning-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0 0 0;
+  font-style: italic;
+}
+
+.forgot-password-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.forgot-password-toggle input[type="checkbox"] {
+  cursor: pointer;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.forgot-password-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.forgot-password-warning {
+  color: #F44336;
+  font-weight: 600;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.content-blocked {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.blocked-message {
+  background-color: var(--bg-primary);
+  padding: 24px;
+  border-radius: 8px;
+  border: 2px solid var(--accent-primary);
+  text-align: center;
+  max-width: 400px;
+}
+
+.blocked-message p {
+  margin: 8px 0;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.content.blocked {
+  pointer-events: none;
+  opacity: 0.3;
+  user-select: none;
+}
+
+.profile-creation-wizard {
+  width: 700px;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wizard-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.wizard-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+
+.wizard-warning {
+  padding: 12px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  margin-top: 16px;
+}
+
+.wizard-warning .warning-text {
+  margin: 0;
+  font-size: 12px;
+  color: #856404;
+  line-height: 1.4;
+}
+
+.required {
+  color: #F44336;
+  font-weight: 600;
+}
+
+.field-help {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin: 4px 0 0 0;
+  font-style: italic;
+}
+
+.social-ids-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  min-height: 60px;
+}
+
+.social-id-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.social-id-type {
+  font-weight: 600;
+  color: var(--accent-primary);
+  min-width: 120px;
+}
+
+.social-id-value {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.add-social-id-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.social-id-select {
+  min-width: 180px;
+  flex-shrink: 0;
+}
+
+.social-id-input {
+  flex: 1;
+}
+
+.modal-input.error {
+  border-color: #F44336;
+  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.1);
 }
 
 .modal-note {

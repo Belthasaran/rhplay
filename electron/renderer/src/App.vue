@@ -6597,11 +6597,22 @@ async function completeProfileCreation() {
       return;
     }
     
-    // Add keypair to profile
-    profileData.primaryKeypair = keypairResult.keypair;
+    // Add keypair to profile - ensure all values are serializable
+    // Create a clean copy of the keypair to avoid any non-serializable properties
+    profileData.primaryKeypair = {
+      type: String(keypairResult.keypair.type),
+      publicKey: String(keypairResult.keypair.publicKey),
+      privateKey: String(keypairResult.keypair.privateKey),
+      publicKeyHex: String(keypairResult.keypair.publicKeyHex || ''),
+      fingerprint: String(keypairResult.keypair.fingerprint || ''),
+      localName: String(keypairResult.keypair.localName || ''),
+      canonicalName: String(keypairResult.keypair.canonicalName || ''),
+      encrypted: keypairResult.keypair.encrypted === true,
+      createdAt: String(keypairResult.keypair.createdAt || new Date().toISOString())
+    };
     
-    // Save profile
-    const saveResult = await (window as any).electronAPI.saveOnlineProfile(profileData);
+    // Save profile - ensure profileData is fully serializable
+    const saveResult = await (window as any).electronAPI.saveOnlineProfile(JSON.parse(JSON.stringify(profileData)));
     
     if (!saveResult.success) {
       alert(`Failed to save profile: ${saveResult.error}`);

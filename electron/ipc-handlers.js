@@ -3548,12 +3548,39 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:keypair:regenerate', async (event, { profileId, keyType, isPrimary }) => {
     try {
-      // TODO: Implement actual keypair regeneration
+      const crypto = require('crypto');
+      
+      // TODO: Implement actual keypair regeneration based on keyType
+      // For now, generate placeholder keypair
       const keypair = {
         type: keyType || 'ML-DSA-44',
         publicKey: 'PLACEHOLDER_PUBLIC_KEY_REGEN_' + Date.now() + '_' + Math.random(),
         privateKey: 'PLACEHOLDER_PRIVATE_KEY_REGEN_' + Date.now() + '_' + Math.random()
       };
+      
+      // Encrypt private key with Profile Guard if available
+      const keyguardKey = getKeyguardKey(event);
+      if (keyguardKey) {
+        // Encrypt private key
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+        let encrypted = cipher.update(keypair.privateKey, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        
+        // Store encrypted private key instead
+        keypair.privateKey = iv.toString('hex') + ':' + encrypted;
+        keypair.encrypted = true;
+      } else {
+        // Check if Profile Guard is enabled (user needs to unlock)
+        const db = dbManager.getConnection('clientdata');
+        const saltRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('keyguardsalt');
+        
+        if (saltRow) {
+          return { success: false, error: 'Profile Guard is enabled but not unlocked. Please unlock Profile Guard first.' };
+        }
+      }
       
       return { success: true, keypair };
     } catch (error) {

@@ -2860,6 +2860,7 @@
         <div class="modal-field">
           <label>Keypair Type:</label>
           <select v-model="newKeypairType" class="modal-input">
+            <option value="Nostr">Nostr (Master Admin)</option>
             <option value="ML-DSA-87">ML-DSA-87 (Master Admin)</option>
             <option value="RSA-2048">RSA-2048 (Master Admin)</option>
             <option value="ED25519">ED25519 (Master Admin)</option>
@@ -2894,6 +2895,7 @@
         <div class="modal-field">
           <label>Keypair Type:</label>
           <select v-model="newKeypairType" class="modal-input">
+            <option value="Nostr">Nostr (Master Admin)</option>
             <option value="ML-DSA-87">ML-DSA-87 (Master Admin)</option>
             <option value="RSA-2048">RSA-2048 (Master Admin)</option>
             <option value="ED25519">ED25519 (Master Admin)</option>

@@ -4637,8 +4637,13 @@ function registerDatabaseHandlers(dbManager) {
    * @param {string} fingerprint - SHA256 fingerprint
    * @returns {string} Local name
    */
-  function generateLocalKeypairName(username, keyType, fingerprint) {
-    // Use last 6 hex digits of fingerprint as distinguishing digits
+  function generateLocalKeypairName(username, keyType, fingerprint, publicKey = null) {
+    // For Nostr keys, use <username>_<public_key> format
+    if (keyType === 'Nostr' && publicKey) {
+      return `${username}_${publicKey}`;
+    }
+    
+    // For other keys, use last 6 hex digits of fingerprint as distinguishing digits
     const digits = fingerprint.slice(-6);
     const typeNormalized = keyType.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     return `${username}_${typeNormalized}_${digits}`;
@@ -4647,13 +4652,20 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Generate canonical remote name for keypair
    * Format: type_fingerprint or type_publickey
+   * For Nostr keys: just the npub public key (Bech32 format)
    * @param {string} keyType - Key type
    * @param {string} fingerprint - SHA256 fingerprint
    * @param {string} publicKeyHex - Public key in hex format (optional)
+   * @param {string} publicKey - Public key in display format (npub for Nostr, PEM for others)
    * @param {boolean} usePublicKey - If true, use full public key instead of fingerprint
    * @returns {string} Canonical remote name
    */
-  function generateCanonicalKeypairName(keyType, fingerprint, publicKeyHex, usePublicKey = false) {
+  function generateCanonicalKeypairName(keyType, fingerprint, publicKeyHex, publicKey = null, usePublicKey = false) {
+    // For Nostr keys, canonical_name is just the public key in Bech32 format (npub...)
+    if (keyType === 'Nostr' && publicKey) {
+      return publicKey; // npub format
+    }
+    
     const typeNormalized = keyType.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     if (usePublicKey && publicKeyHex) {
       return `${typeNormalized}_${publicKeyHex}`;
@@ -4689,8 +4701,8 @@ function registerDatabaseHandlers(dbManager) {
       const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
       
       // Generate names
-      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
-      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint, keypairData.publicKey);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex, keypairData.publicKey);
       
       // Create keypair object with only serializable values (strings, numbers)
       // Ensure all values are plain JavaScript types for IPC serialization
@@ -4775,8 +4787,8 @@ function registerDatabaseHandlers(dbManager) {
       const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
       
       // Generate names
-      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
-      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint, keypairData.publicKey);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex, keypairData.publicKey);
       
       // Create keypair object with only serializable values (strings, numbers)
       // Ensure all values are plain JavaScript types for IPC serialization
@@ -5580,8 +5592,8 @@ function registerDatabaseHandlers(dbManager) {
       const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
       
       // Generate names
-      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
-      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint, keypairData.publicKey);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex, keypairData.publicKey);
       
       // Encrypt private key with Profile Guard
       const keyguardKey = getKeyguardKey(event);
@@ -5669,8 +5681,8 @@ function registerDatabaseHandlers(dbManager) {
       const calculatedFingerprint = publicKeyHex ? crypto.createHash('sha256').update(Buffer.from(publicKeyHex, 'hex')).digest('hex').substring(0, 32) : null;
       
       // Generate names
-      const localName = calculatedFingerprint ? generateLocalKeypairName('admin', keyType, calculatedFingerprint) : null;
-      const canonicalName = calculatedFingerprint ? generateCanonicalKeypairName(keyType, calculatedFingerprint, publicKeyHex) : null;
+      const localName = calculatedFingerprint ? generateLocalKeypairName('admin', keyType, calculatedFingerprint, publicKey) : null;
+      const canonicalName = calculatedFingerprint ? generateCanonicalKeypairName(keyType, calculatedFingerprint, publicKeyHex, publicKey) : null;
       
       // Encrypt private key if provided
       let encryptedPrivateKey = null;
@@ -6122,8 +6134,8 @@ function registerDatabaseHandlers(dbManager) {
       const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
       
       // Generate names
-      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint);
-      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex);
+      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint, keypairData.publicKey);
+      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex, keypairData.publicKey);
       
       // Encrypt private key with Profile Guard
       const keyguardKey = getKeyguardKey(event);

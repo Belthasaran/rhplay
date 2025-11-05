@@ -1,6 +1,51 @@
 # RHTools Changelog
 
 > **Note**: For a comprehensive summary of recent USB2SNES connection enhancements, see [`devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md`](../devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md)
+> 
+> **Note**: For Trust Declarations implementation summary, see [`devdocs/nostr/trust-declarations-summary.md`](../devdocs/nostr/trust-declarations-summary.md)
+
+## 2025-02-XX - Trust Declarations System
+
+### Feature: Trust Declarations and Admin Declarations
+
+**Overview**: Implemented a comprehensive system for creating, signing, and managing trust declarations and admin declarations. This system establishes trust relationships, grants privileges, delegates powers, and authorizes administrative actions in the decentralized game rating platform.
+
+**Database Schema**:
+- New `admindeclarations` table in `clientdata.db`
+- Support for Draft, Finalized, Signed, and Published statuses
+- Nostr publishing fields (`nostr_event_id`, `nostr_event`, etc.)
+- Update tracking and revocation support
+- Schema versioning for backward compatibility
+
+**AdminDeclaration Class**:
+- Four JSON format outputs (Content only, Signed data, Signed data with signature, Complete export)
+- Support for both Nostr and non-Nostr key signing
+- Nostr event creation using `finalizeEvent()` from `nostr-tools`
+- Standard cryptographic signing for ED25519, RSA, ML-DSA
+
+**UI Implementation**:
+- New "Trust Declarations" tab in Online dialog
+- Full-screen wizard for creating declarations (5 steps)
+- Tabbed details modal for viewing/editing declarations
+- Status management workflow (Draft → Finalized → Signed)
+- Signing workflow with issuer keypair selection
+
+**Nostr Integration**:
+- Nostr key type support in keypair generation
+- Proper Nostr event creation for Nostr-signed declarations
+- Support for wrapping non-Nostr signatures in Nostr events (future)
+- Database fields for Nostr event storage
+
+**Documentation**:
+- Schema plan document (`devdocs/nostr/admin-declarations-schema-plan.md`)
+- Nostr signing guide (`devdocs/nostr/trust-declarations-nostr-signing.md`)
+- Implementation summary (`devdocs/nostr/trust-declarations-summary.md`)
+
+**Benefits**:
+- Foundation for decentralized trust and authority management
+- Support for future forum moderation and messaging controls
+- Extensible schema for new declaration types
+- Backward compatibility through schema versioning
 
 ## 2025-01-27 - USB2SNES Hosting & Proxy Options
 

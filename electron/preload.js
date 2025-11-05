@@ -823,6 +823,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateTrustDeclarationMetadata: (params) => ipcRenderer.invoke('online:trust-declaration:update-metadata', params),
   deleteTrustDeclaration: (params) => ipcRenderer.invoke('online:trust-declaration:delete', params),
   
+  // Admin Declaration operations (for admindeclarations table)
+  saveAdminDeclaration: (declarationData) => ipcRenderer.invoke('online:admin-declaration:save', declarationData),
+  updateAdminDeclarationStatus: (declarationUuid, status) => ipcRenderer.invoke('online:admin-declaration:update-status', { declarationUuid, status }),
+  getAdminDeclaration: (declarationUuid) => ipcRenderer.invoke('online:admin-declaration:get', { declarationUuid }),
+  signAdminDeclaration: (declarationUuid, keypairUuid, keypairType) => ipcRenderer.invoke('online:admin-declaration:sign', { declarationUuid, keypairUuid, keypairType }),
+  
+  // Nostr keypair publishing
+  getAvailableNostrSigningKeypairs: () => ipcRenderer.invoke('online:get-available-nostr-signing-keypairs'),
+  generateKeypairPublishEventPreview: (keypairType, keypairUuid, signingKeypairUuid, profileUuid) => ipcRenderer.invoke('online:generate-keypair-publish-event-preview', { keypairType, keypairUuid, signingKeypairUuid, profileUuid }),
+  publishKeypairToNostr: (keypairType, keypairUuid, signingKeypairUuid, profileUuid) => ipcRenderer.invoke('online:publish-keypair-to-nostr', { keypairType, keypairUuid, signingKeypairUuid, profileUuid }),
+  
+  /**
+   * Publish user profile as Nostr kind 0 event (NIP-01)
+   * @param {Object} params - {profileUuid: string}
+   * @returns {Promise<{success: boolean, eventId?: string, error?: string}>}
+   */
+  publishProfileToNostr: (params) => ipcRenderer.invoke('online:publish-profile-to-nostr', params),
+  
   // User Op keypair operations (profile-bound admin keypairs)
   listUserOpKeypairs: (profileUuid) => ipcRenderer.invoke('online:user-op-keypairs:list', { profileUuid }),
   getUserOpKeypair: (keypairUuid) => ipcRenderer.invoke('online:user-op-keypair:get', { keypairUuid }),

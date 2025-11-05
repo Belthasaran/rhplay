@@ -1224,3 +1224,48 @@ ALTER TABLE run_results ADD COLUMN sfcpath TEXT NULL;
 
 ---
 
+## 2025-02-XX: Admin Keypairs Nostr Publishing Fields (clientdata.db)
+
+### Date
+February 2025
+
+### Description
+Added `nostr_event_id` and `nostr_status` columns to the `admin_keypairs` table to support publishing admin keypair records as Nostr events.
+
+### Rationale
+- **Nostr Publishing**: Track which admin keypairs have been published to the Nostr network
+- **Event Tracking**: Store the Nostr event ID for each published keypair
+- **Status Management**: Track publishing status (pending, published, failed, retrying)
+- **Network Distribution**: Enable distribution of admin keypair metadata via Nostr relays
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**Table**: `admin_keypairs`
+
+**New Columns**:
+1. `nostr_event_id` (VARCHAR(64) NULL)
+   - Stores the Nostr event ID when a keypair is published
+   - NULL if not yet published
+   - Indexed for efficient lookups
+
+2. `nostr_status` (VARCHAR(50) DEFAULT 'pending')
+   - Publishing status: 'pending', 'published', 'failed', 'retrying'
+   - Defaults to 'pending' for existing records
+   - Indexed for efficient status queries
+
+### Data Type Changes
+- New nullable columns added
+- Existing records have `nostr_status = 'pending'` and `nostr_event_id = NULL`
+
+### Migration Command
+```sql
+ALTER TABLE admin_keypairs ADD COLUMN nostr_event_id VARCHAR(64);
+ALTER TABLE admin_keypairs ADD COLUMN nostr_status VARCHAR(50) DEFAULT 'pending';
+CREATE INDEX IF NOT EXISTS idx_admin_keypairs_nostr_event_id ON admin_keypairs(nostr_event_id);
+CREATE INDEX IF NOT EXISTS idx_admin_keypairs_nostr_status ON admin_keypairs(nostr_status);
+```
+
+---
+

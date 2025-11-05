@@ -551,6 +551,29 @@ function processDeclaration(declaration, clientSchemaVersion) {
 
 **Purpose**: Establish trust relationships between admin keypairs and operational admins.
 
+#### Trust Level Hierarchy
+
+The `trust_level` field supports the following values, in descending order of privilege:
+
+1. **`operating-admin`**: Full administrative privileges. Can sign trust declarations for other admins and moderators. Can delegate moderation powers and metadata update authorities. Can sign New Delegations, Updates, and Revocations for all trust levels.
+
+2. **`authorized-admin`**: Administrative privileges with restrictions. Almost the same as Operating Admin, but with the following limitations:
+   - **Cannot sign New Delegations, Updates, or Revocations** that affect Master Admin or Operating Admin objects
+   - Can revoke or modify any Moderator, Updater, or Contributor level declarations
+   - Can only revoke or reduce Authorized Admin declarations that rely upon their signature
+   - **Cannot sign a declaration granting a permission or privilege they don't possess**
+   - When signing an Authorized Admin declaration, can only grant:
+     - Same or fewer privileges than they possess
+     - Same or narrower scope than they possess
+     - Same or reduced validity period than their own declaration
+   - Within their scope, can perform moderation actions, metadata updates, and other administrative tasks
+
+3. **`moderator`**: Can moderate content and manage user interactions within their scope. Cannot sign trust declarations or delegate powers.
+
+4. **`updater`**: Can update metadata within their scope. Cannot sign trust declarations, moderate, or delegate powers.
+
+5. **`contributor`**: Limited contributor role. Can contribute content within their scope. Cannot sign trust declarations, moderate, update metadata, or delegate powers.
+
 **Content Schema**:
 
 ```json
@@ -575,7 +598,7 @@ function processDeclaration(declaration, clientSchemaVersion) {
     "valid_until": 1730659456
   },
   "content": {
-    "trust_level": "operating-admin|moderator|updater|contributor",
+    "trust_level": "operating-admin|authorized-admin|moderator|updater|contributor",
     "usage_types": ["signing", "moderation", "metadata-updates"],
     "scopes": {
       "type": "global|global-chat|global-forum|channel|forum|game",
@@ -612,6 +635,61 @@ function processDeclaration(declaration, clientSchemaVersion) {
     "content.required_countersignatures.min_count": "critical",
     "content.metadata.reason": "non-critical",
     "content.metadata.notes": "non-critical"
+  }
+}
+```
+
+**Example: Authorized Admin Trust Declaration**:
+
+```json
+{
+  "schema_version": "1.0",
+  "declaration_type": "trust-declaration",
+  "declaration_id": "770e8400-e29b-41d4-a716-446655440001",
+  "issued_at": 1699123456,
+  "issuer": {
+    "canonical_name": "npub1masteradmin123...",
+    "fingerprint": "a1b2c3d4e5f6...",
+    "keypair_uuid": "master-admin-uuid-1"
+  },
+  "subject": {
+    "type": "keypair",
+    "canonical_name": "npub1authadmin789...",
+    "fingerprint": "9876543210ab...",
+    "keypair_uuid": "authorized-admin-uuid-1"
+  },
+  "validity": {
+    "valid_from": 1699123456,
+    "valid_until": 1730659456
+  },
+  "content": {
+    "trust_level": "authorized-admin",
+    "usage_types": ["moderation", "metadata-updates"],
+    "scopes": {
+      "type": "channel",
+      "targets": ["general", "help"],
+      "exclude": []
+    },
+    "permissions": {
+      "can_sign_trust_declarations": false,
+      "can_sign_operational_admins": false,
+      "can_moderate": true,
+      "can_update_metadata": true,
+      "can_delegate_moderators": true,
+      "can_delegate_updaters": true,
+      "max_delegation_duration": 2592000,
+      "max_block_duration": 86400
+    }
+  },
+  "metadata": {
+    "reason": "Trusted community member granted authorized admin privileges for channel moderation and metadata updates",
+    "notes": "Restricted scope: cannot sign declarations affecting Master Admin or Operating Admin objects"
+  },
+  "field_importance": {
+    "content.trust_level": "critical",
+    "content.usage_types": "critical",
+    "content.permissions.can_sign_operational_admins": "critical",
+    "content.scopes.type": "critical"
   }
 }
 ```

@@ -1557,3 +1557,45 @@ Adds `profile_uuid` column to the `admin_keypairs` table:
 
 ---
 
+## Migration 024: Admin Keypairs Nostr Publishing Fields
+
+### Date Added
+February 2025
+
+### Purpose
+Add Nostr event ID and status columns to `admin_keypairs` table to support publishing admin keypair records to the Nostr network.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+```
+
+Or manually:
+```sql
+sqlite3 electron/clientdata.db < electron/sql/migrations/024_clientdata_admin_keypairs_nostr_fields.sql
+```
+
+### What It Does
+- Adds `nostr_event_id` column (VARCHAR(64) NULL) to store the Nostr event ID when published
+- Adds `nostr_status` column (VARCHAR(50) DEFAULT 'pending') to track publishing status
+- Creates indexes on both columns for efficient queries
+- Sets default status to 'pending' for existing records
+
+### Prerequisites
+- Database `clientdata.db` must exist
+- `admin_keypairs` table must exist (from migration 015)
+- Backup recommended before running
+
+### Expected Outcome
+- New columns `nostr_event_id` and `nostr_status` appear in `admin_keypairs` table
+- Two new indexes created for query performance
+- Existing keypairs have `nostr_status = 'pending'` and `nostr_event_id = NULL`
+- No data loss
+
+### Warnings
+- Safe to run multiple times (uses IF NOT EXISTS)
+- Existing records will have NULL `nostr_event_id` and 'pending' status
+- Publishing to Nostr will update these fields when implemented
+
+---
+

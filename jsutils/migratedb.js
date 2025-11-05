@@ -446,6 +446,39 @@ const MIGRATIONS = {
           && columnExists(db, 'admindeclarations', 'original_declaration_uuid');
       },
     },
+    {
+      id: 'clientdata_022_admindeclarations_signing_fields',
+      description: 'Add signed_data, signed_data_sha256, signing_timestamp, and canonical_name fields to admindeclarations table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/022_clientdata_admindeclarations_signing_fields.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admindeclarations', 'signed_data')
+          && columnExists(db, 'admindeclarations', 'signed_data_sha256')
+          && columnExists(db, 'admindeclarations', 'signing_timestamp')
+          && columnExists(db, 'admindeclarations', 'signing_keypair_canonical_name');
+      },
+    },
+    {
+      id: 'clientdata_023_admindeclarations_nostr_event_fields',
+      description: 'Add Nostr event serialization fields (public_key, created_at, content) to admindeclarations table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/023_clientdata_admindeclarations_nostr_event_fields.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admindeclarations', 'nostr_public_key')
+          && columnExists(db, 'admindeclarations', 'nostr_created_at')
+          && columnExists(db, 'admindeclarations', 'nostr_content');
+      },
+    },
+    {
+      id: 'clientdata_024_admin_keypairs_nostr_fields',
+      description: 'Add nostr_event_id and nostr_status columns to admin_keypairs table for Nostr publishing',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/024_clientdata_admin_keypairs_nostr_fields.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admin_keypairs', 'nostr_event_id')
+          && columnExists(db, 'admin_keypairs', 'nostr_status');
+      },
+    },
   ],
   patchbin: [],
 };

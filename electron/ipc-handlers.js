@@ -5466,7 +5466,9 @@ function registerDatabaseHandlers(dbManager) {
           label,
           comments,
           profile_uuid,
-          created_at
+          created_at,
+          nostr_status,
+          nostr_event_id
         FROM admin_keypairs
         WHERE profile_uuid IS NULL
         ORDER BY COALESCE(name, local_name, canonical_name), created_at DESC
@@ -5487,7 +5489,9 @@ function registerDatabaseHandlers(dbManager) {
         label: kp.label,
         comments: kp.comments,
         profileUuid: kp.profile_uuid,
-        createdAt: kp.created_at
+        createdAt: kp.created_at,
+        nostrStatus: kp.nostr_status || 'pending',
+        nostrEventId: kp.nostr_event_id
       }));
     } catch (error) {
       console.error('Error listing admin keypairs:', error);
@@ -6004,7 +6008,9 @@ function registerDatabaseHandlers(dbManager) {
           label,
           comments,
           profile_uuid,
-          created_at
+          created_at,
+          nostr_status,
+          nostr_event_id
         FROM admin_keypairs
         WHERE profile_uuid = ?
         ORDER BY COALESCE(name, local_name, canonical_name), created_at DESC
@@ -6025,6 +6031,8 @@ function registerDatabaseHandlers(dbManager) {
         label: kp.label,
         comments: kp.comments,
         profileUuid: kp.profile_uuid,
+        nostrStatus: kp.nostr_status || 'pending',
+        nostrEventId: kp.nostr_event_id,
         createdAt: kp.created_at
       }));
     } catch (error) {
@@ -6976,15 +6984,15 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
 
   /**
-   * List all trust declarations
+   * List all admin declarations (trust declarations)
    * Channel: online:trust-declarations:list
    */
   ipcMain.handle('online:trust-declarations:list', async (event) => {
     try {
       const db = dbManager.getConnection('clientdata');
       const declarations = db.prepare(`
-        SELECT * FROM trust_declarations
-        ORDER BY issued_at DESC
+        SELECT * FROM admindeclarations
+        ORDER BY created_at DESC
       `).all();
       
       return declarations || [];
@@ -7134,6 +7142,807 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('Error deleting trust declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Create or update an admin declaration
+   * Channel: online:admin-declaration:save
+   */
+  ipcMain.handle('online:admin-declaration:save', async (event, declarationData) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      
+      // Generate UUID if not provided
+      if (!declarationData.declaration_uuid) {
+        declarationData.declaration_uuid = crypto.randomUUID();
+      }
+      
+      const now = new Date().toISOString();
+      
+      // Compute content hash
+      const contentHash = crypto.createHash('sha256')
+        .update(declarationData.content_json || '')
+        .digest('hex');
+      
+      // Check if declaration already exists
+      const existing = db.prepare(`
+        SELECT declaration_uuid FROM admindeclarations
+        WHERE declaration_uuid = ?
+      `).get(declarationData.declaration_uuid);
+      
+      if (existing) {
+        // Update existing declaration
+        db.prepare(`
+          UPDATE admindeclarations SET
+            declaration_type = ?,
+            content_json = ?,
+            content_hash_sha256 = ?,
+            status = ?,
+            schema_version = ?,
+            content_version = COALESCE(content_version, 1) + 1,
+            signing_keypair_uuid = ?,
+            signing_keypair_fingerprint = ?,
+            target_keypair_uuid = ?,
+            target_keypair_fingerprint = ?,
+            target_user_profile_id = ?,
+            valid_from = ?,
+            valid_until = ?,
+            required_countersignatures = ?,
+            retroactive_effect_enabled = ?,
+            retroactive_effective_from = ?,
+            updated_at = ?
+          WHERE declaration_uuid = ?
+        `).run(
+          declarationData.declaration_type || 'trust-declaration',
+          declarationData.content_json,
+          contentHash,
+          declarationData.status || 'Draft',
+          declarationData.schema_version || '1.0',
+          declarationData.signing_keypair_uuid || null,
+          declarationData.signing_keypair_fingerprint || null,
+          declarationData.target_keypair_uuid || null,
+          declarationData.target_keypair_fingerprint || null,
+          declarationData.target_user_profile_id || null,
+          declarationData.valid_from || null,
+          declarationData.valid_until || null,
+          declarationData.required_countersignatures || 0,
+          declarationData.retroactive_effect_enabled ? 1 : 0,
+          declarationData.retroactive_effective_from || null,
+          now,
+          declarationData.declaration_uuid
+        );
+      } else {
+        // Insert new declaration
+        db.prepare(`
+          INSERT INTO admindeclarations (
+            declaration_uuid,
+            declaration_type,
+            content_json,
+            content_hash_sha256,
+            digital_signature,
+            status,
+            schema_version,
+            content_version,
+            signing_keypair_uuid,
+            signing_keypair_fingerprint,
+            target_keypair_uuid,
+            target_keypair_fingerprint,
+            target_user_profile_id,
+            valid_from,
+            valid_until,
+            required_countersignatures,
+            retroactive_effect_enabled,
+            retroactive_effective_from,
+            is_local,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          declarationData.declaration_uuid,
+          declarationData.declaration_type || 'trust-declaration',
+          declarationData.content_json,
+          contentHash,
+          declarationData.digital_signature || '',
+          declarationData.status || 'Draft',
+          declarationData.schema_version || '1.0',
+          declarationData.content_version || 1,
+          declarationData.signing_keypair_uuid || null,
+          declarationData.signing_keypair_fingerprint || null,
+          declarationData.target_keypair_uuid || null,
+          declarationData.target_keypair_fingerprint || null,
+          declarationData.target_user_profile_id || null,
+          declarationData.valid_from || null,
+          declarationData.valid_until || null,
+          declarationData.required_countersignatures || 0,
+          declarationData.retroactive_effect_enabled ? 1 : 0,
+          declarationData.retroactive_effective_from || null,
+          1, // is_local
+          now,
+          now
+        );
+      }
+      
+      return { success: true, declarationUuid: declarationData.declaration_uuid };
+    } catch (error) {
+      console.error('Error saving admin declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get a specific admin declaration
+   * Channel: online:admin-declaration:get
+   */
+  ipcMain.handle('online:admin-declaration:get', async (event, { declarationUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const declaration = db.prepare(`
+        SELECT * FROM admindeclarations
+        WHERE declaration_uuid = ?
+      `).get(declarationUuid);
+      
+      if (!declaration) {
+        return { success: false, error: 'Admin declaration not found' };
+      }
+      
+      return { success: true, declaration };
+    } catch (error) {
+      console.error('Error getting admin declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update admin declaration status
+   * Channel: online:admin-declaration:update-status
+   */
+  ipcMain.handle('online:admin-declaration:update-status', async (event, { declarationUuid, status }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const now = new Date().toISOString();
+      
+      db.prepare(`
+        UPDATE admindeclarations
+        SET status = ?, updated_at = ?
+        WHERE declaration_uuid = ?
+      `).run(status, now, declarationUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating admin declaration status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Sign an admin declaration
+   * Channel: online:admin-declaration:sign
+   */
+  ipcMain.handle('online:admin-declaration:sign', async (event, { declarationUuid, keypairUuid, keypairType }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const crypto = require('crypto');
+      const AdminDeclaration = require('./utils/AdminDeclaration');
+      
+      // Get the declaration
+      const declaration = db.prepare(`
+        SELECT * FROM admindeclarations WHERE declaration_uuid = ?
+      `).get(declarationUuid);
+      
+      if (!declaration) {
+        return { success: false, error: 'Admin declaration not found' };
+      }
+      
+      // Check if already signed
+      if (declaration.digital_signature && declaration.status === 'Published') {
+        return { success: false, error: 'Declaration is already signed and published' };
+      }
+      
+      // Get the keypair (admin or user-op)
+      let keypair = null;
+      if (keypairType === 'admin' || !keypairType) {
+        keypair = db.prepare(`
+          SELECT * FROM admin_keypairs WHERE keypair_uuid = ? AND profile_uuid IS NULL
+        `).get(keypairUuid);
+      } else if (keypairType === 'user-op') {
+        keypair = db.prepare(`
+          SELECT * FROM admin_keypairs WHERE keypair_uuid = ? AND profile_uuid IS NOT NULL
+        `).get(keypairUuid);
+      }
+      
+      if (!keypair) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      // Check if private key is available
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to sign declarations' };
+      }
+      
+      // Decrypt private key if encrypted
+      let privateKey = null;
+      if (keypair.encrypted_private_key) {
+        try {
+          const parts = keypair.encrypted_private_key.split(':');
+          if (parts.length === 2) {
+            const iv = Buffer.from(parts[0], 'hex');
+            const encrypted = Buffer.from(parts[1], 'hex');
+            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+            let decrypted = decipher.update(encrypted);
+            decrypted = Buffer.concat([decrypted, decipher.final()]);
+            
+            if (keypair.private_key_format === 'hex') {
+              privateKey = decrypted.toString('hex');
+            } else {
+              privateKey = decrypted.toString('utf8');
+            }
+          }
+        } catch (error) {
+          return { success: false, error: 'Failed to decrypt private key' };
+        }
+      } else if (keypair.storage_status === 'full-offline') {
+        return { success: false, error: 'Private key is stored offline and cannot be used for signing' };
+      }
+      
+      if (!privateKey) {
+        return { success: false, error: 'Private key not available' };
+      }
+      
+      // Prepare signing keypair object
+      const signingKeypair = {
+        canonical_name: keypair.canonical_name,
+        fingerprint: keypair.fingerprint,
+        privateKey: privateKey,
+        type: keypair.keypair_type,
+        algorithm: keypair.keypair_type
+      };
+      
+      // Sign the declaration
+      const signResult = await AdminDeclaration.signDeclaration(declaration, signingKeypair);
+      
+      // Update the declaration in database
+      const now = new Date().toISOString();
+      
+      // Check if this is a Nostr key (returns nostr_event_id and nostr_event)
+      const isNostrKey = signResult.nostr_event_id !== undefined;
+      
+      if (isNostrKey) {
+        // Nostr key: Update with Nostr event data including all serialization fields
+        db.prepare(`
+          UPDATE admindeclarations SET
+            digital_signature = ?,
+            signed_data = ?,
+            signed_data_sha256 = ?,
+            signing_timestamp = ?,
+            signing_keypair_uuid = ?,
+            signing_keypair_fingerprint = ?,
+            signing_keypair_canonical_name = ?,
+          nostr_event_id = ?,
+          nostr_public_key = ?,
+          nostr_created_at = ?,
+          nostr_kind = ?,
+          nostr_tags = ?,
+          nostr_content = ?,
+          status = CASE WHEN status = 'Finalized' THEN 'Signed' ELSE status END,
+          updated_at = ?
+          WHERE declaration_uuid = ?
+        `).run(
+          signResult.digital_signature,
+          signResult.signed_data,
+          signResult.signed_data_sha256,
+          signResult.signing_timestamp,
+          keypairUuid,
+          signingKeypair.fingerprint,
+          signingKeypair.canonical_name,
+          signResult.nostr_event_id,
+          signResult.nostr_public_key || null,
+          signResult.nostr_created_at || null,
+          signResult.nostr_kind || null,
+          signResult.nostr_tags || null,
+          signResult.nostr_content || null,
+          now,
+          declarationUuid
+        );
+      } else {
+        // Non-Nostr key: Standard update
+        db.prepare(`
+          UPDATE admindeclarations SET
+            digital_signature = ?,
+            signed_data = ?,
+            signed_data_sha256 = ?,
+            signing_timestamp = ?,
+            signing_keypair_uuid = ?,
+            signing_keypair_fingerprint = ?,
+            signing_keypair_canonical_name = ?,
+            status = CASE WHEN status = 'Finalized' THEN 'Signed' ELSE status END,
+            updated_at = ?
+          WHERE declaration_uuid = ?
+        `).run(
+          signResult.digital_signature,
+          signResult.signed_data,
+          signResult.signed_data_sha256,
+          signResult.signing_timestamp,
+          keypairUuid,
+          signingKeypair.fingerprint,
+          signingKeypair.canonical_name,
+          now,
+          declarationUuid
+        );
+      }
+      
+      return { success: true, signedData: signResult };
+    } catch (error) {
+      console.error('Error signing admin declaration:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:get-available-nostr-signing-keypairs
+   * Get all Nostr keypairs that have private keys available for signing
+   */
+  ipcMain.handle('online:get-available-nostr-signing-keypairs', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const keyguardKey = getKeyguardKey(event);
+      
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      
+      // Get all Nostr keypairs (admin, user-op, and user profile keypairs)
+      // that have private keys (storage_status != 'public-only')
+      const nostrKeypairs = [];
+      
+      // Admin keypairs - check for both 'Nostr' and 'Nostr%' patterns
+      // Also check case-insensitive
+      const adminKeypairs = db.prepare(`
+        SELECT keypair_uuid, keypair_type, name, label, canonical_name, storage_status, encrypted_private_key
+        FROM admin_keypairs
+        WHERE (keypair_type LIKE 'Nostr%' OR keypair_type = 'Nostr' OR LOWER(keypair_type) LIKE '%nostr%')
+          AND storage_status IN ('full', 'full-offline')
+          AND encrypted_private_key IS NOT NULL
+      `).all();
+      
+      console.log(`[getAvailableNostrSigningKeypairs] Found ${adminKeypairs.length} admin keypairs matching Nostr pattern`);
+      
+      for (const kp of adminKeypairs) {
+        try {
+          console.log(`[getAvailableNostrSigningKeypairs] Processing admin keypair ${kp.keypair_uuid}: type=${kp.keypair_type}, status=${kp.storage_status}`);
+          
+          // Try to decrypt to verify we have the key
+          if (kp.storage_status === 'full' && kp.encrypted_private_key) {
+            const parts = kp.encrypted_private_key.split(':');
+            if (parts.length === 2) {
+              const iv = Buffer.from(parts[0], 'hex');
+              const encrypted = Buffer.from(parts[1], 'hex');
+              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+              let decrypted = decipher.update(encrypted);
+              decrypted = Buffer.concat([decrypted, decipher.final()]);
+              
+              console.log(`[getAvailableNostrSigningKeypairs] Successfully decrypted admin keypair ${kp.keypair_uuid}`);
+              
+              // Successfully decrypted - add to list
+              nostrKeypairs.push({
+                uuid: kp.keypair_uuid,
+                name: kp.name,
+                label: kp.label,
+                canonicalName: kp.canonical_name,
+                type: kp.keypair_type,
+                keyType: 'admin'
+              });
+            } else {
+              console.warn(`[getAvailableNostrSigningKeypairs] Admin keypair ${kp.keypair_uuid} has invalid encrypted_private_key format (expected iv:encrypted)`);
+            }
+          } else {
+            console.log(`[getAvailableNostrSigningKeypairs] Skipping admin keypair ${kp.keypair_uuid}: status=${kp.storage_status}, has_encrypted=${!!kp.encrypted_private_key}`);
+          }
+        } catch (err) {
+          // Skip if can't decrypt
+          console.warn(`[getAvailableNostrSigningKeypairs] Cannot decrypt admin keypair ${kp.keypair_uuid}:`, err.message);
+        }
+      }
+      
+      // User Op keypairs (for current profile)
+      const userOpKeypairs = db.prepare(`
+        SELECT keypair_uuid, keypair_type, name, label, canonical_name, storage_status, encrypted_private_key
+        FROM admin_keypairs
+        WHERE (keypair_type LIKE 'Nostr%' OR keypair_type = 'Nostr' OR LOWER(keypair_type) LIKE '%nostr%')
+          AND profile_uuid IS NOT NULL
+          AND storage_status IN ('full', 'full-offline')
+          AND encrypted_private_key IS NOT NULL
+      `).all();
+      
+      console.log(`[getAvailableNostrSigningKeypairs] Found ${userOpKeypairs.length} user-op keypairs matching Nostr pattern`);
+      
+      for (const kp of userOpKeypairs) {
+        try {
+          if (kp.storage_status === 'full' && kp.encrypted_private_key) {
+            const parts = kp.encrypted_private_key.split(':');
+            if (parts.length === 2) {
+              const iv = Buffer.from(parts[0], 'hex');
+              const encrypted = Buffer.from(parts[1], 'hex');
+              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+              let decrypted = decipher.update(encrypted);
+              decrypted = Buffer.concat([decrypted, decipher.final()]);
+              
+              // Successfully decrypted - add to list
+              nostrKeypairs.push({
+                uuid: kp.keypair_uuid,
+                name: kp.name,
+                label: kp.label,
+                canonicalName: kp.canonical_name,
+                type: kp.keypair_type,
+                keyType: 'user-op'
+              });
+            }
+          }
+        } catch (err) {
+          console.warn(`Cannot decrypt user-op keypair ${kp.keypair_uuid}:`, err.message);
+        }
+      }
+      
+      // User profile keypairs (primary and additional)
+      // These are stored in the profiles table, need to check onlineProfile
+      // For now, we'll get them from the standby_profiles if available
+      // This would require additional logic to parse standby_profiles JSON
+      
+      console.log(`[getAvailableNostrSigningKeypairs] Returning ${nostrKeypairs.length} available Nostr signing keypairs`);
+      
+      return { success: true, keypairs: nostrKeypairs };
+    } catch (error) {
+      console.error('Error getting available Nostr signing keypairs:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:generate-keypair-publish-event-preview
+   * Generate a Nostr event template for publishing a keypair (without signing)
+   */
+  ipcMain.handle('online:generate-keypair-publish-event-preview', async (event, { keypairType, keypairUuid, signingKeypairUuid, profileUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get the keypair to publish
+      let keypairRow;
+      if (keypairType === 'master' || keypairType === 'admin') {
+        keypairRow = db.prepare('SELECT * FROM admin_keypairs WHERE keypair_uuid = ?').get(keypairUuid);
+      } else if (keypairType === 'user-op') {
+        keypairRow = db.prepare('SELECT * FROM admin_keypairs WHERE keypair_uuid = ? AND profile_uuid = ?').get(keypairUuid, profileUuid);
+      }
+      
+      if (!keypairRow) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      // Get the signing keypair
+      const signingKeypair = db.prepare('SELECT * FROM admin_keypairs WHERE keypair_uuid = ?').get(signingKeypairUuid);
+      if (!signingKeypair || !signingKeypair.canonical_name) {
+        return { success: false, error: 'Signing keypair not found' };
+      }
+      
+      // Build event content (JSON with all public keypair details)
+      const eventContent = {
+        keypair_uuid: keypairRow.keypair_uuid,
+        keypair_type: keypairRow.keypair_type,
+        key_usage: keypairRow.key_usage,
+        trust_level: keypairRow.trust_level,
+        public_key: keypairRow.public_key,
+        public_key_hex: keypairRow.public_key_hex,
+        fingerprint: keypairRow.fingerprint,
+        canonical_name: keypairRow.canonical_name,
+        local_name: keypairRow.local_name,
+        name: keypairRow.name,
+        label: keypairRow.label,
+        comments: keypairRow.comments,
+        created_at: keypairRow.created_at,
+        updated_at: keypairRow.updated_at,
+        profile_uuid: keypairRow.profile_uuid || null
+      };
+      
+      // Add profile information for User Op keys
+      if (keypairType === 'user-op' && profileUuid) {
+        const profileRow = db.prepare('SELECT * FROM profiles WHERE profile_uuid = ?').get(profileUuid);
+        if (profileRow) {
+          eventContent.profile = {
+            uuid: profileRow.profile_uuid,
+            username: profileRow.username,
+            displayname: profileRow.displayname
+          };
+        }
+      }
+      
+      // Create event template
+      // Kind 31107 for keypair publications (to be defined)
+      const eventTemplate = {
+        kind: 31107, // Keypair publication event kind
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['d', keypairRow.keypair_uuid], // Keypair UUID tag
+          ['t', 'rhplay-keypair-publication'], // Type tag
+          ['k', keypairType], // Keypair type (master/admin/user-op)
+          ['p', signingKeypair.canonical_name] // Signing keypair canonical name
+        ],
+        content: JSON.stringify(eventContent)
+      };
+      
+      return { success: true, eventTemplate };
+    } catch (error) {
+      console.error('Error generating keypair publish event preview:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:publish-keypair-to-nostr
+   * Create and sign a Nostr event for publishing a keypair, add to cache_out
+   */
+  ipcMain.handle('online:publish-keypair-to-nostr', async (event, { keypairType, keypairUuid, signingKeypairUuid, profileUuid }) => {
+    try {
+      const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
+      const { finalizeEvent } = require('nostr-tools');
+      const db = dbManager.getConnection('clientdata');
+      const keyguardKey = getKeyguardKey(event);
+      
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      
+      // Get the keypair to publish (same logic as preview)
+      let keypairRow;
+      if (keypairType === 'master' || keypairType === 'admin') {
+        keypairRow = db.prepare('SELECT * FROM admin_keypairs WHERE keypair_uuid = ?').get(keypairUuid);
+      } else if (keypairType === 'user-op') {
+        keypairRow = db.prepare('SELECT * FROM admin_keypairs WHERE keypair_uuid = ? AND profile_uuid = ?').get(keypairUuid, profileUuid);
+      }
+      
+      if (!keypairRow) {
+        return { success: false, error: 'Keypair not found' };
+      }
+      
+      // Get the signing keypair and decrypt its private key
+      const signingKeypair = db.prepare('SELECT * FROM admin_keypairs WHERE keypair_uuid = ?').get(signingKeypairUuid);
+      if (!signingKeypair || signingKeypair.storage_status === 'public-only') {
+        return { success: false, error: 'Signing keypair not found or private key not available' };
+      }
+      
+      // Decrypt signing keypair private key
+      let privateKeyHex;
+      try {
+        const parts = signingKeypair.encrypted_private_key.split(':');
+        if (parts.length !== 2) {
+          return { success: false, error: 'Invalid encrypted private key format' };
+        }
+        
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+        let decrypted = decipher.update(encrypted);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        
+        // For Nostr keys, private key is stored as hex
+        privateKeyHex = decrypted.toString('hex');
+      } catch (err) {
+        return { success: false, error: `Cannot decrypt signing keypair: ${err.message}` };
+      }
+      
+      // Generate event template (same as preview)
+      const eventContent = {
+        keypair_uuid: keypairRow.keypair_uuid,
+        keypair_type: keypairRow.keypair_type,
+        key_usage: keypairRow.key_usage,
+        trust_level: keypairRow.trust_level,
+        public_key: keypairRow.public_key,
+        public_key_hex: keypairRow.public_key_hex,
+        fingerprint: keypairRow.fingerprint,
+        canonical_name: keypairRow.canonical_name,
+        local_name: keypairRow.local_name,
+        name: keypairRow.name,
+        label: keypairRow.label,
+        comments: keypairRow.comments,
+        created_at: keypairRow.created_at,
+        updated_at: keypairRow.updated_at,
+        profile_uuid: keypairRow.profile_uuid || null
+      };
+      
+      if (keypairType === 'user-op' && profileUuid) {
+        const profileRow = db.prepare('SELECT * FROM profiles WHERE profile_uuid = ?').get(profileUuid);
+        if (profileRow) {
+          eventContent.profile = {
+            uuid: profileRow.profile_uuid,
+            username: profileRow.username,
+            displayname: profileRow.displayname
+          };
+        }
+      }
+      
+      const eventTemplate = {
+        kind: 31107,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['d', keypairRow.keypair_uuid],
+          ['t', 'rhplay-keypair-publication'],
+          ['k', keypairType],
+          ['p', signingKeypair.canonical_name]
+        ],
+        content: JSON.stringify(eventContent)
+      };
+      
+      // Sign the event
+      const privateKeyBytes = new Uint8Array(Buffer.from(privateKeyHex, 'hex'));
+      const signedEvent = finalizeEvent(eventTemplate, privateKeyBytes);
+      
+      // Add to NostrLocalDBManager cache_out
+      const nostrDBManager = new NostrLocalDBManager();
+      await nostrDBManager.initialize();
+      
+      const success = nostrDBManager.addEvent(
+        'cache_out',
+        signedEvent,
+        0, // proc_status: pending
+        null, // keep_for
+        'admin_keypairs', // table_name
+        keypairRow.keypair_uuid, // record_uuid
+        profileUuid || null // user_profile_uuid
+      );
+      
+      if (!success) {
+        return { success: false, error: 'Failed to add event to outgoing cache' };
+      }
+      
+      // Update keypair status to 'pending'
+      db.prepare(`
+        UPDATE admin_keypairs 
+        SET nostr_status = 'pending', nostr_event_id = ?
+        WHERE keypair_uuid = ?
+      `).run(signedEvent.id, keypairRow.keypair_uuid);
+      
+      nostrDBManager.closeAll();
+      
+      return { success: true, eventId: signedEvent.id };
+    } catch (error) {
+      console.error('Error publishing keypair to Nostr:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:publish-profile-to-nostr
+   * Create and sign a Nostr kind 0 event for user profile metadata (NIP-01)
+   * Uses the user's primary Nostr keypair to sign the event
+   */
+  ipcMain.handle('online:publish-profile-to-nostr', async (event, { profileUuid }) => {
+    try {
+      const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
+      const { finalizeEvent } = require('nostr-tools');
+      const db = dbManager.getConnection('clientdata');
+      const keyguardKey = getKeyguardKey(event);
+      
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      
+      // Get the current profile from csettings
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No current profile found' };
+      }
+      
+      // Load profile from csettings
+      const profileJson = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile');
+      
+      if (!profileJson) {
+        return { success: false, error: 'Profile not found' };
+      }
+      
+      const profile = JSON.parse(profileJson.csetting_value);
+      
+      // Verify the profile UUID matches
+      if (profile.profileId !== profileUuid && profile.profileId !== currentProfileId) {
+        return { success: false, error: 'Profile UUID mismatch' };
+      }
+      
+      // Get the primary keypair - must be Nostr type
+      if (!profile.primaryKeypair) {
+        return { success: false, error: 'Profile has no primary keypair' };
+      }
+      
+      const primaryKeypair = profile.primaryKeypair;
+      
+      if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
+        return { success: false, error: 'Primary keypair must be Nostr type to publish profile' };
+      }
+      
+      // Decrypt the private key
+      let privateKeyHex;
+      try {
+        if (!primaryKeypair.encrypted || !primaryKeypair.privateKey) {
+          return { success: false, error: 'Private key not available or not encrypted' };
+        }
+        
+        // privateKey is stored as encrypted string in format "iv:encrypted"
+        const parts = primaryKeypair.privateKey.split(':');
+        if (parts.length !== 2) {
+          return { success: false, error: 'Invalid encrypted private key format' };
+        }
+        
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+        let decrypted = decipher.update(encrypted);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        
+        // For Nostr keys, private key is stored as hex
+        privateKeyHex = decrypted.toString('hex');
+      } catch (err) {
+        return { success: false, error: `Cannot decrypt primary keypair: ${err.message}` };
+      }
+      
+      // Build NIP-01 profile metadata content
+      const profileContent = {
+        name: profile.displayName || profile.username || '',
+        about: profile.bio || '',
+        picture: profile.pictureUrl || '',
+        banner: profile.bannerUrl || ''
+      };
+      
+      // Remove empty fields
+      Object.keys(profileContent).forEach(key => {
+        if (profileContent[key] === '' || profileContent[key] === null || profileContent[key] === undefined) {
+          delete profileContent[key];
+        }
+      });
+      
+      // Create kind 0 event template
+      const eventTemplate = {
+        kind: 0,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['d', profile.profileId]
+        ],
+        content: JSON.stringify(profileContent)
+      };
+      
+      // Sign the event
+      const privateKeyBytes = new Uint8Array(Buffer.from(privateKeyHex, 'hex'));
+      const signedEvent = finalizeEvent(eventTemplate, privateKeyBytes);
+      
+      // Add to NostrLocalDBManager cache_out
+      const nostrDBManager = new NostrLocalDBManager();
+      await nostrDBManager.initialize();
+      
+      const success = nostrDBManager.addEvent(
+        'cache_out',
+        signedEvent,
+        0, // proc_status: pending
+        null, // keep_for
+        'profiles', // table_name
+        profile.profileId, // record_uuid (profile UUID)
+        profile.profileId // user_profile_uuid (same as profile UUID)
+      );
+      
+      if (!success) {
+        nostrDBManager.closeAll();
+        return { success: false, error: 'Failed to add event to outgoing cache' };
+      }
+      
+      nostrDBManager.closeAll();
+      
+      return { success: true, eventId: signedEvent.id };
+    } catch (error) {
+      console.error('Error publishing profile to Nostr:', error);
       return { success: false, error: error.message };
     }
   });

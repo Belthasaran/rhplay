@@ -8,4 +8,5 @@ patchbin.db
 *.db-shm
 *.db-wal
 *.db-journal
+nostr*.db
 

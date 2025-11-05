@@ -210,6 +210,7 @@
                           <th>Usage</th>
                           <th>Trust</th>
                           <th>Storage Type</th>
+                          <th>Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -233,9 +234,14 @@
                           <td>{{ getKeyUsageLabel(kp.keyUsage) }}</td>
                           <td>{{ kp.trustLevel || 'Standard' }}</td>
                           <td>{{ getStorageStatusLabel(kp.storageStatus) }}</td>
+                          <td>
+                            <span :class="'nostr-status-' + (kp.nostrStatus || 'pending')">
+                              {{ getNostrStatusLabel(kp.nostrStatus) }}
+                            </span>
+                          </td>
                         </tr>
                         <tr v-if="masterAdminKeypairsList.length === 0">
-                          <td colspan="7" class="empty-message">No master admin keypairs found. Use the menu to create or import one.</td>
+                          <td colspan="8" class="empty-message">No master admin keypairs found. Use the menu to create or import one.</td>
                         </tr>
                       </tbody>
                     </table>
@@ -273,6 +279,14 @@
                         >
                           Delete Keypair
                         </button>
+                        <div class="dropdown-divider" v-if="selectedMasterKeypairUuid"></div>
+                        <button 
+                          v-if="selectedMasterKeypairUuid" 
+                          @click="openPublishKeypairModal('master'); showMasterKeypairActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          Publish Keypair
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -297,6 +311,7 @@
                           <th>Usage</th>
                           <th>Trust</th>
                           <th>Storage Type</th>
+                          <th>Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -320,9 +335,14 @@
                           <td>{{ getKeyUsageLabel(kp.keyUsage) }}</td>
                           <td>{{ kp.trustLevel || 'Standard' }}</td>
                           <td>{{ getStorageStatusLabel(kp.storageStatus) }}</td>
+                          <td>
+                            <span :class="'nostr-status-' + (kp.nostrStatus || 'pending')">
+                              {{ getNostrStatusLabel(kp.nostrStatus) }}
+                            </span>
+                          </td>
                         </tr>
                         <tr v-if="nonMasterAdminKeypairsList.length === 0">
-                          <td colspan="7" class="empty-message">No admin keypairs found. Use the menu to create or import one.</td>
+                          <td colspan="8" class="empty-message">No admin keypairs found. Use the menu to create or import one.</td>
                         </tr>
                       </tbody>
                     </table>
@@ -359,6 +379,14 @@
                           class="dropdown-item danger"
                         >
                           Delete Keypair
+                        </button>
+                        <div class="dropdown-divider" v-if="selectedAdminKeypairUuid"></div>
+                        <button 
+                          v-if="selectedAdminKeypairUuid" 
+                          @click="openPublishKeypairModal('admin'); showAdminKeypairActionDropdown = false" 
+                          class="dropdown-item"
+                        >
+                          Publish Keypair
                         </button>
                       </div>
                     </div>
@@ -404,14 +432,14 @@
                                 @click.stop
                               />
                             </td>
-                            <td><code style="font-size: 10px;">{{ decl.issuing_fingerprint ? decl.issuing_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
-                            <td><code style="font-size: 10px;">{{ decl.subject_fingerprint ? decl.subject_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
-                            <td>{{ decl.subject_trust_level || 'N/A' }}</td>
-                            <td>{{ formatDate(decl.valid_starting) }}</td>
-                            <td>{{ decl.valid_ending ? formatDate(decl.valid_ending) : 'No expiration' }}</td>
+                            <td><code style="font-size: 10px;">{{ decl.signing_keypair_fingerprint ? decl.signing_keypair_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
+                            <td><code style="font-size: 10px;">{{ decl.target_keypair_fingerprint ? decl.target_keypair_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
+                            <td>{{ getTrustLevelFromContent(decl) || 'N/A' }}</td>
+                            <td>{{ formatDate(decl.valid_from) }}</td>
+                            <td>{{ decl.valid_until ? formatDate(decl.valid_until) : 'No expiration' }}</td>
                             <td>
                               <span :class="getTrustDeclarationStatusClass(decl)">
-                                {{ getTrustDeclarationStatus(decl) }}
+                                {{ decl.status || 'Draft' }}
                               </span>
                             </td>
                           </tr>
@@ -1924,6 +1952,100 @@
     </div>
   </div>
 
+  <!-- Publish Keypair Modal -->
+  <div v-if="showPublishKeypairModal" class="modal-backdrop" @click.self="showPublishKeypairModal = false">
+    <div class="modal large-modal">
+      <header class="modal-header">
+        <h3>Publish Keypair to Nostr</h3>
+        <button class="close" @click="showPublishKeypairModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div v-if="!publishKeypairData" class="loading-message">Loading keypair details...</div>
+        <template v-else>
+          <!-- Keypair Information -->
+          <div class="modal-field">
+            <label>Keypair to Publish:</label>
+            <div class="readonly-field-group">
+              <div><strong>Name:</strong> {{ publishKeypairData.name || publishKeypairData.localName || 'Unnamed' }}</div>
+              <div><strong>Type:</strong> {{ publishKeypairData.type }}</div>
+              <div><strong>Canonical Name:</strong> {{ publishKeypairData.canonicalName || 'N/A' }}</div>
+              <div><strong>Usage:</strong> {{ getKeyUsageLabel(publishKeypairData.keyUsage) }}</div>
+            </div>
+          </div>
+
+          <!-- Nostr Signing Keypair Selector -->
+          <div class="modal-field">
+            <label>Choose Nostr Keypair for Signing:</label>
+            <select 
+              v-model="selectedNostrSigningKeypairUuid" 
+              class="modal-input"
+              @change="generateEventPreview"
+            >
+              <option value="">Select a Nostr keypair...</option>
+              <option 
+                v-for="kp in availableNostrSigningKeypairs" 
+                :key="kp.uuid" 
+                :value="kp.uuid"
+              >
+                {{ kp.name || kp.label || kp.canonicalName || 'Unnamed' }} ({{ kp.type }})
+              </option>
+            </select>
+            <p class="field-hint">
+              Select a Nostr keypair that you have the private key for. This keypair will be used to sign the publish event.
+            </p>
+          </div>
+
+          <!-- User Op Keys: Profile Information -->
+          <div v-if="publishKeypairType === 'user-op' && onlineProfile" class="modal-field">
+            <label>Profile Information (will be included in event):</label>
+            <div class="readonly-field-group">
+              <div><strong>Username:</strong> {{ onlineProfile.username }}</div>
+              <div><strong>Display Name:</strong> {{ onlineProfile.displayname }}</div>
+              <div><strong>Profile UUID:</strong> {{ onlineProfile.uuid }}</div>
+            </div>
+            <p class="field-hint">
+              For User Op keys, profile identifiers will be included to prove authorization.
+            </p>
+          </div>
+
+          <!-- Event Preview -->
+          <div v-if="publishKeypairEventPreview" class="modal-field">
+            <label>Event Preview:</label>
+            <div class="event-preview-container">
+              <div class="event-preview-section">
+                <strong>Event Kind:</strong> {{ publishKeypairEventPreview.kind }}
+              </div>
+              <div class="event-preview-section">
+                <strong>Tags:</strong>
+                <pre class="event-preview-json">{{ JSON.stringify(publishKeypairEventPreview.tags, null, 2) }}</pre>
+              </div>
+              <div class="event-preview-section">
+                <strong>Content:</strong>
+                <pre class="event-preview-json">{{ JSON.stringify(JSON.parse(publishKeypairEventPreview.content), null, 2) }}</pre>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="!selectedNostrSigningKeypairUuid" class="modal-field">
+            <p class="field-hint" style="color: #d32f2f;">
+              ⚠️ Please select a Nostr signing keypair to generate the event preview.
+            </p>
+          </div>
+        </template>
+      </section>
+      <footer class="modal-footer">
+        <button @click="showPublishKeypairModal = false" class="btn-secondary-small">Cancel</button>
+        <button 
+          @click="confirmPublishKeypair" 
+          class="btn-primary-small"
+          :disabled="!selectedNostrSigningKeypairUuid || !publishKeypairEventPreview"
+        >
+          Publish Keypair
+        </button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Encryption Key Details Modal -->
   <div v-if="showEncryptionKeyDetailsModal" class="modal-backdrop" @click.self="showEncryptionKeyDetailsModal = false">
     <div class="modal large-modal">
@@ -2470,6 +2592,28 @@
               rows="3"
             ></textarea>
           </div>
+          
+          <div class="modal-field">
+            <label>Picture URL (optional):</label>
+            <input 
+              type="url" 
+              v-model="profileCreationData.pictureUrl"
+              placeholder="https://example.com/picture.jpg"
+              class="modal-input"
+            />
+            <p class="field-help">URL to your profile picture</p>
+          </div>
+          
+          <div class="modal-field">
+            <label>Banner URL (optional):</label>
+            <input 
+              type="url" 
+              v-model="profileCreationData.bannerUrl"
+              placeholder="https://example.com/banner.jpg"
+              class="modal-input"
+            />
+            <p class="field-help">URL to your profile banner image</p>
+          </div>
         </div>
         
         <!-- Step 2: Keypair Generation -->
@@ -2482,10 +2626,10 @@
             <label>Keypair Type:</label>
             <select v-model="profileCreationData.keypairType" class="modal-input">
               <option value="Nostr">Nostr (Default, Required for first profile)</option>
-              <option value="ML-DSA-44">ML-DSA-44</option>
+              <!-- <option value="ML-DSA-44">ML-DSA-44</option>
               <option value="ML-DSA-87">ML-DSA-87</option>
               <option value="ED25519">ED25519</option>
-              <option value="RSA-2048">RSA-2048</option>
+              <option value="RSA-2048">RSA-2048</option> -->
             </select>
             <p class="field-help">Nostr is required for your first profile key. Additional keypairs can use other types.</p>
           </div>
@@ -2512,7 +2656,7 @@
             @click="completeProfileCreation" 
             class="btn-primary-small"
             :disabled="!profileCreationData.keypairType">
-            Complete Profile Creation
+            Complete and Publish Profile
           </button>
           <button 
             v-if="profileCreationWizardStep > 1"
@@ -2686,6 +2830,30 @@
             ></textarea>
           </div>
 
+          <!-- Picture URL -->
+          <div class="profile-field">
+            <label>Picture URL (optional):</label>
+            <input 
+              type="url" 
+              v-model="onlineProfile.pictureUrl"
+              @input="updateOnlineProfile"
+              placeholder="https://example.com/picture.jpg"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Banner URL -->
+          <div class="profile-field">
+            <label>Banner URL (optional):</label>
+            <input 
+              type="url" 
+              v-model="onlineProfile.bannerUrl"
+              @input="updateOnlineProfile"
+              placeholder="https://example.com/banner.jpg"
+              class="profile-input"
+            />
+          </div>
+
           <!-- Backup Warning -->
           <div v-if="onlineProfile.primaryKeypair || (onlineProfile.additionalKeypairs && onlineProfile.additionalKeypairs.length > 0)" class="backup-warning">
             <p class="warning-text">
@@ -2773,6 +2941,7 @@
                       <th>Usage</th>
                       <th>Trust</th>
                       <th>Storage Type</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2796,9 +2965,14 @@
                       <td>{{ getKeyUsageLabel(kp.keyUsage) }}</td>
                       <td>{{ kp.trustLevel || 'Standard' }}</td>
                       <td>{{ getStorageStatusLabel(kp.storageStatus) }}</td>
+                      <td>
+                        <span :class="'nostr-status-' + (kp.nostrStatus || 'pending')">
+                          {{ getNostrStatusLabel(kp.nostrStatus) }}
+                        </span>
+                      </td>
                     </tr>
                     <tr v-if="userOpKeypairsList.length === 0">
-                      <td colspan="7" class="empty-message">No User Op keypairs found. Use the menu to create or import one.</td>
+                      <td colspan="8" class="empty-message">No User Op keypairs found. Use the menu to create or import one.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2835,6 +3009,14 @@
                       class="dropdown-item danger"
                     >
                       Delete Keypair
+                    </button>
+                    <div class="dropdown-divider" v-if="selectedUserOpKeypairUuid"></div>
+                    <button 
+                      v-if="selectedUserOpKeypairUuid" 
+                      @click="openPublishKeypairModal('user-op'); showUserOpKeypairActionDropdown = false" 
+                      class="dropdown-item"
+                    >
+                      Publish Keypair
                     </button>
                   </div>
                 </div>
@@ -4721,15 +4903,30 @@
                   >
                     <option value="">-- Select Trust Level --</option>
                     <option value="operating-admin">Operating Admin</option>
+                    <option value="authorized-admin">Authorized Admin</option>
                     <option value="moderator">Moderator</option>
                     <option value="updater">Updater</option>
                     <option value="contributor">Contributor</option>
                   </select>
                   <p class="field-hint">
-                    <strong>Operating Admin:</strong> Master admin trusts an operational admin keypair for signing trust declarations and managing system operations.<br>
-                    <strong>Moderator:</strong> Trusted for moderation actions only.<br>
-                    <strong>Updater:</strong> Trusted for metadata updates only.<br>
-                    <strong>Contributor:</strong> Limited contributor role.
+                    <span v-if="trustDeclarationWizardData.content.trustLevel === 'operating-admin'">
+                      Operating Admin: Full administrative privileges, can sign trust declarations for other admins and moderators.
+                    </span>
+                    <span v-else-if="trustDeclarationWizardData.content.trustLevel === 'authorized-admin'">
+                      Authorized Admin: Administrative privileges with restrictions. Cannot sign New Delegations, Updates, or Revocations affecting Master Admin or Operating Admin objects. Can only revoke/reduce Authorized Admin declarations that rely on their signature. Cannot grant permissions they don't possess.
+                    </span>
+                    <span v-else-if="trustDeclarationWizardData.content.trustLevel === 'moderator'">
+                      Moderator: Can moderate content and manage user interactions within their scope.
+                    </span>
+                    <span v-else-if="trustDeclarationWizardData.content.trustLevel === 'updater'">
+                      Updater: Can update metadata within their scope.
+                    </span>
+                    <span v-else-if="trustDeclarationWizardData.content.trustLevel === 'contributor'">
+                      Contributor: Can contribute content within their scope.
+                    </span>
+                    <span v-else>
+                      Select a trust level to see its description.
+                    </span>
                   </p>
                 </div>
 
@@ -5106,9 +5303,16 @@
           <!-- Step 5: Finalize buttons -->
           <button 
             v-if="trustDeclarationWizardStep === 5" 
+            @click="finishLaterTrustDeclaration" 
+            class="btn-secondary"
+          >
+            Finish Later
+          </button>
+          <button 
+            v-if="trustDeclarationWizardStep === 5 && trustDeclarationWizardData.status !== 'Finalized'" 
             @click="finalizeTrustDeclaration" 
             class="btn-primary"
-            :disabled="!canFinalizeDeclaration || trustDeclarationWizardData.status === 'Finalized'"
+            :disabled="!canFinalizeDeclaration"
           >
             Finalize Declaration
           </button>
@@ -5120,6 +5324,404 @@
             Save Declaration
           </button>
         </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Trust Declaration Details Modal (View/Edit) -->
+  <div v-if="showTrustDeclarationDetailsModal" class="modal-backdrop" @click.self="closeTrustDeclarationDetailsModal">
+    <div class="modal trust-declaration-details-modal" style="max-width: 1200px; width: 90vw;">
+      <header class="modal-header">
+        <h3>Trust Declaration Details</h3>
+        <button @click="closeTrustDeclarationDetailsModal" class="btn-close">×</button>
+      </header>
+
+      <div class="modal-body">
+        <div v-if="selectedTrustDeclaration" class="declaration-details-content">
+          <!-- Tabs -->
+          <div class="details-tabs">
+            <button 
+              v-for="tab in ['summary', 'issuer', 'subject', 'validity', 'content', 'status']" 
+              :key="tab"
+              :class="['tab-button', { active: trustDeclarationDetailsTab === tab }]"
+              @click="trustDeclarationDetailsTab = tab"
+            >
+              {{ tab.charAt(0).toUpperCase() + tab.slice(1) }}
+            </button>
+          </div>
+
+          <!-- Tab Content -->
+          <div class="tab-content-container">
+            <!-- Summary and Metadata Tab -->
+            <div v-if="trustDeclarationDetailsTab === 'summary'" class="tab-content-panel">
+              <h4>Summary and Metadata</h4>
+              
+              <div class="modal-field">
+                <label>Declaration UUID:</label>
+                <input type="text" :value="selectedTrustDeclaration.declaration_uuid" readonly class="modal-input readonly" />
+              </div>
+
+              <div class="modal-field">
+                <label>Declaration Type:</label>
+                <input 
+                  v-if="isDraftDeclaration" 
+                  type="text" 
+                  v-model="editingTrustDeclaration.declaration_type" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else 
+                  type="text" 
+                  :value="selectedTrustDeclaration.declaration_type" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Status:</label>
+                <input type="text" :value="selectedTrustDeclaration.status || 'Draft'" readonly class="modal-input readonly" />
+              </div>
+
+              <div class="modal-field">
+                <label>Brief Summary (Read-only):</label>
+                <textarea 
+                  :value="generateDeclarationSummary(selectedTrustDeclaration)" 
+                  readonly 
+                  class="modal-textarea readonly" 
+                  rows="3"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Reason:</label>
+                <textarea 
+                  v-if="isDraftDeclaration"
+                  v-model="editingTrustDeclaration.reason" 
+                  class="modal-textarea" 
+                  rows="3"
+                  placeholder="Optional reason for this declaration"
+                />
+                <textarea 
+                  v-else
+                  :value="getReasonFromContent(selectedTrustDeclaration)" 
+                  readonly 
+                  class="modal-textarea readonly" 
+                  rows="3"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Comment:</label>
+                <textarea 
+                  v-if="isDraftDeclaration"
+                  v-model="editingTrustDeclaration.comment" 
+                  class="modal-textarea" 
+                  rows="3"
+                  placeholder="Optional comment or notes"
+                />
+                <textarea 
+                  v-else
+                  :value="getCommentFromContent(selectedTrustDeclaration)" 
+                  readonly 
+                  class="modal-textarea readonly" 
+                  rows="3"
+                />
+              </div>
+            </div>
+
+            <!-- Issuer Tab -->
+            <div v-if="trustDeclarationDetailsTab === 'issuer'" class="tab-content-panel">
+              <h4>Issuer Information</h4>
+              
+              <div class="modal-field">
+                <label>Signing Keypair UUID:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="text" 
+                  v-model="editingTrustDeclaration.signing_keypair_uuid" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="selectedTrustDeclaration.signing_keypair_uuid || 'N/A'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Signing Keypair Fingerprint:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="text" 
+                  v-model="editingTrustDeclaration.signing_keypair_fingerprint" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="selectedTrustDeclaration.signing_keypair_fingerprint || 'N/A'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+            </div>
+
+            <!-- Subject Tab -->
+            <div v-if="trustDeclarationDetailsTab === 'subject'" class="tab-content-panel">
+              <h4>Subject Information</h4>
+              
+              <div class="modal-field">
+                <label>Target Keypair UUID:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="text" 
+                  v-model="editingTrustDeclaration.target_keypair_uuid" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="selectedTrustDeclaration.target_keypair_uuid || 'N/A'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Target Keypair Fingerprint:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="text" 
+                  v-model="editingTrustDeclaration.target_keypair_fingerprint" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="selectedTrustDeclaration.target_keypair_fingerprint || 'N/A'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Target User Profile ID:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="text" 
+                  v-model="editingTrustDeclaration.target_user_profile_id" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="selectedTrustDeclaration.target_user_profile_id || 'N/A'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+            </div>
+
+            <!-- Validity Tab -->
+            <div v-if="trustDeclarationDetailsTab === 'validity'" class="tab-content-panel">
+              <h4>Validity Period</h4>
+              
+              <div class="modal-field">
+                <label>Valid From:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="datetime-local" 
+                  v-model="editingTrustDeclaration.valid_from" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="formatDateTime(selectedTrustDeclaration.valid_from)" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Valid Until:</label>
+                <input 
+                  v-if="isDraftDeclaration"
+                  type="datetime-local" 
+                  v-model="editingTrustDeclaration.valid_until" 
+                  class="modal-input"
+                />
+                <input 
+                  v-else
+                  type="text" 
+                  :value="formatDateTime(selectedTrustDeclaration.valid_until) || 'No expiration'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+            </div>
+
+            <!-- Content Tab -->
+            <div v-if="trustDeclarationDetailsTab === 'content'" class="tab-content-panel">
+              <h4>Declaration Content</h4>
+              
+              <div class="modal-field">
+                <label>Content JSON:</label>
+                <div class="json-viewer-container">
+                  <pre class="json-viewer">{{ formatContentJson(selectedTrustDeclaration.content_json) }}</pre>
+                </div>
+              </div>
+
+              <div v-if="isDraftDeclaration" class="modal-field">
+                <label>Edit Content (Advanced):</label>
+                <textarea 
+                  v-model="editingTrustDeclaration.content_json" 
+                  class="modal-textarea json-editor" 
+                  rows="15"
+                  placeholder="Enter JSON content"
+                />
+              </div>
+            </div>
+
+            <!-- Status and Signatures Tab -->
+            <div v-if="trustDeclarationDetailsTab === 'status'" class="tab-content-panel">
+              <h4>Status and Signatures</h4>
+              
+              <div class="modal-field">
+                <label>Status:</label>
+                <input type="text" :value="selectedTrustDeclaration.status || 'Draft'" readonly class="modal-input readonly" />
+              </div>
+
+              <div class="modal-field">
+                <label>Digital Signature:</label>
+                <input 
+                  type="text" 
+                  :value="selectedTrustDeclaration.digital_signature ? 'Present' : 'Not signed'" 
+                  readonly 
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div class="modal-field">
+                <label>Content Hash (SHA256):</label>
+                <input type="text" :value="selectedTrustDeclaration.content_hash_sha256 || 'N/A'" readonly class="modal-input readonly" style="font-family: monospace; font-size: 11px;" />
+              </div>
+
+              <div class="modal-field">
+                <label>Validity Test:</label>
+                <div class="validity-test-results">
+                  <div :class="['validity-item', { 'valid': isValidDeclaration, 'invalid': !isValidDeclaration }]">
+                    <span class="validity-icon">{{ isValidDeclaration ? '✓' : '✗' }}</span>
+                    <span>{{ isValidDeclaration ? 'Declaration is valid' : 'Declaration is invalid' }}</span>
+                  </div>
+                  <div v-if="selectedTrustDeclaration.valid_from" class="validity-item">
+                    <span>Valid From: {{ formatDateTime(selectedTrustDeclaration.valid_from) }}</span>
+                  </div>
+                  <div v-if="selectedTrustDeclaration.valid_until" class="validity-item">
+                    <span>Valid Until: {{ formatDateTime(selectedTrustDeclaration.valid_until) }}</span>
+                  </div>
+                  <div v-if="!selectedTrustDeclaration.digital_signature" class="validity-item invalid">
+                    <span>⚠️ Not signed - Declaration must be signed before use</span>
+                  </div>
+                  <div v-if="selectedTrustDeclaration.status !== 'Published'" class="validity-item invalid">
+                    <span>⚠️ Not published - Declaration must be published before use</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal-field">
+                <label>Trust Status:</label>
+                <div class="trust-status-controls">
+                  <div class="trust-status-display">
+                    <span :class="['trust-badge', { 'trusted': isTrustedDeclaration, 'untrusted': !isTrustedDeclaration }]">
+                      {{ isTrustedDeclaration ? 'Trusted' : 'Untrusted' }}
+                    </span>
+                  </div>
+                  <label class="trust-override-checkbox">
+                    <input 
+                      type="checkbox" 
+                      v-model="localTrustOverride" 
+                      @change="onTrustOverrideChange"
+                    />
+                    <span>Local Trust Override</span>
+                  </label>
+                  <p class="field-hint">You can manually override the trust status. This only affects your local client.</p>
+                </div>
+              </div>
+
+              <!-- Finalize and Reload Button (only for Draft declarations) -->
+              <div v-if="selectedTrustDeclaration.status === 'Draft'" class="modal-field">
+                <button 
+                  @click="finalizeAndReloadDeclaration" 
+                  class="btn-primary"
+                  :disabled="!isValidDeclaration"
+                >
+                  Finalize and Reload
+                </button>
+                <p class="field-hint">
+                  <span v-if="!isValidDeclaration" style="color: #d32f2f;">
+                    ⚠️ Validation failed. Please fix errors before finalizing.
+                  </span>
+                  <span v-else>
+                    Validation passed. Click to finalize this declaration and reload with read-only fields.
+                  </span>
+                </p>
+              </div>
+
+              <!-- Sign Declaration Button (only for Finalized declarations without signature) -->
+              <div v-if="selectedTrustDeclaration.status === 'Finalized' && !selectedTrustDeclaration.digital_signature" class="modal-field">
+                <button 
+                  @click="signDeclaration" 
+                  class="btn-primary"
+                  :disabled="!canSignDeclaration"
+                >
+                  Issuer Sign
+                </button>
+                <p class="field-hint">
+                  <span v-if="!canSignDeclaration" style="color: #d32f2f;">
+                    ⚠️ Cannot sign: Issuer keypair not found or private key not available.
+                  </span>
+                  <span v-else>
+                    Sign this declaration with the issuer keypair. After signing, the status will change to "Signed".
+                  </span>
+                </p>
+              </div>
+
+              <!-- Add Signature Button (for Signed declarations) -->
+              <div v-if="selectedTrustDeclaration.digital_signature" class="modal-field">
+                <button 
+                  @click="addCountersignature" 
+                  class="btn-primary"
+                  :disabled="!canAddCountersignature"
+                >
+                  Add Signature
+                </button>
+                <p class="field-hint">
+                  <span v-if="!canAddCountersignature" style="color: #d32f2f;">
+                    ⚠️ Cannot add signature: No keypair available or private key not available.
+                  </span>
+                  <span v-else>
+                    Add a countersignature to this declaration. Multiple signatures can be added.
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="modal-footer">
+        <button @click="closeTrustDeclarationDetailsModal" class="btn-secondary">Close</button>
+        <button 
+          v-if="isDraftDeclaration" 
+          @click="saveTrustDeclarationEdits" 
+          class="btn-primary"
+        >
+          Save Changes
+        </button>
       </footer>
     </div>
   </div>
@@ -6886,6 +7488,15 @@ const adminKeypairsList = ref<Array<{uuid: string, type: string, keyUsage?: stri
 const selectedAdminKeypairUuid = ref<string | null>(null);
 const selectedAdminKeypair = ref<any>(null);
 
+// Publish Keypair Modal
+const showPublishKeypairModal = ref(false);
+const publishKeypairType = ref<'master' | 'admin' | 'user-op'>('admin');
+const publishKeypairUuid = ref<string | null>(null);
+const publishKeypairData = ref<any>(null);
+const availableNostrSigningKeypairs = ref<Array<{uuid: string, name?: string, label?: string, canonicalName?: string, type: string}>>([]);
+const selectedNostrSigningKeypairUuid = ref<string | null>(null);
+const publishKeypairEventPreview = ref<any>(null);
+
 // User Op keypairs (profile-bound admin keypairs)
 const userOpKeypairsList = ref<Array<{uuid: string, type: string, keyUsage?: string, storageStatus?: string, publicKey: string, fingerprint?: string, trustLevel?: string, name?: string, label?: string, comments?: string, localName?: string}>>([]);
 const selectedUserOpKeypairUuid = ref<string | null>(null);
@@ -6921,6 +7532,8 @@ const showTrustDeclarationActionDropdown = ref(false);
 const showCreateTrustDeclarationModal = ref(false);
 const showTrustDeclarationDetailsModal = ref(false);
 const editingTrustDeclaration = ref<any>({});
+const trustDeclarationDetailsTab = ref('summary');
+const localTrustOverride = ref(false);
 
 // Create Trust Declaration Wizard state
 const trustDeclarationWizardStep = ref(1); // 1=issuer, 2=validity, 3=subject, 4=content, 5=finalize
@@ -7045,6 +7658,8 @@ const profileCreationData = ref({
   homepage: '',
   socialIds: [] as SocialId[],
   bio: '',
+  pictureUrl: '',
+  bannerUrl: '',
   keypairType: 'Nostr' as KeypairType
 });
 const newSocialIdType = ref<SocialIdType>('discord');
@@ -8419,17 +9034,32 @@ function selectTrustDeclaration(declarationUuid: string) {
   }
 }
 
-async function loadSelectedTrustDeclaration() {
-  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+async function loadSelectedTrustDeclaration(declarationUuid?: string) {
+  const uuid = declarationUuid || selectedTrustDeclarationUuid.value;
+  if (!isElectronAvailable() || !uuid) {
     selectedTrustDeclaration.value = null;
     return;
   }
   
   try {
-    const result = await (window as any).electronAPI.getTrustDeclaration({ declarationUuid: selectedTrustDeclarationUuid.value });
+    const result = await (window as any).electronAPI.getAdminDeclaration(uuid);
     if (result.success) {
       selectedTrustDeclaration.value = result.declaration;
-      editingTrustDeclaration.value = { ...result.declaration };
+      
+      // Update the UUID ref if it was passed as parameter
+      if (declarationUuid) {
+        selectedTrustDeclarationUuid.value = declarationUuid;
+      }
+      
+      // Initialize editing data with proper date format for datetime-local inputs
+      const decl = result.declaration;
+      editingTrustDeclaration.value = { 
+        ...decl,
+        valid_from: decl.valid_from ? formatDateForInput(decl.valid_from) : null,
+        valid_until: decl.valid_until ? formatDateForInput(decl.valid_until) : null,
+        reason: getReasonFromContent(decl),
+        comment: getCommentFromContent(decl)
+      };
     } else {
       alert(`Failed to load trust declaration: ${result.error}`);
       selectedTrustDeclaration.value = null;
@@ -8438,6 +9068,22 @@ async function loadSelectedTrustDeclaration() {
     console.error('Error loading trust declaration:', error);
     alert(`Error: ${formatErrorMessage(error)}`);
     selectedTrustDeclaration.value = null;
+  }
+}
+
+function formatDateForInput(dateString: string | null | undefined): string {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    // Convert to format required by datetime-local input (YYYY-MM-DDTHH:mm)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch {
+    return '';
   }
 }
 
@@ -8461,7 +9107,354 @@ async function openTrustDeclarationDetailsModal() {
     return;
   }
   await loadSelectedTrustDeclaration();
+  // Load admin and user-op keypairs for signing
+  await loadAdminKeypairsList();
+  if (onlineProfile.value?.uuid) {
+    await loadUserOpKeypairsList(onlineProfile.value.uuid);
+  }
+  trustDeclarationDetailsTab.value = 'summary';
+  localTrustOverride.value = false;
   showTrustDeclarationDetailsModal.value = true;
+}
+
+function closeTrustDeclarationDetailsModal() {
+  showTrustDeclarationDetailsModal.value = false;
+  editingTrustDeclaration.value = {};
+  trustDeclarationDetailsTab.value = 'summary';
+  localTrustOverride.value = false;
+}
+
+const isDraftDeclaration = computed(() => {
+  return selectedTrustDeclaration.value?.status === 'Draft';
+});
+
+const isValidDeclaration = computed(() => {
+  if (!selectedTrustDeclaration.value) return false;
+  const decl = selectedTrustDeclaration.value;
+  
+  // Check if declaration has required fields
+  if (!decl.declaration_uuid) return false;
+  if (!decl.declaration_type) return false;
+  if (!decl.content_json) return false;
+  
+  // Validate JSON content
+  try {
+    const content = JSON.parse(decl.content_json);
+    // Basic validation - ensure required fields exist
+    if (decl.declaration_type === 'trust-declaration' && !content.trust_level) {
+      return false;
+    }
+  } catch {
+    return false; // Invalid JSON
+  }
+  
+  // Validate date ranges
+  const now = new Date();
+  if (decl.valid_from) {
+    const validFrom = new Date(decl.valid_from);
+    if (validFrom > now) return false; // Not yet valid
+  }
+  
+  if (decl.valid_until) {
+    const validUntil = new Date(decl.valid_until);
+    if (validUntil < now) return false; // Expired
+  }
+  
+  return true;
+});
+
+async function finalizeAndReloadDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclaration.value) {
+    return;
+  }
+  
+  // Check validation
+  if (!isValidDeclaration.value) {
+    alert('Validation failed. Please fix errors before finalizing.');
+    return;
+  }
+  
+  try {
+    // Update status to Finalized in database
+    const result = await (window as any).electronAPI.updateAdminDeclarationStatus(
+      selectedTrustDeclaration.value.declaration_uuid,
+      'Finalized'
+    );
+    
+    if (result.success) {
+      // Reload the declaration from database
+      await loadSelectedTrustDeclaration(selectedTrustDeclaration.value.declaration_uuid);
+      alert('Declaration finalized successfully. All fields are now read-only.');
+    } else {
+      alert(`Failed to finalize declaration: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error finalizing and reloading declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+const canSignDeclaration = computed(() => {
+  if (!selectedTrustDeclaration.value || selectedTrustDeclaration.value.status !== 'Finalized') {
+    return false;
+  }
+  
+  if (selectedTrustDeclaration.value.digital_signature) {
+    return false; // Already signed
+  }
+  
+  // Check if we have the issuer keypair available
+  const issuerUuid = selectedTrustDeclaration.value.signing_keypair_uuid;
+  if (!issuerUuid) {
+    return false;
+  }
+  
+  // Check if issuer keypair exists in admin or user-op keypairs
+  const adminKeypair = adminKeypairsList.value.find(kp => kp.uuid === issuerUuid);
+  const userOpKeypair = userOpKeypairsList.value.find(kp => kp.uuid === issuerUuid);
+  
+  if (!adminKeypair && !userOpKeypair) {
+    return false;
+  }
+  
+  // Check if private key is available (not full-offline)
+  const keypair = adminKeypair || userOpKeypair;
+  return keypair.storageStatus !== 'full-offline';
+});
+
+const canAddCountersignature = computed(() => {
+  if (!selectedTrustDeclaration.value || !selectedTrustDeclaration.value.digital_signature) {
+    return false;
+  }
+  
+  // Check if we have any available keypairs for countersigning
+  return (adminKeypairsList.value.length > 0 || userOpKeypairsList.value.length > 0);
+});
+
+async function signDeclaration() {
+  if (!isElectronAvailable() || !selectedTrustDeclaration.value) {
+    return;
+  }
+  
+  if (!canSignDeclaration.value) {
+    alert('Cannot sign declaration: Issuer keypair not found or private key not available.');
+    return;
+  }
+  
+  try {
+    const issuerUuid = selectedTrustDeclaration.value.signing_keypair_uuid;
+    if (!issuerUuid) {
+      alert('Declaration has no issuer keypair specified.');
+      return;
+    }
+    
+    // Find the issuer keypair
+    let keypairType = null;
+    let keypair = adminKeypairsList.value.find(kp => kp.uuid === issuerUuid);
+    if (keypair) {
+      keypairType = 'admin';
+    } else {
+      keypair = userOpKeypairsList.value.find(kp => kp.uuid === issuerUuid);
+      if (keypair) {
+        keypairType = 'user-op';
+      }
+    }
+    
+    if (!keypair) {
+      alert('Issuer keypair not found. Please ensure the keypair exists and is accessible.');
+      return;
+    }
+    
+    // Sign the declaration
+    const result = await (window as any).electronAPI.signAdminDeclaration(
+      selectedTrustDeclaration.value.declaration_uuid,
+      issuerUuid,
+      keypairType
+    );
+    
+    if (result.success) {
+      // Reload the declaration from database
+      await loadSelectedTrustDeclaration(selectedTrustDeclaration.value.declaration_uuid);
+      alert('Declaration signed successfully. Status changed to "Signed".');
+    } else {
+      alert(`Failed to sign declaration: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error signing declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function addCountersignature() {
+  if (!isElectronAvailable() || !selectedTrustDeclaration.value) {
+    return;
+  }
+  
+  if (!canAddCountersignature.value) {
+    alert('Cannot add countersignature: No keypair available or private key not available.');
+    return;
+  }
+  
+  // TODO: Implement countersignature logic
+  // For now, show a message
+  alert('Countersignature functionality will be implemented in a future update.');
+}
+
+
+const isTrustedDeclaration = computed(() => {
+  if (!selectedTrustDeclaration.value) return false;
+  
+  // Check if local override is set
+  if (localTrustOverride.value) {
+    // User has manually overridden - we need to check the opposite of what they want
+    // This is a simplified version - in reality you'd store the override preference
+    return true; // For now, assume override means trusted
+  }
+  
+  // Check if declaration is valid and published with at least one signature
+  const decl = selectedTrustDeclaration.value;
+  if (decl.status !== 'Published') return false;
+  if (!decl.digital_signature) return false;
+  
+  return isValidDeclaration.value;
+});
+
+function generateDeclarationSummary(decl: any): string {
+  if (!decl) return '';
+  
+  try {
+    const content = decl.content_json ? JSON.parse(decl.content_json) : {};
+    const type = decl.declaration_type || 'trust-declaration';
+    const issuer = decl.signing_keypair_fingerprint ? decl.signing_keypair_fingerprint.substring(0, 16) + '...' : 'Unknown';
+    const subject = decl.target_keypair_fingerprint ? decl.target_keypair_fingerprint.substring(0, 16) + '...' : 'Unknown';
+    
+    if (type === 'trust-declaration') {
+      const trustLevel = content.trust_level || content.subject?.trust_level || 'Unknown';
+      return `${type}: ${issuer} declares ${trustLevel} trust for ${subject}`;
+    }
+    
+    return `${type}: ${issuer} → ${subject}`;
+  } catch {
+    return `Declaration ${decl.declaration_uuid?.substring(0, 8) || 'Unknown'}`;
+  }
+}
+
+function getReasonFromContent(decl: any): string {
+  if (!decl?.content_json) return '';
+  try {
+    const content = JSON.parse(decl.content_json);
+    return content.reason || content.metadata?.reason || '';
+  } catch {
+    return '';
+  }
+}
+
+function getCommentFromContent(decl: any): string {
+  if (!decl?.content_json) return '';
+  try {
+    const content = JSON.parse(decl.content_json);
+    return content.comment || content.metadata?.comment || content.notes || '';
+  } catch {
+    return '';
+  }
+}
+
+
+function formatContentJson(contentJson: string | null | undefined): string {
+  if (!contentJson) return '{}';
+  try {
+    const parsed = JSON.parse(contentJson);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return contentJson || '';
+  }
+}
+
+function onTrustOverrideChange() {
+  // TODO: Save local trust override preference to database
+  // For now, this is just a UI state
+}
+
+async function saveTrustDeclarationEdits() {
+  if (!isElectronAvailable() || !selectedTrustDeclaration.value) {
+    return;
+  }
+  
+  if (!isDraftDeclaration.value) {
+    alert('Only draft declarations can be edited');
+    return;
+  }
+  
+  try {
+    // Update content_json if it was edited
+    if (editingTrustDeclaration.value.content_json) {
+      try {
+        JSON.parse(editingTrustDeclaration.value.content_json);
+      } catch (error: any) {
+        alert(`Invalid JSON in content: ${error.message}`);
+        return;
+      }
+    }
+    
+    // Prepare declaration data
+    // Convert datetime-local format back to ISO string
+    let validFrom = editingTrustDeclaration.value.valid_from || selectedTrustDeclaration.value.valid_from || null;
+    let validUntil = editingTrustDeclaration.value.valid_until || selectedTrustDeclaration.value.valid_until || null;
+    
+    if (validFrom && validFrom.includes('T') && !validFrom.includes('Z') && validFrom.length === 16) {
+      validFrom = new Date(validFrom).toISOString();
+    }
+    if (validUntil && validUntil.includes('T') && !validUntil.includes('Z') && validUntil.length === 16) {
+      validUntil = new Date(validUntil).toISOString();
+    }
+    
+    // Update content_json with reason/comment if edited
+    let contentJson = editingTrustDeclaration.value.content_json || selectedTrustDeclaration.value.content_json;
+    if (editingTrustDeclaration.value.reason !== undefined || editingTrustDeclaration.value.comment !== undefined) {
+      try {
+        const content = JSON.parse(contentJson);
+        if (!content.metadata) content.metadata = {};
+        if (editingTrustDeclaration.value.reason !== undefined) {
+          content.metadata.reason = editingTrustDeclaration.value.reason || null;
+        }
+        if (editingTrustDeclaration.value.comment !== undefined) {
+          content.metadata.comment = editingTrustDeclaration.value.comment || null;
+        }
+        contentJson = JSON.stringify(content);
+      } catch {
+        // If content_json is invalid, keep it as is
+      }
+    }
+    
+    const declarationData = {
+      declaration_uuid: selectedTrustDeclaration.value.declaration_uuid,
+      declaration_type: editingTrustDeclaration.value.declaration_type || selectedTrustDeclaration.value.declaration_type,
+      content_json: contentJson,
+      status: 'Draft',
+      schema_version: selectedTrustDeclaration.value.schema_version || '1.0',
+      signing_keypair_uuid: editingTrustDeclaration.value.signing_keypair_uuid || selectedTrustDeclaration.value.signing_keypair_uuid || null,
+      signing_keypair_fingerprint: editingTrustDeclaration.value.signing_keypair_fingerprint || selectedTrustDeclaration.value.signing_keypair_fingerprint || null,
+      target_keypair_uuid: editingTrustDeclaration.value.target_keypair_uuid || selectedTrustDeclaration.value.target_keypair_uuid || null,
+      target_keypair_fingerprint: editingTrustDeclaration.value.target_keypair_fingerprint || selectedTrustDeclaration.value.target_keypair_fingerprint || null,
+      target_user_profile_id: editingTrustDeclaration.value.target_user_profile_id || selectedTrustDeclaration.value.target_user_profile_id || null,
+      valid_from: validFrom,
+      valid_until: validUntil
+    };
+    
+    // Save the declaration
+    const result = await (window as any).electronAPI.saveAdminDeclaration(declarationData);
+    
+    if (result.success) {
+      alert('Declaration updated successfully');
+      await loadSelectedTrustDeclaration();
+      loadTrustDeclarationsList();
+    } else {
+      alert(`Failed to update declaration: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error saving declaration edits:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
 }
 
 function canSignTrustDeclaration(): boolean {
@@ -8469,28 +9462,25 @@ function canSignTrustDeclaration(): boolean {
   return masterAdminKeypairsList.value.length > 0 || adminKeypairsList.value.length > 0;
 }
 
+function getTrustLevelFromContent(decl: any): string {
+  if (!decl?.content_json) return null;
+  try {
+    const content = JSON.parse(decl.content_json);
+    return content.trust_level || content.subject?.trust_level || null;
+  } catch {
+    return null;
+  }
+}
+
 function getTrustDeclarationStatus(decl: any): string {
-  const now = new Date();
-  const validFrom = new Date(decl.valid_starting);
-  const validTo = decl.valid_ending ? new Date(decl.valid_ending) : null;
-  
-  if (validFrom > now) {
-    return 'Pending';
-  }
-  if (validTo && validTo < now) {
-    return 'Expired';
-  }
-  if (decl.signature && decl.signature_hash_value) {
-    return 'Signed';
-  }
-  return 'Unsigned';
+  return decl.status || 'Draft';
 }
 
 function getTrustDeclarationStatusClass(decl: any): string {
   const status = getTrustDeclarationStatus(decl);
-  if (status === 'Signed') return 'status-active';
-  if (status === 'Expired') return 'status-expired';
-  if (status === 'Pending') return 'status-pending';
+  if (status === 'Published') return 'status-active';
+  if (status === 'Finalized') return 'status-pending';
+  if (status === 'Draft') return 'status-inactive';
   return 'status-inactive';
 }
 
@@ -9236,13 +10226,13 @@ async function saveDraftTrustDeclaration() {
     validateTrustDeclarationAdvancedJson();
     if (trustDeclarationWizardData.value.content.validationErrors.length > 0) {
       alert('Please fix validation errors before saving draft');
-      return;
+      return false;
     }
     try {
       contentJson = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
     } catch (error: any) {
       alert(`Invalid JSON: ${error.message}`);
-      return;
+      return false;
     }
   } else {
     // Generate JSON from form
@@ -9252,7 +10242,7 @@ async function saveDraftTrustDeclaration() {
       contentJson = parsed.content || {};
     } catch (error: any) {
       alert(`Error generating JSON from form: ${error.message}`);
-      return;
+      return false;
     }
   }
   
@@ -9262,40 +10252,52 @@ async function saveDraftTrustDeclaration() {
       trustDeclarationWizardData.value.declarationUuid = generateTrustDeclarationUUID();
     }
     
-    // TODO: Call IPC handler to save draft declaration
-    // const result = await (window as any).electronAPI.createAdminDeclaration({
-    //   declarationUuid: trustDeclarationWizardData.value.declarationUuid,
-    //   declarationType: trustDeclarationWizardData.value.content.declarationType,
-    //   contentJson: JSON.stringify(contentJson),
-    //   status: 'Draft',
-    //   issuer: trustDeclarationWizardData.value.issuer,
-    //   subject: trustDeclarationWizardData.value.subject,
-    //   validity: trustDeclarationWizardData.value.validity
-    // });
+    // Prepare declaration data for database
+    const declarationData = {
+      declaration_uuid: trustDeclarationWizardData.value.declarationUuid,
+      declaration_type: trustDeclarationWizardData.value.content.declarationType || 'trust-declaration',
+      content_json: JSON.stringify(contentJson),
+      status: 'Draft',
+      schema_version: '1.0',
+      signing_keypair_uuid: trustDeclarationWizardData.value.issuer.keypairUuid || null,
+      signing_keypair_fingerprint: trustDeclarationWizardData.value.issuer.fingerprint || null,
+      target_keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
+      target_keypair_fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+      target_user_profile_id: trustDeclarationWizardData.value.subject.profileUuid || null,
+      valid_from: trustDeclarationWizardData.value.validity.validFrom 
+        ? new Date(trustDeclarationWizardData.value.validity.validFrom).toISOString()
+        : null,
+      valid_until: trustDeclarationWizardData.value.validity.validUntil
+        ? new Date(trustDeclarationWizardData.value.validity.validUntil).toISOString()
+        : null,
+      required_countersignatures: trustDeclarationWizardData.value.content.requiredCountersignatures.minCount || 0,
+      retroactive_effect_enabled: trustDeclarationWizardData.value.content.retroactiveEffect.enabled || false,
+      retroactive_effective_from: trustDeclarationWizardData.value.content.retroactiveEffect.effectiveFrom || null
+    };
     
-    // For now, just mark as saved locally
-    trustDeclarationWizardData.value.status = 'Draft';
-    alert('Draft saved successfully (implementation pending)');
+    // Call IPC handler to save draft declaration
+    const result = await (window as any).electronAPI.saveAdminDeclaration(declarationData);
     
-    // if (result.success) {
-    //   trustDeclarationWizardData.value.declarationUuid = result.declarationUuid;
-    //   trustDeclarationWizardData.value.status = 'Draft';
-    //   alert('Draft saved successfully');
-    // } else {
-    //   alert(`Failed to save draft: ${result.error}`);
-    // }
+    if (result.success) {
+      trustDeclarationWizardData.value.status = 'Draft';
+      return true;
+    } else {
+      alert(`Failed to save draft: ${result.error || 'Unknown error'}`);
+      return false;
+    }
   } catch (error) {
     console.error('Error saving draft declaration:', error);
     alert(`Error: ${formatErrorMessage(error)}`);
+    return false;
   }
 }
 
 async function saveDraftAndNextTrustDeclaration() {
   // Save draft first, then proceed to next step
-  await saveDraftTrustDeclaration();
+  const success = await saveDraftTrustDeclaration();
   
   // If save was successful, proceed to next step
-  if (trustDeclarationWizardData.value.status === 'Draft') {
+  if (success) {
     // Generate JSON from form before moving to review step
     generateTrustDeclarationJsonFromForm();
     nextTrustDeclarationWizardStep();
@@ -9303,6 +10305,10 @@ async function saveDraftAndNextTrustDeclaration() {
 }
 
 async function finalizeTrustDeclaration() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
   if (!canFinalizeDeclaration.value) {
     alert('Please fix validation errors before finalizing');
     return;
@@ -9317,62 +10323,125 @@ async function finalizeTrustDeclaration() {
     }
   }
   
-  // Generate JSON from form if needed
-  if (trustDeclarationWizardData.value.content.mode === 'form') {
-    generateTrustDeclarationJsonFromForm();
-  }
-  
   // Ensure declaration UUID is set
   if (!trustDeclarationWizardData.value.declarationUuid) {
-    trustDeclarationWizardData.value.declarationUuid = generateTrustDeclarationUUID();
+    // If no UUID, we need to save as draft first
+    const saved = await saveDraftTrustDeclaration();
+    if (!saved) {
+      alert('Failed to save declaration. Please try again.');
+      return;
+    }
   }
   
-  trustDeclarationWizardData.value.status = 'Finalized';
-  alert('Declaration finalized. You can now sign and save it.');
+  try {
+    // Update status to Finalized in database
+    const result = await (window as any).electronAPI.updateAdminDeclarationStatus(
+      trustDeclarationWizardData.value.declarationUuid,
+      'Finalized'
+    );
+    
+    if (result.success) {
+      trustDeclarationWizardData.value.status = 'Finalized';
+      alert('Declaration finalized. You can now sign and save it.');
+    } else {
+      alert(`Failed to finalize declaration: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error finalizing declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
 }
 
 async function saveTrustDeclaration() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
   if (trustDeclarationWizardData.value.status !== 'Finalized') {
     alert('Please finalize the declaration before saving');
     return;
   }
   
-  if (!isElectronAvailable()) {
-    return;
-  }
-  
   // Generate declaration JSON
-  let contentJson: string;
+  let contentJson: any = {};
   if (trustDeclarationWizardData.value.content.mode === 'advanced') {
-    contentJson = trustDeclarationWizardData.value.content.advancedJson;
+    try {
+      const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+      contentJson = parsed.content || parsed;
+    } catch (error: any) {
+      alert(`Invalid JSON: ${error.message}`);
+      return;
+    }
   } else {
     generateTrustDeclarationJsonFromForm();
-    contentJson = trustDeclarationWizardData.value.content.advancedJson;
+    try {
+      const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+      contentJson = parsed.content || {};
+    } catch (error: any) {
+      alert(`Error generating JSON from form: ${error.message}`);
+      return;
+    }
   }
   
   try {
-    // TODO: Call IPC handler to save finalized declaration
-    // const result = await (window as any).electronAPI.createAdminDeclaration({
-    //   declarationUuid: trustDeclarationWizardData.value.declarationUuid || generateTrustDeclarationUUID(),
-    //   declarationType: 'trust-declaration',
-    //   contentJson: contentJson,
-    //   status: 'Finalized',
-    //   issuer: trustDeclarationWizardData.value.issuer,
-    //   subject: trustDeclarationWizardData.value.subject,
-    //   validity: trustDeclarationWizardData.value.validity
-    // });
+    // Prepare declaration data for database
+    const declarationData = {
+      declaration_uuid: trustDeclarationWizardData.value.declarationUuid,
+      declaration_type: trustDeclarationWizardData.value.content.declarationType || 'trust-declaration',
+      content_json: JSON.stringify(contentJson),
+      status: 'Finalized',
+      schema_version: '1.0',
+      signing_keypair_uuid: trustDeclarationWizardData.value.issuer.keypairUuid || null,
+      signing_keypair_fingerprint: trustDeclarationWizardData.value.issuer.fingerprint || null,
+      target_keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
+      target_keypair_fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+      target_user_profile_id: trustDeclarationWizardData.value.subject.profileUuid || null,
+      valid_from: trustDeclarationWizardData.value.validity.validFrom 
+        ? new Date(trustDeclarationWizardData.value.validity.validFrom).toISOString()
+        : null,
+      valid_until: trustDeclarationWizardData.value.validity.validUntil
+        ? new Date(trustDeclarationWizardData.value.validity.validUntil).toISOString()
+        : null,
+      required_countersignatures: trustDeclarationWizardData.value.content.requiredCountersignatures.minCount || 0,
+      retroactive_effect_enabled: trustDeclarationWizardData.value.content.retroactiveEffect.enabled || false,
+      retroactive_effective_from: trustDeclarationWizardData.value.content.retroactiveEffect.effectiveFrom || null
+    };
     
-    alert('Saving declarations is not yet implemented');
-    // if (result.success) {
-    //   alert('Declaration saved successfully');
-    //   showCreateTrustDeclarationModal.value = false;
-    //   await loadTrustDeclarationsList();
-    // } else {
-    //   alert(`Failed to save declaration: ${result.error}`);
-    // }
+    // Save finalized declaration (this will update the existing record)
+    const result = await (window as any).electronAPI.saveAdminDeclaration(declarationData);
+    
+    if (result.success) {
+      alert('Declaration saved successfully');
+      showCreateTrustDeclarationModal.value = false;
+      trustDeclarationWizardStep.value = 1;
+      // Reset wizard data
+      initializeTrustDeclarationWizard();
+      // Reload declarations list if we're on the Trust Declarations tab
+      if (onlineActiveTab.value === 'trust-declarations') {
+        loadTrustDeclarationsList();
+      }
+    } else {
+      alert(`Failed to save declaration: ${result.error || 'Unknown error'}`);
+    }
   } catch (error) {
     console.error('Error saving declaration:', error);
     alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function finishLaterTrustDeclaration() {
+  // Save as draft and close wizard
+  const saved = await saveDraftTrustDeclaration();
+  
+  if (saved) {
+    showCreateTrustDeclarationModal.value = false;
+    trustDeclarationWizardStep.value = 1;
+    // Reset wizard data
+    initializeTrustDeclarationWizard();
+    // Reload declarations list if we're on the Trust Declarations tab
+    if (onlineActiveTab.value === 'trust-declarations') {
+      loadTrustDeclarationsList();
+    }
   }
 }
 
@@ -9942,6 +11011,152 @@ function getStorageStatusLabel(status?: string): string {
       return 'Full keypair, secret offline (prompt for secret when needed)';
     default:
       return 'Not specified';
+  }
+}
+
+function getNostrStatusLabel(status?: string): string {
+  switch (status) {
+    case 'pending':
+      return 'Pending';
+    case 'published':
+      return 'Published';
+    case 'failed':
+      return 'Failed';
+    case 'retrying':
+      return 'Retrying';
+    default:
+      return 'Pending';
+  }
+}
+
+async function openPublishKeypairModal(keypairType: 'master' | 'admin' | 'user-op') {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  publishKeypairType.value = keypairType;
+  publishKeypairData.value = null;
+  selectedNostrSigningKeypairUuid.value = null;
+  publishKeypairEventPreview.value = null;
+  availableNostrSigningKeypairs.value = [];
+  
+  try {
+    // Get the selected keypair based on type
+    let keypairUuid: string | null = null;
+    let keypairData: any = null;
+    
+    if (keypairType === 'master') {
+      keypairUuid = selectedMasterKeypairUuid.value;
+      keypairData = selectedMasterKeypair.value;
+    } else if (keypairType === 'admin') {
+      keypairUuid = selectedAdminKeypairUuid.value;
+      keypairData = selectedAdminKeypair.value;
+    } else if (keypairType === 'user-op') {
+      keypairUuid = selectedUserOpKeypairUuid.value;
+      keypairData = selectedUserOpKeypair.value;
+    }
+    
+    if (!keypairUuid || !keypairData) {
+      alert('Please select a keypair first.');
+      return;
+    }
+    
+    publishKeypairUuid.value = keypairUuid;
+    publishKeypairData.value = keypairData;
+    
+    // Load available Nostr signing keypairs
+    await loadAvailableNostrSigningKeypairs();
+    
+    showPublishKeypairModal.value = true;
+  } catch (error) {
+    console.error('Error opening publish keypair modal:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function loadAvailableNostrSigningKeypairs() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getAvailableNostrSigningKeypairs();
+    if (result.success) {
+      availableNostrSigningKeypairs.value = result.keypairs || [];
+    } else {
+      console.error('Error loading Nostr signing keypairs:', result.error);
+      alert(`Failed to load Nostr signing keypairs: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error loading Nostr signing keypairs:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function generateEventPreview() {
+  if (!isElectronAvailable() || !selectedNostrSigningKeypairUuid.value || !publishKeypairData.value) {
+    publishKeypairEventPreview.value = null;
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.generateKeypairPublishEventPreview(
+      publishKeypairType.value,
+      publishKeypairUuid.value!,
+      selectedNostrSigningKeypairUuid.value,
+      publishKeypairType.value === 'user-op' ? onlineProfile.value?.uuid : null
+    );
+    
+    if (result.success) {
+      publishKeypairEventPreview.value = result.eventTemplate;
+    } else {
+      console.error('Error generating event preview:', result.error);
+      alert(`Failed to generate event preview: ${result.error || 'Unknown error'}`);
+      publishKeypairEventPreview.value = null;
+    }
+  } catch (error) {
+    console.error('Error generating event preview:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+    publishKeypairEventPreview.value = null;
+  }
+}
+
+async function confirmPublishKeypair() {
+  if (!isElectronAvailable() || !selectedNostrSigningKeypairUuid.value || !publishKeypairEventPreview.value) {
+    alert('Please select a Nostr signing keypair and generate an event preview first.');
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to publish this keypair to Nostr? This will create a signed event and add it to the outgoing cache.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.publishKeypairToNostr(
+      publishKeypairType.value,
+      publishKeypairUuid.value!,
+      selectedNostrSigningKeypairUuid.value,
+      publishKeypairType.value === 'user-op' ? onlineProfile.value?.uuid : null
+    );
+    
+    if (result.success) {
+      alert('Keypair published successfully! The event has been added to the outgoing cache.');
+      showPublishKeypairModal.value = false;
+      
+      // Reload the keypair lists to update status
+      // masterAdminKeypairsList is a computed property that filters adminKeypairsList,
+      // so we just need to reload adminKeypairsList for master/admin types
+      if (publishKeypairType.value === 'master' || publishKeypairType.value === 'admin') {
+        await loadAdminKeypairsList();
+      } else if (publishKeypairType.value === 'user-op') {
+        await loadUserOpKeypairsList(selectedProfileId.value!);
+      }
+    } else {
+      alert(`Failed to publish keypair: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('Error publishing keypair:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
   }
 }
 
@@ -10900,6 +12115,8 @@ async function completeProfileCreation() {
       homepage: profileCreationData.value.homepage.trim() || undefined,
       socialIds: profileCreationData.value.socialIds,
       bio: profileCreationData.value.bio.trim() || undefined,
+      pictureUrl: profileCreationData.value.pictureUrl.trim() || undefined,
+      bannerUrl: profileCreationData.value.bannerUrl.trim() || undefined,
       primaryKeypair: null, // Will be created next
       additionalKeypairs: [],
       adminKeypairs: [],
@@ -10960,6 +12177,26 @@ async function completeProfileCreation() {
       onlineProfile.value = profileData;
     }
     
+    // Publish profile as Nostr kind 0 event if primary keypair is Nostr
+    if (profileData.primaryKeypair && profileData.primaryKeypair.type && profileData.primaryKeypair.type.toLowerCase().includes('nostr')) {
+      try {
+        const publishResult = await (window as any).electronAPI.publishProfileToNostr({
+          profileUuid: profileData.profileId
+        });
+        
+        if (publishResult.success) {
+          console.log('Profile published to Nostr successfully:', publishResult.eventId);
+          // Note: Success message will mention publishing
+        } else {
+          console.warn('Failed to publish profile to Nostr:', publishResult.error);
+          // Don't fail profile creation if publishing fails, just warn
+        }
+      } catch (error) {
+        console.error('Error publishing profile to Nostr:', error);
+        // Don't fail profile creation if publishing fails
+      }
+    }
+    
     // Save mode before resetting
     const wasNewProfileMode = profileCreationWizardMode.value === 'new-profile';
     
@@ -10972,7 +12209,7 @@ async function completeProfileCreation() {
     if (wasNewProfileMode || hasExistingProfile) {
       alert('New profile created successfully! You can switch to it in Profile Details. Make sure to export and backup your profile.');
     } else {
-      alert('Profile created successfully! Make sure to export and backup your profile.');
+      alert('Profile created and published successfully! Make sure to export and backup your profile.');
     }
   } catch (error) {
     console.error('Error creating profile:', error);
@@ -14445,9 +15682,19 @@ function formatShortDateTime(dateStr: string | null | undefined): string {
 }
 
 function formatDateTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return date.toLocaleString('en-US');
+  if (!dateStr) return 'N/A';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return dateStr || 'N/A';
+  }
 }
 
 function formatConditions(conditionsJson: string | null | undefined): string {
@@ -17753,6 +19000,20 @@ button:disabled {
   background: var(--bg-secondary);
   color: var(--text-secondary);
   cursor: not-allowed;
+}
+
+.birthday-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.birthday-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-input.locked {
   opacity: 0.7;
 }
 
@@ -19770,6 +21031,212 @@ button:disabled {
   border: 1px solid #4caf50;
   border-radius: 6px;
   color: #2e7d32;
+}
+
+/* Trust Declaration Details Modal */
+.trust-declaration-details-modal {
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.declaration-details-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.details-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.details-tabs .tab-button {
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.details-tabs .tab-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.details-tabs .tab-button.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  font-weight: bold;
+}
+
+.tab-content-container {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.tab-content-panel {
+  padding: 20px 0;
+}
+
+.tab-content-panel h4 {
+  margin-bottom: 20px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.modal-input.readonly,
+.modal-textarea.readonly {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.validity-test-results {
+  padding: 15px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.validity-item {
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.validity-item.valid {
+  color: #4caf50;
+}
+
+.validity-item.invalid {
+  color: #f44336;
+}
+
+.validity-icon {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.trust-status-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.trust-status-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trust-badge {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.trust-badge.trusted {
+  background: #4caf50;
+  color: white;
+}
+
+.trust-badge.untrusted {
+  background: #f44336;
+  color: white;
+}
+
+.trust-override-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.trust-override-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.json-editor {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.readonly-field-group {
+  padding: 10px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.readonly-field-group div {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.event-preview-container {
+  margin-top: 10px;
+  padding: 15px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.event-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-preview-json {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.nostr-status-pending {
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.nostr-status-published {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.nostr-status-failed {
+  color: #f44336;
+  font-weight: 500;
+}
+
+.nostr-status-retrying {
+  color: #2196f3;
+  font-weight: 500;
 }
 
 </style>

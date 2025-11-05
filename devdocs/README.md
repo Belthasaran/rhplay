@@ -23,6 +23,30 @@ This directory contains internal developer documentation for maintaining the RHT
 
 - **[IMPORTANT_GIT_UPDATE_TRACKING.txt](IMPORTANT_GIT_UPDATE_TRACKING.txt)** - Git usage reminders
 
+### Nostr & Trust Declarations
+
+- **[nostr/admin-declarations-schema-plan.md](nostr/admin-declarations-schema-plan.md)** - Complete schema plan for admin declarations
+  - Versioned JSON schema for `content_json`
+  - Declaration types (trust-declaration, privilege-grant, etc.)
+  - Trust level hierarchy (Master Admin, Operating Admin, Authorized Admin)
+  - Update and revocation mechanisms
+  - Examples for all declaration types
+
+- **[nostr/trust-declarations-nostr-signing.md](nostr/trust-declarations-nostr-signing.md)** - Nostr signing mechanism guide
+  - How Nostr keys differ from traditional keys
+  - Nostr event creation and signing process
+  - Wrapping non-Nostr signatures for Nostr publication
+  - Countersignatures with Nostr keys
+  - Database schema for Nostr fields
+
+- **[nostr/trust-declarations-summary.md](nostr/trust-declarations-summary.md)** - Complete implementation summary
+  - Database schema overview
+  - AdminDeclaration class documentation
+  - IPC handlers reference
+  - UI implementation details
+  - Workflow documentation
+  - Future work and known limitations
+
 ## 🔍 Quick Security Audit
 
 To perform a security audit on recent commits:

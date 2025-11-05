@@ -1,0 +1,5 @@
+
+On the Subject page of the declaration:  When the Subject type is a Declaration;
+   For Target Declaration UUID:  Provide an option of either using a Dropdown list for choosing an existing declaration to populate the UUID, or Type in the UUID manually.
+   
+

@@ -4458,11 +4458,11 @@ function registerDatabaseHandlers(dbManager) {
     switch (keyType) {
       case 'Nostr': {
         // Nostr uses secp256k1 elliptic curve with Schnorr signatures
-        const { generatePrivateKey, getPublicKey } = require('nostr-tools');
+        const { generateSecretKey, getPublicKey } = require('nostr-tools');
         const nip19 = require('nostr-tools/nip19');
         
         // Generate a 32-byte private key (secp256k1) - returns hex string
-        const privateKeyHex = generatePrivateKey();
+        const privateKeyHex = generateSecretKey();
         
         // Get public key in hex format (not npub format)
         const publicKeyHex = getPublicKey(privateKeyHex);

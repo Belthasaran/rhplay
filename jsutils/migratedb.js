@@ -434,6 +434,18 @@ const MIGRATIONS = {
         return tableExists(db, 'trust_declarations');
       },
     },
+    {
+      id: 'clientdata_021_admindeclarations_updates',
+      description: 'Add status, Nostr publishing, update tracking, and schema versioning to admindeclarations table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/021_clientdata_admindeclarations_updates.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admindeclarations', 'status')
+          && columnExists(db, 'admindeclarations', 'schema_version')
+          && columnExists(db, 'admindeclarations', 'nostr_event_id')
+          && columnExists(db, 'admindeclarations', 'original_declaration_uuid');
+      },
+    },
   ],
   patchbin: [],
 };

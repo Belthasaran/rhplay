@@ -4446,6 +4446,684 @@
     </div>
   </div>
 
+  <!-- Create Trust Declaration Wizard Modal -->
+  <div v-if="showCreateTrustDeclarationModal" class="modal-backdrop fullscreen-modal-backdrop" @click.self.prevent>
+    <div class="modal fullscreen-wizard-modal">
+      <header class="modal-header">
+        <h3>Create Trust Declaration</h3>
+        <button class="close" @click="cancelTrustDeclarationWizard">✕</button>
+      </header>
+      
+      <div class="wizard-container">
+        <!-- Wizard Steps Indicator -->
+        <div class="wizard-steps">
+          <div :class="['wizard-step', { 'active': trustDeclarationWizardStep === 1, 'completed': trustDeclarationWizardStep > 1 }]">
+            <span class="step-number">1</span>
+            <span class="step-label">Issuer</span>
+          </div>
+          <div :class="['wizard-step', { 'active': trustDeclarationWizardStep === 2, 'completed': trustDeclarationWizardStep > 2 }]">
+            <span class="step-number">2</span>
+            <span class="step-label">Validity</span>
+          </div>
+          <div :class="['wizard-step', { 'active': trustDeclarationWizardStep === 3, 'completed': trustDeclarationWizardStep > 3 }]">
+            <span class="step-number">3</span>
+            <span class="step-label">Subject</span>
+          </div>
+          <div :class="['wizard-step', { 'active': trustDeclarationWizardStep === 4, 'completed': trustDeclarationWizardStep > 4 }]">
+            <span class="step-number">4</span>
+            <span class="step-label">Content</span>
+          </div>
+          <div :class="['wizard-step', { 'active': trustDeclarationWizardStep === 5, 'completed': trustDeclarationWizardStep > 5 }]">
+            <span class="step-number">5</span>
+            <span class="step-label">Finalize</span>
+          </div>
+        </div>
+
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+          <!-- Step 1: Issuer Selection -->
+          <div v-if="trustDeclarationWizardStep === 1" class="wizard-step-content">
+            <h4>Step 1: Select Issuer</h4>
+            <p class="wizard-description">Choose the keypair that will sign this declaration. The issuer must be an admin keypair, User Op keypair, or User keypair.</p>
+            
+            <div class="modal-field">
+              <label>Issuer Keypair:</label>
+              <select 
+                v-model="trustDeclarationWizardData.issuer.keypairUuid" 
+                class="modal-input"
+                @change="onIssuerSelected"
+              >
+                <option value="">-- Select Issuer --</option>
+                <optgroup label="Admin Keypairs">
+                  <option 
+                    v-for="kp in availableIssuerKeypairs.filter(k => k.type === 'admin')" 
+                    :key="kp.uuid" 
+                    :value="kp.uuid"
+                  >
+                    {{ kp.name || kp.label || kp.localName || 'Unnamed' }} ({{ kp.canonicalName || kp.publicKey?.substring(0, 20) + '...' }})
+                  </option>
+                </optgroup>
+                <optgroup label="User Op Keypairs">
+                  <option 
+                    v-for="kp in availableIssuerKeypairs.filter(k => k.type === 'user-op')" 
+                    :key="kp.uuid" 
+                    :value="kp.uuid"
+                  >
+                    {{ kp.name || kp.label || kp.localName || 'Unnamed' }} ({{ kp.canonicalName || kp.publicKey?.substring(0, 20) + '...' }})
+                  </option>
+                </optgroup>
+                <optgroup label="User Keypairs">
+                  <option 
+                    v-for="kp in availableIssuerKeypairs.filter(k => k.type === 'user')" 
+                    :key="kp.uuid" 
+                    :value="kp.uuid"
+                  >
+                    {{ kp.name || kp.label || kp.localName || 'Unnamed' }} ({{ kp.canonicalName || kp.publicKey?.substring(0, 20) + '...' }})
+                  </option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div v-if="trustDeclarationWizardData.issuer.keypairUuid" class="issuer-info">
+              <div class="info-row">
+                <strong>Canonical Name:</strong>
+                <code>{{ trustDeclarationWizardData.issuer.canonicalName || 'N/A' }}</code>
+              </div>
+              <div class="info-row">
+                <strong>Fingerprint:</strong>
+                <code>{{ trustDeclarationWizardData.issuer.fingerprint || 'N/A' }}</code>
+              </div>
+              <div v-if="!trustDeclarationWizardData.issuer.hasPrivateKey" class="warning-message">
+                ⚠️ <strong>Warning:</strong> You do not possess the private key for this keypair. You will not be able to sign this declaration.
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Validity Dates -->
+          <div v-if="trustDeclarationWizardStep === 2" class="wizard-step-content">
+            <h4>Step 2: Validity Period</h4>
+            <p class="wizard-description">Set the validity period for this declaration. Start date defaults to issue date. Leave end date empty for permanent declaration.</p>
+            
+            <div v-if="parentDeclarationValidity" class="parent-validity-info">
+              <p class="info-note">
+                ℹ️ <strong>Parent Declaration Restriction:</strong> 
+                The validity period is restricted by parent declarations:
+                <br>• Earliest start: {{ parentDeclarationValidity.validFrom ? formatDate(parentDeclarationValidity.validFrom) : 'No restriction' }}
+                <br>• Latest end: {{ parentDeclarationValidity.validUntil ? formatDate(parentDeclarationValidity.validUntil) : 'No restriction' }}
+              </p>
+            </div>
+
+            <div class="modal-field">
+              <label>Start Date:</label>
+              <input 
+                type="date" 
+                v-model="trustDeclarationWizardData.validity.validFrom" 
+                class="modal-input"
+                :min="parentDeclarationValidity?.validFrom || undefined"
+                :max="parentDeclarationValidity?.validUntil || undefined"
+              />
+              <p class="field-hint">Defaults to issue date if not specified. A declaration with null start and end dates is valid from the beginning of the universe until the end of time (if issued by a master admin).</p>
+            </div>
+
+            <div class="modal-field">
+              <label>End Date (Optional):</label>
+              <input 
+                type="date" 
+                v-model="trustDeclarationWizardData.validity.validUntil" 
+                class="modal-input"
+                :min="trustDeclarationWizardData.validity.validFrom || undefined"
+                :max="parentDeclarationValidity?.validUntil || undefined"
+              />
+              <p class="field-hint">Leave empty for permanent declaration. The declaration will be valid until revoked or the parent declaration expires.</p>
+            </div>
+          </div>
+
+          <!-- Step 3: Subject Information -->
+          <div v-if="trustDeclarationWizardStep === 3" class="wizard-step-content">
+            <h4>Step 3: Subject Information</h4>
+            <p class="wizard-description">Specify the subject of this declaration (what or who the declaration applies to).</p>
+            
+            <div class="modal-field">
+              <label>Subject Type:</label>
+              <select 
+                v-model="trustDeclarationWizardData.subject.type" 
+                class="modal-input"
+                @change="onSubjectTypeChanged"
+              >
+                <option value="keypair">Keypair</option>
+                <option value="profile">Profile</option>
+                <option value="user">User</option>
+                <option value="system">System</option>
+                <option value="declaration">Declaration</option>
+              </select>
+            </div>
+
+            <div v-if="trustDeclarationWizardData.subject.type === 'keypair' || trustDeclarationWizardData.subject.type === 'profile'" class="modal-field">
+              <label>Canonical Name / Keypair:</label>
+              <select 
+                v-model="trustDeclarationWizardData.subject.keypairUuid" 
+                class="modal-input"
+                @change="onSubjectKeypairSelected"
+              >
+                <option value="">-- Select Keypair --</option>
+                <option 
+                  v-for="kp in availableSubjectKeypairs" 
+                  :key="kp.uuid" 
+                  :value="kp.uuid"
+                >
+                  {{ kp.name || kp.label || kp.localName || 'Unnamed' }} ({{ kp.canonicalName || kp.publicKey?.substring(0, 20) + '...' }})
+                </option>
+              </select>
+            </div>
+
+            <div v-if="trustDeclarationWizardData.subject.type === 'declaration'" class="modal-field">
+              <label>Target Declaration UUID:</label>
+              <input 
+                type="text" 
+                v-model="trustDeclarationWizardData.subject.declarationUuid" 
+                class="modal-input"
+                placeholder="Enter declaration UUID"
+              />
+            </div>
+
+            <div v-if="trustDeclarationWizardData.subject.canonicalName" class="subject-info">
+              <div class="info-row">
+                <strong>Canonical Name:</strong>
+                <code>{{ trustDeclarationWizardData.subject.canonicalName }}</code>
+              </div>
+              <div v-if="trustDeclarationWizardData.subject.fingerprint" class="info-row">
+                <strong>Fingerprint:</strong>
+                <code>{{ trustDeclarationWizardData.subject.fingerprint }}</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Content -->
+          <div v-if="trustDeclarationWizardStep === 4" class="wizard-step-content">
+            <h4>Step 4: Declaration Content</h4>
+            <p class="wizard-description">Choose how to prepare the declaration content: use a form or enter JSON directly.</p>
+            
+            <div class="modal-field">
+              <label>Content Mode:</label>
+              <div class="radio-group">
+                <label>
+                  <input 
+                    type="radio" 
+                    v-model="trustDeclarationWizardData.content.mode" 
+                    value="form"
+                    @change="onContentModeChanged"
+                  />
+                  Form Mode (Guided)
+                </label>
+                <label>
+                  <input 
+                    type="radio" 
+                    v-model="trustDeclarationWizardData.content.mode" 
+                    value="advanced"
+                    @change="onContentModeChanged"
+                  />
+                  Advanced Mode (JSON Editor)
+                </label>
+              </div>
+            </div>
+
+            <!-- Form Mode -->
+            <div v-if="trustDeclarationWizardData.content.mode === 'form'" class="form-mode-content">
+              <div class="modal-field">
+                <label>Declaration Type:</label>
+                <select 
+                  v-model="trustDeclarationWizardData.content.declarationType" 
+                  class="modal-input"
+                  @change="onDeclarationTypeChanged"
+                >
+                  <option value="trust-declaration">Trust Declaration</option>
+                  <option value="privilege-grant">Privilege Grant</option>
+                  <option value="privilege-revoke">Privilege Revoke</option>
+                  <option value="moderation-action">Moderation Action</option>
+                  <option value="metadata-delegation">Metadata Delegation</option>
+                  <option value="admin-control-message">Admin Control Message</option>
+                </select>
+              </div>
+
+              <div class="modal-field">
+                <label>Declaration Affects:</label>
+                <div class="checkbox-group">
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      v-model="trustDeclarationWizardData.content.affects" 
+                      value="New Delegation"
+                      @change="onAffectsChanged"
+                    />
+                    New Delegation
+                  </label>
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      v-model="trustDeclarationWizardData.content.affects" 
+                      value="Update Previous"
+                      @change="onAffectsChanged"
+                    />
+                    Update Previous
+                  </label>
+                </div>
+              </div>
+
+              <!-- New Delegation: Trust Declaration Form -->
+              <div v-if="trustDeclarationWizardData.content.affects.includes('New Delegation') && trustDeclarationWizardData.content.declarationType === 'trust-declaration'" class="new-delegation-section">
+                <h5>Trust Declaration Configuration</h5>
+                
+                <div class="modal-field">
+                  <label>Trust Level:</label>
+                  <select 
+                    v-model="trustDeclarationWizardData.content.trustLevel" 
+                    class="modal-input"
+                  >
+                    <option value="">-- Select Trust Level --</option>
+                    <option value="operating-admin">Operating Admin</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="updater">Updater</option>
+                    <option value="contributor">Contributor</option>
+                  </select>
+                  <p class="field-hint">
+                    <strong>Operating Admin:</strong> Master admin trusts an operational admin keypair for signing trust declarations and managing system operations.<br>
+                    <strong>Moderator:</strong> Trusted for moderation actions only.<br>
+                    <strong>Updater:</strong> Trusted for metadata updates only.<br>
+                    <strong>Contributor:</strong> Limited contributor role.
+                  </p>
+                </div>
+
+                <div class="modal-field">
+                  <label>Usage Types:</label>
+                  <div class="checkbox-group">
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.usageTypes" 
+                        value="signing"
+                      />
+                      Signing (can sign trust declarations)
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.usageTypes" 
+                        value="moderation"
+                      />
+                      Moderation
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.usageTypes" 
+                        value="metadata-updates"
+                      />
+                      Metadata Updates
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.usageTypes" 
+                        value="delegation"
+                      />
+                      Delegation (can delegate moderators/updaters)
+                    </label>
+                  </div>
+                </div>
+
+                <div class="modal-field">
+                  <label>Scope Type:</label>
+                  <select 
+                    v-model="trustDeclarationWizardData.content.scopes.type" 
+                    class="modal-input"
+                  >
+                    <option value="global">Global (All channels/forums)</option>
+                    <option value="global-chat">Global Chat (All chat channels)</option>
+                    <option value="global-forum">Global Forum (All forums)</option>
+                    <option value="channel">Channel (Specific channels)</option>
+                    <option value="forum">Forum (Specific forums)</option>
+                    <option value="game">Game (Specific games)</option>
+                  </select>
+                </div>
+
+                <div v-if="trustDeclarationWizardData.content.scopes.type !== 'global'" class="modal-field">
+                  <label>Scope Targets:</label>
+                  <textarea 
+                    v-model="trustDeclarationWizardData.content.scopes.targetsText" 
+                    class="modal-input"
+                    rows="3"
+                    placeholder="Enter targets separated by commas or newlines (e.g., general, help, game:9671)"
+                  ></textarea>
+                  <p class="field-hint">Enter channel names, forum names, or game IDs (format: game:ID)</p>
+                </div>
+
+                <div class="modal-field">
+                  <label>Permissions:</label>
+                  <div class="permissions-group">
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canSignTrustDeclarations"
+                      />
+                      Can Sign Trust Declarations
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canSignOperationalAdmins"
+                      />
+                      Can Sign Operational Admins
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canModerate"
+                      />
+                      Can Moderate
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canUpdateMetadata"
+                      />
+                      Can Update Metadata
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canDelegateModerators"
+                      />
+                      Can Delegate Moderators
+                    </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canDelegateUpdaters"
+                      />
+                      Can Delegate Updaters
+                    </label>
+                  </div>
+                </div>
+
+                <div class="modal-field">
+                  <label>Max Delegation Duration (seconds):</label>
+                  <input 
+                    type="number" 
+                    v-model.number="trustDeclarationWizardData.content.permissions.maxDelegationDuration" 
+                    class="modal-input"
+                    placeholder="e.g., 2592000 (30 days)"
+                    min="0"
+                  />
+                  <p class="field-hint">Maximum duration for delegations issued by this admin (in seconds). Leave empty for no limit.</p>
+                </div>
+
+                <div class="modal-field">
+                  <label>Max Block Duration (seconds):</label>
+                  <input 
+                    type="number" 
+                    v-model.number="trustDeclarationWizardData.content.permissions.maxBlockDuration" 
+                    class="modal-input"
+                    placeholder="e.g., 86400 (24 hours)"
+                    min="0"
+                  />
+                  <p class="field-hint">Maximum duration for blocks issued by this admin (in seconds). Leave empty for no limit.</p>
+                </div>
+
+                <div class="modal-field">
+                  <label>Required Countersignatures:</label>
+                  <div class="countersignature-group">
+                    <div class="modal-field-inline">
+                      <label>Minimum Count:</label>
+                      <input 
+                        type="number" 
+                        v-model.number="trustDeclarationWizardData.content.requiredCountersignatures.minCount" 
+                        class="modal-input"
+                        min="0"
+                        style="width: 100px;"
+                      />
+                      <p class="field-hint-inline">Number of master admin signatures required (0 = no requirement)</p>
+                    </div>
+                    <div v-if="trustDeclarationWizardData.content.requiredCountersignatures.minCount > 0" class="modal-field">
+                      <label>Required Master Admin Keys (canonical names):</label>
+                      <textarea 
+                        v-model="trustDeclarationWizardData.content.requiredCountersignatures.requiredKeysText" 
+                        class="modal-input"
+                        rows="3"
+                        placeholder="Enter canonical names (npub1...) separated by commas or newlines"
+                      ></textarea>
+                      <p class="field-hint">List of master admin keypair canonical names that must countersign this declaration</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="modal-field">
+                  <label>Reason (Optional):</label>
+                  <textarea 
+                    v-model="trustDeclarationWizardData.content.metadata.reason" 
+                    class="modal-input"
+                    rows="2"
+                    placeholder="Explain why this trust declaration is being issued..."
+                  ></textarea>
+                </div>
+
+                <div class="modal-field">
+                  <label>Notes (Optional):</label>
+                  <textarea 
+                    v-model="trustDeclarationWizardData.content.metadata.notes" 
+                    class="modal-input"
+                    rows="2"
+                    placeholder="Internal notes about this declaration..."
+                  ></textarea>
+                </div>
+              </div>
+
+              <div v-if="trustDeclarationWizardData.content.affects.includes('Update Previous')" class="update-section">
+                <div class="modal-field">
+                  <label>Update Type:</label>
+                  <select 
+                    v-model="trustDeclarationWizardData.content.updateType" 
+                    class="modal-input"
+                  >
+                    <option value="">-- Select Update Type --</option>
+                    <option value="add-expiration">Add Expiration</option>
+                    <option value="modify-permissions">Modify Permissions</option>
+                    <option value="modify-scope">Modify Scope</option>
+                    <option value="retroactive-void">Retroactive Void</option>
+                  </select>
+                </div>
+
+                <div class="modal-field">
+                  <label>Change Type:</label>
+                  <select 
+                    v-model="trustDeclarationWizardData.content.changes.type" 
+                    class="modal-input"
+                  >
+                    <option value="">-- Select Change Type --</option>
+                    <option value="validity">Validity</option>
+                    <option value="permissions">Permissions</option>
+                    <option value="scopes">Scopes</option>
+                  </select>
+                </div>
+
+                <div class="modal-field">
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      v-model="trustDeclarationWizardData.content.retroactiveEffect.enabled"
+                    />
+                    Retroactive Effect
+                  </label>
+                </div>
+
+                <div v-if="trustDeclarationWizardData.content.retroactiveEffect.enabled" class="retroactive-effect-fields">
+                  <div class="modal-field">
+                    <label>Effective From:</label>
+                    <input 
+                      type="datetime-local" 
+                      v-model="trustDeclarationWizardData.content.retroactiveEffect.effectiveFrom" 
+                      class="modal-input"
+                    />
+                  </div>
+                  <div class="modal-field">
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.retroactiveEffect.voidActionsAfter"
+                      />
+                      Void Actions After This Date
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Additional form fields for different declaration types will go here -->
+            </div>
+
+            <!-- Advanced Mode -->
+            <div v-if="trustDeclarationWizardData.content.mode === 'advanced'" class="advanced-mode-content">
+              <div class="modal-field">
+                <label>Declaration JSON:</label>
+                <textarea 
+                  v-model="trustDeclarationWizardData.content.advancedJson" 
+                  class="modal-input json-editor"
+                  rows="20"
+                  placeholder='{"schema_version": "1.0", "declaration_type": "trust-declaration", ...}'
+                ></textarea>
+                <p class="field-hint">Enter the declaration content as JSON. The content will be validated before saving.</p>
+              </div>
+
+              <div v-if="trustDeclarationWizardData.content.validationErrors.length > 0" class="validation-errors">
+                <strong>Validation Errors:</strong>
+                <ul>
+                  <li v-for="error in trustDeclarationWizardData.content.validationErrors" :key="error">
+                    {{ error }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Status and Validation -->
+            <div class="declaration-status">
+              <div class="status-indicator">
+                <strong>Status:</strong> 
+                <span :class="['status-badge', 'status-' + trustDeclarationWizardData.status.toLowerCase()]">
+                  {{ trustDeclarationWizardData.status }}
+                </span>
+              </div>
+              <div v-if="trustDeclarationWizardData.status === 'Draft' && trustDeclarationWizardData.content.validationErrors.length > 0" class="status-warning">
+                ⚠️ Invalid content detected. Fix validation errors before finalizing. You can save as Draft, but cannot sign until finalized.
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 5: Finalize/Review -->
+          <div v-if="trustDeclarationWizardStep === 5" class="wizard-step-content">
+            <h4>Step 5: Review and Finalize</h4>
+            <p class="wizard-description">Review the complete declaration before finalizing. Once finalized, the declaration will include digital signatures and cannot be edited without removing the signatures.</p>
+            
+            <div class="modal-field">
+              <label>Full Declaration JSON (with all database attributes):</label>
+              <div class="json-viewer-container">
+                <pre class="json-viewer">{{ fullDeclarationJson }}</pre>
+              </div>
+              <p class="field-hint">This includes all database attributes. Review carefully before finalizing. Draft declarations can be exported, imported, and edited. Finalized declarations contain digital signatures that must be removed for further editing.</p>
+            </div>
+
+            <div v-if="trustDeclarationWizardData.content.validationErrors.length > 0" class="validation-errors">
+              <strong>Validation Errors:</strong>
+              <ul>
+                <li v-for="error in trustDeclarationWizardData.content.validationErrors" :key="error">
+                  {{ error }}
+                </li>
+              </ul>
+              <p class="field-hint">Please fix these errors before finalizing.</p>
+            </div>
+
+            <div class="declaration-status">
+              <div class="status-indicator">
+                <strong>Status:</strong> 
+                <span :class="['status-badge', 'status-' + trustDeclarationWizardData.status.toLowerCase()]">
+                  {{ trustDeclarationWizardData.status }}
+                </span>
+              </div>
+              <div v-if="trustDeclarationWizardData.status === 'Finalized'" class="status-info">
+                ✓ Declaration has been finalized and is ready to be signed. Click "Save Declaration" to save it to the database.
+              </div>
+              <div v-if="trustDeclarationWizardData.status === 'Draft'" class="status-info">
+                ℹ️ This is a draft declaration. You can edit it, export it, or finalize it. Once finalized, digital signatures will be added and editing will require removing signatures.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wizard Footer -->
+      <footer class="modal-footer wizard-footer">
+        <button @click="cancelTrustDeclarationWizard" class="btn-secondary">Cancel</button>
+        <div class="wizard-nav-buttons">
+          <button 
+            v-if="trustDeclarationWizardStep > 1" 
+            @click="previousTrustDeclarationWizardStep" 
+            class="btn-secondary"
+          >
+            ← Previous
+          </button>
+          <button 
+            v-if="trustDeclarationWizardStep < 4" 
+            @click="nextTrustDeclarationWizardStep" 
+            class="btn-primary"
+            :disabled="!canProceedToNextStep"
+          >
+            Next →
+          </button>
+          <!-- Step 4: Content buttons -->
+          <template v-if="trustDeclarationWizardStep === 4">
+            <!-- Form Mode: Save Draft and Next -->
+            <button 
+              v-if="trustDeclarationWizardData.content.mode === 'form'" 
+              @click="saveDraftAndNextTrustDeclaration" 
+              class="btn-secondary"
+            >
+              Save Draft and Next →
+            </button>
+            <!-- Advanced Mode: Separate Save Draft and Next -->
+            <template v-if="trustDeclarationWizardData.content.mode === 'advanced'">
+              <button 
+                @click="saveDraftTrustDeclaration" 
+                class="btn-secondary"
+              >
+                Save Draft
+              </button>
+              <button 
+                @click="nextTrustDeclarationWizardStep" 
+                class="btn-primary"
+                :disabled="!canProceedToNextStep"
+              >
+                Next →
+              </button>
+            </template>
+          </template>
+          <!-- Step 5: Finalize buttons -->
+          <button 
+            v-if="trustDeclarationWizardStep === 5" 
+            @click="finalizeTrustDeclaration" 
+            class="btn-primary"
+            :disabled="!canFinalizeDeclaration || trustDeclarationWizardData.status === 'Finalized'"
+          >
+            Finalize Declaration
+          </button>
+          <button 
+            v-if="trustDeclarationWizardStep === 5 && trustDeclarationWizardData.status === 'Finalized'" 
+            @click="saveTrustDeclaration" 
+            class="btn-primary"
+          >
+            Save Declaration
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <!-- Upload File Modal (standalone) -->
   <div v-if="uploadFileModalOpen" class="modal-backdrop" @click.self="closeUploadFileModal">
     <div class="modal upload-file-modal">
@@ -6244,6 +6922,84 @@ const showCreateTrustDeclarationModal = ref(false);
 const showTrustDeclarationDetailsModal = ref(false);
 const editingTrustDeclaration = ref<any>({});
 
+// Create Trust Declaration Wizard state
+const trustDeclarationWizardStep = ref(1); // 1=issuer, 2=validity, 3=subject, 4=content, 5=finalize
+const trustDeclarationWizardData = ref({
+  issuer: {
+    keypairUuid: '',
+    keypairType: '', // 'admin' | 'user-op' | 'user'
+    canonicalName: '',
+    fingerprint: '',
+    hasPrivateKey: false
+  },
+  validity: {
+    validFrom: null as string | null,
+    validUntil: null as string | null,
+    issueDate: new Date().toISOString().split('T')[0]
+  },
+  subject: {
+    type: 'keypair', // 'keypair' | 'profile' | 'user' | 'system' | 'declaration'
+    canonicalName: '',
+    fingerprint: '',
+    keypairUuid: '',
+    profileUuid: '',
+    declarationUuid: ''
+  },
+  content: {
+    mode: 'form', // 'form' | 'advanced'
+    declarationType: 'trust-declaration', // 'trust-declaration' | 'privilege-grant' | 'privilege-revoke' | 'moderation-action' | 'metadata-delegation' | 'admin-control-message'
+    affects: [] as string[], // ['New Delegation', 'Update Previous']
+    updateType: '', // if Update Previous selected
+    changes: {
+      type: '', // validity, permissions, scopes
+      validity: null as any,
+      permissions: null as any,
+      scopes: null as any
+    },
+    retroactiveEffect: {
+      enabled: false,
+      effectiveFrom: null as string | null,
+      voidActionsAfter: false
+    },
+    // Trust Declaration fields
+    trustLevel: '', // operating-admin, moderator, updater, contributor
+    usageTypes: [] as string[], // signing, moderation, metadata-updates, delegation
+    scopes: {
+      type: 'global', // global, global-chat, global-forum, channel, forum, game
+      targets: [] as string[],
+      targetsText: '', // User-friendly text input for targets
+      exclude: [] as string[]
+    },
+    permissions: {
+      canSignTrustDeclarations: false,
+      canSignOperationalAdmins: false,
+      canModerate: false,
+      canUpdateMetadata: false,
+      canDelegateModerators: false,
+      canDelegateUpdaters: false,
+      maxDelegationDuration: null as number | null, // seconds
+      maxBlockDuration: null as number | null // seconds
+    },
+    requiredCountersignatures: {
+      minCount: 0,
+      requiredKeys: [] as string[],
+      requiredKeysText: '', // User-friendly text input for required keys
+      currentSignatures: [] as any[]
+    },
+    metadata: {
+      reason: '',
+      notes: ''
+    },
+    advancedJson: '',
+    validationErrors: [] as string[]
+  },
+  status: 'Draft' as 'Draft' | 'Finalized' | 'Published',
+  declarationUuid: ''
+});
+const availableIssuerKeypairs = ref<any[]>([]);
+const availableSubjectKeypairs = ref<any[]>([]);
+const parentDeclarationValidity = ref<{validFrom: string | null, validUntil: string | null} | null>(null);
+
 // Master admin keypairs are just admin keypairs filtered by key_usage = 'master-admin-signing'
 const masterAdminKeypairsList = computed(() => {
   return adminKeypairsList.value.filter(kp => kp.keyUsage === 'master-admin-signing');
@@ -7814,6 +8570,818 @@ async function deleteTrustDeclaration() {
     alert(`Error: ${formatErrorMessage(error)}`);
   }
 }
+
+// Create Trust Declaration Wizard Functions
+async function initializeTrustDeclarationWizard() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // Reset wizard state
+  trustDeclarationWizardStep.value = 1;
+  trustDeclarationWizardData.value = {
+    issuer: {
+      keypairUuid: '',
+      keypairType: '',
+      canonicalName: '',
+      fingerprint: '',
+      hasPrivateKey: false
+    },
+    validity: {
+      validFrom: null,
+      validUntil: null,
+      issueDate: new Date().toISOString().split('T')[0]
+    },
+    subject: {
+      type: 'keypair',
+      canonicalName: '',
+      fingerprint: '',
+      keypairUuid: '',
+      profileUuid: '',
+      declarationUuid: ''
+    },
+    content: {
+      mode: 'form',
+      declarationType: 'trust-declaration',
+      affects: [],
+      updateType: '',
+      changes: {
+        type: '',
+        validity: null,
+        permissions: null,
+        scopes: null
+      },
+      retroactiveEffect: {
+        enabled: false,
+        effectiveFrom: null,
+        voidActionsAfter: false
+      },
+      trustLevel: '',
+      usageTypes: [],
+      scopes: {
+        type: 'global',
+        targets: [],
+        targetsText: '',
+        exclude: []
+      },
+      permissions: {
+        canSignTrustDeclarations: false,
+        canSignOperationalAdmins: false,
+        canModerate: false,
+        canUpdateMetadata: false,
+        canDelegateModerators: false,
+        canDelegateUpdaters: false,
+        maxDelegationDuration: null,
+        maxBlockDuration: null
+      },
+      requiredCountersignatures: {
+        minCount: 0,
+        requiredKeys: [],
+        requiredKeysText: '',
+        currentSignatures: []
+      },
+      metadata: {
+        reason: '',
+        notes: ''
+      },
+      advancedJson: '',
+      validationErrors: []
+    },
+    status: 'Draft',
+    declarationUuid: ''
+  };
+  
+  // Load available keypairs for issuer selection
+  await loadAvailableIssuerKeypairs();
+  
+  // Load available keypairs for subject selection
+  await loadAvailableSubjectKeypairs();
+}
+
+async function loadAvailableIssuerKeypairs() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const issuerKeypairs: any[] = [];
+    
+    // Load admin keypairs
+    const adminKeypairs = await (window as any).electronAPI.listAdminKeypairs();
+    for (const kp of adminKeypairs || []) {
+      issuerKeypairs.push({
+        uuid: kp.uuid || kp.keypair_uuid,
+        type: 'admin',
+        keyUsage: kp.keyUsage || kp.key_usage,
+        storageStatus: kp.storageStatus || kp.storage_status || 'public-only',
+        canonicalName: kp.canonicalName || kp.canonical_name || '',
+        fingerprint: kp.fingerprint || '',
+        publicKey: kp.publicKey || kp.public_key || '',
+        name: kp.name || '',
+        label: kp.label || '',
+        localName: kp.localName || kp.local_name || ''
+      });
+    }
+    
+    // Load User Op keypairs (if profile is selected)
+    if (onlineProfile.value?.profileId) {
+      try {
+        const userOpKeypairs = await (window as any).electronAPI.listUserOpKeypairs(onlineProfile.value.profileId);
+        for (const kp of userOpKeypairs || []) {
+          issuerKeypairs.push({
+            uuid: kp.uuid || kp.keypair_uuid,
+            type: 'user-op',
+            keyUsage: kp.keyUsage || kp.key_usage,
+            storageStatus: kp.storageStatus || kp.storage_status || 'public-only',
+            canonicalName: kp.canonicalName || kp.canonical_name || '',
+            fingerprint: kp.fingerprint || '',
+            publicKey: kp.publicKey || kp.public_key || '',
+            name: kp.name || '',
+            label: kp.label || '',
+            localName: kp.localName || kp.local_name || ''
+          });
+        }
+      } catch (err) {
+        console.warn('Error loading User Op keypairs:', err);
+      }
+    }
+    
+    // Load user keypairs from profile
+    if (onlineProfile.value?.primaryKeypair) {
+      const primaryKp = onlineProfile.value.primaryKeypair;
+      issuerKeypairs.push({
+        uuid: 'primary',
+        type: 'user',
+        storageStatus: 'full-keypair', // Assume primary keypair has private key
+        canonicalName: primaryKp.canonicalName || primaryKp.publicKey || '',
+        fingerprint: primaryKp.fingerprint || '',
+        publicKey: primaryKp.publicKey || '',
+        name: primaryKp.name || '',
+        label: primaryKp.label || '',
+        localName: primaryKp.localName || primaryKp.publicKey?.substring(0, 20) || ''
+      });
+    }
+    
+    if (onlineProfile.value?.additionalKeypairs && Array.isArray(onlineProfile.value.additionalKeypairs)) {
+      for (const kp of onlineProfile.value.additionalKeypairs) {
+        issuerKeypairs.push({
+          uuid: kp.uuid || kp.keypair_uuid || `additional-${issuerKeypairs.length}`,
+          type: 'user',
+          storageStatus: 'full-keypair', // Assume additional keypairs have private key
+          canonicalName: kp.canonicalName || kp.publicKey || '',
+          fingerprint: kp.fingerprint || '',
+          publicKey: kp.publicKey || '',
+          name: kp.name || '',
+          label: kp.label || '',
+          localName: kp.localName || kp.publicKey?.substring(0, 20) || ''
+        });
+      }
+    }
+    
+    console.log('Loaded issuer keypairs:', issuerKeypairs);
+    availableIssuerKeypairs.value = issuerKeypairs;
+  } catch (error) {
+    console.error('Error loading available issuer keypairs:', error);
+    availableIssuerKeypairs.value = [];
+  }
+}
+
+async function loadAvailableSubjectKeypairs() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const subjectKeypairs: any[] = [];
+    
+    // Load admin keypairs
+    const adminKeypairs = await (window as any).electronAPI.listAdminKeypairs();
+    for (const kp of adminKeypairs || []) {
+      subjectKeypairs.push({
+        uuid: kp.uuid || kp.keypair_uuid,
+        keyUsage: kp.keyUsage || kp.key_usage,
+        storageStatus: kp.storageStatus || kp.storage_status || 'public-only',
+        canonicalName: kp.canonicalName || kp.canonical_name || '',
+        fingerprint: kp.fingerprint || '',
+        publicKey: kp.publicKey || kp.public_key || '',
+        name: kp.name || '',
+        label: kp.label || '',
+        localName: kp.localName || kp.local_name || ''
+      });
+    }
+    
+    availableSubjectKeypairs.value = subjectKeypairs;
+  } catch (error) {
+    console.error('Error loading available subject keypairs:', error);
+    availableSubjectKeypairs.value = [];
+  }
+}
+
+async function onIssuerSelected() {
+  if (!trustDeclarationWizardData.value.issuer.keypairUuid) {
+    trustDeclarationWizardData.value.issuer.canonicalName = '';
+    trustDeclarationWizardData.value.issuer.fingerprint = '';
+    trustDeclarationWizardData.value.issuer.hasPrivateKey = false;
+    return;
+  }
+  
+  const selectedKeypair = availableIssuerKeypairs.value.find(
+    kp => kp.uuid === trustDeclarationWizardData.value.issuer.keypairUuid
+  );
+  
+  if (!selectedKeypair) {
+    console.warn('Selected keypair not found:', trustDeclarationWizardData.value.issuer.keypairUuid);
+    return;
+  }
+  
+  console.log('Selected issuer keypair:', selectedKeypair);
+  
+  trustDeclarationWizardData.value.issuer.keypairType = selectedKeypair.type;
+  trustDeclarationWizardData.value.issuer.canonicalName = selectedKeypair.canonicalName || '';
+  trustDeclarationWizardData.value.issuer.fingerprint = selectedKeypair.fingerprint || '';
+  trustDeclarationWizardData.value.issuer.hasPrivateKey = selectedKeypair.storageStatus === 'full-keypair' || selectedKeypair.storageStatus === 'full-keypair-offline';
+  
+  // Check parent declaration validity
+  await checkParentDeclarationValidity();
+}
+
+async function checkParentDeclarationValidity() {
+  // TODO: Query database for parent declarations and calculate validity restrictions
+  // For now, set to null (no restrictions)
+  parentDeclarationValidity.value = null;
+  
+  // If issuer is a master admin keypair, no restrictions
+  const selectedKeypair = availableIssuerKeypairs.value.find(
+    kp => kp.uuid === trustDeclarationWizardData.value.issuer.keypairUuid
+  );
+  
+  if (selectedKeypair?.keyUsage === 'master-admin-signing') {
+    parentDeclarationValidity.value = null;
+    return;
+  }
+  
+  // Otherwise, need to check parent declarations
+  // This will be implemented when we have the IPC handlers
+}
+
+function onSubjectTypeChanged() {
+  trustDeclarationWizardData.value.subject.keypairUuid = '';
+  trustDeclarationWizardData.value.subject.declarationUuid = '';
+  trustDeclarationWizardData.value.subject.canonicalName = '';
+  trustDeclarationWizardData.value.subject.fingerprint = '';
+}
+
+async function onSubjectKeypairSelected() {
+  if (!trustDeclarationWizardData.value.subject.keypairUuid) {
+    trustDeclarationWizardData.value.subject.canonicalName = '';
+    trustDeclarationWizardData.value.subject.fingerprint = '';
+    return;
+  }
+  
+  const selectedKeypair = availableSubjectKeypairs.value.find(
+    kp => kp.uuid === trustDeclarationWizardData.value.subject.keypairUuid
+  );
+  
+  if (!selectedKeypair) {
+    console.warn('Selected subject keypair not found:', trustDeclarationWizardData.value.subject.keypairUuid);
+    return;
+  }
+  
+  trustDeclarationWizardData.value.subject.canonicalName = selectedKeypair.canonicalName || '';
+  trustDeclarationWizardData.value.subject.fingerprint = selectedKeypair.fingerprint || '';
+}
+
+function onContentModeChanged() {
+  if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+    // Generate JSON from form data if switching to advanced
+    generateTrustDeclarationJsonFromForm();
+  } else {
+    // Validate JSON if switching to form
+    validateTrustDeclarationAdvancedJson();
+  }
+}
+
+function onAffectsChanged() {
+  // Reset update-related fields if Update Previous is unchecked
+  if (!trustDeclarationWizardData.value.content.affects.includes('Update Previous')) {
+    trustDeclarationWizardData.value.content.updateType = '';
+    trustDeclarationWizardData.value.content.changes.type = '';
+    trustDeclarationWizardData.value.content.retroactiveEffect.enabled = false;
+  }
+  
+  // Reset new delegation fields if New Delegation is unchecked
+  if (!trustDeclarationWizardData.value.content.affects.includes('New Delegation')) {
+    trustDeclarationWizardData.value.content.trustLevel = '';
+    trustDeclarationWizardData.value.content.usageTypes = [];
+    trustDeclarationWizardData.value.content.scopes = {
+      type: 'global',
+      targets: [],
+      targetsText: '',
+      exclude: []
+    };
+    trustDeclarationWizardData.value.content.permissions = {
+      canSignTrustDeclarations: false,
+      canSignOperationalAdmins: false,
+      canModerate: false,
+      canUpdateMetadata: false,
+      canDelegateModerators: false,
+      canDelegateUpdaters: false,
+      maxDelegationDuration: null,
+      maxBlockDuration: null
+    };
+    trustDeclarationWizardData.value.content.requiredCountersignatures = {
+      minCount: 0,
+      requiredKeys: [],
+      requiredKeysText: '',
+      currentSignatures: []
+    };
+  }
+}
+
+function onDeclarationTypeChanged() {
+  // Reset content when declaration type changes
+  if (trustDeclarationWizardData.value.content.declarationType !== 'trust-declaration') {
+    // Reset trust declaration specific fields
+    trustDeclarationWizardData.value.content.trustLevel = '';
+    trustDeclarationWizardData.value.content.usageTypes = [];
+    // Other declaration types will be handled later
+  }
+}
+
+function generateTrustDeclarationJsonFromForm() {
+  // Generate JSON from form data based on declaration type
+  let content: any = {};
+  
+  if (trustDeclarationWizardData.value.content.declarationType === 'trust-declaration') {
+    // Parse scope targets from text
+    let scopeTargets: string[] = [];
+    if (trustDeclarationWizardData.value.content.scopes.targetsText) {
+      scopeTargets = trustDeclarationWizardData.value.content.scopes.targetsText
+        .split(/[,\n]/)
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+    } else {
+      scopeTargets = trustDeclarationWizardData.value.content.scopes.targets || [];
+    }
+    
+    // Parse required keys from text
+    let requiredKeys: string[] = [];
+    if (trustDeclarationWizardData.value.content.requiredCountersignatures.requiredKeysText) {
+      requiredKeys = trustDeclarationWizardData.value.content.requiredCountersignatures.requiredKeysText
+        .split(/[,\n]/)
+        .map(k => k.trim())
+        .filter(k => k.length > 0);
+    } else {
+      requiredKeys = trustDeclarationWizardData.value.content.requiredCountersignatures.requiredKeys || [];
+    }
+    
+    content = {
+      trust_level: trustDeclarationWizardData.value.content.trustLevel,
+      usage_types: trustDeclarationWizardData.value.content.usageTypes,
+      scopes: {
+        type: trustDeclarationWizardData.value.content.scopes.type,
+        targets: scopeTargets,
+        exclude: trustDeclarationWizardData.value.content.scopes.exclude || []
+      },
+      permissions: {
+        can_sign_trust_declarations: trustDeclarationWizardData.value.content.permissions.canSignTrustDeclarations,
+        can_sign_operational_admins: trustDeclarationWizardData.value.content.permissions.canSignOperationalAdmins,
+        can_moderate: trustDeclarationWizardData.value.content.permissions.canModerate,
+        can_update_metadata: trustDeclarationWizardData.value.content.permissions.canUpdateMetadata,
+        can_delegate_moderators: trustDeclarationWizardData.value.content.permissions.canDelegateModerators,
+        can_delegate_updaters: trustDeclarationWizardData.value.content.permissions.canDelegateUpdaters,
+        max_delegation_duration: trustDeclarationWizardData.value.content.permissions.maxDelegationDuration || undefined,
+        max_block_duration: trustDeclarationWizardData.value.content.permissions.maxBlockDuration || undefined
+      }
+    };
+    
+    // Add required countersignatures if specified
+    if (trustDeclarationWizardData.value.content.requiredCountersignatures.minCount > 0) {
+      content.required_countersignatures = {
+        min_count: trustDeclarationWizardData.value.content.requiredCountersignatures.minCount,
+        required_keys: requiredKeys,
+        current_signatures: trustDeclarationWizardData.value.content.requiredCountersignatures.currentSignatures || []
+      };
+    }
+  }
+  
+  const json = {
+    schema_version: '1.0',
+    declaration_type: trustDeclarationWizardData.value.content.declarationType,
+    declaration_id: trustDeclarationWizardData.value.declarationUuid || generateTrustDeclarationUUID(),
+    issued_at: Math.floor(Date.now() / 1000),
+    issuer: {
+      canonical_name: trustDeclarationWizardData.value.issuer.canonicalName,
+      fingerprint: trustDeclarationWizardData.value.issuer.fingerprint,
+      keypair_uuid: trustDeclarationWizardData.value.issuer.keypairUuid
+    },
+    subject: {
+      type: trustDeclarationWizardData.value.subject.type,
+      canonical_name: trustDeclarationWizardData.value.subject.canonicalName || null,
+      fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+      keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
+      profile_uuid: trustDeclarationWizardData.value.subject.profileUuid || null,
+      declaration_uuid: trustDeclarationWizardData.value.subject.declarationUuid || null
+    },
+    validity: {
+      valid_from: trustDeclarationWizardData.value.validity.validFrom 
+        ? Math.floor(new Date(trustDeclarationWizardData.value.validity.validFrom).getTime() / 1000)
+        : null,
+      valid_until: trustDeclarationWizardData.value.validity.validUntil
+        ? Math.floor(new Date(trustDeclarationWizardData.value.validity.validUntil).getTime() / 1000)
+        : null
+    },
+    content: content,
+    metadata: {
+      reason: trustDeclarationWizardData.value.content.metadata.reason || '',
+      notes: trustDeclarationWizardData.value.content.metadata.notes || ''
+    },
+    field_importance: {}
+  };
+  
+  trustDeclarationWizardData.value.content.advancedJson = JSON.stringify(json, null, 2);
+}
+
+function validateTrustDeclarationAdvancedJson() {
+  trustDeclarationWizardData.value.content.validationErrors = [];
+  
+  if (!trustDeclarationWizardData.value.content.advancedJson.trim()) {
+    return;
+  }
+  
+  try {
+    const json = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+    
+    // Basic validation
+    if (!json.schema_version) {
+      trustDeclarationWizardData.value.content.validationErrors.push('Missing schema_version');
+    }
+    if (!json.declaration_type) {
+      trustDeclarationWizardData.value.content.validationErrors.push('Missing declaration_type');
+    }
+    if (!json.issuer) {
+      trustDeclarationWizardData.value.content.validationErrors.push('Missing issuer');
+    }
+    if (!json.subject) {
+      trustDeclarationWizardData.value.content.validationErrors.push('Missing subject');
+    }
+    
+    // More validation will be added based on schema
+  } catch (error: any) {
+    trustDeclarationWizardData.value.content.validationErrors.push(`Invalid JSON: ${error.message}`);
+  }
+}
+
+function generateTrustDeclarationUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+const canProceedToNextStep = computed(() => {
+  switch (trustDeclarationWizardStep.value) {
+    case 1:
+      return !!trustDeclarationWizardData.value.issuer.keypairUuid;
+    case 2:
+      return true; // Validity dates are optional
+    case 3:
+      if (trustDeclarationWizardData.value.subject.type === 'keypair' || trustDeclarationWizardData.value.subject.type === 'profile') {
+        return !!trustDeclarationWizardData.value.subject.keypairUuid;
+      }
+      if (trustDeclarationWizardData.value.subject.type === 'declaration') {
+        return !!trustDeclarationWizardData.value.subject.declarationUuid;
+      }
+      return true; // system and user types don't require additional selection
+    case 4:
+      // In advanced mode, validate JSON first
+      if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+        validateTrustDeclarationAdvancedJson();
+        return trustDeclarationWizardData.value.content.validationErrors.length === 0;
+      }
+      // In form mode, basic validation
+      if (trustDeclarationWizardData.value.content.declarationType === 'trust-declaration') {
+        return !!trustDeclarationWizardData.value.content.trustLevel && trustDeclarationWizardData.value.content.usageTypes.length > 0;
+      }
+      return true;
+    case 5:
+      return true; // Finalize step always allows proceeding
+    default:
+      return false;
+  }
+});
+
+const canFinalizeDeclaration = computed(() => {
+  // Validate based on mode
+  if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+    validateTrustDeclarationAdvancedJson();
+    return trustDeclarationWizardData.value.content.validationErrors.length === 0;
+  }
+  
+  // Form mode validation
+  if (trustDeclarationWizardData.value.content.declarationType === 'trust-declaration') {
+    if (!trustDeclarationWizardData.value.content.trustLevel) return false;
+    if (trustDeclarationWizardData.value.content.usageTypes.length === 0) return false;
+    if (!trustDeclarationWizardData.value.issuer.keypairUuid) return false;
+    if (!trustDeclarationWizardData.value.subject.keypairUuid && 
+        (trustDeclarationWizardData.value.subject.type === 'keypair' || trustDeclarationWizardData.value.subject.type === 'profile')) {
+      return false;
+    }
+  }
+  
+  return true;
+});
+
+const fullDeclarationJson = computed(() => {
+  // Generate full declaration JSON with all database attributes
+  return generateFullDeclarationJsonForDisplay();
+});
+
+function generateFullDeclarationJsonForDisplay(): string {
+  // Generate the content JSON first
+  let contentJson: any = {};
+  
+  if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+    try {
+      const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+      contentJson = parsed.content || parsed;
+    } catch (error: any) {
+      return JSON.stringify({ error: `Invalid JSON in advanced mode: ${error.message}` }, null, 2);
+    }
+  } else {
+    // Generate from form
+    generateTrustDeclarationJsonFromForm();
+    try {
+      const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+      contentJson = parsed.content || {};
+    } catch (error: any) {
+      return JSON.stringify({ error: `Error generating JSON from form: ${error.message}` }, null, 2);
+    }
+  }
+  
+  // Build full declaration object with all database attributes
+  const fullDeclaration = {
+    // Database attributes
+    declaration_uuid: trustDeclarationWizardData.value.declarationUuid || generateTrustDeclarationUUID(),
+    schema_version: '1.0',
+    content_version: 1,
+    declaration_type: trustDeclarationWizardData.value.content.declarationType || 'trust-declaration',
+    status: trustDeclarationWizardData.value.status || 'Draft',
+    content_json: JSON.stringify(contentJson),
+    // content_hash_sha256 will be computed when saved
+    // digital_signature will be added when signed
+    signing_keypair_uuid: trustDeclarationWizardData.value.issuer.keypairUuid || null,
+    signing_keypair_fingerprint: trustDeclarationWizardData.value.issuer.fingerprint || null,
+    target_keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
+    target_keypair_fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+    target_user_profile_id: trustDeclarationWizardData.value.subject.profileUuid || null,
+    valid_from: trustDeclarationWizardData.value.validity.validFrom 
+      ? new Date(trustDeclarationWizardData.value.validity.validFrom).toISOString()
+      : null,
+    valid_until: trustDeclarationWizardData.value.validity.validUntil
+      ? new Date(trustDeclarationWizardData.value.validity.validUntil).toISOString()
+      : null,
+    // Nostr publishing fields (will be set when published)
+    nostr_event_id: null,
+    nostr_published_at: null,
+    nostr_published_to_relays: null,
+    nostr_publish_status: 'pending',
+    nostr_kind: 31106,
+    nostr_tags: null,
+    // Countersignatures
+    required_countersignatures: trustDeclarationWizardData.value.content.requiredCountersignatures.minCount || 0,
+    current_countersignatures: 0,
+    countersignatures_json: null,
+    // Network discovery
+    discovered_from_relay: null,
+    discovered_at: null,
+    is_local: true,
+    verification_status: 'pending',
+    // Update tracking
+    original_declaration_uuid: null,
+    is_update: false,
+    update_chain_uuid: null,
+    update_history_json: null,
+    is_revoked: false,
+    revoked_at: null,
+    revoked_by_declaration_uuid: null,
+    retroactive_effect_enabled: trustDeclarationWizardData.value.content.retroactiveEffect.enabled || false,
+    retroactive_effective_from: trustDeclarationWizardData.value.content.retroactiveEffect.effectiveFrom || null,
+    // Timestamps
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    // Parsed content for reference (display only)
+    content: contentJson
+  };
+  
+  return JSON.stringify(fullDeclaration, null, 2);
+}
+
+function generateFullDeclarationJson() {
+  // This function is called when moving to step 5 to ensure JSON is up to date
+  // Generate content JSON first if needed
+  if (trustDeclarationWizardData.value.content.mode === 'form') {
+    generateTrustDeclarationJsonFromForm();
+  }
+  // The computed property will handle the actual generation
+}
+
+function previousTrustDeclarationWizardStep() {
+  if (trustDeclarationWizardStep.value > 1) {
+    trustDeclarationWizardStep.value--;
+  }
+}
+
+function nextTrustDeclarationWizardStep() {
+  if (trustDeclarationWizardStep.value < 5 && canProceedToNextStep.value) {
+    trustDeclarationWizardStep.value++;
+    
+    // Load data when moving to next step
+    if (trustDeclarationWizardStep.value === 2) {
+      // Set default validity dates
+      if (!trustDeclarationWizardData.value.validity.validFrom) {
+        trustDeclarationWizardData.value.validity.validFrom = trustDeclarationWizardData.value.validity.issueDate;
+      }
+    }
+    if (trustDeclarationWizardStep.value === 4) {
+      // Generate JSON from form if in advanced mode
+      if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+        generateTrustDeclarationJsonFromForm();
+      }
+    }
+    if (trustDeclarationWizardStep.value === 5) {
+      // Generate full declaration JSON for review
+      generateFullDeclarationJson();
+    }
+  }
+}
+
+function cancelTrustDeclarationWizard() {
+  if (confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
+    showCreateTrustDeclarationModal.value = false;
+    trustDeclarationWizardStep.value = 1;
+  }
+}
+
+async function saveDraftTrustDeclaration() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // Generate declaration JSON
+  let contentJson: any = {};
+  if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+    // Validate JSON if in advanced mode
+    validateTrustDeclarationAdvancedJson();
+    if (trustDeclarationWizardData.value.content.validationErrors.length > 0) {
+      alert('Please fix validation errors before saving draft');
+      return;
+    }
+    try {
+      contentJson = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+    } catch (error: any) {
+      alert(`Invalid JSON: ${error.message}`);
+      return;
+    }
+  } else {
+    // Generate JSON from form
+    generateTrustDeclarationJsonFromForm();
+    try {
+      const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
+      contentJson = parsed.content || {};
+    } catch (error: any) {
+      alert(`Error generating JSON from form: ${error.message}`);
+      return;
+    }
+  }
+  
+  try {
+    // Generate UUID if not set
+    if (!trustDeclarationWizardData.value.declarationUuid) {
+      trustDeclarationWizardData.value.declarationUuid = generateTrustDeclarationUUID();
+    }
+    
+    // TODO: Call IPC handler to save draft declaration
+    // const result = await (window as any).electronAPI.createAdminDeclaration({
+    //   declarationUuid: trustDeclarationWizardData.value.declarationUuid,
+    //   declarationType: trustDeclarationWizardData.value.content.declarationType,
+    //   contentJson: JSON.stringify(contentJson),
+    //   status: 'Draft',
+    //   issuer: trustDeclarationWizardData.value.issuer,
+    //   subject: trustDeclarationWizardData.value.subject,
+    //   validity: trustDeclarationWizardData.value.validity
+    // });
+    
+    // For now, just mark as saved locally
+    trustDeclarationWizardData.value.status = 'Draft';
+    alert('Draft saved successfully (implementation pending)');
+    
+    // if (result.success) {
+    //   trustDeclarationWizardData.value.declarationUuid = result.declarationUuid;
+    //   trustDeclarationWizardData.value.status = 'Draft';
+    //   alert('Draft saved successfully');
+    // } else {
+    //   alert(`Failed to save draft: ${result.error}`);
+    // }
+  } catch (error) {
+    console.error('Error saving draft declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function saveDraftAndNextTrustDeclaration() {
+  // Save draft first, then proceed to next step
+  await saveDraftTrustDeclaration();
+  
+  // If save was successful, proceed to next step
+  if (trustDeclarationWizardData.value.status === 'Draft') {
+    // Generate JSON from form before moving to review step
+    generateTrustDeclarationJsonFromForm();
+    nextTrustDeclarationWizardStep();
+  }
+}
+
+async function finalizeTrustDeclaration() {
+  if (!canFinalizeDeclaration.value) {
+    alert('Please fix validation errors before finalizing');
+    return;
+  }
+  
+  // Validate JSON if in advanced mode
+  if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+    validateTrustDeclarationAdvancedJson();
+    if (trustDeclarationWizardData.value.content.validationErrors.length > 0) {
+      alert('Please fix validation errors before finalizing');
+      return;
+    }
+  }
+  
+  // Generate JSON from form if needed
+  if (trustDeclarationWizardData.value.content.mode === 'form') {
+    generateTrustDeclarationJsonFromForm();
+  }
+  
+  // Ensure declaration UUID is set
+  if (!trustDeclarationWizardData.value.declarationUuid) {
+    trustDeclarationWizardData.value.declarationUuid = generateTrustDeclarationUUID();
+  }
+  
+  trustDeclarationWizardData.value.status = 'Finalized';
+  alert('Declaration finalized. You can now sign and save it.');
+}
+
+async function saveTrustDeclaration() {
+  if (trustDeclarationWizardData.value.status !== 'Finalized') {
+    alert('Please finalize the declaration before saving');
+    return;
+  }
+  
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // Generate declaration JSON
+  let contentJson: string;
+  if (trustDeclarationWizardData.value.content.mode === 'advanced') {
+    contentJson = trustDeclarationWizardData.value.content.advancedJson;
+  } else {
+    generateTrustDeclarationJsonFromForm();
+    contentJson = trustDeclarationWizardData.value.content.advancedJson;
+  }
+  
+  try {
+    // TODO: Call IPC handler to save finalized declaration
+    // const result = await (window as any).electronAPI.createAdminDeclaration({
+    //   declarationUuid: trustDeclarationWizardData.value.declarationUuid || generateTrustDeclarationUUID(),
+    //   declarationType: 'trust-declaration',
+    //   contentJson: contentJson,
+    //   status: 'Finalized',
+    //   issuer: trustDeclarationWizardData.value.issuer,
+    //   subject: trustDeclarationWizardData.value.subject,
+    //   validity: trustDeclarationWizardData.value.validity
+    // });
+    
+    alert('Saving declarations is not yet implemented');
+    // if (result.success) {
+    //   alert('Declaration saved successfully');
+    //   showCreateTrustDeclarationModal.value = false;
+    //   await loadTrustDeclarationsList();
+    // } else {
+    //   alert(`Failed to save declaration: ${result.error}`);
+    // }
+  } catch (error) {
+    console.error('Error saving declaration:', error);
+    alert(`Error: ${formatErrorMessage(error)}`);
+  }
+}
+
+// Watch for modal opening
+watch(showCreateTrustDeclarationModal, (isOpen) => {
+  if (isOpen) {
+    initializeTrustDeclarationWizard();
+  }
+});
 
 // Load trust declarations when switching to Trust Declarations tab
 watch(onlineActiveTab, (newTab) => {
@@ -10043,7 +11611,6 @@ function handleGlobalClick(e: MouseEvent) {
     closeManageDropdown();
     closeSnesContentsDropdown();
     closeOnlineDropdown();
-    showMasterKeyActionDropdown.value = false;
     activeAdminKeypairDropdown.value = null;
     showAdminKeypairActionDropdown.value = false;
     showMasterKeypairActionDropdown.value = false;
@@ -17815,6 +19382,394 @@ button:disabled {
   color: var(--text-secondary);
   margin-left: 8px;
   font-style: italic;
+}
+
+/* Create Trust Declaration Wizard Modal */
+.fullscreen-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-wizard-modal {
+  width: 95vw;
+  height: 95vh;
+  max-width: 1400px;
+  max-height: 900px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.wizard-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wizard-steps {
+  display: flex;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
+  gap: 20px;
+  justify-content: center;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.wizard-step .step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border: 2px solid var(--border-color);
+  transition: all 0.3s;
+}
+
+.wizard-step.active .step-number {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.wizard-step.completed .step-number {
+  background: var(--success-color);
+  color: white;
+  border-color: var(--success-color);
+}
+
+.wizard-step .step-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+.wizard-step.active .step-label {
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+.wizard-step.completed .step-label {
+  color: var(--success-color);
+}
+
+.wizard-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 30px;
+}
+
+.wizard-step-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.wizard-step-content h4 {
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+
+.wizard-description {
+  margin-bottom: 30px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.issuer-info,
+.subject-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row code {
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.warning-message {
+  margin-top: 15px;
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  color: #856404;
+}
+
+.parent-validity-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #e7f3ff;
+  border: 1px solid #2196F3;
+  border-radius: 6px;
+}
+
+.info-note {
+  margin: 0;
+  color: #1565C0;
+  line-height: 1.6;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 5px;
+  font-style: italic;
+}
+
+.radio-group {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.update-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 4px solid var(--warning-color);
+}
+
+.retroactive-effect-fields {
+  margin-top: 15px;
+  padding: 15px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+}
+
+.json-editor {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.validation-errors {
+  margin-top: 15px;
+  padding: 15px;
+  background: #ffebee;
+  border: 1px solid #f44336;
+  border-radius: 6px;
+  color: #c62828;
+}
+
+.validation-errors ul {
+  margin: 10px 0 0 20px;
+  padding: 0;
+}
+
+.validation-errors li {
+  margin-bottom: 5px;
+}
+
+.declaration-status {
+  margin-top: 30px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.status-badge.status-draft {
+  background: #ff9800;
+  color: white;
+}
+
+.status-badge.status-finalized {
+  background: #2196F3;
+  color: white;
+}
+
+.status-badge.status-published {
+  background: #4caf50;
+  color: white;
+}
+
+.status-warning {
+  margin-top: 10px;
+  padding: 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  color: #856404;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-top: 2px solid var(--border-color);
+}
+
+.wizard-nav-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.wizard-nav-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* New Delegation Section */
+.new-delegation-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.new-delegation-section h5 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.permissions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.permissions-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.countersignature-group {
+  margin-top: 10px;
+}
+
+.modal-field-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.modal-field-inline label {
+  min-width: 120px;
+}
+
+.field-hint-inline {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+/* JSON Viewer */
+.json-viewer-container {
+  margin-top: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.json-viewer {
+  margin: 0;
+  padding: 15px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 500px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.status-info {
+  margin-top: 10px;
+  padding: 12px;
+  background: #e8f5e9;
+  border: 1px solid #4caf50;
+  border-radius: 6px;
+  color: #2e7d32;
 }
 
 </style>

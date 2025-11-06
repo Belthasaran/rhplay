@@ -89,6 +89,26 @@ function registerDatabaseHandlers(dbManager) {
             uga.user_review_rating as MyReviewRating,
             uga.user_skill_rating as MySkillRating,
             uga.user_skill_rating_when_beat as MySkillRatingWhenBeat,
+            uga.user_recommendation_rating as MyRecommendationRating,
+            uga.user_importance_rating as MyImportanceRating,
+            uga.user_technical_quality_rating as MyTechnicalQualityRating,
+            uga.user_gameplay_design_rating as MyGameplayDesignRating,
+            uga.user_originality_rating as MyOriginalityRating,
+            uga.user_visual_aesthetics_rating as MyVisualAestheticsRating,
+            uga.user_story_rating as MyStoryRating,
+            uga.user_soundtrack_graphics_rating as MySoundtrackGraphicsRating,
+            uga.user_difficulty_comment as MyDifficultyComment,
+            uga.user_skill_comment as MySkillComment,
+            uga.user_skill_comment_when_beat as MySkillCommentWhenBeat,
+            uga.user_review_comment as MyReviewComment,
+            uga.user_recommendation_comment as MyRecommendationComment,
+            uga.user_importance_comment as MyImportanceComment,
+            uga.user_technical_quality_comment as MyTechnicalQualityComment,
+            uga.user_gameplay_design_comment as MyGameplayDesignComment,
+            uga.user_originality_comment as MyOriginalityComment,
+            uga.user_visual_aesthetics_comment as MyVisualAestheticsComment,
+            uga.user_story_comment as MyStoryComment,
+            uga.user_soundtrack_graphics_comment as MySoundtrackGraphicsComment,
             COALESCE(uga.hidden, 0) as Hidden,
             COALESCE(uga.exclude_from_random, 0) as ExcludeFromRandom,
             uga.user_notes as Mynotes
@@ -176,6 +196,9 @@ function registerDatabaseHandlers(dbManager) {
             COALESCE(ugva.user_visual_aesthetics_rating, uga.user_visual_aesthetics_rating) as MyVisualAestheticsRating,
             COALESCE(ugva.user_story_rating, uga.user_story_rating) as MyStoryRating,
             COALESCE(ugva.user_soundtrack_graphics_rating, uga.user_soundtrack_graphics_rating) as MySoundtrackGraphicsRating,
+            COALESCE(ugva.user_difficulty_comment, uga.user_difficulty_comment) as MyDifficultyComment,
+            COALESCE(ugva.user_skill_comment, uga.user_skill_comment) as MySkillComment,
+            COALESCE(ugva.user_skill_comment_when_beat, uga.user_skill_comment_when_beat) as MySkillCommentWhenBeat,
             COALESCE(ugva.user_review_comment, uga.user_review_comment) as MyReviewComment,
             COALESCE(ugva.user_recommendation_comment, uga.user_recommendation_comment) as MyRecommendationComment,
             COALESCE(ugva.user_importance_comment, uga.user_importance_comment) as MyImportanceComment,
@@ -255,6 +278,9 @@ function registerDatabaseHandlers(dbManager) {
         myVisualAestheticsRating,
         myStoryRating,
         mySoundtrackGraphicsRating,
+        myDifficultyComment,
+        mySkillComment,
+        mySkillCommentWhenBeat,
         myReviewComment,
         myRecommendationComment,
         myImportanceComment,
@@ -295,20 +321,9 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
-      db.prepare(`
-        INSERT OR REPLACE INTO user_game_annotations
-          (gameid, status, user_difficulty_rating, user_review_rating, user_skill_rating, user_skill_rating_when_beat,
-           user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
-           user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
-           user_story_rating, user_soundtrack_graphics_rating,
-           user_review_comment, user_recommendation_comment, user_importance_comment,
-           user_technical_quality_comment, user_gameplay_design_comment, user_originality_comment,
-           user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
-           hidden, exclude_from_random, user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        gameid,
-        status || 'Default',
+      // Log the values being saved for debugging
+      console.log('[Save Annotation] Saving for gameid:', gameid);
+      console.log('[Save Annotation] Ratings:', {
         myDifficultyRating,
         myReviewRating,
         mySkillRating,
@@ -320,7 +335,39 @@ function registerDatabaseHandlers(dbManager) {
         myOriginalityRating,
         myVisualAestheticsRating,
         myStoryRating,
-        mySoundtrackGraphicsRating,
+        mySoundtrackGraphicsRating
+      });
+      
+      const result = db.prepare(`
+        INSERT OR REPLACE INTO user_game_annotations
+          (gameid, status, user_difficulty_rating, user_review_rating, user_skill_rating, user_skill_rating_when_beat,
+           user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
+           user_gameplay_design_rating, user_originality_rating, user_visual_aesthetics_rating,
+           user_story_rating, user_soundtrack_graphics_rating,
+           user_difficulty_comment, user_skill_comment, user_skill_comment_when_beat,
+           user_review_comment, user_recommendation_comment, user_importance_comment,
+           user_technical_quality_comment, user_gameplay_design_comment, user_originality_comment,
+           user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
+           hidden, exclude_from_random, user_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        gameid,
+        status || 'Default',
+        myDifficultyRating ?? null,
+        myReviewRating ?? null,
+        mySkillRating ?? null,
+        mySkillRatingWhenBeat ?? null,
+        myRecommendationRating ?? null,
+        myImportanceRating ?? null,
+        myTechnicalQualityRating ?? null,
+        myGameplayDesignRating ?? null,
+        myOriginalityRating ?? null,
+        myVisualAestheticsRating ?? null,
+        myStoryRating ?? null,
+        mySoundtrackGraphicsRating ?? null,
+        myDifficultyComment || null,
+        mySkillComment || null,
+        mySkillCommentWhenBeat || null,
         myReviewComment || null,
         myRecommendationComment || null,
         myImportanceComment || null,
@@ -335,9 +382,13 @@ function registerDatabaseHandlers(dbManager) {
         mynotes || null
       );
       
+      console.log('[Save Annotation] Database write result:', result);
+      console.log('[Save Annotation] Changes:', result.changes);
+      
       return { success: true };
     } catch (error) {
       console.error('Error saving annotation:', error);
+      console.error('Error stack:', error.stack);
       return { success: false, error: error.message };
     }
   });
@@ -7943,6 +7994,225 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true, eventId: signedEvent.id };
     } catch (error) {
       console.error('Error publishing profile to Nostr:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:check-profile-for-publishing
+   * Check if user has an online profile with Nostr keypair for publishing
+   */
+  ipcMain.handle('online:check-profile-for-publishing', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get current profile ID
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      if (!currentProfileId) {
+        return { hasProfile: false, hasNostrKeypair: false };
+      }
+      
+      // Load profile from csettings
+      const profileJson = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile');
+      
+      if (!profileJson) {
+        return { hasProfile: false, hasNostrKeypair: false };
+      }
+      
+      const profile = JSON.parse(profileJson.csetting_value);
+      
+      // Check if profile has primary keypair and if it's Nostr type
+      const hasNostrKeypair = profile.primaryKeypair && 
+        profile.primaryKeypair.type && 
+        profile.primaryKeypair.type.toLowerCase().includes('nostr');
+      
+      return { 
+        hasProfile: true, 
+        hasNostrKeypair: hasNostrKeypair || false 
+      };
+    } catch (error) {
+      console.error('Error checking profile for publishing:', error);
+      return { hasProfile: false, hasNostrKeypair: false };
+    }
+  });
+
+  /**
+   * Channel: online:publish-ratings-to-nostr
+   * Create and sign a Nostr NIP-33 event (kind 31001) for publishing game ratings
+   * Uses the user's primary Nostr keypair to sign the event
+   */
+  ipcMain.handle('online:publish-ratings-to-nostr', async (event, { gameId, gameName, gvUuid, version, status, ratings, comments, user_notes }) => {
+    try {
+      const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
+      const { finalizeEvent } = require('nostr-tools');
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      const keyguardKey = getKeyguardKey(event);
+      
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      
+      // Get the current profile from csettings
+      const currentProfileIdRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile_id');
+      
+      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No current profile found' };
+      }
+      
+      // Load profile from csettings
+      const profileJson = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_current_profile');
+      
+      if (!profileJson) {
+        return { success: false, error: 'Profile not found' };
+      }
+      
+      const profile = JSON.parse(profileJson.csetting_value);
+      
+      // Get the primary keypair - must be Nostr type
+      if (!profile.primaryKeypair) {
+        return { success: false, error: 'Profile has no primary keypair' };
+      }
+      
+      const primaryKeypair = profile.primaryKeypair;
+      
+      if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
+        return { success: false, error: 'Primary keypair must be Nostr type to publish ratings' };
+      }
+      
+      // Decrypt the private key
+      let privateKeyHex;
+      try {
+        if (!primaryKeypair.encrypted || !primaryKeypair.privateKey) {
+          return { success: false, error: 'Private key not available or not encrypted' };
+        }
+        
+        // privateKey is stored as encrypted string in format "iv:encrypted"
+        const parts = primaryKeypair.privateKey.split(':');
+        if (parts.length !== 2) {
+          return { success: false, error: 'Invalid encrypted private key format' };
+        }
+        
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+        let decrypted = decipher.update(encrypted);
+        decrypted = Buffer.concat([decrypted, decipher.final()]);
+        
+        // For Nostr keys, private key is stored as hex
+        privateKeyHex = decrypted.toString('hex');
+      } catch (err) {
+        return { success: false, error: `Cannot decrypt primary keypair: ${err.message}` };
+      }
+      
+      // Get public key from primary keypair
+      const publicKeyHex = primaryKeypair.publicKeyHex || primaryKeypair.publicKey;
+      
+      if (!publicKeyHex) {
+        return { success: false, error: 'Public key not available' };
+      }
+      
+      // Build NIP-33 event content (kind 31001 - User Game Rating)
+      const now = Math.floor(Date.now() / 1000);
+      
+      // Create the content JSON object
+      const contentJson = {
+        gameid: gameId,
+        gvuuid: gvUuid || null,
+        version: version || 1,
+        game_title: gameName || '',
+        status: status || 'Default',
+        rating: {
+          user_difficulty_rating: ratings.user_difficulty_rating ?? null,
+          user_review_rating: ratings.user_review_rating ?? null,
+          user_skill_rating: ratings.user_skill_rating ?? null,
+          user_skill_rating_when_beat: ratings.user_skill_rating_when_beat ?? null,
+          user_recommendation_rating: ratings.user_recommendation_rating ?? null,
+          user_importance_rating: ratings.user_importance_rating ?? null,
+          user_technical_quality_rating: ratings.user_technical_quality_rating ?? null,
+          user_gameplay_design_rating: ratings.user_gameplay_design_rating ?? null,
+          user_originality_rating: ratings.user_originality_rating ?? null,
+          user_visual_aesthetics_rating: ratings.user_visual_aesthetics_rating ?? null,
+          user_story_rating: ratings.user_story_rating ?? null,
+          user_soundtrack_graphics_rating: ratings.user_soundtrack_graphics_rating ?? null,
+          user_difficulty_comment: comments.user_difficulty_comment || null,
+          user_skill_comment: comments.user_skill_comment || null,
+          user_skill_comment_when_beat: comments.user_skill_comment_when_beat || null,
+          user_review_comment: comments.user_review_comment || null,
+          user_recommendation_comment: comments.user_recommendation_comment || null,
+          user_importance_comment: comments.user_importance_comment || null,
+          user_technical_quality_comment: comments.user_technical_quality_comment || null,
+          user_gameplay_design_comment: comments.user_gameplay_design_comment || null,
+          user_originality_comment: comments.user_originality_comment || null,
+          user_visual_aesthetics_comment: comments.user_visual_aesthetics_comment || null,
+          user_story_comment: comments.user_story_comment || null,
+          user_soundtrack_graphics_comment: comments.user_soundtrack_graphics_comment || null,
+          updated_at_ts: now,
+          created_at_ts: now
+        },
+        user_notes: user_notes || null
+      };
+      
+      // Create NIP-33 event template (kind 31001, parameterized replaceable)
+      const eventTemplate = {
+        kind: 31001,
+        created_at: now,
+        tags: [
+          ['d', `game:${gameId}:v1:rating`], // NIP-33 replaceable event identifier
+          ['gameid', gameId],
+          ['version', '1'],
+          ['app', 'rhplay-gameratings'],
+          ['verified', 'true'],
+          ['v', '1.0']
+        ],
+        content: JSON.stringify(contentJson)
+      };
+      
+      // Add gvuuid tag if available
+      if (gvUuid) {
+        eventTemplate.tags.push(['gvuuid', gvUuid]);
+      }
+      
+      // Sign the event using Nostr finalizeEvent
+      const signedEvent = finalizeEvent(eventTemplate, privateKeyHex);
+      
+      // Add to NostrLocalDBManager cache_out
+      const nostrDBManager = new NostrLocalDBManager();
+      await nostrDBManager.initialize();
+      
+      const success = nostrDBManager.addEvent(
+        'cache_out',
+        signedEvent,
+        0, // proc_status: pending
+        null, // keep_for
+        'user_game_annotations', // table_name
+        gameId, // record_uuid (using gameId as identifier)
+        currentProfileId // user_profile_uuid
+      );
+      
+      if (!success) {
+        nostrDBManager.closeAll();
+        return { success: false, error: 'Failed to add event to outgoing cache' };
+      }
+      
+      nostrDBManager.closeAll();
+      
+      return { success: true, eventId: signedEvent.id };
+    } catch (error) {
+      console.error('Error publishing ratings to Nostr:', error);
       return { success: false, error: error.message };
     }
   });

@@ -479,6 +479,100 @@ const MIGRATIONS = {
           && columnExists(db, 'admin_keypairs', 'nostr_status');
       },
     },
+    /*{  PLEASEFIX: This migration should be called from somewhere else, since   nostr_raw_events is not a table in clientsettings.db
+     *   nostraw_raw_events tables are in various databases created dynamically.
+     *    nostr_cache_in.db  nostr_cache_out.db  nostr_store_in.db  nostr_store_out.db
+     *    nostr_archive_01.db nostr_archive_02.db ... nostr_archive_xx.db  etc.
+     *    Therefore, nostr_raw_events migrations   need special handling.
+     *
+      id: 'clientdata_025_nostr_raw_events_table_metadata',
+      description: 'Add table_name, record_uuid, and user_profile_uuid columns to nostr_raw_events table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/025_nostr_raw_events_table_metadata.sql'),
+      skipIf(db) {
+        return columnExists(db, 'nostr_raw_events', 'table_name')
+          && columnExists(db, 'nostr_raw_events', 'record_uuid')
+          && columnExists(db, 'nostr_raw_events', 'user_profile_uuid');
+      },
+    },*/
+    {
+      id: 'clientdata_026_add_difficulty_skill_comments',
+      description: 'Add user_difficulty_comment, user_skill_comment, and user_skill_comment_when_beat columns to user_game_annotations and user_game_version_annotations',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/026_add_difficulty_skill_comments.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_game_annotations', 'user_difficulty_comment')
+          && columnExists(db, 'user_game_annotations', 'user_skill_comment')
+          && columnExists(db, 'user_game_annotations', 'user_skill_comment_when_beat');
+      },
+    },
+    {
+      id: 'clientdata_027_allow_zero_stars_for_difficulty_review',
+      description: 'Update CHECK constraints to allow 0 stars for user_difficulty_rating and user_review_rating (0-5 instead of 1-5)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/027_allow_zero_stars_for_difficulty_review.sql'),
+      skipIf(db) {
+        // CRITICAL: Check if constraints already allow 0 to avoid unnecessary table recreation
+        // This is important because:
+        // 1. Large tables would take a long time to recreate
+        // 2. Users may have custom columns not in the migration
+        // 3. Table recreation is risky and should be avoided if possible
+        
+        try {
+          // Test if we can insert a 0 value into user_difficulty_rating
+          // This will fail if the constraint doesn't allow 0
+          const testGameId = '__migration_test_027';
+          
+          // Check if test row already exists (from previous failed migration attempt)
+          const existingTest = db.prepare('SELECT gameid FROM user_game_annotations WHERE gameid = ?').get(testGameId);
+          if (existingTest) {
+            // Clean up any leftover test row
+            db.prepare('DELETE FROM user_game_annotations WHERE gameid = ?').run(testGameId);
+          }
+          
+          // Try to insert a row with 0 rating - this will fail if constraint doesn't allow 0
+          const insertStmt = db.prepare(`
+            INSERT INTO user_game_annotations (gameid, user_difficulty_rating, user_review_rating)
+            VALUES (?, 0, 0)
+          `);
+          
+          insertStmt.run(testGameId);
+          
+          // If we get here, the constraint allows 0 - migration already applied
+          // Clean up test row
+          db.prepare('DELETE FROM user_game_annotations WHERE gameid = ?').run(testGameId);
+          
+          // Also test user_game_version_annotations if it exists
+          if (tableExists(db, 'user_game_version_annotations')) {
+            const existingTestVersion = db.prepare('SELECT gameid, version FROM user_game_version_annotations WHERE gameid = ? AND version = ?').get(testGameId, 999);
+            if (existingTestVersion) {
+              db.prepare('DELETE FROM user_game_version_annotations WHERE gameid = ? AND version = ?').run(testGameId, 999);
+            }
+            
+            const insertVersionStmt = db.prepare(`
+              INSERT INTO user_game_version_annotations (gameid, version, user_difficulty_rating, user_review_rating)
+              VALUES (?, 999, 0, 0)
+            `);
+            
+            insertVersionStmt.run(testGameId);
+            db.prepare('DELETE FROM user_game_version_annotations WHERE gameid = ? AND version = ?').run(testGameId, 999);
+          }
+          
+          // Constraints already allow 0 - skip migration
+          return true;
+        } catch (err) {
+          // If insert fails, constraint doesn't allow 0 - migration needed
+          // Clean up any partial test row just in case
+          try {
+            db.prepare('DELETE FROM user_game_annotations WHERE gameid = ?').run('__migration_test_027');
+            db.prepare('DELETE FROM user_game_version_annotations WHERE gameid = ? AND version = ?').run('__migration_test_027', 999);
+          } catch (cleanupErr) {
+            // Ignore cleanup errors
+          }
+          return false;
+        }
+      },
+    },
   ],
   patchbin: [],
 };

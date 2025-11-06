@@ -1099,7 +1099,7 @@
                 <tr>
                   <th>Status</th>
                   <td>
-                    <select v-model="selectedItem.Status">
+                    <select v-model="selectedItem.Status" @change="saveNonRatingFields">
                       <option value="Default">Default</option>
                       <option value="In Progress">In Progress</option>
                       <option value="Finished">Finished</option>
@@ -1111,16 +1111,16 @@
                 <tr>
                   <th>My Difficulty</th>
                   <td>
-                    <div class="star-rating">
+                    <div class="star-rating clickable" @click="openRatingSheetModal">
                       <span 
                         v-for="n in 6" 
                         :key="'diff-' + (n-1)"
-                        @click="selectedItem.MyDifficultyRating = n - 1; saveAnnotation()"
                         :class="{ filled: (n - 1) <= (selectedItem.MyDifficultyRating ?? -1) }"
                         class="star"
                       >★</span>
-                      <button @click="selectedItem.MyDifficultyRating = null; saveAnnotation()" class="btn-clear-rating">✕</button>
+                      <button @click.stop="selectedItem.MyDifficultyRating = null; openRatingSheetModal()" class="btn-clear-rating">✕</button>
                       <span class="rating-label">{{ difficultyLabel(selectedItem.MyDifficultyRating) }}</span>
+                      <span class="click-hint">(Click to open rating sheet)</span>
                     </div>
                   </td>
                 </tr>
@@ -1134,68 +1134,24 @@
                         :class="{ filled: (n - 1) <= (selectedItem.MyReviewRating ?? -1) }"
                         class="star"
                       >★</span>
-                      <button @click.stop="selectedItem.MyReviewRating = null; saveAnnotation()" class="btn-clear-rating">✕</button>
+                      <button @click.stop="selectedItem.MyReviewRating = null; openRatingSheetModal()" class="btn-clear-rating">✕</button>
                       <span class="rating-label">{{ reviewLabel(selectedItem.MyReviewRating) }}</span>
                       <span class="click-hint">(Click to open rating sheet)</span>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <th>My Skill (At time I rated this)</th>
-                  <td>
-                    <div class="skill-rating-container">
-                      <div class="star-rating skill-rating">
-                        <span 
-                          v-for="n in 11" 
-                          :key="'skill-' + (n-1)"
-                          @click="selectedItem.MySkillRating = n - 1; saveAnnotation()"
-                          :class="{ filled: (n - 1) <= (selectedItem.MySkillRating ?? -1) }"
-                          :title="skillRatingHoverText(n - 1)"
-                          class="star star-small"
-                        >★</span>
-                        <button @click="selectedItem.MySkillRating = null; saveAnnotation()" class="btn-clear-rating">✕</button>
-                        <span class="rating-label">{{ skillLabel(selectedItem.MySkillRating) }}</span>
-                      </div>
-                      <div class="skill-caption" v-if="selectedItem.MySkillRating !== null && selectedItem.MySkillRating !== undefined">
-                        {{ skillRatingHoverText(selectedItem.MySkillRating) }}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <th>My Skill (At time I beat this game)</th>
-                  <td>
-                    <div class="skill-rating-container">
-                      <div class="star-rating skill-rating">
-                        <span 
-                          v-for="n in 11" 
-                          :key="'skill-beat-' + (n-1)"
-                          @click="selectedItem.MySkillRatingWhenBeat = n - 1; saveAnnotation()"
-                          :class="{ filled: (n - 1) <= (selectedItem.MySkillRatingWhenBeat ?? -1) }"
-                          :title="skillRatingHoverText(n - 1)"
-                          class="star star-small"
-                        >★</span>
-                        <button @click="selectedItem.MySkillRatingWhenBeat = null; saveAnnotation()" class="btn-clear-rating">✕</button>
-                        <span class="rating-label">{{ skillLabel(selectedItem.MySkillRatingWhenBeat) }}</span>
-                      </div>
-                      <div class="skill-caption" v-if="selectedItem.MySkillRatingWhenBeat !== null && selectedItem.MySkillRatingWhenBeat !== undefined">
-                        {{ skillRatingHoverText(selectedItem.MySkillRatingWhenBeat) }}
-                      </div>
                     </div>
                   </td>
                 </tr>
                 
                 <tr>
                   <th>Hidden</th>
-                  <td><input type="checkbox" v-model="selectedItem.Hidden" /></td>
+                  <td><input type="checkbox" v-model="selectedItem.Hidden" @change="saveNonRatingFields" /></td>
                 </tr>
                 <tr>
                   <th>Exclude from Random</th>
-                  <td><input type="checkbox" v-model="selectedItem.ExcludeFromRandom" /></td>
+                  <td><input type="checkbox" v-model="selectedItem.ExcludeFromRandom" @change="saveNonRatingFields" /></td>
                 </tr>
                 <tr>
                   <th>My notes</th>
-                  <td><textarea v-model="selectedItem.Mynotes" rows="4"></textarea></td>
+                  <td><textarea v-model="selectedItem.Mynotes" rows="4" @input="saveNonRatingFields" @blur="saveNonRatingFields"></textarea></td>
                 </tr>
                 
                 <!-- Action Buttons -->
@@ -1544,6 +1500,96 @@
           
           <div class="rating-component">
             <div class="rating-header">
+              <label class="rating-label">My Difficulty</label>
+              <span class="rating-label-text">{{ difficultyLabel(ratingSheetData.MyDifficultyRating) }}</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'diff-' + (n-1)"
+                  @click="updateRating('MyDifficultyRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyDifficultyRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyDifficultyRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyDifficultyComment"
+                @input="updateComment('MyDifficultyComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">My Skill (At time I rated this)</label>
+              <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRating) }}</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating skill-rating">
+                <span 
+                  v-for="n in 11" 
+                  :key="'skill-' + (n-1)"
+                  @click="updateRating('MySkillRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MySkillRating ?? -1) }"
+                  :title="skillRatingHoverText(n - 1)"
+                  class="star star-small"
+                >★</span>
+                <button @click="updateRating('MySkillRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <div class="skill-caption" v-if="ratingSheetData.MySkillRating !== null && ratingSheetData.MySkillRating !== undefined">
+                {{ skillRatingHoverText(ratingSheetData.MySkillRating) }}
+              </div>
+            </div>
+            <div class="rating-row">
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MySkillComment"
+                @input="updateComment('MySkillComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">My Skill (At time I beat this game)</label>
+              <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRatingWhenBeat) }}</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating skill-rating">
+                <span 
+                  v-for="n in 11" 
+                  :key="'skill-beat-' + (n-1)"
+                  @click="updateRating('MySkillRatingWhenBeat', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MySkillRatingWhenBeat ?? -1) }"
+                  :title="skillRatingHoverText(n - 1)"
+                  class="star star-small"
+                >★</span>
+                <button @click="updateRating('MySkillRatingWhenBeat', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <div class="skill-caption" v-if="ratingSheetData.MySkillRatingWhenBeat !== null && ratingSheetData.MySkillRatingWhenBeat !== undefined">
+                {{ skillRatingHoverText(ratingSheetData.MySkillRatingWhenBeat) }}
+              </div>
+            </div>
+            <div class="rating-row">
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MySkillCommentWhenBeat"
+                @input="updateComment('MySkillCommentWhenBeat')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
               <label class="rating-label">Recommendation <span class="rating-description-inline">(Level to which you would recommend the game, regardless of its qualities)</span></label>
             </div>
             <div class="rating-row">
@@ -1744,6 +1790,14 @@
         </div>
       </section>
       <footer class="modal-footer">
+        <button 
+          @click="publishRatingsToNostr" 
+          :disabled="!hasAtLeastOneRating"
+          class="btn-primary"
+          style="margin-right: 10px;"
+        >
+          Publish My Ratings or Ratings Update
+        </button>
         <button @click="closeRatingSheetModal">Close</button>
       </footer>
     </div>
@@ -6500,12 +6554,24 @@ function toggleCheckAll(e: Event) {
 }
 
 function rowClick(row: Item) {
+  // Don't allow selection changes when rating sheet modal is open
+  if (ratingSheetModalOpen.value) {
+    return;
+  }
+  
   const has = selectedIds.value.has(row.Id);
   selectedIds.value.clear();
   if (!has) selectedIds.value.add(row.Id);
 }
 
 function toggleMainSelection(id: string, e: Event) {
+  // Don't allow selection changes when rating sheet modal is open
+  if (ratingSheetModalOpen.value) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  
   const checked = (e.target as HTMLInputElement).checked;
   if (checked) {
     selectedIds.value.add(id);
@@ -12196,11 +12262,88 @@ async function completeProfileCreation() {
     // Save mode before resetting
     const wasNewProfileMode = profileCreationWizardMode.value === 'new-profile';
     
-    // Close wizard and reset initialization flag
+    // Check if we need to resume publishing after profile creation
+    const shouldResumePublishing = pendingPublishAfterProfileCreation.value;
+    const savedGameId = ratingSheetGameId.value; // Save gameId before closing wizard
+    
+    // Close wizard and reset initialization flag FIRST
     showProfileCreationWizard.value = false;
     profileCreationWizardStep.value = 1;
     profileCreationWizardInitialized.value = false;
     profileCreationWizardMode.value = 'create-first';
+    
+    // Resume publishing after wizard closes (so modal can appear on top)
+    if (shouldResumePublishing) {
+      pendingPublishAfterProfileCreation.value = false;
+      
+      // Wait a tick for Vue to update the DOM (wizard closing)
+      await nextTick();
+      
+      // Find the item for the saved gameId
+      if (savedGameId) {
+        const item = items.find(it => it.Id === savedGameId);
+        if (item) {
+          // Ensure this item is selected
+          selectedIds.value = new Set([savedGameId]);
+          
+          // Wait for Vue to update selectedItem computed property
+          await nextTick();
+          
+          // Reopen rating sheet modal with the saved game data
+          ratingSheetGameId.value = savedGameId;
+          ratingSheetData.value = {
+            MyReviewRating: item.MyReviewRating ?? null,
+            MyDifficultyRating: item.MyDifficultyRating ?? null,
+            MySkillRating: item.MySkillRating ?? null,
+            MySkillRatingWhenBeat: item.MySkillRatingWhenBeat ?? null,
+            MyRecommendationRating: item.MyRecommendationRating ?? null,
+            MyImportanceRating: item.MyImportanceRating ?? null,
+            MyTechnicalQualityRating: item.MyTechnicalQualityRating ?? null,
+            MyGameplayDesignRating: item.MyGameplayDesignRating ?? null,
+            MyOriginalityRating: item.MyOriginalityRating ?? null,
+            MyVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
+            MyStoryRating: item.MyStoryRating ?? null,
+            MySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating ?? null,
+            MyDifficultyComment: (item as any).MyDifficultyComment || '',
+            MySkillComment: (item as any).MySkillComment || '',
+            MySkillCommentWhenBeat: (item as any).MySkillCommentWhenBeat || '',
+            MyReviewComment: (item as any).MyReviewComment || '',
+            MyRecommendationComment: (item as any).MyRecommendationComment || '',
+            MyImportanceComment: (item as any).MyImportanceComment || '',
+            MyTechnicalQualityComment: (item as any).MyTechnicalQualityComment || '',
+            MyGameplayDesignComment: (item as any).MyGameplayDesignComment || '',
+            MyOriginalityComment: (item as any).MyOriginalityComment || '',
+            MyVisualAestheticsComment: (item as any).MyVisualAestheticsComment || '',
+            MyStoryComment: (item as any).MyStoryComment || '',
+            MySoundtrackGraphicsComment: (item as any).MySoundtrackGraphicsComment || '',
+          };
+          ratingSheetModalOpen.value = true;
+          
+          // Wait another tick for modal to open and selectedItem to update
+          await nextTick();
+          
+          // Verify selectedItem is now available
+          if (!selectedItem.value || selectedItem.value.Id !== savedGameId) {
+            console.error('[completeProfileCreation] selectedItem not available after reopening modal');
+            // Try to find it again
+            const foundItem = items.find(it => it.Id === savedGameId);
+            if (foundItem) {
+              selectedIds.value = new Set([savedGameId]);
+              await nextTick();
+            }
+          }
+          
+          // Now publish the ratings
+          await publishRatingsToNostr();
+        } else {
+          console.error('[completeProfileCreation] Could not find item for saved gameId:', savedGameId);
+          alert('Could not find the game you were rating. Please reopen the rating sheet and try publishing again.');
+        }
+      } else {
+        console.error('[completeProfileCreation] No saved gameId for resume publishing');
+        alert('Could not resume publishing. Please reopen the rating sheet and try publishing again.');
+      }
+    }
     
     if (wasNewProfileMode || hasExistingProfile) {
       alert('New profile created successfully! You can switch to it in Profile Details. Make sure to export and backup your profile.');
@@ -15929,19 +16072,146 @@ async function loadSettings() {
  */
 async function saveAnnotation() {
   if (!selectedItem.value) return;
-  return debouncedSaveAnnotation(selectedItem.value);
+  
+  // CRITICAL: Only save annotations when the rating sheet modal is open
+  // This prevents saving to unrelated games
+  if (!ratingSheetModalOpen.value || !ratingSheetGameId.value) {
+    console.warn('[saveAnnotation] Blocked: Modal is not open. Only save from modal or via saveNonRatingFields().');
+    return;
+  }
+  
+  // Use ratingSheetData if available (user is editing in modal), otherwise use selectedItem
+  // ratingSheetData is the source of truth when modal is open
+  let itemToSave: any;
+  
+  if (ratingSheetModalOpen.value && ratingSheetGameId.value && Object.keys(ratingSheetData.value).length > 0) {
+    // When modal is open, use the gameId that the modal was opened for
+    // This prevents saving to the wrong game if user clicks on a different game while modal is open
+    const modalGameId = ratingSheetGameId.value;
+    
+    // Find the actual item for this game (it might not be selectedItem anymore)
+    const baseItem = items.find(it => it.Id === modalGameId) || selectedItem.value;
+    
+    if (baseItem.Id !== modalGameId) {
+      console.error('[saveAnnotation] WARNING: Could not find item for modal gameId:', modalGameId);
+      console.error('[saveAnnotation] Using selectedItem instead:', selectedItem.value.Id);
+    }
+    
+    const ratingData = ratingSheetData.value;
+    
+    itemToSave = { 
+      // Base properties (Id, Status, Hidden, etc.) - use the modal's gameId
+      Id: modalGameId,
+      Status: baseItem.Status || 'Default',
+      Hidden: baseItem.Hidden || false,
+      ExcludeFromRandom: baseItem.ExcludeFromRandom || false,
+      Mynotes: baseItem.Mynotes || null,
+      // All rating and comment values from modal (these are the source of truth)
+      MyDifficultyRating: ratingData.MyDifficultyRating ?? null,
+      MyReviewRating: ratingData.MyReviewRating ?? null,
+      MySkillRating: ratingData.MySkillRating ?? null,
+      MySkillRatingWhenBeat: ratingData.MySkillRatingWhenBeat ?? null,
+      MyRecommendationRating: ratingData.MyRecommendationRating ?? null,
+      MyImportanceRating: ratingData.MyImportanceRating ?? null,
+      MyTechnicalQualityRating: ratingData.MyTechnicalQualityRating ?? null,
+      MyGameplayDesignRating: ratingData.MyGameplayDesignRating ?? null,
+      MyOriginalityRating: ratingData.MyOriginalityRating ?? null,
+      MyVisualAestheticsRating: ratingData.MyVisualAestheticsRating ?? null,
+      MyStoryRating: ratingData.MyStoryRating ?? null,
+      MySoundtrackGraphicsRating: ratingData.MySoundtrackGraphicsRating ?? null,
+      MyDifficultyComment: ratingData.MyDifficultyComment || null,
+      MySkillComment: ratingData.MySkillComment || null,
+      MySkillCommentWhenBeat: ratingData.MySkillCommentWhenBeat || null,
+      MyReviewComment: ratingData.MyReviewComment || null,
+      MyRecommendationComment: ratingData.MyRecommendationComment || null,
+      MyImportanceComment: ratingData.MyImportanceComment || null,
+      MyTechnicalQualityComment: ratingData.MyTechnicalQualityComment || null,
+      MyGameplayDesignComment: ratingData.MyGameplayDesignComment || null,
+      MyOriginalityComment: ratingData.MyOriginalityComment || null,
+      MyVisualAestheticsComment: ratingData.MyVisualAestheticsComment || null,
+      MyStoryComment: ratingData.MyStoryComment || null,
+      MySoundtrackGraphicsComment: ratingData.MySoundtrackGraphicsComment || null,
+    };
+    
+    // Deep clone to ensure we have a plain object, not a reactive proxy
+    itemToSave = JSON.parse(JSON.stringify(itemToSave));
+    
+    console.log('[saveAnnotation] Using ratingSheetData (modal open):', {
+      'modalGameId': modalGameId,
+      'selectedItem.Id': selectedItem.value.Id,
+      'baseItem.Id': baseItem.Id,
+      'ratingSheetData.MyDifficultyRating': ratingData.MyDifficultyRating,
+      'ratingSheetData.MyReviewRating': ratingData.MyReviewRating,
+      'ratingSheetData.MySkillRating': ratingData.MySkillRating,
+      'itemToSave.Id': itemToSave.Id,
+      'itemToSave.MyDifficultyRating': itemToSave.MyDifficultyRating,
+      'itemToSave.MyReviewRating': itemToSave.MyReviewRating,
+      'itemToSave.MySkillRating': itemToSave.MySkillRating,
+    });
+  } else {
+    // This should never happen due to the guard above, but if it does, don't save
+    console.error('[saveAnnotation] ERROR: Modal is open but no ratingSheetData available');
+    return;
+  }
+  
+  console.log('[saveAnnotation] About to call debouncedSaveAnnotation with:', {
+    Id: itemToSave.Id,
+    MyDifficultyRating: itemToSave.MyDifficultyRating,
+    MyReviewRating: itemToSave.MyReviewRating,
+    MySkillRating: itemToSave.MySkillRating,
+  });
+  
+  // Verify gameId matches
+  if (ratingSheetModalOpen.value && ratingSheetGameId.value && itemToSave.Id !== ratingSheetGameId.value) {
+    console.error('[saveAnnotation] CRITICAL ERROR: gameId mismatch!', {
+      'itemToSave.Id': itemToSave.Id,
+      'ratingSheetGameId': ratingSheetGameId.value,
+      'selectedItem.Id': selectedItem.value?.Id,
+    });
+  }
+  
+  return debouncedSaveAnnotation(itemToSave);
 }
 
-const debouncedSaveAnnotation = debounce(async (item: Item) => {
+// Store debounce timers per gameId to avoid cross-game conflicts
+const saveAnnotationTimers = new Map<string, NodeJS.Timeout>();
+
+async function saveAnnotationDirect(item: Item) {
   if (!isElectronAvailable()) {
     console.log('Mock mode: Would save annotation for', item.Id);
     return;
   }
   
   try {
+    // Debug: log what we received and what we're reading
+    console.log('[saveAnnotationDirect] Received item:', {
+      Id: item.Id,
+      type: typeof item,
+      keys: Object.keys(item),
+    });
+    
+    // Debug: log what we're reading from the item
+    console.log('[saveAnnotationDirect] Item values:', {
+      MyDifficultyRating: item.MyDifficultyRating,
+      MyReviewRating: item.MyReviewRating,
+      MySkillRating: item.MySkillRating,
+      MySkillRatingWhenBeat: item.MySkillRatingWhenBeat,
+      MyRecommendationRating: item.MyRecommendationRating,
+      MyImportanceRating: item.MyImportanceRating,
+      MyTechnicalQualityRating: item.MyTechnicalQualityRating,
+      MyGameplayDesignRating: item.MyGameplayDesignRating,
+      MyOriginalityRating: item.MyOriginalityRating,
+      MyVisualAestheticsRating: item.MyVisualAestheticsRating,
+      MyStoryRating: item.MyStoryRating,
+      MySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating,
+    });
+    
     const annotation = {
       gameid: item.Id,
       status: item.Status,
+      myDifficultyComment: (item as any).MyDifficultyComment || null,
+      mySkillComment: (item as any).MySkillComment || null,
+      mySkillCommentWhenBeat: (item as any).MySkillCommentWhenBeat || null,
       myReviewComment: (item as any).MyReviewComment || null,
       myRecommendationComment: (item as any).MyRecommendationComment || null,
       myImportanceComment: (item as any).MyImportanceComment || null,
@@ -15951,22 +16221,24 @@ const debouncedSaveAnnotation = debounce(async (item: Item) => {
       myVisualAestheticsComment: (item as any).MyVisualAestheticsComment || null,
       myStoryComment: (item as any).MyStoryComment || null,
       mySoundtrackGraphicsComment: (item as any).MySoundtrackGraphicsComment || null,
-      myDifficultyRating: item.MyDifficultyRating,
-      myReviewRating: item.MyReviewRating,
-      mySkillRating: item.MySkillRating,
-      mySkillRatingWhenBeat: item.MySkillRatingWhenBeat,
-      myRecommendationRating: item.MyRecommendationRating,
-      myImportanceRating: item.MyImportanceRating,
-      myTechnicalQualityRating: item.MyTechnicalQualityRating,
-      myGameplayDesignRating: item.MyGameplayDesignRating,
-      myOriginalityRating: item.MyOriginalityRating,
-      myVisualAestheticsRating: item.MyVisualAestheticsRating,
-      myStoryRating: item.MyStoryRating,
-      mySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating,
+      myDifficultyRating: item.MyDifficultyRating ?? null,
+      myReviewRating: item.MyReviewRating ?? null,
+      mySkillRating: item.MySkillRating ?? null,
+      mySkillRatingWhenBeat: item.MySkillRatingWhenBeat ?? null,
+      myRecommendationRating: item.MyRecommendationRating ?? null,
+      myImportanceRating: item.MyImportanceRating ?? null,
+      myTechnicalQualityRating: item.MyTechnicalQualityRating ?? null,
+      myGameplayDesignRating: item.MyGameplayDesignRating ?? null,
+      myOriginalityRating: item.MyOriginalityRating ?? null,
+      myVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
+      myStoryRating: item.MyStoryRating ?? null,
+      mySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating ?? null,
       hidden: item.Hidden,
       excludeFromRandom: item.ExcludeFromRandom,
       mynotes: item.Mynotes
     };
+    
+    console.log('[saveAnnotationDirect] Annotation object:', annotation);
     
     const result = await (window as any).electronAPI.saveAnnotation(annotation);
     if (!result.success) {
@@ -15975,7 +16247,29 @@ const debouncedSaveAnnotation = debounce(async (item: Item) => {
   } catch (error) {
     console.error('Error saving annotation:', error);
   }
-}, 500);
+}
+
+// Debounce per gameId to avoid cross-game conflicts
+function debouncedSaveAnnotation(item: Item) {
+  const gameId = item.Id;
+  
+  // Deep clone the item to avoid stale references in the closure
+  const itemToSave = JSON.parse(JSON.stringify(item));
+  
+  // Clear existing timer for this game
+  const existingTimer = saveAnnotationTimers.get(gameId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+  
+  // Create new timer for this game
+  const timer = setTimeout(() => {
+    saveAnnotationTimers.delete(gameId);
+    saveAnnotationDirect(itemToSave);
+  }, 500);
+  
+  saveAnnotationTimers.set(gameId, timer);
+}
 
 /**
  * Load specific game version
@@ -16140,15 +16434,8 @@ onUnmounted(() => {
   }
 });
 
-/**
- * Watch for item changes and auto-save
- */
-watch(items, () => {
-  // Auto-save when items change
-  for (const item of items) {
-    debouncedSaveAnnotation(item);
-  }
-}, { deep: true });
+// Removed auto-save watch on items - it was causing massive flood of save events
+// Saves should only happen when user explicitly changes ratings/comments via saveAnnotation()
 
 /**
  * Watch for version changes
@@ -16284,43 +16571,165 @@ function closeDescriptionModal() {
 // Rating Sheet Modal
 const ratingSheetModalOpen = ref(false);
 const ratingSheetData = ref<any>({});
+const ratingSheetGameId = ref<string | null>(null); // Track which game the modal is for
+const pendingPublishAfterProfileCreation = ref(false); // Track if we need to publish after profile creation
 
 function openRatingSheetModal() {
   if (!selectedItem.value) return;
+  
+  // Store the gameId for this modal session
+  ratingSheetGameId.value = selectedItem.value.Id;
+  
   // Copy current ratings and comments to modal data
+  // Use nullish coalescing and optional chaining to handle undefined/null values
+  const item = selectedItem.value;
   ratingSheetData.value = {
-    MyReviewRating: selectedItem.value.MyReviewRating,
-    MyRecommendationRating: selectedItem.value.MyRecommendationRating,
-    MyImportanceRating: selectedItem.value.MyImportanceRating,
-    MyTechnicalQualityRating: selectedItem.value.MyTechnicalQualityRating,
-    MyGameplayDesignRating: selectedItem.value.MyGameplayDesignRating,
-    MyOriginalityRating: selectedItem.value.MyOriginalityRating,
-    MyVisualAestheticsRating: selectedItem.value.MyVisualAestheticsRating,
-    MyStoryRating: selectedItem.value.MyStoryRating,
-    MySoundtrackGraphicsRating: selectedItem.value.MySoundtrackGraphicsRating,
-    MyReviewComment: selectedItem.value.MyReviewComment || '',
-    MyRecommendationComment: selectedItem.value.MyRecommendationComment || '',
-    MyImportanceComment: selectedItem.value.MyImportanceComment || '',
-    MyTechnicalQualityComment: selectedItem.value.MyTechnicalQualityComment || '',
-    MyGameplayDesignComment: selectedItem.value.MyGameplayDesignComment || '',
-    MyOriginalityComment: selectedItem.value.MyOriginalityComment || '',
-    MyVisualAestheticsComment: selectedItem.value.MyVisualAestheticsComment || '',
-    MyStoryComment: selectedItem.value.MyStoryComment || '',
-    MySoundtrackGraphicsComment: selectedItem.value.MySoundtrackGraphicsComment || '',
+    MyReviewRating: item.MyReviewRating ?? null,
+    MyDifficultyRating: item.MyDifficultyRating ?? null,
+    MySkillRating: item.MySkillRating ?? null,
+    MySkillRatingWhenBeat: item.MySkillRatingWhenBeat ?? null,
+    MyRecommendationRating: item.MyRecommendationRating ?? null,
+    MyImportanceRating: item.MyImportanceRating ?? null,
+    MyTechnicalQualityRating: item.MyTechnicalQualityRating ?? null,
+    MyGameplayDesignRating: item.MyGameplayDesignRating ?? null,
+    MyOriginalityRating: item.MyOriginalityRating ?? null,
+    MyVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
+    MyStoryRating: item.MyStoryRating ?? null,
+    MySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating ?? null,
+    MyDifficultyComment: item.MyDifficultyComment || '',
+    MySkillComment: item.MySkillComment || '',
+    MySkillCommentWhenBeat: item.MySkillCommentWhenBeat || '',
+    MyReviewComment: item.MyReviewComment || '',
+    MyRecommendationComment: item.MyRecommendationComment || '',
+    MyImportanceComment: item.MyImportanceComment || '',
+    MyTechnicalQualityComment: item.MyTechnicalQualityComment || '',
+    MyGameplayDesignComment: item.MyGameplayDesignComment || '',
+    MyOriginalityComment: item.MyOriginalityComment || '',
+    MyVisualAestheticsComment: item.MyVisualAestheticsComment || '',
+    MyStoryComment: item.MyStoryComment || '',
+    MySoundtrackGraphicsComment: item.MySoundtrackGraphicsComment || '',
   };
   ratingSheetModalOpen.value = true;
+  
+  console.log('[openRatingSheetModal] Opened for gameId:', ratingSheetGameId.value);
 }
 
 function closeRatingSheetModal() {
   ratingSheetModalOpen.value = false;
+  ratingSheetGameId.value = null;
+}
+
+// Computed property to check if at least one rating is set
+const hasAtLeastOneRating = computed(() => {
+  const data = ratingSheetData.value;
+  return (
+    (data.MyDifficultyRating !== null && data.MyDifficultyRating !== undefined) ||
+    (data.MyReviewRating !== null && data.MyReviewRating !== undefined) ||
+    (data.MySkillRating !== null && data.MySkillRating !== undefined) ||
+    (data.MySkillRatingWhenBeat !== null && data.MySkillRatingWhenBeat !== undefined) ||
+    (data.MyRecommendationRating !== null && data.MyRecommendationRating !== undefined) ||
+    (data.MyImportanceRating !== null && data.MyImportanceRating !== undefined) ||
+    (data.MyTechnicalQualityRating !== null && data.MyTechnicalQualityRating !== undefined) ||
+    (data.MyGameplayDesignRating !== null && data.MyGameplayDesignRating !== undefined) ||
+    (data.MyOriginalityRating !== null && data.MyOriginalityRating !== undefined) ||
+    (data.MyVisualAestheticsRating !== null && data.MyVisualAestheticsRating !== undefined) ||
+    (data.MyStoryRating !== null && data.MyStoryRating !== undefined) ||
+    (data.MySoundtrackGraphicsRating !== null && data.MySoundtrackGraphicsRating !== undefined)
+  );
+});
+
+// Function to publish ratings to Nostr
+async function publishRatingsToNostr() {
+  if (!hasAtLeastOneRating.value) {
+    alert('Please set at least one rating before publishing.');
+    return;
+  }
+  
+  if (!ratingSheetGameId.value || !selectedItem.value) {
+    alert('No game selected for publishing.');
+    return;
+  }
+  
+  if (!isElectronAvailable()) {
+    console.warn('Electron not available, cannot publish ratings');
+    return;
+  }
+  
+  try {
+    // Check if user has an online profile with Nostr keypair
+    const profileCheck = await (window as any).electronAPI.checkProfileForPublishing();
+    
+    if (!profileCheck.hasProfile || !profileCheck.hasNostrKeypair) {
+      // User needs to create a profile - open wizard
+      // Close rating sheet modal first so wizard appears on top
+      pendingPublishAfterProfileCreation.value = true;
+      ratingSheetModalOpen.value = false;
+      showProfileCreationWizard.value = true;
+      return;
+    }
+    
+    // User has profile and Nostr keypair - proceed with publishing
+    const result = await (window as any).electronAPI.publishRatingsToNostr({
+      gameId: ratingSheetGameId.value,
+      gameName: selectedItem.value.Name || '',
+      gvUuid: selectedItem.value.GvUuid || null,
+      version: selectedItem.value.CurrentVersion || 1,
+      status: selectedItem.value.Status || 'Default',
+      ratings: {
+        user_difficulty_rating: ratingSheetData.value.MyDifficultyRating ?? null,
+        user_review_rating: ratingSheetData.value.MyReviewRating ?? null,
+        user_skill_rating: ratingSheetData.value.MySkillRating ?? null,
+        user_skill_rating_when_beat: ratingSheetData.value.MySkillRatingWhenBeat ?? null,
+        user_recommendation_rating: ratingSheetData.value.MyRecommendationRating ?? null,
+        user_importance_rating: ratingSheetData.value.MyImportanceRating ?? null,
+        user_technical_quality_rating: ratingSheetData.value.MyTechnicalQualityRating ?? null,
+        user_gameplay_design_rating: ratingSheetData.value.MyGameplayDesignRating ?? null,
+        user_originality_rating: ratingSheetData.value.MyOriginalityRating ?? null,
+        user_visual_aesthetics_rating: ratingSheetData.value.MyVisualAestheticsRating ?? null,
+        user_story_rating: ratingSheetData.value.MyStoryRating ?? null,
+        user_soundtrack_graphics_rating: ratingSheetData.value.MySoundtrackGraphicsRating ?? null,
+      },
+      comments: {
+        user_difficulty_comment: ratingSheetData.value.MyDifficultyComment || null,
+        user_skill_comment: ratingSheetData.value.MySkillComment || null,
+        user_skill_comment_when_beat: ratingSheetData.value.MySkillCommentWhenBeat || null,
+        user_review_comment: ratingSheetData.value.MyReviewComment || null,
+        user_recommendation_comment: ratingSheetData.value.MyRecommendationComment || null,
+        user_importance_comment: ratingSheetData.value.MyImportanceComment || null,
+        user_technical_quality_comment: ratingSheetData.value.MyTechnicalQualityComment || null,
+        user_gameplay_design_comment: ratingSheetData.value.MyGameplayDesignComment || null,
+        user_originality_comment: ratingSheetData.value.MyOriginalityComment || null,
+        user_visual_aesthetics_comment: ratingSheetData.value.MyVisualAestheticsComment || null,
+        user_story_comment: ratingSheetData.value.MyStoryComment || null,
+        user_soundtrack_graphics_comment: ratingSheetData.value.MySoundtrackGraphicsComment || null,
+      },
+      user_notes: selectedItem.value.Mynotes || null,
+    });
+    
+    if (result.success) {
+      alert('Ratings published successfully!');
+    } else {
+      alert(`Failed to publish ratings: ${result.error}`);
+    }
+  } catch (error: any) {
+    console.error('Error publishing ratings:', error);
+    alert(`Error publishing ratings: ${error.message || error}`);
+  }
 }
 
 async function updateRating(field: string, value: number | null) {
   if (!selectedItem.value) return;
   
-  // Update both modal data and selected item
+  // Update modal data (this is the source of truth when modal is open)
   ratingSheetData.value[field] = value;
+  
+  // Also update selectedItem for immediate UI updates in main view
   (selectedItem.value as any)[field] = value;
+  
+  // Debug: log what we're setting
+  console.log(`[updateRating] Setting ${field} = ${value}`);
+  console.log(`[updateRating] ratingSheetData.${field} = ${ratingSheetData.value[field]}`);
+  console.log(`[updateRating] selectedItem.${field} = ${(selectedItem.value as any)[field]}`);
   
   // Save immediately
   await saveAnnotation();
@@ -16329,12 +16738,68 @@ async function updateRating(field: string, value: number | null) {
 async function updateComment(field: string) {
   if (!selectedItem.value) return;
   
+  // Only update if modal is open
+  if (!ratingSheetModalOpen.value || !ratingSheetGameId.value) {
+    console.warn('[updateComment] Blocked: Modal is not open');
+    return;
+  }
+  
   // Update both modal data and selected item
   const commentValue = ratingSheetData.value[field] || '';
   (selectedItem.value as any)[field] = commentValue || null;
   
   // Save immediately (debounced)
   await saveAnnotation();
+}
+
+/**
+ * Save non-rating fields (Status, Hidden, ExcludeFromRandom, Mynotes) from main view
+ * This is the ONLY way to save annotations when the modal is NOT open
+ */
+async function saveNonRatingFields() {
+  if (!selectedItem.value) return;
+  
+  // Only save non-rating fields: Status, Hidden, ExcludeFromRandom, Mynotes
+  // Do NOT save rating fields here - those must be saved from the modal
+  const itemToSave = {
+    Id: selectedItem.value.Id,
+    Status: selectedItem.value.Status || 'Default',
+    Hidden: selectedItem.value.Hidden || false,
+    ExcludeFromRandom: selectedItem.value.ExcludeFromRandom || false,
+    Mynotes: selectedItem.value.Mynotes || null,
+    // Keep existing rating values (don't modify them)
+    MyDifficultyRating: selectedItem.value.MyDifficultyRating ?? null,
+    MyReviewRating: selectedItem.value.MyReviewRating ?? null,
+    MySkillRating: selectedItem.value.MySkillRating ?? null,
+    MySkillRatingWhenBeat: selectedItem.value.MySkillRatingWhenBeat ?? null,
+    MyRecommendationRating: selectedItem.value.MyRecommendationRating ?? null,
+    MyImportanceRating: selectedItem.value.MyImportanceRating ?? null,
+    MyTechnicalQualityRating: selectedItem.value.MyTechnicalQualityRating ?? null,
+    MyGameplayDesignRating: selectedItem.value.MyGameplayDesignRating ?? null,
+    MyOriginalityRating: selectedItem.value.MyOriginalityRating ?? null,
+    MyVisualAestheticsRating: selectedItem.value.MyVisualAestheticsRating ?? null,
+    MyStoryRating: selectedItem.value.MyStoryRating ?? null,
+    MySoundtrackGraphicsRating: selectedItem.value.MySoundtrackGraphicsRating ?? null,
+    MyDifficultyComment: (selectedItem.value as any).MyDifficultyComment || null,
+    MySkillComment: (selectedItem.value as any).MySkillComment || null,
+    MySkillCommentWhenBeat: (selectedItem.value as any).MySkillCommentWhenBeat || null,
+    MyReviewComment: (selectedItem.value as any).MyReviewComment || null,
+    MyRecommendationComment: (selectedItem.value as any).MyRecommendationComment || null,
+    MyImportanceComment: (selectedItem.value as any).MyImportanceComment || null,
+    MyTechnicalQualityComment: (selectedItem.value as any).MyTechnicalQualityComment || null,
+    MyGameplayDesignComment: (selectedItem.value as any).MyGameplayDesignComment || null,
+    MyOriginalityComment: (selectedItem.value as any).MyOriginalityComment || null,
+    MyVisualAestheticsComment: (selectedItem.value as any).MyVisualAestheticsComment || null,
+    MyStoryComment: (selectedItem.value as any).MyStoryComment || null,
+    MySoundtrackGraphicsComment: (selectedItem.value as any).MySoundtrackGraphicsComment || null,
+  };
+  
+  // Deep clone to ensure we have a plain object
+  const itemToSaveCloned = JSON.parse(JSON.stringify(itemToSave));
+  
+  console.log('[saveNonRatingFields] Saving non-rating fields for gameId:', itemToSaveCloned.Id);
+  
+  return debouncedSaveAnnotation(itemToSaveCloned);
 }
 
 // Helper functions

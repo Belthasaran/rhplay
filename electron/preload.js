@@ -841,6 +841,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   publishProfileToNostr: (params) => ipcRenderer.invoke('online:publish-profile-to-nostr', params),
   
+  // Check if user has profile and Nostr keypair for publishing
+  checkProfileForPublishing: () => ipcRenderer.invoke('online:check-profile-for-publishing'),
+  
+  // Publish ratings to Nostr as NIP-33 event
+  publishRatingsToNostr: (params) => ipcRenderer.invoke('online:publish-ratings-to-nostr', params),
+  
   // User Op keypair operations (profile-bound admin keypairs)
   listUserOpKeypairs: (profileUuid) => ipcRenderer.invoke('online:user-op-keypairs:list', { profileUuid }),
   getUserOpKeypair: (keypairUuid) => ipcRenderer.invoke('online:user-op-keypair:get', { keypairUuid }),

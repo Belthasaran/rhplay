@@ -2565,6 +2565,7 @@
                   <option value="steam">Steam Name</option>
                   <option value="playtracker">Playtracker Name</option>
                   <option value="gamerprofiles">Gamerprofiles Name</option>
+                  <option value="github">Github Username</option>
                 </select>
                 <input 
                   type="text" 
@@ -2800,6 +2801,7 @@
                   <option value="steam">Steam Name</option>
                   <option value="playtracker">Playtracker Name</option>
                   <option value="gamerprofiles">Gamerprofiles Name</option>
+                  <option value="github">Github Username</option>
                 </select>
                 <input 
                   type="text" 
@@ -7445,7 +7447,7 @@ type Keypair = {
   createdAt?: string; // ISO timestamp
 };
 
-type SocialIdType = 'discord' | 'twitch' | 'smwcentral' | 'youtube' | 'keyoxide' | 'steam' | 'playtracker' | 'gamerprofiles';
+type SocialIdType = 'discord' | 'twitch' | 'smwcentral' | 'youtube' | 'keyoxide' | 'steam' | 'playtracker' | 'gamerprofiles' | 'github';
 type SocialId = {
   type: SocialIdType;
   value: string;
@@ -11966,21 +11968,15 @@ function validateUsername() {
     return;
   }
   
-  // Must be lowercase
-  if (username !== username.toLowerCase()) {
-    usernameError.value = 'Username must be lowercase';
-    return;
-  }
-  
-  // Must start with letter or underscore
-  if (!/^[a-z_]/.test(username)) {
+  // Must start with letter or underscore (case-insensitive)
+  if (!/^[a-zA-Z_]/.test(username)) {
     usernameError.value = 'Username must start with a letter or underscore';
     return;
   }
   
-  // Only US alphanumeric and underscore, 4-25 characters
-  if (!/^[a-z0-9_]{4,25}$/.test(username)) {
-    usernameError.value = 'Username must be 4-25 characters, lowercase letters, numbers, and underscores only';
+  // Only alphanumeric and underscore, 4-25 characters (case-insensitive)
+  if (!/^[a-zA-Z0-9_]{4,25}$/.test(username)) {
+    usernameError.value = 'Username must be 4-25 characters, letters, numbers, and underscores only';
     return;
   }
   

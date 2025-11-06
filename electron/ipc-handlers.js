@@ -3617,6 +3617,7 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profile:switch', async (event, { profileId }) => {
     try {
+      console.log(`[Profile Switch] Switching to profile: ${profileId}`);
       const db = dbManager.getConnection('clientdata');
       const crypto = require('crypto');
       
@@ -3630,14 +3631,18 @@ function registerDatabaseHandlers(dbManager) {
       `).get('online_current_profile_id');
       const currentProfileId = currentProfileIdRow?.csetting_value || null;
       
+      console.log(`[Profile Switch] Current profile ID: ${currentProfileId}, Target profile ID: ${profileId}`);
+      
       // If switching to the same profile, do nothing
       if (profileId === currentProfileId) {
+        console.log(`[Profile Switch] Already on target profile, skipping switch`);
         return { success: true, profile: currentProfile };
       }
       
       // Get keyguard key for encryption
       const keyguardKey = getKeyguardKey(event);
       if (!keyguardKey) {
+        console.log(`[Profile Switch] Profile Guard not unlocked, cannot switch`);
         return { success: false, error: 'Profile Guard must be unlocked to switch profiles' };
       }
       
@@ -3799,6 +3804,8 @@ function registerDatabaseHandlers(dbManager) {
         VALUES (?, ?, ?)
         ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
       `).run(uuid4, 'online_current_profile_id', profileId);
+      
+      console.log(`[Profile Switch] Updated online_current_profile_id to: ${profileId}`);
       
       return { success: true, profile: targetProfile };
     } catch (error) {
@@ -4414,8 +4421,8 @@ function registerDatabaseHandlers(dbManager) {
         ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
       `).run(uuid2, 'online_profile', JSON.stringify(profileToSave));
       
-      // Update current profile ID if not set
-      if (!currentProfileId && profile.profileId) {
+      // Always update current profile ID to match the profile being saved
+      if (profile.profileId) {
         const uuid3 = crypto.randomUUID();
         db.prepare(`
           INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
@@ -8060,7 +8067,7 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Profile Guard not unlocked' };
       }
       
-      // Get the current profile from csettings
+      // Get the current profile ID
       const currentProfileIdRow = db.prepare(`
         SELECT csetting_value FROM csettings WHERE csetting_name = ?
       `).get('online_current_profile_id');
@@ -8071,16 +8078,33 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'No current profile found' };
       }
       
-      // Load profile from csettings (use 'online_profile' not 'online_current_profile')
-      const profileJson = db.prepare(`
+      // Load full profile from standby profiles (which has encrypted private keys)
+      const standbyProfilesRow = db.prepare(`
         SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_profile');
+      `).get('online_standby_profiles');
       
-      if (!profileJson) {
-        return { success: false, error: 'Profile not found' };
+      let profile = null;
+      if (standbyProfilesRow) {
+        try {
+          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+          const iv = Buffer.from(encryptedData.iv, 'hex');
+          const encrypted = Buffer.from(encryptedData.data, 'hex');
+          
+          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+          let decrypted = decipher.update(encrypted);
+          decrypted = Buffer.concat([decrypted, decipher.final()]);
+          
+          const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+          profile = standbyProfiles.find((p) => p.profileId === currentProfileId);
+        } catch (error) {
+          console.error('Error decrypting standby profiles:', error);
+          return { success: false, error: `Cannot decrypt standby profiles: ${error.message}` };
+        }
       }
       
-      const profile = JSON.parse(profileJson.csetting_value);
+      if (!profile) {
+        return { success: false, error: 'Profile not found in standby profiles' };
+      }
       
       // Get the primary keypair - must be Nostr type
       if (!profile.primaryKeypair) {

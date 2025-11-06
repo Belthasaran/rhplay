@@ -3839,10 +3839,62 @@ function registerDatabaseHandlers(dbManager) {
       const profileFp = await calculateProfileFp(profileData.profileId);
       profileData.fp = profileFp;
       
+      // Save to standby profiles first (with full private keys)
+      const standbyProfilesRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('online_standby_profiles');
+      
+      let standbyProfiles = [];
+      if (standbyProfilesRow) {
+        try {
+          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
+          const iv = Buffer.from(encryptedData.iv, 'hex');
+          const encrypted = Buffer.from(encryptedData.data, 'hex');
+          
+          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+          let decrypted = decipher.update(encrypted);
+          decrypted = Buffer.concat([decrypted, decipher.final()]);
+          
+          standbyProfiles = JSON.parse(decrypted.toString('utf8'));
+        } catch (error) {
+          console.error('Error decrypting standby profiles:', error);
+          standbyProfiles = [];
+        }
+      }
+      
+      // Check if profile already exists in standby
+      const existingIndex = standbyProfiles.findIndex((p) => p.profileId === profileData.profileId);
+      if (existingIndex >= 0) {
+        // Update existing profile
+        standbyProfiles[existingIndex] = profileData;
+      } else {
+        // Add new profile
+        standbyProfiles.push(profileData);
+      }
+      
+      // Encrypt and save standby profiles
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+      const standbyProfilesJson = JSON.stringify(standbyProfiles);
+      let encrypted = cipher.update(standbyProfilesJson, 'utf8');
+      encrypted = Buffer.concat([encrypted, cipher.final()]);
+      
+      const encryptedData = {
+        iv: iv.toString('hex'),
+        data: encrypted.toString('hex')
+      };
+      
+      const uuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+      
       // If no current profile, make this the current profile
       if (!hasCurrentProfile) {
         const profileToSave = JSON.parse(JSON.stringify(profileData));
-        // Remove private keys before saving
+        // Remove private keys before saving to online_profile
         if (profileToSave.primaryKeypair?.privateKey) {
           delete profileToSave.primaryKeypair.privateKey;
         }
@@ -3857,67 +3909,23 @@ function registerDatabaseHandlers(dbManager) {
           });
         }
         
-        const uuid = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
-        
         const uuid2 = crypto.randomUUID();
         db.prepare(`
           INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
           VALUES (?, ?, ?)
           ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid2, 'online_current_profile_id', profileData.profileId);
+        `).run(uuid2, 'online_profile', JSON.stringify(profileToSave));
         
-        return { success: true, profile: profileData, isCurrent: true };
-      } else {
-        // Add to standby profiles
-        const standbyProfilesRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_standby_profiles');
-        
-        let standbyProfiles = [];
-        if (standbyProfilesRow) {
-          try {
-            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-            const iv = Buffer.from(encryptedData.iv, 'hex');
-            const encrypted = Buffer.from(encryptedData.data, 'hex');
-            
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-          } catch (error) {
-            console.error('Error decrypting standby profiles:', error);
-            standbyProfiles = [];
-          }
-        }
-        
-        // Add new profile
-        standbyProfiles.push(profileData);
-        
-        // Encrypt and save
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-        const standbyProfilesJson = JSON.stringify(standbyProfiles);
-        let encrypted = cipher.update(standbyProfilesJson, 'utf8');
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        
-        const encryptedData = {
-          iv: iv.toString('hex'),
-          data: encrypted.toString('hex')
-        };
-        
-        const uuid = crypto.randomUUID();
+        const uuid3 = crypto.randomUUID();
         db.prepare(`
           INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
           VALUES (?, ?, ?)
           ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+        `).run(uuid3, 'online_current_profile_id', profileData.profileId);
         
+        return { success: true, profile: profileData, isCurrent: true };
+      } else {
+        // Profile already saved to standby profiles above, just return success
         return { success: true, profile: profileData, isCurrent: false };
       }
     } catch (error) {
@@ -8106,12 +8114,17 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Profile not found in standby profiles' };
       }
       
+      console.log(`[Publish Ratings] Found profile: ${profile.profileId}, has primaryKeypair: ${!!profile.primaryKeypair}`);
+      
       // Get the primary keypair - must be Nostr type
       if (!profile.primaryKeypair) {
         return { success: false, error: 'Profile has no primary keypair' };
       }
       
       const primaryKeypair = profile.primaryKeypair;
+      
+      console.log(`[Publish Ratings] Primary keypair type: ${primaryKeypair.type}, encrypted: ${primaryKeypair.encrypted}, has privateKey: ${!!primaryKeypair.privateKey}`);
+      console.log(`[Publish Ratings] Private key value type: ${typeof primaryKeypair.privateKey}, length: ${primaryKeypair.privateKey?.length || 0}`);
       
       if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
         return { success: false, error: 'Primary keypair must be Nostr type to publish ratings' };
@@ -8120,25 +8133,42 @@ function registerDatabaseHandlers(dbManager) {
       // Decrypt the private key
       let privateKeyHex;
       try {
-        if (!primaryKeypair.encrypted || !primaryKeypair.privateKey) {
+        // Check if private key exists and is encrypted
+        if (!primaryKeypair.privateKey) {
+          console.log(`[Publish Ratings] Private key is missing`);
           return { success: false, error: 'Private key not available or not encrypted' };
         }
         
-        // privateKey is stored as encrypted string in format "iv:encrypted"
-        const parts = primaryKeypair.privateKey.split(':');
-        if (parts.length !== 2) {
-          return { success: false, error: 'Invalid encrypted private key format' };
+        // Check if encrypted flag is set (if not, the key might be stored unencrypted or in a different format)
+        if (!primaryKeypair.encrypted) {
+          console.log(`[Publish Ratings] Private key is not marked as encrypted, checking format...`);
+          // If not encrypted, it might be stored as hex directly
+          if (typeof primaryKeypair.privateKey === 'string' && /^[0-9a-fA-F]+$/.test(primaryKeypair.privateKey)) {
+            privateKeyHex = primaryKeypair.privateKey;
+            console.log(`[Publish Ratings] Using unencrypted private key as hex`);
+          } else {
+            return { success: false, error: 'Private key not available or not encrypted' };
+          }
+        } else {
+          // privateKey is stored as encrypted string in format "iv:encrypted"
+          const parts = primaryKeypair.privateKey.split(':');
+          if (parts.length !== 2) {
+            console.log(`[Publish Ratings] Invalid encrypted private key format, parts.length: ${parts.length}`);
+            return { success: false, error: 'Invalid encrypted private key format' };
+          }
+          
+          const iv = Buffer.from(parts[0], 'hex');
+          const encrypted = Buffer.from(parts[1], 'hex');
+          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+          let decrypted = decipher.update(encrypted);
+          decrypted = Buffer.concat([decrypted, decipher.final()]);
+          
+          // For Nostr keys, private key is stored as hex
+          privateKeyHex = decrypted.toString('hex');
+          console.log(`[Publish Ratings] Successfully decrypted private key, length: ${privateKeyHex.length}`);
         }
-        
-        const iv = Buffer.from(parts[0], 'hex');
-        const encrypted = Buffer.from(parts[1], 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-        let decrypted = decipher.update(encrypted);
-        decrypted = Buffer.concat([decrypted, decipher.final()]);
-        
-        // For Nostr keys, private key is stored as hex
-        privateKeyHex = decrypted.toString('hex');
       } catch (err) {
+        console.error(`[Publish Ratings] Error decrypting private key:`, err);
         return { success: false, error: `Cannot decrypt primary keypair: ${err.message}` };
       }
       

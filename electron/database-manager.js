@@ -18,6 +18,8 @@ class DatabaseManager {
     // Set to true for GUI mode, false for external scripts
     this.autoApplyMigrations = options.autoApplyMigrations || false;
     this.migrationsApplied = new Set(); // Track which DBs have had migrations applied
+    this.trustDeclarationsImported = false;
+    this.tableColumnCache = {};
     console.log('Database paths:', this.paths);
     if (this.autoApplyMigrations) {
       console.log('Auto-apply migrations: ENABLED');
@@ -201,6 +203,11 @@ class DatabaseManager {
       
       // Store path for reference
       this.connections[dbName].dbPath = dbPath;
+
+      if (dbName === 'clientdata' && !this.trustDeclarationsImported) {
+        this.trustDeclarationsImported = true;
+        this.autoImportTrustDeclarations(this.connections[dbName]);
+      }
     }
     
     return this.connections[dbName];
@@ -404,6 +411,156 @@ class DatabaseManager {
    */
   detachClientData(db) {
     db.exec('DETACH DATABASE clientdata');
+  }
+
+  getTableColumns(db, tableName) {
+    if (!this.tableColumnCache[tableName]) {
+      try {
+        const rows = db.prepare(`PRAGMA table_info(${tableName})`).all();
+        this.tableColumnCache[tableName] = rows.map((row) => row.name);
+      } catch (error) {
+        console.warn(`Failed to fetch columns for table ${tableName}:`, error.message);
+        this.tableColumnCache[tableName] = [];
+      }
+    }
+    return this.tableColumnCache[tableName];
+  }
+
+  importTrustDeclarationsFromData(data, options = {}) {
+    if (!data) {
+      return { adminDeclarationsImported: 0, trustDeclarationsImported: 0 };
+    }
+    const db = options.db || this.getConnection('clientdata');
+    const adminEntries = [];
+    const legacyEntries = [];
+
+    const addEntries = (entries, target) => {
+      if (Array.isArray(entries)) {
+        entries.forEach((entry) => {
+          if (entry && typeof entry === 'object') {
+            target.push(entry);
+          }
+        });
+      }
+    };
+
+    if (Array.isArray(data)) {
+      addEntries(data, adminEntries);
+    } else if (typeof data === 'object') {
+      addEntries(data.admindeclarations, adminEntries);
+      addEntries(data.adminDeclarations, adminEntries);
+      addEntries(data.declarations, adminEntries);
+      addEntries(data.trust_declarations, legacyEntries);
+      addEntries(data.trustDeclarations, legacyEntries);
+      if (!adminEntries.length && Array.isArray(data.entries)) {
+        addEntries(data.entries, adminEntries);
+      }
+    }
+
+    const results = { adminDeclarationsImported: 0, trustDeclarationsImported: 0 };
+
+    const sanitizeEntry = (entry, tableColumns) => {
+      const sanitized = {};
+      tableColumns.forEach((col) => {
+        if (entry[col] !== undefined) {
+          let value = entry[col];
+          if (value && typeof value === 'object' && !Buffer.isBuffer(value)) {
+            value = JSON.stringify(value);
+          }
+          sanitized[col] = value;
+        }
+      });
+      return sanitized;
+    };
+
+    const insertEntries = (entries, tableName, keyField, counterKey) => {
+      if (!entries.length) {
+        return;
+      }
+      const columns = this.getTableColumns(db, tableName);
+      if (!columns || !columns.length || !columns.includes(keyField)) {
+        return;
+      }
+      const insertTransaction = db.transaction(() => {
+        entries.forEach((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return;
+          }
+          const keyValue = entry[keyField];
+          if (!keyValue) {
+            return;
+          }
+          const existing = db.prepare(`SELECT 1 FROM ${tableName} WHERE ${keyField} = ?`).get(keyValue);
+          if (existing) {
+            return;
+          }
+          const sanitized = sanitizeEntry(entry, columns);
+          if (!sanitized[keyField]) {
+            return;
+          }
+          const cols = Object.keys(sanitized);
+          if (!cols.length) {
+            return;
+          }
+          const placeholders = cols.map(() => '?').join(', ');
+          const values = cols.map((col) => sanitized[col]);
+          const sql = `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`;
+          db.prepare(sql).run(values);
+          results[counterKey] = (results[counterKey] || 0) + 1;
+        });
+      });
+      insertTransaction();
+    };
+
+    insertEntries(adminEntries, 'admindeclarations', 'declaration_uuid', 'adminDeclarationsImported');
+    insertEntries(legacyEntries, 'trust_declarations', 'declaration_uuid', 'trustDeclarationsImported');
+
+    return results;
+  }
+
+  getTrustDeclarationFileCandidates(dbPath) {
+    const candidates = [];
+    const dbDir = dbPath ? path.dirname(dbPath) : null;
+    if (dbDir) {
+      candidates.push(path.join(dbDir, 'trustdecl.json'));
+    }
+    candidates.push(path.join(__dirname, 'trustdecl.json'));
+    if (process.resourcesPath) {
+      candidates.push(path.join(process.resourcesPath, 'trustdecl.json'));
+      candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'trustdecl.json'));
+      candidates.push(path.join(process.resourcesPath, 'electron', 'trustdecl.json'));
+    }
+    if (process.execPath) {
+      candidates.push(path.join(path.dirname(process.execPath), 'trustdecl.json'));
+    }
+    return [...new Set(candidates)];
+  }
+
+  autoImportTrustDeclarations(db) {
+    try {
+      const candidates = this.getTrustDeclarationFileCandidates(db ? db.dbPath : this.paths.clientdata);
+      const fs = require('fs');
+      for (const candidate of candidates) {
+        if (!candidate) {
+          continue;
+        }
+        try {
+          if (fs.existsSync(candidate)) {
+            console.log(`Auto-importing trust declarations from ${candidate}`);
+            const content = fs.readFileSync(candidate, 'utf8');
+            const data = JSON.parse(content);
+            const result = this.importTrustDeclarationsFromData(data, { db, source: candidate });
+            console.log(`Trust declarations import summary: admindeclarations=${result.adminDeclarationsImported || 0}, legacy=${result.trustDeclarationsImported || 0}`);
+            break;
+          }
+        } catch (fileError) {
+          console.warn(`Failed to import trust declarations from ${candidate}:`, fileError.message);
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error('Error during automatic trust declarations import:', error);
+    }
   }
 
   /**

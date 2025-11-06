@@ -499,6 +499,11 @@
                       </div>
                     </div>
                   </div>
+
+                <div class="trust-declarations-actions">
+                  <button class="btn-secondary" @click="importTrustDeclarations">Import</button>
+                  <button class="btn-primary" @click="exportAllTrustDeclarations">Export All</button>
+                </div>
                 </div>
               </div>
               <!-- End Trust Declarations Tab -->
@@ -2305,11 +2310,11 @@
   </div>
 
   <!-- Profile Guard Setup Modal -->
-  <div v-if="showProfileGuardSetupModal" class="modal-backdrop" @click.self="showProfileGuardSetupModal = false">
+  <div v-if="showProfileGuardSetupModal" class="modal-backdrop" :class="{ 'welcome-wizard-nested': welcomeWizardOpen }" @click.self="welcomeWizardOpen ? null : (showProfileGuardSetupModal = false)">
     <div class="modal">
       <header class="modal-header">
         <h3>Set Up Profile Guard</h3>
-        <button class="close" @click="showProfileGuardSetupModal = false">✕</button>
+        <button v-if="!welcomeWizardOpen" class="close" @click="showProfileGuardSetupModal = false">✕</button>
       </header>
       <section class="modal-body">
         <div class="modal-field">
@@ -2351,6 +2356,62 @@
             Set Up Profile Guard
           </button>
           <button @click="showProfileGuardSetupModal = false" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- WelcomeWizard Modal -->
+  <!-- This modal guides users through required setup tasks on startup -->
+  <div v-if="welcomeWizardOpen" class="modal-backdrop welcome-wizard-blocking" @click.stop>
+    <div class="modal welcome-wizard-modal" @click.stop>
+      <header class="modal-header">
+        <h3>Welcome to RHTools!</h3>
+        <p class="modal-subtitle">Let's get you set up</p>
+      </header>
+      <section class="modal-body">
+        <!-- Progress indicator -->
+        <div class="welcome-wizard-progress">
+          <p class="progress-text">
+            Task {{ currentWelcomeTaskIndex + 1 }} of {{ welcomeTasks.length }}
+          </p>
+          <div class="progress-bar">
+            <div 
+              class="progress-fill" 
+              :style="{ width: ((currentWelcomeTaskIndex + 1) / welcomeTasks.length * 100) + '%' }"
+            ></div>
+          </div>
+        </div>
+        
+        <!-- Task content -->
+        <div class="welcome-wizard-content">
+          <!-- Setup Keyguard Task -->
+          <div v-if="currentWelcomeTask === 'setup-keyguard'" class="welcome-task-content">
+            <h4>Set Up Profile Guard</h4>
+            <p>Profile Guard encrypts your secret keys and protects your profile data. You'll need to set a master password.</p>
+            <!-- Profile Guard Setup Modal will be shown on top of this -->
+            <div v-if="!showProfileGuardSetupModal" class="welcome-task-action">
+              <button @click="setupProfileGuard" class="btn-primary">Set Up Profile Guard</button>
+            </div>
+            <!-- Show setup modal when button is clicked -->
+            <div v-if="showProfileGuardSetupModal" class="welcome-task-modal">
+              <!-- Profile Guard Setup content is already in the template above -->
+            </div>
+          </div>
+          
+          <!-- Unlock Keyguard Task -->
+          <div v-if="currentWelcomeTask === 'unlock-keyguard'" class="welcome-task-content">
+            <h4>Unlock Profile Guard</h4>
+            <p>Please enter your master password to unlock Profile Guard and continue.</p>
+            <!-- Profile Guard Password Prompt will be shown on top of this -->
+            <div v-if="!showProfileGuardPasswordPrompt" class="welcome-task-action">
+              <button @click="showProfileGuardPasswordPrompt = true" class="btn-primary">Unlock Profile Guard</button>
+            </div>
+            <!-- Show password prompt when button is clicked -->
+            <div v-if="showProfileGuardPasswordPrompt" class="welcome-task-modal">
+              <!-- Profile Guard Password Prompt content is already in the template above -->
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -7707,6 +7768,20 @@ const profileGuardUnlocked = ref(false);
 const profileGuardForgotPassword = ref(false);
 const profileGuardPasswordInput = ref<HTMLInputElement | null>(null);
 
+// WelcomeWizard state
+const welcomeWizardOpen = ref(false);
+const welcomeTasks = ref<string[]>([]);
+const currentWelcomeTaskIndex = ref(0);
+const welcomeTaskStatus = ref<Record<string, 'pending' | 'in-progress' | 'completed'>>({});
+
+// Computed property for current welcome task
+const currentWelcomeTask = computed(() => {
+  if (welcomeTasks.value.length === 0 || currentWelcomeTaskIndex.value >= welcomeTasks.value.length) {
+    return null;
+  }
+  return welcomeTasks.value[currentWelcomeTaskIndex.value];
+});
+
 // Profile Creation Wizard state
 const showProfileDetailsModal = ref(false);
 const showProfileCreationWizard = ref(false);
@@ -9592,13 +9667,51 @@ async function exportTrustDeclaration() {
   alert('Exporting trust declarations is not yet implemented');
 }
 
-async function importTrustDeclarationBackup() {
+async function exportAllTrustDeclarations() {
   if (!isElectronAvailable()) {
     return;
   }
   
-  // TODO: Implement import logic
-  alert('Importing trust declarations is not yet implemented');
+  try {
+    const result = await (window as any).electronAPI.exportAllTrustDeclarations();
+    if (!result || result.canceled) {
+      return;
+    }
+    if (!result.success) {
+      alert(`Failed to export trust declarations: ${result.error || 'Unknown error'}`);
+      return;
+    }
+    alert(`Exported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations to ${result.filePath}`);
+  } catch (error) {
+    console.error('Error exporting trust declarations:', error);
+    alert(`Error exporting trust declarations: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function importTrustDeclarations() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.importTrustDeclarations();
+    if (!result || result.canceled) {
+      return;
+    }
+    if (!result.success) {
+      alert(`Failed to import trust declarations: ${result.error || 'Unknown error'}`);
+      return;
+    }
+    alert(`Imported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations${result.filePath ? ` from ${result.filePath}` : ''}.`);
+    await loadTrustDeclarationsList();
+  } catch (error) {
+    console.error('Error importing trust declarations:', error);
+    alert(`Error importing trust declarations: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function importTrustDeclarationBackup() {
+  await importTrustDeclarations();
 }
 
 async function deleteTrustDeclaration() {
@@ -11527,13 +11640,16 @@ async function checkProfileGuardStatus() {
     if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
       if (profileGuardHighSecurityMode.value) {
         // High Security Mode: Always prompt for password
-        showProfileGuardPasswordPrompt.value = true;
-        // Auto-focus password input when modal opens
-        nextTick(() => {
-          if (profileGuardPasswordInput.value) {
-            profileGuardPasswordInput.value.focus();
-          }
-        });
+        // If WelcomeWizard is open, don't show standalone modal
+        if (!welcomeWizardOpen.value) {
+          showProfileGuardPasswordPrompt.value = true;
+          // Auto-focus password input when modal opens
+          nextTick(() => {
+            if (profileGuardPasswordInput.value) {
+              profileGuardPasswordInput.value.focus();
+            }
+          });
+        }
       } else if (!profileGuardHighSecurityMode.value) {
         // Normal mode: Try to unlock automatically
         try {
@@ -11545,17 +11661,8 @@ async function checkProfileGuardStatus() {
         await checkAndCreateProfileIfNeeded();
       } else {
         // If auto-unlock failed, prompt for password
-        showProfileGuardPasswordPrompt.value = true;
-        // Auto-focus password input when modal opens
-        nextTick(() => {
-          if (profileGuardPasswordInput.value) {
-            profileGuardPasswordInput.value.focus();
-          }
-        });
-      }
-        } catch (error) {
-          console.error('Error auto-unlocking Profile Guard:', error);
-          // If auto-unlock failed, prompt for password
+        // If WelcomeWizard is open, don't show standalone modal
+        if (!welcomeWizardOpen.value) {
           showProfileGuardPasswordPrompt.value = true;
           // Auto-focus password input when modal opens
           nextTick(() => {
@@ -11565,10 +11672,106 @@ async function checkProfileGuardStatus() {
           });
         }
       }
+        } catch (error) {
+          console.error('Error auto-unlocking Profile Guard:', error);
+          // If auto-unlock failed, prompt for password
+          // If WelcomeWizard is open, don't show standalone modal
+          if (!welcomeWizardOpen.value) {
+            showProfileGuardPasswordPrompt.value = true;
+            // Auto-focus password input when modal opens
+            nextTick(() => {
+              if (profileGuardPasswordInput.value) {
+                profileGuardPasswordInput.value.focus();
+              }
+            });
+          }
+        }
+      }
     }
   } catch (error) {
     console.error('Error checking Profile Guard status:', error);
     profileGuardEnabled.value = false;
+  }
+}
+
+/**
+ * Check for welcome tasks that need to be completed on startup
+ */
+async function checkWelcomeTasks() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  const tasks: string[] = [];
+  
+  try {
+    // Check Profile Guard status
+    const status = await (window as any).electronAPI.checkProfileGuard();
+    profileGuardEnabled.value = status.enabled || false;
+    profileGuardHighSecurityMode.value = status.highSecurityMode || false;
+    
+    // Task 1: Setup Keyguard (if not set up)
+    if (!profileGuardEnabled.value) {
+      tasks.push('setup-keyguard');
+    } else {
+      // Task 2: Unlock Keyguard (if set up but not unlocked)
+      // Check if unlocked by trying to get keyguard key
+      try {
+        const unlockResult = await (window as any).electronAPI.unlockProfileGuard();
+        if (unlockResult.success) {
+          profileGuardUnlocked.value = true;
+        } else {
+          // Not unlocked - need to unlock
+          tasks.push('unlock-keyguard');
+        }
+      } catch (error) {
+        // Not unlocked - need to unlock
+        tasks.push('unlock-keyguard');
+      }
+    }
+    
+    // If we have tasks, open WelcomeWizard
+    if (tasks.length > 0) {
+      welcomeTasks.value = tasks;
+      currentWelcomeTaskIndex.value = 0;
+      welcomeWizardOpen.value = true;
+      
+      // Initialize task status
+      tasks.forEach(task => {
+        welcomeTaskStatus.value[task] = 'pending';
+      });
+      
+      // Mark first task as in-progress
+      if (tasks.length > 0) {
+        welcomeTaskStatus.value[tasks[0]] = 'in-progress';
+      }
+    }
+  } catch (error) {
+    console.error('Error checking welcome tasks:', error);
+  }
+}
+
+/**
+ * Advance to next welcome task
+ */
+function advanceWelcomeTask() {
+  const currentTask = currentWelcomeTask.value;
+  if (currentTask) {
+    // Mark current task as completed
+    welcomeTaskStatus.value[currentTask] = 'completed';
+    
+    // Move to next task
+    if (currentWelcomeTaskIndex.value < welcomeTasks.value.length - 1) {
+      currentWelcomeTaskIndex.value++;
+      const nextTask = welcomeTasks.value[currentWelcomeTaskIndex.value];
+      welcomeTaskStatus.value[nextTask] = 'in-progress';
+    } else {
+      // All tasks completed
+      welcomeWizardOpen.value = false;
+      welcomeTasks.value = [];
+      currentWelcomeTaskIndex.value = 0;
+      welcomeTaskStatus.value = {};
+    }
   }
 }
 
@@ -11607,6 +11810,11 @@ async function confirmSetupProfileGuard() {
       showProfileGuardSetupModal.value = false;
       profileGuardPassword.value = '';
       profileGuardPasswordConfirm.value = '';
+      
+      // If WelcomeWizard is open, advance to next task
+      if (welcomeWizardOpen.value && currentWelcomeTask.value === 'setup-keyguard') {
+        advanceWelcomeTask();
+      }
       
       // Check if profile needs to be created after setup
       await checkAndCreateProfileIfNeeded();
@@ -11679,6 +11887,11 @@ async function confirmProfileGuardPassword() {
       profileGuardPasswordPrompt.value = '';
       profileGuardPasswordError.value = '';
       profileGuardForgotPassword.value = false;
+      
+      // If WelcomeWizard is open, advance to next task
+      if (welcomeWizardOpen.value && currentWelcomeTask.value === 'unlock-keyguard') {
+        advanceWelcomeTask();
+      }
       
       // Check if profile needs to be created
       await checkAndCreateProfileIfNeeded();
@@ -12169,16 +12382,23 @@ async function completeProfileCreation() {
   }
   
   try {
+    const trimString = (value) => {
+      if (typeof value !== 'string') {
+        return '';
+      }
+      return value.trim();
+    };
+
     // First create the profile with basic info
     const profileData = {
       profileId: profileCreationData.value.profileId,
-      username: profileCreationData.value.username.trim().toLowerCase(),
-      displayName: profileCreationData.value.displayName.trim(),
-      homepage: profileCreationData.value.homepage.trim() || undefined,
+      username: trimString(profileCreationData.value.username).toLowerCase(),
+      displayName: trimString(profileCreationData.value.displayName),
+      homepage: trimString(profileCreationData.value.homepage) || undefined,
       socialIds: profileCreationData.value.socialIds,
-      bio: profileCreationData.value.bio.trim() || undefined,
-      pictureUrl: profileCreationData.value.pictureUrl.trim() || undefined,
-      bannerUrl: profileCreationData.value.bannerUrl.trim() || undefined,
+      bio: trimString(profileCreationData.value.bio) || undefined,
+      pictureUrl: trimString(profileCreationData.value.pictureUrl) || undefined,
+      bannerUrl: trimString(profileCreationData.value.bannerUrl) || undefined,
       primaryKeypair: null, // Will be created next
       additionalKeypairs: [],
       adminKeypairs: [],
@@ -16415,6 +16635,11 @@ onMounted(async () => {
     }
   }
   
+  // Check for welcome tasks (must be done after settings are loaded)
+  if (isElectronAvailable()) {
+    await checkWelcomeTasks();
+  }
+  
   console.log('=== INITIALIZATION COMPLETE ===');
 });
 
@@ -19925,8 +20150,92 @@ button:disabled {
   z-index: 10000 !important;
 }
 
+.welcome-wizard-blocking {
+  pointer-events: all !important;
+  z-index: 9999 !important;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.welcome-wizard-modal {
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+}
+
+.welcome-wizard-progress {
+  margin-bottom: 30px;
+}
+
+.welcome-wizard-progress .progress-text {
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.welcome-wizard-progress .progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.welcome-wizard-progress .progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+}
+
+.welcome-wizard-content {
+  min-height: 200px;
+}
+
+.welcome-task-content {
+  text-align: center;
+}
+
+.welcome-task-content h4 {
+  margin-bottom: 15px;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.welcome-task-content p {
+  margin-bottom: 25px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.welcome-task-action {
+  margin-top: 30px;
+}
+
+.welcome-task-action button {
+  padding: 12px 30px;
+  font-size: 16px;
+}
+
+.welcome-wizard-nested {
+  z-index: 10001 !important;
+}
+
+.modal-subtitle {
+  margin-top: 5px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
 .profile-guard-blocking .modal {
   pointer-events: all;
+}
+
+.trust-declarations-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .modal-warning-text {

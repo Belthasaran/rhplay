@@ -573,6 +573,24 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_028_user_profiles',
+      description: 'Create user_profiles table for storing profile JSON and Nostr version',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/028_clientdata_user_profiles.sql'),
+      skipIf(db) {
+        return tableExists(db, 'user_profiles');
+      },
+    },
+    {
+      id: 'clientdata_029_profile_keypairs',
+      description: 'Create profile_keypairs table (mirrors admin_keypairs structure)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/029_clientdata_profile_keypairs.sql'),
+      skipIf(db) {
+        return tableExists(db, 'profile_keypairs');
+      },
+    },
   ],
   patchbin: [],
 };

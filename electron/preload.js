@@ -822,6 +822,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createTrustDeclaration: (declarationData) => ipcRenderer.invoke('online:trust-declaration:create', declarationData),
   updateTrustDeclarationMetadata: (params) => ipcRenderer.invoke('online:trust-declaration:update-metadata', params),
   deleteTrustDeclaration: (params) => ipcRenderer.invoke('online:trust-declaration:delete', params),
+  exportAllTrustDeclarations: () => ipcRenderer.invoke('online:trust-declarations:export-all'),
+  importTrustDeclarations: () => ipcRenderer.invoke('online:trust-declarations:import'),
   
   // Admin Declaration operations (for admindeclarations table)
   saveAdminDeclaration: (declarationData) => ipcRenderer.invoke('online:admin-declaration:save', declarationData),

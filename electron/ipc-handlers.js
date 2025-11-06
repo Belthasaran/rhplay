@@ -29,6 +29,9 @@ function getKeyguardKey(event) {
  * @param {DatabaseManager} dbManager - Database manager instance
  */
 function registerDatabaseHandlers(dbManager) {
+  // Import OnlineProfileManager for profile management
+  const OnlineProfileManager = require('./utils/OnlineProfileManager');
+  
   const broadcastUsb2snesSshStatus = (status) => {
     try {
       const windows = BrowserWindow.getAllWindows();
@@ -3443,89 +3446,34 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profile:get', async (event) => {
     try {
-      const db = dbManager.getConnection('clientdata');
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      // Load current profile ID
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
+      // Try to get from database first
+      let profile = profileManager.getCurrentProfile();
       
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
-      // Load profile from csettings
-      const profileJson = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_profile');
-      
-      if (profileJson) {
-        const profile = JSON.parse(profileJson.csetting_value);
-        
-        // Ensure current profile exists in standby profiles
-        const keyguardKey = getKeyguardKey(event);
-        if (keyguardKey && currentProfileId) {
-          // Get standby profiles
-          const standbyProfilesRow = db.prepare(`
-            SELECT csetting_value FROM csettings WHERE csetting_name = ?
-          `).get('online_standby_profiles');
-          
-          let standbyProfiles = [];
-          let needsUpdate = false;
-          
-          if (standbyProfilesRow) {
-            try {
-              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-              const iv = Buffer.from(encryptedData.iv, 'hex');
-              const encrypted = Buffer.from(encryptedData.data, 'hex');
-              
-              const crypto = require('crypto');
-              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-              let decrypted = decipher.update(encrypted);
-              decrypted = Buffer.concat([decrypted, decipher.final()]);
-              
-              standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-            } catch (error) {
-              console.error('Error decrypting standby profiles:', error);
-              standbyProfiles = [];
+      // If not in database, try to migrate from csettings
+      if (!profile && keyguardKey) {
+        const currentProfileId = profileManager.getCurrentProfileId();
+        if (currentProfileId) {
+          try {
+            const migrationResult = profileManager.migrateProfileFromCsettings(currentProfileId);
+            if (migrationResult.success && !migrationResult.alreadyMigrated) {
+              profile = profileManager.getCurrentProfile();
             }
-          }
-          
-          // Check if current profile exists in standby
-          const existsInStandby = standbyProfiles.some((p) => p.profileId === currentProfileId);
-          
-          if (!existsInStandby) {
-            // Add current profile to standby (with full data from standby if available)
-            // For now, we'll add the profile as-is (may not have private keys, but that's OK)
-            standbyProfiles.push(profile);
-            needsUpdate = true;
-          }
-          
-          // Update standby profiles if needed
-          if (needsUpdate) {
-            const crypto = require('crypto');
-            const iv = crypto.randomBytes(16);
-            const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-            const standbyProfilesJson = JSON.stringify(standbyProfiles);
-            let encrypted = cipher.update(standbyProfilesJson, 'utf8');
-            encrypted = Buffer.concat([encrypted, cipher.final()]);
-            
-            const encryptedData = {
-              iv: iv.toString('hex'),
-              data: encrypted.toString('hex')
-            };
-            
-            const uuid = crypto.randomUUID();
-            db.prepare(`
-              INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-              VALUES (?, ?, ?)
-              ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-            `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+          } catch (migrationError) {
+            console.error('Error migrating profile from csettings:', migrationError);
           }
         }
-        
-        return profile;
       }
       
-      return null;
+      // Remove metadata before returning (for backward compatibility)
+      if (profile && profile._metadata) {
+        const { _metadata, ...profileWithoutMetadata } = profile;
+        return profileWithoutMetadata;
+      }
+      
+      return profile || null;
     } catch (error) {
       console.error('Error getting online profile:', error);
       return null;
@@ -3538,73 +3486,22 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profiles:list', async (event) => {
     try {
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      // Get current profile ID
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      // Get profiles from database
+      const profiles = profileManager.listProfiles();
       
-      // Get current profile
-      const currentProfileRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_profile');
-      
-      const profiles = [];
-      
-      // Add current profile if exists
-      if (currentProfileRow && currentProfileId) {
-        const currentProfile = JSON.parse(currentProfileRow.csetting_value);
-        profiles.push({
-          profileId: currentProfileId,
-          username: currentProfile.username || 'Unknown',
-          displayName: currentProfile.displayName || '',
-          isCurrent: true
-        });
-      }
-      
-      // Get standby profiles (encrypted)
-      const standbyProfilesRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_standby_profiles');
-      
-      if (standbyProfilesRow) {
-        const standbyProfilesJson = standbyProfilesRow.csetting_value;
-        
-        // Try to decrypt standby profiles
-        const keyguardKey = getKeyguardKey(event);
-        if (keyguardKey) {
-          try {
-            const encryptedData = JSON.parse(standbyProfilesJson);
-            const iv = Buffer.from(encryptedData.iv, 'hex');
-            const encrypted = Buffer.from(encryptedData.data, 'hex');
-            
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-            
-            // Add each standby profile (only metadata, not full profile)
-            standbyProfiles.forEach((profile) => {
-              if (profile.profileId !== currentProfileId) {
-                profiles.push({
-                  profileId: profile.profileId,
-                  username: profile.username || 'Unknown',
-                  displayName: profile.displayName || '',
-                  isCurrent: false
-                });
-              }
-            });
-          } catch (error) {
-            console.error('Error decrypting standby profiles:', error);
-          }
-        }
-      }
-      
-      return profiles;
+      // Map to expected format (remove metadata, add isCurrent flag)
+      return profiles.map(profile => {
+        const { _metadata, ...profileWithoutMetadata } = profile;
+        return {
+          profileId: profile.profileId || _metadata?.profileUuid,
+          username: profile.username || 'Unknown',
+          displayName: profile.displayName || '',
+          isCurrent: _metadata?.isCurrentProfile || false
+        };
+      });
     } catch (error) {
       console.error('Error listing profiles:', error);
       return [];
@@ -3618,26 +3515,6 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('online:profile:switch', async (event, { profileId }) => {
     try {
       console.log(`[Profile Switch] Switching to profile: ${profileId}`);
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
-      
-      // Get current profile
-      const currentProfileRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_profile');
-      const currentProfile = currentProfileRow ? JSON.parse(currentProfileRow.csetting_value) : null;
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
-      console.log(`[Profile Switch] Current profile ID: ${currentProfileId}, Target profile ID: ${profileId}`);
-      
-      // If switching to the same profile, do nothing
-      if (profileId === currentProfileId) {
-        console.log(`[Profile Switch] Already on target profile, skipping switch`);
-        return { success: true, profile: currentProfile };
-      }
       
       // Get keyguard key for encryption
       const keyguardKey = getKeyguardKey(event);
@@ -3646,95 +3523,48 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Profile Guard must be unlocked to switch profiles' };
       }
       
-      // Save current profile to standby profiles if it exists
-      // We need to get the full profile with private keys from somewhere
-      // For now, we'll need to load it differently - the current profile in DB may not have private keys
-      // Let's check if we need to get it from standby profiles first
-      if (currentProfile && currentProfileId) {
-        // Get existing standby profiles
-        const standbyProfilesRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_standby_profiles');
-        
-        let standbyProfiles = [];
-        if (standbyProfilesRow) {
-          try {
-            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-            const iv = Buffer.from(encryptedData.iv, 'hex');
-            const encrypted = Buffer.from(encryptedData.data, 'hex');
-            
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-          } catch (error) {
-            console.error('Error decrypting standby profiles:', error);
-            standbyProfiles = [];
-          }
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      console.log(`[Profile Switch] Current profile ID: ${currentProfileId}, Target profile ID: ${profileId}`);
+      
+      // If switching to the same profile, do nothing
+      if (profileId === currentProfileId) {
+        console.log(`[Profile Switch] Already on target profile, skipping switch`);
+        const profile = profileManager.getCurrentProfile();
+        // Remove metadata before returning
+        if (profile && profile._metadata) {
+          const { _metadata, ...profileWithoutMetadata } = profile;
+          return { success: true, profile: profileWithoutMetadata };
         }
-        
-        // Check if current profile exists in standby with full data
-        const fullCurrentProfile = standbyProfiles.find((p) => p.profileId === currentProfileId);
-        
-        // Remove profile from standby if it exists
-        standbyProfiles = standbyProfiles.filter((p) => p.profileId !== currentProfileId);
-        
-        // Use full profile if found, otherwise use current profile (may not have private keys)
-        const profileToSave = fullCurrentProfile || currentProfile;
-        
-        // Merge any updates from currentProfile into the full profile
-        if (fullCurrentProfile) {
-          // Update displayName, bio, etc. from currentProfile but keep private keys
-          Object.keys(currentProfile).forEach(key => {
-            if (key !== 'primaryKeypair' && key !== 'additionalKeypairs' && key !== 'adminKeypairs') {
-              profileToSave[key] = currentProfile[key];
-            }
-          });
-        }
-        
-        standbyProfiles.push(profileToSave);
-        
-        // Encrypt and save standby profiles
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-        const standbyProfilesJson = JSON.stringify(standbyProfiles);
-        let encrypted = cipher.update(standbyProfilesJson, 'utf8');
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        
-        const encryptedData = {
-          iv: iv.toString('hex'),
-          data: encrypted.toString('hex')
-        };
-        
-        const uuid = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
+        return { success: true, profile: profile };
       }
       
-      // Load the target profile from standby profiles
-      const standbyProfilesRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_standby_profiles');
+      // Save current profile to database if it exists (preserve any edits)
+      if (currentProfileId) {
+        const currentProfile = profileManager.getCurrentProfile();
+        if (currentProfile) {
+          // Save current profile to preserve any edits
+          try {
+            profileManager.saveProfile(currentProfile, false); // Don't mark as unpublished when switching
+          } catch (saveError) {
+            console.error('Error saving current profile before switch:', saveError);
+          }
+        }
+      }
       
-      let targetProfile = null;
-      if (standbyProfilesRow) {
+      // Load target profile from database
+      let targetProfile = profileManager.getProfile(profileId);
+      
+      // If not in database, try to migrate from csettings
+      if (!targetProfile) {
         try {
-          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-          const iv = Buffer.from(encryptedData.iv, 'hex');
-          const encrypted = Buffer.from(encryptedData.data, 'hex');
-          
-          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-          let decrypted = decipher.update(encrypted);
-          decrypted = Buffer.concat([decrypted, decipher.final()]);
-          
-          const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-          targetProfile = standbyProfiles.find((p) => p.profileId === profileId);
-        } catch (error) {
-          console.error('Error decrypting standby profiles:', error);
+          const migrationResult = profileManager.migrateProfileFromCsettings(profileId);
+          if (migrationResult.success && !migrationResult.alreadyMigrated) {
+            targetProfile = profileManager.getProfile(profileId);
+          }
+        } catch (migrationError) {
+          console.error('Error migrating target profile from csettings:', migrationError);
         }
       }
       
@@ -3742,70 +3572,19 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Profile not found' };
       }
       
-      // Remove target profile from standby
-      const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-      const iv = Buffer.from(encryptedData.iv, 'hex');
-      const encrypted = Buffer.from(encryptedData.data, 'hex');
+      // Set target profile as current
+      profileManager.setCurrentProfileId(profileId);
       
-      const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-      let decrypted = decipher.update(encrypted);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      
-      let standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-      standbyProfiles = standbyProfiles.filter((p) => p.profileId !== profileId);
-      
-      // Encrypt and save updated standby profiles
-      const newIv = crypto.randomBytes(16);
-      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, newIv);
-      const standbyProfilesJson = JSON.stringify(standbyProfiles);
-      let newEncrypted = cipher.update(standbyProfilesJson, 'utf8');
-      newEncrypted = Buffer.concat([newEncrypted, cipher.final()]);
-      
-      const newEncryptedData = {
-        iv: newIv.toString('hex'),
-        data: newEncrypted.toString('hex')
-      };
-      
-      const uuid2 = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid2, 'online_standby_profiles', JSON.stringify(newEncryptedData));
-      
-      // Save target profile as current
-      const profileToSave = JSON.parse(JSON.stringify(targetProfile));
-      // Remove private keys before saving (they should never leave the client)
-      if (profileToSave.primaryKeypair?.privateKey) {
-        delete profileToSave.primaryKeypair.privateKey;
-      }
-      if (profileToSave.additionalKeypairs) {
-        profileToSave.additionalKeypairs.forEach((kp) => {
-          if (kp.privateKey) delete kp.privateKey;
-        });
-      }
-      if (profileToSave.adminKeypairs) {
-        profileToSave.adminKeypairs.forEach((kp) => {
-          if (kp.privateKey) delete kp.privateKey;
-        });
-      }
-      
-      const uuid3 = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid3, 'online_profile', JSON.stringify(profileToSave));
-      
-      // Update current profile ID
-      const uuid4 = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid4, 'online_current_profile_id', profileId);
+      // Sync to csettings for backward compatibility
+      profileManager.syncProfileToCsettings(profileId);
       
       console.log(`[Profile Switch] Updated online_current_profile_id to: ${profileId}`);
+      
+      // Remove metadata before returning
+      if (targetProfile._metadata) {
+        const { _metadata, ...profileWithoutMetadata } = targetProfile;
+        return { success: true, profile: profileWithoutMetadata };
+      }
       
       return { success: true, profile: targetProfile };
     } catch (error) {
@@ -3820,15 +3599,6 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profile:create-new', async (event, { profileData }) => {
     try {
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
-      
-      // Check if there's a current profile
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
-      const hasCurrentProfile = !!currentProfileIdRow?.csetting_value;
-      
       // Get keyguard key for encryption
       const keyguardKey = getKeyguardKey(event);
       if (!keyguardKey) {
@@ -3839,93 +3609,39 @@ function registerDatabaseHandlers(dbManager) {
       const profileFp = await calculateProfileFp(profileData.profileId);
       profileData.fp = profileFp;
       
-      // Save to standby profiles first (with full private keys)
-      const standbyProfilesRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_standby_profiles');
+      // Use OnlineProfileManager to save profile
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      let standbyProfiles = [];
-      if (standbyProfilesRow) {
+      // Check if there's a current profile
+      const hasCurrentProfile = !!profileManager.getCurrentProfileId();
+      
+      // Save profile to database (automatically syncs to csettings)
+      const result = profileManager.saveProfile(profileData, true); // Mark as having unpublished edits
+      
+      // Also save keypairs to database if they exist
+      if (profileData.primaryKeypair) {
         try {
-          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-          const iv = Buffer.from(encryptedData.iv, 'hex');
-          const encrypted = Buffer.from(encryptedData.data, 'hex');
-          
-          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-          let decrypted = decipher.update(encrypted);
-          decrypted = Buffer.concat([decrypted, decipher.final()]);
-          
-          standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-        } catch (error) {
-          console.error('Error decrypting standby profiles:', error);
-          standbyProfiles = [];
+          profileManager.migrateKeypairToDatabase(profileData.profileId, profileData.primaryKeypair, 'primary');
+        } catch (keypairError) {
+          console.error('Error saving primary keypair:', keypairError);
         }
       }
       
-      // Check if profile already exists in standby
-      const existingIndex = standbyProfiles.findIndex((p) => p.profileId === profileData.profileId);
-      if (existingIndex >= 0) {
-        // Update existing profile
-        standbyProfiles[existingIndex] = profileData;
-      } else {
-        // Add new profile
-        standbyProfiles.push(profileData);
+      if (profileData.additionalKeypairs) {
+        profileData.additionalKeypairs.forEach((kp) => {
+          try {
+            profileManager.migrateKeypairToDatabase(profileData.profileId, kp, 'additional');
+          } catch (keypairError) {
+            console.error('Error saving additional keypair:', keypairError);
+          }
+        });
       }
-      
-      // Encrypt and save standby profiles
-      const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-      const standbyProfilesJson = JSON.stringify(standbyProfiles);
-      let encrypted = cipher.update(standbyProfilesJson, 'utf8');
-      encrypted = Buffer.concat([encrypted, cipher.final()]);
-      
-      const encryptedData = {
-        iv: iv.toString('hex'),
-        data: encrypted.toString('hex')
-      };
-      
-      const uuid = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
       
       // If no current profile, make this the current profile
       if (!hasCurrentProfile) {
-        const profileToSave = JSON.parse(JSON.stringify(profileData));
-        // Remove private keys before saving to online_profile
-        if (profileToSave.primaryKeypair?.privateKey) {
-          delete profileToSave.primaryKeypair.privateKey;
-        }
-        if (profileToSave.additionalKeypairs) {
-          profileToSave.additionalKeypairs.forEach((kp) => {
-            if (kp.privateKey) delete kp.privateKey;
-          });
-        }
-        if (profileToSave.adminKeypairs) {
-          profileToSave.adminKeypairs.forEach((kp) => {
-            if (kp.privateKey) delete kp.privateKey;
-          });
-        }
-        
-        const uuid2 = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid2, 'online_profile', JSON.stringify(profileToSave));
-        
-        const uuid3 = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid3, 'online_current_profile_id', profileData.profileId);
-        
+        profileManager.setCurrentProfileId(profileData.profileId);
         return { success: true, profile: profileData, isCurrent: true };
       } else {
-        // Profile already saved to standby profiles above, just return success
         return { success: true, profile: profileData, isCurrent: false };
       }
     } catch (error) {
@@ -3940,161 +3656,39 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profile:delete', async (event, { profileId }) => {
     try {
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
-      
       // Get keyguard key for decryption
       const keyguardKey = getKeyguardKey(event);
       if (!keyguardKey) {
         return { success: false, error: 'Profile Guard must be unlocked to delete profiles' };
       }
       
-      // Check if this is the current profile
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
       const isCurrentProfile = profileId === currentProfileId;
       
-      // If it's the current profile, we need to handle it differently
+      // If it's the current profile, try to switch to another profile first
       if (isCurrentProfile) {
-        // Delete the current profile entry
-        db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_profile');
-        db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_current_profile_id');
+        const allProfiles = profileManager.listProfiles();
+        const otherProfiles = allProfiles.filter(p => (p.profileId || p._metadata?.profileUuid) !== profileId);
         
-        // Try to switch to another profile if available
-        const standbyProfilesRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_standby_profiles');
-        
-        if (standbyProfilesRow) {
-          try {
-            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-            const iv = Buffer.from(encryptedData.iv, 'hex');
-            const encrypted = Buffer.from(encryptedData.data, 'hex');
-            
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-            
-            // If there are other profiles, switch to the first one
-            if (standbyProfiles.length > 0) {
-              const newCurrentProfile = standbyProfiles[0];
-              const remainingProfiles = standbyProfiles.slice(1);
-              
-              // Save the new current profile
-              const profileToSave = JSON.parse(JSON.stringify(newCurrentProfile));
-              if (profileToSave.primaryKeypair?.privateKey) {
-                delete profileToSave.primaryKeypair.privateKey;
-              }
-              if (profileToSave.additionalKeypairs) {
-                profileToSave.additionalKeypairs.forEach((kp) => {
-                  if (kp.privateKey) delete kp.privateKey;
-                });
-              }
-              if (profileToSave.adminKeypairs) {
-                profileToSave.adminKeypairs.forEach((kp) => {
-                  if (kp.privateKey) delete kp.privateKey;
-                });
-              }
-              
-              const uuid = crypto.randomUUID();
-              db.prepare(`
-                INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-                VALUES (?, ?, ?)
-                ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-              `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
-              
-              const uuid2 = crypto.randomUUID();
-              db.prepare(`
-                INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-                VALUES (?, ?, ?)
-                ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-              `).run(uuid2, 'online_current_profile_id', newCurrentProfile.profileId);
-              
-              // Update standby profiles with remaining profiles
-              if (remainingProfiles.length > 0) {
-                const newIv = crypto.randomBytes(16);
-                const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, newIv);
-                const standbyProfilesJson = JSON.stringify(remainingProfiles);
-                let newEncrypted = cipher.update(standbyProfilesJson, 'utf8');
-                newEncrypted = Buffer.concat([newEncrypted, cipher.final()]);
-                
-                const newEncryptedData = {
-                  iv: newIv.toString('hex'),
-                  data: newEncrypted.toString('hex')
-                };
-                
-                const uuid3 = crypto.randomUUID();
-                db.prepare(`
-                  INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-                  VALUES (?, ?, ?)
-                  ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-                `).run(uuid3, 'online_standby_profiles', JSON.stringify(newEncryptedData));
-              } else {
-                // No more standby profiles, delete the entry
-                db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_standby_profiles');
-              }
-            } else {
-              // No more profiles, delete standby profiles entry
-              db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_standby_profiles');
-            }
-          } catch (error) {
-            console.error('Error handling profile switch after deletion:', error);
+        if (otherProfiles.length > 0) {
+          // Switch to the first available profile
+          const newCurrentProfile = otherProfiles[0];
+          const newProfileId = newCurrentProfile.profileId || newCurrentProfile._metadata?.profileUuid;
+          if (newProfileId) {
+            profileManager.setCurrentProfileId(newProfileId);
+            profileManager.syncProfileToCsettings(newProfileId);
           }
-        }
-      } else {
-        // Delete from standby profiles
-        const standbyProfilesRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_standby_profiles');
-        
-        if (standbyProfilesRow) {
-          try {
-            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-            const iv = Buffer.from(encryptedData.iv, 'hex');
-            const encrypted = Buffer.from(encryptedData.data, 'hex');
-            
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            let standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-            standbyProfiles = standbyProfiles.filter((p) => p.profileId !== profileId);
-            
-            if (standbyProfiles.length > 0) {
-              // Encrypt and save updated standby profiles
-              const newIv = crypto.randomBytes(16);
-              const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, newIv);
-              const standbyProfilesJson = JSON.stringify(standbyProfiles);
-              let newEncrypted = cipher.update(standbyProfilesJson, 'utf8');
-              newEncrypted = Buffer.concat([newEncrypted, cipher.final()]);
-              
-              const newEncryptedData = {
-                iv: newIv.toString('hex'),
-                data: newEncrypted.toString('hex')
-              };
-              
-              const uuid = crypto.randomUUID();
-              db.prepare(`
-                INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-                VALUES (?, ?, ?)
-                ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-              `).run(uuid, 'online_standby_profiles', JSON.stringify(newEncryptedData));
-            } else {
-              // No more standby profiles, delete the entry
-              db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_standby_profiles');
-            }
-          } catch (error) {
-            console.error('Error deleting profile from standby:', error);
-            return { success: false, error: error.message };
-          }
+        } else {
+          // No other profiles, clear current profile ID (managed by OnlineProfileManager)
+          profileManager.setCurrentProfileId('');
         }
       }
       
-      return { success: true };
+      // Delete profile from database (cascade will delete keypairs)
+      const result = profileManager.deleteProfile(profileId);
+      
+      return result;
     } catch (error) {
       console.error('Error deleting profile:', error);
       return { success: false, error: error.message };
@@ -4109,7 +3703,6 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const fs = require('fs');
       const crypto = require('crypto');
-      const db = dbManager.getConnection('clientdata');
       
       // Read encrypted file
       const encryptedData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -4128,130 +3721,57 @@ function registerDatabaseHandlers(dbManager) {
       
       const importedProfile = JSON.parse(decrypted.toString('utf8'));
       
-      // Check if profile already exists
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
-      let profileExists = false;
-      if (importedProfile.profileId === currentProfileId) {
-        profileExists = true;
-      } else {
-        // Check standby profiles
-        const standbyProfilesRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_standby_profiles');
-        
-        if (standbyProfilesRow) {
-          const keyguardKey = getKeyguardKey(event);
-          if (keyguardKey) {
-            try {
-              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-              const iv = Buffer.from(encryptedData.iv, 'hex');
-              const encrypted = Buffer.from(encryptedData.data, 'hex');
-              
-              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-              let decrypted = decipher.update(encrypted);
-              decrypted = Buffer.concat([decrypted, decipher.final()]);
-              
-              const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-              profileExists = standbyProfiles.some((p) => p.profileId === importedProfile.profileId);
-            } catch (error) {
-              console.error('Error checking standby profiles:', error);
-            }
-          }
-        }
-      }
-      
-      if (profileExists && !overwriteExisting) {
-        return { success: false, error: 'Profile already exists. Enable overwrite to replace it.' };
-      }
-      
       // Get keyguard key for saving
       const keyguardKey = getKeyguardKey(event);
       if (!keyguardKey) {
         return { success: false, error: 'Profile Guard must be unlocked to import profiles' };
       }
       
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      
+      // Check if profile already exists
+      const existingProfile = profileManager.getProfile(importedProfile.profileId);
+      const profileExists = !!existingProfile;
+      
+      if (profileExists && !overwriteExisting) {
+        return { success: false, error: 'Profile already exists. Enable overwrite to replace it.' };
+      }
+      
       // Calculate and set fp attribute for the imported profile
       const profileFp = await calculateProfileFp(importedProfile.profileId);
       importedProfile.fp = profileFp;
       
-      // If overwriting current profile
-      if (importedProfile.profileId === currentProfileId) {
-        const profileToSave = JSON.parse(JSON.stringify(importedProfile));
-        // Remove private keys before saving
-        if (profileToSave.primaryKeypair?.privateKey) {
-          delete profileToSave.primaryKeypair.privateKey;
+      // Check if this is the current profile
+      const currentProfileId = profileManager.getCurrentProfileId();
+      const isCurrent = importedProfile.profileId === currentProfileId;
+      
+      // Save profile to database
+      profileManager.saveProfile(importedProfile, false); // Don't mark as unpublished during import
+      
+      // Migrate keypairs if they exist
+      if (importedProfile.primaryKeypair) {
+        try {
+          profileManager.migrateKeypairToDatabase(importedProfile.profileId, importedProfile.primaryKeypair, 'primary');
+        } catch (keypairError) {
+          console.error('Error saving primary keypair:', keypairError);
         }
-        if (profileToSave.additionalKeypairs) {
-          profileToSave.additionalKeypairs.forEach((kp) => {
-            if (kp.privateKey) delete kp.privateKey;
-          });
-        }
-        if (profileToSave.adminKeypairs) {
-          profileToSave.adminKeypairs.forEach((kp) => {
-            if (kp.privateKey) delete kp.privateKey;
-          });
-        }
-        
-        const uuid = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid, 'online_profile', JSON.stringify(profileToSave));
-        
+      }
+      
+      if (importedProfile.additionalKeypairs) {
+        importedProfile.additionalKeypairs.forEach((kp) => {
+          try {
+            profileManager.migrateKeypairToDatabase(importedProfile.profileId, kp, 'additional');
+          } catch (keypairError) {
+            console.error('Error saving additional keypair:', keypairError);
+          }
+        });
+      }
+      
+      // If this is the current profile or there's no current profile, set it as current
+      if (isCurrent || !currentProfileId) {
+        profileManager.setCurrentProfileId(importedProfile.profileId);
         return { success: true, profile: importedProfile, isCurrent: true };
       } else {
-        // Add to standby profiles (or replace if exists)
-        const standbyProfilesRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_standby_profiles');
-        
-        let standbyProfiles = [];
-        if (standbyProfilesRow) {
-          try {
-            const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-            const iv = Buffer.from(encryptedData.iv, 'hex');
-            const encrypted = Buffer.from(encryptedData.data, 'hex');
-            
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-            // Remove existing profile if overwriting
-            standbyProfiles = standbyProfiles.filter((p) => p.profileId !== importedProfile.profileId);
-          } catch (error) {
-            console.error('Error decrypting standby profiles:', error);
-            standbyProfiles = [];
-          }
-        }
-        
-        // Add imported profile
-        standbyProfiles.push(importedProfile);
-        
-        // Encrypt and save
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-        const standbyProfilesJson = JSON.stringify(standbyProfiles);
-        let encrypted = cipher.update(standbyProfilesJson, 'utf8');
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        
-        const encryptedData2 = {
-          iv: iv.toString('hex'),
-          data: encrypted.toString('hex')
-        };
-        
-        const uuid = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData2));
-        
         return { success: true, profile: importedProfile, isCurrent: false };
       }
     } catch (error) {
@@ -4287,16 +3807,30 @@ function registerDatabaseHandlers(dbManager) {
         isAdmin: false
       };
       
-      // Save to database
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
-      const uuid = crypto.randomUUID();
+      // Use OnlineProfileManager to save profile
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
+      }
       
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid, 'online_profile', JSON.stringify(profile));
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      
+      // Generate profile ID if not present
+      if (!profile.profileId) {
+        profile.profileId = crypto.randomUUID();
+      }
+      
+      // Calculate and set fp attribute
+      const profileFp = await calculateProfileFp(profile.profileId);
+      profile.fp = profileFp;
+      
+      // Save profile to database
+      profileManager.saveProfile(profile, true);
+      
+      // Save keypairs
+      if (profile.primaryKeypair) {
+        profileManager.migrateKeypairToDatabase(profile.profileId, profile.primaryKeypair, 'primary');
+      }
       
       return { success: true, profile };
     } catch (error) {
@@ -4308,138 +3842,54 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Save online profile
    * Channel: online:profile:save
-   * Note: This saves the current profile. Private keys are stored encrypted in standby profiles.
+   * Note: This saves the current profile. Private keys are stored encrypted in database.
    */
   ipcMain.handle('online:profile:save', async (event, profile) => {
     try {
-      const db = dbManager.getConnection('clientdata');
-      const crypto = require('crypto');
-      
-      // Get current profile ID
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
-      let currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
-      // If no current profile ID but profile has profileId, use it
-      if (!currentProfileId && profile.profileId) {
-        currentProfileId = profile.profileId;
-      }
-      
+      console.log('[online:profile:save] Received profile primaryKeypair privateKey length:', profile?.primaryKeypair?.privateKey ? String(profile.primaryKeypair.privateKey).length : 'none');
+      console.log('[online:profile:save] Received profile primaryKeypair privateKey sample:', profile?.primaryKeypair?.privateKey ? String(profile.primaryKeypair.privateKey).substring(0, 20) : 'none');
       // Get keyguard key for encryption
       const keyguardKey = getKeyguardKey(event);
       if (!keyguardKey) {
         return { success: false, error: 'Profile Guard must be unlocked to save profiles' };
       }
       
-      // Get existing standby profiles to preserve full profile with private keys
-      const standbyProfilesRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_standby_profiles');
-      
-      let standbyProfiles = [];
-      if (standbyProfilesRow) {
-        try {
-          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-          const iv = Buffer.from(encryptedData.iv, 'hex');
-          const encrypted = Buffer.from(encryptedData.data, 'hex');
-          
-          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-          let decrypted = decipher.update(encrypted);
-          decrypted = Buffer.concat([decrypted, decipher.final()]);
-          
-          standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-        } catch (error) {
-          console.error('Error decrypting standby profiles:', error);
-          standbyProfiles = [];
-        }
-      }
-      
       // Calculate and set fp attribute for the profile
       const profileFp = await calculateProfileFp(profile.profileId);
       profile.fp = profileFp;
       
-      // Find existing full profile in standby
-      const existingFullProfileIndex = standbyProfiles.findIndex((p) => p.profileId === currentProfileId);
+      // Use OnlineProfileManager to save profile
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      // Merge updates into full profile, preserving private keys
-      if (existingFullProfileIndex >= 0) {
-        const fullProfile = standbyProfiles[existingFullProfileIndex];
-        // Update all fields except keypairs (which need special handling)
-        Object.keys(profile).forEach(key => {
-          if (key !== 'primaryKeypair' && key !== 'additionalKeypairs' && key !== 'adminKeypairs') {
-            fullProfile[key] = profile[key];
+      // If this is the current profile, ensure it's set as current
+      const currentProfileId = profileManager.getCurrentProfileId();
+      if (!currentProfileId && profile.profileId) {
+        profileManager.setCurrentProfileId(profile.profileId);
+      }
+      
+      // Save profile to database (automatically syncs to csettings)
+      const result = profileManager.saveProfile(profile, true); // Mark as having unpublished edits
+      
+      // Also save keypairs to database if they exist
+      if (profile.primaryKeypair) {
+        try {
+          profileManager.migrateKeypairToDatabase(profile.profileId, profile.primaryKeypair, 'primary');
+        } catch (keypairError) {
+          console.error('Error saving primary keypair:', keypairError);
+        }
+      }
+      
+      if (profile.additionalKeypairs) {
+        profile.additionalKeypairs.forEach((kp) => {
+          try {
+            profileManager.migrateKeypairToDatabase(profile.profileId, kp, 'additional');
+          } catch (keypairError) {
+            console.error('Error saving additional keypair:', keypairError);
           }
         });
-        // Update keypair metadata but preserve private keys
-        if (profile.primaryKeypair && fullProfile.primaryKeypair) {
-          Object.keys(profile.primaryKeypair).forEach(key => {
-            if (key !== 'privateKey') {
-              fullProfile.primaryKeypair[key] = profile.primaryKeypair[key];
-            }
-          });
-        }
-        // Update fp attribute
-        fullProfile.fp = profileFp;
-        standbyProfiles[existingFullProfileIndex] = fullProfile;
-      } else {
-        // If not in standby, add it (profile was just created or switched)
-        standbyProfiles.push(profile);
       }
       
-      // Encrypt and save standby profiles
-      const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-      const standbyProfilesJson = JSON.stringify(standbyProfiles);
-      let encrypted = cipher.update(standbyProfilesJson, 'utf8');
-      encrypted = Buffer.concat([encrypted, cipher.final()]);
-      
-      const encryptedData = {
-        iv: iv.toString('hex'),
-        data: encrypted.toString('hex')
-      };
-      
-      const uuid = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid, 'online_standby_profiles', JSON.stringify(encryptedData));
-      
-      // Save current profile without private keys (for display)
-      const profileToSave = JSON.parse(JSON.stringify(profile));
-      if (profileToSave.primaryKeypair?.privateKey) {
-        delete profileToSave.primaryKeypair.privateKey;
-      }
-      if (profileToSave.additionalKeypairs) {
-        profileToSave.additionalKeypairs.forEach((kp) => {
-          if (kp.privateKey) delete kp.privateKey;
-        });
-      }
-      if (profileToSave.adminKeypairs) {
-        profileToSave.adminKeypairs.forEach((kp) => {
-          if (kp.privateKey) delete kp.privateKey;
-        });
-      }
-      
-      const uuid2 = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid2, 'online_profile', JSON.stringify(profileToSave));
-      
-      // Always update current profile ID to match the profile being saved
-      if (profile.profileId) {
-        const uuid3 = crypto.randomUUID();
-        db.prepare(`
-          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-          VALUES (?, ?, ?)
-          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-        `).run(uuid3, 'online_current_profile_id', profile.profileId);
-      }
-      
-      return { success: true };
+      return result;
     } catch (error) {
       console.error('Error saving online profile:', error);
       return { success: false, error: error.message };
@@ -4527,14 +3977,17 @@ function registerDatabaseHandlers(dbManager) {
         const { generateSecretKey, getPublicKey } = require('nostr-tools');
         const nip19 = require('nostr-tools/nip19');
         
-        // Generate a 32-byte private key (secp256k1) - returns hex string
-        const privateKeyHex = generateSecretKey();
+        // Generate a 32-byte private key (secp256k1) - returns Uint8Array
+        const privateKeyBytes = generateSecretKey();
+        const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
+        console.log('[generateKeypair:Nostr] Generated private key hex length:', privateKeyHex.length);
         
         // Get public key in hex format (not npub format)
-        const publicKeyHex = getPublicKey(privateKeyHex);
+        const publicKeyHex = getPublicKey(privateKeyBytes);
         
         // Convert hex private key to Buffer for fingerprint calculation
         const privateKeyBuffer = Buffer.from(privateKeyHex, 'hex');
+        console.log('[generateKeypair:Nostr] Private key buffer length:', privateKeyBuffer.length);
         const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
         
         // Generate fingerprint from public key
@@ -4549,6 +4002,7 @@ function registerDatabaseHandlers(dbManager) {
         
         // Convert public key to npub format for display
         const npub = nip19.npubEncode(publicKeyHex);
+        console.log('[generateKeypair:Nostr] Private key hex sample:', privateKeyHex.substring(0, 20));
         
         return {
           type: 'Nostr',
@@ -4750,14 +4204,15 @@ function registerDatabaseHandlers(dbManager) {
       // Get username from profile if not provided
       let usernameForName = username;
       if (!usernameForName) {
-        const db = dbManager.getConnection('clientdata');
-        const profileJson = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_profile');
-        
-        if (profileJson) {
-          const profile = JSON.parse(profileJson.csetting_value);
-          usernameForName = profile.username || 'user';
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          if (currentProfile) {
+            usernameForName = currentProfile.username || 'user';
+          } else {
+            usernameForName = 'user';
+          }
         } else {
           usernameForName = 'user';
         }
@@ -4803,6 +4258,8 @@ function registerDatabaseHandlers(dbManager) {
         
         // Store encrypted private key as hex string
         keypair.privateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
+        console.log('[createOnlineKeypair] Encrypted private key length:', keypair.privateKey.length);
+        console.log('[createOnlineKeypair] Plain key length (bytes):', keyData.length);
         // Store format indicator for decryption
         keypair.privateKeyFormat = keypair.privateKeyRaw ? 'hex' : 'pem';
         keypair.encrypted = true;
@@ -4836,14 +4293,15 @@ function registerDatabaseHandlers(dbManager) {
       // Get username from profile if not provided
       let usernameForName = username;
       if (!usernameForName) {
-        const db = dbManager.getConnection('clientdata');
-        const profileJson = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_profile');
-        
-        if (profileJson) {
-          const profile = JSON.parse(profileJson.csetting_value);
-          usernameForName = profile.username || 'user';
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          if (currentProfile) {
+            usernameForName = currentProfile.username || 'user';
+          } else {
+            usernameForName = 'user';
+          }
         } else {
           usernameForName = 'user';
         }
@@ -5234,8 +4692,6 @@ function registerDatabaseHandlers(dbManager) {
       db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('keyguard_high_security_mode');
       
       // Delete online profile (which contains encrypted keypairs)
-      db.prepare(`DELETE FROM csettings WHERE csetting_name = ?`).run('online_profile');
-      
       // Clear any session-stored keys
       // Note: This is per-session, so we can't clear it from here
       // But the profile deletion above will prevent access to encrypted data
@@ -5276,65 +4732,40 @@ function registerDatabaseHandlers(dbManager) {
           return { success: false, error: 'Profile Guard must be unlocked to export profiles' };
         }
         
-        // Get current profile ID
-        const currentProfileIdRow = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_current_profile_id');
-        const currentProfileId = currentProfileIdRow?.csetting_value || null;
+        const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
         
-        // If exporting current profile, try to get full version from standby first
-        if (params.profileId === currentProfileId) {
-          // Check standby profiles first for full version
-          const standbyProfilesRow = db.prepare(`
-            SELECT csetting_value FROM csettings WHERE csetting_name = ?
-          `).get('online_standby_profiles');
-          
-          if (standbyProfilesRow) {
-            try {
-              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-              const iv = Buffer.from(encryptedData.iv, 'hex');
-              const encrypted = Buffer.from(encryptedData.data, 'hex');
-              
-              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-              let decrypted = decipher.update(encrypted);
-              decrypted = Buffer.concat([decrypted, decipher.final()]);
-              
-              const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-              profileToExport = standbyProfiles.find((p) => p.profileId === params.profileId);
-            } catch (error) {
-              console.error('Error decrypting standby profiles:', error);
+        // Get profile from database
+        profileToExport = profileManager.getProfile(params.profileId);
+        
+        // If profile not found, try to migrate from csettings
+        if (!profileToExport) {
+          try {
+            const migrationResult = profileManager.migrateProfileFromCsettings(params.profileId);
+            if (migrationResult.success && !migrationResult.alreadyMigrated) {
+              profileToExport = profileManager.getProfile(params.profileId);
             }
+          } catch (migrationError) {
+            console.error('Error migrating profile from csettings:', migrationError);
           }
-          
-          // If not found in standby, get from current profile
-          if (!profileToExport) {
-            const currentProfileRow = db.prepare(`
-              SELECT csetting_value FROM csettings WHERE csetting_name = ?
-            `).get('online_profile');
-            if (currentProfileRow) {
-              profileToExport = JSON.parse(currentProfileRow.csetting_value);
-            }
-          }
-        } else {
-          // Get from standby profiles
-          const standbyProfilesRow = db.prepare(`
-            SELECT csetting_value FROM csettings WHERE csetting_name = ?
-          `).get('online_standby_profiles');
-          
-          if (standbyProfilesRow) {
-            try {
-              const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-              const iv = Buffer.from(encryptedData.iv, 'hex');
-              const encrypted = Buffer.from(encryptedData.data, 'hex');
-              
-              const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-              let decrypted = decipher.update(encrypted);
-              decrypted = Buffer.concat([decrypted, decipher.final()]);
-              
-              const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-              profileToExport = standbyProfiles.find((p) => p.profileId === params.profileId);
-            } catch (error) {
-              console.error('Error decrypting standby profiles:', error);
+        }
+        
+        // If still not found, try to load keypairs and reconstruct profile
+        if (!profileToExport) {
+          // Try to get basic profile info from keypairs
+          const keypairs = profileManager.getProfileKeypairs(params.profileId);
+          if (keypairs.length > 0) {
+            // Reconstruct minimal profile from keypairs
+            const primaryKeypair = keypairs.find(kp => kp.keyUsage === 'primary');
+            if (primaryKeypair) {
+              profileToExport = {
+                profileId: params.profileId,
+                username: 'Unknown',
+                displayName: '',
+                bio: '',
+                primaryKeypair: primaryKeypair,
+                additionalKeypairs: keypairs.filter(kp => kp.keyUsage === 'additional'),
+                adminKeypairs: []
+              };
             }
           }
         }
@@ -5646,13 +5077,15 @@ function registerDatabaseHandlers(dbManager) {
       // Get username from profile if not provided
       let usernameForName = username;
       if (!usernameForName) {
-        const profileJson = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_profile');
-        
-        if (profileJson) {
-          const profile = JSON.parse(profileJson.csetting_value);
-          usernameForName = profile.username || 'admin';
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          if (currentProfile) {
+            usernameForName = currentProfile.username || 'admin';
+          } else {
+            usernameForName = 'admin';
+          }
         } else {
           usernameForName = 'admin';
         }
@@ -6192,13 +5625,15 @@ function registerDatabaseHandlers(dbManager) {
       // Get username from profile if not provided
       let usernameForName = username;
       if (!usernameForName) {
-        const profileJson = db.prepare(`
-          SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('online_profile');
-        
-        if (profileJson) {
-          const profile = JSON.parse(profileJson.csetting_value);
-          usernameForName = profile.username || 'user';
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          if (currentProfile) {
+            usernameForName = currentProfile.username || 'user';
+          } else {
+            usernameForName = 'user';
+          }
         } else {
           usernameForName = 'user';
         }
@@ -7068,6 +6503,83 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('online:trust-declarations:export-all', async () => {
+    try {
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Export Trust Declarations',
+        defaultPath: 'trust-declarations-export.json',
+        filters: [{ name: 'JSON Files', extensions: ['json'] }]
+      });
+      if (canceled || !filePath) {
+        return { success: false, canceled: true };
+      }
+
+      const fs = require('fs');
+      const db = dbManager.getConnection('clientdata');
+      const admindeclarations = db.prepare('SELECT * FROM admindeclarations').all();
+      let trustDeclarations = [];
+      try {
+        trustDeclarations = db.prepare('SELECT * FROM trust_declarations').all();
+      } catch (legacyError) {
+        console.warn('Legacy trust_declarations table not found or inaccessible:', legacyError.message);
+      }
+
+      const exportData = {
+        version: 1,
+        exported_at: new Date().toISOString(),
+        admindeclarations,
+        trust_declarations: trustDeclarations
+      };
+
+      fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2), 'utf8');
+
+      return {
+        success: true,
+        filePath,
+        adminCount: admindeclarations.length,
+        trustCount: trustDeclarations.length
+      };
+    } catch (error) {
+      console.error('Error exporting trust declarations:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:trust-declarations:import', async () => {
+    try {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Import Trust Declarations',
+        filters: [{ name: 'JSON Files', extensions: ['json'] }],
+        properties: ['openFile']
+      });
+
+      if (canceled || !filePaths || filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      const fs = require('fs');
+      const filePath = filePaths[0];
+      const content = fs.readFileSync(filePath, 'utf8');
+      let data;
+      try {
+        data = JSON.parse(content);
+      } catch (parseError) {
+        return { success: false, error: 'Invalid JSON file' };
+      }
+
+      const result = dbManager.importTrustDeclarationsFromData(data, { source: filePath });
+      return {
+        success: true,
+        filePath,
+        adminCount: result.adminDeclarationsImported || 0,
+        trustCount: result.trustDeclarationsImported || 0
+      };
+    } catch (error) {
+      console.error('Error importing trust declarations:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   /**
    * Get a specific trust declaration
    * Channel: online:trust-declaration:get
@@ -7653,9 +7165,31 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // User profile keypairs (primary and additional)
-      // These are stored in the profiles table, need to check onlineProfile
-      // For now, we'll get them from the standby_profiles if available
-      // This would require additional logic to parse standby_profiles JSON
+      // Get from profile_keypairs table via OnlineProfileManager
+      if (keyguardKey) {
+        try {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfileId = profileManager.getCurrentProfileId();
+          if (currentProfileId) {
+            const profileKeypairs = profileManager.getProfileKeypairs(currentProfileId);
+            profileKeypairs.forEach(kp => {
+              if (kp.type && kp.type.toLowerCase().includes('nostr') && kp.encryptedPrivateKey) {
+                nostrKeypairs.push({
+                  uuid: kp.uuid,
+                  name: kp.name || kp.localName || 'User Profile Key',
+                  canonicalName: kp.canonicalName,
+                  type: kp.type,
+                  keyUsage: kp.keyUsage,
+                  storageStatus: kp.storageStatus,
+                  hasPrivateKey: !!kp.encryptedPrivateKey
+                });
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Error loading profile keypairs for Nostr signing:', error);
+        }
+      }
       
       console.log(`[getAvailableNostrSigningKeypairs] Returning ${nostrKeypairs.length} available Nostr signing keypairs`);
       
@@ -7884,129 +7418,23 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:publish-profile-to-nostr', async (event, { profileUuid }) => {
     try {
-      const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
-      const { finalizeEvent } = require('nostr-tools');
-      const db = dbManager.getConnection('clientdata');
       const keyguardKey = getKeyguardKey(event);
-      
       if (!keyguardKey) {
         return { success: false, error: 'Profile Guard not unlocked' };
       }
       
-      // Get the current profile from csettings
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
-      if (!currentProfileId) {
-        return { success: false, error: 'No current profile found' };
+      // Use provided profileUuid or get current profile
+      const targetProfileUuid = profileUuid || profileManager.getCurrentProfileId();
+      if (!targetProfileUuid) {
+        return { success: false, error: 'No profile found to publish' };
       }
       
-      // Load profile from csettings (use 'online_profile' not 'online_current_profile')
-      const profileJson = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_profile');
+      // Publish profile using OnlineProfileManager
+      const result = await profileManager.publishProfileToNostr(targetProfileUuid);
       
-      if (!profileJson) {
-        return { success: false, error: 'Profile not found' };
-      }
-      
-      const profile = JSON.parse(profileJson.csetting_value);
-      
-      // Verify the profile UUID matches
-      if (profile.profileId !== profileUuid && profile.profileId !== currentProfileId) {
-        return { success: false, error: 'Profile UUID mismatch' };
-      }
-      
-      // Get the primary keypair - must be Nostr type
-      if (!profile.primaryKeypair) {
-        return { success: false, error: 'Profile has no primary keypair' };
-      }
-      
-      const primaryKeypair = profile.primaryKeypair;
-      
-      if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
-        return { success: false, error: 'Primary keypair must be Nostr type to publish profile' };
-      }
-      
-      // Decrypt the private key
-      let privateKeyHex;
-      try {
-        if (!primaryKeypair.encrypted || !primaryKeypair.privateKey) {
-          return { success: false, error: 'Private key not available or not encrypted' };
-        }
-        
-        // privateKey is stored as encrypted string in format "iv:encrypted"
-        const parts = primaryKeypair.privateKey.split(':');
-        if (parts.length !== 2) {
-          return { success: false, error: 'Invalid encrypted private key format' };
-        }
-        
-        const iv = Buffer.from(parts[0], 'hex');
-        const encrypted = Buffer.from(parts[1], 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-        let decrypted = decipher.update(encrypted);
-        decrypted = Buffer.concat([decrypted, decipher.final()]);
-        
-        // For Nostr keys, private key is stored as hex
-        privateKeyHex = decrypted.toString('hex');
-      } catch (err) {
-        return { success: false, error: `Cannot decrypt primary keypair: ${err.message}` };
-      }
-      
-      // Build NIP-01 profile metadata content
-      const profileContent = {
-        name: profile.displayName || profile.username || '',
-        about: profile.bio || '',
-        picture: profile.pictureUrl || '',
-        banner: profile.bannerUrl || ''
-      };
-      
-      // Remove empty fields
-      Object.keys(profileContent).forEach(key => {
-        if (profileContent[key] === '' || profileContent[key] === null || profileContent[key] === undefined) {
-          delete profileContent[key];
-        }
-      });
-      
-      // Create kind 0 event template
-      const eventTemplate = {
-        kind: 0,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['d', profile.profileId]
-        ],
-        content: JSON.stringify(profileContent)
-      };
-      
-      // Sign the event
-      const privateKeyBytes = new Uint8Array(Buffer.from(privateKeyHex, 'hex'));
-      const signedEvent = finalizeEvent(eventTemplate, privateKeyBytes);
-      
-      // Add to NostrLocalDBManager cache_out
-      const nostrDBManager = new NostrLocalDBManager();
-      await nostrDBManager.initialize();
-      
-      const success = nostrDBManager.addEvent(
-        'cache_out',
-        signedEvent,
-        0, // proc_status: pending
-        null, // keep_for
-        'profiles', // table_name
-        profile.profileId, // record_uuid (profile UUID)
-        profile.profileId // user_profile_uuid (same as profile UUID)
-      );
-      
-      if (!success) {
-        nostrDBManager.closeAll();
-        return { success: false, error: 'Failed to add event to outgoing cache' };
-      }
-      
-      nostrDBManager.closeAll();
-      
-      return { success: true, eventId: signedEvent.id };
+      return result;
     } catch (error) {
       console.error('Error publishing profile to Nostr:', error);
       return { success: false, error: error.message };
@@ -8019,29 +7447,14 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:check-profile-for-publishing', async (event) => {
     try {
-      const db = dbManager.getConnection('clientdata');
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      // Get current profile ID
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
+      const profile = profileManager.getCurrentProfile();
       
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
-      if (!currentProfileId) {
+      if (!profile) {
         return { hasProfile: false, hasNostrKeypair: false };
       }
-      
-      // Load profile from csettings (use 'online_profile' not 'online_current_profile')
-      const profileJson = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_profile');
-      
-      if (!profileJson) {
-        return { hasProfile: false, hasNostrKeypair: false };
-      }
-      
-      const profile = JSON.parse(profileJson.csetting_value);
       
       // Check if profile has primary keypair and if it's Nostr type
       const hasNostrKeypair = profile.primaryKeypair && 
@@ -8065,206 +7478,35 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:publish-ratings-to-nostr', async (event, { gameId, gameName, gvUuid, version, status, ratings, comments, user_notes }) => {
     try {
-      const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
-      const { finalizeEvent } = require('nostr-tools');
-      const crypto = require('crypto');
-      const db = dbManager.getConnection('clientdata');
       const keyguardKey = getKeyguardKey(event);
-      
       if (!keyguardKey) {
         return { success: false, error: 'Profile Guard not unlocked' };
       }
       
-      // Get the current profile ID
-      const currentProfileIdRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile_id');
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       
-      const currentProfileId = currentProfileIdRow?.csetting_value || null;
-      
+      // Get current profile ID
+      const currentProfileId = profileManager.getCurrentProfileId();
       if (!currentProfileId) {
         return { success: false, error: 'No current profile found' };
       }
       
-      // Load full profile from standby profiles (which has encrypted private keys)
-      const standbyProfilesRow = db.prepare(`
-        SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_standby_profiles');
-      
-      let profile = null;
-      if (standbyProfilesRow) {
-        try {
-          const encryptedData = JSON.parse(standbyProfilesRow.csetting_value);
-          const iv = Buffer.from(encryptedData.iv, 'hex');
-          const encrypted = Buffer.from(encryptedData.data, 'hex');
-          
-          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-          let decrypted = decipher.update(encrypted);
-          decrypted = Buffer.concat([decrypted, decipher.final()]);
-          
-          const standbyProfiles = JSON.parse(decrypted.toString('utf8'));
-          profile = standbyProfiles.find((p) => p.profileId === currentProfileId);
-        } catch (error) {
-          console.error('Error decrypting standby profiles:', error);
-          return { success: false, error: `Cannot decrypt standby profiles: ${error.message}` };
-        }
-      }
-      
-      if (!profile) {
-        return { success: false, error: 'Profile not found in standby profiles' };
-      }
-      
-      console.log(`[Publish Ratings] Found profile: ${profile.profileId}, has primaryKeypair: ${!!profile.primaryKeypair}`);
-      
-      // Get the primary keypair - must be Nostr type
-      if (!profile.primaryKeypair) {
-        return { success: false, error: 'Profile has no primary keypair' };
-      }
-      
-      const primaryKeypair = profile.primaryKeypair;
-      
-      console.log(`[Publish Ratings] Primary keypair type: ${primaryKeypair.type}, encrypted: ${primaryKeypair.encrypted}, has privateKey: ${!!primaryKeypair.privateKey}`);
-      console.log(`[Publish Ratings] Private key value type: ${typeof primaryKeypair.privateKey}, length: ${primaryKeypair.privateKey?.length || 0}`);
-      
-      if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
-        return { success: false, error: 'Primary keypair must be Nostr type to publish ratings' };
-      }
-      
-      // Decrypt the private key
-      let privateKeyHex;
-      try {
-        // Check if private key exists and is encrypted
-        if (!primaryKeypair.privateKey) {
-          console.log(`[Publish Ratings] Private key is missing`);
-          return { success: false, error: 'Private key not available or not encrypted' };
-        }
-        
-        // Check if encrypted flag is set (if not, the key might be stored unencrypted or in a different format)
-        if (!primaryKeypair.encrypted) {
-          console.log(`[Publish Ratings] Private key is not marked as encrypted, checking format...`);
-          // If not encrypted, it might be stored as hex directly
-          if (typeof primaryKeypair.privateKey === 'string' && /^[0-9a-fA-F]+$/.test(primaryKeypair.privateKey)) {
-            privateKeyHex = primaryKeypair.privateKey;
-            console.log(`[Publish Ratings] Using unencrypted private key as hex`);
-          } else {
-            return { success: false, error: 'Private key not available or not encrypted' };
-          }
-        } else {
-          // privateKey is stored as encrypted string in format "iv:encrypted"
-          const parts = primaryKeypair.privateKey.split(':');
-          if (parts.length !== 2) {
-            console.log(`[Publish Ratings] Invalid encrypted private key format, parts.length: ${parts.length}`);
-            return { success: false, error: 'Invalid encrypted private key format' };
-          }
-          
-          const iv = Buffer.from(parts[0], 'hex');
-          const encrypted = Buffer.from(parts[1], 'hex');
-          const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-          let decrypted = decipher.update(encrypted);
-          decrypted = Buffer.concat([decrypted, decipher.final()]);
-          
-          // For Nostr keys, private key is stored as hex
-          privateKeyHex = decrypted.toString('hex');
-          console.log(`[Publish Ratings] Successfully decrypted private key, length: ${privateKeyHex.length}`);
-        }
-      } catch (err) {
-        console.error(`[Publish Ratings] Error decrypting private key:`, err);
-        return { success: false, error: `Cannot decrypt primary keypair: ${err.message}` };
-      }
-      
-      // Get public key from primary keypair
-      const publicKeyHex = primaryKeypair.publicKeyHex || primaryKeypair.publicKey;
-      
-      if (!publicKeyHex) {
-        return { success: false, error: 'Public key not available' };
-      }
-      
-      // Build NIP-33 event content (kind 31001 - User Game Rating)
-      const now = Math.floor(Date.now() / 1000);
-      
-      // Create the content JSON object
-      const contentJson = {
-        gameid: gameId,
-        gvuuid: gvUuid || null,
-        version: version || 1,
-        game_title: gameName || '',
-        status: status || 'Default',
-        rating: {
-          user_difficulty_rating: ratings.user_difficulty_rating ?? null,
-          user_review_rating: ratings.user_review_rating ?? null,
-          user_skill_rating: ratings.user_skill_rating ?? null,
-          user_skill_rating_when_beat: ratings.user_skill_rating_when_beat ?? null,
-          user_recommendation_rating: ratings.user_recommendation_rating ?? null,
-          user_importance_rating: ratings.user_importance_rating ?? null,
-          user_technical_quality_rating: ratings.user_technical_quality_rating ?? null,
-          user_gameplay_design_rating: ratings.user_gameplay_design_rating ?? null,
-          user_originality_rating: ratings.user_originality_rating ?? null,
-          user_visual_aesthetics_rating: ratings.user_visual_aesthetics_rating ?? null,
-          user_story_rating: ratings.user_story_rating ?? null,
-          user_soundtrack_graphics_rating: ratings.user_soundtrack_graphics_rating ?? null,
-          user_difficulty_comment: comments.user_difficulty_comment || null,
-          user_skill_comment: comments.user_skill_comment || null,
-          user_skill_comment_when_beat: comments.user_skill_comment_when_beat || null,
-          user_review_comment: comments.user_review_comment || null,
-          user_recommendation_comment: comments.user_recommendation_comment || null,
-          user_importance_comment: comments.user_importance_comment || null,
-          user_technical_quality_comment: comments.user_technical_quality_comment || null,
-          user_gameplay_design_comment: comments.user_gameplay_design_comment || null,
-          user_originality_comment: comments.user_originality_comment || null,
-          user_visual_aesthetics_comment: comments.user_visual_aesthetics_comment || null,
-          user_story_comment: comments.user_story_comment || null,
-          user_soundtrack_graphics_comment: comments.user_soundtrack_graphics_comment || null,
-          updated_at_ts: now,
-          created_at_ts: now
-        },
-        user_notes: user_notes || null
+      // Prepare rating data
+      const ratingData = {
+        gameId,
+        gameName,
+        gvUuid,
+        version,
+        status,
+        ratings,
+        comments,
+        user_notes
       };
       
-      // Create NIP-33 event template (kind 31001, parameterized replaceable)
-      const eventTemplate = {
-        kind: 31001,
-        created_at: now,
-        tags: [
-          ['d', `game:${gameId}:v1:rating`], // NIP-33 replaceable event identifier
-          ['gameid', gameId],
-          ['version', '1'],
-          ['app', 'rhplay-gameratings'],
-          ['verified', 'true'],
-          ['v', '1.0']
-        ],
-        content: JSON.stringify(contentJson)
-      };
+      // Publish ratings using OnlineProfileManager
+      const result = await profileManager.publishRatingsToNostr(currentProfileId, ratingData);
       
-      // Add gvuuid tag if available
-      if (gvUuid) {
-        eventTemplate.tags.push(['gvuuid', gvUuid]);
-      }
-      
-      // Sign the event using Nostr finalizeEvent
-      const signedEvent = finalizeEvent(eventTemplate, privateKeyHex);
-      
-      // Add to NostrLocalDBManager cache_out
-      const nostrDBManager = new NostrLocalDBManager();
-      await nostrDBManager.initialize();
-      
-      const success = nostrDBManager.addEvent(
-        'cache_out',
-        signedEvent,
-        0, // proc_status: pending
-        null, // keep_for
-        'user_game_annotations', // table_name
-        gameId, // record_uuid (using gameId as identifier)
-        currentProfileId // user_profile_uuid
-      );
-      
-      if (!success) {
-        nostrDBManager.closeAll();
-        return { success: false, error: 'Failed to add event to outgoing cache' };
-      }
-      
-      nostrDBManager.closeAll();
-      
-      return { success: true, eventId: signedEvent.id };
+      return result;
     } catch (error) {
       console.error('Error publishing ratings to Nostr:', error);
       return { success: false, error: error.message };

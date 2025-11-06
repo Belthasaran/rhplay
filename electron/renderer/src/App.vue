@@ -7499,7 +7499,7 @@ const uploadSuccess = ref(false);
 const usb2snesDropdownOpen = ref(false);
 
 // Online/NOSTR profile state
-type KeypairType = 'ML-DSA-44' | 'ML-DSA-87' | 'ED25519' | 'RSA-2048';
+type KeypairType = 'Nostr' | 'ML-DSA-44' | 'ML-DSA-87' | 'ED25519' | 'RSA-2048';
 type Keypair = {
   storageStatus?: 'public-only' | 'full' | 'full-offline';
   type: KeypairType;
@@ -7542,7 +7542,7 @@ const showAddKeypairModal = ref(false);
 const showAddAdminKeypairModal = ref(false);
 const showAddMasterKeypairModal = ref(false);
 const showGenerateMasterKeypairModal = ref(false);
-const newKeypairType = ref<KeypairType>('ML-DSA-44'); // Default for admin keypairs (user profiles use Nostr)
+const newKeypairType = ref<KeypairType>('Nostr'); // Default for admin keypairs (user profiles use Nostr)
 const selectedMasterKeypairUuid = ref<string | null>(null);
 const selectedMasterKeypair = ref<any>(null);
 const showMasterKeypairActionDropdown = ref(false);
@@ -8507,7 +8507,7 @@ async function createNewProfile() {
   try {
     // Create default ML-DSA-44 keypair
     const result = await (window as any).electronAPI.createOnlineProfile({
-      keyType: 'ML-DSA-44'
+      keyType: 'Nostr' // 'ML-DSA-44'
     });
     
     if (result.success) {
@@ -8558,7 +8558,7 @@ async function regeneratePrimaryKeypair() {
   
   try {
     const result = await (window as any).electronAPI.regenerateOnlineKeypair({
-      keyType: onlineProfile.value.primaryKeypair?.type || 'ML-DSA-44',
+      keyType: onlineProfile.value.primaryKeypair?.type || 'Nostr',
       username: onlineProfile.value.username
     });
     
@@ -8592,7 +8592,7 @@ async function addKeypair() {
       onlineProfile.value.additionalKeypairs.push(result.keypair);
       await updateOnlineProfile();
       showAddKeypairModal.value = false;
-      newKeypairType.value = 'ML-DSA-44'; // Reset to default (admin keypairs use ML-DSA-44, not Nostr)
+      newKeypairType.value = 'Nostr'; // Reset to default (admin keypairs use ML-DSA-44, not Nostr) - This is wrong. Admins should be able to use Nostr.
     } else {
       alert(`Failed to create keypair: ${result.error}`);
     }
@@ -8956,7 +8956,7 @@ async function generateAdminKeypair() {
       showGenerateAdminKeypairModal.value = false;
       showAdminKeypairActionDropdown.value = false;
       newAdminKeypairUsage.value = '';
-      newKeypairType.value = 'ML-DSA-44';
+      newKeypairType.value = 'Nostr'; // 'ML-DSA-44';
       alert('Admin keypair generated successfully!');
       // Open details modal to allow setting name/label
       showAdminKeypairDetailsModal.value = true;

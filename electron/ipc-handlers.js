@@ -7889,10 +7889,10 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'No current profile found' };
       }
       
-      // Load profile from csettings
+      // Load profile from csettings (use 'online_profile' not 'online_current_profile')
       const profileJson = db.prepare(`
         SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile');
+      `).get('online_profile');
       
       if (!profileJson) {
         return { success: false, error: 'Profile not found' };
@@ -8017,10 +8017,10 @@ function registerDatabaseHandlers(dbManager) {
         return { hasProfile: false, hasNostrKeypair: false };
       }
       
-      // Load profile from csettings
+      // Load profile from csettings (use 'online_profile' not 'online_current_profile')
       const profileJson = db.prepare(`
         SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile');
+      `).get('online_profile');
       
       if (!profileJson) {
         return { hasProfile: false, hasNostrKeypair: false };
@@ -8071,10 +8071,10 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'No current profile found' };
       }
       
-      // Load profile from csettings
+      // Load profile from csettings (use 'online_profile' not 'online_current_profile')
       const profileJson = db.prepare(`
         SELECT csetting_value FROM csettings WHERE csetting_name = ?
-      `).get('online_current_profile');
+      `).get('online_profile');
       
       if (!profileJson) {
         return { success: false, error: 'Profile not found' };

@@ -3,12 +3,13 @@
 ## 1. Goals
 - Surface Nostr activity in a way that complements existing Online dialogs.
 - Provide intuitive discovery of external reviews, declarations, and posts without overwhelming users.
-- Offer controls for managing the background service, relay health, and follow lists.
+- Offer controls for managing the background service, relay health, follow lists, and Online/Offline mode selection.
 - Ensure the new UI scales to future features: forums, chat, DMs, verification workflows.
 
 ## 2. Primary UI Blocks
 
 ### 2.1 Online Dialog Extensions
+- **Mode selector panel** at the top: toggle between `Offline` and `Online` modes with explanatory text. First activation of Online opens a confirmation modal describing data usage and features.
 - **New `Nostr` tab** alongside `Profile & Keys` and `Trust Declarations`.
 - Sections:
   - `Connection Status`: list current relays, connection/latency state, last sync times.
@@ -35,8 +36,8 @@
 - Button to follow/unfollow (adds manual follow entry) and to open DM (future feature).
 
 ### 2.5 Background Service Indicator
-- System tray icon + in-app status chip showing `Synced`, `Syncing`, `Paused`, `Error`.
-- Clicking opens condensed dashboard with relays, last processed event, queue depth, and toggle controls.
+- System tray icon + in-app status chip showing `Offline`, `Synced`, `Syncing`, `Paused`, `Error`.
+- Clicking opens condensed dashboard with relays, last processed event, queue depth, current mode, and toggle controls (including option to drop to Offline Mode).
 
 ## 3. Interaction Flows
 - **Publishing flow**: After publishing (profile/rating/keys), confirmation toast with link to Outgoing Queue panel.
@@ -45,6 +46,7 @@
 - **Relay management**: Settings dialog for adding/removing relays, prioritizing relays, and enabling Tor/proxy.
 - **Manual follow management**: UI to add Nostr public keys, view source of follow (manual vs derived), disable individual entries.
 - **Notification system**: Desktop notifications (if enabled) for mentions, direct messages, or high-priority admin announcements.
+- **Mode switching**: Central toggle accessible from Online dialog and tray indicator; entering Online prompting consent dialog, returning to Offline showing summary of pending actions.
 
 ## 4. Data Presentation Guidelines
 - Use badges to denote trust level (`Master Admin`, `Operating Admin`, `Authorized Admin`, `Community`).

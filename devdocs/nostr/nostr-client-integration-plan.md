@@ -3,6 +3,7 @@
 ## 1. Objectives
 - Provide a resilient Nostr client stack that can publish and subscribe to RHTools events (profiles, keypairs, trust declarations, ratings, future forum/chat objects).
 - Support both foreground (Electron renderer) and optional background service operation so that events can be processed even when the main UI is closed.
+- Introduce explicit Online vs Offline operating modes so the user controls when network connectivity is used.
 - Maintain a consistent follow list derived from trusted admin/master/admin-user keypairs and relevant subject keys, enabling automatic discovery of authoritative updates.
 - Lay groundwork for advanced features: secure messaging, forum threads, user verification, and cross-device synchronization.
 
@@ -49,8 +50,23 @@
 1. Renderer requests publication → IPC to NRS → NRS signs event (via `OnlineProfileManager`/`NostrLocalDBManager`) → event stored in `nostr_cache_out` → relay send.
 2. NRS subscribes to configured relays → receives events → stores raw event in `nostr_cache_in` + archives → deduplicates → signals renderer via IPC for UI updates.
 3. Follow list updates (see §4) trigger a resubscription cycle with new filters.
+4. Operating mode transitions (`Offline` ⇄ `Online`) propagate from renderer → main process → NRS, which enables or suspends relay connectivity and queue flushing accordingly.
 
-### 3.3 Library Selection
+### 3.3 Operating Modes
+- **Offline Mode** (default for first-time users):
+  - No relay connections; outgoing events remain queued with status `pending`.
+  - Incoming subscriptions paused; background tasks limited to local maintenance (e.g., follow list computation).
+  - Renderer surfaces offline indicators and provides a call-to-action to enable Online Mode.
+- **Online Mode** (requires explicit user consent):
+  - NRS opens relay connections, processes outgoing queue, subscribes for incoming events, and optionally keeps running in the background.
+  - Mode state persisted in `csettings` (e.g., `nostr_operating_mode`) and mirrored in renderer state.
+  - Provide user controls to restrict Online Mode to foreground-only operation if desired.
+- **Mode switching**:
+  - Triggered via UI toggle with confirmation dialog summarizing network activity.
+  - When switching to Online, reinitialize relay pool and flush pending events.
+  - When switching to Offline, gracefully close connections and pause workers while keeping queued events intact.
+
+### 3.4 Library Selection
 
 | Library | Strengths | Limitations | Proposed Usage |
 |---------|-----------|-------------|----------------|
@@ -100,6 +116,7 @@
    - Finalize `NostrLocalDBManager` APIs (relay config, queue operations).
    - Implement NRS scaffold (process startup, IPC contract, logging, configuration storage in `csettings`).
    - Integrate `@nostr/gadgets` with relay connection pooling; read/write events from caches.
+   - Persist and expose the operating mode flag (`Offline`/`Online`) with default Offline and IPC hooks for toggling.
 2. **Follow List & Subscription**
    - Create `nostr_follow_entries` table and sync task.
    - Build subscription filters (kinds and authors) and hook them to NRS.

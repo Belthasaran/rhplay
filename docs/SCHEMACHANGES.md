@@ -5,6 +5,56 @@ This document tracks all database schema changes made to the rhtools project dat
 
 ---
 
+## 2025-11-07: Nostr Relay Catalog (clientdata.db)
+
+### Date
+November 7, 2025
+
+### Description
+Created `nostr_relays` table in `clientdata.db` to store a managed catalog of Nostr relay endpoints along with category tags, priority, health telemetry, and read/write flags. This supports client-managed preload relays, user-added relays, and admin-published relay lists signed via trust declarations.
+
+### Rationale
+- **Relay Management**: Persist a curated list of relays the client should connect to.
+- **Categorization**: Allow users to opt into relay categories (trusted-core, ratings, profiles, etc.).
+- **Health Tracking**: Record last success/failure timestamps and consecutive failure counts for adaptive relay selection.
+- **Extensibility**: Support admin-published relay bundles and user overrides without code changes.
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**New Table**: `nostr_relays`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `relay_url` | TEXT PRIMARY KEY | Fully-qualified Nostr relay URL |
+| `label` | TEXT | Optional human-readable name |
+| `categories` | TEXT | JSON array of category tags |
+| `priority` | INTEGER | Higher values sorted first |
+| `auth_required` | INTEGER | 1 if relay requires auth (NIP-42, NIP-111) |
+| `read` | INTEGER | 1 if client should subscribe/read |
+| `write` | INTEGER | 1 if client should publish/write |
+| `added_by` | TEXT | `system`, `user`, or `admin-published` |
+| `health_score` | REAL | Running score (-1.0 to 1.0) |
+| `last_success` | INTEGER | Unix timestamp of last successful interaction |
+| `last_failure` | INTEGER | Unix timestamp of last failure |
+| `consecutive_failures` | INTEGER | Counter of successive failures |
+| `created_at` | TIMESTAMP | Defaults to CURRENT_TIMESTAMP |
+| `updated_at` | TIMESTAMP | Updated via trigger |
+
+### Constraints & Indexes
+- Primary key on `relay_url`.
+- Trigger `trg_nostr_relays_updated` keeps `updated_at` current.
+- Indexes on `priority` (descending) and `added_by` for filtering and sorting.
+
+### Migration File
+- `electron/sql/migrations/030_clientdata_nostr_relays.sql`
+
+### Related Code
+- `electron/utils/NostrLocalDBManager.js` now provides CRUD helpers, category preference storage, resource limit defaults, and relay health tracking using this table.
+
+---
+
 ## 2025-10-12: Upload Status Tracking Table (patchbin.db)
 
 ### Date
@@ -1266,6 +1316,141 @@ ALTER TABLE admin_keypairs ADD COLUMN nostr_status VARCHAR(50) DEFAULT 'pending'
 CREATE INDEX IF NOT EXISTS idx_admin_keypairs_nostr_event_id ON admin_keypairs(nostr_event_id);
 CREATE INDEX IF NOT EXISTS idx_admin_keypairs_nostr_status ON admin_keypairs(nostr_status);
 ```
+
+---
+
+## 2025-11-07: Ratings Database (ratings.db)
+
+### Date
+November 7, 2025
+
+### Description
+Introduced a dedicated `ratings.db` SQLite database to store incoming Nostr rating (kind 31001) events and aggregated summaries. The database captures per-rater ratingcards and maintains summary statistics for each game across different trust tiers.
+
+### Rationale
+- **Decoupled storage**: Keep crowd-sourced ratings separate from core client data tables while retaining the ability to republish ratings.
+- **Aggregation support**: Provide pre-computed averages/medians/stddevs per rating dimension to power public rating displays.
+- **Trust segmentation**: Track ratings by unverified, fully verified, and highly trusted raters to support future moderation workflows.
+
+### Tables/Columns Affected
+
+**Database**: `ratings.db`
+
+**New Table**: `rating_events`
+- `rater_pubkey` (TEXT, part of PK)
+- `gameid` (TEXT, part of PK)
+- `gvuuid` (TEXT)
+- `version` (INTEGER)
+- `status` (TEXT)
+- `rating_json` (TEXT)
+- `user_notes` (TEXT)
+- `overall_rating` (REAL)
+- `difficulty_rating` (REAL)
+- `created_at_ts` (INTEGER)
+- `updated_at_ts` (INTEGER)
+- `published_at` (INTEGER)
+- `received_at` (INTEGER)
+- `trust_level` (INTEGER)
+- `trust_tier` (TEXT)
+- `event_id` (TEXT)
+- `signature` (TEXT)
+- `tags_json` (TEXT)
+
+**New Table**: `rating_summaries`
+- `gameid` (TEXT, part of PK)
+- `rating_category` (TEXT, part of PK)
+- `trust_tier` (TEXT, part of PK)
+- `rating_count` (INTEGER)
+- `rating_average` (REAL)
+- `rating_median` (REAL)
+- `rating_stddev` (REAL)
+- `updated_at` (INTEGER)
+
+**New Table**: `trust_assignments`
+- `assignment_id` (INTEGER, PK)
+- `pubkey` (TEXT)
+- `assigned_trust_level` (INTEGER)
+- `trust_limit` (INTEGER)
+- `assigned_by_pubkey` (TEXT)
+- `assigned_by_trust_level` (INTEGER)
+- `scope` (TEXT)
+- `source` (TEXT)
+- `reason` (TEXT)
+- `expires_at` (INTEGER)
+- `created_at` (INTEGER)
+
+**Indexes**
+- `idx_rating_events_gameid`
+- `idx_rating_events_trust_tier`
+- `idx_rating_events_event_id`
+- `idx_rating_summaries_gameid`
+- `idx_trust_assignments_pubkey`
+- `idx_trust_assignments_assigned_by`
+
+### Migration File
+- `electron/sql/ratings.sql`
+
+### Related Code
+- `electron/main/NostrRuntimeService.js` now ingests kind 31001 events into `rating_events`, maintains `trust_assignments`-aware trust levels, and updates `rating_summaries` after each publication.
+
+---
+
+## 2025-11-07: Moderation Database (moderation.db)
+
+### Date
+November 7, 2025
+
+### Description
+Created `moderation.db` to store moderator/admin actions (blocks, freezes, warnings) and associated audit logs.
+
+### Rationale
+- **Persistent moderation**: Ensure moderation directives (e.g., user blocks, channel freezes) can be enforced across clients and persisted for auditing.
+- **Auditability**: Track creation, revocation, and expiration events for each moderation action.
+- **Integration**: Provide a central data source that `PermissionHelper`/`ModerationManager` can read from when evaluating scope and permissions.
+
+### Tables/Columns Affected
+
+**Database**: `moderation.db`
+
+**New Table**: `moderation_actions`
+- `action_id` (TEXT, PK)
+- `action_type` (TEXT)
+- `target_type` (TEXT)
+- `target_identifier` (TEXT)
+- `scope_type` (TEXT)
+- `scope_identifier` (TEXT)
+- `content_json` (TEXT)
+- `reason` (TEXT)
+- `issued_by_pubkey` (TEXT)
+- `issued_by_trust_level` (INTEGER)
+- `issued_at` (INTEGER)
+- `expires_at` (INTEGER)
+- `trust_level` (INTEGER)
+- `trust_tier` (TEXT)
+- `event_id` (TEXT)
+- `signature` (TEXT)
+- `status` (TEXT)
+- `revoked_by_pubkey` (TEXT)
+- `revoked_at` (INTEGER)
+
+**New Table**: `moderation_logs`
+- `log_id` (INTEGER, PK)
+- `action_id` (TEXT)
+- `log_type` (TEXT)
+- `details_json` (TEXT)
+- `created_at` (INTEGER)
+
+### Indexes
+- `idx_moderation_actions_target`
+- `idx_moderation_actions_status`
+- `idx_moderation_actions_event_id`
+- `idx_moderation_logs_action_id`
+
+### Migration File
+- `electron/sql/moderation.sql`
+
+### Related Code
+- `electron/utils/PermissionHelper.js` and upcoming moderation IPC handlers rely on this schema for enforcing scope-aware moderation.
 
 ---
 

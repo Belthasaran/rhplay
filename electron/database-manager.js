@@ -63,6 +63,8 @@ class DatabaseManager {
       rhdata: process.env.RHDATA_DB_PATH || path.join(basePath, 'rhdata.db'),
       patchbin: process.env.PATCHBIN_DB_PATH || path.join(basePath, 'patchbin.db'),
       clientdata: process.env.CLIENTDATA_DB_PATH || path.join(basePath, 'clientdata.db'),
+      ratings: process.env.RATINGS_DB_PATH || path.join(basePath, 'ratings.db'),
+      moderation: process.env.MODERATION_DB_PATH || path.join(basePath, 'moderation.db'),
     };
     
     // In packaged environment, handle external databases
@@ -97,6 +99,16 @@ class DatabaseManager {
     // Always ensure clientdata.db exists (user-specific)
     if (!fs.existsSync(paths.clientdata)) {
       this.createEmptyDatabase(paths.clientdata, 'clientdata.db');
+    }
+
+    // Ensure ratings.db exists (user-specific)
+    if (!fs.existsSync(paths.ratings)) {
+      this.createEmptyDatabase(paths.ratings, 'ratings.db');
+    }
+
+    // Ensure moderation.db exists
+    if (!fs.existsSync(paths.moderation)) {
+      this.createEmptyDatabase(paths.moderation, 'moderation.db');
     }
   }
 
@@ -215,6 +227,8 @@ class DatabaseManager {
           this.autoImportAdminPublicKeys(this.connections[dbName]);
         }
       }
+
+      // Additional database-specific initialization could go here
     }
     
     return this.connections[dbName];

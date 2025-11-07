@@ -28,6 +28,16 @@ const DEFAULT_RESOURCE_LIMITS = Object.freeze({
   outgoingPerMinute: 60
 });
 const MESSAGE_UNIT_BYTES = 32 * 1024; // 32 KiB per weighting unit
+const MANUAL_FOLLOW_KEY = 'nostr_manual_follows';
+
+function columnExists(db, table, column) {
+  try {
+    const rows = db.prepare(`PRAGMA table_info(${table})`).all();
+    return rows.some((row) => row.name === column);
+  } catch (error) {
+    return false;
+  }
+}
 
 class NostrLocalDBManager {
   constructor(options = {}) {
@@ -226,6 +236,18 @@ class NostrLocalDBManager {
   }
 
   /**
+   * Estimate message units for rate limiting given payload size
+   * @param {number} sizeBytes
+   * @returns {number}
+   */
+  estimateMessageUnits(sizeBytes) {
+    if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(sizeBytes / MESSAGE_UNIT_BYTES));
+  }
+
+  /**
    * Update resource limit configuration values
    * @param {Object} updates
    * @returns {Object} Updated limits
@@ -277,6 +299,110 @@ class NostrLocalDBManager {
       this.logger.error('[NostrLocalDBManager] Failed to persist relay category preference:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Sanitize manual follow entries
+   * @param {Array} entries
+   * @returns {Array}
+   */
+  sanitizeManualFollowEntries(entries = []) {
+    const sanitized = [];
+    const seen = new Set();
+    const now = Math.floor(Date.now() / 1000);
+
+    for (const entry of entries || []) {
+      if (!entry) continue;
+      const pubkey = String(entry.pubkey || entry.npub || '').trim();
+      if (!pubkey) continue;
+      const key = pubkey.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const label = entry.label ? String(entry.label).trim() : null;
+      const relays = Array.isArray(entry.relays) ? entry.relays.map((r) => String(r).trim()).filter(Boolean) : [];
+      const addedAt = Number.isFinite(entry.addedAt) ? entry.addedAt : now;
+
+      sanitized.push({
+        pubkey,
+        label,
+        relays,
+        addedAt
+      });
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Retrieve manual follow entries
+   * @returns {Array}
+   */
+  getManualFollowEntries() {
+    try {
+      const raw = this.getCsetting(MANUAL_FOLLOW_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return this.sanitizeManualFollowEntries(parsed);
+    } catch (error) {
+      this.logger.warn('[NostrLocalDBManager] Failed to parse manual follow entries, resetting to empty:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Persist manual follow entries
+   * @param {Array} entries
+   * @returns {Array} Sanitized entries
+   */
+  setManualFollowEntries(entries = []) {
+    const sanitized = this.sanitizeManualFollowEntries(entries);
+    try {
+      this.setCsetting(MANUAL_FOLLOW_KEY, JSON.stringify(sanitized));
+      return sanitized;
+    } catch (error) {
+      this.logger.error('[NostrLocalDBManager] Failed to persist manual follow entries:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Add or update a single manual follow entry
+   * @param {Object} entry
+   * @returns {Array} Updated entries
+   */
+  addManualFollowEntry(entry) {
+    const sanitizedEntry = this.sanitizeManualFollowEntries([entry]);
+    if (!sanitizedEntry.length) {
+      return this.getManualFollowEntries();
+    }
+    const existing = this.getManualFollowEntries();
+    const map = new Map(existing.map((item) => [item.pubkey.toLowerCase(), item]));
+    const newEntry = sanitizedEntry[0];
+    map.set(newEntry.pubkey.toLowerCase(), newEntry);
+    const merged = Array.from(map.values());
+    this.setManualFollowEntries(merged);
+    return merged;
+  }
+
+  /**
+   * Remove manual follow entry by pubkey
+   * @param {string} pubkey
+   * @returns {Array} Updated entries
+   */
+  removeManualFollowEntry(pubkey) {
+    if (!pubkey) {
+      return this.getManualFollowEntries();
+    }
+    const key = String(pubkey).trim().toLowerCase();
+    const current = this.getManualFollowEntries();
+    const filtered = current.filter((entry) => entry.pubkey.toLowerCase() !== key);
+    this.setManualFollowEntries(filtered);
+    return filtered;
   }
 
   /**
@@ -337,7 +463,8 @@ class NostrLocalDBManager {
         keep_for INTEGER,
         table_name TEXT,
         record_uuid TEXT,
-        user_profile_uuid TEXT
+        user_profile_uuid TEXT,
+        signature TEXT
       );
       
       CREATE INDEX IF NOT EXISTS idx_nostr_raw_events_publickey ON nostr_raw_events(nostr_publickey);
@@ -350,6 +477,8 @@ class NostrLocalDBManager {
       CREATE INDEX IF NOT EXISTS idx_nostr_raw_events_user_profile_uuid ON nostr_raw_events(user_profile_uuid);
     `);
     
+    this.ensureRawEventsSchema(db);
+
     // Create feed_database table
     db.exec(`
       CREATE TABLE IF NOT EXISTS feed_database (
@@ -415,6 +544,325 @@ class NostrLocalDBManager {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Relay catalog operations (clientdata.nostr_relays)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Normalize relay record from database
+   * @param {Object} row
+   * @returns {Object|null}
+   */
+  formatRelayRow(row) {
+    if (!row) return null;
+    let categories = [];
+    try {
+      categories = row.categories ? JSON.parse(row.categories) : [];
+      if (!Array.isArray(categories)) {
+        categories = [];
+      }
+    } catch (error) {
+      categories = [];
+    }
+    return {
+      relayUrl: row.relay_url,
+      label: row.label || null,
+      categories,
+      priority: row.priority,
+      authRequired: row.auth_required === 1,
+      read: row.read === 1,
+      write: row.write === 1,
+      addedBy: row.added_by || 'system',
+      healthScore: row.health_score,
+      lastSuccess: row.last_success,
+      lastFailure: row.last_failure,
+      consecutiveFailures: row.consecutive_failures,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
+  /**
+   * List relays optionally filtered by options
+   * @param {Object} options
+   * @returns {Array<Object>}
+   */
+  listRelays(options = {}) {
+    const {
+      includeSystem = true,
+      includeUser = true,
+      includeAdminPublished = true,
+      categories = null,
+      read = null,
+      write = null
+    } = options;
+
+    const db = this.getClientDb();
+
+    const conditions = [];
+    const params = [];
+
+    if (!includeSystem || !includeUser || !includeAdminPublished) {
+      const allowed = [];
+      if (includeSystem) allowed.push('system');
+      if (includeUser) allowed.push('user');
+      if (includeAdminPublished) allowed.push('admin-published');
+      if (allowed.length === 0) {
+        return [];
+      }
+      conditions.push(`added_by IN (${allowed.map(() => '?').join(',')})`);
+      params.push(...allowed);
+    }
+
+    if (read !== null) {
+      conditions.push('read = ?');
+      params.push(read ? 1 : 0);
+    }
+
+    if (write !== null) {
+      conditions.push('write = ?');
+      params.push(write ? 1 : 0);
+    }
+
+    let query = 'SELECT * FROM nostr_relays';
+    if (conditions.length) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY priority DESC, relay_url ASC';
+
+    let rows;
+    try {
+      rows = db.prepare(query).all(...params);
+    } catch (error) {
+      if (error && typeof error.message === 'string' && error.message.includes('no such table: nostr_relays')) {
+        this.logger.warn('[NostrLocalDBManager] nostr_relays table not found when listing relays; returning empty list');
+        return [];
+      }
+      throw error;
+    }
+    if (!categories || categories.length === 0) {
+      return rows.map((row) => this.formatRelayRow(row));
+    }
+
+    const categorySet = new Set(categories.map((cat) => String(cat).trim()).filter(Boolean));
+    return rows
+      .map((row) => this.formatRelayRow(row))
+      .filter((relay) => relay && relay.categories.some((cat) => categorySet.has(String(cat).trim())));
+  }
+
+  /**
+   * Retrieve a relay by URL
+   * @param {string} relayUrl
+   * @returns {Object|null}
+   */
+  getRelay(relayUrl) {
+    const db = this.getClientDb();
+    try {
+      const row = db.prepare('SELECT * FROM nostr_relays WHERE relay_url = ?').get(relayUrl);
+      return this.formatRelayRow(row);
+    } catch (error) {
+      if (error && typeof error.message === 'string' && error.message.includes('no such table: nostr_relays')) {
+        this.logger.warn('[NostrLocalDBManager] nostr_relays table not found when fetching relay; returning null');
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Insert or update relay definition
+   * @param {Object} relay
+   * @returns {Object}
+   */
+  upsertRelay(relay) {
+    if (!relay || !relay.relayUrl) {
+      throw new Error('Relay object must include relayUrl');
+    }
+
+    const db = this.getClientDb();
+    const categoriesJson = JSON.stringify(Array.isArray(relay.categories) ? relay.categories : []);
+
+    db.prepare(`
+      INSERT INTO nostr_relays (
+        relay_url, label, categories, priority, auth_required,
+        read, write, added_by, health_score, last_success,
+        last_failure, consecutive_failures
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(relay_url) DO UPDATE SET
+        label = excluded.label,
+        categories = excluded.categories,
+        priority = excluded.priority,
+        auth_required = excluded.auth_required,
+        read = excluded.read,
+        write = excluded.write,
+        added_by = excluded.added_by,
+        health_score = excluded.health_score,
+        last_success = COALESCE(excluded.last_success, nostr_relays.last_success),
+        last_failure = COALESCE(excluded.last_failure, nostr_relays.last_failure),
+        consecutive_failures = excluded.consecutive_failures
+    `).run(
+      relay.relayUrl,
+      relay.label || null,
+      categoriesJson,
+      Number.isFinite(relay.priority) ? relay.priority : 0,
+      relay.authRequired ? 1 : 0,
+      relay.read === false ? 0 : 1,
+      relay.write === false ? 0 : 1,
+      relay.addedBy || 'user',
+      Number.isFinite(relay.healthScore) ? relay.healthScore : 0,
+      relay.lastSuccess || null,
+      relay.lastFailure || null,
+      Number.isFinite(relay.consecutiveFailures) ? relay.consecutiveFailures : 0
+    );
+
+    return this.getRelay(relay.relayUrl);
+  }
+
+  /**
+   * Update specific fields on an existing relay
+   * @param {string} relayUrl
+   * @param {Object} changes
+   * @returns {Object|null}
+   */
+  updateRelay(relayUrl, changes = {}) {
+    const db = this.getClientDb();
+    const columnMap = {
+      label: 'label',
+      categories: 'categories',
+      priority: 'priority',
+      authRequired: 'auth_required',
+      read: 'read',
+      write: 'write',
+      addedBy: 'added_by',
+      healthScore: 'health_score',
+      lastSuccess: 'last_success',
+      lastFailure: 'last_failure',
+      consecutiveFailures: 'consecutive_failures'
+    };
+
+    const sets = [];
+    const params = [];
+
+    for (const [key, column] of Object.entries(columnMap)) {
+      if (!(key in changes)) continue;
+      let value = changes[key];
+      if (column === 'categories') {
+        value = JSON.stringify(Array.isArray(value) ? value : []);
+      } else if (['read', 'write', 'auth_required'].includes(column)) {
+        value = value ? 1 : 0;
+      }
+      sets.push(`${column} = ?`);
+      params.push(value);
+    }
+
+    if (!sets.length) {
+      return this.getRelay(relayUrl);
+    }
+
+    params.push(relayUrl);
+    db.prepare(`UPDATE nostr_relays SET ${sets.join(', ')} WHERE relay_url = ?`).run(...params);
+    return this.getRelay(relayUrl);
+  }
+
+  /**
+   * Remove a relay (system relays require force flag)
+   * @param {string} relayUrl
+   * @param {Object} options
+   */
+  removeRelay(relayUrl, options = {}) {
+    const db = this.getClientDb();
+    const { force = false } = options;
+    const relay = this.getRelay(relayUrl);
+    if (!relay) return false;
+    if (!force && relay.addedBy === 'system') {
+      throw new Error('System relay entries cannot be removed without force');
+    }
+    db.prepare('DELETE FROM nostr_relays WHERE relay_url = ?').run(relayUrl);
+    return true;
+  }
+
+  /**
+   * Update relay health statistics
+   * @param {string} relayUrl
+   * @param {Object} metrics
+   */
+  updateRelayHealth(relayUrl, metrics = {}) {
+    const current = this.getRelay(relayUrl);
+    if (!current) {
+      this.logger.warn(`[NostrLocalDBManager] Cannot update health for unknown relay: ${relayUrl}`);
+      return null;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const changes = {};
+
+    if (metrics.success) {
+      changes.lastSuccess = now;
+      changes.consecutiveFailures = 0;
+      const newScore = Math.min(1, (current.healthScore || 0) + (metrics.delta || 0.1));
+      changes.healthScore = Number(newScore.toFixed(4));
+    }
+
+    if (metrics.failure) {
+      changes.lastFailure = now;
+      const newScore = Math.max(-1, (current.healthScore || 0) - (metrics.delta || 0.1));
+      changes.healthScore = Number(newScore.toFixed(4));
+      changes.consecutiveFailures = (current.consecutiveFailures || 0) + 1;
+    }
+
+    if (typeof metrics.healthScore === 'number') {
+      changes.healthScore = metrics.healthScore;
+    }
+    if (typeof metrics.consecutiveFailures === 'number') {
+      changes.consecutiveFailures = metrics.consecutiveFailures;
+    }
+    if (typeof metrics.lastSuccess === 'number') {
+      changes.lastSuccess = metrics.lastSuccess;
+    }
+    if (typeof metrics.lastFailure === 'number') {
+      changes.lastFailure = metrics.lastFailure;
+    }
+
+    if (Object.keys(changes).length === 0) {
+      return current;
+    }
+
+    return this.updateRelay(relayUrl, changes);
+  }
+
+  /**
+   * Select relays matching category preferences and flags
+   * @param {Object} options
+   * @returns {Array<Object>}
+   */
+  selectPreferredRelays(options = {}) {
+    const categories = options.categories || this.getRelayCategoryPreference();
+    const relays = this.listRelays({ ...options, categories });
+    if (options.limit && Number.isFinite(options.limit)) {
+      return relays.slice(0, options.limit);
+    }
+    return relays;
+  }
+
+  /**
+   * Seed default relays if table is empty
+   * @param {Array<Object>} defaults
+   */
+  ensureDefaultRelays(defaults = []) {
+    const db = this.getClientDb();
+    const countRow = db.prepare('SELECT COUNT(*) AS count FROM nostr_relays').get();
+    if (countRow.count > 0) {
+      return;
+    }
+    for (const relay of defaults) {
+      try {
+        this.upsertRelay({ ...relay, addedBy: relay.addedBy || 'system' });
+      } catch (error) {
+        this.logger.error('[NostrLocalDBManager] Failed to seed relay', relay?.relayUrl, error.message);
+      }
+    }
+  }
+
   /**
    * Get database connection
    * @param {string} dbType - Database type
@@ -467,7 +915,8 @@ class NostrLocalDBManager {
         keep_for INTEGER,
         table_name TEXT,
         record_uuid TEXT,
-        user_profile_uuid TEXT
+        user_profile_uuid TEXT,
+        signature TEXT
       );
       
       CREATE INDEX IF NOT EXISTS idx_nostr_raw_events_publickey ON nostr_raw_events(nostr_publickey);
@@ -494,10 +943,25 @@ class NostrLocalDBManager {
       VALUES (1, 0, '', '');
     `);
     
+    this.ensureRawEventsSchema(db);
+
     // Update host fingerprint asynchronously (non-blocking)
     this.updateHostFingerprint(key).catch(err => {
       console.error(`Error updating host fingerprint for ${key}:`, err);
     });
+  }
+
+  ensureRawEventsSchema(db) {
+    if (!db) {
+      return;
+    }
+    try {
+      if (!columnExists(db, 'nostr_raw_events', 'signature')) {
+        db.exec('ALTER TABLE nostr_raw_events ADD COLUMN signature TEXT');
+      }
+    } catch (error) {
+      this.logger?.warn?.('[NostrLocalDBManager] Failed to ensure nostr_raw_events schema:', error.message);
+    }
   }
 
   /**
@@ -529,8 +993,9 @@ class NostrLocalDBManager {
           keep_for,
           table_name,
           record_uuid,
-          user_profile_uuid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          user_profile_uuid,
+          signature
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         event.id,
         0, // reserved (always 0)
@@ -544,7 +1009,8 @@ class NostrLocalDBManager {
         keepFor,
         tableName,
         recordUuid,
-        userProfileUuid
+        userProfileUuid,
+        event.sig || event.signature || null
       );
       
       return true;
@@ -607,7 +1073,8 @@ class NostrLocalDBManager {
         kind: row.nostr_kind,
         tags: JSON.parse(row.nostr_tags),
         content: row.content,
-        sig: null, // Not stored in raw_events table
+        sig: row.signature,
+        signature: row.signature,
         proc_status: row.proc_status,
         proc_at: row.proc_at,
         keep_for: row.keep_for
@@ -643,7 +1110,8 @@ class NostrLocalDBManager {
         kind: row.nostr_kind,
         tags: JSON.parse(row.nostr_tags),
         content: row.content,
-        sig: null,
+        sig: row.signature,
+        signature: row.signature,
         proc_status: row.proc_status,
         proc_at: row.proc_at,
         keep_for: row.keep_for
@@ -689,8 +1157,9 @@ class NostrLocalDBManager {
           keep_for,
           table_name,
           record_uuid,
-          user_profile_uuid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          user_profile_uuid,
+          signature
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         row.nostr_event_id,
         row.nostr_reserved,
@@ -704,7 +1173,8 @@ class NostrLocalDBManager {
         row.keep_for,
         row.table_name || null,
         row.record_uuid || null,
-        row.user_profile_uuid || null
+        row.user_profile_uuid || null,
+        row.signature || null
       );
       
       // Delete from source
@@ -754,8 +1224,9 @@ class NostrLocalDBManager {
             keep_for,
             table_name,
             record_uuid,
-            user_profile_uuid
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            user_profile_uuid,
+            signature
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           row.nostr_event_id,
           row.nostr_reserved,
@@ -769,7 +1240,8 @@ class NostrLocalDBManager {
           row.keep_for,
           row.table_name || null,
           row.record_uuid || null,
-          row.user_profile_uuid || null
+          row.user_profile_uuid || null,
+          row.signature || null
         );
         
         // Delete from source
@@ -894,6 +1366,9 @@ class NostrLocalDBManager {
     this.connections = {};
   }
 }
+
+NostrLocalDBManager.DEFAULT_RELAY_CATEGORIES = DEFAULT_RELAY_CATEGORIES;
+NostrLocalDBManager.DEFAULT_RESOURCE_LIMITS = DEFAULT_RESOURCE_LIMITS;
 
 module.exports = { NostrLocalDBManager };
 

@@ -155,34 +155,24 @@
 5. **Advanced Features Roadmap**
    - DM encryption (NIP-04/44), forum announcements (kind 31100+), chat (kind 42), remote signer support, moderation queue UI.
 
-## 10. IPC Contracts (Renderer ↔ NRS)
-All commands travel through Electron's IPC (`ipcMain.handle`/`ipcRenderer.invoke`) with payloads serialized as plain objects. Events (streaming updates) use `ipcRenderer.on` from the renderer side. Core channels:
+### Current Implementation Status (as of 2025-11-07)
+- `NostrLocalDBManager` extended with relay catalog CRUD, resource limits, operating-mode persistence, and manual follow storage.
+- Migration `030_clientdata_nostr_relays.sql` adds the managed relay table documented in `docs/SCHEMACHANGES.md` and `docs/DBMIGRATE.md`.
+- `NostrRuntimeService` (main process) introduced to maintain runtime state, queue statistics, and configuration; emits periodic status snapshots.
+- `NostrRuntimeService` now establishes live relay connections using `nostr-tools` `SimplePool`, subscribes to core event kinds, enforces resource limits, persists incoming events, and flushes the outgoing queue with rate limiting and throttling.
+- `NostrRuntimeIPC` delegates IPC handlers to `NostrRuntimeService`, broadcasts status updates to renderer windows, and exposes publish/queue/query operations.
+- Renderer preload API exposes `nostr:nrs:*` commands and event subscription for UI integration.
+- Introduced `TrustManager` utilities and `trust:assignments:*` IPC endpoints enabling storage/query of manual trust assignments and centralised trust-level calculations.
+- Added foundational CLI (`enode.sh cli/trust-inspector.js`) for inspecting trust levels, assignments, and declarations from the command line.
+- Added `PermissionHelper` and `ModerationManager` to centralise scope-aware checks and persistence of moderation actions in `moderation.db` (`moderation:block-target`, `moderation:revoke-action`, `moderation:list-actions`).
 
-| Channel | Direction | Payload | Description |
-|---------|-----------|---------|-------------|
-| `nostr:nrs:init` | Renderer → Main | `{ modePreference?: "online" | "offline" }` | Renderer indicates current preference; main replies with current state, relays, limits. |
-| `nostr:nrs:status` | Main → Renderer (event) | `{ mode, relays, queueStats, cpuLoad, backlog }` | Periodic status broadcast (every 5s or upon change). |
-| `nostr:nrs:set-mode` | Renderer → Main | `{ mode: "online" | "offline", confirm?: boolean }` | Request mode change. Main prompts user if consent needed, then instructs NRS. Reply includes success flag and message. |
-| `nostr:nrs:publish` | Renderer → Main | `{ eventUuid }` | Ask NRS to enqueue/flush specific event. Response contains updated status. |
-| `nostr:nrs:queue:list` | Renderer → Main | `{ limit?, offset? }` | Fetch pending/sent queue entries for UI display. |
-| `nostr:nrs:relays:list` | Renderer ↔ Main | Request: `{}`; Response: array of relay records with categories, health stats. |
-| `nostr:nrs:relays:update` | Renderer → Main | `{ relayUrl, changes }` | Modify relay flags/categories; main persists to DB. |
-| `nostr:nrs:relays:add` | Renderer → Main | `{ relayUrl, categories, read, write }` | Add manual relay. |
-| `nostr:nrs:relays:remove` | Renderer → Main | `{ relayUrl }` | Remove user relay (system relays are flagged and require confirmation). |
-| `nostr:nrs:follow:update` | Renderer → Main | `{ manualFollows }` | Update manual follow list; triggers NRS resubscription. |
-| `nostr:nrs:event` | Main → Renderer (event) | `{ type: "incoming" | "outgoing" | "error", payload }` | Stream new events (for feed updates), errors, or queue status changes. |
-| `nostr:nrs:limits:get` | Renderer → Main | `{}` | Retrieve current resource limits and defaults. |
-| `nostr:nrs:limits:set` | Renderer → Main | `{ incomingBacklog?, messageRate?, cpuCap?, outgoingRate? }` | Update advanced throttles; persisted in `csettings`. |
-| `nostr:nrs:shutdown` | Renderer → Main | `{ keepBackground?: boolean }` | Notify NRS of app exit; optionally keep background service alive. |
+### Upcoming Work Notes
+- **Trust declaration integration**: augment `TrustManager` to honour trust declarations, scoped delegations, and automatic admin privileges when deriving trust levels.
+- **Admin tooling**: build UI & IPC for issuing/revoking trust assignments and inspect user trust history (IPC endpoints available; UI pending).
+- **Public ratings UI**: future phases will surface verified summary data in the client once ingestion and summarisation are complete.
+- **Ratings ingestion pipeline**: incoming Nostr rating events (kind 31001) will be stored in a dedicated ratings database. Schema to include detailed ratingcard records linked to `gameversions`, plus a `rating_summary` table tracking mean/median/stddev/count per rating category. Plan separate summary slices for unverified, fully verified, and highly trusted raters, ensuring updated ratings replace prior submissions.
+- **Trust management UI**: expose trust inspector functionality via graphical admin panels (view/edit trust assignments, inspect declarations, review trust history).
+- **Backend permission helper**: introduce a centralized matcher that evaluates actions/scopes against trust assignments and declarations (including hierarchical sections), to be used by all moderation/admin IPC handlers. (In progress via `PermissionHelper`; trust assignment mutations now require permission checks.)
 
-Errors returned as `{ success: false, errorCode, message }` with log correlation ID for diagnostics. Main process is responsible for routing calls to the NRS worker via message channels and returning replies to renderer.
-
-## 11. Open Questions
-- Background consent UX: do we prompt again after major updates or rely on stored consent?
-
-## 12. Next Steps
-1. Review/approve this architecture and library selection.
-2. Lock down IPC contracts between renderer and NRS.
-3. Define database schema additions (follow table, relay config table, incoming event indices).
-4. Schedule implementation milestones aligned with UI work (see companion UI plan).
-
+### Next Steps
+- Design schema and migrations for dedicated ratings database(s), including raw ratingcard storage and `rating_summary`

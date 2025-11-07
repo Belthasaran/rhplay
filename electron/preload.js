@@ -648,6 +648,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Array>} Array of profile metadata
    */
   listOnlineProfiles: () => ipcRenderer.invoke('online:profiles:list'),
+  listDetailedOnlineProfiles: () => ipcRenderer.invoke('online:profiles:list-detailed'),
   deleteOnlineProfile: (profileId) => ipcRenderer.invoke('online:profile:delete', { profileId }),
   
   /**
@@ -862,4 +863,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportUserOpKeypairSecretPKCS: (keypairUuid, password) => ipcRenderer.invoke('online:user-op-keypair:export-secret-pkcs', { keypairUuid, password }),
   importUserOpKeypairSecretPKCS: (keypairUuid, pkcsDataJson, password) => ipcRenderer.invoke('online:user-op-keypair:import-secret-pkcs', { keypairUuid, pkcsDataJson, password }),
   removeUserOpKeypairSecret: (keypairUuid) => ipcRenderer.invoke('online:user-op-keypair:remove-secret', { keypairUuid }),
+
+  // Nostr Runtime Service (stub) operations
+  initNostrRuntime: (options) => ipcRenderer.invoke('nostr:nrs:init', options || {}),
+  setNostrRuntimeMode: (mode) => ipcRenderer.invoke('nostr:nrs:set-mode', { mode }),
+  getNostrRuntimeResourceLimits: () => ipcRenderer.invoke('nostr:nrs:limits:get'),
+  setNostrRuntimeResourceLimits: (updates) => ipcRenderer.invoke('nostr:nrs:limits:set', updates || {}),
+  getNostrRelayCategories: () => ipcRenderer.invoke('nostr:nrs:relay-categories:get'),
+  setNostrRelayCategories: (categories) => ipcRenderer.invoke('nostr:nrs:relay-categories:set', categories || []),
+  listNostrRelays: (options) => ipcRenderer.invoke('nostr:nrs:relays:list', options || {}),
+  addNostrRelay: (relay) => ipcRenderer.invoke('nostr:nrs:relays:add', relay || {}),
+  updateNostrRelay: (relayUrl, changes) => ipcRenderer.invoke('nostr:nrs:relays:update', { relayUrl, changes }),
+  removeNostrRelay: (relayUrl, force = false) => ipcRenderer.invoke('nostr:nrs:relays:remove', { relayUrl, force }),
+  listNostrManualFollows: () => ipcRenderer.invoke('nostr:nrs:follow:list'),
+  updateNostrManualFollows: (entries) => ipcRenderer.invoke('nostr:nrs:follow:update', { entries: entries || [] }),
+  addNostrManualFollow: (entry) => ipcRenderer.invoke('nostr:nrs:follow:add', entry || {}),
+  removeNostrManualFollow: (pubkey) => ipcRenderer.invoke('nostr:nrs:follow:remove', { pubkey }),
+  listNostrQueue: () => ipcRenderer.invoke('nostr:nrs:queue:list'),
+  publishNostrEvent: (payload) => ipcRenderer.invoke('nostr:nrs:publish', payload || {}),
+  shutdownNostrRuntime: (options) => ipcRenderer.invoke('nostr:nrs:shutdown', options || {}),
+  onNostrRuntimeStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('nostr:nrs:status', handler);
+    return () => ipcRenderer.removeListener('nostr:nrs:status', handler);
+  },
+
+  // Trust assignments
+  listTrustAssignments: (pubkey) => ipcRenderer.invoke('trust:assignments:list', { pubkey }),
+  createTrustAssignment: (payload) => ipcRenderer.invoke('trust:assignments:create', payload || {}),
+  deleteTrustAssignment: ({ assignmentId, actorPubkey }) => ipcRenderer.invoke('trust:assignments:delete', { assignmentId, actorPubkey }),
+  getTrustPermissions: (pubkey) => ipcRenderer.invoke('trust:permissions:get', { pubkey }),
+  moderationBlockTarget: (payload) => ipcRenderer.invoke('moderation:block-target', payload || {}),
+  moderationRevokeAction: (payload) => ipcRenderer.invoke('moderation:revoke-action', payload || {}),
+  moderationListActions: (payload) => ipcRenderer.invoke('moderation:list-actions', payload || {}),
 });

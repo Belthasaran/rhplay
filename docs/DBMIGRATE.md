@@ -5,6 +5,38 @@ This document lists all database migration scripts and maintenance commands that
 
 ---
 
+## Migration 030: Nostr Relay Catalog
+
+### Date Added
+November 7, 2025
+
+### Purpose
+Create the `nostr_relays` table in `clientdata.db` to persist a managed catalog of Nostr relays with category tags, priority, and health metadata. Supports preload relays, user-added relays, and admin-published relay bundles.
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/030_clientdata_nostr_relays.sql
+```
+
+### What It Does
+- Creates `nostr_relays` table with metadata columns.
+- Adds indexes on `priority` and `added_by`.
+- Adds trigger `trg_nostr_relays_updated` to maintain `updated_at` timestamp.
+
+### Prerequisites
+- Prior migrations for `clientdata.db` should already be applied.
+- Backup recommended before running.
+
+### Expected Outcome
+- `nostr_relays` table appears in `clientdata.db`.
+- Default data can later be seeded by the application.
+
+### Warnings
+- Safe to run multiple times (uses `CREATE TABLE IF NOT EXISTS`).
+- Does not populate any default relays; seeding handled by application logic.
+
+---
+
 ## Migration 001: New Schema Fields Support
 
 ### Date Added
@@ -1598,4 +1630,67 @@ sqlite3 electron/clientdata.db < electron/sql/migrations/024_clientdata_admin_ke
 - Publishing to Nostr will update these fields when implemented
 
 ---
+
+## Migration 031: Ratings Database Schema
+
+### Date Added
+November 7, 2025
+
+### Purpose
+Create the `ratings.db` schema used to store incoming Nostr rating events (`rating_events`) and aggregated summaries (`rating_summaries`).
+
+### Command
+```bash
+sqlite3 electron/ratings.db < electron/sql/ratings.sql
+```
+
+### What It Does
+- Creates `rating_events` table keyed by `(rater_pubkey, gameid)` to hold the latest ratingcard per user/game, including derived `trust_level`/`trust_tier` metadata.
+- Creates `rating_summaries` table for per-game, per-trust-tier aggregates.
+- Creates `trust_assignments` table capturing manual or delegated trust certifications (levels, limits, expiration).
+- Adds supporting indexes for lookup performance.
+
+### Prerequisites
+- `ratings.db` should exist or be writable in the application data directory (created automatically on first run).
+- No prior migration required (new database).
+
+### Expected Outcome
+- `ratings.db` contains the base schema ready for Nostr runtime ingestion.
+
+### Warnings
+- Safe to run multiple times (uses `CREATE TABLE IF NOT EXISTS`).
+- Existing data is preserved; rerunning only ensures schema presence.
+
+---
+
+## Migration 032: Moderation Database Schema
+
+### Date Added
+November 7, 2025
+
+### Purpose
+Create the `moderation.db` schema used to track moderation actions (`moderation_actions`) and their audit logs (`moderation_logs`).
+
+### Command
+```bash
+sqlite3 electron/moderation.db < electron/sql/moderation.sql
+```
+
+### What It Does
+- Creates `moderation_actions` to persist signed moderation directives (blocks, freezes, warnings) along with issuer metadata and status.
+- Creates `moderation_logs` to keep an audit trail (create/revoke/expire) for each action.
+- Adds indexes to support lookup by target, status, and event ID.
+
+### Prerequisites
+- `moderation.db` should exist or be writable in the application data directory (created automatically on first run).
+
+### Expected Outcome
+- Moderation runtime helpers can read/write actions and logs for enforcement and auditing purposes.
+
+### Warnings
+- Safe to run multiple times (uses `CREATE TABLE IF NOT EXISTS`).
+- Existing data is preserved; rerunning only ensures schema presence.
+
+---
+
 

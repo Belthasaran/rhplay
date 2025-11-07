@@ -8,12 +8,16 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const crypto = require('crypto');
 const { app } = require('electron');
+const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
 const { matchesFilter } = require('./shared-filter-utils');
 const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
 const { HostFP } = require('./main/HostFP');
+const TrustManager = require('./utils/TrustManager');
+const PermissionHelper = require('./utils/PermissionHelper');
+const ModerationManager = require('./utils/ModerationManager');
 
 /**
  * Get keyguard key from session (for encryption/decryption)
@@ -31,7 +35,35 @@ function getKeyguardKey(event) {
 function registerDatabaseHandlers(dbManager) {
   // Import OnlineProfileManager for profile management
   const OnlineProfileManager = require('./utils/OnlineProfileManager');
+  const trustManager = new TrustManager(dbManager, { logger: console });
+  const permissionHelper = new PermissionHelper(dbManager, { trustManager, logger: console });
+  const moderationManager = new ModerationManager(dbManager, { trustManager, logger: console });
   
+  ipcMain.handle('trust:permissions:get', (_event, { pubkey, scope } = {}) => {
+    try {
+      if (!pubkey) {
+        return { success: false, error: 'Missing pubkey' };
+      }
+      const details = trustManager.inspectTrust(pubkey);
+      const response = {
+        success: true,
+        pubkey: details.pubkey,
+        trust_level: details.trust_level,
+        trust_tier: details.trust_tier,
+        permissions: details.permissions,
+        declarations: details.declarations,
+        assignments: details.assignments
+      };
+      if (scope) {
+        response.scope = scope;
+      }
+      return response;
+    } catch (error) {
+      console.error('[trust:permissions:get] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   const broadcastUsb2snesSshStatus = (status) => {
     try {
       const windows = BrowserWindow.getAllWindows();
@@ -63,6 +95,9 @@ function registerDatabaseHandlers(dbManager) {
 
   usbfxpServer.on('status', broadcastUsb2snesFxpStatus);
   broadcastUsb2snesFxpStatus(usbfxpServer.getStatus());
+
+  // Initialize Nostr runtime IPC stubs
+  registerNostrRuntimeIPC(dbManager);
   
   // ===========================================================================
   // GAME DATA OPERATIONS (rhdata.db)
@@ -761,7 +796,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Start a run (change status to active, expand plan to results)
    * Channel: db:runs:start
@@ -1562,7 +1596,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Reveal a random challenge (select and update with actual game)
    * Channel: db:runs:reveal-challenge
@@ -2341,7 +2374,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-
   /**
    * Upload ROM file to console
    * Channel: usb2snes:uploadRom
@@ -3084,11 +3116,9 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   // ===========================================================================
   // GAME EXPORT/IMPORT OPERATIONS
   // ===========================================================================
-  
   /**
    * Export selected games to directory
    * Channel: db:games:export
@@ -3509,6 +3539,46 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * List all profiles with primary keypair details
+   * Channel: online:profiles:list-detailed
+   */
+  ipcMain.handle('online:profiles:list-detailed', async (event) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const profiles = profileManager.listProfiles();
+
+      return profiles.map((profile) => {
+        const metadata = profile._metadata || {};
+        const primary = profile.primaryKeypair || profile.primaryKeyPair || null;
+
+        let primaryKeypair = null;
+        if (primary) {
+          primaryKeypair = {
+            canonicalName: primary.canonicalName || primary.publicKey || '',
+            publicKey: primary.publicKey || '',
+            publicKeyHex: primary.publicKeyHex || primary.public_key_hex || '',
+            fingerprint: primary.fingerprint || '',
+            keypairType: primary.type || primary.keypair_type || '',
+            keypairUuid: primary.keypairUuid || primary.keypair_uuid || primary.uuid || primary.id || null
+          };
+        }
+
+        return {
+          profileId: profile.profileId || metadata.profileUuid,
+          username: profile.username || '',
+          displayName: profile.displayName || '',
+          isCurrent: metadata.isCurrentProfile || false,
+          primaryKeypair
+        };
+      });
+    } catch (error) {
+      console.error('Error listing detailed profiles:', error);
+      return [];
+    }
+  });
+
+  /**
    * Switch to a different profile
    * Channel: online:profile:switch
    */
@@ -3838,7 +3908,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Save online profile
    * Channel: online:profile:save
@@ -4598,7 +4667,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Unlock Profile Guard (auto-unlock if not in high security mode)
    * Channel: profile-guard:unlock
@@ -5342,7 +5410,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Export admin keypair secret key in PKCS format
    * Channel: online:admin-keypair:export-secret-pkcs
@@ -6086,7 +6153,6 @@ function registerDatabaseHandlers(dbManager) {
       return [];
     }
   });
-
   /**
    * Get encryption key details (decrypts keydata if encrypted)
    * Channel: online:encryption-key:get
@@ -6846,7 +6912,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Create or update an admin declaration
    * Channel: online:admin-declaration:save
@@ -7636,59 +7701,49 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('moderation:block-target', (_event, payload = {}) => {
+    try {
+      const result = moderationManager.createModerationAction({
+        actorPubkey: payload.actorPubkey,
+        actionType: payload.actionType || 'block-user',
+        target: payload.target,
+        scope: payload.scope,
+        reason: payload.reason,
+        content: payload.content || {}
+      });
+      return result;
+    } catch (error) {
+      console.error('[moderation:block-target] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('moderation:revoke-action', (_event, payload = {}) => {
+    try {
+      const result = moderationManager.revokeModerationAction({
+        actorPubkey: payload.actorPubkey,
+        actionId: payload.actionId,
+        reason: payload.reason
+      });
+      return result;
+    } catch (error) {
+      console.error('[moderation:revoke-action] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('moderation:list-actions', (_event, payload = {}) => {
+    try {
+      const actions = moderationManager.listModerationActions({ target: payload.target, status: payload.status });
+      return { success: true, actions };
+    } catch (error) {
+      console.error('[moderation:list-actions] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
-
-// Helper function to sanitize file names
-function sanitizeFileName(fileName) {
-  if (!fileName) return null;
-  
-  // Only allow alphanumeric characters, hyphens, and underscores
-  const sanitized = fileName.replace(/[^a-zA-Z0-9\-_]/g, '_');
-  
-  // Ensure it's not empty and not just underscores
-  if (sanitized.length === 0 || sanitized.match(/^_+$/)) {
-    return null;
-  }
-  
-  return sanitized;
-}
-
-/**
- * Check and populate createdfp in csettings if it doesn't exist
- * @param {DatabaseManager} dbManager - Database manager instance
- */
-async function ensureCreatedFp(dbManager) {
-  try {
-    const db = dbManager.getConnection('clientdata');
-    
-    // Check if createdfp exists
-    const createdFpRow = db.prepare(`
-      SELECT csetting_value FROM csettings WHERE csetting_name = ?
-    `).get('createdfp');
-    
-    if (!createdFpRow || !createdFpRow.csetting_value) {
-      // Calculate createdfp using getv("","")
-      const { HostFP } = require('./main/HostFP');
-      const hostFP = new HostFP();
-      const createdFp = await hostFP.getv('', '');
-      
-      // Save to database
-      const crypto = require('crypto');
-      const uuid = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-        VALUES (?, ?, ?)
-        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid, 'createdfp', createdFp);
-      
-      console.log('Created and saved createdfp:', createdFp);
-    }
-  } catch (error) {
-    console.error('Error ensuring createdfp:', error);
-  }
-}
-
 // Helper function to sanitize file names
 function sanitizeFileName(fileName) {
   if (!fileName) return null;

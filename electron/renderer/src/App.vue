@@ -32,6 +32,12 @@
               >
                 Trust Declarations
               </button>
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'moderation' }]"
+                @click="onlineActiveTab = 'moderation'"
+              >
+                Moderation
+              </button>
             </div>
 
             <div class="online-dropdown-body">
@@ -512,6 +518,11 @@
                 </div>
               </div>
               <!-- End Trust Declarations Tab -->
+
+              <!-- Moderation Tab -->
+              <div v-if="onlineActiveTab === 'moderation'" class="tab-content">
+                <ModeratorDashboard :actor-pubkey="onlinePrimaryPubkey" />
+              </div>
             </div>
           </div>
         </div>
@@ -4902,7 +4913,7 @@
               </select>
             </div>
 
-            <div v-if="trustDeclarationWizardData.subject.type === 'keypair' || trustDeclarationWizardData.subject.type === 'profile'" class="modal-field">
+            <div v-if="trustDeclarationWizardData.subject.type === 'keypair'" class="modal-field">
               <label>Canonical Name / Keypair:</label>
               <select 
                 v-model="trustDeclarationWizardData.subject.keypairUuid" 
@@ -4918,6 +4929,72 @@
                   {{ kp.name || kp.label || kp.localName || 'Unnamed' }} ({{ kp.canonicalName || kp.publicKey?.substring(0, 20) + '...' }})
                 </option>
               </select>
+            </div>
+
+            <div v-else-if="trustDeclarationWizardData.subject.type === 'profile'" class="modal-field">
+              <label>Subject Source:</label>
+              <div class="radio-group">
+                <label>
+                  <input 
+                    type="radio" 
+                    value="local-profile"
+                    v-model="trustDeclarationWizardData.subject.selectionMode"
+                    @change="onSubjectSelectionModeChanged('local-profile')"
+                  />
+                  Local profile
+                </label>
+                <label>
+                  <input 
+                    type="radio" 
+                    value="manual"
+                    v-model="trustDeclarationWizardData.subject.selectionMode"
+                    @change="onSubjectSelectionModeChanged('manual')"
+                  />
+                  Manual Nostr key
+                </label>
+              </div>
+            </div>
+
+            <div 
+              v-if="trustDeclarationWizardData.subject.type === 'profile' && trustDeclarationWizardData.subject.selectionMode === 'local-profile'" 
+              class="modal-field"
+            >
+              <label>Select Local Profile:</label>
+              <select 
+                v-model="trustDeclarationWizardData.subject.profileUuid" 
+                class="modal-input"
+                @change="onSubjectProfileSelected"
+              >
+                <option value="">-- Select Profile --</option>
+                <option 
+                  v-for="profile in availableSubjectProfiles" 
+                  :key="profile.profileId" 
+                  :value="profile.profileId"
+                >
+                  {{ profile.displayName || profile.username || 'Unnamed Profile' }}{{ profile.isCurrent ? ' (Current)' : '' }}
+                </option>
+              </select>
+              <p v-if="availableSubjectProfiles.length === 0" class="field-hint">
+                No local profiles found. Create a profile first or use Manual Nostr key.
+              </p>
+            </div>
+
+            <div 
+              v-if="trustDeclarationWizardData.subject.type === 'profile' && trustDeclarationWizardData.subject.selectionMode === 'manual'" 
+              class="modal-field"
+            >
+              <label>Nostr Public Key:</label>
+              <input 
+                type="text" 
+                class="modal-input"
+                v-model.trim="trustDeclarationWizardData.subject.manualPubkey"
+                @input="onSubjectManualInput"
+                placeholder="npub1... or 64 hex characters"
+              />
+              <p v-if="trustDeclarationWizardData.subject.manualError" class="error-text">
+                {{ trustDeclarationWizardData.subject.manualError }}
+              </p>
+              <p class="field-hint">Enter the subject's npub or 64-character hex public key.</p>
             </div>
 
             <div v-if="trustDeclarationWizardData.subject.type === 'declaration'" class="modal-field">
@@ -6428,6 +6505,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { nip19 } from 'nostr-tools';
+import { Buffer } from 'buffer';
 import { 
   DEFAULT_THEME, 
   DEFAULT_TEXT_SIZE, 
@@ -6439,6 +6518,7 @@ import {
   type TextSize 
 } from './themeConfig';
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
+import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -6503,7 +6583,7 @@ const bulkStatus = ref('');
 const filterDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
-const onlineActiveTab = ref<'profile-keys' | 'trust-declarations'>('profile-keys');
+const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'moderation'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
 // Select dropdown state
@@ -7585,6 +7665,18 @@ type SocialId = {
   value: string;
 };
 
+type SubjectProfileOption = {
+  profileId: string;
+  username: string;
+  displayName: string;
+  isCurrent: boolean;
+  primaryCanonicalName: string;
+  primaryPublicKey: string;
+  primaryPublicKeyHex?: string;
+  primaryFingerprint?: string;
+  primaryKeypairUuid?: string | null;
+};
+
 type OnlineProfile = {
   profileId?: string; // UUID, read-only
   username?: string;
@@ -7601,6 +7693,13 @@ type OnlineProfile = {
 const onlineProfile = ref<OnlineProfile | null>(null);
 const onlineProfilesList = ref<Array<{ profileId: string; username: string; displayName: string; isCurrent: boolean }>>([]);
 const selectedProfileId = ref<string | null>(null);
+const onlinePrimaryPubkey = computed(() => {
+  const keypair = onlineProfile.value?.primaryKeypair;
+  if (!keypair) {
+    return null;
+  }
+  return keypair.publicKeyHex || keypair.publicKey || null;
+});
 const profileHasKeys = computed(() => {
   return onlineProfile.value?.primaryKeypair !== null && onlineProfile.value?.primaryKeypair !== undefined;
 });
@@ -7690,7 +7789,10 @@ const trustDeclarationWizardData = ref({
     fingerprint: '',
     keypairUuid: '',
     profileUuid: '',
-    declarationUuid: ''
+    declarationUuid: '',
+    selectionMode: 'local-profile' as 'local-profile' | 'manual',
+    manualPubkey: '',
+    manualError: ''
   },
   content: {
     mode: 'form', // 'form' | 'advanced'
@@ -7745,6 +7847,7 @@ const trustDeclarationWizardData = ref({
 });
 const availableIssuerKeypairs = ref<any[]>([]);
 const availableSubjectKeypairs = ref<any[]>([]);
+const availableSubjectProfiles = ref<SubjectProfileOption[]>([]);
 const parentDeclarationValidity = ref<{validFrom: string | null, validUntil: string | null} | null>(null);
 
 // Master admin keypairs are just admin keypairs filtered by key_usage = 'master-admin-signing'
@@ -9821,7 +9924,9 @@ async function initializeTrustDeclarationWizard() {
       fingerprint: '',
       keypairUuid: '',
       profileUuid: '',
-      declarationUuid: ''
+      declarationUuid: '',
+      manualPubkey: '',
+      manualError: ''
     },
     content: {
       mode: 'form',
@@ -9878,6 +9983,7 @@ async function initializeTrustDeclarationWizard() {
   await loadAvailableIssuerKeypairs();
   
   // Load available keypairs for subject selection
+  await loadAvailableSubjectProfiles();
   await loadAvailableSubjectKeypairs();
 }
 
@@ -9969,6 +10075,40 @@ async function loadAvailableIssuerKeypairs() {
   }
 }
 
+async function loadAvailableSubjectProfiles() {
+  if (!isElectronAvailable() || !(window as any).electronAPI.listDetailedOnlineProfiles) {
+    availableSubjectProfiles.value = [];
+    return;
+  }
+
+  try {
+    const profiles = await (window as any).electronAPI.listDetailedOnlineProfiles();
+    availableSubjectProfiles.value = (profiles || [])
+      .map((profile: any): SubjectProfileOption | null => {
+        const primary = profile.primaryKeypair || {};
+        const canonicalName = primary?.canonicalName || primary?.publicKey || '';
+        if (!canonicalName) {
+          return null;
+        }
+        return {
+          profileId: profile.profileId,
+          username: profile.username,
+          displayName: profile.displayName,
+          isCurrent: profile.isCurrent,
+          primaryCanonicalName: canonicalName,
+          primaryPublicKey: primary?.publicKey || '',
+          primaryPublicKeyHex: primary?.publicKeyHex || '',
+          primaryFingerprint: primary?.fingerprint || '',
+          primaryKeypairUuid: primary?.keypairUuid || null
+        };
+      })
+      .filter((profile: SubjectProfileOption | null): profile is SubjectProfileOption => profile !== null);
+  } catch (error) {
+    console.error('Error loading detailed profile list:', error);
+    availableSubjectProfiles.value = [];
+  }
+}
+
 async function loadAvailableSubjectKeypairs() {
   if (!isElectronAvailable()) {
     return;
@@ -10050,8 +10190,18 @@ async function checkParentDeclarationValidity() {
 function onSubjectTypeChanged() {
   trustDeclarationWizardData.value.subject.keypairUuid = '';
   trustDeclarationWizardData.value.subject.declarationUuid = '';
+  trustDeclarationWizardData.value.subject.profileUuid = '';
   trustDeclarationWizardData.value.subject.canonicalName = '';
   trustDeclarationWizardData.value.subject.fingerprint = '';
+  trustDeclarationWizardData.value.subject.manualPubkey = '';
+  trustDeclarationWizardData.value.subject.manualError = '';
+  trustDeclarationWizardData.value.subject.selectionMode = 'local-profile';
+
+  if (trustDeclarationWizardData.value.subject.type === 'profile') {
+    if (availableSubjectProfiles.value.length === 0) {
+      loadAvailableSubjectProfiles();
+    }
+  }
 }
 
 async function onSubjectKeypairSelected() {
@@ -10072,6 +10222,79 @@ async function onSubjectKeypairSelected() {
   
   trustDeclarationWizardData.value.subject.canonicalName = selectedKeypair.canonicalName || '';
   trustDeclarationWizardData.value.subject.fingerprint = selectedKeypair.fingerprint || '';
+}
+
+function onSubjectSelectionModeChanged(mode: 'local-profile' | 'manual') {
+  trustDeclarationWizardData.value.subject.selectionMode = mode;
+  trustDeclarationWizardData.value.subject.profileUuid = '';
+  trustDeclarationWizardData.value.subject.manualPubkey = '';
+  trustDeclarationWizardData.value.subject.manualError = '';
+  trustDeclarationWizardData.value.subject.canonicalName = '';
+  trustDeclarationWizardData.value.subject.fingerprint = '';
+  trustDeclarationWizardData.value.subject.keypairUuid = '';
+
+  if (mode === 'local-profile' && availableSubjectProfiles.value.length === 0) {
+    loadAvailableSubjectProfiles();
+  }
+}
+
+function onSubjectProfileSelected() {
+  const subjectProfile = availableSubjectProfiles.value.find(
+    (profile) => profile.profileId === trustDeclarationWizardData.value.subject.profileUuid
+  );
+
+  trustDeclarationWizardData.value.subject.canonicalName = '';
+  trustDeclarationWizardData.value.subject.fingerprint = '';
+  trustDeclarationWizardData.value.subject.keypairUuid = '';
+
+  if (!subjectProfile) {
+    return;
+  }
+
+  trustDeclarationWizardData.value.subject.canonicalName = subjectProfile.primaryCanonicalName || '';
+  trustDeclarationWizardData.value.subject.fingerprint = subjectProfile.primaryFingerprint || subjectProfile.primaryPublicKeyHex || '';
+  trustDeclarationWizardData.value.subject.keypairUuid = subjectProfile.primaryKeypairUuid || '';
+}
+
+function onSubjectManualInput() {
+  const input = (trustDeclarationWizardData.value.subject.manualPubkey || '').trim();
+  trustDeclarationWizardData.value.subject.manualPubkey = input;
+  trustDeclarationWizardData.value.subject.manualError = '';
+  trustDeclarationWizardData.value.subject.canonicalName = '';
+  trustDeclarationWizardData.value.subject.fingerprint = '';
+  trustDeclarationWizardData.value.subject.profileUuid = '';
+  trustDeclarationWizardData.value.subject.keypairUuid = '';
+
+  if (!input) {
+    return;
+  }
+
+  try {
+    let hex: string;
+    let canonical: string;
+
+    if (input.toLowerCase().startsWith('npub')) {
+      const decoded = nip19.decode(input);
+      if (decoded.type !== 'npub') {
+        throw new Error('Expected npub key');
+      }
+      hex = Buffer.from(decoded.data).toString('hex');
+      canonical = input;
+    } else {
+      const sanitized = input.startsWith('0x') ? input.substring(2) : input;
+      if (!/^[0-9a-fA-F]{64}$/.test(sanitized)) {
+        throw new Error('Hex public key must be 64 characters');
+      }
+      hex = sanitized.toLowerCase();
+      canonical = nip19.npubEncode(Buffer.from(hex, 'hex'));
+    }
+
+    trustDeclarationWizardData.value.subject.canonicalName = canonical;
+    trustDeclarationWizardData.value.subject.fingerprint = hex;
+  } catch (error: any) {
+    trustDeclarationWizardData.value.subject.manualError =
+      error?.message || 'Invalid Nostr public key. Provide npub or 64-character hex.';
+  }
 }
 
 function onContentModeChanged() {
@@ -10270,13 +10493,7 @@ const canProceedToNextStep = computed(() => {
     case 2:
       return true; // Validity dates are optional
     case 3:
-      if (trustDeclarationWizardData.value.subject.type === 'keypair' || trustDeclarationWizardData.value.subject.type === 'profile') {
-        return !!trustDeclarationWizardData.value.subject.keypairUuid;
-      }
-      if (trustDeclarationWizardData.value.subject.type === 'declaration') {
-        return !!trustDeclarationWizardData.value.subject.declarationUuid;
-      }
-      return true; // system and user types don't require additional selection
+      return isSubjectSelectionValid();
     case 4:
       // In advanced mode, validate JSON first
       if (trustDeclarationWizardData.value.content.mode === 'advanced') {
@@ -10307,14 +10524,36 @@ const canFinalizeDeclaration = computed(() => {
     if (!trustDeclarationWizardData.value.content.trustLevel) return false;
     if (trustDeclarationWizardData.value.content.usageTypes.length === 0) return false;
     if (!trustDeclarationWizardData.value.issuer.keypairUuid) return false;
-    if (!trustDeclarationWizardData.value.subject.keypairUuid && 
-        (trustDeclarationWizardData.value.subject.type === 'keypair' || trustDeclarationWizardData.value.subject.type === 'profile')) {
-      return false;
-    }
+    if (!isSubjectSelectionValid()) return false;
   }
   
   return true;
 });
+
+function isSubjectSelectionValid(): boolean {
+  const subject = trustDeclarationWizardData.value.subject;
+
+  if (subject.type === 'keypair') {
+    return !!subject.keypairUuid;
+  }
+
+  if (subject.type === 'profile') {
+    if (subject.selectionMode === 'local-profile') {
+      return !!subject.profileUuid;
+    }
+    if (subject.selectionMode === 'manual') {
+      return !!subject.manualPubkey && !subject.manualError && !!subject.canonicalName;
+    }
+    return false;
+  }
+
+  if (subject.type === 'declaration') {
+    return !!subject.declarationUuid;
+  }
+
+  // user/system types currently require no additional input
+  return true;
+}
 
 const fullDeclarationJson = computed(() => {
   // Generate full declaration JSON with all database attributes

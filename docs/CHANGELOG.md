@@ -1,4 +1,4 @@
-- Added Nostr client integration architecture and UI planning documents under `devdocs/nostr/` to outline background service design, library usage, offline/online mode handling, and forthcoming interface changes.
+- Added Nostr client integration architecture and UI planning documents under `devdocs/nostr/` covering relay catalog design, resource throttling defaults, offline/online mode handling, IPC contracts, and forthcoming interface changes.
 # RHTools Changelog
 
 > **Note**: For a comprehensive summary of recent USB2SNES connection enhancements, see [`devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md`](../devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md)

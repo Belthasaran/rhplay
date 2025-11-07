@@ -89,7 +89,20 @@
   - NRS updates subscription filters (kinds 0, 3, 31001, 31106, etc.) accordingly.
 - **Extensibility**: Provide weighting/priority for master/admin keys to ensure their events are never dropped.
 
-## 5. Event Handling Strategy
+## 5. Relay Management & Configuration
+- **Relay catalog**:
+  - Create `nostr_relays` table in `clientdata.db` (managed by `NostrLocalDBManager`) with fields: `relay_url`, `label`, `categories` (JSON array of tags), `priority`, `auth_required`, `read`, `write`, `added_by` (`system`, `user`, `admin-published`), `created_at`, `updated_at`.
+  - Seed table with preload relays distributed with the client; allow updates via admin-signed metadata events.
+- **Category preferences**:
+  - Store user-selected relay categories in `csettings` entry `nostr_relay_categories` (array of tags). Defaults to curated categories (e.g., `trusted-core`, `ratings`, `profiles`).
+  - During startup, NRS selects relays matching preferred categories plus any manually pinned relays.
+- **Dynamic updates**:
+  - Renderer UI allows users to add/remove relays, assign categories, and override read/write flags.
+  - Admin-published relay lists ingested via Nostr events update the table with provenance metadata.
+- **Health tracking**:
+  - Maintain success/failure counters and last latency for each relay; expose via IPC for UI display.
+
+## 6. Event Handling Strategy
 - **Outgoing** (existing `nostr_cache_out`):
   - Implement queue worker in NRS reading pending rows, signing if necessary, pushing to relays.
   - Track per-event status (pending, sent, confirmed). Update `nostr_status` columns in relevant tables (keypairs, declarations, profiles).
@@ -98,20 +111,26 @@
   - Parse and route to domain-specific handlers (profiles, ratings, declarations). Update domain tables (`user_profiles`, `admindeclarations`, etc.) or queue for moderation review.
 - **Retention policy**: use `keep_for` column to control TTL; archive older events to `nostr_archive_##` automatically.
 
-## 6. Background Service Implementation
+## 7. Background Service Implementation
 - **Process model**: Node worker launched via `child_process.fork()` from main process, with message channel for IPC, or use Electron's `BrowserWindow` running in headless mode for easier reuse of Node + DOM APIs.
 - **Lifecycle**:
   - Auto-start with app (configurable). Provide controls in settings to pause/stop.
   - When Electron app closes, prompt user to keep service running; if accepted, detach to run as long-lived background process (Linux: systemd service entries optional; Windows: scheduled task). Document manual start via CLI.
 - **Resource management**: ensure service respects rate limits, manages reconnections, and handles relay selection/preferences per user settings.
+  - Defaults: total unprocessed incoming queue threshold (e.g., 5,000 events) after which intake pauses until backlog processed.
+  - Message rate limiter: weighted average (default 100 units per 2 minutes, event unit = ceil(size/32KB)). If exceeded, pause intake for 60 seconds.
+  - CPU usage guard: monitor worker CPU; if > configurable threshold (default 35%) over rolling window, back off subscriptions.
+  - Outgoing throttle: limit to configurable events/minute (default 60), queue additional events for next interval.
+  - Advanced options surfaced in settings; basic users rely on safe defaults.
 
-## 7. Security Considerations
+## 8. Security Considerations
 - Use `safeStorage` + Profile Guard encryption for secret keys. NRS requests secrets through `OnlineProfileManager`, decrypts in-memory only, zeroises after signing.
 - Provide sandbox for NRS (no renderer access). Validate all IPC payloads.
 - Implement optional Tor/proxy support (`socks-proxy-agent`).
 - For DMs/E2EE: plan to implement NIP-04/NIP-44 using libs from `nostr-tools` or `@nostr/gadgets` (supports encryption helpers).
+- Archived decrypted content: when storing offline copies of decrypted messages, encrypt payloads with dedicated AES-256 key cached per user and protected via Profile Guard (keyguard-managed key wrapping).
 
-## 8. Implementation Phases
+## 9. Implementation Phases
 1. **Foundations**
    - Finalize `NostrLocalDBManager` APIs (relay config, queue operations).
    - Implement NRS scaffold (process startup, IPC contract, logging, configuration storage in `csettings`).
@@ -129,13 +148,33 @@
 5. **Advanced Features Roadmap**
    - DM encryption (NIP-04/44), forum announcements (kind 31100+), chat (kind 42), remote signer support, moderation queue UI.
 
-## 9. Open Questions
-- Relay discovery strategy—preload curated relays vs. allow user-provided list only?
-- Resource constraints for always-on background service; need CPU/network throttling options.
-- Multi-profile support: ensure per-profile identity separation while sharing runtime resources.
-- Authenticated encryption for offline message storage—decide on key derivation approach (shared secrets vs. per-conversation keys).
+## 10. IPC Contracts (Renderer ↔ NRS)
+All commands travel through Electron's IPC (`ipcMain.handle`/`ipcRenderer.invoke`) with payloads serialized as plain objects. Events (streaming updates) use `ipcRenderer.on` from the renderer side. Core channels:
 
-## 10. Next Steps
+| Channel | Direction | Payload | Description |
+|---------|-----------|---------|-------------|
+| `nostr:nrs:init` | Renderer → Main | `{ modePreference?: "online" | "offline" }` | Renderer indicates current preference; main replies with current state, relays, limits. |
+| `nostr:nrs:status` | Main → Renderer (event) | `{ mode, relays, queueStats, cpuLoad, backlog }` | Periodic status broadcast (every 5s or upon change). |
+| `nostr:nrs:set-mode` | Renderer → Main | `{ mode: "online" | "offline", confirm?: boolean }` | Request mode change. Main prompts user if consent needed, then instructs NRS. Reply includes success flag and message. |
+| `nostr:nrs:publish` | Renderer → Main | `{ eventUuid }` | Ask NRS to enqueue/flush specific event. Response contains updated status. |
+| `nostr:nrs:queue:list` | Renderer → Main | `{ limit?, offset? }` | Fetch pending/sent queue entries for UI display. |
+| `nostr:nrs:relays:list` | Renderer ↔ Main | Request: `{}`; Response: array of relay records with categories, health stats. |
+| `nostr:nrs:relays:update` | Renderer → Main | `{ relayUrl, changes }` | Modify relay flags/categories; main persists to DB. |
+| `nostr:nrs:relays:add` | Renderer → Main | `{ relayUrl, categories, read, write }` | Add manual relay. |
+| `nostr:nrs:relays:remove` | Renderer → Main | `{ relayUrl }` | Remove user relay (system relays are flagged and require confirmation). |
+| `nostr:nrs:follow:update` | Renderer → Main | `{ manualFollows }` | Update manual follow list; triggers NRS resubscription. |
+| `nostr:nrs:event` | Main → Renderer (event) | `{ type: "incoming" | "outgoing" | "error", payload }` | Stream new events (for feed updates), errors, or queue status changes. |
+| `nostr:nrs:limits:get` | Renderer → Main | `{}` | Retrieve current resource limits and defaults. |
+| `nostr:nrs:limits:set` | Renderer → Main | `{ incomingBacklog?, messageRate?, cpuCap?, outgoingRate? }` | Update advanced throttles; persisted in `csettings`. |
+| `nostr:nrs:shutdown` | Renderer → Main | `{ keepBackground?: boolean }` | Notify NRS of app exit; optionally keep background service alive. |
+
+Errors returned as `{ success: false, errorCode, message }` with log correlation ID for diagnostics. Main process is responsible for routing calls to the NRS worker via message channels and returning replies to renderer.
+
+## 11. Open Questions
+- Multi-profile support: ensure per-profile identity separation while sharing runtime resources.
+- Background consent UX: do we prompt again after major updates or rely on stored consent?
+
+## 12. Next Steps
 1. Review/approve this architecture and library selection.
 2. Lock down IPC contracts between renderer and NRS.
 3. Define database schema additions (follow table, relay config table, incoming event indices).

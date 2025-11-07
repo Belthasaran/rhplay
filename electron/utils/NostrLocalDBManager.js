@@ -15,8 +15,19 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { app } = require('electron');
 const { HostFP } = require('../main/HostFP');
+
+const DEFAULT_RELAY_CATEGORIES = ['trusted-core', 'profiles', 'ratings'];
+const DEFAULT_RESOURCE_LIMITS = Object.freeze({
+  incomingBacklogMax: 5000,
+  messageRateUnits: 100,
+  messageRateWindowSeconds: 120,
+  cpuPercentMax: 35,
+  outgoingPerMinute: 60
+});
+const MESSAGE_UNIT_BYTES = 32 * 1024; // 32 KiB per weighting unit
 
 class NostrLocalDBManager {
   constructor(options = {}) {
@@ -25,6 +36,11 @@ class NostrLocalDBManager {
     this.hostFP = new HostFP();
     this.initialized = false;
     this.initializing = false;
+    this.dbManager = options.dbManager || null;
+    this.clientDb = null;
+    this.logger = options.logger || console;
+    this.cachedResourceLimits = null;
+    this.cachedOperatingMode = null;
     // Initialize databases lazily on first use
     // Call initialize() explicitly if you need to await initialization
   }
@@ -100,6 +116,167 @@ class NostrLocalDBManager {
     
     // Update host fingerprints for all databases
     await this.updateAllHostFingerprints();
+  }
+
+  /**
+   * Attach a DatabaseManager for clientdata access after construction
+   * @param {DatabaseManager} dbManager - Database manager instance
+   */
+  setDatabaseManager(dbManager) {
+    this.dbManager = dbManager;
+    this.clientDb = null;
+  }
+
+  /**
+   * Get clientdata database connection via DatabaseManager
+   * @returns {Database}
+   */
+  getClientDb() {
+    if (!this.dbManager || typeof this.dbManager.getConnection !== 'function') {
+      throw new Error('NostrLocalDBManager requires a DatabaseManager instance for relay/config operations');
+    }
+    if (!this.clientDb) {
+      this.clientDb = this.dbManager.getConnection('clientdata');
+    }
+    return this.clientDb;
+  }
+
+  /**
+   * Convenience helper to fetch a csetting value
+   * @param {string} name
+   * @returns {string|null}
+   */
+  getCsetting(name) {
+    const db = this.getClientDb();
+    const row = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get(name);
+    return row ? row.csetting_value : null;
+  }
+
+  /**
+   * Upsert a csetting value
+   * @param {string} name
+   * @param {string} value
+   */
+  setCsetting(name, value) {
+    const db = this.getClientDb();
+    const existing = db.prepare('SELECT csettinguid FROM csettings WHERE csetting_name = ?').get(name);
+    if (existing) {
+      db.prepare('UPDATE csettings SET csetting_value = ? WHERE csetting_name = ?').run(value, name);
+    } else {
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+      `).run(crypto.randomUUID(), name, value);
+    }
+  }
+
+  /**
+   * Get persisted operating mode (online/offline)
+   * @returns {string}
+   */
+  getOperatingMode() {
+    if (this.cachedOperatingMode) {
+      return this.cachedOperatingMode;
+    }
+    try {
+      const stored = this.getCsetting('nostr_operating_mode');
+      this.cachedOperatingMode = stored === 'online' ? 'online' : 'offline';
+    } catch (error) {
+      this.logger.warn('[NostrLocalDBManager] Unable to read operating mode:', error.message);
+      this.cachedOperatingMode = 'offline';
+    }
+    return this.cachedOperatingMode;
+  }
+
+  /**
+   * Persist operating mode
+   * @param {string} mode - 'online' or 'offline'
+   */
+  setOperatingMode(mode) {
+    const normalized = mode === 'online' ? 'online' : 'offline';
+    try {
+      this.setCsetting('nostr_operating_mode', normalized);
+      this.cachedOperatingMode = normalized;
+    } catch (error) {
+      this.logger.error('[NostrLocalDBManager] Failed to persist operating mode:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get persisted resource limit configuration merged with defaults
+   * @returns {Object}
+   */
+  getResourceLimits() {
+    if (this.cachedResourceLimits) {
+      return { ...this.cachedResourceLimits };
+    }
+    let parsed = {};
+    try {
+      const raw = this.getCsetting('nostr_resource_limits');
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      this.logger.warn('[NostrLocalDBManager] Failed to parse resource limits, using defaults:', error.message);
+    }
+    this.cachedResourceLimits = {
+      ...DEFAULT_RESOURCE_LIMITS,
+      ...parsed
+    };
+    return { ...this.cachedResourceLimits };
+  }
+
+  /**
+   * Update resource limit configuration values
+   * @param {Object} updates
+   * @returns {Object} Updated limits
+   */
+  setResourceLimits(updates = {}) {
+    const merged = {
+      ...this.getResourceLimits(),
+      ...updates
+    };
+    try {
+      this.setCsetting('nostr_resource_limits', JSON.stringify(merged));
+      this.cachedResourceLimits = { ...merged };
+      return { ...merged };
+    } catch (error) {
+      this.logger.error('[NostrLocalDBManager] Failed to persist resource limits:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve preferred relay categories
+   * @returns {Array<string>}
+   */
+  getRelayCategoryPreference() {
+    try {
+      const raw = this.getCsetting('nostr_relay_categories');
+      if (!raw) {
+        return [...DEFAULT_RELAY_CATEGORIES];
+      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map(String);
+      }
+    } catch (error) {
+      this.logger.warn('[NostrLocalDBManager] Failed to load relay category preference:', error.message);
+    }
+    return [...DEFAULT_RELAY_CATEGORIES];
+  }
+
+  /**
+   * Persist relay category preference
+   * @param {Array<string>} categories
+   */
+  setRelayCategoryPreference(categories = []) {
+    const uniqueCategories = Array.from(new Set((categories || []).map((c) => String(c).trim()).filter(Boolean)));
+    try {
+      this.setCsetting('nostr_relay_categories', JSON.stringify(uniqueCategories));
+    } catch (error) {
+      this.logger.error('[NostrLocalDBManager] Failed to persist relay category preference:', error.message);
+      throw error;
+    }
   }
 
   /**

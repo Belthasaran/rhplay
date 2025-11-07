@@ -591,6 +591,15 @@ const MIGRATIONS = {
         return tableExists(db, 'profile_keypairs');
       },
     },
+    {
+      id: 'clientdata_030_nostr_relays',
+      description: 'Create nostr_relays table for relay catalog and metadata',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/030_clientdata_nostr_relays.sql'),
+      skipIf(db) {
+        return tableExists(db, 'nostr_relays');
+      },
+    },
   ],
   patchbin: [],
 };

@@ -111,6 +111,13 @@
   - Parse and route to domain-specific handlers (profiles, ratings, declarations). Update domain tables (`user_profiles`, `admindeclarations`, etc.) or queue for moderation review.
 - **Retention policy**: use `keep_for` column to control TTL; archive older events to `nostr_archive_##` automatically.
 
+### 6.1 Profile Context & Multi-Profile Behavior
+- Conversations, review threads, and other recurring Nostr interactions retain the profile identity that initiated them. Switching the active profile does **not** hide or duplicate existing conversations; instead, each conversation stores the `profile_uuid` (and associated keypair UUID) used for outbound posts.
+- When composing new messages in an existing conversation (e.g., replying to a DM, extending a forum thread, or updating a game review), the system automatically reuses the original profile/keypair identity unless:
+  - The originating profile or keypair has been deleted, in which case the currently active profile is used and recorded going forward.
+  - The user explicitly requests a profile switch for that conversation via future advanced controls.
+- New conversations or game reviews default to the currently active profile at creation time and persist that association for continuity and auditability.
+
 ## 7. Background Service Implementation
 - **Process model**: Node worker launched via `child_process.fork()` from main process, with message channel for IPC, or use Electron's `BrowserWindow` running in headless mode for easier reuse of Node + DOM APIs.
 - **Lifecycle**:
@@ -171,7 +178,6 @@ All commands travel through Electron's IPC (`ipcMain.handle`/`ipcRenderer.invoke
 Errors returned as `{ success: false, errorCode, message }` with log correlation ID for diagnostics. Main process is responsible for routing calls to the NRS worker via message channels and returning replies to renderer.
 
 ## 11. Open Questions
-- Multi-profile support: ensure per-profile identity separation while sharing runtime resources.
 - Background consent UX: do we prompt again after major updates or rely on stored consent?
 
 ## 12. Next Steps

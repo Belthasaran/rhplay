@@ -393,6 +393,11 @@
                   </div>
                 </div>
               </div>
+              
+              <div v-if="onlineShowAdminOptions" class="admin-import-export-actions">
+                <button class="btn-secondary" @click="importAllAdminPublicKeys">Import All</button>
+                <button class="btn-primary" @click="exportAllAdminPublicKeys">Export All Public</button>
+              </div>
               </div>
               <!-- End Profile & Keys Tab -->
 
@@ -9712,6 +9717,53 @@ async function importTrustDeclarations() {
 
 async function importTrustDeclarationBackup() {
   await importTrustDeclarations();
+}
+
+async function exportAllAdminPublicKeys() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.exportAdminPublicKeys();
+    if (!result || result.canceled) {
+      return;
+    }
+    if (!result.success) {
+      alert(`Failed to export admin keys: ${result.error || 'Unknown error'}`);
+      return;
+    }
+    alert(`Exported ${result.masterCount || 0} master keys, ${result.adminCount || 0} admin keypairs, ${result.userOpCount || 0} user op keypairs, and ${result.encryptionCount || 0} shared preinstalled encryption keys to ${result.filePath}`);
+  } catch (error) {
+    console.error('Error exporting admin public keys:', error);
+    alert(`Error exporting admin public keys: ${formatErrorMessage(error)}`);
+  }
+}
+
+async function importAllAdminPublicKeys() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.importAdminPublicKeys();
+    if (!result || result.canceled) {
+      return;
+    }
+    if (!result.success) {
+      alert(`Failed to import admin keys: ${result.error || 'Unknown error'}`);
+      return;
+    }
+    alert(`Imported ${result.masterCount || 0} master keys, ${result.adminCount || 0} admin keypairs, ${result.userOpCount || 0} user op keypairs, and ${result.encryptionCount || 0} shared preinstalled encryption keys${result.filePath ? ` from ${result.filePath}` : ''}.`);
+    await Promise.all([
+      loadAdminKeypairsList(),
+      loadUserOpKeypairsList(),
+      loadEncryptionKeysList()
+    ]);
+  } catch (error) {
+    console.error('Error importing admin public keys:', error);
+    alert(`Error importing admin public keys: ${formatErrorMessage(error)}`);
+  }
 }
 
 async function deleteTrustDeclaration() {
@@ -20236,6 +20288,13 @@ button:disabled {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
+}
+
+.admin-import-export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 .modal-warning-text {

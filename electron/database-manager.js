@@ -19,6 +19,7 @@ class DatabaseManager {
     this.autoApplyMigrations = options.autoApplyMigrations || false;
     this.migrationsApplied = new Set(); // Track which DBs have had migrations applied
     this.trustDeclarationsImported = false;
+    this.adminPublicKeysImported = false;
     this.tableColumnCache = {};
     console.log('Database paths:', this.paths);
     if (this.autoApplyMigrations) {
@@ -204,9 +205,15 @@ class DatabaseManager {
       // Store path for reference
       this.connections[dbName].dbPath = dbPath;
 
-      if (dbName === 'clientdata' && !this.trustDeclarationsImported) {
-        this.trustDeclarationsImported = true;
-        this.autoImportTrustDeclarations(this.connections[dbName]);
+      if (dbName === 'clientdata') {
+        if (!this.trustDeclarationsImported) {
+          this.trustDeclarationsImported = true;
+          this.autoImportTrustDeclarations(this.connections[dbName]);
+        }
+        if (!this.adminPublicKeysImported) {
+          this.adminPublicKeysImported = true;
+          this.autoImportAdminPublicKeys(this.connections[dbName]);
+        }
       }
     }
     
@@ -560,6 +567,254 @@ class DatabaseManager {
       }
     } catch (error) {
       console.error('Error during automatic trust declarations import:', error);
+    }
+  }
+
+  importAdminPublicKeysFromData(data, options = {}) {
+    if (!data) {
+      return { masterKeysImported: 0, adminKeysImported: 0, userOpKeysImported: 0, encryptionKeysImported: 0 };
+    }
+
+    const db = options.db || this.getConnection('clientdata');
+
+    const normalizeArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'object') return [value];
+      return [];
+    };
+
+    const adminMasterEntries = [
+      ...normalizeArray(data.admin_master_keys),
+      ...normalizeArray(data.masterAdminKeys),
+      ...normalizeArray(data.master_keys)
+    ];
+
+    const adminEntries = [
+      ...normalizeArray(data.admin_keypairs),
+      ...normalizeArray(data.adminKeypairs),
+      ...normalizeArray(data.admin_keys)
+    ];
+
+    const userOpEntries = [
+      ...normalizeArray(data.user_op_keypairs),
+      ...normalizeArray(data.userOpKeypairs),
+      ...normalizeArray(data.user_op_keys)
+    ];
+
+    const encryptionEntries = [
+      ...normalizeArray(data.encryption_keys),
+      ...normalizeArray(data.shared_preinstalled_keys)
+    ];
+
+    const results = {
+      masterKeysImported: 0,
+      adminKeysImported: 0,
+      userOpKeysImported: 0,
+      encryptionKeysImported: 0
+    };
+
+    const sanitizeEntry = (entry, tableColumns) => {
+      const sanitized = {};
+      tableColumns.forEach((col) => {
+        if (entry[col] !== undefined) {
+          let value = entry[col];
+          if (value && typeof value === 'object' && !Buffer.isBuffer(value)) {
+            value = JSON.stringify(value);
+          }
+          sanitized[col] = value;
+        }
+      });
+      return sanitized;
+    };
+
+    const insertAdminKeypairs = (entries, counterKey, defaults = {}) => {
+      if (!entries.length) {
+        return;
+      }
+      const columns = this.getTableColumns(db, 'admin_keypairs');
+      if (!columns.length || !columns.includes('keypair_uuid')) {
+        return;
+      }
+      const insertTransaction = db.transaction((rows) => {
+        rows.forEach((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return;
+          }
+          const keypairUuid = entry.keypair_uuid || entry.uuid;
+          if (!keypairUuid) {
+            return;
+          }
+          const existing = db.prepare(`SELECT 1 FROM admin_keypairs WHERE keypair_uuid = ?`).get(keypairUuid);
+          if (existing) {
+            return;
+          }
+          const sanitized = sanitizeEntry({ ...entry, keypair_uuid: keypairUuid }, columns);
+          sanitized.key_usage = defaults.key_usage || sanitized.key_usage || null;
+          sanitized.storage_status = 'public-only';
+          sanitized.encrypted_private_key = null;
+          sanitized.private_key_format = null;
+          sanitized.profile_uuid = null;
+          sanitized.created_at = sanitized.created_at || new Date().toISOString();
+          sanitized.updated_at = sanitized.updated_at || new Date().toISOString();
+
+          const cols = Object.keys(sanitized);
+          if (!cols.length) {
+            return;
+          }
+          const placeholders = cols.map(() => '?').join(', ');
+          const values = cols.map((col) => sanitized[col]);
+          const sql = `INSERT INTO admin_keypairs (${cols.join(', ')}) VALUES (${placeholders})`;
+          db.prepare(sql).run(values);
+          results[counterKey] = (results[counterKey] || 0) + 1;
+        });
+      });
+      insertTransaction(entries);
+    };
+
+    const insertUserOpKeypairs = (entries) => {
+      if (!entries.length) {
+        return;
+      }
+      const columns = this.getTableColumns(db, 'profile_keypairs');
+      if (!columns.length || !columns.includes('keypair_uuid')) {
+        return;
+      }
+      const profileExistsStmt = db.prepare(`SELECT 1 FROM user_profiles WHERE profile_uuid = ?`);
+      const insertTransaction = db.transaction((rows) => {
+        rows.forEach((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return;
+          }
+          const keypairUuid = entry.keypair_uuid || entry.uuid;
+          const profileUuid = entry.profile_uuid;
+          if (!keypairUuid || !profileUuid) {
+            return;
+          }
+          const existing = db.prepare(`SELECT 1 FROM profile_keypairs WHERE keypair_uuid = ?`).get(keypairUuid);
+          if (existing) {
+            return;
+          }
+          const profileExists = profileExistsStmt.get(profileUuid);
+          if (!profileExists) {
+            return;
+          }
+          const sanitized = sanitizeEntry({ ...entry, keypair_uuid: keypairUuid, profile_uuid: profileUuid }, columns);
+          sanitized.storage_status = 'public-only';
+          sanitized.encrypted_private_key = null;
+          sanitized.private_key_format = null;
+          sanitized.created_at = sanitized.created_at || new Date().toISOString();
+          sanitized.updated_at = sanitized.updated_at || new Date().toISOString();
+
+          const cols = Object.keys(sanitized);
+          if (!cols.length) {
+            return;
+          }
+          const placeholders = cols.map(() => '?').join(', ');
+          const values = cols.map((col) => sanitized[col]);
+          const sql = `INSERT INTO profile_keypairs (${cols.join(', ')}) VALUES (${placeholders})`;
+          db.prepare(sql).run(values);
+          results.userOpKeysImported += 1;
+        });
+      });
+      insertTransaction(entries);
+    };
+
+    const insertEncryptionKeys = (entries) => {
+      if (!entries.length) {
+        return;
+      }
+      const columns = this.getTableColumns(db, 'encryption_keys');
+      if (!columns.length || !columns.includes('key_uuid')) {
+        return;
+      }
+      const insertTransaction = db.transaction((rows) => {
+        rows.forEach((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return;
+          }
+          const keyUuid = entry.key_uuid || entry.uuid;
+          if (!keyUuid) {
+            return;
+          }
+          const keyType = entry.key_type || entry.keyType;
+          if (keyType !== 'Shared Preinstalled') {
+            return;
+          }
+          const existing = db.prepare(`SELECT 1 FROM encryption_keys WHERE key_uuid = ?`).get(keyUuid);
+          if (existing) {
+            return;
+          }
+          const sanitized = sanitizeEntry({ ...entry, key_uuid: keyUuid, key_type: 'Shared Preinstalled' }, columns);
+          sanitized.key_type = 'Shared Preinstalled';
+          sanitized.encrypted = sanitized.encrypted ? 1 : 0;
+          sanitized.created_at = sanitized.created_at || new Date().toISOString();
+          sanitized.updated_at = sanitized.updated_at || new Date().toISOString();
+
+          const cols = Object.keys(sanitized);
+          if (!cols.length) {
+            return;
+          }
+          const placeholders = cols.map(() => '?').join(', ');
+          const values = cols.map((col) => sanitized[col]);
+          const sql = `INSERT INTO encryption_keys (${cols.join(', ')}) VALUES (${placeholders})`;
+          db.prepare(sql).run(values);
+          results.encryptionKeysImported += 1;
+        });
+      });
+      insertTransaction(entries);
+    };
+
+    insertAdminKeypairs(adminMasterEntries, 'masterKeysImported', { key_usage: 'master-admin-signing' });
+    insertAdminKeypairs(adminEntries, 'adminKeysImported');
+    insertUserOpKeypairs(userOpEntries);
+    insertEncryptionKeys(encryptionEntries);
+
+    return results;
+  }
+
+  getAdminPublicKeysFileCandidates(dbPath) {
+    const candidates = [];
+    const dbDir = dbPath ? path.dirname(dbPath) : null;
+    if (dbDir) {
+      candidates.push(path.join(dbDir, 'adminkp_trust.json'));
+    }
+    candidates.push(path.join(__dirname, 'adminkp_trust.json'));
+    if (process.resourcesPath) {
+      candidates.push(path.join(process.resourcesPath, 'adminkp_trust.json'));
+      candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'adminkp_trust.json'));
+      candidates.push(path.join(process.resourcesPath, 'electron', 'adminkp_trust.json'));
+    }
+    if (process.execPath) {
+      candidates.push(path.join(path.dirname(process.execPath), 'adminkp_trust.json'));
+    }
+    return [...new Set(candidates)];
+  }
+
+  autoImportAdminPublicKeys(db) {
+    try {
+      const candidates = this.getAdminPublicKeysFileCandidates(db ? db.dbPath : this.paths.clientdata);
+      const fs = require('fs');
+      for (const candidate of candidates) {
+        if (!candidate) {
+          continue;
+        }
+        try {
+          if (fs.existsSync(candidate)) {
+            console.log(`Auto-importing admin public keys from ${candidate}`);
+            const content = fs.readFileSync(candidate, 'utf8');
+            const data = JSON.parse(content);
+            const result = this.importAdminPublicKeysFromData(data, { db, source: candidate });
+            console.log(`Admin public keys import summary: master=${result.masterKeysImported || 0}, admin=${result.adminKeysImported || 0}, userOp=${result.userOpKeysImported || 0}, encryption=${result.encryptionKeysImported || 0}`);
+            break;
+          }
+        } catch (fileError) {
+          console.warn(`Failed to import admin public keys from ${candidate}:`, fileError.message);
+          continue;
+        }
+      }
+    } catch (error) {
+      console.error('Error during automatic admin public keys import:', error);
     }
   }
 

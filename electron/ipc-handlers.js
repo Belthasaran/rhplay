@@ -6580,6 +6580,129 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('online:admin-public-keys:export', async () => {
+    try {
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        title: 'Export Admin Public Keys',
+        defaultPath: 'adminkp_trust.json',
+        filters: [{ name: 'JSON Files', extensions: ['json'] }]
+      });
+      if (canceled || !filePath) {
+        return { success: false, canceled: true };
+      }
+
+      const fs = require('fs');
+      const db = dbManager.getConnection('clientdata');
+
+      const sanitizeAdminKeypairForExport = (kp) => {
+        const copy = { ...kp };
+        delete copy.encrypted_private_key;
+        delete copy.private_key_format;
+        delete copy.privateKey;
+        delete copy.private_key;
+        copy.storage_status = 'public-only';
+        copy.profile_uuid = copy.profile_uuid || null;
+        return copy;
+      };
+
+      const sanitizeUserOpKeypairForExport = (kp) => {
+        const copy = { ...kp };
+        delete copy.encrypted_private_key;
+        delete copy.private_key_format;
+        delete copy.privateKey;
+        delete copy.private_key;
+        copy.storage_status = 'public-only';
+        return copy;
+      };
+
+      const sanitizeEncryptionKeyForExport = (key) => {
+        const copy = { ...key };
+        copy.encrypted = copy.encrypted ? 1 : 0;
+        return copy;
+      };
+
+      const masterKeys = db.prepare(`
+        SELECT * FROM admin_keypairs
+        WHERE key_usage = 'master-admin-signing'
+      `).all().map(sanitizeAdminKeypairForExport);
+
+      const adminKeys = db.prepare(`
+        SELECT * FROM admin_keypairs
+        WHERE (key_usage IS NULL OR key_usage != 'master-admin-signing')
+          AND (profile_uuid IS NULL OR profile_uuid = '')
+      `).all().map(sanitizeAdminKeypairForExport);
+
+      const userOpKeys = db.prepare(`
+        SELECT * FROM profile_keypairs
+      `).all().map(sanitizeUserOpKeypairForExport);
+
+      const encryptionKeys = db.prepare(`
+        SELECT * FROM encryption_keys
+        WHERE key_type = 'Shared Preinstalled'
+      `).all().map(sanitizeEncryptionKeyForExport);
+
+      const exportData = {
+        version: 1,
+        exported_at: new Date().toISOString(),
+        admin_master_keys: masterKeys,
+        admin_keypairs: adminKeys,
+        user_op_keypairs: userOpKeys,
+        encryption_keys: encryptionKeys
+      };
+
+      fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2), 'utf8');
+
+      return {
+        success: true,
+        filePath,
+        masterCount: masterKeys.length,
+        adminCount: adminKeys.length,
+        userOpCount: userOpKeys.length,
+        encryptionCount: encryptionKeys.length
+      };
+    } catch (error) {
+      console.error('Error exporting admin public keys:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:admin-public-keys:import', async () => {
+    try {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        title: 'Import Admin Public Keys',
+        filters: [{ name: 'JSON Files', extensions: ['json'] }],
+        properties: ['openFile']
+      });
+
+      if (canceled || !filePaths || filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      const fs = require('fs');
+      const filePath = filePaths[0];
+      const content = fs.readFileSync(filePath, 'utf8');
+      let data;
+      try {
+        data = JSON.parse(content);
+      } catch (parseError) {
+        return { success: false, error: 'Invalid JSON file' };
+      }
+
+      const result = dbManager.importAdminPublicKeysFromData(data, { source: filePath });
+      return {
+        success: true,
+        filePath,
+        masterCount: result.masterKeysImported || 0,
+        adminCount: result.adminKeysImported || 0,
+        userOpCount: result.userOpKeysImported || 0,
+        encryptionCount: result.encryptionKeysImported || 0
+      };
+    } catch (error) {
+      console.error('Error importing admin public keys:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   /**
    * Get a specific trust declaration
    * Channel: online:trust-declaration:get

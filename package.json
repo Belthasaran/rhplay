@@ -137,6 +137,16 @@
       "bin/flips",
       "node_modules/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "electron/trustdecl.json",
+        "to": "trustdecl.json"
+      },
+      {
+        "from": "electron/adminkp_trust.json",
+        "to": "adminkp_trust.json"
+      }
+    ],
     "asarUnpack": [
       "electron/renderer/dist/**/*",
       "node_modules/better-sqlite3/**/*",

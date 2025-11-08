@@ -70,10 +70,151 @@ function registerDatabaseHandlers(dbManager) {
     const median = count % 2 === 1
       ? sorted[(count - 1) / 2]
       : (sorted[count / 2 - 1] + sorted[count / 2]) / 2;
-    const variance = sorted.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / count;
+    const variance = values.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / count;
     const stddev = Math.sqrt(variance);
     return { count, average, median, stddev };
   };
+
+  const parseAssignmentScopeInput = (scope) => {
+    if (!scope) {
+      return null;
+    }
+    if (typeof scope === 'string') {
+      const trimmed = scope.trim();
+      if (!trimmed) {
+        return null;
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return { type: 'custom', value: trimmed };
+      }
+    }
+    if (typeof scope === 'object' && !Array.isArray(scope)) {
+      return scope;
+    }
+    return { type: 'custom', value: scope };
+  };
+
+  const serializeAssignmentScope = (scope) => {
+    if (!scope) {
+      return null;
+    }
+    if (typeof scope === 'string') {
+      return scope;
+    }
+    try {
+      return JSON.stringify(scope);
+    } catch (error) {
+      console.warn('[trust:assignments] Failed to serialize scope:', error.message);
+      return null;
+    }
+  };
+
+  const buildPermissionScope = (scope) => {
+    const parsed = parseAssignmentScopeInput(scope);
+    if (parsed && typeof parsed === 'object' && parsed.type) {
+      return parsed;
+    }
+    return { type: 'global', target: '*' };
+  };
+
+  ipcMain.handle('trust:assignments:list', (_event, { pubkey } = {}) => {
+    try {
+      const assignments = trustManager.listTrustAssignments(pubkey || undefined);
+      return { success: true, assignments };
+    } catch (error) {
+      console.error('[trust:assignments:list] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('trust:assignments:create', (_event, payload = {}) => {
+    try {
+      const { actorPubkey, assignment } = payload;
+      if (!actorPubkey) {
+        return { success: false, error: 'actorPubkey is required' };
+      }
+      if (!assignment || !assignment.pubkey) {
+        return { success: false, error: 'assignment.pubkey is required' };
+      }
+
+      const permission = permissionHelper.canPerform({
+        pubkey: actorPubkey,
+        action: 'trust.assign',
+        scope: buildPermissionScope(assignment.scope)
+      });
+      if (!permission.allowed) {
+        return { success: false, error: permission.reason || 'Permission denied', details: permission };
+      }
+
+      const targetPubkey = String(assignment.pubkey).trim().toLowerCase();
+      if (!targetPubkey) {
+        return { success: false, error: 'Target pubkey is empty' };
+      }
+
+      const assignedTrustLevel = assignment.assigned_trust_level !== undefined && assignment.assigned_trust_level !== null
+        ? Number(assignment.assigned_trust_level)
+        : null;
+      const trustLimit = assignment.trust_limit !== undefined && assignment.trust_limit !== null
+        ? Number(assignment.trust_limit)
+        : null;
+      const expiresAt = assignment.expires_at !== undefined && assignment.expires_at !== null
+        ? Number(assignment.expires_at)
+        : null;
+
+      const entry = {
+        pubkey: targetPubkey,
+        assigned_trust_level: assignedTrustLevel,
+        trust_limit: trustLimit,
+        assigned_by_pubkey: actorPubkey,
+        assigned_by_trust_level: trustManager.getTrustLevel(actorPubkey),
+        scope: serializeAssignmentScope(assignment.scope),
+        source: assignment.source || 'manual',
+        reason: assignment.reason || null,
+        expires_at: Number.isFinite(expiresAt) ? expiresAt : null,
+        created_at: assignment.created_at || Math.floor(Date.now() / 1000)
+      };
+
+      const assignmentId = trustManager.saveTrustAssignment(entry);
+      return { success: true, assignmentId };
+    } catch (error) {
+      console.error('[trust:assignments:create] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('trust:assignments:delete', (_event, { assignmentId, actorPubkey } = {}) => {
+    try {
+      if (!assignmentId) {
+        return { success: false, error: 'assignmentId is required' };
+      }
+      if (!actorPubkey) {
+        return { success: false, error: 'actorPubkey is required' };
+      }
+
+      const assignments = trustManager.listTrustAssignments();
+      const target = assignments.find((row) => Number(row.assignment_id) === Number(assignmentId));
+      if (!target) {
+        return { success: false, error: 'Assignment not found' };
+      }
+
+      const permission = permissionHelper.canPerform({
+        pubkey: actorPubkey,
+        action: 'trust.assign',
+        scope: buildPermissionScope(target.scope)
+      });
+      if (!permission.allowed) {
+        return { success: false, error: permission.reason || 'Permission denied', details: permission };
+      }
+
+      trustManager.deleteTrustAssignment(assignmentId);
+      return { success: true };
+    } catch (error) {
+      console.error('[trust:assignments:delete] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
 
   ipcMain.handle('trust:permissions:get', (_event, { pubkey, scope } = {}) => {
     try {
@@ -637,7 +778,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Bulk save stage annotations
    * Channel: db:clientdata:set:stage-annotations-bulk
@@ -1421,7 +1561,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Stage games for quick launch (direct launch without creating a run)
    * Channel: db:games:quick-launch-stage
@@ -2218,7 +2357,6 @@ function registerDatabaseHandlers(dbManager) {
     const { grantDialoutPermission } = require('./main/usb2snes/usbPermissions');
     return await grantDialoutPermission();
   });
-
   /**
    * Disconnect from USB2SNES server
    * Channel: usb2snes:disconnect
@@ -3017,7 +3155,6 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
   // PAST RUNS OPERATIONS
   // ===========================================================================
-  
   /**
    * Get all runs from database
    * Channel: db:runs:get-all

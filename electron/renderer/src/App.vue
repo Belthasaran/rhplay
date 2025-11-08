@@ -33,6 +33,12 @@
                 Trust Declarations
               </button>
               <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'trust-assignments' }]"
+                @click="onlineActiveTab = 'trust-assignments'"
+              >
+                Trust & Delegation
+              </button>
+              <button 
                 :class="['tab-button', { 'active': onlineActiveTab === 'moderation' }]"
                 @click="onlineActiveTab = 'moderation'"
               >
@@ -516,6 +522,155 @@
                   <button class="btn-primary" @click="exportAllTrustDeclarations">Export All</button>
                 </div>
                 </div>
+
+                <div class="online-section trust-assignments-section">
+                  <h4>Manual Trust Assignments</h4>
+                  <p class="admin-note">
+                    Manual assignments can immediately adjust or cap a subject's verification level within a scope. They complement trust declarations for emergency actions or temporary limits.
+                  </p>
+
+                  <div class="trust-assignments-toolbar">
+                    <div class="toolbar-group">
+                      <label>
+                        Filter by pubkey
+                        <input
+                          v-model.trim="trustAssignmentsFilter.pubkey"
+                          type="text"
+                          placeholder="npub… or hex"
+                          @keyup.enter="loadTrustAssignmentsList(trustAssignmentsFilter.pubkey)"
+                        />
+                      </label>
+                      <label>
+                        Scope
+                        <select v-model="trustAssignmentsFilter.scopeType">
+                          <option value="all">All</option>
+                          <option value="global">Global</option>
+                          <option value="section">Section</option>
+                          <option value="channel">Channel</option>
+                          <option value="forum">Forum</option>
+                          <option value="game">Game</option>
+                          <option value="user">User</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="toolbar-actions">
+                      <button class="btn-secondary" :disabled="trustAssignmentsLoading" @click="loadTrustAssignmentsList(trustAssignmentsFilter.pubkey)">
+                        {{ trustAssignmentsLoading ? 'Loading…' : 'Refresh' }}
+                      </button>
+                      <button
+                        class="btn-primary"
+                        :disabled="!canManageTrustAssignments"
+                        @click="openCreateTrustAssignmentForm"
+                        title="Requires a profile with an active Nostr key"
+                      >
+                        New Assignment
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-if="trustAssignmentsError" class="error-message">
+                    {{ trustAssignmentsError }}
+                  </div>
+
+                  <p v-if="!canManageTrustAssignments" class="info-message">
+                    Select a profile with an active Nostr key to issue or revoke manual assignments.
+                  </p>
+
+                  <div v-if="showCreateTrustAssignmentForm" class="trust-assignment-form">
+                    <h5>Create Assignment</h5>
+                    <div class="form-grid">
+                      <label>
+                        Subject Public Key
+                        <input v-model.trim="trustAssignmentForm.subjectPubkey" type="text" placeholder="npub… or hex" />
+                      </label>
+                      <label>
+                        Assigned Trust Level
+                        <input v-model.trim="trustAssignmentForm.assignedLevel" type="number" min="-2" max="30" />
+                      </label>
+                      <label>
+                        Trust Limit (optional)
+                        <input v-model.trim="trustAssignmentForm.trustLimit" type="number" min="-2" max="30" />
+                      </label>
+                      <label>
+                        Scope Type
+                        <select v-model="trustAssignmentForm.scopeType">
+                          <option value="global">Global</option>
+                          <option value="section">Section</option>
+                          <option value="channel">Channel</option>
+                          <option value="forum">Forum</option>
+                          <option value="game">Game</option>
+                          <option value="user">User</option>
+                        </select>
+                      </label>
+                      <label v-if="trustAssignmentForm.scopeType !== 'global'">
+                        Scope Target
+                        <input v-model.trim="trustAssignmentForm.scopeTarget" type="text" placeholder="e.g. kaizo" />
+                      </label>
+                      <label>
+                        Reason (optional)
+                        <input v-model.trim="trustAssignmentForm.reason" type="text" placeholder="Internal note" />
+                      </label>
+                      <label>
+                        Expires At (optional)
+                        <input v-model="trustAssignmentForm.expiresAt" type="datetime-local" />
+                      </label>
+                    </div>
+                    <div class="form-actions">
+                      <button class="btn-secondary" @click="closeCreateTrustAssignmentForm" :disabled="submittingTrustAssignment">
+                        Cancel
+                      </button>
+                      <button class="btn-primary" @click="submitTrustAssignmentForm" :disabled="submittingTrustAssignment">
+                        {{ submittingTrustAssignment ? 'Saving…' : 'Save Assignment' }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="trust-assignments-table-wrapper">
+                    <table class="trust-assignments-table">
+                      <thead>
+                        <tr>
+                          <th>Subject</th>
+                          <th>Level</th>
+                          <th>Limit</th>
+                          <th>Scope</th>
+                          <th>Assigned By</th>
+                          <th>Expires</th>
+                          <th>Source</th>
+                          <th>Reason</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-if="trustAssignmentsLoading">
+                          <td colspan="9" class="empty-message">Loading assignments…</td>
+                        </tr>
+                        <tr v-else-if="filteredTrustAssignments.length === 0">
+                          <td colspan="9" class="empty-message">No assignments found.</td>
+                        </tr>
+                        <tr v-else v-for="row in filteredTrustAssignments" :key="row.assignment_id">
+                          <td><code class="mono">{{ row.pubkey }}</code></td>
+                          <td>{{ row.assigned_trust_level ?? '—' }}</td>
+                          <td>{{ row.trust_limit ?? '—' }}</td>
+                          <td>{{ formatAssignmentScope(row.scope) }}</td>
+                          <td><code class="mono">{{ row.assigned_by_pubkey || '—' }}</code></td>
+                          <td>{{ formatUnixTimestamp(row.expires_at) }}</td>
+                          <td>{{ row.source || 'manual' }}</td>
+                          <td>{{ row.reason || '—' }}</td>
+                          <td class="actions">
+                            <button
+                              class="btn-link danger"
+                              :disabled="deletingTrustAssignmentIds.has(row.assignment_id) || !canManageTrustAssignments"
+                              @click="deleteTrustAssignment(row.assignment_id)"
+                            >
+                              {{ deletingTrustAssignmentIds.has(row.assignment_id) ? 'Removing…' : 'Revoke' }}
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
               </div>
               <!-- End Trust Declarations Tab -->
 
@@ -6651,7 +6806,7 @@ const bulkStatus = ref('');
 const filterDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
-const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'moderation'>('profile-keys');
+const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
 // Select dropdown state
@@ -7835,6 +7990,58 @@ const showTrustDeclarationDetailsModal = ref(false);
 const editingTrustDeclaration = ref<any>({});
 const trustDeclarationDetailsTab = ref('summary');
 const localTrustOverride = ref(false);
+
+const trustAssignments = ref<TrustAssignmentRow[]>([]);
+const trustAssignmentsLoading = ref(false);
+const trustAssignmentsError = ref<string | null>(null);
+const trustAssignmentsFilter = reactive({
+  pubkey: '',
+  scopeType: 'all' as 'all' | 'global' | 'section' | 'channel' | 'forum' | 'game' | 'user'
+});
+const showCreateTrustAssignmentForm = ref(false);
+const submittingTrustAssignment = ref(false);
+const trustAssignmentForm = reactive({
+  subjectPubkey: '',
+  assignedLevel: '',
+  trustLimit: '',
+  scopeType: 'global' as 'global' | 'section' | 'channel' | 'forum' | 'game' | 'user',
+  scopeTarget: '',
+  reason: '',
+  expiresAt: ''
+});
+const deletingTrustAssignmentIds = reactive(new Set<number>());
+
+const filteredTrustAssignments = computed(() => {
+  const rows = trustAssignments.value || [];
+  const pubkeyFilter = trustAssignmentsFilter.pubkey.trim().toLowerCase();
+  const scopeTypeFilter = trustAssignmentsFilter.scopeType;
+  return rows.filter((row) => {
+    let matches = true;
+    if (pubkeyFilter) {
+      const targets = [
+        row.pubkey?.toLowerCase() || '',
+        row.assigned_by_pubkey?.toLowerCase() || ''
+      ];
+      matches = targets.some((value) => value.includes(pubkeyFilter));
+    }
+    if (!matches) {
+      return false;
+    }
+    if (scopeTypeFilter !== 'all') {
+      if (!row.scope) {
+        return scopeTypeFilter === 'global';
+      }
+      try {
+        const parsed = JSON.parse(row.scope);
+        const type = parsed?.type || 'global';
+        return type === scopeTypeFilter;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  });
+});
 
 // Create Trust Declaration Wizard state
 const trustDeclarationWizardStep = ref(1); // 1=issuer, 2=validity, 3=subject, 4=content, 5=finalize
@@ -9326,6 +9533,203 @@ function onAdminOptionsToggle() {
   } else {
     selectedAdminKeypairUuid.value = null;
     selectedAdminKeypair.value = null;
+  }
+}
+
+function parseAssignmentScope(scope: string | null | undefined): any {
+  if (!scope) {
+    return null;
+  }
+  try {
+    return JSON.parse(scope);
+  } catch (error) {
+    console.warn('Failed to parse trust assignment scope:', error);
+    return null;
+  }
+}
+
+function formatAssignmentScope(scope: string | null | undefined): string {
+  const parsed = parseAssignmentScope(scope);
+  if (!parsed) {
+    return 'Global';
+  }
+  const type = parsed.type || 'global';
+  const target = Array.isArray(parsed.targets) ? parsed.targets.join(', ') : parsed.target || '*';
+  if (type === 'global') {
+    return 'Global';
+  }
+  return `${type}:${target}`;
+}
+
+function formatUnixTimestamp(timestamp?: number | null): string {
+  if (!timestamp) {
+    return '—';
+  }
+  const date = new Date(timestamp * 1000);
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+  return date.toLocaleString();
+}
+
+function resetTrustAssignmentForm() {
+  trustAssignmentForm.subjectPubkey = '';
+  trustAssignmentForm.assignedLevel = '';
+  trustAssignmentForm.trustLimit = '';
+  trustAssignmentForm.scopeType = 'global';
+  trustAssignmentForm.scopeTarget = '';
+  trustAssignmentForm.reason = '';
+  trustAssignmentForm.expiresAt = '';
+}
+
+function openCreateTrustAssignmentForm() {
+  resetTrustAssignmentForm();
+  showCreateTrustAssignmentForm.value = true;
+}
+
+function closeCreateTrustAssignmentForm() {
+  if (submittingTrustAssignment.value) {
+    return;
+  }
+  showCreateTrustAssignmentForm.value = false;
+}
+
+async function loadTrustAssignmentsList(pubkeyFilter?: string | null) {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  trustAssignmentsLoading.value = true;
+  trustAssignmentsError.value = null;
+  try {
+    const api = (window as any).electronAPI;
+    const response = await api.listTrustAssignments(pubkeyFilter || undefined);
+    if (response?.success) {
+      trustAssignments.value = Array.isArray(response.assignments) ? response.assignments : [];
+    } else {
+      throw new Error(response?.error || 'Failed to load assignments');
+    }
+  } catch (error: any) {
+    console.error('Error loading trust assignments:', error);
+    trustAssignments.value = [];
+    trustAssignmentsError.value = error?.message || String(error);
+  } finally {
+    trustAssignmentsLoading.value = false;
+  }
+}
+
+function buildAssignmentScopePayload() {
+  const type = trustAssignmentForm.scopeType;
+  if (type === 'global') {
+    return null;
+  }
+  const target = trustAssignmentForm.scopeTarget.trim();
+  if (!target) {
+    throw new Error('Scope target is required for non-global scopes');
+  }
+  return {
+    type,
+    target
+  };
+}
+
+async function submitTrustAssignmentForm() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  if (!onlinePrimaryPubkey.value) {
+    alert('You must select a profile with a Nostr key to issue trust assignments.');
+    return;
+  }
+  const subject = trustAssignmentForm.subjectPubkey.trim();
+  if (!subject) {
+    alert('Subject public key is required.');
+    return;
+  }
+  const level = trustAssignmentForm.assignedLevel.trim();
+  if (!level) {
+    alert('Assigned trust level is required.');
+    return;
+  }
+  const assignment: any = {
+    pubkey: subject,
+    assigned_trust_level: Number(level)
+  };
+  if (trustAssignmentForm.trustLimit.trim()) {
+    assignment.trust_limit = Number(trustAssignmentForm.trustLimit.trim());
+  }
+  if (trustAssignmentForm.reason.trim()) {
+    assignment.reason = trustAssignmentForm.reason.trim();
+  }
+  if (trustAssignmentForm.expiresAt.trim()) {
+    const expires = Date.parse(trustAssignmentForm.expiresAt);
+    if (Number.isNaN(expires)) {
+      alert('Expiration date is invalid.');
+      return;
+    }
+    assignment.expires_at = Math.floor(expires / 1000);
+  }
+  try {
+    const scopePayload = buildAssignmentScopePayload();
+    if (scopePayload) {
+      assignment.scope = scopePayload;
+    }
+  } catch (error: any) {
+    alert(error?.message || 'Invalid scope configuration.');
+    return;
+  }
+
+  submittingTrustAssignment.value = true;
+  try {
+    const api = (window as any).electronAPI;
+    const response = await api.createTrustAssignment({
+      actorPubkey: onlinePrimaryPubkey.value,
+      assignment
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || 'Failed to create trust assignment');
+    }
+    showCreateTrustAssignmentForm.value = false;
+    resetTrustAssignmentForm();
+    await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+  } catch (error: any) {
+    console.error('Error creating trust assignment:', error);
+    alert(error?.message || String(error));
+  } finally {
+    submittingTrustAssignment.value = false;
+  }
+}
+
+async function deleteTrustAssignment(assignmentId: number) {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  if (!onlinePrimaryPubkey.value) {
+    alert('You must select a profile with a Nostr key to revoke trust assignments.');
+    return;
+  }
+  if (!Number.isFinite(assignmentId)) {
+    return;
+  }
+  const confirmed = window.confirm('Revoke this trust assignment?');
+  if (!confirmed) {
+    return;
+  }
+  deletingTrustAssignmentIds.add(assignmentId);
+  try {
+    const api = (window as any).electronAPI;
+    const response = await api.deleteTrustAssignment({
+      actorPubkey: onlinePrimaryPubkey.value,
+      assignmentId
+    });
+    if (!response?.success) {
+      throw new Error(response?.error || 'Failed to delete trust assignment');
+    }
+    await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+  } catch (error: any) {
+    console.error('Error deleting trust assignment:', error);
+    alert(error?.message || String(error));
+  } finally {
+    deletingTrustAssignmentIds.delete(assignmentId);
   }
 }
 
@@ -11027,6 +11431,8 @@ async function saveTrustDeclaration() {
       // Reload declarations list if we're on the Trust Declarations tab
       if (onlineActiveTab.value === 'trust-declarations') {
         loadTrustDeclarationsList();
+      } else if (onlineActiveTab.value === 'trust-assignments') {
+        loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
       }
     } else {
       alert(`Failed to save declaration: ${result.error || 'Unknown error'}`);
@@ -11049,6 +11455,8 @@ async function finishLaterTrustDeclaration() {
     // Reload declarations list if we're on the Trust Declarations tab
     if (onlineActiveTab.value === 'trust-declarations') {
       loadTrustDeclarationsList();
+    } else if (onlineActiveTab.value === 'trust-assignments') {
+      loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
     }
   }
 }
@@ -11064,8 +11472,18 @@ watch(showCreateTrustDeclarationModal, (isOpen) => {
 watch(onlineActiveTab, (newTab) => {
   if (newTab === 'trust-declarations') {
     loadTrustDeclarationsList();
+    loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
   }
 });
+
+watch(
+  () => onlinePrimaryPubkey.value,
+  () => {
+    if (onlineActiveTab.value === 'trust-declarations') {
+      loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+    }
+  }
+);
 
 // Encryption Key functions
 async function loadEncryptionKeysList() {
@@ -14431,6 +14849,20 @@ type RatingsSummaryDisplay = {
   updatedAtLabel: string | null;
 };
 
+type TrustAssignmentRow = {
+  assignment_id: number;
+  pubkey: string;
+  assigned_trust_level: number | null;
+  trust_limit: number | null;
+  assigned_by_pubkey: string | null;
+  assigned_by_trust_level: number | null;
+  scope: string | null;
+  source?: string | null;
+  reason?: string | null;
+  expires_at?: number | null;
+  created_at?: number | null;
+};
+
 // Demo stage data per item id
 const stagesByItemId = reactive<Record<string, Stage[]>>({
   '11374': [
@@ -14571,6 +15003,8 @@ watch(
   },
   { immediate: true }
 );
+
+const canManageTrustAssignments = computed(() => Boolean(onlinePrimaryPubkey.value));
 
 const currentStages = computed<Stage[]>(() => {
   if (!selectedItem.value) return [];
@@ -22607,6 +23041,128 @@ button:disabled {
 .nostr-status-retrying {
   color: #2196f3;
   font-weight: 500;
+}
+
+.trust-assignments-section {
+  margin-top: 32px;
+}
+
+.trust-assignments-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.trust-assignments-toolbar .toolbar-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.trust-assignments-toolbar label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 4px;
+}
+
+.trust-assignments-toolbar input,
+.trust-assignments-toolbar select {
+  min-width: 220px;
+}
+
+.trust-assignments-toolbar .toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.trust-assignment-form {
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  margin-bottom: 16px;
+}
+
+.trust-assignment-form h5 {
+  margin: 0 0 12px;
+}
+
+.trust-assignment-form .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.trust-assignment-form .form-grid label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 4px;
+}
+
+.trust-assignment-form .form-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.trust-assignments-table-wrapper {
+  overflow-x: auto;
+}
+
+.trust-assignments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.trust-assignments-table th,
+.trust-assignments-table td {
+  border: 1px solid var(--border-color);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.trust-assignments-table th {
+  background: var(--bg-primary);
+  font-weight: 600;
+}
+
+.trust-assignments-table .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+
+.btn-link.danger {
+  color: #f44336;
+}
+
+.btn-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.info-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
 }
 
 .ratings-summary-panel {

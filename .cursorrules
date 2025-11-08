@@ -35,7 +35,8 @@ When making any schema changes (adding tables, modifying columns, adding indexes
    - Any data type changes or constraints
 
 ### Database Migration Commands
-**REQUIRED:** All new database migration scripts or maintenance commands that the admin should run MUST be appended to `docs/DBMIGRATE.md`.
+**REQUIRED:** Please check and add to jsutils/migratedb.js  when creating database migrations.
+All new database migration scripts or maintenance commands that the admin should run MUST be appended to `docs/DBMIGRATE.md`.
 
 When creating migration scripts or database maintenance commands:
 1. Append the command/script to `docs/DBMIGRATE.md` with:

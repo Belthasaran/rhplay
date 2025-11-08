@@ -6905,7 +6905,13 @@ function registerDatabaseHandlers(dbManager) {
         DELETE FROM trust_declarations
         WHERE declaration_uuid = ?
       `).run(declarationUuid);
-      
+
+      db.prepare(`
+        DELETE FROM admindeclarations
+        WHERE declaration_uuid = ?
+      `).run(declarationUuid);
+      console.log(`[online:trust-declaration:delete] uuid=${declarationUuid}`)
+     
       return { success: true };
     } catch (error) {
       console.error('Error deleting trust declaration:', error);

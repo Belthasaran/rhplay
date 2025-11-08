@@ -3,6 +3,7 @@
 - Added `ratings.db` schema (`rating_events`, `rating_summaries`, `trust_assignments`) and extended `NostrRuntimeService`/`TrustManager` to ingest kind 31001 rating events, derive trust levels/tiers (including trust declarations), persist normalized ratingcards, recompute per-game summary statistics, and expose trust assignment IPC plus a `cli/trust-inspector.js` utility for upcoming admin tooling.
 - Added `moderation.db` schema (`moderation_actions`, `moderation_logs`) to persist scope-aware moderation directives and wired the new `PermissionHelper` into moderation/trust assignment flows.
 - Introduced `ModeratorDashboard` prototype in the Online dialog with trust-aware moderation actions (block/mute/freeze/warn), action history table, and revoke support backed by the new IPC + `ModerationManager`.
+- Trust declaration wizard now records `target_keypair_canonical_name` and new `target_keypair_public_hex`, fixing subject resolution (GUI populates npub + hex automatically; backend persists them).
 # RHTools Changelog
 
 > **Note**: For a comprehensive summary of recent USB2SNES connection enhancements, see [`devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md`](../devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md)

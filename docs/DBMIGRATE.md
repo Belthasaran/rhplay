@@ -37,6 +37,37 @@ sqlite3 electron/clientdata.db < electron/sql/migrations/030_clientdata_nostr_re
 
 ---
 
+## Migration 031: Admin Declaration Target Hex
+
+### Date Added
+November 8, 2025
+
+### Purpose
+Ensure every admin declaration records the subject’s public key in hex form so trust matching can be performed deterministically, even when the local UUID differs.
+
+### Command
+```bash
+sqlite3 electron/clientdata.db < electron/sql/migrations/031_clientdata_admindeclarations_target_hex.sql
+```
+
+### What It Does
+- Adds `target_keypair_public_hex` column to the `admindeclarations` table.
+- Backfills the new column with any existing 64-character hex fingerprints.
+
+### Prerequisites
+- Prior `clientdata.db` migrations (027-030) should be applied.
+- Backup recommended before running.
+
+### Expected Outcome
+- Trust declarations and other admin records store `target_keypair_public_hex`, enabling reliable matching against subjects’ public keys.
+- Existing rows gain hex data where it can be inferred from the fingerprint field.
+
+### Warnings
+- Uses `ALTER TABLE`; safe to run once.
+- Re-running after the column exists is a no-op (migration runner skips automatically).
+
+---
+
 ## Migration 001: New Schema Fields Support
 
 ### Date Added

@@ -600,6 +600,15 @@ const MIGRATIONS = {
         return tableExists(db, 'nostr_relays');
       },
     },
+    {
+      id: 'clientdata_031_admindeclarations_target_hex',
+      description: 'Add target_keypair_public_hex column to admindeclarations',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/031_clientdata_admindeclarations_target_hex.sql'),
+      skipIf(db) {
+        return columnExists(db, 'admindeclarations', 'target_keypair_public_hex');
+      },
+    },
   ],
   patchbin: [],
 };

@@ -1454,3 +1454,32 @@ Created `moderation.db` to store moderator/admin actions (blocks, freezes, warni
 
 ---
 
+## 2025-11-08: Admin Declaration Target Hex Column
+
+### Date
+November 8, 2025
+
+### Description
+Added `target_keypair_public_hex` column to the `admindeclarations` table so trust declarations explicitly store the subject’s hex-encoded public key in addition to the canonical name and fingerprint fields.
+
+### Rationale
+- Trust declarations were previously only capturing a local UUID and optional fingerprint, making it impossible to reliably match declarations to subject keys across machines.
+- Storing the canonical name (`npub…`) plus the raw hex public key guarantees deterministic matching for Nostr keys (and can be extended to other key types).
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**Updated Table**: `admindeclarations`
+- Added column `target_keypair_public_hex VARCHAR(128)` (nullable).
+- Existing rows are backfilled where `target_keypair_fingerprint` already contained a 64-character hex string.
+
+### Migration File
+- `electron/sql/migrations/031_clientdata_admindeclarations_target_hex.sql`
+
+### Related Code
+- `electron/ipc-handlers.js` (`online:admin-declaration:save`) now persists canonical name and hex for targets.
+- `electron/renderer/src/App.vue` trust declaration wizard populates canonical/hex fields for local profiles, selected keypairs, and manually entered Nostr keys.
+
+---
+

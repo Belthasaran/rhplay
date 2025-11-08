@@ -7792,7 +7792,8 @@ const trustDeclarationWizardData = ref({
     declarationUuid: '',
     selectionMode: 'local-profile' as 'local-profile' | 'manual',
     manualPubkey: '',
-    manualError: ''
+    manualError: '',
+    publicKeyHex: ''
   },
   content: {
     mode: 'form', // 'form' | 'advanced'
@@ -9926,7 +9927,9 @@ async function initializeTrustDeclarationWizard() {
       profileUuid: '',
       declarationUuid: '',
       manualPubkey: '',
-      manualError: ''
+      manualError: '',
+      selectionMode: 'local-profile',
+      publicKeyHex: ''
     },
     content: {
       mode: 'form',
@@ -10127,6 +10130,7 @@ async function loadAvailableSubjectKeypairs() {
         canonicalName: kp.canonicalName || kp.canonical_name || '',
         fingerprint: kp.fingerprint || '',
         publicKey: kp.publicKey || kp.public_key || '',
+        publicKeyHex: kp.publicKeyHex || kp.public_key_hex || '',
         name: kp.name || '',
         label: kp.label || '',
         localName: kp.localName || kp.local_name || ''
@@ -10196,6 +10200,7 @@ function onSubjectTypeChanged() {
   trustDeclarationWizardData.value.subject.manualPubkey = '';
   trustDeclarationWizardData.value.subject.manualError = '';
   trustDeclarationWizardData.value.subject.selectionMode = 'local-profile';
+  trustDeclarationWizardData.value.subject.publicKeyHex = '';
 
   if (trustDeclarationWizardData.value.subject.type === 'profile') {
     if (availableSubjectProfiles.value.length === 0) {
@@ -10222,6 +10227,7 @@ async function onSubjectKeypairSelected() {
   
   trustDeclarationWizardData.value.subject.canonicalName = selectedKeypair.canonicalName || '';
   trustDeclarationWizardData.value.subject.fingerprint = selectedKeypair.fingerprint || '';
+  trustDeclarationWizardData.value.subject.publicKeyHex = selectedKeypair.publicKeyHex || selectedKeypair.publicKey || '';
 }
 
 function onSubjectSelectionModeChanged(mode: 'local-profile' | 'manual') {
@@ -10232,6 +10238,7 @@ function onSubjectSelectionModeChanged(mode: 'local-profile' | 'manual') {
   trustDeclarationWizardData.value.subject.canonicalName = '';
   trustDeclarationWizardData.value.subject.fingerprint = '';
   trustDeclarationWizardData.value.subject.keypairUuid = '';
+  trustDeclarationWizardData.value.subject.publicKeyHex = '';
 
   if (mode === 'local-profile' && availableSubjectProfiles.value.length === 0) {
     loadAvailableSubjectProfiles();
@@ -10246,6 +10253,7 @@ function onSubjectProfileSelected() {
   trustDeclarationWizardData.value.subject.canonicalName = '';
   trustDeclarationWizardData.value.subject.fingerprint = '';
   trustDeclarationWizardData.value.subject.keypairUuid = '';
+  trustDeclarationWizardData.value.subject.publicKeyHex = '';
 
   if (!subjectProfile) {
     return;
@@ -10254,6 +10262,7 @@ function onSubjectProfileSelected() {
   trustDeclarationWizardData.value.subject.canonicalName = subjectProfile.primaryCanonicalName || '';
   trustDeclarationWizardData.value.subject.fingerprint = subjectProfile.primaryFingerprint || subjectProfile.primaryPublicKeyHex || '';
   trustDeclarationWizardData.value.subject.keypairUuid = subjectProfile.primaryKeypairUuid || '';
+  trustDeclarationWizardData.value.subject.publicKeyHex = subjectProfile.primaryPublicKeyHex || '';
 }
 
 function onSubjectManualInput() {
@@ -10264,6 +10273,7 @@ function onSubjectManualInput() {
   trustDeclarationWizardData.value.subject.fingerprint = '';
   trustDeclarationWizardData.value.subject.profileUuid = '';
   trustDeclarationWizardData.value.subject.keypairUuid = '';
+  trustDeclarationWizardData.value.subject.publicKeyHex = '';
 
   if (!input) {
     return;
@@ -10291,10 +10301,62 @@ function onSubjectManualInput() {
 
     trustDeclarationWizardData.value.subject.canonicalName = canonical;
     trustDeclarationWizardData.value.subject.fingerprint = hex;
+    trustDeclarationWizardData.value.subject.publicKeyHex = hex;
   } catch (error: any) {
     trustDeclarationWizardData.value.subject.manualError =
       error?.message || 'Invalid Nostr public key. Provide npub or 64-character hex.';
   }
+}
+
+function getSubjectCanonicalName(): string | null {
+  const subject = trustDeclarationWizardData.value.subject;
+  if (subject.canonicalName) {
+    return subject.canonicalName;
+  }
+  if (subject.type === 'profile' && subject.selectionMode === 'manual') {
+    return subject.manualPubkey || null;
+  }
+  if (subject.manualPubkey) {
+    return subject.manualPubkey;
+  }
+  return null;
+}
+
+function getSubjectPublicKeyHex(): string | null {
+  const subject = trustDeclarationWizardData.value.subject;
+  if (subject.publicKeyHex) {
+    return subject.publicKeyHex.toLowerCase();
+  }
+  if (subject.fingerprint && /^[0-9a-fA-F]{64}$/.test(subject.fingerprint)) {
+    return subject.fingerprint.toLowerCase();
+  }
+  if (subject.manualPubkey) {
+    const sanitized = subject.manualPubkey.startsWith('0x') ? subject.manualPubkey.substring(2) : subject.manualPubkey;
+    if (/^[0-9a-fA-F]{64}$/.test(sanitized)) {
+      return sanitized.toLowerCase();
+    }
+    if (subject.manualPubkey.toLowerCase().startsWith('npub')) {
+      try {
+        const decoded = nip19.decode(subject.manualPubkey);
+        if (decoded.type === 'npub') {
+          return Buffer.from(decoded.data).toString('hex');
+        }
+      } catch (error) {
+        console.warn('Unable to decode manual npub key:', error);
+      }
+    }
+  }
+  if (subject.canonicalName && subject.canonicalName.toLowerCase().startsWith('npub')) {
+    try {
+      const decoded = nip19.decode(subject.canonicalName);
+      if (decoded.type === 'npub') {
+        return Buffer.from(decoded.data).toString('hex');
+      }
+    } catch (error) {
+      console.warn('Unable to decode canonical npub key:', error);
+    }
+  }
+  return null;
 }
 
 function onContentModeChanged() {
@@ -10597,6 +10659,8 @@ function generateFullDeclarationJsonForDisplay(): string {
     signing_keypair_fingerprint: trustDeclarationWizardData.value.issuer.fingerprint || null,
     target_keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
     target_keypair_fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+    target_keypair_canonical_name: getSubjectCanonicalName(),
+    target_keypair_public_hex: getSubjectPublicKeyHex(),
     target_user_profile_id: trustDeclarationWizardData.value.subject.profileUuid || null,
     valid_from: trustDeclarationWizardData.value.validity.validFrom 
       ? new Date(trustDeclarationWizardData.value.validity.validFrom).toISOString()
@@ -10735,6 +10799,8 @@ async function saveDraftTrustDeclaration() {
       signing_keypair_fingerprint: trustDeclarationWizardData.value.issuer.fingerprint || null,
       target_keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
       target_keypair_fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+    target_keypair_canonical_name: getSubjectCanonicalName(),
+    target_keypair_public_hex: getSubjectPublicKeyHex(),
       target_user_profile_id: trustDeclarationWizardData.value.subject.profileUuid || null,
       valid_from: trustDeclarationWizardData.value.validity.validFrom 
         ? new Date(trustDeclarationWizardData.value.validity.validFrom).toISOString()
@@ -10867,6 +10933,8 @@ async function saveTrustDeclaration() {
       signing_keypair_fingerprint: trustDeclarationWizardData.value.issuer.fingerprint || null,
       target_keypair_uuid: trustDeclarationWizardData.value.subject.keypairUuid || null,
       target_keypair_fingerprint: trustDeclarationWizardData.value.subject.fingerprint || null,
+      target_keypair_canonical_name: getSubjectCanonicalName(),
+      target_keypair_public_hex: getSubjectPublicKeyHex(),
       target_user_profile_id: trustDeclarationWizardData.value.subject.profileUuid || null,
       valid_from: trustDeclarationWizardData.value.validity.validFrom 
         ? new Date(trustDeclarationWizardData.value.validity.validFrom).toISOString()

@@ -671,7 +671,6 @@
                   </div>
                 </div>
               </div>
-              </div>
               <!-- End Trust Declarations Tab -->
 
               <!-- Moderation Tab -->

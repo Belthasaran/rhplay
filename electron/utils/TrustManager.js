@@ -281,7 +281,7 @@ class TrustManager {
           }
         }
 
-        const subject = content?.subject || {};
+        const subject = content?.subject || content?.content?.subject || {};
 
         const candidateTargets = [
           subject.canonical_name,
@@ -310,12 +310,13 @@ class TrustManager {
           return;
         }
 
-        const declarationLevel = this.parseDeclarationTrustLevel(content?.content?.trust_level);
+        const trustSection = content?.content || content || {};
+        const declarationLevel = this.parseDeclarationTrustLevel(trustSection?.trust_level);
         if (declarationLevel !== null && declarationLevel !== undefined) {
           highestLevel = highestLevel === null ? declarationLevel : Math.max(highestLevel, declarationLevel);
         }
 
-        const declarationLimit = this.parseDeclarationTrustLimit(content?.content?.trust_limit);
+        const declarationLimit = this.parseDeclarationTrustLimit(trustSection?.trust_limit);
         if (declarationLimit !== null && declarationLimit !== undefined) {
           trustLimit = trustLimit === null ? declarationLimit : Math.min(trustLimit, declarationLimit);
         }
@@ -324,11 +325,11 @@ class TrustManager {
           matchedDeclarations.push({
             declaration_uuid: row.declaration_uuid,
             derived_trust_level: declarationLevel,
-            declared_trust_level: content?.content?.trust_level ?? null,
+            declared_trust_level: trustSection?.trust_level ?? null,
             trust_limit: declarationLimit,
-            scopes: this.normalizeScopes(content?.content?.scopes),
-            usage_types: Array.isArray(content?.content?.usage_types) ? content.content.usage_types : [],
-            permissions: content?.content?.permissions || {},
+            scopes: this.normalizeScopes(trustSection?.scopes),
+            usage_types: Array.isArray(trustSection?.usage_types) ? trustSection.usage_types : [],
+            permissions: trustSection?.permissions || {},
             issuer: content?.issuer || {},
             subject,
             valid_from: this.toUnixTimestamp(row.valid_from),

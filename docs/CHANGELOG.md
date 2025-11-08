@@ -4,6 +4,7 @@
 - Added `moderation.db` schema (`moderation_actions`, `moderation_logs`) to persist scope-aware moderation directives and wired the new `PermissionHelper` into moderation/trust assignment flows.
 - Introduced `ModeratorDashboard` prototype in the Online dialog with trust-aware moderation actions (block/mute/freeze/warn), action history table, and revoke support backed by the new IPC + `ModerationManager`.
 - Trust declaration wizard now records `target_keypair_canonical_name` and new `target_keypair_public_hex`, fixing subject resolution (GUI populates npub + hex automatically; backend persists them).
+- Hardened `NostrRuntimeService` with per-relay health/backoff tracking, priority-aware outgoing queue scheduling, and richer status snapshots (includes relay health + queue buckets) now consumable by renderer dashboards and the new `cli/nostr-status.js` diagnostics utility.
 # RHTools Changelog
 
 > **Note**: For a comprehensive summary of recent USB2SNES connection enhancements, see [`devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md`](../devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md)

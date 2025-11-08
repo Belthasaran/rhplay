@@ -38,6 +38,9 @@ const DEFAULT_SUBSCRIPTION_KINDS = [0, 3, 31001, 31106, 31107];
 const SUBSCRIPTION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const DEFAULT_OUTGOING_FLUSH_INTERVAL_MS = 10 * 1000;
 const MESSAGE_THROTTLE_COOLDOWN_MS = 60 * 1000;
+const RELAY_BASE_BACKOFF_MS = 5000;
+const RELAY_MAX_BACKOFF_MS = 5 * 60 * 1000;
+const RELAY_FAILURE_RESET_WINDOW_MS = 10 * 60 * 1000;
 const NUMERIC_RATING_FIELDS = [
   'user_review_rating',
   'user_difficulty_rating',
@@ -67,6 +70,46 @@ const COMMENT_RATING_FIELDS = [
   'user_soundtrack_graphics_comment'
 ];
 const TIMESTAMP_FIELDS = ['created_at_ts', 'updated_at_ts'];
+const PRIORITY_BUCKETS = {
+  CRITICAL: 'critical',
+  ELEVATED: 'elevated',
+  NORMAL: 'normal',
+  BULK: 'bulk'
+};
+const BUCKET_BASE_SCORES = {
+  [PRIORITY_BUCKETS.CRITICAL]: 1000,
+  [PRIORITY_BUCKETS.ELEVATED]: 700,
+  [PRIORITY_BUCKETS.NORMAL]: 400,
+  [PRIORITY_BUCKETS.BULK]: 100
+};
+const KIND_PRIORITY_BUCKET = new Map([
+  [31106, PRIORITY_BUCKETS.CRITICAL],
+  [31107, PRIORITY_BUCKETS.CRITICAL],
+  [0, PRIORITY_BUCKETS.ELEVATED],
+  [3, PRIORITY_BUCKETS.ELEVATED],
+  [31001, PRIORITY_BUCKETS.NORMAL]
+]);
+const TABLE_PRIORITY_BUCKET = new Map([
+  ['admindeclarations', PRIORITY_BUCKETS.CRITICAL],
+  ['admin_keypairs', PRIORITY_BUCKETS.CRITICAL],
+  ['user_profiles', PRIORITY_BUCKETS.ELEVATED],
+  ['user_game_annotations', PRIORITY_BUCKETS.NORMAL]
+]);
+const PRIORITY_HINT_BUCKET = {
+  critical: PRIORITY_BUCKETS.CRITICAL,
+  urgent: PRIORITY_BUCKETS.CRITICAL,
+  high: PRIORITY_BUCKETS.ELEVATED,
+  elevated: PRIORITY_BUCKETS.ELEVATED,
+  priority: PRIORITY_BUCKETS.ELEVATED,
+  normal: PRIORITY_BUCKETS.NORMAL,
+  medium: PRIORITY_BUCKETS.NORMAL,
+  default: PRIORITY_BUCKETS.NORMAL,
+  low: PRIORITY_BUCKETS.BULK,
+  bulk: PRIORITY_BUCKETS.BULK
+};
+const DEFAULT_OUTGOING_PRIORITY_SNAPSHOT_LIMIT = 200;
+const OUTGOING_FETCH_MULTIPLIER = 3;
+const OUTGOING_FETCH_MAX = 250;
 
 class NostrRuntimeService extends EventEmitter {
   constructor(dbManager, options = {}) {
@@ -115,16 +158,22 @@ class NostrRuntimeService extends EventEmitter {
     this.flushingOutgoing = false;
     this.outgoingThrottleUntil = 0;
     this.messageUnitsHistory = [];
+    this.lastPrioritySnapshot = { total: 0, buckets: {} };
+    this.autoConnect = options.autoConnect !== false;
+    this.relayHealth = new Map();
+    this.healthCheckTimer = null;
+    this.healthCheckDueAt = null;
+    this.relayBaseBackoffMs = options.relayBaseBackoffMs || RELAY_BASE_BACKOFF_MS;
+    this.relayMaxBackoffMs = options.relayMaxBackoffMs || RELAY_MAX_BACKOFF_MS;
     this.lastQueueStats = this.computeQueueStats();
 
     this.pool = null;
     this.relayUrls = [];
-    this.activeSubscription = null;
+    this.activeSubscriptions = new Map();
+    this.manuallyClosedRelays = new Set();
     this.lastSubscriptionAt = null;
     this.lastSubscriptionFilters = null;
-    this.handleIncomingEventBound = (event) => this.handleIncomingEvent(event);
-
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.ensureConnections().catch((error) => {
         this.logger.warn('[NostrRuntimeService] Initial connection attempt failed:', error.message);
       });
@@ -158,7 +207,7 @@ class NostrRuntimeService extends EventEmitter {
       this.refreshQueueStats();
       this.broadcastStatus();
     }, this.queueIntervalMs);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.ensureConnections().catch((error) => {
         this.logger.warn('[NostrRuntimeService] Connection attempt failed:', error.message);
       });
@@ -182,6 +231,7 @@ class NostrRuntimeService extends EventEmitter {
       this.clearSubscriptionRefreshTimer();
     }
     this.clearFlushTimeout();
+    this.clearHealthCheckTimer();
     this.running = false;
     this.background = keepBackground;
     return this.broadcastStatus();
@@ -196,6 +246,8 @@ class NostrRuntimeService extends EventEmitter {
       preferredRelays: this.safeCall(() => this.localDb.selectPreferredRelays(), []),
       manualFollows: this.safeCall(() => this.localDb.getManualFollowEntries(), []),
       queueStats: this.lastQueueStats || this.computeQueueStats(),
+      outgoingPriority: this.lastPrioritySnapshot,
+      relayHealth: this.getRelayHealthSnapshot(),
       runtime: {
         running: this.running,
         background: this.background,
@@ -230,6 +282,152 @@ class NostrRuntimeService extends EventEmitter {
     }
   }
 
+  getRelayHealthInfo(relayUrl) {
+    const key = typeof relayUrl === 'string' ? relayUrl.trim() : '';
+    if (!key) {
+      return null;
+    }
+    if (!this.relayHealth.has(key)) {
+      this.relayHealth.set(key, {
+        relayUrl: key,
+        status: 'unknown',
+        failureCount: 0,
+        successCount: 0,
+        lastFailure: null,
+        lastSuccess: null,
+        cooldownUntil: 0,
+        backoffMs: 0,
+        lastError: null
+      });
+    }
+    return this.relayHealth.get(key);
+  }
+
+  markRelayConnecting(relayUrl) {
+    const info = this.getRelayHealthInfo(relayUrl);
+    if (!info) {
+      return;
+    }
+    info.status = 'connecting';
+  }
+
+  markRelaySuccess(relayUrl) {
+    const info = this.getRelayHealthInfo(relayUrl);
+    if (!info) {
+      return;
+    }
+    const now = Date.now();
+    if (info.lastFailure && now - info.lastFailure > RELAY_FAILURE_RESET_WINDOW_MS) {
+      info.failureCount = 0;
+    }
+    info.status = 'healthy';
+    info.failureCount = 0;
+    info.backoffMs = 0;
+    info.cooldownUntil = 0;
+    info.lastSuccess = now;
+    info.lastError = null;
+    info.successCount = (info.successCount || 0) + 1;
+    this.scheduleHealthCheck();
+  }
+
+  markRelayFailure(relayUrl, error) {
+    const info = this.getRelayHealthInfo(relayUrl);
+    if (!info) {
+      return;
+    }
+    const now = Date.now();
+    info.failureCount = (info.failureCount || 0) + 1;
+    info.lastFailure = now;
+    const backoff = Math.min(
+      this.relayBaseBackoffMs * Math.pow(2, Math.max(0, info.failureCount - 1)),
+      this.relayMaxBackoffMs
+    );
+    info.backoffMs = backoff;
+    info.cooldownUntil = now + backoff;
+    info.status = 'cooldown';
+    info.lastError =
+      error && typeof error.message === 'string'
+        ? error.message
+        : error
+        ? String(error)
+        : 'Unknown relay error';
+
+    this.logger.warn(
+      `[NostrRuntimeService] Relay ${relayUrl} entered cooldown for ${Math.round(backoff / 1000)}s: ${info.lastError}`
+    );
+    this.scheduleHealthCheck();
+  }
+
+  filterRelaysForConnection(relayUrls = []) {
+    const ready = [];
+    const cooling = [];
+    const now = Date.now();
+    relayUrls.forEach((relayUrl) => {
+      const info = this.getRelayHealthInfo(relayUrl);
+      if (!info) {
+        return;
+      }
+      if (info.cooldownUntil && info.cooldownUntil > now) {
+        cooling.push({ relayUrl, info });
+      } else {
+        ready.push(relayUrl);
+      }
+    });
+    return { ready, cooling };
+  }
+
+  scheduleHealthCheck() {
+    let earliestDelay = null;
+    const now = Date.now();
+    for (const info of this.relayHealth.values()) {
+      if (info.cooldownUntil && info.cooldownUntil > now) {
+        const delay = info.cooldownUntil - now + 100;
+        if (earliestDelay === null || delay < earliestDelay) {
+          earliestDelay = delay;
+        }
+      }
+    }
+    if (earliestDelay === null) {
+      this.clearHealthCheckTimer();
+      return;
+    }
+    const targetDueAt = now + earliestDelay;
+    if (this.healthCheckTimer && this.healthCheckDueAt && this.healthCheckDueAt <= targetDueAt) {
+      return;
+    }
+    this.clearHealthCheckTimer();
+    this.healthCheckDueAt = targetDueAt;
+    this.healthCheckTimer = setTimeout(() => {
+      this.healthCheckTimer = null;
+      this.healthCheckDueAt = null;
+      this.ensureConnections(true).catch((error) => {
+        this.logger.warn('[NostrRuntimeService] Scheduled health check failed:', error.message);
+      });
+    }, earliestDelay);
+  }
+
+  clearHealthCheckTimer() {
+    if (this.healthCheckTimer) {
+      clearTimeout(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+    this.healthCheckDueAt = null;
+  }
+
+  getRelayHealthSnapshot() {
+    return Array.from(this.relayHealth.values()).map((info) => ({
+      relayUrl: info.relayUrl,
+      status: info.status,
+      failureCount: info.failureCount,
+      successCount: info.successCount,
+      lastFailure: info.lastFailure,
+      lastSuccess: info.lastSuccess,
+      cooldownUntil: info.cooldownUntil,
+      backoffMs: info.backoffMs || 0,
+      lastError: info.lastError
+    }));
+  }
+
   isOnline() {
     return this.cachedMode === 'online';
   }
@@ -243,9 +441,11 @@ class NostrRuntimeService extends EventEmitter {
     this.cachedMode = normalized;
     this.lastModeChange = Date.now();
     if (normalized === 'online') {
+      if (this.autoConnect) {
       this.ensureConnections(true).catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to ensure connections after mode change:', error.message);
       });
+      }
     } else {
       this.disconnectFromRelays();
       this.clearOutgoingTimer();
@@ -271,7 +471,7 @@ class NostrRuntimeService extends EventEmitter {
 
   setRelayCategoryPreference(categories = []) {
     this.localDb.setRelayCategoryPreference(categories);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.ensureConnections(true).catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to reconnect after relay category change:', error.message);
       });
@@ -286,7 +486,7 @@ class NostrRuntimeService extends EventEmitter {
 
   addRelay(relay) {
     const record = this.localDb.upsertRelay({ ...relay, addedBy: relay?.addedBy || 'user' });
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.ensureConnections(true).catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to reconnect after adding relay:', error.message);
       });
@@ -297,7 +497,7 @@ class NostrRuntimeService extends EventEmitter {
 
   updateRelay(relayUrl, changes = {}) {
     const record = this.localDb.updateRelay(relayUrl, changes);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.ensureConnections(true).catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to reconnect after updating relay:', error.message);
       });
@@ -308,7 +508,7 @@ class NostrRuntimeService extends EventEmitter {
 
   removeRelay(relayUrl, options = {}) {
     const removed = this.localDb.removeRelay(relayUrl, options);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.ensureConnections(true).catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to reconnect after removing relay:', error.message);
       });
@@ -323,7 +523,7 @@ class NostrRuntimeService extends EventEmitter {
 
   setManualFollowEntries(entries = []) {
     const list = this.localDb.setManualFollowEntries(entries);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.refreshSubscription().catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to refresh subscription after follow update:', error.message);
       });
@@ -334,7 +534,7 @@ class NostrRuntimeService extends EventEmitter {
 
   addManualFollowEntry(entry) {
     const list = this.localDb.addManualFollowEntry(entry);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.refreshSubscription().catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to refresh subscription after adding follow:', error.message);
       });
@@ -345,7 +545,7 @@ class NostrRuntimeService extends EventEmitter {
 
   removeManualFollowEntry(pubkey) {
     const list = this.localDb.removeManualFollowEntry(pubkey);
-    if (this.isOnline()) {
+    if (this.autoConnect && this.isOnline()) {
       this.refreshSubscription().catch((error) => {
         this.logger.warn('[NostrRuntimeService] Failed to refresh subscription after removing follow:', error.message);
       });
@@ -397,6 +597,7 @@ class NostrRuntimeService extends EventEmitter {
   }
 
   refreshQueueStats() {
+    this.lastPrioritySnapshot = this.computePrioritySnapshot();
     this.lastQueueStats = this.computeQueueStats();
     return this.lastQueueStats;
   }
@@ -409,8 +610,19 @@ class NostrRuntimeService extends EventEmitter {
       outgoingCompleted: this.countEvents('cache_out', 'proc_status = 2'),
       outgoingFailed: this.countEvents('cache_out', 'proc_status < 0'),
       outgoingSentLastMinute: this.countEvents('cache_out', 'proc_status = 2 AND proc_at IS NOT NULL AND proc_at >= ?', [nowUnix - 60]),
-      incomingBacklog: this.countEvents('cache_in', 'proc_status = 0')
+      incomingBacklog: this.countEvents('cache_in', 'proc_status = 0'),
+      outgoingPrioritySummary: this.lastPrioritySnapshot
     };
+  }
+
+  computePrioritySnapshot(limit = DEFAULT_OUTGOING_PRIORITY_SNAPSHOT_LIMIT) {
+    try {
+      const events = this.localDb.getEventsByStatus('cache_out', 0, limit);
+      return this.summarizePrioritySnapshot(events);
+    } catch (error) {
+      this.logger.warn('[NostrRuntimeService] computePrioritySnapshot failed:', error.message);
+      return { total: 0, buckets: {} };
+    }
   }
 
   countEvents(dbType, whereClause, params = []) {
@@ -482,6 +694,9 @@ class NostrRuntimeService extends EventEmitter {
   }
 
   async ensureConnections(force = false) {
+    if (!this.autoConnect) {
+      return;
+    }
     if (!this.isOnline()) {
       this.disconnectFromRelays();
       this.clearOutgoingTimer();
@@ -492,10 +707,32 @@ class NostrRuntimeService extends EventEmitter {
     this.ensureOutgoingTimer();
     this.ensureSubscriptionRefreshTimer();
 
-    const relayUrls = this.getRelayUrlsForConnection();
-    if (!relayUrls.length) {
+    const relayCandidates = this.getRelayUrlsForConnection();
+    if (!relayCandidates.length) {
       this.logger.warn('[NostrRuntimeService] No relays available for connection.');
       return;
+    }
+
+    const { ready: relayUrls, cooling } = this.filterRelaysForConnection(relayCandidates);
+
+    if (!relayUrls.length) {
+      if (cooling.length) {
+        const soonest = Math.min(...cooling.map(({ info }) => info.cooldownUntil || 0).filter(Boolean));
+        const waitMs = soonest ? Math.max(0, soonest - Date.now()) : this.relayBaseBackoffMs;
+        this.logger.warn(
+          `[NostrRuntimeService] All relays in cooldown; will retry connections in ${Math.round(waitMs / 1000)}s.`
+        );
+        this.scheduleHealthCheck();
+      }
+      await this.disconnectFromRelays();
+      return;
+    }
+
+    if (cooling.length) {
+      this.logger.info(
+        `[NostrRuntimeService] Skipping ${cooling.length} relay(s) in cooldown. Using ${relayUrls.length} active relay(s).`
+      );
+      this.scheduleHealthCheck();
     }
 
     const changed =
@@ -512,25 +749,41 @@ class NostrRuntimeService extends EventEmitter {
   }
 
   async connectToRelays(relayUrls) {
+    if (!this.autoConnect) {
+      return;
+    }
     await this.disconnectFromRelays();
     this.pool = new SimplePool();
     this.relayUrls = relayUrls;
     this.logger.info(`[NostrRuntimeService] Connecting to ${relayUrls.length} relay(s).`);
-    await this.subscribeToRelays();
+    relayUrls.forEach((relayUrl) => this.markRelayConnecting(relayUrl));
+    try {
+      await this.subscribeToRelays();
+      relayUrls.forEach((relayUrl) => this.markRelaySuccess(relayUrl));
+    } catch (error) {
+      relayUrls.forEach((relayUrl) => this.markRelayFailure(relayUrl, error));
+      throw error;
+    }
     this.triggerOutgoingFlush(200);
   }
 
   async disconnectFromRelays() {
-    if (this.activeSubscription && typeof this.activeSubscription.close === 'function') {
-      try {
-        this.activeSubscription.close();
-      } catch (error) {
-        this.logger.warn('[NostrRuntimeService] Failed to close subscription:', error.message);
-      }
-    }
-    this.activeSubscription = null;
     this.lastSubscriptionAt = null;
     this.lastSubscriptionFilters = null;
+
+    if (this.activeSubscriptions && this.activeSubscriptions.size) {
+      for (const [relayUrl, sub] of this.activeSubscriptions.entries()) {
+        if (sub && typeof sub.close === 'function') {
+          try {
+            this.manuallyClosedRelays.add(relayUrl);
+            sub.close();
+          } catch (error) {
+            this.logger.warn(`[NostrRuntimeService] Failed to close subscription for ${relayUrl}:`, error.message);
+          }
+        }
+      }
+    }
+    this.activeSubscriptions = new Map();
 
     if (this.pool && this.relayUrls.length) {
       try {
@@ -544,30 +797,48 @@ class NostrRuntimeService extends EventEmitter {
   }
 
   async subscribeToRelays(force = false) {
+    if (!this.autoConnect) {
+      return;
+    }
     if (!this.pool || !this.relayUrls.length) {
       return;
     }
 
     const filters = this.buildSubscriptionFilters();
     const filtersKey = JSON.stringify(filters);
-    if (!force && this.lastSubscriptionFilters === filtersKey && this.activeSubscription) {
+    if (!force && this.lastSubscriptionFilters === filtersKey && this.activeSubscriptions.size === this.relayUrls.length) {
       return;
     }
 
-    if (this.activeSubscription && typeof this.activeSubscription.close === 'function') {
-      try {
-        this.activeSubscription.close();
-      } catch (error) {
-        this.logger.warn('[NostrRuntimeService] Failed to close previous subscription:', error.message);
+    for (const [relayUrl, sub] of this.activeSubscriptions.entries()) {
+      if (sub && typeof sub.close === 'function') {
+        try {
+          this.manuallyClosedRelays.add(relayUrl);
+          sub.close();
+        } catch (error) {
+          this.logger.warn(`[NostrRuntimeService] Failed to close previous subscription for ${relayUrl}:`, error.message);
+        }
       }
     }
+    this.activeSubscriptions.clear();
 
     this.lastSubscriptionFilters = filtersKey;
     this.lastSubscriptionAt = Date.now();
-    this.activeSubscription = this.pool.subscribeMany(this.relayUrls, filters, {
-      onevent: this.handleIncomingEventBound,
-      oneose: () => {
-        this.logger.debug?.('[NostrRuntimeService] Subscription EOSE received.');
+
+    this.relayUrls.forEach((relayUrl) => {
+      try {
+        const subscription = this.pool.subscribeMany([relayUrl], filters, {
+          onevent: (event) => this.handleRelaySubscriptionEvent(relayUrl, event),
+          oneose: () => this.handleRelayEOSE(relayUrl)
+        });
+        if (subscription && typeof subscription.on === 'function') {
+          subscription.on('error', (err) => this.handleRelaySubscriptionError(relayUrl, err));
+          subscription.on('close', () => this.handleRelaySubscriptionClosed(relayUrl));
+        }
+        this.activeSubscriptions.set(relayUrl, subscription);
+      } catch (error) {
+        this.logger.warn(`[NostrRuntimeService] Failed to subscribe to relay ${relayUrl}:`, error.message);
+        this.markRelayFailure(relayUrl, error);
       }
     });
   }
@@ -763,6 +1034,178 @@ class NostrRuntimeService extends EventEmitter {
     }
   }
 
+  async publishEventToRelays(event) {
+    if (!this.pool || !this.relayUrls.length) {
+      return [];
+    }
+    const results = [];
+    for (const relayUrl of this.relayUrls) {
+      try {
+        await this.pool.publish([relayUrl], event);
+        this.markRelaySuccess(relayUrl);
+        results.push({ relayUrl, success: true });
+      } catch (error) {
+        this.markRelayFailure(relayUrl, error);
+        results.push({ relayUrl, success: false, error });
+      }
+    }
+    return results;
+  }
+
+  handleRelaySubscriptionEvent(relayUrl, event) {
+    if (relayUrl) {
+      this.markRelaySuccess(relayUrl);
+    }
+    Promise.resolve(this.handleIncomingEvent(event)).catch((error) => {
+      this.logger.warn(`[NostrRuntimeService] Failed processing event ${event?.id || 'unknown'} from ${relayUrl}:`, error.message);
+    });
+  }
+
+  handleRelayEOSE(relayUrl) {
+    if (relayUrl) {
+      this.markRelaySuccess(relayUrl);
+    }
+    this.logger.debug?.(`[NostrRuntimeService] Subscription EOSE received from ${relayUrl}.`);
+  }
+
+  handleRelaySubscriptionError(relayUrl, error) {
+    if (this.manuallyClosedRelays.has(relayUrl)) {
+      this.manuallyClosedRelays.delete(relayUrl);
+      return;
+    }
+    this.logger.warn(
+      `[NostrRuntimeService] Subscription error from ${relayUrl}: ${
+        error && error.message ? error.message : error || 'unknown error'
+      }`
+    );
+    this.activeSubscriptions.delete(relayUrl);
+    this.markRelayFailure(relayUrl, error);
+  }
+
+  handleRelaySubscriptionClosed(relayUrl) {
+    if (this.manuallyClosedRelays.has(relayUrl)) {
+      this.manuallyClosedRelays.delete(relayUrl);
+      this.activeSubscriptions.delete(relayUrl);
+      return;
+    }
+    this.logger.warn(`[NostrRuntimeService] Subscription closed by relay ${relayUrl}; scheduling reconnect.`);
+    this.activeSubscriptions.delete(relayUrl);
+    this.markRelayFailure(relayUrl, new Error('subscription closed'));
+  }
+
+  sortEventsByPriority(events) {
+    return events
+      .map((row) => {
+        const priority = this.scoreOutgoingEvent(row);
+        return { row, priority };
+      })
+      .sort((a, b) => {
+        if (b.priority.score !== a.priority.score) {
+          return b.priority.score - a.priority.score;
+        }
+        const createdA = Number(a.row.created_at || 0);
+        const createdB = Number(b.row.created_at || 0);
+        return createdA - createdB;
+      });
+  }
+
+  scoreOutgoingEvent(event) {
+    if (!event) {
+      return { bucket: PRIORITY_BUCKETS.BULK, score: BUCKET_BASE_SCORES[PRIORITY_BUCKETS.BULK] };
+    }
+
+    let bucket = PRIORITY_BUCKETS.BULK;
+    let score = BUCKET_BASE_SCORES[bucket];
+
+    const hint = event.priority_hint;
+    let hintBucket = null;
+    let hintScore = null;
+
+    if (hint !== undefined && hint !== null) {
+      const numericHint = Number(hint);
+      if (Number.isFinite(numericHint)) {
+        hintScore = numericHint;
+        hintBucket = this.bucketFromScore(hintScore);
+      } else {
+        const normalizedHint = String(hint).toLowerCase().trim();
+        if (PRIORITY_HINT_BUCKET[normalizedHint]) {
+          hintBucket = PRIORITY_HINT_BUCKET[normalizedHint];
+          hintScore = BUCKET_BASE_SCORES[hintBucket];
+        }
+      }
+    }
+
+    if (hintBucket) {
+      bucket = hintBucket;
+      score = hintScore ?? BUCKET_BASE_SCORES[hintBucket];
+    }
+
+    if (bucket === PRIORITY_BUCKETS.BULK) {
+      if (event.kind !== undefined && KIND_PRIORITY_BUCKET.has(event.kind)) {
+        bucket = KIND_PRIORITY_BUCKET.get(event.kind);
+        score = BUCKET_BASE_SCORES[bucket];
+      } else if (event.table_name && TABLE_PRIORITY_BUCKET.has(event.table_name)) {
+        bucket = TABLE_PRIORITY_BUCKET.get(event.table_name);
+        score = BUCKET_BASE_SCORES[bucket];
+      } else if (event.table_name === 'nostr_cache_out' && event.record_uuid && event.record_uuid.startsWith('moderation:')) {
+        bucket = PRIORITY_BUCKETS.ELEVATED;
+        score = BUCKET_BASE_SCORES[bucket];
+      }
+    }
+
+    if (hintScore !== null && hintScore !== undefined) {
+      score = Math.max(score, hintScore);
+      bucket = this.bucketFromScore(score);
+    }
+
+    return { bucket, score };
+  }
+
+  bucketFromScore(score) {
+    if (!Number.isFinite(score)) {
+      return PRIORITY_BUCKETS.BULK;
+    }
+    if (score >= 900) {
+      return PRIORITY_BUCKETS.CRITICAL;
+    }
+    if (score >= 650) {
+      return PRIORITY_BUCKETS.ELEVATED;
+    }
+    if (score >= 350) {
+      return PRIORITY_BUCKETS.NORMAL;
+    }
+    return PRIORITY_BUCKETS.BULK;
+  }
+
+  summarizePrioritySnapshot(events = []) {
+    const summary = {
+      total: events.length,
+      buckets: {}
+    };
+    events.forEach((event) => {
+      const { bucket } = this.scoreOutgoingEvent(event);
+      const created = Number(event.created_at || 0);
+      if (!summary.buckets[bucket]) {
+        summary.buckets[bucket] = {
+          count: 0,
+          oldest: created || null,
+          newest: created || null
+        };
+      }
+      const bucketStats = summary.buckets[bucket];
+      bucketStats.count += 1;
+      if (created) {
+        if (!bucketStats.oldest || created < bucketStats.oldest) {
+          bucketStats.oldest = created;
+        }
+        if (!bucketStats.newest || created > bucketStats.newest) {
+          bucketStats.newest = created;
+        }
+      }
+    });
+    return summary;
+  }
+
   async flushOutgoingQueue() {
     if (this.flushingOutgoing) {
       return;
@@ -780,21 +1223,38 @@ class NostrRuntimeService extends EventEmitter {
     const windowMs = (limits?.messageRateWindowSeconds || 120) * 1000;
     this.trimMessageHistory(now, windowMs);
 
-    const pending = this.localDb.getEventsByStatus('cache_out', 0, limits?.outgoingPerMinute || 25);
+    const desiredBatch = Math.max(1, limits?.outgoingPerMinute || 25);
+    const fetchLimit = Math.min(
+      Math.max(desiredBatch * OUTGOING_FETCH_MULTIPLIER, desiredBatch + 10),
+      limits?.outgoingFetchMax || OUTGOING_FETCH_MAX
+    );
+
+    const pending = this.localDb.getEventsByStatus('cache_out', 0, fetchLimit);
+    this.lastPrioritySnapshot = this.summarizePrioritySnapshot(pending);
+
     if (!pending.length) {
       return;
     }
 
+    const prioritizedQueue = this.sortEventsByPriority(pending);
+
     this.flushingOutgoing = true;
     let sentCount = 0;
+    let attemptedCount = 0;
     try {
-      for (const row of pending) {
+      for (const item of prioritizedQueue) {
+        if (attemptedCount >= desiredBatch) {
+          break;
+        }
+        const { row, priority } = item;
         const event = this.buildEventFromRow(row);
         if (!event.sig) {
           this.logger.warn('[NostrRuntimeService] Skipping outgoing event with no signature:', event.id);
           this.localDb.updateEventStatus('cache_out', event.id, -1);
           continue;
         }
+
+        attemptedCount += 1;
 
         const eventJsonLength = Buffer.byteLength(JSON.stringify(event), 'utf8');
         const units = this.localDb.estimateMessageUnits(eventJsonLength);
@@ -808,13 +1268,40 @@ class NostrRuntimeService extends EventEmitter {
 
         this.localDb.updateEventStatus('cache_out', event.id, 1);
         try {
-          await this.pool.publish(this.relayUrls, event);
+          const publishResults = await this.publishEventToRelays(event);
+          const successes = publishResults.filter((result) => result.success);
+          const failures = publishResults.filter((result) => !result.success);
+
+          if (failures.length) {
+            this.logger.warn(
+              `[NostrRuntimeService] Event ${event.id} (${priority.bucket}) publish encountered ${failures.length} failing relay(s): ${failures
+                .map((r) => r.relayUrl)
+                .join(', ')}`
+            );
+          }
+
+          if (successes.length === 0) {
+            this.logger.warn(
+              `[NostrRuntimeService] Event ${event.id} (${priority.bucket}) failed to publish to any relay; will retry after cooldown.`
+            );
+            this.localDb.updateEventStatus('cache_out', event.id, 0);
+            this.outgoingThrottleUntil = Math.max(
+              Date.now() + Math.max(MESSAGE_THROTTLE_COOLDOWN_MS, this.relayBaseBackoffMs),
+              this.outgoingThrottleUntil
+            );
+            this.triggerOutgoingFlush(this.outgoingThrottleUntil - Date.now());
+            break;
+          }
+
           this.localDb.updateEventStatus('cache_out', event.id, 2);
           this.localDb.moveEventToStore('cache_out', 'store_out', event.id);
           this.recordMessageUnits(units);
           sentCount += 1;
         } catch (error) {
-          this.logger.warn(`[NostrRuntimeService] Failed to publish event ${event.id}:`, error.message);
+          this.logger.warn(
+            `[NostrRuntimeService] Failed to publish event ${event.id} (${priority.bucket}):`,
+            error.message
+          );
           this.localDb.updateEventStatus('cache_out', event.id, 0);
         }
       }
@@ -823,6 +1310,10 @@ class NostrRuntimeService extends EventEmitter {
       if (sentCount > 0) {
         this.refreshQueueStats();
         this.broadcastStatus();
+      } else {
+        this.lastPrioritySnapshot = this.summarizePrioritySnapshot(
+          this.localDb.getEventsByStatus('cache_out', 0, fetchLimit)
+        );
       }
     }
   }

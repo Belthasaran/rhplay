@@ -1114,7 +1114,11 @@ class NostrLocalDBManager {
         signature: row.signature,
         proc_status: row.proc_status,
         proc_at: row.proc_at,
-        keep_for: row.keep_for
+        keep_for: row.keep_for,
+        table_name: row.table_name,
+        record_uuid: row.record_uuid,
+        user_profile_uuid: row.user_profile_uuid,
+        priority_hint: row.priority_hint || null
       }));
     } catch (error) {
       console.error(`Error getting events by status from ${dbType}:`, error);

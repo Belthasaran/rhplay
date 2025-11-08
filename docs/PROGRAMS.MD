@@ -731,6 +731,27 @@ See `docs/DBMIGRATE.md` for detailed migration instructions.
 - `docs/VERIFY_RESULT_FEATURE.md` - Result verification
 - `docs/NEWER_THAN_FEATURE.md` - Incremental verification
 
+### Nostr Runtime Tools
+
+### nostr-status.js
+**Purpose**: Inspect the local Nostr Runtime Service health, relay cooldowns, and outgoing queue priorities from the command line.
+
+**Usage**:
+```bash
+enode.sh cli/nostr-status.js [--details] [--json] [--limit <n>]
+```
+
+**Key Options**:
+- `--details` - include queued event samples and extended metadata
+- `--json` - emit the full status snapshot as formatted JSON
+- `--limit <n>` - number of queued events to sample (default: 50)
+
+**Output Highlights**:
+- Current operating mode and runtime heartbeat
+- Per-relay health with cooldown/backoff timers
+- Outgoing queue counts with priority bucket summaries
+- Optional pending-event listing with kind/table metadata
+
 ### Testing Documentation
 - `tests/README_BLOB_TESTS.md` - Test suite documentation
 

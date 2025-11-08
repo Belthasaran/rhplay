@@ -851,6 +851,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // Publish ratings to Nostr as NIP-33 event
   publishRatingsToNostr: (params) => ipcRenderer.invoke('online:publish-ratings-to-nostr', params),
+
+  // Ratings summaries (Nostr ingestion)
+  ratings: {
+    getSummaries: (gameId) => ipcRenderer.invoke('ratings:summaries:get', { gameId })
+  },
   
   // User Op keypair operations (profile-bound admin keypairs)
   listUserOpKeypairs: (profileUuid) => ipcRenderer.invoke('online:user-op-keypairs:list', { profileUuid }),

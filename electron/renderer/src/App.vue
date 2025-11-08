@@ -1188,6 +1188,74 @@
                 </tr>
               </tbody>
             </table>
+
+        <div v-if="ratingSummaryPanelVisible" class="ratings-summary-panel">
+          <header class="ratings-summary-header">
+            <h4>Community Ratings (Nostr)</h4>
+            <button
+              class="btn-refresh"
+              :disabled="ratingSummaryState.loading"
+              @click="refreshRatingSummaries"
+            >
+              {{ ratingSummaryState.loading ? 'Refreshing…' : 'Refresh' }}
+            </button>
+          </header>
+
+          <div v-if="ratingSummaryState.loading" class="ratings-summary-loading">
+            Fetching latest aggregated ratings…
+          </div>
+
+          <div v-else-if="ratingSummaryState.error" class="ratings-summary-error">
+            {{ ratingSummaryState.error }}
+          </div>
+
+          <div v-else-if="ratingSummaryDisplay" class="ratings-summary-content">
+            <p class="ratings-summary-meta">
+              <strong>{{ ratingSummaryDisplay.totalEvents }}</strong>
+              total rating{{ ratingSummaryDisplay.totalEvents === 1 ? '' : 's' }}
+              <span v-if="ratingSummaryDisplay.updatedAtLabel" class="meta-updated">
+                (updated {{ ratingSummaryDisplay.updatedAtLabel }})
+              </span>
+            </p>
+
+            <div v-if="ratingSummaryDisplay.tiers.length" class="ratings-summary-tiers">
+              <div class="tier" v-for="tier in ratingSummaryDisplay.tiers" :key="tier.key">
+                <span class="tier-label">{{ tier.label }}</span>
+                <span class="tier-count">{{ tier.count }}</span>
+              </div>
+            </div>
+
+            <div v-if="ratingSummaryDisplay.hasCategoryData" class="ratings-summary-categories">
+              <div class="category" v-for="category in ratingSummaryDisplay.categories" :key="category.field">
+                <h5>{{ category.label }}</h5>
+                <table class="category-table">
+                  <thead>
+                    <tr>
+                      <th>Tier</th>
+                      <th>Count</th>
+                      <th>Avg</th>
+                      <th>Median</th>
+                      <th>Std Dev</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="tier in category.tiers" :key="tier.key">
+                      <td>{{ tier.label }}</td>
+                      <td>{{ tier.count }}</td>
+                      <td>{{ formatRatingStat(tier.average) }}</td>
+                      <td>{{ formatRatingStat(tier.median) }}</td>
+                      <td>{{ formatRatingStat(tier.stddev) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <p v-else class="ratings-summary-empty">
+              No community ratings (kind 31001) available yet.
+            </p>
+          </div>
+        </div>
           </div>
         </div>
 
@@ -14321,6 +14389,48 @@ type Stage = {
   myReviewRating?: number | null;
 };
 
+type RatingsSummaryTier = {
+  key: string;
+  label: string;
+  count: number;
+  average: number | null;
+  median: number | null;
+  stddev: number | null;
+};
+
+type RatingsSummaryCategory = {
+  field: string;
+  label: string;
+  tiers: RatingsSummaryTier[];
+};
+
+type RatingsSummaryTotals = {
+  totalEvents: number;
+  byTier: Array<{ key: string; label: string; count: number }>;
+  tierLabels: Record<string, string>;
+};
+
+type RatingsSummaryResponse = {
+  success?: boolean;
+  error?: string;
+  gameId: string;
+  updatedAt: number | null;
+  totals: RatingsSummaryTotals;
+  categories: RatingsSummaryCategory[];
+};
+
+type RatingsSummaryDisplay = {
+  totalEvents: number;
+  tiers: Array<{ key: string; label: string; count: number }>;
+  categories: Array<{
+    field: string;
+    label: string;
+    tiers: RatingsSummaryTier[];
+  }>;
+  hasCategoryData: boolean;
+  updatedAtLabel: string | null;
+};
+
 // Demo stage data per item id
 const stagesByItemId = reactive<Record<string, Stage[]>>({
   '11374': [
@@ -14337,6 +14447,130 @@ const selectedItem = computed(() => {
   const id = Array.from(selectedIds.value)[0];
   return items.find((it) => it.Id === id) ?? null;
 });
+
+const ratingSummaryState = reactive<{
+  loading: boolean;
+  error: string | null;
+  data: RatingsSummaryResponse | null;
+}>({
+  loading: false,
+  error: null,
+  data: null
+});
+
+const ratingSummaryDisplay = computed<RatingsSummaryDisplay | null>(() => {
+  const data = ratingSummaryState.data;
+  if (!data) {
+    return null;
+  }
+
+  const categories = (data.categories || []).map((category) => ({
+    field: category.field,
+    label: category.label,
+    tiers: (category.tiers || []).map((tier) => ({
+      key: tier.key,
+      label: tier.label,
+      count: tier.count,
+      average: tier.average,
+      median: tier.median,
+      stddev: tier.stddev
+    }))
+  }));
+
+  const hasCategoryData = categories.some((category) => category.tiers.some((tier) => tier.count > 0));
+  const updatedAtLabel = data.updatedAt ? new Date(data.updatedAt * 1000).toLocaleString() : null;
+
+  return {
+    totalEvents: data.totals?.totalEvents ?? 0,
+    tiers: data.totals?.byTier ?? [],
+    categories,
+    hasCategoryData,
+    updatedAtLabel
+  };
+});
+
+const ratingSummaryPanelVisible = computed(() => {
+  if (!exactlyOneSelected.value) {
+    return false;
+  }
+  if (ratingSummaryState.loading || ratingSummaryState.error) {
+    return true;
+  }
+  return Boolean(ratingSummaryDisplay.value);
+});
+
+const formatRatingStat = (value: number | null | undefined, digits = 2) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—';
+  }
+  return Number(value).toFixed(digits);
+};
+
+let ratingSummaryRequestToken = 0;
+
+async function loadRatingSummaries(gameId: string, options: { preserveData?: boolean } = {}) {
+  const token = ++ratingSummaryRequestToken;
+  if (!options.preserveData) {
+    ratingSummaryState.data = null;
+  }
+  ratingSummaryState.loading = true;
+  ratingSummaryState.error = null;
+
+  try {
+    const api = (window as any)?.electronAPI;
+    const getter = api?.ratings?.getSummaries;
+    if (typeof getter !== 'function') {
+      throw new Error('Rating summaries are not available in this environment.');
+    }
+
+    const response = await getter(gameId);
+    if (token !== ratingSummaryRequestToken) {
+      return;
+    }
+    if (!response || response.success === false) {
+      throw new Error(response?.error || 'Failed to load rating summaries');
+    }
+    ratingSummaryState.data = response as RatingsSummaryResponse;
+  } catch (error: any) {
+    if (token !== ratingSummaryRequestToken) {
+      return;
+    }
+    ratingSummaryState.error = error?.message || String(error);
+    ratingSummaryState.data = null;
+  } finally {
+    if (token === ratingSummaryRequestToken) {
+      ratingSummaryState.loading = false;
+    }
+  }
+}
+
+async function refreshRatingSummaries() {
+  const gameId = selectedItem.value?.Id;
+  if (!gameId) {
+    return;
+  }
+  await loadRatingSummaries(gameId, { preserveData: true });
+}
+
+watch(
+  () => {
+    if (!exactlyOneSelected.value) {
+      return null;
+    }
+    return selectedItem.value?.Id ?? null;
+  },
+  (gameId) => {
+    ratingSummaryRequestToken++;
+    if (!gameId) {
+      ratingSummaryState.loading = false;
+      ratingSummaryState.error = null;
+      ratingSummaryState.data = null;
+      return;
+    }
+    loadRatingSummaries(gameId);
+  },
+  { immediate: true }
+);
 
 const currentStages = computed<Stage[]>(() => {
   if (!selectedItem.value) return [];
@@ -22373,6 +22607,118 @@ button:disabled {
 .nostr-status-retrying {
   color: #2196f3;
   font-weight: 500;
+}
+
+.ratings-summary-panel {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+}
+
+.ratings-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.ratings-summary-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ratings-summary-panel .btn-refresh {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ratings-summary-panel .btn-refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ratings-summary-loading,
+.ratings-summary-error,
+.ratings-summary-empty {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ratings-summary-error {
+  color: #f44336;
+}
+
+.ratings-summary-meta {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.ratings-summary-meta .meta-updated {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ratings-summary-tiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ratings-summary-tiers .tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.ratings-summary-tiers .tier-label {
+  font-weight: 500;
+}
+
+.ratings-summary-categories .category {
+  margin-bottom: 16px;
+}
+
+.ratings-summary-categories h5 {
+  font-size: 14px;
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.ratings-summary-categories .category-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ratings-summary-categories .category-table th,
+.ratings-summary-categories .category-table td {
+  border: 1px solid var(--border-color);
+  padding: 4px 6px;
+  text-align: left;
+}
+
+.ratings-summary-categories .category-table th {
+  background: var(--bg-primary);
+  font-weight: 600;
+}
+
+.ratings-summary-categories .category-table td {
+  background: var(--bg-secondary);
 }
 
 </style>

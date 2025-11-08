@@ -39,6 +39,42 @@ function registerDatabaseHandlers(dbManager) {
   const permissionHelper = new PermissionHelper(dbManager, { trustManager, logger: console });
   const moderationManager = new ModerationManager(dbManager, { trustManager, logger: console });
   
+  const RATING_FIELD_METADATA = [
+    { field: 'user_review_rating', label: 'Overall Review' },
+    { field: 'user_difficulty_rating', label: 'Difficulty' },
+    { field: 'user_skill_rating', label: 'Skill Level' },
+    { field: 'user_recommendation_rating', label: 'Recommendation' }
+  ];
+  const RATING_TIER_ORDER = ['trusted', 'verified', 'unverified', 'restricted', 'all'];
+  const RATING_TIER_LABELS = {
+    trusted: 'Trusted',
+    verified: 'Verified',
+    unverified: 'Unverified',
+    restricted: 'Restricted',
+    all: 'All Tiers'
+  };
+
+  const isFiniteNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const computeRatingStats = (values) => {
+    if (!values || values.length === 0) {
+      return { count: 0, average: null, median: null, stddev: null };
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    const count = sorted.length;
+    const sum = sorted.reduce((acc, val) => acc + val, 0);
+    const average = sum / count;
+    const median = count % 2 === 1
+      ? sorted[(count - 1) / 2]
+      : (sorted[count / 2 - 1] + sorted[count / 2]) / 2;
+    const variance = sorted.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / count;
+    const stddev = Math.sqrt(variance);
+    return { count, average, median, stddev };
+  };
+
   ipcMain.handle('trust:permissions:get', (_event, { pubkey, scope } = {}) => {
     try {
       if (!pubkey) {
@@ -748,7 +784,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Save run plan entries
    * Channel: db:runs:save-plan
@@ -1411,7 +1446,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Upload run files to USB2SNES subdirectory
    * Channel: db:runs:upload-to-snes
@@ -2202,7 +2236,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-
   /**
    * Get USB2SNES connection status
    * Channel: usb2snes:status
@@ -2981,7 +3014,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-
   // ===========================================================================
   // PAST RUNS OPERATIONS
   // ===========================================================================
@@ -3764,7 +3796,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Import profile from encrypted file
    * Channel: online:profile:import
@@ -4511,7 +4542,6 @@ function registerDatabaseHandlers(dbManager) {
       return { enabled: false };
     }
   });
-
   /**
    * Set up Profile Guard
    * Channel: profile-guard:setup
@@ -5238,7 +5268,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Add existing admin keypair (public key only or full)
    * Channel: online:admin-keypair:add
@@ -6023,7 +6052,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Import User Op keypair secret key from PKCS format
    * Channel: online:user-op-keypair:import-secret-pkcs
@@ -6791,7 +6819,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Create a new trust declaration
    * Channel: online:trust-declaration:create
@@ -7479,7 +7506,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Channel: online:publish-keypair-to-nostr
    * Create and sign a Nostr event for publishing a keypair, add to cache_out
@@ -7715,43 +7741,131 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
-  ipcMain.handle('moderation:block-target', (_event, payload = {}) => {
-    try {
-      const result = moderationManager.createModerationAction({
-        actorPubkey: payload.actorPubkey,
-        actionType: payload.actionType || 'block-user',
-        target: payload.target,
-        scope: payload.scope,
-        reason: payload.reason,
-        content: payload.content || {}
-      });
-      return result;
-    } catch (error) {
-      console.error('[moderation:block-target] Failed:', error);
-      return { success: false, error: error.message };
+  ipcMain.handle('ratings:summaries:get', (_event, { gameId } = {}) => {
+    if (!gameId) {
+      return { success: false, error: 'gameId is required' };
     }
-  });
 
-  ipcMain.handle('moderation:revoke-action', (_event, payload = {}) => {
     try {
-      const result = moderationManager.revokeModerationAction({
-        actorPubkey: payload.actorPubkey,
-        actionId: payload.actionId,
-        reason: payload.reason
+      const ratingsDb = dbManager.getConnection('ratings');
+      const events = ratingsDb
+        .prepare('SELECT rating_json, trust_tier FROM rating_events WHERE gameid = ?')
+        .all(gameId);
+      const updatedRow = ratingsDb
+        .prepare('SELECT MAX(updated_at) AS updated_at FROM rating_summaries WHERE gameid = ?')
+        .get(gameId);
+
+      if (!events || events.length === 0) {
+        return {
+          success: true,
+          gameId,
+          updatedAt: updatedRow?.updated_at || null,
+          totals: {
+            totalEvents: 0,
+            byTier: [],
+            tierLabels: RATING_TIER_LABELS
+          },
+          categories: []
+        };
+      }
+
+      const baseTiers = Array.isArray(TrustManager.TRUST_TIERS) ? TrustManager.TRUST_TIERS : ['restricted', 'unverified', 'verified', 'trusted'];
+      const tierOrder = Array.from(new Set([...RATING_TIER_ORDER, ...baseTiers]));
+
+      const countsByTier = tierOrder.reduce((acc, tier) => {
+        if (tier !== 'all') {
+          acc[tier] = 0;
+        }
+        return acc;
+      }, {});
+
+      const metricsByCategory = new Map();
+      RATING_FIELD_METADATA.forEach((meta) => {
+        const perTier = new Map();
+        tierOrder.forEach((tier) => perTier.set(tier, []));
+        metricsByCategory.set(meta.field, { meta, perTier });
       });
-      return result;
-    } catch (error) {
-      console.error('[moderation:revoke-action] Failed:', error);
-      return { success: false, error: error.message };
-    }
-  });
 
-  ipcMain.handle('moderation:list-actions', (_event, payload = {}) => {
-    try {
-      const actions = moderationManager.listModerationActions({ target: payload.target, status: payload.status });
-      return { success: true, actions };
+      events.forEach((row) => {
+        let tier = (row.trust_tier || 'unverified').toLowerCase();
+        if (!tierOrder.includes(tier)) {
+          tier = 'unverified';
+        }
+        if (tier !== 'all') {
+          countsByTier[tier] = (countsByTier[tier] || 0) + 1;
+        }
+
+        let payload = null;
+        try {
+          payload = row.rating_json ? JSON.parse(row.rating_json) : {};
+        } catch (error) {
+          console.warn('[ratings:summaries:get] Failed to parse rating_json:', error.message);
+          payload = {};
+        }
+
+        metricsByCategory.forEach(({ perTier }, fieldKey) => {
+          const candidate = payload ? payload[fieldKey] : null;
+          const value = isFiniteNumber(candidate);
+          if (value !== null) {
+            perTier.get(tier).push(value);
+            perTier.get('all').push(value);
+          }
+        });
+      });
+
+      const categories = [];
+      const totalEvents = Object.values(countsByTier).reduce((sum, value) => sum + value, 0);
+
+      metricsByCategory.forEach(({ meta, perTier }) => {
+        const categoryEntry = {
+          field: meta.field,
+          label: meta.label,
+          tiers: []
+        };
+
+        let hasData = false;
+        tierOrder.forEach((tierKey) => {
+          const values = perTier.get(tierKey) || [];
+          const stats = computeRatingStats(values);
+          if (stats.count > 0 || tierKey === 'all') {
+            hasData = hasData || stats.count > 0;
+            categoryEntry.tiers.push({
+              key: tierKey,
+              label: RATING_TIER_LABELS[tierKey] || tierKey,
+              count: stats.count,
+              average: stats.average,
+              median: stats.median,
+              stddev: stats.stddev
+            });
+          }
+        });
+
+        if (hasData) {
+          categories.push(categoryEntry);
+        }
+      });
+
+      const totalsByTier = tierOrder
+        .filter((tierKey) => tierKey !== 'all')
+        .map((tierKey) => ({
+          key: tierKey,
+          label: RATING_TIER_LABELS[tierKey] || tierKey,
+          count: countsByTier[tierKey] || 0
+        }));
+
+      return {
+        success: true,
+        gameId,
+        updatedAt: updatedRow?.updated_at || null,
+        totals: {
+          totalEvents,
+          byTier: totalsByTier,
+          tierLabels: RATING_TIER_LABELS
+        },
+        categories
+      };
     } catch (error) {
-      console.error('[moderation:list-actions] Failed:', error);
+      console.error('[ratings:summaries:get] Failed:', error);
       return { success: false, error: error.message };
     }
   });

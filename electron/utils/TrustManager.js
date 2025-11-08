@@ -227,13 +227,27 @@ class TrustManager {
       const db = this.dbManager.getConnection('clientdata');
       const now = Math.floor(Date.now() / 1000);
       const rows = db.prepare(`
-        SELECT declaration_uuid, content_json, status, valid_from, valid_until,
-               signing_keypair_uuid, signing_keypair_fingerprint,
-               target_keypair_uuid, target_keypair_fingerprint,
-               created_at, updated_at
+        SELECT declaration_uuid,
+               content_json,
+               status,
+               valid_from,
+               valid_until,
+               signing_keypair_uuid,
+               signing_keypair_fingerprint,
+               target_keypair_uuid,
+               target_keypair_fingerprint,
+               target_keypair_canonical_name,
+               target_keypair_public_hex,
+               target_user_profile_id,
+               required_countersignatures,
+               current_countersignatures,
+               is_local,
+               is_revoked,
+               created_at,
+               updated_at
         FROM admindeclarations
         WHERE declaration_type = 'trust-declaration'
-          AND status IN ('Published', 'Active')
+          AND status IN ('Published', 'Active', 'Signed')
       `).all();
 
       let highestLevel = null;
@@ -241,69 +255,99 @@ class TrustManager {
       const matchedDeclarations = [];
 
       rows.forEach((row) => {
-        if (!row || !row.content_json) {
+        if (!row) {
           return;
         }
-        try {
-          const content = JSON.parse(row.content_json);
-          const subject = content?.subject || {};
-          const subjectCanonical = (subject.canonical_name || subject.pubkey || '').toLowerCase();
-          const subjectFingerprint = (subject.fingerprint || '').toLowerCase();
-          const subjectUuid = (subject.keypair_uuid || subject.profile_uuid || '').toLowerCase();
 
-          const matches = pubkeyVariants.some((variant) => {
-            const lower = variant.toLowerCase();
-            return (
-              (subjectCanonical && subjectCanonical === lower) ||
-              (subjectFingerprint && subjectFingerprint === lower) ||
-              (subjectUuid && subjectUuid === lower)
-            );
+        const status = (row.status || '').toLowerCase();
+        if (row.is_revoked) {
+          return;
+        }
+
+        if (status === 'signed') {
+          const required = this.toNumberOrNull(row.required_countersignatures) || 0;
+          const current = this.toNumberOrNull(row.current_countersignatures) || 0;
+          if (current < required) {
+            return;
+          }
+        }
+
+        let content = null;
+        if (row.content_json) {
+          try {
+            content = JSON.parse(row.content_json);
+          } catch (error) {
+            this.logger.warn('[TrustManager] Failed to parse trust declaration:', error.message);
+          }
+        }
+
+        const subject = content?.subject || {};
+
+        const candidateTargets = [
+          subject.canonical_name,
+          subject.pubkey,
+          subject.fingerprint,
+          subject.keypair_uuid,
+          subject.profile_uuid,
+          row.target_keypair_canonical_name,
+          row.target_keypair_public_hex,
+          row.target_keypair_fingerprint,
+          row.target_keypair_uuid,
+          row.target_user_profile_id
+        ]
+          .filter(Boolean)
+          .map((value) => String(value).toLowerCase());
+
+        const matches = pubkeyVariants.some((variant) => candidateTargets.includes(variant.toLowerCase()));
+
+        if (!matches) {
+          return;
+        }
+
+        const validFrom = this.toUnixTimestamp(row.valid_from);
+        const validUntil = this.toUnixTimestamp(row.valid_until);
+        if ((validFrom && now < validFrom) || (validUntil && now > validUntil)) {
+          return;
+        }
+
+        const declarationLevel = this.parseDeclarationTrustLevel(content?.content?.trust_level);
+        if (declarationLevel !== null && declarationLevel !== undefined) {
+          highestLevel = highestLevel === null ? declarationLevel : Math.max(highestLevel, declarationLevel);
+        }
+
+        const declarationLimit = this.parseDeclarationTrustLimit(content?.content?.trust_limit);
+        if (declarationLimit !== null && declarationLimit !== undefined) {
+          trustLimit = trustLimit === null ? declarationLimit : Math.min(trustLimit, declarationLimit);
+        }
+
+        if (options.includeDetails) {
+          matchedDeclarations.push({
+            declaration_uuid: row.declaration_uuid,
+            derived_trust_level: declarationLevel,
+            declared_trust_level: content?.content?.trust_level ?? null,
+            trust_limit: declarationLimit,
+            scopes: this.normalizeScopes(content?.content?.scopes),
+            usage_types: Array.isArray(content?.content?.usage_types) ? content.content.usage_types : [],
+            permissions: content?.content?.permissions || {},
+            issuer: content?.issuer || {},
+            subject,
+            valid_from: this.toUnixTimestamp(row.valid_from),
+            valid_until: this.toUnixTimestamp(row.valid_until),
+            status: row.status,
+            created_at: this.toUnixTimestamp(row.created_at),
+            updated_at: this.toUnixTimestamp(row.updated_at),
+            signing_keypair_uuid: row.signing_keypair_uuid,
+            signing_keypair_fingerprint: row.signing_keypair_fingerprint,
+            target_keypair_uuid: row.target_keypair_uuid,
+            target_keypair_fingerprint: row.target_keypair_fingerprint,
+            target_keypair_canonical_name: row.target_keypair_canonical_name,
+            target_keypair_public_hex: row.target_keypair_public_hex,
+            target_user_profile_id: row.target_user_profile_id,
+            required_countersignatures: this.toNumberOrNull(row.required_countersignatures),
+            current_countersignatures: this.toNumberOrNull(row.current_countersignatures),
+            is_local: row.is_local,
+            content
           });
-
-          if (!matches) {
-            return;
-          }
-
-          const validFrom = this.toUnixTimestamp(row.valid_from);
-          const validUntil = this.toUnixTimestamp(row.valid_until);
-          if ((validFrom && now < validFrom) || (validUntil && now > validUntil)) {
-            return;
-          }
-
-          const declarationLevel = this.parseDeclarationTrustLevel(content?.content?.trust_level);
-          if (declarationLevel !== null && declarationLevel !== undefined) {
-            highestLevel = highestLevel === null ? declarationLevel : Math.max(highestLevel, declarationLevel);
-          }
-
-          const declarationLimit = this.parseDeclarationTrustLimit(content?.content?.trust_limit);
-          if (declarationLimit !== null && declarationLimit !== undefined) {
-            trustLimit = trustLimit === null ? declarationLimit : Math.min(trustLimit, declarationLimit);
-          }
-
-          if (options.includeDetails) {
-            matchedDeclarations.push({
-              declaration_uuid: row.declaration_uuid,
-              derived_trust_level: declarationLevel,
-              declared_trust_level: content?.content?.trust_level ?? null,
-              trust_limit: declarationLimit,
-              scopes: this.normalizeScopes(content?.content?.scopes),
-              usage_types: Array.isArray(content?.content?.usage_types) ? content.content.usage_types : [],
-              permissions: content?.content?.permissions || {},
-              issuer: content?.issuer || {},
-              subject,
-              valid_from: this.toUnixTimestamp(row.valid_from),
-              valid_until: this.toUnixTimestamp(row.valid_until),
-              created_at: this.toUnixTimestamp(row.created_at),
-              updated_at: this.toUnixTimestamp(row.updated_at),
-              signing_keypair_uuid: row.signing_keypair_uuid,
-              signing_keypair_fingerprint: row.signing_keypair_fingerprint,
-              target_keypair_uuid: row.target_keypair_uuid,
-              target_keypair_fingerprint: row.target_keypair_fingerprint,
-              content
-            });
-          }
-        } catch (error) {
-          this.logger.warn('[TrustManager] Failed to parse trust declaration:', error.message);
         }
       });
 

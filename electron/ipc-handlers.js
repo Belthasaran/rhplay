@@ -7011,7 +7011,7 @@ function registerDatabaseHandlers(dbManager) {
             is_local,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           declarationData.declaration_uuid,
           declarationData.declaration_type || 'trust-declaration',

@@ -8295,6 +8295,8 @@ const selectedTrustDeclarationQueueLoading = ref(false);
 const selectedTrustDeclarationQueueError = ref<string | null>(null);
 const retryingTrustDeclarationQueue = ref(false);
 const retryTrustDeclarationMessage = ref<string | null>(null);
+const retryTrustDeclarationSuccess = ref(false);
+const expandedQueueStages = reactive<Record<string, boolean>>({});
 const showTrustDeclarationActionDropdown = ref(false);
 const showCreateTrustDeclarationModal = ref(false);
 const showTrustDeclarationDetailsModal = ref(false);
@@ -10457,6 +10459,23 @@ const canRetryTrustDeclarationPublish = computed(() => {
   return ['retrying', 'failed', 'pending', 'queued'].includes(String(statusRaw).toLowerCase());
 });
 
+const retryTrustDeclarationDisabled = computed(() => {
+  if (!canRetryTrustDeclarationPublish.value) {
+    return true;
+  }
+  if (retryingTrustDeclarationQueue.value) {
+    return true;
+  }
+  if (retryTrustDeclarationSuccess.value) {
+    return true;
+  }
+  return false;
+});
+
+const isQueueStageExpanded = (stageKey: string) => {
+  return Boolean(expandedQueueStages[stageKey]);
+};
+
 // Trust Declaration functions
 async function loadTrustDeclarationsList() {
   if (!isElectronAvailable()) {
@@ -11088,6 +11107,7 @@ async function retryTrustDeclarationPublish() {
     );
     if (response?.success) {
       retryTrustDeclarationMessage.value = 'Retry requested. Queue will flush shortly.';
+      retryTrustDeclarationSuccess.value = true;
       await loadTrustDeclarationQueueSummary(selectedTrustDeclarationUuid.value);
     } else {
       retryTrustDeclarationMessage.value = `Retry failed: ${response?.error || 'Unknown error'}`;
@@ -11097,6 +11117,10 @@ async function retryTrustDeclarationPublish() {
   } finally {
     retryingTrustDeclarationQueue.value = false;
   }
+}
+
+function toggleQueueStage(stageKey: string) {
+  expandedQueueStages[stageKey] = !expandedQueueStages[stageKey];
 }
 
 async function exportTrustDeclaration() {
@@ -12453,6 +12477,20 @@ watch(
     }
   }
 );
+
+watch(
+  () => selectedTrustDeclarationUuid.value,
+  () => {
+    retryTrustDeclarationMessage.value = null;
+    retryTrustDeclarationSuccess.value = false;
+  }
+);
+
+watch(canRetryTrustDeclarationPublish, (value) => {
+  if (value) {
+    retryTrustDeclarationSuccess.value = false;
+  }
+});
 
 // Encryption Key functions
 async function loadEncryptionKeysList() {

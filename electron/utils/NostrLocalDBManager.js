@@ -29,6 +29,11 @@ const DEFAULT_RESOURCE_LIMITS = Object.freeze({
 });
 const MESSAGE_UNIT_BYTES = 32 * 1024; // 32 KiB per weighting unit
 const MANUAL_FOLLOW_KEY = 'nostr_manual_follows';
+const PROC_STATUS_LABELS = Object.freeze({
+  0: 'pending',
+  1: 'processing',
+  2: 'completed'
+});
 
 function columnExists(db, table, column) {
   try {
@@ -53,6 +58,14 @@ class NostrLocalDBManager {
     this.cachedOperatingMode = null;
     // Initialize databases lazily on first use
     // Call initialize() explicitly if you need to await initialization
+  }
+
+  mapProcessingStatus(statusValue) {
+    const status = Number(statusValue);
+    if (Number.isInteger(status) && Object.prototype.hasOwnProperty.call(PROC_STATUS_LABELS, status)) {
+      return PROC_STATUS_LABELS[status];
+    }
+    return 'unknown';
   }
 
   /**
@@ -1124,6 +1137,117 @@ class NostrLocalDBManager {
       console.error(`Error getting events by status from ${dbType}:`, error);
       return [];
     }
+  }
+
+  getEventQueueSummary(tableName, recordUuid) {
+    if (!tableName || !recordUuid) {
+      return null;
+    }
+
+    const stageOrder = [
+      { dbType: 'cache_out', label: 'Outgoing Queue' },
+      { dbType: 'store_out', label: 'Published Store' }
+    ];
+
+    const toIso = (value) => {
+      if (value === null || value === undefined) {
+        return null;
+      }
+      const num = Number(value);
+      if (!Number.isFinite(num)) {
+        return null;
+      }
+      const millis = num > 1e12 ? num : num * 1000;
+      try {
+        return new Date(millis).toISOString();
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const normalizeRow = (dbType, row) => {
+      const statusLabel = this.mapProcessingStatus(row.proc_status);
+      return {
+        stage: dbType,
+        eventId: row.nostr_event_id,
+        kind: row.nostr_kind,
+        publicKey: row.nostr_publickey,
+        status: row.proc_status,
+        statusLabel,
+        createdAt: row.nostr_createdat,
+        createdAtIso: toIso(row.nostr_createdat),
+        processedAt: row.proc_at,
+        processedAtIso: toIso(row.proc_at),
+        signature: row.signature || null
+      };
+    };
+
+    const summarizeStage = (dbType, label) => {
+      const db = this.getConnection(dbType);
+      const rows = db
+        .prepare(`
+          SELECT
+            nostr_event_id,
+            nostr_kind,
+            nostr_publickey,
+            nostr_createdat,
+            proc_status,
+            proc_at,
+            signature
+          FROM nostr_raw_events
+          WHERE table_name = ? AND record_uuid = ?
+          ORDER BY nostr_createdat DESC
+        `)
+        .all(tableName, recordUuid);
+
+      const entries = rows.map((row) => normalizeRow(dbType, row));
+      const counts = entries.reduce(
+        (acc, entry) => {
+          acc.total += 1;
+          acc.byStatus[entry.statusLabel] = (acc.byStatus[entry.statusLabel] || 0) + 1;
+          return acc;
+        },
+        { total: 0, byStatus: {} }
+      );
+      const latestEntry = entries.length ? entries[0] : null;
+      return {
+        stage: dbType,
+        label,
+        entries,
+        counts,
+        latest: latestEntry
+      };
+    };
+
+    const stages = stageOrder.map(({ dbType, label }) => summarizeStage(dbType, label));
+    const aggregated = stages.reduce(
+      (acc, stage) => {
+        acc.totalEntries += stage.counts.total;
+        Object.entries(stage.counts.byStatus).forEach(([key, value]) => {
+          acc.byStatus[key] = (acc.byStatus[key] || 0) + value;
+        });
+        if (stage.latest) {
+          const timestamp = stage.latest.processedAt || stage.latest.createdAt;
+          if (timestamp && timestamp > acc.lastTimestamp) {
+            acc.lastTimestamp = timestamp;
+            acc.lastTimestampIso = stage.latest.processedAtIso || stage.latest.createdAtIso || null;
+          }
+        }
+        return acc;
+      },
+      { totalEntries: 0, byStatus: {}, lastTimestamp: 0, lastTimestampIso: null }
+    );
+
+    return {
+      tableName,
+      recordUuid,
+      stages,
+      totals: {
+        total: aggregated.totalEntries,
+        byStatus: aggregated.byStatus,
+        lastUpdatedAt: aggregated.lastTimestampIso
+      }
+    };
   }
 
   /**

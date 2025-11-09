@@ -8161,6 +8161,9 @@ const trustDeclarationsList = ref<Array<{
 }>>([]);
 const selectedTrustDeclarationUuid = ref<string | null>(null);
 const selectedTrustDeclaration = ref<any>(null);
+const selectedTrustDeclarationQueueSummary = ref<any | null>(null);
+const selectedTrustDeclarationQueueLoading = ref(false);
+const selectedTrustDeclarationQueueError = ref<string | null>(null);
 const showTrustDeclarationActionDropdown = ref(false);
 const showCreateTrustDeclarationModal = ref(false);
 const showTrustDeclarationDetailsModal = ref(false);
@@ -10292,6 +10295,14 @@ const declarationNostrInfo = computed(() => {
   };
 });
 
+const trustDeclarationQueueStages = computed(() => {
+  return selectedTrustDeclarationQueueSummary.value?.stages || [];
+});
+
+const trustDeclarationQueueTotals = computed(() => {
+  return selectedTrustDeclarationQueueSummary.value?.totals || null;
+});
+
 // Trust Declaration functions
 async function loadTrustDeclarationsList() {
   if (!isElectronAvailable()) {
@@ -10814,6 +10825,15 @@ function getTrustDeclarationPublishStatusHint(decl: any): string | null {
 function getTrustDeclarationPublishStatusClass(decl: any): string {
   const raw = getTrustDeclarationPublishStatusRaw(decl);
   return `publish-status-${raw || 'pending'}`;
+}
+
+function formatQueueStatusLabel(label: string | null | undefined): string {
+  if (!label) return 'Unknown';
+  return String(label)
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function formatDate(dateString: string | null | undefined): string {

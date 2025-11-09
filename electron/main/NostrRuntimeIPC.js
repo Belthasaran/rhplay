@@ -1,5 +1,6 @@
 const { BrowserWindow, app, ipcMain } = require('electron');
 const { NostrRuntimeService } = require('./NostrRuntimeService');
+const { NostrLocalDBManager } = require('../utils/NostrLocalDBManager');
 
 let runtimeServiceInstance = null;
 
@@ -198,6 +199,29 @@ function registerNostrRuntimeIPC(dbManager) {
     } catch (error) {
       console.error('[NostrRuntimeIPC] Failed to enqueue Nostr event:', error);
       return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('nostr:queue:summary', async (_event, payload = {}) => {
+    const { tableName, recordUuid } = payload || {};
+    if (!tableName || !recordUuid) {
+      return { success: false, error: 'tableName and recordUuid are required' };
+    }
+
+    const nostrDb = new NostrLocalDBManager({ logger: console });
+    try {
+      await nostrDb.initialize();
+      const summary = nostrDb.getEventQueueSummary(tableName, recordUuid);
+      return { success: true, summary };
+    } catch (error) {
+      console.error('[NostrRuntimeIPC] Failed to get queue summary:', error);
+      return { success: false, error: error.message };
+    } finally {
+      try {
+        nostrDb.closeAll();
+      } catch (closeError) {
+        console.warn('[NostrRuntimeIPC] Failed to close Nostr DB:', closeError.message);
+      }
     }
   });
 

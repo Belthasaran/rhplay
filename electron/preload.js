@@ -901,4 +901,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moderationBlockTarget: (payload) => ipcRenderer.invoke('moderation:block-target', payload || {}),
   moderationRevokeAction: (payload) => ipcRenderer.invoke('moderation:revoke-action', payload || {}),
   moderationListActions: (payload) => ipcRenderer.invoke('moderation:list-actions', payload || {}),
+  onTrustChanged: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('trust:changed', handler);
+    return () => ipcRenderer.removeListener('trust:changed', handler);
+  },
 });

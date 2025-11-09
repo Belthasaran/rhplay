@@ -38,6 +38,17 @@ function registerDatabaseHandlers(dbManager) {
   const trustManager = new TrustManager(dbManager, { logger: console });
   const permissionHelper = new PermissionHelper(dbManager, { trustManager, logger: console });
   const moderationManager = new ModerationManager(dbManager, { trustManager, permissionHelper, logger: console });
+  const broadcastTrustChange = (payload = {}) => {
+    BrowserWindow.getAllWindows()
+      .filter((win) => !win.isDestroyed())
+      .forEach((win) => {
+        try {
+          win.webContents.send('trust:changed', payload);
+        } catch (error) {
+          console.warn('[trust:changed] Broadcast failed:', error.message);
+        }
+      });
+  };
   
   const RATING_FIELD_METADATA = [
     { field: 'user_review_rating', label: 'Overall Review' },
@@ -177,6 +188,13 @@ function registerDatabaseHandlers(dbManager) {
       };
 
       const assignmentId = trustManager.saveTrustAssignment(entry);
+      broadcastTrustChange({
+        type: 'assignment',
+        action: 'create',
+        pubkey: entry.pubkey,
+        actorPubkey,
+        assignmentId
+      });
       return { success: true, assignmentId };
     } catch (error) {
       console.error('[trust:assignments:create] Failed:', error);
@@ -209,6 +227,13 @@ function registerDatabaseHandlers(dbManager) {
       }
 
       trustManager.deleteTrustAssignment(assignmentId);
+      broadcastTrustChange({
+        type: 'assignment',
+        action: 'delete',
+        pubkey: target.pubkey,
+        actorPubkey,
+        assignmentId
+      });
       return { success: true };
     } catch (error) {
       console.error('[trust:assignments:delete] Failed:', error);
@@ -774,7 +799,6 @@ function registerDatabaseHandlers(dbManager) {
       return [];
     }
   });
-
   /**
    * Save stage annotation
    * Channel: db:clientdata:set:stage-annotation
@@ -1550,7 +1574,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Stage run games (create SFC files)
    * Channel: db:runs:stage-games
@@ -2352,7 +2375,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message, status };
     }
   });
-
   ipcMain.handle('usb2snes:fxp-restart', async (_event, config) => {
     try {
       // Update config if provided
@@ -3152,7 +3174,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-  
   /**
    * Update file status (pin, dismiss, etc)
    * Channel: snesContents:updateStatus
@@ -3929,7 +3950,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Delete a profile (remove from standby or current, if it's the current profile then switch to another or clear)
    * Channel: online:profile:delete
@@ -7150,6 +7170,8 @@ function registerDatabaseHandlers(dbManager) {
         WHERE declaration_uuid = ?
       `).get(declarationData.declaration_uuid);
       
+      const actionType = existing ? 'update' : 'create';
+      
       if (existing) {
         // Update existing declaration
         db.prepare(`
@@ -7250,6 +7272,16 @@ function registerDatabaseHandlers(dbManager) {
         );
       }
       
+      broadcastTrustChange({
+        type: 'declaration',
+        action: actionType,
+        declarationUuid: declarationData.declaration_uuid,
+        targetPubkey: declarationData.target_keypair_public_hex ||
+          declarationData.target_keypair_fingerprint ||
+          declarationData.target_keypair_canonical_name || null,
+        status: declarationData.status || 'Draft'
+      });
+      
       return { success: true, declarationUuid: declarationData.declaration_uuid };
     } catch (error) {
       console.error('Error saving admin declaration:', error);
@@ -7295,6 +7327,12 @@ function registerDatabaseHandlers(dbManager) {
         WHERE declaration_uuid = ?
       `).run(status, now, declarationUuid);
       
+      broadcastTrustChange({
+        type: 'declaration',
+        action: 'status',
+        declarationUuid,
+        status
+      });
       return { success: true };
     } catch (error) {
       console.error('Error updating admin declaration status:', error);
@@ -7458,6 +7496,13 @@ function registerDatabaseHandlers(dbManager) {
           declarationUuid
         );
       }
+      
+      broadcastTrustChange({
+        type: 'declaration',
+        action: 'sign',
+        declarationUuid,
+        status: 'Signed'
+      });
       
       return { success: true, signedData: signResult };
     } catch (error) {

@@ -6236,6 +6236,7 @@
   </div>
 
 <TrustSummaryModal
+  ref="trustSummaryModalRef"
   :visible="trustSummaryModalOpen"
   :pubkey="onlinePrimaryPubkey"
   @close="trustSummaryModalOpen = false"
@@ -6980,6 +6981,8 @@ const usb2snesSshStatusLabel = computed(() => {
 
 let removeUsb2snesSshStatusListener: (() => void) | null = null;
 let removeUsb2snesFxpStatusListener: (() => void) | null = null;
+let removeTrustChangedListener: (() => void) | null = null;
+let trustChangeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Version management (must be declared before watchers use it)
 const selectedVersion = ref<number>(1);
@@ -8085,6 +8088,7 @@ const editingTrustDeclaration = ref<any>({});
 const trustDeclarationDetailsTab = ref('summary');
 const localTrustOverride = ref(false);
 const trustSummaryModalOpen = ref(false);
+const trustSummaryModalRef = ref<InstanceType<typeof TrustSummaryModal> | null>(null);
 
 const trustAssignments = ref<TrustAssignmentRow[]>([]);
 const trustAssignmentsLoading = ref(false);
@@ -9710,6 +9714,36 @@ async function loadTrustAssignmentsList(pubkeyFilter?: string | null) {
   } finally {
     trustAssignmentsLoading.value = false;
   }
+}
+
+function handleTrustChangeEvent(payload: any) {
+  if (trustChangeRefreshTimer) {
+    clearTimeout(trustChangeRefreshTimer);
+    trustChangeRefreshTimer = null;
+  }
+
+  trustChangeRefreshTimer = setTimeout(async () => {
+    trustChangeRefreshTimer = null;
+    try {
+      await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+    } catch (error) {
+      console.warn('[Trust] Failed to refresh assignments after change:', error);
+    }
+
+    try {
+      await loadTrustDeclarationsList();
+    } catch (error) {
+      console.warn('[Trust] Failed to refresh declarations after change:', error);
+    }
+
+    if (trustSummaryModalOpen.value && trustSummaryModalRef.value) {
+      try {
+        trustSummaryModalRef.value.refresh();
+      } catch (error) {
+        console.warn('[Trust] Failed to refresh summary modal:', error);
+      }
+    }
+  }, 200);
 }
 
 function buildAssignmentScopePayload() {
@@ -17965,6 +17999,10 @@ onMounted(async () => {
         }
       }
     }
+
+    if (typeof (window as any).electronAPI?.onTrustChanged === 'function') {
+      removeTrustChangedListener = (window as any).electronAPI.onTrustChanged(handleTrustChangeEvent);
+    }
   }
   
   // Check for welcome tasks (must be done after settings are loaded)
@@ -17988,6 +18026,14 @@ onUnmounted(() => {
   if (removeUsb2snesFxpStatusListener) {
     removeUsb2snesFxpStatusListener();
     removeUsb2snesFxpStatusListener = null;
+  }
+  if (removeTrustChangedListener) {
+    removeTrustChangedListener();
+    removeTrustChangedListener = null;
+  }
+  if (trustChangeRefreshTimer) {
+    clearTimeout(trustChangeRefreshTimer);
+    trustChangeRefreshTimer = null;
   }
 });
 

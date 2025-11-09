@@ -37,7 +37,7 @@ function registerDatabaseHandlers(dbManager) {
   const OnlineProfileManager = require('./utils/OnlineProfileManager');
   const trustManager = new TrustManager(dbManager, { logger: console });
   const permissionHelper = new PermissionHelper(dbManager, { trustManager, logger: console });
-  const moderationManager = new ModerationManager(dbManager, { trustManager, logger: console });
+  const moderationManager = new ModerationManager(dbManager, { trustManager, permissionHelper, logger: console });
   
   const RATING_FIELD_METADATA = [
     { field: 'user_review_rating', label: 'Overall Review' },

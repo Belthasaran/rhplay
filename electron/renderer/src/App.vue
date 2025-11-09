@@ -5996,6 +5996,49 @@
                 </div>
               </div>
 
+              <div v-if="selectedDeclarationTrustLevel !== null" class="modal-field">
+                <label>Delegated Trust Level:</label>
+                <input
+                  type="text"
+                  :value="selectedDeclarationTrustLevel"
+                  readonly
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div v-if="selectedDeclarationTrustLimit !== null" class="modal-field">
+                <label>Trust Limit:</label>
+                <input
+                  type="text"
+                  :value="selectedDeclarationTrustLimit"
+                  readonly
+                  class="modal-input readonly"
+                />
+              </div>
+
+              <div v-if="selectedDeclarationUsageTypes.length" class="modal-field">
+                <label>Usage Types:</label>
+                <ul class="permission-list">
+                  <li v-for="usage in selectedDeclarationUsageTypes" :key="usage">{{ usage }}</li>
+                </ul>
+              </div>
+
+              <div v-if="selectedDeclarationScopes.length" class="modal-field">
+                <label>Scopes:</label>
+                <ul class="scope-list">
+                  <li v-for="scope in selectedDeclarationScopes" :key="scope.key">{{ scope.label }}</li>
+                </ul>
+              </div>
+
+              <div v-if="selectedDeclarationPermissions.length" class="modal-field">
+                <label>Permissions:</label>
+                <ul class="permission-list">
+                  <li v-for="permission in selectedDeclarationPermissions" :key="permission.key">
+                    {{ permission.label }}
+                  </li>
+                </ul>
+              </div>
+
               <div v-if="isDraftDeclaration" class="modal-field">
                 <label>Edit Content (Advanced):</label>
                 <textarea 
@@ -6070,6 +6113,48 @@
                     <span>Local Trust Override</span>
                   </label>
                   <p class="field-hint">You can manually override the trust status. This only affects your local client.</p>
+                </div>
+              </div>
+
+              <div v-if="countersignatureInfo" class="modal-field">
+                <label>Countersignatures:</label>
+                <div class="countersignature-summary">
+                  <p>
+                    Required: <strong>{{ countersignatureInfo.required }}</strong>,
+                    Present: <strong>{{ countersignatureInfo.current }}</strong>
+                  </p>
+                  <ul v-if="countersignatureInfo.rows.length" class="countersignature-list">
+                    <li v-for="entry in countersignatureInfo.rows" :key="entry.key">
+                      <div class="counter-row">
+                        <span class="counter-signer">{{ entry.signer }}</span>
+                        <span class="counter-time" v-if="entry.signedAt">· {{ formatDateTime(entry.signedAt) }}</span>
+                      </div>
+                    </li>
+                  </ul>
+                  <p v-else class="field-hint">No countersignatures recorded.</p>
+                </div>
+              </div>
+
+              <div v-if="declarationNostrInfo" class="modal-field">
+                <label>Nostr Publish Status:</label>
+                <div class="nostr-status-block">
+                  <p>Status: <strong>{{ declarationNostrInfo.status }}</strong></p>
+                  <p v-if="declarationNostrInfo.eventId">
+                    Event ID: <code class="mono">{{ declarationNostrInfo.eventId }}</code>
+                  </p>
+                  <p v-if="declarationNostrInfo.publicKey">
+                    Published by: <code class="mono">{{ declarationNostrInfo.publicKey }}</code>
+                  </p>
+                  <p v-if="declarationNostrInfo.publishedAt">
+                    Published at: {{ formatDateTime(declarationNostrInfo.publishedAt) }}
+                  </p>
+                  <div v-if="declarationNostrInfo.relays.length" class="nostr-relays">
+                    Relays:
+                    <ul class="nostr-relay-list">
+                      <li v-for="relay in declarationNostrInfo.relays" :key="relay">{{ relay }}</li>
+                    </ul>
+                  </div>
+                  <p v-else class="field-hint">No relays recorded yet.</p>
                 </div>
               </div>
 
@@ -9732,6 +9817,206 @@ async function deleteTrustAssignment(assignmentId: number) {
   }
 }
 
+function safeParseJSON<T>(value: any, fallback: T): T {
+  if (!value && value !== 0) {
+    return fallback;
+  }
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return parsed as T;
+  } catch (error) {
+    console.warn('Failed to parse JSON value:', error);
+    return fallback;
+  }
+}
+
+function extractDeclarationContent(raw: any) {
+  if (!raw) {
+    return null;
+  }
+  const wrappedContent = raw.content && typeof raw.content === 'object' ? raw.content : raw;
+  const scopesRaw = wrappedContent.scopes;
+  const scopes = Array.isArray(scopesRaw)
+    ? scopesRaw
+    : scopesRaw
+    ? [scopesRaw]
+    : [];
+  const permissions = wrappedContent.permissions && typeof wrappedContent.permissions === 'object'
+    ? wrappedContent.permissions
+    : {};
+  const usageTypes = Array.isArray(wrappedContent.usage_types)
+    ? wrappedContent.usage_types
+    : [];
+  return {
+    trustLevel: wrappedContent.trust_level ?? null,
+    trustLimit: wrappedContent.trust_limit ?? null,
+    usageTypes,
+    permissions,
+    scopes
+  };
+}
+
+function describeScope(scope: any, index: number) {
+  if (!scope || typeof scope !== 'object') {
+    return {
+      key: `scope-${index}`,
+      label: 'Global scope (all targets)'
+    };
+  }
+  const type = (scope.type || 'global') as string;
+  const targets = Array.isArray(scope.targets)
+    ? scope.targets
+    : scope.target
+    ? [scope.target]
+    : [];
+  const exclude = Array.isArray(scope.exclude) ? scope.exclude : [];
+  let label = type === 'global'
+    ? 'Global scope (all targets)'
+    : `${type}: ${targets.length ? targets.join(', ') : '*'}`;
+  if (exclude.length) {
+    label += ` (excluding ${exclude.join(', ')})`;
+  }
+  return {
+    key: `scope-${index}-${label}`,
+    label
+  };
+}
+
+function formatPermissionEntry(key: string, value: any): string {
+  const labels: Record<string, string> = {
+    can_sign_trust_declarations: 'Can sign trust declarations',
+    can_sign_operational_admins: 'Can sign operating admin delegations',
+    can_moderate: 'Can moderate',
+    can_update_metadata: 'Can update metadata',
+    can_delegate_moderators: 'Can delegate moderators',
+    can_delegate_updaters: 'Can delegate updaters',
+    max_delegation_duration: 'Max delegation duration',
+    max_block_duration: 'Max block duration'
+  };
+  const baseLabel = labels[key] || key.replace(/_/g, ' ');
+  if (typeof value === 'boolean') {
+    return `${baseLabel}`;
+  }
+  if (typeof value === 'number') {
+    return `${baseLabel}: ${value}`;
+  }
+  if (Array.isArray(value)) {
+    return `${baseLabel}: ${value.join(', ')}`;
+  }
+  if (value && typeof value === 'object') {
+    return `${baseLabel}: ${JSON.stringify(value)}`;
+  }
+  return `${baseLabel}`;
+}
+
+const selectedDeclarationContent = computed(() => {
+  const decl = selectedTrustDeclaration.value;
+  if (!decl?.content_json) {
+    return null;
+  }
+  const parsed = safeParseJSON<any>(decl.content_json, null);
+  if (!parsed) {
+    return null;
+  }
+  return extractDeclarationContent(parsed);
+});
+
+const selectedDeclarationScopes = computed(() => {
+  const content = selectedDeclarationContent.value;
+  if (!content || !content.scopes || content.scopes.length === 0) {
+    return [];
+  }
+  return content.scopes.map((scope: any, index: number) => describeScope(scope, index));
+});
+
+const selectedDeclarationUsageTypes = computed(() => {
+  const content = selectedDeclarationContent.value;
+  if (!content || !content.usageTypes) {
+    return [];
+  }
+  return content.usageTypes.filter((entry: any) => typeof entry === 'string' && entry.trim().length > 0);
+});
+
+const selectedDeclarationPermissions = computed(() => {
+  const content = selectedDeclarationContent.value;
+  if (!content || !content.permissions) {
+    return [];
+  }
+  return Object.entries(content.permissions)
+    .filter(([_, value]) => Boolean(value))
+    .map(([key, value]) => ({
+      key,
+      label: formatPermissionEntry(key, value)
+    }));
+});
+
+const selectedDeclarationTrustLevel = computed(() => selectedDeclarationContent.value?.trustLevel ?? null);
+const selectedDeclarationTrustLimit = computed(() => selectedDeclarationContent.value?.trustLimit ?? null);
+
+const countersignatureInfo = computed(() => {
+  const decl = selectedTrustDeclaration.value;
+  if (!decl) {
+    return null;
+  }
+  const parsedList = safeParseJSON<Array<any>>(decl.countersignatures_json, []);
+  const rows = Array.isArray(parsedList)
+    ? parsedList.map((entry, index) => ({
+        key: `sig-${index}-${entry?.signing_keypair_fingerprint || entry?.signing_keypair_uuid || index}`,
+        signer: entry?.signing_keypair_fingerprint || entry?.signing_keypair_uuid || entry?.signing_pubkey || entry?.signer || 'Unknown signer',
+        signedAt: (() => {
+          const raw = entry?.signed_at ?? entry?.timestamp ?? null;
+          if (raw === null || raw === undefined) {
+            return null;
+          }
+          if (typeof raw === 'number') {
+            return new Date(raw * 1000).toISOString();
+          }
+          return raw;
+        })(),
+        raw: entry
+      }))
+    : [];
+  const required = Number(decl.required_countersignatures) || 0;
+  const current = rows.length || Number(decl.current_countersignatures) || 0;
+  return {
+    required,
+    current,
+    rows
+  };
+});
+
+const declarationNostrInfo = computed(() => {
+  const decl = selectedTrustDeclaration.value;
+  if (!decl) {
+    return null;
+  }
+  const relays = (() => {
+    if (!decl.nostr_published_to_relays) {
+      return [];
+    }
+    const parsed = safeParseJSON<any>(decl.nostr_published_to_relays, []);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    if (typeof parsed === 'string') {
+      return parsed.split(/[,\\s]+/).filter(Boolean);
+    }
+    return [];
+  })();
+  const publishedAtRaw = decl.nostr_published_at || decl.nostr_published_at_ts || null;
+  const publishedAt =
+    typeof publishedAtRaw === 'number'
+      ? new Date(publishedAtRaw * 1000).toISOString()
+      : publishedAtRaw;
+  return {
+    status: decl.nostr_publish_status || (decl.nostr_event_id ? 'published' : 'pending'),
+    eventId: decl.nostr_event_id || null,
+    publicKey: decl.nostr_public_key || null,
+    publishedAt,
+    relays
+  };
+});
+
 // Trust Declaration functions
 async function loadTrustDeclarationsList() {
   if (!isElectronAvailable()) {
@@ -11471,6 +11756,8 @@ watch(showCreateTrustDeclarationModal, (isOpen) => {
 watch(onlineActiveTab, (newTab) => {
   if (newTab === 'trust-declarations') {
     loadTrustDeclarationsList();
+  }
+  if (newTab === 'trust-declarations' || newTab === 'trust-assignments') {
     loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
   }
 });
@@ -23274,6 +23561,62 @@ button:disabled {
 
 .ratings-summary-categories .category-table td {
   background: var(--bg-secondary);
+}
+
+.scope-list,
+.permission-list,
+.countersignature-list,
+.nostr-relay-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+}
+
+.scope-list li,
+.permission-list li,
+.countersignature-list li,
+.nostr-relay-list li {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.countersignature-summary {
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.counter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.counter-signer {
+  font-family: var(--font-mono, monospace);
+}
+
+.counter-time {
+  color: var(--text-secondary);
+}
+
+.nostr-status-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.nostr-relays {
+  margin-top: 6px;
+}
+
+.nostr-relay-list li {
+  font-family: var(--font-mono, monospace);
+  word-break: break-all;
 }
 
 </style>

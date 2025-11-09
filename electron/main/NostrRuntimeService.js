@@ -1631,6 +1631,95 @@ class NostrRuntimeService extends EventEmitter {
     }
   }
 
+  async retryQueueEvent(tableName, recordUuid) {
+    if (!tableName || !recordUuid) {
+      return { success: false, error: 'tableName and recordUuid are required' };
+    }
+    try {
+      const cacheDb = this.localDb.getConnection('cache_out');
+      const cacheRow = cacheDb
+        .prepare(
+          `
+          SELECT nostr_event_id
+          FROM nostr_raw_events
+          WHERE table_name = ? AND record_uuid = ?
+          ORDER BY COALESCE(proc_at, 0) DESC, nostr_createdat DESC
+          LIMIT 1
+        `
+        )
+        .get(tableName, recordUuid);
+
+      let eventId = cacheRow?.nostr_event_id || null;
+
+      if (!eventId) {
+        const storeDb = this.localDb.getConnection('store_out');
+        const storeRow = storeDb
+          .prepare(
+            `
+            SELECT *
+            FROM nostr_raw_events
+            WHERE table_name = ? AND record_uuid = ?
+            ORDER BY COALESCE(proc_at, 0) DESC, nostr_createdat DESC
+            LIMIT 1
+          `
+          )
+          .get(tableName, recordUuid);
+        if (!storeRow) {
+          return { success: false, error: 'No published event found to retry.' };
+        }
+        eventId = storeRow.nostr_event_id;
+        cacheDb.prepare(
+          `
+          INSERT OR REPLACE INTO nostr_raw_events (
+            nostr_event_id,
+            nostr_reserved,
+            nostr_publickey,
+            nostr_createdat,
+            nostr_kind,
+            nostr_tags,
+            content,
+            proc_status,
+            proc_at,
+            keep_for,
+            table_name,
+            record_uuid,
+            user_profile_uuid,
+            signature
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?)
+        `
+        ).run(
+          storeRow.nostr_event_id,
+          storeRow.nostr_reserved,
+          storeRow.nostr_publickey,
+          storeRow.nostr_createdat,
+          storeRow.nostr_kind,
+          storeRow.nostr_tags,
+          storeRow.content,
+          storeRow.keep_for,
+          storeRow.table_name,
+          storeRow.record_uuid,
+          storeRow.user_profile_uuid,
+          storeRow.signature
+        );
+      } else {
+        cacheDb.prepare(
+          `
+          UPDATE nostr_raw_events
+          SET proc_status = 0,
+              proc_at = NULL
+          WHERE table_name = ? AND record_uuid = ?
+        `
+        ).run(tableName, recordUuid);
+      }
+
+      this.triggerOutgoingFlush(200);
+      return { success: true, eventId };
+    } catch (error) {
+      this.logger.warn('[NostrRuntimeService] Failed to retry queue event:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   buildEventFromRow(row) {
     return {
       id: row.id,

@@ -225,6 +225,20 @@ function registerNostrRuntimeIPC(dbManager) {
     }
   });
 
+  ipcMain.handle('nostr:queue:retry', async (_event, payload = {}) => {
+    const { tableName, recordUuid } = payload || {};
+    if (!tableName || !recordUuid) {
+      return { success: false, error: 'tableName and recordUuid are required' };
+    }
+    try {
+      const result = await service.retryQueueEvent(tableName, recordUuid);
+      return result;
+    } catch (error) {
+      console.error('[NostrRuntimeIPC] Failed to retry queue event:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('nostr:nrs:queue:list', () => {
     try {
       const snapshot = service.getQueueSnapshot();

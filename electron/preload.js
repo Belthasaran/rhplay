@@ -887,6 +887,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listNostrQueue: () => ipcRenderer.invoke('nostr:nrs:queue:list'),
   publishNostrEvent: (payload) => ipcRenderer.invoke('nostr:nrs:publish', payload || {}),
   getNostrQueueSummary: (tableName, recordUuid) => ipcRenderer.invoke('nostr:queue:summary', { tableName, recordUuid }),
+  retryNostrQueueEvent: (tableName, recordUuid) => ipcRenderer.invoke('nostr:queue:retry', { tableName, recordUuid }),
   shutdownNostrRuntime: (options) => ipcRenderer.invoke('nostr:nrs:shutdown', options || {}),
   onNostrRuntimeStatus: (callback) => {
     const handler = (_event, status) => callback(status);

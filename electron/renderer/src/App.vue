@@ -6228,6 +6228,18 @@
                     {{ selectedTrustDeclarationQueueError }}
                   </div>
                   <div v-else-if="trustDeclarationQueueStages.length">
+                    <div class="queue-summary-actions">
+                      <button
+                        class="btn-secondary"
+                        @click="retryTrustDeclarationPublish"
+                        :disabled="!canRetryTrustDeclarationPublish || retryingTrustDeclarationQueue"
+                      >
+                        {{ retryingTrustDeclarationQueue ? 'Retrying…' : 'Retry Publish' }}
+                      </button>
+                      <span v-if="retryTrustDeclarationMessage" class="queue-summary-hint">
+                        {{ retryTrustDeclarationMessage }}
+                      </span>
+                    </div>
                     <div v-if="trustDeclarationQueueTotals" class="queue-summary-header">
                       <p>Total Events: <strong>{{ trustDeclarationQueueTotals.total }}</strong></p>
                       <p v-if="trustDeclarationQueueTotals.lastUpdatedAt" class="queue-summary-updated">
@@ -6265,6 +6277,38 @@
                             · Processed: {{ formatDateTime(stage.latest.processedAtIso) }}
                           </span>
                         </p>
+                      </div>
+                      <div v-if="stage.entries.length" class="queue-stage-details">
+                        <table class="queue-stage-table">
+                          <thead>
+                            <tr>
+                              <th>Event</th>
+                              <th>Status</th>
+                              <th>Created</th>
+                              <th>Processed</th>
+                              <th>Signature</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="entry in stage.entries" :key="entry.eventId">
+                              <td>
+                                <code class="mono">{{ formatShortEventId(entry.eventId) }}</code>
+                                <div class="queue-stage-kind">Kind {{ entry.kind }}</div>
+                              </td>
+                              <td>
+                                <span class="queue-stage-status-pill">
+                                  {{ formatQueueStatusLabel(entry.statusLabel) }}
+                                </span>
+                              </td>
+                              <td>{{ entry.createdAtIso ? formatDateTime(entry.createdAtIso) : '—' }}</td>
+                              <td>{{ entry.processedAtIso ? formatDateTime(entry.processedAtIso) : '—' }}</td>
+                              <td>
+                                <span v-if="entry.signature" class="queue-stage-signature">Present</span>
+                                <span v-else class="queue-stage-signature missing">Missing</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                       <p v-else class="field-hint">No events recorded in this stage.</p>
                     </div>
@@ -8249,6 +8293,8 @@ const selectedTrustDeclaration = ref<any>(null);
 const selectedTrustDeclarationQueueSummary = ref<any | null>(null);
 const selectedTrustDeclarationQueueLoading = ref(false);
 const selectedTrustDeclarationQueueError = ref<string | null>(null);
+const retryingTrustDeclarationQueue = ref(false);
+const retryTrustDeclarationMessage = ref<string | null>(null);
 const showTrustDeclarationActionDropdown = ref(false);
 const showCreateTrustDeclarationModal = ref(false);
 const showTrustDeclarationDetailsModal = ref(false);
@@ -10400,6 +10446,17 @@ const trustDeclarationRecentAttempts = computed(() => {
   return selectedTrustDeclarationQueueSummary.value?.attempts?.recent || [];
 });
 
+const canRetryTrustDeclarationPublish = computed(() => {
+  const statusRaw = declarationNostrInfo.value?.statusRaw;
+  if (!selectedTrustDeclarationUuid.value) {
+    return false;
+  }
+  if (!statusRaw) {
+    return false;
+  }
+  return ['retrying', 'failed', 'pending', 'queued'].includes(String(statusRaw).toLowerCase());
+});
+
 // Trust Declaration functions
 async function loadTrustDeclarationsList() {
   if (!isElectronAvailable()) {
@@ -10421,6 +10478,7 @@ function selectTrustDeclaration(declarationUuid: string) {
     selectedTrustDeclaration.value = null;
     selectedTrustDeclarationQueueSummary.value = null;
     selectedTrustDeclarationQueueError.value = null;
+    retryTrustDeclarationMessage.value = null;
   } else {
     selectedTrustDeclarationUuid.value = declarationUuid;
     loadSelectedTrustDeclaration();
@@ -11014,6 +11072,31 @@ async function publishTrustDeclaration() {
   
   // TODO: Implement publishing logic
   alert('Publishing trust declarations is not yet implemented');
+}
+
+async function retryTrustDeclarationPublish() {
+  if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
+    alert('Please select a trust declaration first');
+    return;
+  }
+  retryTrustDeclarationMessage.value = null;
+  retryingTrustDeclarationQueue.value = true;
+  try {
+    const response = await (window as any).electronAPI.retryNostrQueueEvent(
+      'admindeclarations',
+      selectedTrustDeclarationUuid.value
+    );
+    if (response?.success) {
+      retryTrustDeclarationMessage.value = 'Retry requested. Queue will flush shortly.';
+      await loadTrustDeclarationQueueSummary(selectedTrustDeclarationUuid.value);
+    } else {
+      retryTrustDeclarationMessage.value = `Retry failed: ${response?.error || 'Unknown error'}`;
+    }
+  } catch (error: any) {
+    retryTrustDeclarationMessage.value = `Retry failed: ${error?.message || String(error)}`;
+  } finally {
+    retryingTrustDeclarationQueue.value = false;
+  }
 }
 
 async function exportTrustDeclaration() {
@@ -22240,6 +22323,18 @@ button:disabled {
   color: var(--text-secondary);
 }
 
+.queue-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.queue-summary-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 .queue-summary-error {
   color: var(--color-error, #d32f2f);
 }
@@ -22266,6 +22361,47 @@ button:disabled {
   align-items: center;
   font-size: 13px;
   color: var(--text-primary);
+}
+
+.queue-stage-details {
+  margin-top: 6px;
+  overflow-x: auto;
+}
+
+.queue-stage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.queue-stage-table th,
+.queue-stage-table td {
+  border: 1px solid var(--border-color);
+  padding: 4px 6px;
+  text-align: left;
+}
+
+.queue-stage-table th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.queue-stage-kind {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.queue-stage-signature {
+  font-weight: 600;
+  color: var(--success-color);
+}
+
+.queue-stage-signature.missing {
+  color: var(--color-error, #d32f2f);
 }
 
 .queue-stage-total {

@@ -7,6 +7,60 @@
 - Enforce rate limiting (≤1 submission per 24 h for trust <12).
 - Prepare the schema for publishing corresponding Nostr events and distributing historical archives.
 
+Game Submisison Modal :
+- The UI should be implement as a separate Vue component and made accessible from a "Manage > Submit Game Additions"  menu
+- The modal can be extended later to include Resource submissions, but for now is just for submitting new Games, and
+updates for items previously published by that user.
+
+- The UI tracks all the draft submissions the user is working on, as well as all the published ones.
+A "New Game"  button opens a form which allows entry of the common game fields:
+       - Please see the gameversions table of the rhdata.db database, and matching gameversion_stats tables; plus the patchblobs data table,
+	     and rhpatches table.  Then patchbin.db database's attachments table which links to actual patch file data.
+       - gameid, gvuuid, section - Calculated values, read-only to user submitters, only editable by admins.
+	   - version is locked at 1 for a new game submission
+	   - removed, obsoleted, moderated, and featured - Are all not editable by the submitter. Admins and moderators can set any of them.
+	   - based_against - Dropdown list that contains only SMW, currently.
+       - Patch filename - user needs to select a BPS file which will be compiled into a patchblob and prepared for addition to the
+	   attachments table before the game verification. The patchblob filename will be pblob_(SHAKE128 hash of its contents, 20-characters in hex) -
+	   It must be a patch against the base game. The file size must be less than 4194305 bytes.  No ROMs.
+       - Screenshot filenames - Must be 256x224 pixel PNGs. Maximum 5 screenshots, file size 300kb each.
+       - name - Name of the actual game
+	   - length - Exit count
+	   - demo - Yes or No
+	   - sa1 - Yes or No
+	   - collab - Yes or No
+	   - difficulty - Dropdown list of the common difficulties: 1 Newcomer, 2 Casual, 3 Skilled, 4 Advanced, 5 Expert, 6 Master, 7 Grandmaster
+	   - type - Multi-select Listbox, requires 1 or more selections: Standard, Kaizo, Puzzle, Tool-Assisted, Pit
+       - warnings - Multi-select list: Suggestive Content or Language, Crude Content or Language, Possible Photosensitivity Triggers, Violence, Mature
+       - author - Main Author
+	   - authors - Authors list (Defaults to author if not specified)
+	   - submitter - Public key of the submitter in npub format.
+	   - legacy_type - Multi-select Listbox, allows picking from 1 or more:
+	          Standard: Easy, Standard: Normal, Standard: Hard, Standard: Very Hard,
+			  Kaizo: Beginner, Kaizo: Intermediate, Kaizo: Expert, Intermediate Intermediate Kaizo, Intermediate Advanced Kaizo,
+			  Tool-Assisted: Pit, Tool-Assisted: Kaizo,  Misc.: Troll, Misc.: Puzzle, Intermediate Intro Kaizo, Intermediate,
+			  Joke, Hard
+       - combinedtype - Not edited directly, but is set according to code in computeCombinedType() from ~/rhplay/jstools/loaddata.js
+   	   - url - optional URL to game info page
+	   - download_url - optional author's direct download link for patch or zip containning patch
+	   - name_href - optional link to a gamedb listing page
+	   - author_href - optional link to an author listing page
+	   - obsoleted_by - Only editable by moderators and admins.
+	   - description -  Full text description
+	   - tags - List of simple tags - Comma separated, usually must be from the available list: custom music, original music, original graphics, no audio
+                            altered physics, bosses, exploration, gimmick, no boss, non-platformer, puzzle, traditional, tutorial, vanilla, variety
+						creepypasta, crossover, holiday, horror, joke, remake, story, troll, cape, gauntlet, glitch, item tech, precision, shell
+						script recommended, fixme, compilation, msu-1
+
+						- Character names, languages, series names, environments, and types of media can also be used as tags
+						(e.g. anime, sports, politics, desert, space)
+						- Please consider the tags found in ~/rhplay/refmaterial/smwtags.txt   as of the moment as available tags also.
+	   - raw_difficulty - The calculated numerical value on the difficulty, such as  diff_1, diff_2, diff_3, diff_4, diff_5
+       - submission_notes
+	   
+
+
+
 ## 2. New Tables
 
 ### 2.1 `game_submissions`
@@ -107,6 +161,26 @@
   - Lists drafts/published records with state, moderation status, cooldown timer, and action buttons (edit, submit, withdraw).
   - “New Draft Submission” guided wizard for metadata, patch upload, screenshots.
   - Trust warning overlay if user lacks required trust to publish.
+- **Submission Form Fields (per draft)**
+  - **Patch upload**: BPS file ≤ 4 MiB, validated against base ROM; stored as patch blob + attachment (enforce SHAKE128 filename `pblob_<hash>`).
+  - **Screenshots**: up to 5 PNG images, each exactly 256×224 px and ≤ 300 KB; stored with metadata.
+  - **Name** (`gameversions.name`): free text, required.
+  - **Length** (`gameversions.length` / exit count): integer.
+  - **Demo / SA-1 / Collab flags**: boolean toggles.
+  - **Difficulty**: dropdown (1 Newcomer, 2 Casual, 3 Skilled, 4 Advanced, 5 Expert, 6 Master, 7 Grandmaster).
+  - **Type**: multi-select (Standard, Kaizo, Puzzle, Tool-Assisted, Pit).
+  - **Warnings**: multi-select (Suggestive Content or Language, Crude Content or Language, Possible Photosensitivity Triggers, Violence, Mature).
+  - **Author** (primary) and **Authors list** (defaults to primary if empty).
+  - **Submitter npub**: auto-filled from profile; read-only to user.
+  - **Legacy Type** multi-select: (Standard: Easy/Normal/Hard/Very Hard, Kaizo tiers, Tool-Assisted categories, Misc tags: Troll, Puzzle, Joke, etc.).
+  - **Combined Type**: computed via `computeCombinedType()` (read-only).
+  - **URL / download_url / name_href / author_href**: optional external links.
+  - **Obsoleted By**: admin/moderator only.
+  - **Description**: rich text/markdown field.
+  - **Tags**: comma-separated list (with guidance from `refmaterial/smwtags.txt`; include character/language/environment tags permitted).
+  - **Raw Difficulty**: derived numeric difficulty key (e.g., `diff_1`…`diff_5`).
+  - **Submission Notes**: freeform text to moderators.
+  - **New identifiers (auto)**: `gameid = newYYMMDDHH_<SHAKE128-8>`, `gvuuid` hashed from timestamp + submitter npub, `section` default “Game” plus inferred subsections via tags.
 - Moderation view (for scoped admins/moderators):
   - Pending submissions filter, approval/rejection controls, preview of patch (maybe via test apply), view of attached screenshots.
   - Display submitter trust level, cooldown history, and flags (quality rating, tags).

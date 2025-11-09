@@ -5319,6 +5319,47 @@
               <div v-if="trustDeclarationWizardData.content.affects.includes('New Delegation') && trustDeclarationWizardData.content.declarationType === 'trust-declaration'" class="new-delegation-section">
                 <h5>Trust Declaration Configuration</h5>
                 
+                <div class="modal-field guided-presets">
+                  <label>Guided Presets:</label>
+                  <div class="preset-card-grid">
+                    <button
+                      type="button"
+                      class="preset-card"
+                      v-for="preset in delegationPresetList"
+                      :key="preset.id"
+                      :class="{ active: trustDeclarationWizardData.content.selectedPresetId === preset.id }"
+                      @click.prevent="applyDelegationPreset(preset.id)"
+                    >
+                      <div class="preset-card-header">
+                        <strong>{{ preset.label }}</strong>
+                        <span class="preset-badge">{{ formatPresetScope(preset) }}</span>
+                      </div>
+                      <p class="preset-description">{{ preset.description }}</p>
+                      <p v-if="preset.notes" class="preset-note">{{ preset.notes }}</p>
+                      <ul class="preset-meta">
+                        <li>Trust Level: {{ preset.trustLevel }}</li>
+                        <li v-if="preset.permissions.canModerate">Grants moderation privileges</li>
+                        <li v-if="preset.permissions.canUpdateMetadata">Allows metadata updates</li>
+                        <li v-if="preset.permissions.canSignTrustDeclarations">Can sign trust declarations</li>
+                        <li v-if="preset.permissions.canDelegateModerators">Can delegate moderators</li>
+                        <li v-if="preset.permissions.canDelegateUpdaters">Can delegate updaters</li>
+                        <li v-if="preset.permissions.maxDelegationDuration">
+                          Max Delegation: {{ formatDurationSeconds(preset.permissions.maxDelegationDuration) }}
+                        </li>
+                        <li v-if="preset.permissions.maxBlockDuration">
+                          Max Block: {{ formatDurationSeconds(preset.permissions.maxBlockDuration) }}
+                        </li>
+                        <li v-if="preset.countersignatures">
+                          Countersignatures required: {{ preset.countersignatures.minCount }}
+                        </li>
+                        <li v-if="preset.scope.requiresTargets && preset.scope.hint">
+                          Targets needed: {{ preset.scope.hint }}
+                        </li>
+                      </ul>
+                    </button>
+                  </div>
+                </div>
+                
                 <div class="modal-field">
                   <label>Trust Level:</label>
                   <select 
@@ -8215,7 +8256,8 @@ const trustDeclarationWizardData = ref({
       notes: ''
     },
     advancedJson: '',
-    validationErrors: [] as string[]
+    validationErrors: [] as string[],
+    selectedPresetId: null as string | null
   },
   status: 'Draft' as 'Draft' | 'Finalized' | 'Published',
   declarationUuid: ''
@@ -8224,6 +8266,132 @@ const availableIssuerKeypairs = ref<any[]>([]);
 const availableSubjectKeypairs = ref<any[]>([]);
 const availableSubjectProfiles = ref<SubjectProfileOption[]>([]);
 const parentDeclarationValidity = ref<{validFrom: string | null, validUntil: string | null} | null>(null);
+
+type DelegationPreset = {
+  id: string;
+  label: string;
+  description: string;
+  trustLevel: 'operating-admin' | 'authorized-admin' | 'moderator' | 'updater' | 'contributor';
+  usageTypes: string[];
+  scope: {
+    type: 'global' | 'global-chat' | 'global-forum' | 'channel' | 'forum' | 'game';
+    targets?: string[];
+    exclude?: string[];
+    requiresTargets?: boolean;
+    hint?: string;
+  };
+  permissions: {
+    canSignTrustDeclarations?: boolean;
+    canSignOperationalAdmins?: boolean;
+    canModerate?: boolean;
+    canUpdateMetadata?: boolean;
+    canDelegateModerators?: boolean;
+    canDelegateUpdaters?: boolean;
+    maxDelegationDuration?: number | null;
+    maxBlockDuration?: number | null;
+  };
+  countersignatures?: {
+    minCount: number;
+    requiredKeys?: string[];
+  };
+  metadata?: {
+    reason?: string;
+    notes?: string;
+  };
+  notes?: string;
+};
+
+const TRUST_DELEGATION_PRESETS: DelegationPreset[] = [
+  {
+    id: 'global-moderator',
+    label: 'Global Moderator',
+    description: 'Full moderation authority across all sections with delegation powers.',
+    trustLevel: 'moderator',
+    usageTypes: ['moderation', 'delegation'],
+    scope: {
+      type: 'global'
+    },
+    permissions: {
+      canModerate: true,
+      canDelegateModerators: true,
+      maxBlockDuration: 60 * 60 * 24 * 30 // 30 days
+    },
+    countersignatures: {
+      minCount: 1
+    },
+    metadata: {
+      reason: 'Appointed as global moderator'
+    }
+  },
+  {
+    id: 'section-moderator',
+    label: 'Section Moderator',
+    description: 'Moderation powers scoped to specified channels/forums.',
+    trustLevel: 'moderator',
+    usageTypes: ['moderation'],
+    scope: {
+      type: 'channel',
+      requiresTargets: true,
+      hint: 'Provide channel/forum IDs this moderator should manage.'
+    },
+    permissions: {
+      canModerate: true,
+      maxBlockDuration: 60 * 60 * 24 * 14 // 14 days
+    },
+    metadata: {
+      reason: 'Delegated moderator for specific sections'
+    },
+    notes: 'Fill in the scope targets with the channels or forums this moderator should manage.'
+  },
+  {
+    id: 'metadata-updater',
+    label: 'Metadata Updater',
+    description: 'Grants metadata editing rights for selected games or forums.',
+    trustLevel: 'updater',
+    usageTypes: ['metadata-updates'],
+    scope: {
+      type: 'game',
+      requiresTargets: true,
+      hint: 'List game IDs (e.g., game:9671) or forum identifiers.'
+    },
+    permissions: {
+      canUpdateMetadata: true
+    },
+    metadata: {
+      reason: 'Authorized to maintain metadata for assigned scope'
+    },
+    notes: 'Remember to specify the games/forums that this updater can manage.'
+  },
+  {
+    id: 'operating-admin',
+    label: 'Operating Admin',
+    description: 'Comprehensive administrative authority with full signing and delegation powers.',
+    trustLevel: 'operating-admin',
+    usageTypes: ['signing', 'moderation', 'metadata-updates', 'delegation'],
+    scope: {
+      type: 'global'
+    },
+    permissions: {
+      canSignTrustDeclarations: true,
+      canSignOperationalAdmins: true,
+      canModerate: true,
+      canUpdateMetadata: true,
+      canDelegateModerators: true,
+      canDelegateUpdaters: true,
+      maxDelegationDuration: 60 * 60 * 24 * 90, // 90 days
+      maxBlockDuration: 60 * 60 * 24 * 30 // 30 days
+    },
+    countersignatures: {
+      minCount: 2,
+      requiredKeys: []
+    },
+    metadata: {
+      reason: 'Promoted to operating admin'
+    }
+  }
+];
+
+const delegationPresetList = TRUST_DELEGATION_PRESETS;
 
 // Master admin keypairs are just admin keypairs filtered by key_usage = 'master-admin-signing'
 const masterAdminKeypairsList = computed(() => {
@@ -10785,7 +10953,8 @@ async function initializeTrustDeclarationWizard() {
         notes: ''
       },
       advancedJson: '',
-      validationErrors: []
+      validationErrors: [],
+      selectedPresetId: null
     },
     status: 'Draft',
     declarationUuid: ''
@@ -10797,6 +10966,101 @@ async function initializeTrustDeclarationWizard() {
   // Load available keypairs for subject selection
   await loadAvailableSubjectProfiles();
   await loadAvailableSubjectKeypairs();
+}
+
+function applyDelegationPreset(presetId: string) {
+  const preset = delegationPresetList.find((candidate) => candidate.id === presetId);
+  if (!preset) {
+    console.warn('Delegation preset not found:', presetId);
+    return;
+  }
+
+  const content = trustDeclarationWizardData.value.content;
+
+  trustDeclarationWizardData.value.content.mode = 'form';
+  trustDeclarationWizardData.value.content.declarationType = 'trust-declaration';
+  if (!content.affects.includes('New Delegation')) {
+    content.affects = [...content.affects, 'New Delegation'];
+  }
+  content.selectedPresetId = preset.id;
+
+  content.trustLevel = preset.trustLevel;
+  content.usageTypes = [...preset.usageTypes];
+
+  content.scopes.type = preset.scope.type;
+  content.scopes.exclude = preset.scope.exclude ? [...preset.scope.exclude] : [];
+  if (preset.scope.targets && preset.scope.targets.length > 0) {
+    content.scopes.targets = [...preset.scope.targets];
+    content.scopes.targetsText = preset.scope.targets.join('\n');
+  } else {
+    content.scopes.targets = [];
+    content.scopes.targetsText = '';
+  }
+
+  content.permissions.canSignTrustDeclarations = Boolean(preset.permissions.canSignTrustDeclarations);
+  content.permissions.canSignOperationalAdmins = Boolean(preset.permissions.canSignOperationalAdmins);
+  content.permissions.canModerate = Boolean(preset.permissions.canModerate);
+  content.permissions.canUpdateMetadata = Boolean(preset.permissions.canUpdateMetadata);
+  content.permissions.canDelegateModerators = Boolean(preset.permissions.canDelegateModerators);
+  content.permissions.canDelegateUpdaters = Boolean(preset.permissions.canDelegateUpdaters);
+  content.permissions.maxDelegationDuration = preset.permissions.maxDelegationDuration ?? null;
+  content.permissions.maxBlockDuration = preset.permissions.maxBlockDuration ?? null;
+
+  if (preset.countersignatures) {
+    content.requiredCountersignatures.minCount = preset.countersignatures.minCount;
+    const requiredKeys = preset.countersignatures.requiredKeys || [];
+    content.requiredCountersignatures.requiredKeys = [...requiredKeys];
+    content.requiredCountersignatures.requiredKeysText = requiredKeys.join('\n');
+  } else {
+    content.requiredCountersignatures.minCount = 0;
+    content.requiredCountersignatures.requiredKeys = [];
+    content.requiredCountersignatures.requiredKeysText = '';
+  }
+
+  if (preset.metadata?.reason !== undefined) {
+    content.metadata.reason = preset.metadata.reason;
+  }
+  if (preset.metadata?.notes !== undefined) {
+    content.metadata.notes = preset.metadata.notes;
+  }
+}
+
+function formatPresetScope(preset: DelegationPreset): string {
+  const typeLabelMap: Record<DelegationPreset['scope']['type'], string> = {
+    global: 'Global',
+    'global-chat': 'Global Chat',
+    'global-forum': 'Global Forum',
+    channel: 'Channel',
+    forum: 'Forum',
+    game: 'Game'
+  };
+  const base = typeLabelMap[preset.scope.type] || preset.scope.type;
+  if (preset.scope.requiresTargets) {
+    return `${base} (targets required)`;
+  }
+  if (preset.scope.targets && preset.scope.targets.length > 0) {
+    return `${base}: ${preset.scope.targets.join(', ')}`;
+  }
+  return base;
+}
+
+function formatDurationSeconds(seconds?: number | null): string | null {
+  if (!seconds) {
+    return null;
+  }
+  const days = Math.round(seconds / (60 * 60 * 24));
+  if (days >= 1) {
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }
+  const hours = Math.round(seconds / (60 * 60));
+  if (hours >= 1) {
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes >= 1) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+  return `${seconds} second${seconds === 1 ? '' : 's'}`;
 }
 
 async function loadAvailableIssuerKeypairs() {
@@ -11212,6 +11476,7 @@ function onAffectsChanged() {
       requiredKeysText: '',
       currentSignatures: []
     };
+    trustDeclarationWizardData.value.content.selectedPresetId = null;
   }
 }
 
@@ -11221,6 +11486,7 @@ function onDeclarationTypeChanged() {
     // Reset trust declaration specific fields
     trustDeclarationWizardData.value.content.trustLevel = '';
     trustDeclarationWizardData.value.content.usageTypes = [];
+    trustDeclarationWizardData.value.content.selectedPresetId = null;
     // Other declaration types will be handled later
   }
 }
@@ -23117,6 +23383,76 @@ button:disabled {
   margin-bottom: 20px;
   color: var(--text-primary);
   font-size: 16px;
+}
+
+.guided-presets .preset-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.preset-card {
+  text-align: left;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.preset-card.active {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(76, 110, 245, 0.15);
+}
+
+.preset-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.preset-badge {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.preset-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.preset-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.preset-meta {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .permissions-group {

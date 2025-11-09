@@ -6218,6 +6218,63 @@
                 </div>
               </div>
 
+              <div class="modal-field">
+                <label>Nostr Queue Status:</label>
+                <div class="queue-summary-block">
+                  <div v-if="selectedTrustDeclarationQueueLoading" class="queue-summary-loading">
+                    Loading queue status…
+                  </div>
+                  <div v-else-if="selectedTrustDeclarationQueueError" class="queue-summary-error">
+                    {{ selectedTrustDeclarationQueueError }}
+                  </div>
+                  <div v-else-if="trustDeclarationQueueStages.length">
+                    <div v-if="trustDeclarationQueueTotals" class="queue-summary-header">
+                      <p>Total Events: <strong>{{ trustDeclarationQueueTotals.total }}</strong></p>
+                      <p v-if="trustDeclarationQueueTotals.lastUpdatedAt" class="queue-summary-updated">
+                        Last Updated: {{ formatDateTime(trustDeclarationQueueTotals.lastUpdatedAt) }}
+                      </p>
+                    </div>
+                    <div
+                      v-for="stage in trustDeclarationQueueStages"
+                      :key="stage.stage"
+                      class="queue-stage"
+                    >
+                      <div class="queue-stage-header">
+                        <strong>{{ stage.label }}</strong>
+                        <span class="queue-stage-total">{{ stage.counts.total }} event(s)</span>
+                      </div>
+                      <div v-if="Object.keys(stage.counts.byStatus || {}).length" class="queue-stage-statuses">
+                        <span
+                          v-for="(count, statusKey) in stage.counts.byStatus"
+                          :key="`${stage.stage}-${statusKey}`"
+                          class="queue-stage-status-pill"
+                        >
+                          {{ formatQueueStatusLabel(statusKey) }}: {{ count }}
+                        </span>
+                      </div>
+                      <div v-if="stage.latest" class="queue-stage-latest">
+                        <p>
+                          Latest: {{ formatQueueStatusLabel(stage.latest.statusLabel) }}
+                          <span v-if="stage.latest.eventId">
+                            · Event {{ formatShortEventId(stage.latest.eventId) }}
+                          </span>
+                        </p>
+                        <p class="queue-stage-timestamp">
+                          Created: {{ stage.latest.createdAtIso ? formatDateTime(stage.latest.createdAtIso) : '—' }}
+                          <span v-if="stage.latest.processedAtIso">
+                            · Processed: {{ formatDateTime(stage.latest.processedAtIso) }}
+                          </span>
+                        </p>
+                      </div>
+                      <p v-else class="field-hint">No events recorded in this stage.</p>
+                    </div>
+                  </div>
+                  <div v-else class="field-hint">
+                    No queue entries recorded yet for this declaration.
+                  </div>
+                </div>
+              </div>
+
               <!-- Finalize and Reload Button (only for Draft declarations) -->
               <div v-if="selectedTrustDeclaration.status === 'Draft'" class="modal-field">
                 <button 
@@ -9939,6 +9996,10 @@ async function refreshTrustData() {
     console.warn('[Trust] Failed to refresh declarations after change:', error);
   }
 
+  if (selectedTrustDeclarationUuid.value) {
+    await loadTrustDeclarationQueueSummary(selectedTrustDeclarationUuid.value);
+  }
+
   if (trustSummaryModalOpen.value && trustSummaryModalRef.value) {
     try {
       trustSummaryModalRef.value.refresh();
@@ -10322,9 +10383,41 @@ function selectTrustDeclaration(declarationUuid: string) {
   if (declarationUuid === selectedTrustDeclarationUuid.value) {
     selectedTrustDeclarationUuid.value = null;
     selectedTrustDeclaration.value = null;
+    selectedTrustDeclarationQueueSummary.value = null;
+    selectedTrustDeclarationQueueError.value = null;
   } else {
     selectedTrustDeclarationUuid.value = declarationUuid;
     loadSelectedTrustDeclaration();
+  }
+}
+
+async function loadTrustDeclarationQueueSummary(declarationUuid?: string | null) {
+  if (!isElectronAvailable()) {
+    selectedTrustDeclarationQueueSummary.value = null;
+    selectedTrustDeclarationQueueError.value = null;
+    return;
+  }
+  const uuid = declarationUuid || selectedTrustDeclarationUuid.value;
+  if (!uuid) {
+    selectedTrustDeclarationQueueSummary.value = null;
+    selectedTrustDeclarationQueueError.value = null;
+    return;
+  }
+  selectedTrustDeclarationQueueLoading.value = true;
+  selectedTrustDeclarationQueueError.value = null;
+  try {
+    const response = await (window as any).electronAPI.getNostrQueueSummary('admindeclarations', uuid);
+    if (response?.success) {
+      selectedTrustDeclarationQueueSummary.value = response.summary || null;
+    } else {
+      selectedTrustDeclarationQueueSummary.value = null;
+      selectedTrustDeclarationQueueError.value = response?.error || 'Unable to load queue summary.';
+    }
+  } catch (error: any) {
+    selectedTrustDeclarationQueueSummary.value = null;
+    selectedTrustDeclarationQueueError.value = error?.message || String(error);
+  } finally {
+    selectedTrustDeclarationQueueLoading.value = false;
   }
 }
 
@@ -10332,6 +10425,8 @@ async function loadSelectedTrustDeclaration(declarationUuid?: string) {
   const uuid = declarationUuid || selectedTrustDeclarationUuid.value;
   if (!isElectronAvailable() || !uuid) {
     selectedTrustDeclaration.value = null;
+    selectedTrustDeclarationQueueSummary.value = null;
+    selectedTrustDeclarationQueueError.value = null;
     return;
   }
   
@@ -10354,14 +10449,20 @@ async function loadSelectedTrustDeclaration(declarationUuid?: string) {
         reason: getReasonFromContent(decl),
         comment: getCommentFromContent(decl)
       };
+
+      await loadTrustDeclarationQueueSummary(uuid);
     } else {
       alert(`Failed to load trust declaration: ${result.error}`);
       selectedTrustDeclaration.value = null;
+      selectedTrustDeclarationQueueSummary.value = null;
+      selectedTrustDeclarationQueueError.value = result.error || null;
     }
   } catch (error) {
     console.error('Error loading trust declaration:', error);
     alert(`Error: ${formatErrorMessage(error)}`);
     selectedTrustDeclaration.value = null;
+    selectedTrustDeclarationQueueSummary.value = null;
+    selectedTrustDeclarationQueueError.value = error instanceof Error ? error.message : String(error);
   }
 }
 
@@ -10416,6 +10517,8 @@ function closeTrustDeclarationDetailsModal() {
   editingTrustDeclaration.value = {};
   trustDeclarationDetailsTab.value = 'summary';
   localTrustOverride.value = false;
+  selectedTrustDeclarationQueueSummary.value = null;
+  selectedTrustDeclarationQueueError.value = null;
 }
 
 const isDraftDeclaration = computed(() => {
@@ -10834,6 +10937,17 @@ function formatQueueStatusLabel(label: string | null | undefined): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function formatShortEventId(eventId: string | null | undefined, length = 12): string {
+  if (!eventId) {
+    return '—';
+  }
+  const trimmed = String(eventId).trim();
+  if (trimmed.length <= length) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, length)}…`;
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -22071,6 +22185,86 @@ button:disabled {
   font-size: 11px;
   color: var(--text-tertiary);
   margin-top: 4px;
+}
+
+.queue-summary-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.queue-summary-loading,
+.queue-summary-error,
+.queue-summary-header {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.queue-summary-error {
+  color: var(--color-error, #d32f2f);
+}
+
+.queue-summary-updated {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.queue-stage {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.queue-stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.queue-stage-total {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.queue-stage-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.queue-stage-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.queue-stage-latest {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.queue-stage-timestamp {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 .admin-import-export-actions {

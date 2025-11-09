@@ -68,6 +68,146 @@ class NostrLocalDBManager {
     return 'unknown';
   }
 
+  recordPublishAttempt(eventId, tableName, recordUuid, results = []) {
+    if (!eventId || !tableName || !recordUuid) {
+      return false;
+    }
+    const relayResults = Array.isArray(results) && results.length > 0
+      ? results
+      : [{ relayUrl: null, success: false, message: 'No relay results recorded' }];
+
+    const db = this.getConnection('cache_out');
+    const batchId =
+      typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : crypto.randomBytes(16).toString('hex');
+    const attemptAt = Math.floor(Date.now() / 1000);
+    const toMessage = (entry) => {
+      if (!entry) {
+        return null;
+      }
+      if (entry.message) {
+        return String(entry.message);
+      }
+      if (entry.error) {
+        if (typeof entry.error === 'string') {
+          return entry.error;
+        }
+        if (entry.error?.message) {
+          return entry.error.message;
+        }
+        try {
+          return JSON.stringify(entry.error);
+        } catch (err) {
+          return String(entry.error);
+        }
+      }
+      return null;
+    };
+    const insertStmt = db.prepare(`
+      INSERT INTO nostr_publish_attempts (
+        attempt_batch_id,
+        event_id,
+        table_name,
+        record_uuid,
+        relay_url,
+        success,
+        message,
+        attempt_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const transaction = db.transaction((entries) => {
+      entries.forEach((entry) =>
+        insertStmt.run(
+          batchId,
+          eventId,
+          tableName,
+          recordUuid,
+          entry.relayUrl || null,
+          entry.success ? 1 : 0,
+          toMessage(entry),
+          attemptAt
+        )
+      );
+    });
+    transaction(relayResults);
+    return true;
+  }
+
+  getPublishAttempts(tableName, recordUuid, batchLimit = 5) {
+    if (!tableName || !recordUuid) {
+      return [];
+    }
+    const db = this.getConnection('cache_out');
+    const batches = db
+      .prepare(
+        `
+        SELECT attempt_batch_id, MAX(attempt_at) AS attempt_at
+        FROM nostr_publish_attempts
+        WHERE table_name = ? AND record_uuid = ?
+        GROUP BY attempt_batch_id
+        ORDER BY attempt_at DESC
+        LIMIT ?
+      `
+      )
+      .all(tableName, recordUuid, batchLimit);
+    if (!batches.length) {
+      return [];
+    }
+    const batchIds = batches.map((batch) => batch.attempt_batch_id);
+    const placeholders = batchIds.map(() => '?').join(',');
+    const detailRows = db
+      .prepare(
+        `
+        SELECT attempt_batch_id, event_id, relay_url, success, message, attempt_at
+        FROM nostr_publish_attempts
+        WHERE attempt_batch_id IN (${placeholders})
+        ORDER BY attempt_at DESC
+      `
+      )
+      .all(...batchIds);
+    const toIso = (value) => {
+      if (value === null || value === undefined) {
+        return null;
+      }
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return null;
+      }
+      const millis = numeric > 1e12 ? numeric : numeric * 1000;
+      try {
+        return new Date(millis).toISOString();
+      } catch (error) {
+        return null;
+      }
+    };
+    const grouped = batches.map((batch) => {
+      const entries = detailRows
+        .filter((row) => row.attempt_batch_id === batch.attempt_batch_id)
+        .map((row) => ({
+          relayUrl: row.relay_url || null,
+          success: row.success === 1,
+          message: row.message || null,
+          attemptAt: row.attempt_at,
+          attemptAtIso: toIso(row.attempt_at)
+        }));
+      const successes = entries.filter((entry) => entry.success);
+      const failures = entries.filter((entry) => !entry.success);
+      return {
+        batchId: batch.attempt_batch_id,
+        attemptAt: batch.attempt_at,
+        attemptAtIso: toIso(batch.attempt_at),
+        entries,
+        successes,
+        failures,
+        successCount: successes.length,
+        failureCount: failures.length
+      };
+    });
+    return grouped;
+  }
+
+
   /**
    * Explicitly initialize all databases (call this if you need to await initialization)
    * @returns {Promise<void>}
@@ -491,6 +631,25 @@ class NostrLocalDBManager {
     `);
     
     this.ensureRawEventsSchema(db);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS nostr_publish_attempts (
+        attempt_batch_id TEXT NOT NULL,
+        event_id TEXT,
+        table_name TEXT,
+        record_uuid TEXT,
+        relay_url TEXT,
+        success INTEGER NOT NULL DEFAULT 0,
+        message TEXT,
+        attempt_at INTEGER NOT NULL,
+        PRIMARY KEY (attempt_batch_id, relay_url, attempt_at)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nostr_publish_attempts_record
+        ON nostr_publish_attempts(table_name, record_uuid, attempt_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_nostr_publish_attempts_event
+        ON nostr_publish_attempts(event_id, attempt_at DESC);
+    `);
 
     // Create feed_database table
     db.exec(`
@@ -942,6 +1101,25 @@ class NostrLocalDBManager {
       CREATE INDEX IF NOT EXISTS idx_nostr_raw_events_user_profile_uuid ON nostr_raw_events(user_profile_uuid);
     `);
     
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS nostr_publish_attempts (
+        attempt_batch_id TEXT NOT NULL,
+        event_id TEXT,
+        table_name TEXT,
+        record_uuid TEXT,
+        relay_url TEXT,
+        success INTEGER NOT NULL DEFAULT 0,
+        message TEXT,
+        attempt_at INTEGER NOT NULL,
+        PRIMARY KEY (attempt_batch_id, relay_url, attempt_at)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_nostr_publish_attempts_record
+        ON nostr_publish_attempts(table_name, record_uuid, attempt_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_nostr_publish_attempts_event
+        ON nostr_publish_attempts(event_id, attempt_at DESC);
+    `);
+    
     // Create feed_database table
     db.exec(`
       CREATE TABLE IF NOT EXISTS feed_database (
@@ -1238,6 +1416,9 @@ class NostrLocalDBManager {
       { totalEntries: 0, byStatus: {}, lastTimestamp: 0, lastTimestampIso: null }
     );
 
+    const attemptGroups = this.getPublishAttempts(tableName, recordUuid, 5);
+    const latestAttempt = attemptGroups.length ? attemptGroups[0] : null;
+
     return {
       tableName,
       recordUuid,
@@ -1246,6 +1427,10 @@ class NostrLocalDBManager {
         total: aggregated.totalEntries,
         byStatus: aggregated.byStatus,
         lastUpdatedAt: aggregated.lastTimestampIso
+      },
+      attempts: {
+        latest: latestAttempt,
+        recent: attemptGroups
       }
     };
   }

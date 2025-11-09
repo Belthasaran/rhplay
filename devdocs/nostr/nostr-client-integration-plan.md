@@ -176,3 +176,30 @@
 
 ### Next Steps
 - Design schema and migrations for dedicated ratings database(s), including raw ratingcard storage and `rating_summary`
+
+## 10. Future Work: Game & Resource Publication Pipeline
+- **Game Submission Workflow**
+  - Support end-user submissions of new games (initial trust level ≥ 5). Submissions create draft `gameversions` records with `moderated = 0`, hidden from general users unless “show unmoderated” is enabled.
+  - Auto-generate `gameid` as `newYYMMDDHH_<SHAKE128-8>` using UTC timestamp + submitter npub hash; derive deterministic `gvuuid` from submission timestamp + submitter key.
+  - Collect required metadata: name, version=1, exit count, demo/SA-1/collab flags, difficulty, multi-select type/warnings/legacy_type tags, author(s), submitter npub, description, tags, optional URLs. Attach patch blob (≤4 MiB BPS) and up to 5 screenshots (PNG 256×224 ≤300 KB).
+  - Enforce publish cooldown for trust level <12 (max 1 submission per 24 h).
+  - Expose “Game/Resource Submissions” modal (Manage ▸ Game/Resource Submissions) with tabs for Drafts vs Published, “New Draft Submission” workflow, and trust warning if the active profile cannot publish (requires online profile + trust ≥5).
+  - Moderators/admins review via scoped permissions (`moderation` / `metadata`) with approve/reject/soft-delete actions, quality qualifiers, and reject reasons. Approved updates may adjust read-only fields (section, combinedtype, gameid) via admin-only path.
+
+- **Update Publications**
+  - Admins with metadata privileges can publish updates (new versions, attachment revisions) bypassing moderation queue but still logging trust scope.
+  - Moderation flow for user-submitted updates mirrors new game submissions: unmoderated visibility until approved; rejected items flagged (`rejected`, optional `removed`).
+
+- **Database Extensions**
+  - Add moderation tracking columns (e.g., `moderated`, `moderation_status`, `reject_reason`, timestamps) to `gameversions`, patch/attachment tables for transparency.
+  - Track submission rate-limiting metadata per submitter for trust enforcement.
+
+- **Offline & Historical Sync**
+  - Plan admin-hosted HTTPS endpoints / specialized relays to mirror high-value Nostr events (trust declarations, ratings, game metadata) ensuring long-term availability even if public relays prune history.
+  - Provide packed archival feeds (`nostr-data*.json.xz`) for bootstrap. Clients ingest once, log SHA256 of processed archives, and reconcile without overwriting newer local data.
+  - Allow clients to configure supplemental archive sources: arDrive folder IDs, HTTPS JSON manifest (e.g., `{ "nostrArchives": [ ... ] }`), or local `.7z` bundles.
+  - Implement importer that merges historical events while respecting newer local state (e.g., skip older `gameversions` updates if a more recent publish exists).
+  - Consider server-side consolidator that passively listens to relays, validates events, and prepares compact archive files for distribution.
+
+- **Distribution Strategy**
+  - When game metadata tables change (new gameversions, attachments, patch blobs), ensure Nostr events and archive feeds deliver the delta so new clients can sync without direct database access.

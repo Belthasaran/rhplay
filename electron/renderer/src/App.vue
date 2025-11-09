@@ -6268,6 +6268,34 @@
                       </div>
                       <p v-else class="field-hint">No events recorded in this stage.</p>
                     </div>
+                    <div v-if="trustDeclarationLatestAttempt" class="queue-attempt">
+                      <div class="queue-attempt-header">
+                        <strong>Last Publish Attempt</strong>
+                        <span v-if="trustDeclarationLatestAttempt.attemptAtIso">
+                          {{ formatDateTime(trustDeclarationLatestAttempt.attemptAtIso) }}
+                        </span>
+                      </div>
+                      <div v-if="trustDeclarationLatestAttempt.successes.length" class="queue-attempt-list success">
+                        <p>Successful relays:</p>
+                        <ul>
+                          <li v-for="entry in trustDeclarationLatestAttempt.successes" :key="entry.relayUrl || entry.attemptAt">
+                            {{ entry.relayUrl || 'Unknown relay' }}
+                          </li>
+                        </ul>
+                      </div>
+                      <div v-if="trustDeclarationLatestAttempt.failures.length" class="queue-attempt-list failure">
+                        <p>Failed relays:</p>
+                        <ul>
+                          <li v-for="entry in trustDeclarationLatestAttempt.failures" :key="(entry.relayUrl || 'failure') + entry.attemptAt">
+                            <span class="queue-attempt-relay">{{ entry.relayUrl || 'Unknown relay' }}</span>
+                            <span v-if="entry.message" class="queue-attempt-message">— {{ entry.message }}</span>
+                          </li>
+                        </ul>
+                      </div>
+                      <p v-if="!trustDeclarationLatestAttempt.successes.length && !trustDeclarationLatestAttempt.failures.length" class="field-hint">
+                        No relay outcomes recorded for the latest attempt.
+                      </p>
+                    </div>
                   </div>
                   <div v-else class="field-hint">
                     No queue entries recorded yet for this declaration.
@@ -10362,6 +10390,14 @@ const trustDeclarationQueueStages = computed(() => {
 
 const trustDeclarationQueueTotals = computed(() => {
   return selectedTrustDeclarationQueueSummary.value?.totals || null;
+});
+
+const trustDeclarationLatestAttempt = computed(() => {
+  return selectedTrustDeclarationQueueSummary.value?.attempts?.latest || null;
+});
+
+const trustDeclarationRecentAttempts = computed(() => {
+  return selectedTrustDeclarationQueueSummary.value?.attempts?.recent || [];
 });
 
 // Trust Declaration functions
@@ -22265,6 +22301,52 @@ button:disabled {
   margin: 0;
   font-size: 11px;
   color: var(--text-tertiary);
+}
+
+.queue-attempt {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-attempt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.queue-attempt-list {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.queue-attempt-list ul {
+  margin: 4px 0 0 0;
+  padding-left: 18px;
+}
+
+.queue-attempt-list.success p {
+  color: var(--success-color);
+}
+
+.queue-attempt-list.failure p {
+  color: var(--color-error, #d32f2f);
+}
+
+.queue-attempt-relay {
+  font-weight: 600;
+}
+
+.queue-attempt-message {
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin-left: 4px;
 }
 
 .admin-import-export-actions {

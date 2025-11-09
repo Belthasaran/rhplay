@@ -1331,6 +1331,8 @@ class NostrRuntimeService extends EventEmitter {
             );
           }
 
+          this.recordPublishAttempt(row, event, publishResults);
+
           if (successes.length === 0) {
             this.logger.warn(
               `[NostrRuntimeService] Event ${event.id} (${priority.bucket}) failed to publish to any relay; will retry after cooldown.`
@@ -1368,6 +1370,9 @@ class NostrRuntimeService extends EventEmitter {
             `[NostrRuntimeService] Failed to publish event ${event.id} (${priority.bucket}):`,
             error.message
           );
+          this.recordPublishAttempt(row, event, [
+            { relayUrl: null, success: false, message: error?.message || String(error) }
+          ]);
           this.localDb.updateEventStatus('cache_out', event.id, 0);
           if (row.table_name === 'admindeclarations' && row.record_uuid) {
             this.updateAdminDeclarationPublishState(row.record_uuid, {
@@ -1613,6 +1618,17 @@ class NostrRuntimeService extends EventEmitter {
       median,
       stddev
     };
+  }
+
+  recordPublishAttempt(row, event, results) {
+    if (!row?.table_name || !row?.record_uuid) {
+      return;
+    }
+    try {
+      this.localDb.recordPublishAttempt(event?.id || null, row.table_name, row.record_uuid, results);
+    } catch (error) {
+      this.logger.warn('[NostrRuntimeService] Failed to record publish attempt:', error.message);
+    }
   }
 
   buildEventFromRow(row) {

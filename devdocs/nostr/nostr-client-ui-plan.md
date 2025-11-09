@@ -78,3 +78,20 @@
 3. **Follow & Relay Controls**: Manual follow management, relay settings, notifications.
 4. **Advanced Interactions**: Profile overlays, DM scaffolding, verification hooks.
 
+## 8. Planned Extensions
+- **Game/Resource Submission Modal**
+  - Accessible via Manage ▸ “Game/Resource Submissions”.
+  - Tabs for `My Drafts` and `Published`. Draft list shows status, last edited timestamp, moderation state.
+  - “New Draft Submission” wizard capturing patch upload, screenshots, core metadata, tags, warnings, authors, submitter npub.
+  - Trust gating: users below trust level 5 can draft but see warning that publishing requires an online profile with sufficient trust. Level <12 limited to one publish per 24 h (UI surfaces cooldown).
+  - Moderation queue view for users with appropriate scope showing pending submissions, approve/reject controls, quality flags, reject reason entry.
+- **Admin Metadata Console**
+  - Shortcut for admins with metadata permissions to fast-track updates, edit read-only fields (section, combinedtype, obsoleted_by), manage patch blobs/attachments, and view publish history per game.
+- **Historical Archive Management**
+  - Online tab addition to list available archive bundles (`nostr-data*.json.xz`), show ingest status, allow manual rescan (arDrive folder ID, HTTPS manifest, local file import).
+  - Provide progress indicators and conflict resolution summaries (e.g., “Skipped 3 older events superseded by local changes”).
+- **Relay Outcome Diagnostics**
+  - Extend Outgoing Queue cards to display per-relay success/failure counts, last attempt details, and retry options.
+- **Submission Notifications**
+  - Optional alerts when a user’s submission is approved, rejected, or requires changes, with quick links to relevant game records or moderation comments.
+

@@ -432,6 +432,7 @@
                             <th>Valid From</th>
                             <th>Valid To</th>
                             <th>Status</th>
+                            <th>Publish Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -457,6 +458,14 @@
                             <td>
                               <span :class="getTrustDeclarationStatusClass(decl)">
                                 {{ decl.status || 'Draft' }}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                :class="['publish-status-pill', getTrustDeclarationPublishStatusClass(decl)]"
+                                :title="getTrustDeclarationPublishStatusHint(decl) || ''"
+                              >
+                                {{ getTrustDeclarationPublishStatusLabel(decl) }}
                               </span>
                             </td>
                           </tr>
@@ -6182,7 +6191,14 @@
               <div v-if="declarationNostrInfo" class="modal-field">
                 <label>Nostr Publish Status:</label>
                 <div class="nostr-status-block">
-                  <p>Status: <strong>{{ declarationNostrInfo.status }}</strong></p>
+                  <p>Status:
+                    <span
+                      :class="['publish-status-pill', `publish-status-${declarationNostrInfo.statusRaw}`]"
+                    >
+                      {{ declarationNostrInfo.status }}
+                    </span>
+                  </p>
+                  <p v-if="declarationNostrInfo.hint" class="field-hint">{{ declarationNostrInfo.hint }}</p>
                   <p v-if="declarationNostrInfo.eventId">
                     Event ID: <code class="mono">{{ declarationNostrInfo.eventId }}</code>
                   </p>
@@ -8119,7 +8135,29 @@ const newEncryptionKeyDescription = ref('');
 const newEncryptionKeyEndDate = ref('');
 
 // Trust Declarations
-const trustDeclarationsList = ref<Array<{declaration_uuid: string, issuing_canonical_name?: string, issuing_fingerprint: string, issued_at?: string, updated_at?: string, subject_canonical_name?: string, subject_fingerprint: string, valid_starting: string, valid_ending?: string, subject_trust_level?: string, subject_usagetypes?: string, subject_scopes?: string, scope_permissions?: string, signature_hash_algorithm?: string, signature_hash_value?: string, signature?: string, countersignatures?: string}>>([]);
+const trustDeclarationsList = ref<Array<{
+  declaration_uuid: string;
+  issuing_canonical_name?: string;
+  issuing_fingerprint: string;
+  issued_at?: string;
+  updated_at?: string;
+  subject_canonical_name?: string;
+  subject_fingerprint: string;
+  valid_starting: string;
+  valid_ending?: string;
+  subject_trust_level?: string;
+  subject_usagetypes?: string;
+  subject_scopes?: string;
+  scope_permissions?: string;
+  signature_hash_algorithm?: string;
+  signature_hash_value?: string;
+  signature?: string;
+  countersignatures?: string;
+  nostr_publish_status?: string | null;
+  nostr_event_id?: string | null;
+  nostr_published_at?: string | null;
+  nostr_published_to_relays?: string | null;
+}>>([]);
 const selectedTrustDeclarationUuid = ref<string | null>(null);
 const selectedTrustDeclaration = ref<any>(null);
 const showTrustDeclarationActionDropdown = ref(false);
@@ -10221,8 +10259,11 @@ const declarationNostrInfo = computed(() => {
     typeof publishedAtRaw === 'number'
       ? new Date(publishedAtRaw * 1000).toISOString()
       : publishedAtRaw;
+  const statusRaw = getTrustDeclarationPublishStatusRaw(decl);
   return {
-    status: decl.nostr_publish_status || (decl.nostr_event_id ? 'published' : 'pending'),
+    status: getTrustDeclarationPublishStatusLabel(decl),
+    statusRaw,
+    hint: getTrustDeclarationPublishStatusHint(decl),
     eventId: decl.nostr_event_id || null,
     publicKey: decl.nostr_public_key || null,
     publishedAt,
@@ -10703,6 +10744,55 @@ function getTrustDeclarationStatusClass(decl: any): string {
   if (status === 'Finalized') return 'status-pending';
   if (status === 'Draft') return 'status-inactive';
   return 'status-inactive';
+}
+
+const PUBLISH_STATUS_LABELS: Record<string, string> = {
+  published: 'Published',
+  queued: 'Queued',
+  retrying: 'Retrying',
+  pending: 'Pending',
+  failed: 'Failed',
+  draft: 'Not Published'
+};
+
+const PUBLISH_STATUS_HINTS: Record<string, string> = {
+  queued: 'Event queued for Nostr publish. Will be sent shortly.',
+  retrying: 'Previous publish attempt failed. Runtime will retry automatically.',
+  pending: 'Awaiting signature or publish confirmation.',
+  failed: 'Publish failed. Review logs and retry.',
+  draft: 'Declaration has not been published to relays yet.'
+};
+
+function getTrustDeclarationPublishStatusRaw(decl: any): string {
+  const raw = String(decl?.nostr_publish_status || '').toLowerCase();
+  if (raw) {
+    return raw;
+  }
+  if (decl?.nostr_event_id) {
+    return 'published';
+  }
+  if ((decl?.status || '').toLowerCase() === 'draft') {
+    return 'draft';
+  }
+  return 'pending';
+}
+
+function getTrustDeclarationPublishStatusLabel(decl: any): string {
+  const raw = getTrustDeclarationPublishStatusRaw(decl);
+  if (PUBLISH_STATUS_LABELS[raw]) {
+    return PUBLISH_STATUS_LABELS[raw];
+  }
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Unknown';
+}
+
+function getTrustDeclarationPublishStatusHint(decl: any): string | null {
+  const raw = getTrustDeclarationPublishStatusRaw(decl);
+  return PUBLISH_STATUS_HINTS[raw] || null;
+}
+
+function getTrustDeclarationPublishStatusClass(decl: any): string {
+  const raw = getTrustDeclarationPublishStatusRaw(decl);
+  return `publish-status-${raw || 'pending'}`;
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -21880,6 +21970,58 @@ button:disabled {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
+}
+
+.publish-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+
+.publish-status-pill.publish-status-published {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--success-color);
+}
+
+.publish-status-pill.publish-status-queued {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #1d4ed8;
+}
+
+.publish-status-pill.publish-status-retrying {
+  background: rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.4);
+  color: #c2410c;
+}
+
+.publish-status-pill.publish-status-pending,
+.publish-status-pill.publish-status-draft {
+  background: rgba(107, 114, 128, 0.15);
+  border-color: rgba(107, 114, 128, 0.3);
+  color: #4b5563;
+}
+
+.publish-status-pill.publish-status-failed {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #b91c1c;
+}
+
+.publish-status-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
 }
 
 .admin-import-export-actions {

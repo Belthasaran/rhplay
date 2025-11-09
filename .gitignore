@@ -62,5 +62,6 @@ bin/
 dist-builds/
 README_OLD*.md
 *.db_bak
+.env.private
 
 tests/fixtures/generated/

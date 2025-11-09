@@ -124,3 +124,122 @@
 - Plan UI components (submission modal, moderation queue, admin metadata console).
 - Define Nostr event kinds & payload schema for game submissions/approvals.
 
+---
+
+# Metadata Delta Log Proposal (`updategames.js`)
+
+## 1. Goals
+- Emit a machine-readable log of every mutation performed by `enode.sh jstools/updategames.js`.
+- Include changes to primary tables (`gameversions`, `rhpatches`, `patchblobs`, `attachments`) and ancillary tables populated by follow-up scripts (`gameversion_stats`, `gameversion_levelnames`, `gameversions_translevels`, `levelnames`).
+- Support both baseline diff and append-only capture modes.
+- Allow optional compression (XZ) and splitting per run for efficient packaging and distribution.
+
+## 2. File Layout & Naming
+- Default root: `logs/game_deltas/`.
+- File naming: `delta-YYYYMMDD-HHMMSS.json` (UTC). When `--log-xz` enabled, produce `delta-YYYYMMDD-HHMMSS.json.xz`.
+- `--log-split-size <MB>` starts new segments (`delta-...-partNN.json`).
+- Maintain manifest `delta-manifest.json` tracking file order, SHA256, compression.
+
+## 3. Document Structure
+```json
+{
+  "version": 1,
+  "run_id": "2025-11-09T13:05:01Z",
+  "mode": "append",
+  "source": {
+    "script": "jstools/updategames.js",
+    "git_commit": "abc123",
+    "baseline_db_sha256": "optional"
+  },
+  "entries": [
+    {
+      "timestamp": "2025-11-09T13:05:02.345Z",
+      "table": "gameversions",
+      "action": "insert",
+      "primary_key": { "gameid": "new25110913_1a2b3c4d" },
+      "diff": {
+        "before": null,
+        "after": { "...": "..." }
+      },
+      "artifacts": [
+        {
+          "type": "patch_blob",
+          "path": "patchbin/pblob_deadbeef1234",
+          "sha256": "deadbeef...",
+          "size_bytes": 102400
+        }
+      ]
+    }
+  ],
+  "ancillary": {
+    "gameversion_stats": [
+      {
+        "timestamp": "2025-11-09T13:05:10Z",
+        "action": "upsert",
+        "primary_key": { "gameid": "new...", "version": 1 },
+        "diff": { "before": "...", "after": "..." }
+      }
+    ],
+    "gameversion_levelnames": [
+      {
+        "timestamp": "2025-11-09T13:05:20Z",
+        "action": "insert",
+        "primary_key": { "level_id": 42, "lang": "en" },
+        "diff": { "before": null, "after": { "name": "Example" } }
+      }
+    ],
+    "gameversions_translevels": [
+      {
+        "timestamp": "2025-11-09T13:05:25Z",
+        "action": "insert",
+        "primary_key": { "gameid": "new...", "translevel": 45 },
+        "diff": { "before": null, "after": { "notes": "..." } }
+      }
+    ],
+    "levelnames": [
+      {
+        "timestamp": "2025-11-09T13:05:30Z",
+        "action": "update",
+        "primary_key": { "level_id": 42, "lang": "en" },
+        "diff": { "before": { "name": "Old" }, "after": { "name": "New" } }
+      }
+    ]
+  }
+}
+```
+
+### Entry Fields
+- `timestamp`: ISO 8601 UTC.
+- `table`: affected table.
+- `action`: `insert`, `update`, `delete`.
+- `primary_key`: map of columns forming the key.
+- `diff.before` / `diff.after`: capture relevant columns (omit raw BLOBs; reference via hashes).
+- `artifacts`: optional array linking to files produced (patch blobs, screenshots).
+
+## 4. Capture Modes
+- **Append Mode (`--log-append`)**: log each mutation as the script executes.
+- **Baseline Diff Mode (`--log-baseline path/to/original.db`)**: compare final DB to baseline; emit entries for new/updated/deleted records.
+- Both modes can run together (append for realtime, baseline for verification).
+
+## 5. Compression & Splitting Options
+- `--log-xz`: stream entries through XZ compressor.
+- `--log-split-size <MB>`: rotate files when size threshold reached; maintain manifest.
+- `--log-dir <path>`: override output directory.
+
+## 6. Publishing Hooks
+- Provide CLI `enode.sh jstools/export-delta-to-nostr.js` that consumes delta files:
+  - Emits Nostr events for each entry (e.g., new game, updated patch, levelname change).
+  - Queues events in `nostr_cache_out`.
+  - Optionally bundle delta segments into `.json.xz` for distribution via HTTP/relay.
+- Offer `--publish-levelnames` flag to send ancillary levelnames/level-id updates once imports complete (after running `lmlevelnames/import_*` scripts).
+
+## 7. Ingest & Verification
+- Build validator to replay delta entries on a pristine DB to ensure determinism.
+- Record SHA256 per delta file; clients compare before ingest.
+- Support resumable ingest by persisting last processed `run_id + entry index`.
+
+## 8. Future Considerations
+- Add signatures (admin keypair) to delta manifests for authenticity.
+- Extend schema with `notes` / `tags` per entry to group changes (e.g., “SMWC batch 2025-11-09”).
+- Provide UI in Nostr admin tools to list delta runs, inspect entries, and trigger re-publish.
+

@@ -203,3 +203,10 @@
 
 - **Distribution Strategy**
   - When game metadata tables change (new gameversions, attachments, patch blobs), ensure Nostr events and archive feeds deliver the delta so new clients can sync without direct database access.
+- **Game Update Toolchain (`enode.sh jstools/updategames.js`)**
+  - Script currently ingests SMWC additions/updates, writes to `gameversions`, `rhpatches`, `patchblobs`, and `attachments` tables, and stores binaries in `patchbin.db`.
+  - Enhance workflow to emit a consolidated metadata delta log covering all changes the script applies.
+    - **Option A:** Compare updated DB to a baseline “original” and generate events for every new game/version/attachment detected.
+    - **Option B:** Append incremental log entries during each update run capturing mutations as they happen (preferred for live tracking).
+  - Build a converter that reads the delta log and produces Nostr events (or packed archive bundles) for distribution, so clients can ingest updates without full DB snapshots.
+  - Ensure resulting events link to stored patch blobs/screenshots (hash references) and respect the moderation workflow (approved vs pending).

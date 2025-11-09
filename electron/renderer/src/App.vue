@@ -518,6 +518,9 @@
                   </div>
 
                 <div class="trust-declarations-actions">
+                  <button class="btn-secondary" @click="openTrustSummaryModal" :disabled="!onlinePrimaryPubkey">
+                    View Trust Summary
+                  </button>
                   <button class="btn-secondary" @click="importTrustDeclarations">Import</button>
                   <button class="btn-primary" @click="exportAllTrustDeclarations">Export All</button>
                 </div>
@@ -6232,6 +6235,12 @@
     </div>
   </div>
 
+<TrustSummaryModal
+  :visible="trustSummaryModalOpen"
+  :pubkey="onlinePrimaryPubkey"
+  @close="trustSummaryModalOpen = false"
+/>
+
   <!-- Upload File Modal (standalone) -->
   <div v-if="uploadFileModalOpen" class="modal-backdrop" @click.self="closeUploadFileModal">
     <div class="modal upload-file-modal">
@@ -6826,6 +6835,7 @@ import {
 } from './themeConfig';
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
+import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -8074,6 +8084,7 @@ const showTrustDeclarationDetailsModal = ref(false);
 const editingTrustDeclaration = ref<any>({});
 const trustDeclarationDetailsTab = ref('summary');
 const localTrustOverride = ref(false);
+const trustSummaryModalOpen = ref(false);
 
 const trustAssignments = ref<TrustAssignmentRow[]>([]);
 const trustAssignmentsLoading = ref(false);
@@ -10577,6 +10588,14 @@ async function importTrustDeclarations() {
 
 async function importTrustDeclarationBackup() {
   await importTrustDeclarations();
+}
+
+function openTrustSummaryModal() {
+  if (!onlinePrimaryPubkey.value) {
+    alert('Select a profile with an active Nostr key to view trust summary.');
+    return;
+  }
+  trustSummaryModalOpen.value = true;
 }
 
 async function exportAllAdminPublicKeys() {

@@ -7039,6 +7039,7 @@ const usb2snesSshStatusLabel = computed(() => {
 let removeUsb2snesSshStatusListener: (() => void) | null = null;
 let removeUsb2snesFxpStatusListener: (() => void) | null = null;
 let removeTrustChangedListener: (() => void) | null = null;
+let removeNostrStatusListener: (() => void) | null = null;
 let trustChangeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Version management (must be declared before watchers use it)
@@ -9922,7 +9923,29 @@ async function loadTrustAssignmentsList(pubkeyFilter?: string | null) {
   }
 }
 
-function handleTrustChangeEvent(payload: any) {
+async function refreshTrustData() {
+  try {
+    await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+  } catch (error) {
+    console.warn('[Trust] Failed to refresh assignments after change:', error);
+  }
+
+  try {
+    await loadTrustDeclarationsList();
+  } catch (error) {
+    console.warn('[Trust] Failed to refresh declarations after change:', error);
+  }
+
+  if (trustSummaryModalOpen.value && trustSummaryModalRef.value) {
+    try {
+      trustSummaryModalRef.value.refresh();
+    } catch (error) {
+      console.warn('[Trust] Failed to refresh summary modal:', error);
+    }
+  }
+}
+
+function scheduleTrustDataRefresh() {
   if (trustChangeRefreshTimer) {
     clearTimeout(trustChangeRefreshTimer);
     trustChangeRefreshTimer = null;
@@ -9930,26 +9953,24 @@ function handleTrustChangeEvent(payload: any) {
 
   trustChangeRefreshTimer = setTimeout(async () => {
     trustChangeRefreshTimer = null;
-    try {
-      await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
-    } catch (error) {
-      console.warn('[Trust] Failed to refresh assignments after change:', error);
-    }
-
-    try {
-      await loadTrustDeclarationsList();
-    } catch (error) {
-      console.warn('[Trust] Failed to refresh declarations after change:', error);
-    }
-
-    if (trustSummaryModalOpen.value && trustSummaryModalRef.value) {
-      try {
-        trustSummaryModalRef.value.refresh();
-      } catch (error) {
-        console.warn('[Trust] Failed to refresh summary modal:', error);
-      }
-    }
+    await refreshTrustData();
   }, 200);
+}
+
+function handleTrustChangeEvent(payload: any) {
+  scheduleTrustDataRefresh();
+}
+
+function handleNostrStatusEvent(status: any) {
+  if (!status) {
+    return;
+  }
+  if (onlineActiveTab.value !== 'trust-declarations' && onlineActiveTab.value !== 'trust-assignments') {
+    // Still refresh in background but less frequently
+    scheduleTrustDataRefresh();
+    return;
+  }
+  scheduleTrustDataRefresh();
 }
 
 function buildAssignmentScopePayload() {
@@ -18356,8 +18377,12 @@ onMounted(async () => {
       }
     }
 
-    if (typeof (window as any).electronAPI?.onTrustChanged === 'function') {
-      removeTrustChangedListener = (window as any).electronAPI.onTrustChanged(handleTrustChangeEvent);
+    const api = (window as any).electronAPI;
+    if (typeof api?.onTrustChanged === 'function') {
+      removeTrustChangedListener = api.onTrustChanged(handleTrustChangeEvent);
+    }
+    if (typeof api?.nostrRuntime?.onStatus === 'function') {
+      removeNostrStatusListener = api.nostrRuntime.onStatus(handleNostrStatusEvent);
     }
   }
   
@@ -18386,6 +18411,10 @@ onUnmounted(() => {
   if (removeTrustChangedListener) {
     removeTrustChangedListener();
     removeTrustChangedListener = null;
+  }
+  if (removeNostrStatusListener) {
+    removeNostrStatusListener();
+    removeNostrStatusListener = null;
   }
   if (trustChangeRefreshTimer) {
     clearTimeout(trustChangeRefreshTimer);

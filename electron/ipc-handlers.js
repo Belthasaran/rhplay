@@ -216,6 +216,47 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('moderation:block-target', (_event, payload = {}) => {
+    try {
+      const result = moderationManager.createModerationAction({
+        actorPubkey: payload.actorPubkey,
+        actionType: payload.actionType || 'block-user',
+        target: payload.target,
+        scope: payload.scope,
+        reason: payload.reason,
+        content: payload.content || {}
+      });
+      return result;
+    } catch (error) {
+      console.error('[moderation:block-target] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('moderation:revoke-action', (_event, payload = {}) => {
+    try {
+      const result = moderationManager.revokeModerationAction({
+        actorPubkey: payload.actorPubkey,
+        actionId: payload.actionId,
+        reason: payload.reason
+      });
+      return result;
+    } catch (error) {
+      console.error('[moderation:revoke-action] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('moderation:list-actions', (_event, payload = {}) => {
+    try {
+      const actions = moderationManager.listModerationActions({ target: payload.target, status: payload.status });
+      return { success: true, actions };
+    } catch (error) {
+      console.error('[moderation:list-actions] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('trust:permissions:get', (_event, { pubkey, scope } = {}) => {
     try {
       if (!pubkey) {

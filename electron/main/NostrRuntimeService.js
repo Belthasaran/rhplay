@@ -678,6 +678,57 @@ class NostrRuntimeService extends EventEmitter {
     }
   }
 
+  updateAdminDeclarationPublishState(declarationUuid, options = {}) {
+    if (!declarationUuid) {
+      return;
+    }
+    try {
+      const clientDb = this.dbManager.getConnection('clientdata');
+      const {
+        status = null,
+        relays = undefined,
+        eventId = null,
+        setPublishedAt = false
+      } = options;
+
+      const sets = ["updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"];
+      const params = [];
+
+      if (status) {
+        sets.push('nostr_publish_status = ?');
+        params.push(status);
+      }
+
+      if (Array.isArray(relays)) {
+        sets.push('nostr_published_to_relays = ?');
+        params.push(JSON.stringify(relays));
+      } else if (relays === null) {
+        sets.push('nostr_published_to_relays = NULL');
+      }
+
+      if (eventId) {
+        sets.push('nostr_event_id = COALESCE(nostr_event_id, ?)');
+        params.push(eventId);
+      }
+
+      if (setPublishedAt) {
+        sets.push("nostr_published_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')");
+      }
+
+      const sql = `
+        UPDATE admindeclarations
+        SET ${sets.join(', ')}
+        WHERE declaration_uuid = ?
+      `;
+      clientDb.prepare(sql).run(...params, declarationUuid);
+    } catch (error) {
+      this.logger.warn(
+        `[NostrRuntimeService] Failed to update publish state for declaration ${declarationUuid}:`,
+        error.message
+      );
+    }
+  }
+
   attachWindowListeners() {
     BrowserWindow.getAllWindows().forEach((win) => {
       this.sendStatusToWindow(win, this.getStatusSnapshot());
@@ -1284,6 +1335,13 @@ class NostrRuntimeService extends EventEmitter {
             this.logger.warn(
               `[NostrRuntimeService] Event ${event.id} (${priority.bucket}) failed to publish to any relay; will retry after cooldown.`
             );
+            if (row.table_name === 'admindeclarations' && row.record_uuid) {
+              this.updateAdminDeclarationPublishState(row.record_uuid, {
+                status: 'retrying',
+                relays: failures.map((result) => result.relayUrl).filter(Boolean),
+                setPublishedAt: false
+              });
+            }
             this.localDb.updateEventStatus('cache_out', event.id, 0);
             this.outgoingThrottleUntil = Math.max(
               Date.now() + Math.max(MESSAGE_THROTTLE_COOLDOWN_MS, this.relayBaseBackoffMs),
@@ -1295,6 +1353,14 @@ class NostrRuntimeService extends EventEmitter {
 
           this.localDb.updateEventStatus('cache_out', event.id, 2);
           this.localDb.moveEventToStore('cache_out', 'store_out', event.id);
+          if (row.table_name === 'admindeclarations' && row.record_uuid) {
+            this.updateAdminDeclarationPublishState(row.record_uuid, {
+              status: 'published',
+              relays: successes.map((result) => result.relayUrl).filter(Boolean),
+              eventId: event.id,
+              setPublishedAt: true
+            });
+          }
           this.recordMessageUnits(units);
           sentCount += 1;
         } catch (error) {
@@ -1303,6 +1369,13 @@ class NostrRuntimeService extends EventEmitter {
             error.message
           );
           this.localDb.updateEventStatus('cache_out', event.id, 0);
+          if (row.table_name === 'admindeclarations' && row.record_uuid) {
+            this.updateAdminDeclarationPublishState(row.record_uuid, {
+              status: 'retrying',
+              relays: null,
+              setPublishedAt: false
+            });
+          }
         }
       }
     } finally {

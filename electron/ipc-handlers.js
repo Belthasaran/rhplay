@@ -18,6 +18,7 @@ const { HostFP } = require('./main/HostFP');
 const TrustManager = require('./utils/TrustManager');
 const PermissionHelper = require('./utils/PermissionHelper');
 const ModerationManager = require('./utils/ModerationManager');
+const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
 
 /**
  * Get keyguard key from session (for encryption/decryption)
@@ -7433,6 +7434,7 @@ function registerDatabaseHandlers(dbManager) {
       // Check if this is a Nostr key (returns nostr_event_id and nostr_event)
       const isNostrKey = signResult.nostr_event_id !== undefined;
       
+      let nostrQueued = false;
       if (isNostrKey) {
         // Nostr key: Update with Nostr event data including all serialization fields
         db.prepare(`
@@ -7470,6 +7472,32 @@ function registerDatabaseHandlers(dbManager) {
           now,
           declarationUuid
         );
+
+        if (signResult.nostr_event) {
+          try {
+            const nostrEvent =
+              typeof signResult.nostr_event === 'string'
+                ? JSON.parse(signResult.nostr_event)
+                : signResult.nostr_event;
+            const nostrDBManager = new NostrLocalDBManager();
+            try {
+              await nostrDBManager.initialize();
+              nostrQueued = nostrDBManager.addEvent(
+                'cache_out',
+                nostrEvent,
+                0,
+                null,
+                'admindeclarations',
+                declarationUuid,
+                null
+              );
+            } finally {
+              nostrDBManager.closeAll();
+            }
+          } catch (error) {
+            console.error('[online:admin-declaration:sign] Failed to enqueue declaration for Nostr publish:', error);
+          }
+        }
       } else {
         // Non-Nostr key: Standard update
         db.prepare(`
@@ -7495,6 +7523,16 @@ function registerDatabaseHandlers(dbManager) {
           now,
           declarationUuid
         );
+      }
+
+      if (nostrQueued) {
+        db.prepare(`
+          UPDATE admindeclarations
+          SET nostr_publish_status = 'queued',
+              nostr_published_at = NULL,
+              nostr_published_to_relays = NULL
+          WHERE declaration_uuid = ?
+        `).run(declarationUuid);
       }
       
       broadcastTrustChange({
@@ -7735,7 +7773,6 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:publish-keypair-to-nostr', async (event, { keypairType, keypairUuid, signingKeypairUuid, profileUuid }) => {
     try {
-      const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
       const { finalizeEvent } = require('nostr-tools');
       const db = dbManager.getConnection('clientdata');
       const keyguardKey = getKeyguardKey(event);

@@ -27,8 +27,8 @@ Installers must create the settings directory when missing, but never overwrite 
    - Default action is “skip” when file already present; user may opt into overwrite.
 2. **Working directory selection**
    - Prompt when any database requires provisioning/overwrite.
-  - Default to per-OS working directory table above; allow override.
-   - Copy `electron/db_temp/dbmanifest.json` into the working directory for transparency.
+   - Default to per-OS working directory table above; allow override.
+   - Copy `electron/dbmanifest.json` into the working directory for transparency.
 3. **Artifact sourcing**
    - Required files:
      - Base archive (`tar.xz`) per database (`manifest.<db>.base`).
@@ -43,7 +43,7 @@ Installers must create the settings directory when missing, but never overwrite 
    - Iterate patches in lexicographic order; decompress `.sql.xz`, run SQL statements against staging database (transaction-wrapped), delete temporary SQL.
    - Copy finished database to settings directory; keep archives for reuse.
 5. **Embedded databases**
-   - `clientdata.db` seed bundled under `extraResources` (`db/clientdata.db`) and copied automatically.
+   - `clientdata.db` seed bundled under `extraResources` (`db/clientdata.db.initial.xz`), decompressed, and copied automatically.
 6. **Post-provision tasks**
    - Copy portable runtime to install location (`%LOCALAPPDATA%\Programs\RHTools`, `/Applications/RHTools.app`, `/opt/RHTools`, or user-selected path).
    - Create version-agnostic launcher and platform-appropriate shortcuts/menu entries.
@@ -62,8 +62,16 @@ Installers must create the settings directory when missing, but never overwrite 
    - Add automated smoke tests invoking `prepare_databases.js --ensure-dirs --provision --write-plan` against temporary directories.
    - Validate hash comparisons and patch sequencing; ensure offline-friendly failure messaging.
 
+### Windows Installer Interaction
+- Custom NSIS page (before Finish) runs the provisioning script in “plan” mode (`--ensure-dirs --write-plan --write-summary`) after files are copied.
+- The page displays a detailed summary, highlights which databases need work, and links directly to the ArDrive folder for manual downloads.
+- Users can trigger “Re-scan” to regenerate the plan after placing files manually.
+- Proceeding past the page prompts for confirmation and, if approved, runs `--provision`. Failures keep the user on the page with clear guidance; success requires all remaining actions to resolve before finishing.
+- Install flow is strictly per-user (`allowElevation: false`, no “all users” option).
+- Text/JSON summaries are written to `%TEMP%\rhtools-plan.{txt,json}` for diagnostics.
+
 ### Next Steps
-1. Implement shared provisioning module (`prepare_databases.js` scaffolded) to drive both installer UIs and CLI testing.
+1. Expand automated testing to cover interactive installer flows (plan, rescan, provision success/failure).
 2. Finalize downloader + patch applier implementations with retry/backoff, streaming decompression, and hash verification.
 3. Integrate per-OS installer builders, wiring UI to the provisioning module.
 4. Author end-user docs describing installer choices, manual download option, and recovery steps.

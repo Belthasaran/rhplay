@@ -74,6 +74,7 @@ function parseArgs(argv) {
     ensureDirs: false,
     provision: false,
     writePlanPath: null,
+    writeSummaryPath: null,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -111,6 +112,11 @@ function parseArgs(argv) {
       opts.writePlanPath = path.resolve(argv[++i]);
     } else if (arg.startsWith('--write-plan=')) {
       opts.writePlanPath = path.resolve(arg.substring('--write-plan='.length));
+    } else if (arg === '--write-summary') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --write-summary');
+      opts.writeSummaryPath = path.resolve(argv[++i]);
+    } else if (arg.startsWith('--write-summary=')) {
+      opts.writeSummaryPath = path.resolve(arg.substring('--write-summary='.length));
     } else if (arg.startsWith('--')) {
       exitWithError(`Unknown option "${arg}". Use --help for usage details.`);
     } else {
@@ -283,6 +289,46 @@ function writePlanIfRequested(plan, filePath) {
     fs.mkdirSync(dir, { recursive: true });
   }
   fs.writeFileSync(filePath, JSON.stringify(plan, null, 2));
+}
+
+function writeSummaryIfRequested(plan, filePath) {
+  if (!filePath) return;
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const lines = [];
+  const provisionRequired = plan.databases.some((db) => db.action !== 'skip');
+  lines.push(`PROVISION_REQUIRED=${provisionRequired ? 'yes' : 'no'}`);
+  lines.push(`USER_DATA_DIR=${plan.userDataDir}`);
+  lines.push(`WORKING_DIR=${plan.workingDir}`);
+  lines.push(`MANIFEST=${plan.manifestPath}`);
+  lines.push('');
+  lines.push('DATABASES:');
+  plan.databases.forEach((db) => {
+    const summary = [
+      `status=${db.action}`,
+      `exists=${db.exists}`,
+      `overwrite=${db.overwrite}`,
+      `embedded=${db.embedded}`,
+    ].join(', ');
+    lines.push(`- ${db.name}: ${summary}`);
+    if (db.manifestSummary && db.manifestSummary.base) {
+      const base = db.manifestSummary.base;
+      lines.push(`    base: ${base.file_name} (${base.size || 'unknown'} bytes)`);
+      lines.push(`    patches: ${base.patchCount}`);
+    }
+  });
+  if (plan.downloads.length > 0) {
+    lines.push('');
+    lines.push('DOWNLOADS_PENDING:');
+    plan.downloads.forEach((dl) => {
+      lines.push(`- ${dl.database}: ${dl.manifestKey}`);
+    });
+  }
+  lines.push('');
+  lines.push('ArDrive (manual download option): https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH');
+  fs.writeFileSync(filePath, lines.join('\n'));
 }
 
 function copyManifestToWorkingDir(manifestPath, workingDir) {
@@ -585,9 +631,13 @@ async function main() {
 
   if (opts.provision) {
     plan.provisionResult = await executeProvision(plan, manifest);
+    const finalDbStatus = inspectDatabases(opts, manifest);
+    plan.databases = finalDbStatus;
+    plan.downloads = [];
   }
 
   writePlanIfRequested(plan, opts.writePlanPath);
+  writeSummaryIfRequested(plan, opts.writeSummaryPath);
   console.log(JSON.stringify(plan, null, 2));
 }
 

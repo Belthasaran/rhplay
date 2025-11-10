@@ -171,7 +171,8 @@
       "node_modules/@noble/post-quantum/**/*",
       "native-modules/serialport-nonblock/build/**/*",
       "jsutils/**/*",
-      "electron/sql/migrations/**/*"
+      "electron/sql/migrations/**/*",
+      "electron/installer/**/*"
     ],
     "win": {
       "target": [
@@ -196,6 +197,8 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": false,
+      "include": "electron/installers/win/rhtools-preinstall.nsh",
       "artifactName": "${productName}-${version}-setup.exe"
     },
     "linux": {

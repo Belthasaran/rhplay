@@ -328,6 +328,7 @@ enode.sh electron/installer/prepare_databases.js \
 - `--ensure-dirs` - Create settings + working directories and copy manifest + embedded seeds.
 - `--provision` - Execute downloads, extraction, SQL patching, and final copy steps.
 - `--write-plan <path>` - Persist JSON action plan.
+- `--write-summary <path>` - Persist human-readable summary (used by installers for UI).
 - `--help` - Show usage information.
 
 **Output**: JSON summary describing directory paths, planned actions per database (`skip`, `copy-embedded`, `provision-from-manifest`), downloads required, and—when `--provision` is set—the execution results for each database (completed, skipped, errors).

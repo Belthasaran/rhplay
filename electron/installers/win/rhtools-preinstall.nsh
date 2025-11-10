@@ -6,10 +6,10 @@
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
-!define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
-!define RHTOOLS_SCRIPT_ALT1 "electron/db/prepare_databases.js"
-!define RHTOOLS_SCRIPT_ALT2 "db/prepare_databases.js"
-!define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
+!define RHTOOLS_SCRIPT_PRIMARY "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js"
+!define RHTOOLS_SCRIPT_SECONDARY "$INSTDIR\resources\app.asar\electron\installer\prepare_databases.js"
+!define RHTOOLS_SCRIPT_TERTIARY "$INSTDIR\resources\db\prepare_databases.js"
+!define RHTOOLS_MANIFEST_PRIMARY "$INSTDIR\resources\db\dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
 Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
@@ -129,22 +129,25 @@ Function RHTools_DetermineArgs
   StrCmp $RHToolsManifestPath "" 0 +3
     MessageBox MB_ICONSTOP "Unable to locate dbmanifest.json within the installed package." /SD IDOK
     Abort
-  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" --run-cli-script "$RHToolsCliCommand" --manifest "$RHToolsManifestPath"'
+  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$RHToolsCliCommand" --manifest "$RHToolsManifestPath"'
 FunctionEnd
 
 Function RHTools_FindScriptPath
-  StrCpy $RHToolsCliCommand "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js"
-  IfFileExists "$RHToolsCliCommand" +4 0
-    Return
-  StrCpy $RHToolsCliCommand "$INSTDIR\resources\db\prepare_databases.js"
-  IfFileExists "$RHToolsCliCommand" +3 0
-    Return
+  StrCpy $RHToolsCliCommand ${RHTOOLS_SCRIPT_PRIMARY}
+  IfFileExists "$RHToolsCliCommand" done
+  StrCpy $RHToolsCliCommand ${RHTOOLS_SCRIPT_SECONDARY}
+  IfFileExists "$RHToolsCliCommand" done
+  StrCpy $RHToolsCliCommand ${RHTOOLS_SCRIPT_TERTIARY}
+  IfFileExists "$RHToolsCliCommand" done
   StrCpy $RHToolsCliCommand ""
+  Return
+ done:
+  Return
 FunctionEnd
 
 Function RHTools_FindManifestPath
-  StrCpy $RHToolsManifestPath "$INSTDIR\resources\db\dbmanifest.json"
-  IfFileExists "$RHToolsManifestPath" +3 0
+  StrCpy $RHToolsManifestPath ${RHTOOLS_MANIFEST_PRIMARY}
+  IfFileExists "$RHToolsManifestPath" 0 +3
     Return
   StrCpy $RHToolsManifestPath ""
 FunctionEnd

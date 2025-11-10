@@ -1,14 +1,57 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { DatabaseManager } = require('./database-manager');
 const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
 
+function resolveLogPath() {
+    const dirs = [
+        process.env.TEMP,
+        process.env.TMP,
+        os.tmpdir(),
+        path.dirname(process.execPath),
+        process.cwd(),
+    ].filter(Boolean);
+
+    for (const dir of dirs) {
+        try {
+            const candidate = path.join(dir, 'rhtools-installer.log');
+            fs.appendFileSync(candidate, '', { encoding: 'utf8' });
+            return candidate;
+        } catch {
+            // try next directory
+        }
+    }
+    return null;
+}
+
+const tempLogPath = resolveLogPath();
+function logTemp(message) {
+    if (tempLogPath) {
+        try {
+            fs.appendFileSync(tempLogPath, `[${new Date().toISOString()}] PID ${process.pid} ${message}\n`, { encoding: 'utf8' });
+            return;
+        } catch {
+            // fall through to console
+        }
+    }
+    console.log(`[installer-log:${process.pid}] ${message}`);
+}
+
+logTemp(`argv=${process.argv.join(' ')}`);
+
 const CLI_RUN_FLAG = '--run-cli-script';
 const cliFlagIndex = process.argv.indexOf(CLI_RUN_FLAG);
 const isInstallerCli = cliFlagIndex !== -1;
+logTemp(`isInstallerCli=${isInstallerCli} index=${cliFlagIndex}`);
 
 if (isInstallerCli) {
+    process.env.ELECTRON_RUN_AS_NODE = '1';
+    if (app && typeof app.disableHardwareAcceleration === 'function') {
+        app.disableHardwareAcceleration();
+    }
     const scriptPath = process.argv[cliFlagIndex + 1];
     const scriptArgs = process.argv.slice(cliFlagIndex + 2);
     (async () => {
@@ -27,11 +70,21 @@ if (isInstallerCli) {
             if (!runner) {
                 throw new Error(`CLI script ${resolvedScript} does not export a run function.`);
             }
+            logTemp(`Running CLI script ${resolvedScript} args=${scriptArgs.join(' ')}`);
             await runner(scriptArgs);
-            app.exit(0);
+            if (app && typeof app.exit === 'function') {
+                app.exit(0);
+            } else {
+                process.exit(0);
+            }
         } catch (error) {
             console.error('[installer-cli] Failed to execute script:', error);
-            app.exit(1);
+            logTemp(`CLI script failed: ${error.stack || error}`);
+            if (app && typeof app.exit === 'function') {
+                app.exit(1);
+            } else {
+                process.exit(1);
+            }
         }
     })();
 }

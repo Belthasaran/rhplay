@@ -337,9 +337,7 @@ function copyManifestToWorkingDir(manifestPath, workingDir) {
   return destPath;
 }
 
-async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
-  ensureDirectory(userDataDir);
-
+function locateEmbeddedClientSeed() {
   const candidates = [
     path.resolve(__dirname, '..', 'packed_db', 'clientdata.db.initial.xz'),
     path.resolve(__dirname, '..', 'db', 'clientdata.db'),
@@ -350,7 +348,13 @@ async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
     candidates.push(path.join(process.resourcesPath, 'db', 'clientdata.db'));
   }
 
-  const source = candidates.find((candidate) => fs.existsSync(candidate));
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
+  ensureDirectory(userDataDir);
+
+  const source = locateEmbeddedClientSeed();
 
   if (!source) {
     throw new Error(`Embedded clientdata.db seed not found in expected locations.`);
@@ -620,12 +624,19 @@ async function run(argv) {
   if (opts.ensureDirs) {
     const manifestCopyPath = copyManifestToWorkingDir(opts.manifestPath, opts.workingDir);
     plan.workingManifestPath = manifestCopyPath;
-
-    try {
-      const stagedClientSeed = await stageEmbeddedClientDb(opts.userDataDir, false);
-      plan.clientdataSeedPath = stagedClientSeed;
-    } catch (err) {
-      plan.clientdataSeedError = err.message;
+    const embeddedSeed = locateEmbeddedClientSeed();
+    if (embeddedSeed) {
+      plan.clientdataSeedSource = embeddedSeed;
+      if (opts.provision) {
+        try {
+          const stagedClientSeed = await stageEmbeddedClientDb(opts.userDataDir, false);
+          plan.clientdataSeedPath = stagedClientSeed;
+        } catch (err) {
+          plan.clientdataSeedError = err.message;
+        }
+      }
+    } else {
+      plan.clientdataSeedError = 'Embedded clientdata seed not found.';
     }
   }
 

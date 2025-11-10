@@ -315,6 +315,7 @@ enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json 
 ```bash
 enode.sh electron/installer/prepare_databases.js \
   --ensure-dirs \
+  --provision \
   --write-plan=/tmp/rhtools-plan.json \
   --overwrite rhdata.db,patchbin.db
 ```
@@ -325,10 +326,11 @@ enode.sh electron/installer/prepare_databases.js \
 - `--working-dir <path>` - Override temporary working directory.
 - `--overwrite <csv>` - Force provisioning for listed databases.
 - `--ensure-dirs` - Create settings + working directories and copy manifest + embedded seeds.
+- `--provision` - Execute downloads, extraction, SQL patching, and final copy steps.
 - `--write-plan <path>` - Persist JSON action plan.
 - `--help` - Show usage information.
 
-**Output**: JSON summary describing directory paths, planned actions per database (`skip`, `copy-embedded`, `provision-from-manifest`), downloads required, and staged artifacts (manifest copy, embedded `clientdata.db` seed).
+**Output**: JSON summary describing directory paths, planned actions per database (`skip`, `copy-embedded`, `provision-from-manifest`), downloads required, and—when `--provision` is set—the execution results for each database (completed, skipped, errors).
 
 ---
 

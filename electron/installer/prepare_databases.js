@@ -3,11 +3,11 @@
 /**
  * prepare_databases.js
  *
- * Utility invoked by future graphical installers to plan and stage database
- * provisioning based on electron/dbmanifest.json. At this stage we focus on
- * directory detection, manifest inspection, and action planning. Subsequent
- * iterations will download archives, apply SQL patches, and perform final
- * installation steps.
+ * Utility invoked by graphical installers to plan and execute database
+ * provisioning based on electron/dbmanifest.json. The script can generate a
+ * plan only, or perform the full workflow: download archives (IPFS first,
+ * ArDrive/Arweave fallback), extract base databases, apply SQL patches, and
+ * move finished databases into the application settings directory.
  *
  * Usage:
  *   prepare_databases.js [options]
@@ -18,6 +18,7 @@
  *   --working-dir <path>      Override temporary working directory
  *   --overwrite <names>       Comma-separated list of databases to overwrite (default: none)
  *   --ensure-dirs             Create user data + working directories if missing
+ *   --provision               Execute provisioning workflow based on manifest
  *   --write-plan <file>       Write JSON plan to file in addition to stdout
  *   --help                    Show usage information
  *
@@ -28,8 +29,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-
-const DEFAULT_MANIFEST = path.resolve(__dirname, '..', 'dbmanifest.json');
+const { pipeline } = require('stream/promises');
+const { Readable } = require('stream');
+const lzma = require('lzma-native');
+const tar = require('tar');
+const Database = require('better-sqlite3');
 
 const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
@@ -47,6 +51,7 @@ Options:
   --working-dir <path>      Override temporary working directory
   --overwrite <names>       Comma-separated list of databases to overwrite (default: none)
   --ensure-dirs             Create the user data and working directories if they do not exist
+  --provision               Execute provisioning workflow (download/apply/copy)
   --write-plan <file>       Write action plan JSON to the specified file
   --help                    Show this help message
 
@@ -62,11 +67,12 @@ function exitWithError(message) {
 
 function parseArgs(argv) {
   const opts = {
-    manifestPath: DEFAULT_MANIFEST,
+    manifestPath: null,
     userDataDir: null,
     workingDir: null,
     overwrite: new Set(),
     ensureDirs: false,
+    provision: false,
     writePlanPath: null,
   };
 
@@ -98,6 +104,8 @@ function parseArgs(argv) {
       parseOverwriteList(opts.overwrite, arg.substring('--overwrite='.length));
     } else if (arg === '--ensure-dirs') {
       opts.ensureDirs = true;
+    } else if (arg === '--provision') {
+      opts.provision = true;
     } else if (arg === '--write-plan') {
       if (i + 1 >= argv.length) exitWithError('Missing value after --write-plan');
       opts.writePlanPath = path.resolve(argv[++i]);
@@ -167,6 +175,16 @@ function loadManifest(manifestPath) {
   } catch (err) {
     exitWithError(`Failed to parse manifest JSON: ${err.message}`);
   }
+}
+
+function normalizeWorkingPaths(plan) {
+  if (!fs.existsSync(plan.workingDir)) {
+    fs.mkdirSync(plan.workingDir, { recursive: true });
+  }
+  return {
+    downloadsDir: plan.workingDir,
+    stagingDir: path.join(plan.workingDir, 'staging'),
+  };
 }
 
 function sha256File(filePath) {
@@ -242,6 +260,7 @@ function buildPlan(opts, dbStatus) {
     ensureDirs: opts.ensureDirs,
     databases: dbStatus,
     downloads: [],
+    provision: opts.provision,
   };
 
   for (const db of dbStatus) {
@@ -272,18 +291,273 @@ function copyManifestToWorkingDir(manifestPath, workingDir) {
   return destPath;
 }
 
-function stageEmbeddedClientDb(userDataDir) {
-  const source = path.resolve(__dirname, '..', 'db_temp', 'clientdata.db');
-  if (!fs.existsSync(source)) {
-    throw new Error(`Embedded clientdata.db seed not found at ${source}`);
+async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
+  ensureDirectory(userDataDir);
+
+  const candidates = [
+    path.resolve(__dirname, '..', 'packed_db', 'clientdata.db.initial.xz'),
+    path.resolve(__dirname, '..', 'db', 'clientdata.db'),
+  ];
+
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'db', 'clientdata.db.initial.xz'));
+    candidates.push(path.join(process.resourcesPath, 'db', 'clientdata.db'));
   }
-  const destination = path.join(userDataDir, 'clientdata.db.seed');
-  fs.copyFileSync(source, destination);
+
+  const source = candidates.find((candidate) => fs.existsSync(candidate));
+
+  if (!source) {
+    throw new Error(`Embedded clientdata.db seed not found in expected locations.`);
+  }
+
+  const destination = path.join(userDataDir, 'clientdata.db');
+  if (!overwrite && fs.existsSync(destination)) {
+    return destination;
+  }
+  if (overwrite && fs.existsSync(destination)) {
+    fs.unlinkSync(destination);
+  }
+
+  if (source.endsWith('.xz')) {
+    const tempPath = `${destination}.tmp`;
+    try {
+      await decompressXz(source, tempPath);
+      fs.renameSync(tempPath, destination);
+    } catch (err) {
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath);
+      }
+      throw err;
+    }
+  } else {
+    fs.copyFileSync(source, destination);
+  }
+
   return destination;
 }
 
-function main() {
+const IPFS_GATEWAYS = [
+  'https://w3s.link/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+  'https://ipfs.io/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/',
+];
+
+async function downloadFromUrl(url, destPath, expectedSha256) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000); // 4 minutes
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
+  clearTimeout(timeout);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  }
+
+  const tempPath = `${destPath}.download`;
+  const writeStream = fs.createWriteStream(tempPath);
+  const bodyStream = Readable.fromWeb(response.body);
+  await pipeline(bodyStream, writeStream);
+  writeStream.close();
+
+  if (expectedSha256) {
+    const actualSha = sha256File(tempPath);
+    if (actualSha !== expectedSha256) {
+      fs.unlinkSync(tempPath);
+      throw new Error(`SHA-256 mismatch (expected ${expectedSha256}, got ${actualSha})`);
+    }
+  }
+
+  fs.renameSync(tempPath, destPath);
+}
+
+async function ensureArtifact(spec, workingDir) {
+  const destPath = path.join(workingDir, spec.file_name);
+  if (fs.existsSync(destPath) && (!spec.sha256 || sha256File(destPath) === spec.sha256)) {
+    return destPath;
+  }
+
+  let lastError = null;
+
+  if (spec.ipfs_cidv1) {
+    for (const gateway of IPFS_GATEWAYS) {
+      const url = `${gateway}${spec.ipfs_cidv1}`;
+      try {
+        await downloadFromUrl(url, destPath, spec.sha256);
+        return destPath;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+  }
+
+  if (spec.data_txid) {
+    const url = `https://arweave.net/${spec.data_txid}`;
+    try {
+      await downloadFromUrl(url, destPath, spec.sha256);
+      return destPath;
+    } catch (err) {
+      lastError = err;
+    }
+  } else if (spec.ardrive_file_path) {
+    // Last resort: attempt to download via public ArDrive gateway path.
+    const url = `https://arweave.net${spec.ardrive_file_path}`;
+    try {
+      await downloadFromUrl(url, destPath, spec.sha256);
+      return destPath;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw new Error(
+    `Failed to download ${spec.file_name}: ${lastError ? lastError.message : 'no sources available'}`
+  );
+}
+
+async function decompressXz(sourcePath, destPath) {
+  await pipeline(
+    fs.createReadStream(sourcePath),
+    lzma.createDecompressor(),
+    fs.createWriteStream(destPath)
+  );
+}
+
+async function extractFileFromTar(tarPath, extractFile, outputPath) {
+  let extracted = false;
+  await tar.x({
+    file: tarPath,
+    cwd: path.dirname(outputPath),
+    filter: (filePath) => {
+      if (filePath === extractFile) {
+        extracted = true;
+        return true;
+      }
+      return false;
+    },
+  });
+
+  if (!extracted) {
+    throw new Error(`Unable to locate ${extractFile} inside ${path.basename(tarPath)}`);
+  }
+
+  const extractedPath = path.join(path.dirname(outputPath), extractFile);
+  if (extractedPath !== outputPath) {
+    fs.renameSync(extractedPath, outputPath);
+  }
+}
+
+async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths) {
+  const { downloadsDir, stagingDir } = planPaths;
+  ensureDirectory(stagingDir);
+
+  const base = manifestEntry.base;
+  if (!base) {
+    throw new Error(`Manifest entry missing base description.`);
+  }
+
+  const baseArchivePath = await ensureArtifact(base, downloadsDir);
+  const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
+  const tempDbPath = path.join(stagingDir, `${dbStatus.name}.tmp.db`);
+  const finalDbPath = path.join(planPaths.finalDir, dbStatus.name);
+
+  if (fs.existsSync(tempDbPath)) {
+    fs.unlinkSync(tempDbPath);
+  }
+
+  await decompressXz(baseArchivePath, baseTarPath);
+  await extractFileFromTar(baseTarPath, base.extract_file || dbStatus.name, tempDbPath);
+  fs.unlinkSync(baseTarPath);
+
+  const baseSha = sha256File(tempDbPath);
+  if (base.sha256 && baseSha !== base.sha256) {
+    throw new Error(
+      `Extracted base SHA-256 mismatch for ${dbStatus.name} (expected ${base.sha256}, got ${baseSha})`
+    );
+  }
+
+  const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
+  patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
+
+  for (const patch of patches) {
+    const patchArchivePath = await ensureArtifact(patch, downloadsDir);
+    const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
+    await decompressXz(patchArchivePath, sqlPath);
+    await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
+    fs.unlinkSync(sqlPath);
+  }
+
+  ensureDirectory(path.dirname(finalDbPath));
+  fs.copyFileSync(tempDbPath, finalDbPath);
+  fs.unlinkSync(tempDbPath);
+  return finalDbPath;
+}
+
+async function applySqlPatch(dbPath, sqlPath, originName) {
+  const sql = fs.readFileSync(sqlPath, 'utf8');
+  const db = new Database(dbPath);
+  try {
+    db.exec('BEGIN;');
+    db.exec(sql);
+    db.exec('COMMIT;');
+  } catch (err) {
+    db.exec('ROLLBACK;');
+    throw new Error(`Failed to apply ${originName}: ${err.message}`);
+  } finally {
+    db.close();
+  }
+}
+
+async function executeProvision(plan, manifest) {
+  const result = {
+    executed: [],
+    skipped: [],
+    errors: [],
+  };
+
+  const paths = normalizeWorkingPaths(plan);
+  paths.finalDir = plan.userDataDir;
+
+  ensureDirectory(paths.downloadsDir);
+  ensureDirectory(paths.stagingDir);
+  ensureDirectory(paths.finalDir);
+
+  for (const db of plan.databases) {
+    if (db.action === 'skip') {
+      result.skipped.push({ name: db.name, reason: 'existing kept' });
+      continue;
+    }
+
+    try {
+      if (db.action === 'copy-embedded') {
+        const dest = await stageEmbeddedClientDb(paths.finalDir, true);
+        result.executed.push({ name: db.name, action: 'copied-embedded', path: dest });
+      } else if (db.action === 'provision-from-manifest') {
+        const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name).manifestKey];
+        if (!manifestEntry) {
+          throw new Error('Manifest entry missing.');
+        }
+        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths);
+        result.executed.push({ name: db.name, action: 'provisioned', path: dest });
+      } else {
+        result.skipped.push({ name: db.name, reason: `unknown action ${db.action}` });
+      }
+    } catch (err) {
+      result.errors.push({ name: db.name, message: err.message });
+    }
+  }
+
+  return result;
+}
+
+async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  opts.manifestPath =
+    opts.manifestPath || resolveDefaultManifestPath() || path.resolve(__dirname, '..', 'dbmanifest.json');
   opts.userDataDir = opts.userDataDir || detectUserDataDir();
   opts.workingDir = opts.workingDir || defaultWorkingDir(opts.userDataDir);
 
@@ -302,16 +576,35 @@ function main() {
     plan.workingManifestPath = manifestCopyPath;
 
     try {
-      const stagedClientSeed = stageEmbeddedClientDb(opts.userDataDir);
+      const stagedClientSeed = await stageEmbeddedClientDb(opts.userDataDir, false);
       plan.clientdataSeedPath = stagedClientSeed;
     } catch (err) {
       plan.clientdataSeedError = err.message;
     }
   }
 
+  if (opts.provision) {
+    plan.provisionResult = await executeProvision(plan, manifest);
+  }
+
   writePlanIfRequested(plan, opts.writePlanPath);
   console.log(JSON.stringify(plan, null, 2));
 }
 
-main();
+main().catch((err) => {
+  console.error('[prepare_databases] Fatal error:', err);
+  process.exit(1);
+});
+
+function resolveDefaultManifestPath() {
+  const candidates = [
+    path.resolve(__dirname, '..', 'dbmanifest.json'),
+    path.resolve(__dirname, '..', 'db', 'dbmanifest.json'),
+    path.resolve(__dirname, '..', 'packed_db', 'dbmanifest.json'),
+  ];
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'db', 'dbmanifest.json'));
+  }
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
 

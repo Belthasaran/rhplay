@@ -19,6 +19,9 @@
     "build:win-all": "npm run renderer:build && electron-builder --win nsis,portable",
     "build:linux": "npm run renderer:build && electron-builder --linux AppImage",
     "build:mac": "npm run renderer:build && electron-builder --mac",
+    "build:installer:win": "npm run renderer:build && electron-builder --win nsis",
+    "build:installer:linux": "npm run renderer:build && electron-builder --linux deb",
+    "build:installer:mac": "npm run renderer:build && electron-builder --mac dmg",
     "loaddata": "node loaddata.js",
     "attachblobs": "node attachblobs.js",
     "fetchpatches": "node fetchpatches.js",
@@ -98,6 +101,7 @@
     "socks": "^2.8.7",
     "socks-proxy-agent": "^8.0.3",
     "urlsafe-base64": "^1.0.0",
+    "tar": "^6.2.0",
     "usb": "^2.11.0",
     "ws": "^8.18.3"
   },
@@ -148,6 +152,14 @@
       {
         "from": "electron/adminkp_trust.json",
         "to": "adminkp_trust.json"
+      },
+      {
+        "from": "electron/dbmanifest.json",
+        "to": "db/dbmanifest.json"
+      },
+      {
+        "from": "electron/packed_db/clientdata.db.initial.xz",
+        "to": "db/clientdata.db.initial.xz"
       }
     ],
     "asarUnpack": [
@@ -168,6 +180,12 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -182,7 +200,8 @@
     },
     "linux": {
       "target": [
-        "AppImage"
+        "AppImage",
+        "deb"
       ],
       "category": "Utility"
     },
@@ -190,6 +209,12 @@
       "target": [
         {
           "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "dmg",
           "arch": [
             "x64"
           ]

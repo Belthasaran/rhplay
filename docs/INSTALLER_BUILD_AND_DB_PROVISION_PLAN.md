@@ -24,50 +24,43 @@ Installers must create the settings directory when missing, but never overwrite 
 ### Database Provision Workflow
 1. **Pre-flight summary**
    - Enumerate `clientdata.db`, `rhdata.db`, `patchbin.db`.
-   - Present current status (exists, size, SHA-256) with default action “skip” when file already present.
+   - Default action is “skip” when file already present; user may opt into overwrite.
 2. **Working directory selection**
    - Prompt when any database requires provisioning/overwrite.
-   - Default to per-OS working directory table above; allow override.
-   - Copy `electron/dbmanifest.json` into the working directory for transparency.
+  - Default to per-OS working directory table above; allow override.
+   - Copy `electron/db_temp/dbmanifest.json` into the working directory for transparency.
 3. **Artifact sourcing**
    - Required files:
      - Base archive (`tar.xz`) per database (`manifest.<db>.base`).
      - SQL patch archives (`manifest.<db>.sqlpatches[]`).
-   - Give users the option to download manually (link to ArDrive folder); validate presence by filename + SHA-256.
-   - Automated flow attempts:
-     1. IPFS retrieval using `ipfs_cidv1` (CIDv1 hashes computed with raw leaves).
-     2. Fallback ArDrive download via anonymous client.
-     3. Persist each downloaded file in working directory and verify SHA-256.
+   - Manual option: present ArDrive link for self-download; verify by filename and SHA-256.
+   - Automated flow (`prepare_databases.js --provision`) attempts:
+     1. IPFS retrieval using `ipfs_cidv1` (via multiple gateways with raw-leaf CIDv1 handling).
+     2. Fallback HTTP download from Arweave/ArDrive (`data_txid` or `ardrive_file_path`).
+   - Every artifact is written to the working directory and verified against SHA-256.
 4. **Assembly**
-   - Extract base archive to temporary file, ensure hash matches manifest `sha256`.
-   - Stream patches in manifest order:
-     - Decompress `.sql.xz` into temp SQL file.
-     - Apply patch (direct SQLite execution).
-     - Delete temp SQL after successful application.
-   - On completion, rename temp database to canonical name and move into settings directory.
-   - Leave downloaded archives intact for possible re-run.
+   - Decompress `.tar.xz` to `.tar`, extract requested file (`extract_file`) into staging, verify hash.
+   - Iterate patches in lexicographic order; decompress `.sql.xz`, run SQL statements against staging database (transaction-wrapped), delete temporary SQL.
+   - Copy finished database to settings directory; keep archives for reuse.
 5. **Embedded databases**
-   - `clientdata.db` seed copied from repository assets packaged inside installer (no download required).
+   - `clientdata.db` seed bundled under `extraResources` (`db/clientdata.db`) and copied automatically.
 6. **Post-provision tasks**
-   - Copy portable runtime to install location (`%LOCALAPPDATA%\Programs\RHTools`, `/Applications/RHTools.app`, `/opt/RHTools` or user specified).
-   - Create launcher with version-agnostic name.
-   - Register shortcuts/menu entries per platform.
+   - Copy portable runtime to install location (`%LOCALAPPDATA%\Programs\RHTools`, `/Applications/RHTools.app`, `/opt/RHTools`, or user-selected path).
+   - Create version-agnostic launcher and platform-appropriate shortcuts/menu entries.
 
 ### Build Pipeline Changes
 1. **Shared tooling**
-   - New Node utilities under `electron/installer/` for:
-     - Path detection and provisioning (`prepare_databases.js` – see companion script).
-     - Manifest-driven download/apply operations (future modules).
+   - `electron/installer/prepare_databases.js` now supports both planning and full provisioning (`--provision`).
+   - Script leverages IPFS > ArDrive download order, `tar` + `lzma-native` for extraction, and `better-sqlite3` for patch execution.
 2. **Installer packaging**
-   - Extend build scripts to invoke installer-specific packagers after `npm run renderer:build`.
-   - Candidate frameworks:
-     - Windows: NSIS/MSIX via `electron-builder` `nsis` target.
-     - macOS: `dmg` with custom `beforePack` hook or `.pkg`.
-     - Linux: `.deb` or graphical AppImage installer wrapper.
-   - Provide consistent CLI: `npm run build:installer:win`, `:mac`, `:linux`.
+   - Added `electron-builder` installer targets:
+     - Windows: `portable` (existing) + `nsis` (`npm run build:installer:win`).
+     - Linux: `AppImage` (existing) + `deb` (`npm run build:installer:linux`).
+     - macOS: `zip` (existing) + `dmg` (`npm run build:installer:mac`).
+   - Manifest + embedded seeds shipped via `extraResources/db/`.
 3. **Testing**
-   - Add automated smoke tests for database provisioning (assemble into temp dir, verify final SHA-256).
-   - Ensure ArDrive/IPFS fallback gracefully skips in offline CI.
+   - Add automated smoke tests invoking `prepare_databases.js --ensure-dirs --provision --write-plan` against temporary directories.
+   - Validate hash comparisons and patch sequencing; ensure offline-friendly failure messaging.
 
 ### Next Steps
 1. Implement shared provisioning module (`prepare_databases.js` scaffolded) to drive both installer UIs and CLI testing.

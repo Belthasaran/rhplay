@@ -4,6 +4,38 @@ const { DatabaseManager } = require('./database-manager');
 const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
 
+const CLI_RUN_FLAG = '--run-cli-script';
+const cliFlagIndex = process.argv.indexOf(CLI_RUN_FLAG);
+const isInstallerCli = cliFlagIndex !== -1;
+
+if (isInstallerCli) {
+    const scriptPath = process.argv[cliFlagIndex + 1];
+    const scriptArgs = process.argv.slice(cliFlagIndex + 2);
+    (async () => {
+        try {
+            if (!scriptPath) {
+                throw new Error('No script path provided to --run-cli-script.');
+            }
+            const resolvedScript = path.resolve(scriptPath);
+            const runnerModule = require(resolvedScript);
+            const runner =
+                runnerModule && typeof runnerModule.run === 'function'
+                    ? runnerModule.run
+                    : typeof runnerModule === 'function'
+                        ? runnerModule
+                        : null;
+            if (!runner) {
+                throw new Error(`CLI script ${resolvedScript} does not export a run function.`);
+            }
+            await runner(scriptArgs);
+            app.exit(0);
+        } catch (error) {
+            console.error('[installer-cli] Failed to execute script:', error);
+            app.exit(1);
+        }
+    })();
+}
+
 // Initialize database manager
 let dbManager = null;
 
@@ -71,42 +103,44 @@ function createMainWindow() {
     return mainWindow;
 }
 
-app.whenReady().then(async () => {
-    // Initialize database manager with auto-migrations enabled for GUI mode
-    try {
-        console.log('Initializing database manager with auto-migrations enabled...');
-        console.log('Process info:', {
-            execPath: process.execPath,
-            resourcesPath: process.resourcesPath,
-            cwd: process.cwd(),
-            __dirname: __dirname,
-            isPackaged: process.env.ELECTRON_IS_PACKAGED || false
-        });
-        
-        dbManager = new DatabaseManager({ autoApplyMigrations: true });
-        console.log('Database manager initialized with auto-migrations enabled');
-        
-        // Register IPC handlers
-        registerDatabaseHandlers(dbManager);
-        console.log('IPC handlers registered');
-        
-        // Ensure createdfp is populated
-        const { ensureCreatedFp } = require('./ipc-handlers');
-        await ensureCreatedFp(dbManager);
-    } catch (error) {
-        console.error('Failed to initialize database:', error);
-        console.error('Error stack:', error.stack);
-        // Continue anyway - will show error in UI
-    }
-
-    createMainWindow();
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createMainWindow();
+if (!isInstallerCli) {
+    app.whenReady().then(async () => {
+        // Initialize database manager with auto-migrations enabled for GUI mode
+        try {
+            console.log('Initializing database manager with auto-migrations enabled...');
+            console.log('Process info:', {
+                execPath: process.execPath,
+                resourcesPath: process.resourcesPath,
+                cwd: process.cwd(),
+                __dirname: __dirname,
+                isPackaged: process.env.ELECTRON_IS_PACKAGED || false
+            });
+            
+            dbManager = new DatabaseManager({ autoApplyMigrations: true });
+            console.log('Database manager initialized with auto-migrations enabled');
+            
+            // Register IPC handlers
+            registerDatabaseHandlers(dbManager);
+            console.log('IPC handlers registered');
+            
+            // Ensure createdfp is populated
+            const { ensureCreatedFp } = require('./ipc-handlers');
+            await ensureCreatedFp(dbManager);
+        } catch (error) {
+            console.error('Failed to initialize database:', error);
+            console.error('Error stack:', error.stack);
+            // Continue anyway - will show error in UI
         }
+
+        createMainWindow();
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                createMainWindow();
+            }
+        });
     });
-});
+}
 
 app.on('window-all-closed', () => {
     // Close database connections

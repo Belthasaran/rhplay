@@ -600,8 +600,8 @@ async function executeProvision(plan, manifest) {
   return result;
 }
 
-async function main() {
-  const opts = parseArgs(process.argv.slice(2));
+async function run(argv) {
+  const opts = parseArgs(argv);
   opts.manifestPath =
     opts.manifestPath || resolveDefaultManifestPath() || path.resolve(__dirname, '..', 'dbmanifest.json');
   opts.userDataDir = opts.userDataDir || detectUserDataDir();
@@ -639,12 +639,17 @@ async function main() {
   writePlanIfRequested(plan, opts.writePlanPath);
   writeSummaryIfRequested(plan, opts.writeSummaryPath);
   console.log(JSON.stringify(plan, null, 2));
+  return plan;
 }
 
-main().catch((err) => {
-  console.error('[prepare_databases] Fatal error:', err);
-  process.exit(1);
-});
+module.exports = { run };
+
+if (require.main === module) {
+  run(process.argv.slice(2)).catch((err) => {
+    console.error('[prepare_databases] Fatal error:', err);
+    process.exit(1);
+  });
+}
 
 function resolveDefaultManifestPath() {
   const candidates = [

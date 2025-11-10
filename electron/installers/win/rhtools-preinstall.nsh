@@ -31,7 +31,7 @@ FunctionEnd
 Function RHTools_RunPlan
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
-  nsExec::ExecToStack '"$INSTDIR\\${RHTOOLS_APP_EXE}" "$INSTDIR\\resources\\app\\electron\\installer\\prepare_databases.js" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  nsExec::ExecToStack '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "$INSTDIR\\resources\\app\\electron\\installer\\prepare_databases.js" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Pop $0 ; return code
   Pop $1 ; output (ignored)
   ${If} $0 != 0
@@ -118,7 +118,7 @@ needProvision:
   Abort
 
 doProvision:
-  nsExec::ExecToLog '"$INSTDIR\\${RHTOOLS_APP_EXE}" "$INSTDIR\\resources\\app\\electron\\installer\\prepare_databases.js" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  nsExec::ExecToLog '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "$INSTDIR\\resources\\app\\electron\\installer\\prepare_databases.js" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "Database preparation failed (exit code $0).\r\nPlease review the summary at $RHToolsPlanSummary and resolve any issues before continuing." /SD IDOK

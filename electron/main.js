@@ -173,16 +173,16 @@ function collectScriptCandidates(target) {
     if (path.isAbsolute(target)) {
         candidates.push(target);
     } else {
-        candidates.push(path.join(process.cwd(), target));
-        candidates.push(path.join(__dirname, target));
-        candidates.push(path.join(__dirname, '..', target));
-        if (process.resourcesPath) {
+        if (typeof process.resourcesPath === 'string' && process.resourcesPath.length > 0) {
             candidates.push(path.join(process.resourcesPath, target));
             candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', target));
             candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', target));
             candidates.push(path.join(process.resourcesPath, 'app.asar', target));
             candidates.push(path.join(process.resourcesPath, 'app.asar', 'electron', target));
         }
+        candidates.push(path.join(__dirname, target));
+        candidates.push(path.join(__dirname, '..', target));
+        candidates.push(path.join(process.cwd(), target));
     }
     return candidates;
 }

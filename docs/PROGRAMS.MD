@@ -308,6 +308,30 @@ enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json 
 
 ---
 
+### prepare_databases.js
+**Purpose**: Produce a provisioning plan for installer builds by inspecting `dbmanifest.json`, evaluating existing databases in the user settings directory, and staging manifest resources.
+
+**Usage**:
+```bash
+enode.sh electron/installer/prepare_databases.js \
+  --ensure-dirs \
+  --write-plan=/tmp/rhtools-plan.json \
+  --overwrite rhdata.db,patchbin.db
+```
+
+**Key Options**:
+- `--manifest <path>` - Path to manifest (defaults to `electron/dbmanifest.json`).
+- `--user-data-dir <path>` - Override detected settings directory.
+- `--working-dir <path>` - Override temporary working directory.
+- `--overwrite <csv>` - Force provisioning for listed databases.
+- `--ensure-dirs` - Create settings + working directories and copy manifest + embedded seeds.
+- `--write-plan <path>` - Persist JSON action plan.
+- `--help` - Show usage information.
+
+**Output**: JSON summary describing directory paths, planned actions per database (`skip`, `copy-embedded`, `provision-from-manifest`), downloads required, and staged artifacts (manifest copy, embedded `clientdata.db` seed).
+
+---
+
 ## Utilities
 
 ### identify-incompatible-keys.js

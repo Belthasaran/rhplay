@@ -8,6 +8,8 @@
 !define RHTOOLS_APP_EXE "RHTools.exe"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
+Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
+
 !insertmacro TrimNewLines
 
 Var RHToolsPlanJson
@@ -18,10 +20,6 @@ Var RHToolsDialog
 Var RHToolsTextbox
 Var RHToolsRescanBtn
 Var RHToolsOpenBtn
-
-!macro customFinishPageBefore
-  Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
-!macroend
 
 Function RHTools_InitVariables
   StrCpy $RHToolsPlanJson "$TEMP\\rhtools-plan.json"

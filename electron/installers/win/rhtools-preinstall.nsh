@@ -6,6 +6,8 @@
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
+!define RHTOOLS_SCRIPT "$INSTDIR\\resources\\app.asar.unpacked\\electron\\installer\\prepare_databases.js"
+!define RHTOOLS_MANIFEST "$INSTDIR\\resources\\db\\dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
 Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
@@ -31,7 +33,7 @@ FunctionEnd
 Function RHTools_RunPlan
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
-  nsExec::ExecToStack '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "$INSTDIR\\resources\\app\\electron\\installer\\prepare_databases.js" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  nsExec::ExecToStack '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --ensure-dirs --manifest "${RHTOOLS_MANIFEST}" --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Pop $0 ; return code
   Pop $1 ; output (ignored)
   ${If} $0 != 0
@@ -118,7 +120,7 @@ needProvision:
   Abort
 
 doProvision:
-  nsExec::ExecToLog '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "$INSTDIR\\resources\\app\\electron\\installer\\prepare_databases.js" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  nsExec::ExecToLog '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --ensure-dirs --manifest "${RHTOOLS_MANIFEST}" --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "Database preparation failed (exit code $0).\r\nPlease review the summary at $RHToolsPlanSummary and resolve any issues before continuing." /SD IDOK

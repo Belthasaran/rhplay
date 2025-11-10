@@ -2,7 +2,7 @@
   "name": "rhtools",
   "version": "0.1.3beta",
   "description": "RHTools - ROM HackPlay Tools Application",
-  "author": "RHTools Team",
+  "author": "RHTools Team <143627208+Belthasaran@users.noreply.github.com>",
   "main": "electron/main.js",
   "scripts": {
     "postinstall": "cd native-modules/serialport-nonblock && npm install && cd ../.. && patch-package && electron-builder install-app-deps",

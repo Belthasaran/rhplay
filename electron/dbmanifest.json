@@ -1,4 +1,20 @@
 {
+  "clientdata.db": {
+	  "base" : {
+		  "source_path" : "packed_db/clientdata.db.initial.xz",
+		  "file_name" : "clientdata.db.initial.xz",
+		  "format" : "xz",
+		  "sha256" : "51f93fe10acfe1669799156255ef0a4f35a5763c5d5dbf72c6bddbf1960df50c",
+		  "ipfs_cidv1" : "bafkreicr7e76ccwp4ftjpgivmjk66cspgwsxmpc5lw7xfrv53pyzmdpvbq",
+		  "ardrive_file_path": "/SMWRH/db/clientdata.db.initial.xz",
+		  "ardrive_file_name": "clientdata.db.initial.xz",
+		  "ardrive_file_id" : "9c89230e-4a4e-4e3a-8a49-7ddae8c300c2",
+		  "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+		  "data_txid" : "dt_8rJoEVQMTEwTd9nj8Fhb8ItT5q5lA0J-ytQDo0-E",
+		  "metadata_txid" : "dt_8rJoEVQMTEwTd9nj8Fhb8ItT5q5lA0J-ytQDo0-E",
+		  "size": "36308"
+	  }
+  },
   "rhdata.db": {
     "base": {
       "file_name": "full_rhdata_2025_11_01.tar.xz",

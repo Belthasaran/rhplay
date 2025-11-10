@@ -49,7 +49,7 @@
             <div class="online-dropdown-body">
               <!-- Profile & Keys Tab -->
               <div v-if="onlineActiveTab === 'profile-keys'" class="tab-content">
-              <p style="font-size: 16px; font-weight: bold; background: black; color: white;">Prototype UI:  In the future; this feature would allow you to share your game ratings and hacks/mods publicly through a decentralized network based on <a href="https://en.wikipedia.org/wiki/Nostr" style="color: lightgray;" target="_blank">Nostr</a> and IPFS.</p>
+              <p style="font-size: 16px; font-weight: bold; background: black; color: white;">Prototype UI:  In the future; this allows going online to Update the games list (currently you must manually update it). Feature would also allow you to share your game ratings and hacks/mods publicly through a decentralized network based on <a href="https://en.wikipedia.org/wiki/Nostr" style="color: lightgray;" target="_blank">Nostr</a> and IPFS.</p>
               <!-- Admin Options Toggle -->
               <div class="online-section">
                 <label class="admin-toggle">
@@ -6232,13 +6232,16 @@
                       <button
                         class="btn-secondary"
                         @click="retryTrustDeclarationPublish"
-                        :disabled="!canRetryTrustDeclarationPublish || retryingTrustDeclarationQueue"
+                    :disabled="retryTrustDeclarationDisabled"
                       >
                         {{ retryingTrustDeclarationQueue ? 'Retrying…' : 'Retry Publish' }}
                       </button>
-                      <span v-if="retryTrustDeclarationMessage" class="queue-summary-hint">
-                        {{ retryTrustDeclarationMessage }}
-                      </span>
+                  <span
+                    v-if="retryTrustDeclarationMessage"
+                    :class="['queue-summary-hint', { success: retryTrustDeclarationSuccess }]"
+                  >
+                    {{ retryTrustDeclarationMessage }}
+                  </span>
                     </div>
                     <div v-if="trustDeclarationQueueTotals" class="queue-summary-header">
                       <p>Total Events: <strong>{{ trustDeclarationQueueTotals.total }}</strong></p>
@@ -6254,6 +6257,9 @@
                       <div class="queue-stage-header">
                         <strong>{{ stage.label }}</strong>
                         <span class="queue-stage-total">{{ stage.counts.total }} event(s)</span>
+                        <button class="queue-stage-toggle" @click="toggleQueueStage(stage.stage)">
+                          {{ isQueueStageExpanded(stage.stage) ? 'Hide Details' : 'Show Details' }}
+                        </button>
                       </div>
                       <div v-if="Object.keys(stage.counts.byStatus || {}).length" class="queue-stage-statuses">
                         <span
@@ -6278,7 +6284,7 @@
                           </span>
                         </p>
                       </div>
-                      <div v-if="stage.entries.length" class="queue-stage-details">
+                      <div v-if="stage.entries.length && isQueueStageExpanded(stage.stage)" class="queue-stage-details">
                         <table class="queue-stage-table">
                           <thead>
                             <tr>
@@ -10498,6 +10504,10 @@ function selectTrustDeclaration(declarationUuid: string) {
     selectedTrustDeclarationQueueSummary.value = null;
     selectedTrustDeclarationQueueError.value = null;
     retryTrustDeclarationMessage.value = null;
+    retryTrustDeclarationSuccess.value = false;
+    Object.keys(expandedQueueStages).forEach((key) => {
+      delete expandedQueueStages[key];
+    });
   } else {
     selectedTrustDeclarationUuid.value = declarationUuid;
     loadSelectedTrustDeclaration();
@@ -10522,13 +10532,25 @@ async function loadTrustDeclarationQueueSummary(declarationUuid?: string | null)
     const response = await (window as any).electronAPI.getNostrQueueSummary('admindeclarations', uuid);
     if (response?.success) {
       selectedTrustDeclarationQueueSummary.value = response.summary || null;
+      const stages = response?.summary?.stages || [];
+      stages.forEach((stage: any) => {
+        if (!Object.prototype.hasOwnProperty.call(expandedQueueStages, stage.stage)) {
+          expandedQueueStages[stage.stage] = stage.stage === 'cache_out';
+        }
+      });
     } else {
       selectedTrustDeclarationQueueSummary.value = null;
       selectedTrustDeclarationQueueError.value = response?.error || 'Unable to load queue summary.';
+      Object.keys(expandedQueueStages).forEach((key) => {
+        delete expandedQueueStages[key];
+      });
     }
   } catch (error: any) {
     selectedTrustDeclarationQueueSummary.value = null;
     selectedTrustDeclarationQueueError.value = error?.message || String(error);
+    Object.keys(expandedQueueStages).forEach((key) => {
+      delete expandedQueueStages[key];
+    });
   } finally {
     selectedTrustDeclarationQueueLoading.value = false;
   }
@@ -22373,6 +22395,10 @@ button:disabled {
   color: var(--text-tertiary);
 }
 
+.queue-summary-hint.success {
+  color: var(--success-color);
+}
+
 .queue-summary-error {
   color: var(--color-error, #d32f2f);
 }
@@ -22399,6 +22425,19 @@ button:disabled {
   align-items: center;
   font-size: 13px;
   color: var(--text-primary);
+}
+
+.queue-stage-header .queue-stage-toggle {
+  border: none;
+  background: transparent;
+  color: var(--accent-primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.queue-stage-header .queue-stage-toggle:hover {
+  text-decoration: underline;
 }
 
 .queue-stage-details {

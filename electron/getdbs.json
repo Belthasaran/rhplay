@@ -1,0 +1,30 @@
+{
+  "rhdata.db" : {
+	  "base" : {
+		  "file_name" : "full_rhdata_2025_11_01.tar.xz",
+		  "format" : "tar+xz",
+		  "sha256" : "9aabf94d877c9f1e374719410f6bf62825cdcd97827898064bb21014d8d78682",
+		  "ardrive_drive_id" : "58677413-8a0c-4982-944d-4a1b40454039",
+		  "adrive_folder_id" : "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+		  "ardrive_file_id" : "448aa036-a776-40c4-a884-fa5f6d989286",
+		  "data_txid" : "t5hmi4FA6b3cAWoBSdQWbSGANdO4X3rIrg4mDOOARVc",
+		  "metadata_txid"  : "t5hmi4FA6b3cAWoBSdQWbSGANdO4X3rIrg4mDOOARVc",
+		  "ipfs_cid_v1" : "bafybeidhoun3b2wjksyqwj6xvrdqzi22akm5qjyflbevlkhq3v5bit73am"
+	  }
+  },
+  "patchbin.db" : {
+	  "base" : {
+		  "file_name" : "bare_patchbin_2025_11_01.tar.xz",
+		  "format" : "tar+xz",
+		  "type" : "packed",
+		  "sha256" : "37194e9bd78628a84e6700fd90a052af79ecf7f2f1ff860f99cc3f6bdd601d98",
+		  "ardrive_drive_id" : "58677413-8a0c-4982-944d-4a1b40454039",
+		  "ardrive_folder_id" : "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+		  "ardrive_file_id" : "73fbb503-0190-48f4-a56c-8a58f95d8d63",
+		  "data_txid" : "b2H-3lQeJN5BGMsKSbhGsCM1huUdGmIk3_lTncWTEuc",
+		  "metadata_txid" : "b2H-3lQeJN5BGMsKSbhGsCM1huUdGmIk3_lTncWTEuc",
+		  "ipfs_cid_v1" : "bafybeibssd5arl2g7g67c5dxa34ai7svchqu76uh77gmat72acohzc3y4m"
+	  }
+  }
+
+}

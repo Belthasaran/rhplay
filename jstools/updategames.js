@@ -16,7 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 
 // Import modules
 const DatabaseManager = require('./lib/database');
@@ -94,6 +94,16 @@ if (argv['use-js-blobs']) {
   CONFIG.USE_PYTHON_BLOB_CREATOR = false;
 }
 
+CONFIG.LOGGING = {
+  mode: argv['log-mode'],
+  baseline: argv['log-baseline'],
+  dir: argv['log-dir'],
+  splitSize: argv['log-split-size'],
+  compress: argv['log-xz']
+};
+
+const deltaLogger = new DeltaLogger(CONFIG.LOGGING);
+
 /**
  * Simple argument parser
  */
@@ -108,7 +118,12 @@ function parseArgs(args) {
     'limit': null,
     'check-updates': true,
     'update-stats-only': false,
-    'use-js-blobs': false
+    'use-js-blobs': false,
+    'log-mode': 'append',
+    'log-baseline': null,
+    'log-dir': path.join(__dirname, 'logs', 'game_deltas'),
+    'log-split-size': null,
+    'log-xz': true
   };
   
   for (let i = 0; i < args.length; i++) {
@@ -141,6 +156,28 @@ function parseArgs(args) {
       parsed['limit'] = parseInt(arg.split('=')[1]);
     } else if (arg === '--limit') {
       parsed['limit'] = parseInt(args[++i]);
+    } else if (arg === '--log-append') {
+      parsed['log-mode'] = 'append';
+    } else if (arg.startsWith('--log-baseline=')) {
+      parsed['log-mode'] = 'baseline';
+      parsed['log-baseline'] = path.resolve(arg.split('=')[1]);
+    } else if (arg === '--log-baseline') {
+      parsed['log-mode'] = 'baseline';
+      parsed['log-baseline'] = path.resolve(args[++i]);
+    } else if (arg === '--nolog') {
+      parsed['log-mode'] = 'none';
+    } else if (arg.startsWith('--log-dir=')) {
+      parsed['log-dir'] = path.resolve(arg.split('=')[1]);
+    } else if (arg === '--log-dir') {
+      parsed['log-dir'] = path.resolve(args[++i]);
+    } else if (arg.startsWith('--log-split-size=')) {
+      parsed['log-split-size'] = parseInt(arg.split('=')[1], 10);
+    } else if (arg === '--log-split-size') {
+      parsed['log-split-size'] = parseInt(args[++i], 10);
+    } else if (arg === '--log-plain') {
+      parsed['log-xz'] = false;
+    } else if (arg === '--log-xz') {
+      parsed['log-xz'] = true;
     }
   }
   
@@ -168,6 +205,13 @@ Options:
   --limit=<n>             Limit number of games to process
   --use-js-blobs          Use JavaScript blob creator (faster, double base64)
                           Default: use Python blob creator (universal compatibility)
+  --log-append            Emit append-mode delta log (default)
+  --log-baseline=<db>     Generate baseline diff against provided database
+  --nolog                 Disable delta logging for this run
+  --log-dir=<path>        Output directory for delta logs
+  --log-split-size=<MB>   Split log files after given size (future use)
+  --log-plain             Write uncompressed JSON log
+  --log-xz                Force XZ compression (default)
 
 Examples:
   node updategames.js
@@ -185,6 +229,7 @@ For full documentation, see docs/NEW_UPDATE_SCRIPT_SPEC.md
  * Main function
  */
 async function main() {
+  let runSummary = { status: 'success' };
   console.log('==================================================');
   console.log('       rhtools - Update Games Script v1.0        ');
   console.log('==================================================\n');
@@ -253,7 +298,8 @@ async function main() {
     // Step 5: Create database records
     console.log('[Step 5/6] Creating database records...');
     recordCreator = new RecordCreator(dbManager, CONFIG.PATCHBIN_DB_PATH, CONFIG);
-    await createDatabaseRecords(dbManager, recordCreator, argv);
+    const recordSummary = await createDatabaseRecords(dbManager, recordCreator, argv);
+    runSummary.records = recordSummary;
     
     // Step 6: Check for updates to existing games (Phase 2)
     if (argv['check-updates'] && gamesList.length > 0) {
@@ -269,7 +315,12 @@ async function main() {
         console.log(`  Filtered to specific IDs: ${filteredGamesList.length} games\n`);
       }
       
-      await checkExistingGameUpdates(dbManager, filteredGamesList, argv);
+      const updateResults = await checkExistingGameUpdates(dbManager, filteredGamesList, argv);
+      if (updateResults) {
+        runSummary.updateScan = {
+          downloadNeeded: updateResults.downloadNeeded?.length || 0
+        };
+      }
     } else {
       console.log('[Step 6/6] Skipping update detection\n');
     }
@@ -281,7 +332,7 @@ async function main() {
   } catch (error) {
     console.error('\n✗ Fatal error:', error.message);
     console.error(error.stack);
-    process.exit(1);
+    runSummary = { status: 'failed', error: error.message };
   } finally {
     if (recordCreator) {
       recordCreator.close();
@@ -289,6 +340,11 @@ async function main() {
     if (dbManager) {
       dbManager.close();
     }
+    deltaLogger.finish(runSummary);
+  }
+
+  if (runSummary.status === 'failed') {
+    process.exit(1);
   }
 }
 
@@ -585,6 +641,7 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
         
         if (result) {
           created++;
+          logGameCreationDelta(dbManager, queueItem, patchFiles);
         } else {
           skipped++;
         }
@@ -600,6 +657,8 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
   console.log(`    Created: ${created}`);
   console.log(`    Skipped: ${skipped}`);
   console.log(`    Errors:  ${errors}\n`);
+
+  return { created, skipped, errors };
 }
 
 /**
@@ -624,6 +683,20 @@ async function checkExistingGameUpdates(dbManager, gamesList, argv) {
   
   // Process existing games
   const results = await updateProcessor.processExistingGames(gamesList);
+  if (deltaLogger.enabled && results) {
+    deltaLogger.logEntry({
+      table: 'game_updates_scan',
+      action: 'analyze',
+      primary_key: { run_id: deltaLogger.runId },
+      diff: {
+        before: null,
+        after: {
+          processed: gamesList.length,
+          downloadNeeded: results.downloadNeeded?.map(item => item.gameid) || []
+        }
+      }
+    });
+  }
   
   // Handle games that need downloads
   if (results.downloadNeeded.length > 0 && !argv['update-stats-only']) {
@@ -636,6 +709,7 @@ async function checkExistingGameUpdates(dbManager, gamesList, argv) {
     console.log('\n  ⓘ These games will be processed in a future run or manually.');
     console.log('    Use --process-new flag or add to queue manually.\n');
   }
+  return results;
 }
 
 // Execute main
@@ -647,4 +721,209 @@ if (require.main === module) {
 }
 
 module.exports = { main, CONFIG };
+
+/**
+ * Helpers
+ */
+
+class DeltaLogger {
+  constructor(options = {}) {
+    this.mode = options.mode || 'append';
+    if (this.mode === 'baseline') {
+      console.warn('[delta-log] Baseline diff mode not yet implemented; defaulting to append.');
+      this.mode = 'append';
+    }
+    this.enabled = this.mode !== 'none';
+    this.baseline = options.baseline || null;
+    this.logDir = options.dir || path.join(__dirname, 'logs', 'game_deltas');
+    this.splitSize = options.splitSize ? Number(options.splitSize) * 1024 * 1024 : null;
+    this.compress = options.compress !== false;
+    this.entries = [];
+    this.ancillary = {};
+    this.runId = new Date().toISOString();
+    this.startTime = new Date();
+    this.summary = {};
+    this.manifestName = 'delta-manifest.json';
+    this.xzAvailable = false;
+    this.warnedCompression = false;
+    if (!this.enabled) {
+      return;
+    }
+    fs.mkdirSync(this.logDir, { recursive: true });
+    if (this.compress) {
+      this.xzAvailable = this.checkXzAvailable();
+      if (!this.xzAvailable) {
+        console.warn('[delta-log] xz utility not available; writing uncompressed JSON log.');
+        this.compress = false;
+      }
+    }
+  }
+
+  get runIdFilePart() {
+    return this.runId.replace(/[:]/g, '').replace(/\..+/, '');
+  }
+
+  checkXzAvailable() {
+    try {
+      const result = spawnSync('xz', ['--version'], { stdio: 'ignore' });
+      return result.status === 0;
+    } catch {
+      return false;
+    }
+  }
+
+  sanitize(data) {
+    if (data === undefined) {
+      return null;
+    }
+    try {
+      return JSON.parse(JSON.stringify(data));
+    } catch {
+      return data;
+    }
+  }
+
+  logEntry(entry) {
+    if (!this.enabled) {
+      return;
+    }
+    const payload = {
+      timestamp: entry.timestamp || new Date().toISOString(),
+      run_id: this.runId,
+      table: entry.table,
+      action: entry.action,
+      primary_key: this.sanitize(entry.primary_key || null),
+      diff: this.sanitize(entry.diff || null),
+      artifacts: this.sanitize(entry.artifacts || []),
+      context: this.sanitize(entry.context || null)
+    };
+    this.entries.push(payload);
+  }
+
+  logAncillary(table, record) {
+    if (!this.enabled) {
+      return;
+    }
+    if (!this.ancillary[table]) {
+      this.ancillary[table] = [];
+    }
+    this.ancillary[table].push({
+      run_id: this.runId,
+      timestamp: new Date().toISOString(),
+      ...this.sanitize(record)
+    });
+  }
+
+  finish(summary = {}) {
+    if (!this.enabled) {
+      return;
+    }
+
+    this.summary = summary || {};
+
+    const payload = {
+      version: 1,
+      run_id: this.runId,
+      mode: this.mode,
+      started_at: this.startTime.toISOString(),
+      completed_at: new Date().toISOString(),
+      summary: this.summary,
+      entries: this.entries,
+      ancillary: this.ancillary
+    };
+
+    const json = JSON.stringify(payload, null, 2);
+    const baseName = `delta-${this.runIdFilePart}.json`;
+    const jsonPath = path.join(this.logDir, baseName);
+    fs.writeFileSync(jsonPath, json, 'utf8');
+    let finalPath = jsonPath;
+
+    if (this.compress) {
+      const result = spawnSync('xz', ['-zf', jsonPath]);
+      if (result.status === 0) {
+        finalPath = `${jsonPath}.xz`;
+      } else if (!this.warnedCompression) {
+        console.warn('[delta-log] Failed to compress log with xz; keeping JSON file.');
+        this.warnedCompression = true;
+      }
+    }
+
+    this.updateManifest(finalPath);
+  }
+
+  updateManifest(finalPath) {
+    try {
+      const manifestPath = path.join(this.logDir, this.manifestName);
+      let manifest = [];
+      if (fs.existsSync(manifestPath)) {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      }
+      manifest.push({
+        run_id: this.runId,
+        mode: this.mode,
+        file: path.basename(finalPath),
+        entries: this.entries.length,
+        summary: this.summary
+      });
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+    } catch (error) {
+      console.warn('[delta-log] Failed to update manifest:', error.message);
+    }
+  }
+}
+
+function safeParseJSON(value) {
+  if (value && typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function logGameCreationDelta(dbManager, queueItem, patchFiles) {
+  if (!deltaLogger.enabled) {
+    return;
+  }
+  try {
+    const gameid = queueItem.gameid;
+    const gameRow = dbManager.db.prepare(`
+      SELECT * FROM gameversions
+      WHERE gameid = ?
+      ORDER BY version DESC
+      LIMIT 1
+    `).get(gameid);
+
+    const artifactList = Array.isArray(patchFiles)
+      ? patchFiles.map((pf) => ({
+          patch_uuid: pf.pfuuid || null,
+          patch_name: pf.patch_name || pf.filename || null,
+          blob_hash: pf.blob_hash || pf.hash_sha256 || null,
+          status: pf.status || null
+        }))
+      : [];
+
+    deltaLogger.logEntry({
+      table: 'gameversions',
+      action: 'insert',
+      primary_key: {
+        gameid: gameRow?.gameid || gameid,
+        version: gameRow?.version || 1
+      },
+      diff: {
+        before: null,
+        after: gameRow || null
+      },
+      artifacts: artifactList,
+      context: {
+        queueuuid: queueItem.queueuuid,
+        metadata: safeParseJSON(queueItem.metadata || queueItem.metadata_json || null)
+      }
+    });
+  } catch (error) {
+    console.warn('[delta-log] Failed to capture game creation delta:', error.message);
+  }
+}
 

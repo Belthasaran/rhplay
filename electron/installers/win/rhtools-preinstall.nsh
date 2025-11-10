@@ -19,10 +19,6 @@ Var RHToolsTextbox
 Var RHToolsRescanBtn
 Var RHToolsOpenBtn
 
-!macro customInit
-  Call RHTools_InitVariables
-!macroend
-
 !macro customFinishPageBefore
   Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
 !macroend
@@ -74,6 +70,7 @@ Function RHTools_ReadSummary
 FunctionEnd
 
 Function RHToolsPlanPageCreate
+  Call RHTools_InitVariables
   Call RHTools_RunPlan
 
   nsDialogs::Create 1018

@@ -45,6 +45,9 @@ logTemp(`argv=${process.argv.join(' ')}`);
 const CLI_RUN_FLAG = '--run-cli-script';
 const cliFlagIndex = process.argv.indexOf(CLI_RUN_FLAG);
 const isInstallerCli = cliFlagIndex !== -1;
+if (isInstallerCli) {
+    process.env.RHTOOLS_CLI_MODE = '1';
+}
 logTemp(`isInstallerCli=${isInstallerCli} index=${cliFlagIndex}`);
 
 if (isInstallerCli) {
@@ -202,44 +205,46 @@ function resolveScriptLocation(target) {
     return null;
 }
 
-if (!isInstallerCli) {
-    app.whenReady().then(async () => {
-        // Initialize database manager with auto-migrations enabled for GUI mode
-        try {
-            console.log('Initializing database manager with auto-migrations enabled...');
-            console.log('Process info:', {
-                execPath: process.execPath,
-                resourcesPath: process.resourcesPath,
-                cwd: process.cwd(),
-                __dirname: __dirname,
-                isPackaged: process.env.ELECTRON_IS_PACKAGED || false
-            });
-            
-            dbManager = new DatabaseManager({ autoApplyMigrations: true });
-            console.log('Database manager initialized with auto-migrations enabled');
-            
-            // Register IPC handlers
-            registerDatabaseHandlers(dbManager);
-            console.log('IPC handlers registered');
-            
-            // Ensure createdfp is populated
-            const { ensureCreatedFp } = require('./ipc-handlers');
-            await ensureCreatedFp(dbManager);
-        } catch (error) {
-            console.error('Failed to initialize database:', error);
-            console.error('Error stack:', error.stack);
-            // Continue anyway - will show error in UI
-        }
+app.whenReady().then(async () => {
+    if (isInstallerCli) {
+        return;
+    }
 
-        createMainWindow();
-
-        app.on('activate', () => {
-            if (BrowserWindow.getAllWindows().length === 0) {
-                createMainWindow();
-            }
+    // Initialize database manager with auto-migrations enabled for GUI mode
+    try {
+        console.log('Initializing database manager with auto-migrations enabled...');
+        console.log('Process info:', {
+            execPath: process.execPath,
+            resourcesPath: process.resourcesPath,
+            cwd: process.cwd(),
+            __dirname: __dirname,
+            isPackaged: process.env.ELECTRON_IS_PACKAGED || false
         });
+
+        dbManager = new DatabaseManager({ autoApplyMigrations: true });
+        console.log('Database manager initialized with auto-migrations enabled');
+
+        // Register IPC handlers
+        registerDatabaseHandlers(dbManager);
+        console.log('IPC handlers registered');
+
+        // Ensure createdfp is populated
+        const { ensureCreatedFp } = require('./ipc-handlers');
+        await ensureCreatedFp(dbManager);
+    } catch (error) {
+        console.error('Failed to initialize database:', error);
+        console.error('Error stack:', error.stack);
+        // Continue anyway - will show error in UI
+    }
+
+    createMainWindow();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createMainWindow();
+        }
     });
-}
+});
 
 app.on('window-all-closed', () => {
     // Close database connections

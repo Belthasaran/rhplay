@@ -1,6 +1,8 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 
-createApp(App).mount('#app');
+if (!(typeof process !== 'undefined' && process.env && process.env.RHTOOLS_CLI_MODE)) {
+  createApp(App).mount('#app');
+}
 
 

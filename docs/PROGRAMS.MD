@@ -252,6 +252,62 @@ node backfill_rhmd.js
 
 ---
 
+### readd_diffs.js
+**Purpose**: Generate batched SQL UPDATE scripts that restore `attachments.file_data` blobs in stripped `patchbin.db` copies.
+
+**Usage**:
+```bash
+enode.sh electron/db_temp/readd_diffs.js <original.db> <target.db> \
+  --output-dir=/path/to/output \
+  --output-prefix=patchXX \
+  --batchsize=300MB
+```
+
+**Key Options**:
+- `--output-dir` - Directory that will receive the SQL batches.
+- `--output-prefix` - Filename prefix for generated batches (default: `patchset`).
+- `--batchsize` - Target maximum file size per batch (megabytes).
+- `--original`, `--target` - Explicit database paths (fallback to positional args or environment variables).
+- `--help` - Show usage details.
+
+**Environment Overrides**:
+- `PATCHBIN_DB_PATH` - Supplies default original database path.
+- `PATCHBIN_TARGET_DB_PATH` - Supplies default target database path.
+
+**Output**: One or more `.sql` files containing `UPDATE attachments SET file_data = ...` statements wrapped in transactions, sized to stay within the requested batch threshold.
+
+---
+
+### update_dbmanifest.js
+**Purpose**: Maintain `dbmanifest.json` entries for patchbin distributions by adding SQL patch metadata and syncing ArDrive upload details.
+
+**Usage**:
+```bash
+enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json \
+  --target patchbin.db \
+  --add-sqlpatches readd_output/*.sql.xz
+
+enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json \
+  --target patchbin.db \
+  --update-from-ardrive
+```
+
+**Key Options**:
+- `--target <dbfile>` - Manifest entry to update (defaults to `PATCHBIN_DB_PATH` basename or `patchbin.db`).
+- `--add-sqlpatches <files...>` - Append/update compressed SQL patch metadata (size, SHA-256, IPFS CIDv1).
+- `--update-from-ardrive` - Populate missing ArDrive identifiers from drive `58677413-8a0c-4982-944d-4a1b40454039`, folder `1e42b095-4fbf-4411-bcc9-688917d5a5af`.
+- `--patchbin-db <path>` - Optional explicit database path for validation.
+- `--help` - Show usage details.
+
+**Environment Overrides**:
+- `PATCHBIN_DB_PATH` - Supplies default database path and target name when `--target` is omitted.
+
+**Output**:
+- Ensures `sqlpatches` array entries have `file_name`, `format`, `type`, `sha256`, `ipfs_cidv1`, and `size`.
+- Optionally fills in ArDrive metadata fields (`ardrive_file_name`, `ardrive_file_id`, `ardrive_file_path`, `data_txid`, `metadata_txid`, `ardrive_drive_id`, `ardrive_folder_id`) when files are located on ArDrive.
+
+---
+
 ## Utilities
 
 ### identify-incompatible-keys.js

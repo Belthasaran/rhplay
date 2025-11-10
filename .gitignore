@@ -65,3 +65,9 @@ README_OLD*.md
 .env.private
 
 tests/fixtures/generated/
+blobs/
+hacks/
+logs/
+pat_meta/
+patch/
+rom_meta/

@@ -6,8 +6,8 @@
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
-!define RHTOOLS_SCRIPT "$INSTDIR\\resources\\app.asar.unpacked\\electron\\installer\\prepare_databases.js"
-!define RHTOOLS_MANIFEST "$INSTDIR\\resources\\db\\dbmanifest.json"
+!define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
+!define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
 Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
@@ -22,7 +22,6 @@ Var RHToolsDialog
 Var RHToolsTextbox
 Var RHToolsRescanBtn
 Var RHToolsOpenBtn
-
 Function RHTools_InitVariables
   StrCpy $RHToolsPlanJson "$TEMP\\rhtools-plan.json"
   StrCpy $RHToolsPlanSummary "$TEMP\\rhtools-plan.txt"
@@ -33,11 +32,17 @@ FunctionEnd
 Function RHTools_RunPlan
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
-  nsExec::ExecToStack '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --ensure-dirs --manifest "${RHTOOLS_MANIFEST}" --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
+  nsExec::ExecToStack '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --manifest "${RHTOOLS_MANIFEST}" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
   Pop $0 ; return code
   Pop $1 ; output (ignored)
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Failed to generate database preparation plan (exit code $0).\r\nCheck the installer log for details." /SD IDOK
+    ${If} $1 != ""
+      MessageBox MB_ICONSTOP "Failed to generate database preparation plan.$\r$\n$1" /SD IDOK
+    ${Else}
+      MessageBox MB_ICONSTOP "Failed to generate database preparation plan (exit code $0).\r$\nCheck the setup log for details." /SD IDOK
+    ${EndIf}
     Abort
   ${EndIf}
   Call RHTools_ReadSummary
@@ -120,10 +125,16 @@ needProvision:
   Abort
 
 doProvision:
-  nsExec::ExecToLog '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --ensure-dirs --manifest "${RHTOOLS_MANIFEST}" --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
+  nsExec::ExecToLog '"$INSTDIR\\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --manifest "${RHTOOLS_MANIFEST}" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Database preparation failed (exit code $0).\r\nPlease review the summary at $RHToolsPlanSummary and resolve any issues before continuing." /SD IDOK
+    ${If} $1 != ""
+      MessageBox MB_ICONSTOP "Database preparation failed.$\r$\n$1" /SD IDOK
+    ${Else}
+      MessageBox MB_ICONSTOP "Database preparation failed (exit code $0).\r$\nPlease review the summary at $RHToolsPlanSummary and resolve any issues before continuing." /SD IDOK
+    ${EndIf}
     Abort
   ${EndIf}
 

@@ -160,6 +160,14 @@
       {
         "from": "electron/packed_db/clientdata.db.initial.xz",
         "to": "db/clientdata.db.initial.xz"
+      },
+      {
+        "from": "electron/installer/prepare_databases.js",
+        "to": "db/prepare_databases.js"
+      },
+      {
+        "from": "electron/installer/prepare_databases.js",
+        "to": "app.asar.unpacked/electron/installer/prepare_databases.js"
       }
     ],
     "asarUnpack": [

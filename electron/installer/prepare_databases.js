@@ -61,7 +61,9 @@ Examples:
 `.trim();
 
 function exitWithError(message) {
-  console.error(`[prepare_databases] ${message}`);
+  const errorPayload = { success: false, error: message };
+  console.error(JSON.stringify(errorPayload));
+  process.stdout.write(JSON.stringify(errorPayload));
   process.exit(1);
 }
 
@@ -85,9 +87,9 @@ function parseArgs(argv) {
       process.exit(0);
     } else if (arg === '--manifest') {
       if (i + 1 >= argv.length) exitWithError('Missing value after --manifest');
-      opts.manifestPath = path.resolve(argv[++i]);
+      opts.manifestPath = argv[++i];
     } else if (arg.startsWith('--manifest=')) {
-      opts.manifestPath = path.resolve(arg.substring('--manifest='.length));
+      opts.manifestPath = arg.substring('--manifest='.length);
     } else if (arg === '--user-data-dir') {
       if (i + 1 >= argv.length) exitWithError('Missing value after --user-data-dir');
       opts.userDataDir = path.resolve(argv[++i]);
@@ -606,8 +608,14 @@ async function executeProvision(plan, manifest) {
 
 async function run(argv) {
   const opts = parseArgs(argv);
-  opts.manifestPath =
-    opts.manifestPath || resolveDefaultManifestPath() || path.resolve(__dirname, '..', 'dbmanifest.json');
+  const defaultManifestFallback = 'electron/db/dbmanifest.json';
+  const manifestCandidate =
+    opts.manifestPath || resolveResourcePath(defaultManifestFallback) || resolveDefaultManifestPath();
+  const resolvedManifest = resolveResourcePath(manifestCandidate);
+  if (!resolvedManifest) {
+    exitWithError(`Manifest not found. Looked for ${manifestCandidate}`);
+  }
+  opts.manifestPath = resolvedManifest;
   opts.userDataDir = opts.userDataDir || detectUserDataDir();
   opts.workingDir = opts.workingDir || defaultWorkingDir(opts.userDataDir);
 
@@ -672,5 +680,25 @@ function resolveDefaultManifestPath() {
     candidates.push(path.join(process.resourcesPath, 'db', 'dbmanifest.json'));
   }
   return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function resolveResourcePath(input) {
+  if (!input) {
+    return null;
+  }
+  const candidates = [];
+  if (path.isAbsolute(input)) {
+    candidates.push(input);
+  } else {
+    candidates.push(path.join(process.cwd(), input));
+    candidates.push(path.join(__dirname, input));
+    candidates.push(path.join(__dirname, '..', input));
+    if (process.resourcesPath) {
+      candidates.push(path.join(process.resourcesPath, input));
+      candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', input));
+      candidates.push(path.join(process.resourcesPath, 'app.asar', input));
+    }
+  }
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 

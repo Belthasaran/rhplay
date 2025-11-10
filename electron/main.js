@@ -52,14 +52,22 @@ if (isInstallerCli) {
     if (app && typeof app.disableHardwareAcceleration === 'function') {
         app.disableHardwareAcceleration();
     }
-    const scriptPath = process.argv[cliFlagIndex + 1];
+    const scriptPathInput = process.argv[cliFlagIndex + 1];
     const scriptArgs = process.argv.slice(cliFlagIndex + 2);
     (async () => {
         try {
-            if (!scriptPath) {
+            if (!scriptPathInput) {
                 throw new Error('No script path provided to --run-cli-script.');
             }
-            const resolvedScript = path.resolve(scriptPath);
+            const resolvedScript = resolveScriptLocation(scriptPathInput);
+            if (!resolvedScript) {
+                throw new Error(
+                    `CLI script "${scriptPathInput}" not found in expected locations. Checked: ${collectScriptCandidates(
+                        scriptPathInput
+                    ).join('; ')}`
+                );
+            }
+            logTemp(`Resolved CLI script to ${resolvedScript}`);
             const runnerModule = require(resolvedScript);
             const runner =
                 runnerModule && typeof runnerModule.run === 'function'
@@ -154,6 +162,44 @@ function createMainWindow() {
     }
     
     return mainWindow;
+}
+
+function collectScriptCandidates(target) {
+    const candidates = [];
+    if (!target) {
+        return candidates;
+    }
+
+    if (path.isAbsolute(target)) {
+        candidates.push(target);
+    } else {
+        candidates.push(path.join(process.cwd(), target));
+        candidates.push(path.join(__dirname, target));
+        candidates.push(path.join(__dirname, '..', target));
+        if (process.resourcesPath) {
+            candidates.push(path.join(process.resourcesPath, target));
+            candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', target));
+            candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', target));
+            candidates.push(path.join(process.resourcesPath, 'app.asar', target));
+            candidates.push(path.join(process.resourcesPath, 'app.asar', 'electron', target));
+        }
+    }
+    return candidates;
+}
+
+function resolveScriptLocation(target) {
+    const candidates = collectScriptCandidates(target);
+    for (const candidate of candidates) {
+        try {
+            if (fs.existsSync(candidate)) {
+                return candidate;
+            }
+        } catch {
+            // ignore
+        }
+    }
+    logTemp(`CLI script "${target}" not found. Checked: ${candidates.join('; ')}`);
+    return null;
 }
 
 if (!isInstallerCli) {

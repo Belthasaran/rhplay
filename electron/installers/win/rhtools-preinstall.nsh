@@ -2,6 +2,7 @@
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
+!include "TextFunc.nsh"
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"

@@ -9,4 +9,7 @@ patchbin.db
 *.db-wal
 *.db-journal
 nostr*.db
+db_temp
+moderation.db
+ratings.db
 

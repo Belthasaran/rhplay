@@ -19,15 +19,15 @@ const crypto = require('crypto');
 const { execSync, spawnSync } = require('child_process');
 
 // Import modules
-const DatabaseManager = require('./lib/database');
-const SMWCFetcher = require('./lib/smwc-fetcher');
-const GameDownloader = require('./lib/game-downloader');
-const PatchProcessor = require('./lib/patch-processor');
-const BlobCreator = require('./lib/blob-creator');
-const RecordCreator = require('./lib/record-creator');
-const UpdateProcessor = require('./lib/update-processor');
-const StatsManager = require('./lib/stats-manager');
-const { getFlipsPath, getSmwRomPath, SMW_EXPECTED_SHA224 } = require('./lib/binary-finder');
+const DatabaseManager = require('../lib/database');
+const SMWCFetcher = require('../lib/smwc-fetcher');
+const GameDownloader = require('../lib/game-downloader');
+const PatchProcessor = require('../lib/patch-processor');
+const BlobCreator = require('../lib/blob-creator');
+const RecordCreator = require('../lib/record-creator');
+const UpdateProcessor = require('../lib/update-processor');
+const StatsManager = require('../lib/stats-manager');
+const { getFlipsPath, getSmwRomPath, SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
 
 // Configuration
 const CONFIG = {

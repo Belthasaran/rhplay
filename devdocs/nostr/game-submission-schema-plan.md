@@ -210,7 +210,7 @@ A "New Game"  button opens a form which allows entry of the common game fields:
 
 ## 2. File Layout & Naming
 - Default root: `logs/game_deltas/`.
-- File naming: `delta-YYYYMMDD-HHMMSS.json` (UTC). When `--log-xz` enabled, produce `delta-YYYYMMDD-HHMMSS.json.xz`.
+- By default each run emits `delta-YYYYMMDD-HHMMSS.json.xz` (`--log-append` with XZ compression). Override with `--nolog` to skip or `--log-baseline` for diff-only.
 - `--log-split-size <MB>` starts new segments (`delta-...-partNN.json`).
 - Maintain manifest `delta-manifest.json` tracking file order, SHA256, compression.
 
@@ -228,6 +228,7 @@ A "New Game"  button opens a form which allows entry of the common game fields:
   "entries": [
     {
       "timestamp": "2025-11-09T13:05:02.345Z",
+      "run_id": "2025-11-09T13:05:01Z",
       "table": "gameversions",
       "action": "insert",
       "primary_key": { "gameid": "new25110913_1a2b3c4d" },
@@ -291,9 +292,10 @@ A "New Game"  button opens a form which allows entry of the common game fields:
 - `artifacts`: optional array linking to files produced (patch blobs, screenshots).
 
 ## 4. Capture Modes
-- **Append Mode (`--log-append`)**: log each mutation as the script executes.
+- **Append Mode (`--log-append`, default)**: log each mutation as the script executes, emitting streamed `.json.xz`.
 - **Baseline Diff Mode (`--log-baseline path/to/original.db`)**: compare final DB to baseline; emit entries for new/updated/deleted records.
 - Both modes can run together (append for realtime, baseline for verification).
+- Provide follow-up utility (`enode.sh jstools/delta-merge.js`) to combine multiple run files into a consolidated log, ordering by `run_id` then entry timestamp.
 
 ## 5. Compression & Splitting Options
 - `--log-xz`: stream entries through XZ compressor.

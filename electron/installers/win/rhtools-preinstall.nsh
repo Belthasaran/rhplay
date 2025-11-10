@@ -10,7 +10,9 @@
 !define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
-Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
+!macro customFinishPageBefore
+  Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
+!macroend
 
 !insertmacro TrimNewLines
 
@@ -32,14 +34,15 @@ Function RHTools_InitVariables
 FunctionEnd
 
 Function RHTools_RunPlan
+  IfFileExists "$INSTDIR\${RHTOOLS_APP_EXE}" 0 noExecutable
   Call RHTools_DetermineArgs
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
   nsExec::ExecToStack "$RHToolsCliCommand --ensure-dirs --write-plan=$RHToolsPlanJson --write-summary=$RHToolsPlanSummary"
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
-  Pop $0
-  Pop $1
+  Pop $0 ; return code
+  Pop $1 ; output (ignored)
   ${If} $0 != 0
     ${If} $1 != ""
       MessageBox MB_ICONSTOP "Failed to generate database preparation plan.$\r$\n$1" /SD IDOK
@@ -49,6 +52,12 @@ Function RHTools_RunPlan
     Abort
   ${EndIf}
   Call RHTools_ReadSummary
+  Return
+
+noExecutable:
+  StrCpy $RHToolsSummaryContent "Installer files are still being copied. Please continue the installation and revisit this page once setup finishes copying files."
+  StrCpy $RHToolsNeedProvision "no"
+  Return
 FunctionEnd
 
 Function RHTools_ReadSummary
@@ -107,7 +116,7 @@ Function RHToolsPlanPageCreate
 FunctionEnd
 
 Function RHTools_OnOpenArDrive
-  ExecShell "open" ${RHTOOLS_ARD_URL}
+  ExecShell "open" ${RHTools_ARD_URL}
 FunctionEnd
 
 Function RHTools_OnRescan

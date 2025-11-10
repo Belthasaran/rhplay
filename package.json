@@ -207,7 +207,8 @@
       "allowToChangeInstallationDirectory": true,
       "allowElevation": false,
       "include": "electron/installers/win/rhtools-preinstall.nsh",
-      "artifactName": "${productName}-${version}-setup.exe"
+      "artifactName": "${productName}-${version}-setup.exe",
+      "warningsAsErrors" : false
     },
     "linux": {
       "target": [

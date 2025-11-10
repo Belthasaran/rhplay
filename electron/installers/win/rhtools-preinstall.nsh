@@ -6,10 +6,8 @@
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
-!define RHTOOLS_SCRIPT_PRIMARY "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js"
-!define RHTOOLS_SCRIPT_SECONDARY "$INSTDIR\resources\app.asar\electron\installer\prepare_databases.js"
-!define RHTOOLS_SCRIPT_TERTIARY "$INSTDIR\resources\db\prepare_databases.js"
-!define RHTOOLS_MANIFEST_PRIMARY "$INSTDIR\resources\db\dbmanifest.json"
+!define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
+!define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
 Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
@@ -25,7 +23,6 @@ Var RHToolsTextbox
 Var RHToolsRescanBtn
 Var RHToolsOpenBtn
 Var RHToolsCliCommand
-Var RHToolsManifestPath
 
 Function RHTools_InitVariables
   StrCpy $RHToolsPlanJson "$TEMP\rhtools-plan.json"
@@ -41,13 +38,13 @@ Function RHTools_RunPlan
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
   nsExec::ExecToStack "$RHToolsCliCommand --ensure-dirs --write-plan=$RHToolsPlanJson --write-summary=$RHToolsPlanSummary"
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
-  Pop $0 ; return code
-  Pop $1 ; output (ignored)
+  Pop $0
+  Pop $1
   ${If} $0 != 0
     ${If} $1 != ""
       MessageBox MB_ICONSTOP "Failed to generate database preparation plan.$\r$\n$1" /SD IDOK
     ${Else}
-      MessageBox MB_ICONSTOP "Failed to generate database preparation plan (exit code $0).\r$\nCheck the setup log for details." /SD IDOK
+      MessageBox MB_ICONSTOP "Failed to generate database preparation plan (exit code $0)." /SD IDOK
     ${EndIf}
     Abort
   ${EndIf}
@@ -121,35 +118,7 @@ Function RHTools_OnRescan
 FunctionEnd
 
 Function RHTools_DetermineArgs
-  Call RHTools_FindScriptPath
-  StrCmp $RHToolsCliCommand "" 0 +3
-    MessageBox MB_ICONSTOP "Unable to locate prepare_databases.js within the installed package." /SD IDOK
-    Abort
-  Call RHTools_FindManifestPath
-  StrCmp $RHToolsManifestPath "" 0 +3
-    MessageBox MB_ICONSTOP "Unable to locate dbmanifest.json within the installed package." /SD IDOK
-    Abort
-  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$RHToolsCliCommand" --manifest "$RHToolsManifestPath"'
-FunctionEnd
-
-Function RHTools_FindScriptPath
-  StrCpy $RHToolsCliCommand ${RHTOOLS_SCRIPT_PRIMARY}
-  IfFileExists "$RHToolsCliCommand" done
-  StrCpy $RHToolsCliCommand ${RHTOOLS_SCRIPT_SECONDARY}
-  IfFileExists "$RHToolsCliCommand" done
-  StrCpy $RHToolsCliCommand ${RHTOOLS_SCRIPT_TERTIARY}
-  IfFileExists "$RHToolsCliCommand" done
-  StrCpy $RHToolsCliCommand ""
-  Return
- done:
-  Return
-FunctionEnd
-
-Function RHTools_FindManifestPath
-  StrCpy $RHToolsManifestPath ${RHTOOLS_MANIFEST_PRIMARY}
-  IfFileExists "$RHToolsManifestPath" 0 +3
-    Return
-  StrCpy $RHToolsManifestPath ""
+  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --manifest "${RHTOOLS_MANIFEST}"'
 FunctionEnd
 
 Function RHToolsPlanPageLeave
@@ -172,14 +141,13 @@ doProvision:
     ${If} $1 != ""
       MessageBox MB_ICONSTOP "Database preparation failed.$\r$\n$1" /SD IDOK
     ${Else}
-      MessageBox MB_ICONSTOP "Database preparation failed (exit code $0).\r$\nPlease review the summary at $RHToolsPlanSummary and resolve any issues before continuing." /SD IDOK
+      MessageBox MB_ICONSTOP "Database preparation failed (exit code $0)." /SD IDOK
     ${EndIf}
     Abort
   ${EndIf}
-
   Call RHTools_ReadSummary
   ${If} $RHToolsNeedProvision == "yes"
-    MessageBox MB_ICONEXCLAMATION "Some database files are still missing or could not be prepared.\r\nPlease address the items listed and click Next again." /SD IDOK
+    MessageBox MB_ICONEXCLAMATION "Some database files are still missing or could not be prepared.$\r$\nPlease address the items listed and click Next again." /SD IDOK
     Abort
   ${EndIf}
 FunctionEnd

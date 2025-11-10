@@ -690,14 +690,16 @@ function resolveResourcePath(input) {
   if (path.isAbsolute(input)) {
     candidates.push(input);
   } else {
-    candidates.push(path.join(process.cwd(), input));
-    candidates.push(path.join(__dirname, input));
-    candidates.push(path.join(__dirname, '..', input));
     if (process.resourcesPath) {
       candidates.push(path.join(process.resourcesPath, input));
       candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', input));
+      candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', input));
       candidates.push(path.join(process.resourcesPath, 'app.asar', input));
+      candidates.push(path.join(process.resourcesPath, 'app.asar', 'electron', input));
     }
+    candidates.push(path.join(__dirname, input));
+    candidates.push(path.join(__dirname, '..', input));
+    candidates.push(path.join(process.cwd(), input));
   }
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }

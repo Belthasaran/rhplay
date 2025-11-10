@@ -2,6 +2,7 @@
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
+!include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"

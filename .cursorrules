@@ -2,6 +2,7 @@
 #
 Notes: Project uses enode.sh to run various standalone node scripts in parent directories through electron.
 such as: enode.sh fetchpatches.js mode3 -b gameid 23415 
+Never run "node" for project scripts always run "enode.sh"
 
 
 ## File Guidelines

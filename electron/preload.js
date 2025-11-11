@@ -909,4 +909,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('trust:changed', handler);
     return () => ipcRenderer.removeListener('trust:changed', handler);
   },
+
+  provisioner: {
+    getState: () => ipcRenderer.invoke('provisioner:get-state'),
+    runPlan: () => ipcRenderer.invoke('provisioner:run-plan'),
+    runProvision: () => ipcRenderer.invoke('provisioner:run-provision'),
+    launchMain: () => ipcRenderer.invoke('provisioner:launch-main'),
+    openArDrive: () => ipcRenderer.invoke('provisioner:open-ardrive'),
+    onLog: (callback) => {
+      if (typeof callback !== 'function') {
+        return () => {};
+      }
+      const handler = (_event, message) => callback(message);
+      ipcRenderer.on('provisioner:log', handler);
+      return () => ipcRenderer.removeListener('provisioner:log', handler);
+    },
+    onStatus: (callback) => {
+      if (typeof callback !== 'function') {
+        return () => {};
+      }
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('provisioner:status', handler);
+      return () => ipcRenderer.removeListener('provisioner:status', handler);
+    },
+  },
 });

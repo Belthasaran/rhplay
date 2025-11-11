@@ -1,6 +1,6 @@
 {
   "clientdata.db": {
-	  "final_sha256" : ""b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8,
+	  "final_sha256" : "b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8",
 	  "base" : {
 		  "source_path" : "packed_db/clientdata.db.initial.xz",
 		  "file_name" : "clientdata.db.initial.xz",
@@ -18,7 +18,7 @@
 	  }
   },
   "rhdata.db": { 
-    "final_sha256" : ""7bab2e567e79805ad432613ae14718c5c64a29e92a2be3ac26c605a58b26d64b",
+    "final_sha256" : "7bab2e567e79805ad432613ae14718c5c64a29e92a2be3ac26c605a58b26d64b",
     "base": {
       "file_name": "full_rhdata_2025_11_01.tar.xz",
       "format": "tar+xz",

@@ -1,6 +1,6 @@
 {
   "name": "rhtools",
-  "version": "0.1.3beta",
+  "version": "0.1.4beta",
   "description": "RHTools - ROM HackPlay Tools Application",
   "author": "RHTools Team <143627208+Belthasaran@users.noreply.github.com>",
   "main": "electron/main.js",
@@ -169,6 +169,10 @@
         "from": "node_modules/readable-stream",
         "to": "app.asar.unpacked/node_modules/readable-stream"
       },
+     {
+        "from": "node_modules/bindings",
+        "to": "app.asar.unpacked/node_modules/bindings"
+      },
       {
         "from": "node_modules/inherits",
         "to": "app.asar.unpacked/node_modules/inherits"
@@ -214,6 +218,10 @@
         "to": "app.asar.unpacked/node_modules/yallist"
       },
       {
+	      "from" : "node_modules/file-uri-to-path",
+	      "to"   : "app.asar.unpacked/node_modules/file-uri-to-path"
+      },
+      {
         "from": "electron/installer/prepare_databases.js",
         "to": "app.asar.unpacked/electron/installer/prepare_databases.js"
       }
@@ -224,6 +232,7 @@
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
       "node_modules/readable-stream/**/*",
+      "node_modules/file-uri-to-path/**/*",
       "node_modules/inherits/**/*",
       "node_modules/string_decoder/**/*",
       "node_modules/util-deprecate/**/*",

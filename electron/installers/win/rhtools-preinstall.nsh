@@ -21,6 +21,7 @@ Var RHToolsTextbox
 Var RHToolsRefreshBtn
 Var RHToolsOpenBtn
 Var RHToolsCliCommand
+Var RHToolsMsgPtr
 Var RHToolsProgressLog
 Var RHToolsProgressDone
 
@@ -84,18 +85,30 @@ Function RHTools_RunProvision
     MessageBox MB_ICONSTOP "Failed to launch provisioning helper (exit code $1)." /SD IDOK
     Abort
   ${EndIf}
+  Push $0
+  Push $1
+  System::Alloc 28
+  Pop $0 ; pointer to MSG structure
 
 loopProgress:
   Call RHTools_UpdateProgress
+  System::Call 'user32::PeekMessageW(pr0, i 0, i 0, i 0, i 1) i.r1'
+  ${If} $1 != 0
+    System::Call 'user32::TranslateMessage(pr0)'
+    System::Call 'user32::DispatchMessageW(pr0)'
+  ${EndIf}
   IfFileExists "$RHToolsProgressDone" doneProgress waitProgress
 
 waitProgress:
-  Sleep 500
+  Sleep 250
   Goto loopProgress
 
 doneProgress:
   Call RHTools_UpdateProgress
   Call RHTools_RunPlan
+  System::Free $0
+  Pop $1
+  Pop $0
   Return
 
 noExecutable:

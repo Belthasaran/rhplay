@@ -30,7 +30,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
-const { Readable } = require('stream');
+const { Readable, Transform } = require('stream');
 const lzma = require('lzma-native');
 const tar = require('tar');
 const Database = require('better-sqlite3');
@@ -468,7 +468,81 @@ const IPFS_GATEWAYS = [
   'https://gateway.pinata.cloud/ipfs/',
 ];
 
-async function downloadFromUrl(url, destPath, expectedSha256) {
+async function ensureArtifact(spec, workingDir, downloadTracker) {
+  const destPath = path.join(workingDir, spec.file_name);
+  if (downloadTracker) {
+    downloadTracker.register(spec);
+  }
+  if (fs.existsSync(destPath) && (!spec.sha256 || sha256File(destPath) === spec.sha256)) {
+    console.log(`[download-cached] ${spec.file_name} already present with matching hash.`);
+    if (downloadTracker) {
+      downloadTracker.skip(spec);
+    }
+    return destPath;
+  }
+
+  if (fs.existsSync(destPath)) {
+    console.warn(`[download-retry] ${spec.file_name} present but hash mismatch, re-downloading.`);
+  }
+
+  let lastError = null;
+
+  const attempts = [];
+
+  if (spec.ipfs_cidv1) {
+    for (const gateway of IPFS_GATEWAYS) {
+      const url = `${gateway}${spec.ipfs_cidv1}`;
+      attempts.push({ url, label: `ipfs:${gateway}` });
+      try {
+        await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`);
+        return destPath;
+      } catch (err) {
+        lastError = err;
+        console.error(`[download-error] ${spec.file_name} via ipfs:${gateway} -> ${err.message}`);
+      }
+    }
+  }
+
+  if (spec.data_txid) {
+    const url = `https://arweave.net/${spec.data_txid}`;
+    attempts.push({ url, label: 'arweave:data_txid' });
+    try {
+      await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:data_txid');
+      return destPath;
+    } catch (err) {
+      lastError = err;
+      console.error(`[download-error] ${spec.file_name} via arweave:data_txid -> ${err.message}`);
+    }
+  } else if (spec.ardrive_file_path) {
+    // Last resort: attempt to download via public ArDrive gateway path.
+    const url = `https://arweave.net${spec.ardrive_file_path}`;
+    attempts.push({ url, label: 'arweave:ardrive_path' });
+    try {
+      await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:ardrive_path');
+      return destPath;
+    } catch (err) {
+      lastError = err;
+      console.error(`[download-error] ${spec.file_name} via arweave:ardrive_path -> ${err.message}`);
+    }
+  }
+
+  if (attempts.length === 0) {
+    console.error(`[download-fail] ${spec.file_name}: no download sources available in manifest.`);
+  } else {
+    console.error(
+      `[download-fail] ${spec.file_name}: exhausted ${attempts.length} source(s). Last error was: ${
+        lastError ? lastError.message : 'unknown'
+      }`
+    );
+  }
+
+  throw new Error(
+    `Failed to download ${spec.file_name}: ${lastError ? lastError.message : 'no sources available'}`
+  );
+}
+
+async function downloadFromUrl(url, destPath, expectedSha256, spec, downloadTracker, sourceLabel) {
+  console.log(`[download-attempt] ${spec.file_name} via ${sourceLabel || url}`);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000); // 4 minutes
   let response;
@@ -483,11 +557,31 @@ async function downloadFromUrl(url, destPath, expectedSha256) {
     throw new Error(`HTTP ${response.status} ${response.statusText}`);
   }
 
+  const totalBytes = Number(response.headers.get('content-length')) || 0;
+  if (downloadTracker) {
+    downloadTracker.start(spec, totalBytes);
+  }
+
   const tempPath = `${destPath}.download`;
   const writeStream = fs.createWriteStream(tempPath);
   const bodyStream = Readable.fromWeb(response.body);
-  await pipeline(bodyStream, writeStream);
+  let downloadedBytes = 0;
+  const tracker = new Transform({
+    transform(chunk, encoding, callback) {
+      downloadedBytes += chunk.length;
+      if (downloadTracker) {
+        downloadTracker.progress(spec, downloadedBytes, totalBytes);
+      }
+      callback(null, chunk);
+    },
+  });
+
+  await pipeline(bodyStream, tracker, writeStream);
   writeStream.close();
+
+  if (downloadTracker) {
+    downloadTracker.complete(spec);
+  }
 
   if (expectedSha256) {
     const actualSha = sha256File(tempPath);
@@ -497,51 +591,7 @@ async function downloadFromUrl(url, destPath, expectedSha256) {
     }
   }
 
-  fs.renameSync(tempPath, destPath);
-}
-
-async function ensureArtifact(spec, workingDir) {
-  const destPath = path.join(workingDir, spec.file_name);
-  if (fs.existsSync(destPath) && (!spec.sha256 || sha256File(destPath) === spec.sha256)) {
-    return destPath;
-  }
-
-  let lastError = null;
-
-  if (spec.ipfs_cidv1) {
-    for (const gateway of IPFS_GATEWAYS) {
-      const url = `${gateway}${spec.ipfs_cidv1}`;
-      try {
-        await downloadFromUrl(url, destPath, spec.sha256);
-        return destPath;
-      } catch (err) {
-        lastError = err;
-      }
-    }
-  }
-
-  if (spec.data_txid) {
-    const url = `https://arweave.net/${spec.data_txid}`;
-    try {
-      await downloadFromUrl(url, destPath, spec.sha256);
-      return destPath;
-    } catch (err) {
-      lastError = err;
-    }
-  } else if (spec.ardrive_file_path) {
-    // Last resort: attempt to download via public ArDrive gateway path.
-    const url = `https://arweave.net${spec.ardrive_file_path}`;
-    try {
-      await downloadFromUrl(url, destPath, spec.sha256);
-      return destPath;
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  throw new Error(
-    `Failed to download ${spec.file_name}: ${lastError ? lastError.message : 'no sources available'}`
-  );
+  await fs.promises.rename(tempPath, destPath);
 }
 
 async function decompressXz(sourcePath, destPath) {
@@ -576,7 +626,7 @@ async function extractFileFromTar(tarPath, extractFile, outputPath) {
   }
 }
 
-async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths) {
+async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker) {
   const { downloadsDir, stagingDir } = planPaths;
   ensureDirectory(stagingDir);
 
@@ -585,7 +635,8 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths) {
     throw new Error(`Manifest entry missing base description.`);
   }
 
-  const baseArchivePath = await ensureArtifact(base, downloadsDir);
+  const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker);
+  console.log(`[extract] ${dbStatus.name}: decompressing base archive ${base.file_name}`);
   const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
   const tempDbPath = path.join(stagingDir, `${dbStatus.name}.tmp.db`);
   const finalDbPath = path.join(planPaths.finalDir, dbStatus.name);
@@ -595,6 +646,7 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths) {
   }
 
   await decompressXz(baseArchivePath, baseTarPath);
+  console.log(`[extract] ${dbStatus.name}: extracting ${base.extract_file || dbStatus.name}`);
   await extractFileFromTar(baseTarPath, base.extract_file || dbStatus.name, tempDbPath);
   fs.unlinkSync(baseTarPath);
 
@@ -606,16 +658,19 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths) {
   patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
 
   for (const patch of patches) {
-    const patchArchivePath = await ensureArtifact(patch, downloadsDir);
+    const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker);
+    console.log(`[patch-start] ${dbStatus.name}: applying ${patch.file_name}`);
     const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
     await decompressXz(patchArchivePath, sqlPath);
     await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
     fs.unlinkSync(sqlPath);
+    console.log(`[patch-complete] ${dbStatus.name}: applied ${patch.file_name}`);
   }
 
   ensureDirectory(path.dirname(finalDbPath));
   fs.copyFileSync(tempDbPath, finalDbPath);
   fs.unlinkSync(tempDbPath);
+  console.log(`[provision] ${dbStatus.name}: finalized database at ${finalDbPath}`);
   return finalDbPath;
 }
 
@@ -623,9 +678,9 @@ async function applySqlPatch(dbPath, sqlPath, originName) {
   const sql = fs.readFileSync(sqlPath, 'utf8');
   const db = new Database(dbPath);
   try {
-    db.exec('BEGIN;');
+    //db.exec('BEGIN;');
     db.exec(sql);
-    db.exec('COMMIT;');
+    //db.exec('COMMIT;');
   } catch (err) {
     db.exec('ROLLBACK;');
     throw new Error(`Failed to apply ${originName}: ${err.message}`);
@@ -640,6 +695,20 @@ async function executeProvision(plan, manifest) {
     skipped: [],
     errors: [],
   };
+
+  const downloadTracker = createDownloadTracker();
+  for (const db of plan.databases) {
+    const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name)?.manifestKey];
+    if (!manifestEntry) {
+      continue;
+    }
+    if (manifestEntry.base) {
+      downloadTracker.register(manifestEntry.base);
+    }
+    if (Array.isArray(manifestEntry.sqlpatches)) {
+      manifestEntry.sqlpatches.forEach((spec) => downloadTracker.register(spec));
+    }
+  }
 
   const paths = normalizeWorkingPaths(plan);
   paths.finalDir = plan.userDataDir;
@@ -666,7 +735,7 @@ async function executeProvision(plan, manifest) {
         if (!manifestEntry) {
           throw new Error('Manifest entry missing.');
         }
-        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths);
+        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker);
         result.executed.push({ name: db.name, action: 'provisioned', path: dest });
         console.log(`[provision] ${db.name}: provisioning completed -> ${dest}`);
       } else {
@@ -787,5 +856,71 @@ function resolveResourcePath(input) {
     candidates.push(path.join(process.cwd(), input));
   }
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return 'unknown';
+  }
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let idx = 0;
+  let value = bytes;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  return `${value.toFixed(idx === 0 ? 0 : 1)}${units[idx]}`;
+}
+
+function createDownloadTracker() {
+  const state = {
+    total: 0,
+    completed: 0,
+  };
+
+  return {
+    register(spec) {
+      if (spec.__downloadOrder) {
+        return;
+      }
+      spec.__downloadOrder = ++state.total;
+    },
+    start(spec, totalBytes) {
+      spec.__downloadBytesTotal = totalBytes || 0;
+      spec.__downloadLastPercent = -1;
+      spec.__downloadLastBytes = 0;
+      console.log(
+        `[download-start] ${spec.__downloadOrder}/${state.total} ${spec.file_name} size=${formatBytes(totalBytes)}`
+      );
+    },
+    progress(spec, downloaded, totalBytes) {
+      if (totalBytes > 0) {
+        const percent = Math.floor((downloaded / totalBytes) * 100);
+        if (percent >= (spec.__downloadLastPercent ?? -1) + 5) {
+          spec.__downloadLastPercent = percent;
+          console.log(
+            `[download-progress] ${spec.file_name} ${percent}% (${formatBytes(downloaded)}/${formatBytes(totalBytes)})`
+          );
+        }
+      } else {
+        if (downloaded - (spec.__downloadLastBytes ?? 0) >= 5 * 1024 * 1024) {
+          spec.__downloadLastBytes = downloaded;
+          console.log(
+            `[download-progress] ${spec.file_name} downloaded ${formatBytes(downloaded)} (total unknown)`
+          );
+        }
+      }
+    },
+    complete(spec) {
+      state.completed += 1;
+      console.log(
+        `[download-complete] ${spec.__downloadOrder}/${state.total} ${spec.file_name}`
+      );
+    },
+    skip(spec) {
+      console.log(`[download-skip] ${spec.file_name} already present`);
+      state.completed += 1;
+    },
+  };
 }
 

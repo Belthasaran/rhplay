@@ -170,6 +170,26 @@
         "to": "app.asar.unpacked/node_modules/readable-stream"
       },
       {
+        "from": "node_modules/inherits",
+        "to": "app.asar.unpacked/node_modules/inherits"
+      },
+      {
+        "from": "node_modules/string_decoder",
+        "to": "app.asar.unpacked/node_modules/string_decoder"
+      },
+      {
+        "from": "node_modules/util-deprecate",
+        "to": "app.asar.unpacked/node_modules/util-deprecate"
+      },
+      {
+        "from": "node_modules/node-gyp-build",
+        "to": "app.asar.unpacked/node_modules/node-gyp-build"
+      },
+      {
+        "from": "node_modules/tar",
+        "to": "app.asar.unpacked/node_modules/tar"
+      },
+      {
         "from": "electron/installer/prepare_databases.js",
         "to": "app.asar.unpacked/electron/installer/prepare_databases.js"
       }
@@ -180,6 +200,11 @@
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
       "node_modules/readable-stream/**/*",
+      "node_modules/inherits/**/*",
+      "node_modules/string_decoder/**/*",
+      "node_modules/util-deprecate/**/*",
+      "node_modules/node-gyp-build/**/*",
+      "node_modules/tar/**/*",
       "node_modules/secp256k1/**/*",
       "node_modules/@noble/post-quantum/**/*",
       "native-modules/serialport-nonblock/build/**/*",

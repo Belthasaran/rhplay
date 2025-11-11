@@ -4,20 +4,6 @@
 !include "nsDialogs.nsh"
 !include "TextFunc.nsh"
 !include "WordFunc.nsh"
-!define ENABLE_LOGGING
-!define LogSet "!insertmacro LogSetMacro"
-!macro LogSetMacro SETTING
-  !ifdef ENABLE_LOGGING
-    LogSet ${SETTING}
-  !endif
-!macroend
-
-!define LogText "!insertmacro LogTextMacro"
-!macro LogTextMacro INPUT_TEXT
-  !ifdef ENABLE_LOGGING
-    LogText ${INPUT_TEXT}
-  !endif
-!macroend
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
 !define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
@@ -38,12 +24,9 @@ Var RHToolsCliCommand
 Var RHToolsProgressLog
 Var RHToolsProgressDone
 
-Function .onInit
-  SetOutPath $INSTDIR
-  ${LogSet} on
-FunctionEnd
-
 Function RHTools_InitVariables
+  SetOutPath $INSTDIR
+  LogSet on
   StrCpy $RHToolsPlanJson "$TEMP\rhtools-plan.json"
   StrCpy $RHToolsPlanSummary "$TEMP\rhtools-plan.txt"
   StrCpy $RHToolsNeedProvision "no"
@@ -57,7 +40,7 @@ Function RHTools_RunPlan
   StrCpy $0 '$RHToolsCliCommand --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
-  ${LogText} "RHTools_RunPlan: Run $0"
+  LogText "RHTools_RunPlan:Run $0"
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
   nsExec::ExecToStack $0
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
@@ -95,6 +78,7 @@ Function RHTools_RunProvision
   Delete $RHToolsProgressDone
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
   StrCpy $0 '"$SYSDIR\cmd.exe" /C start "" /B "$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary" --progress-log "$RHToolsProgressLog" --progress-done "$RHToolsProgressDone"'
+  LogText "RHTools_RunProvision: nsExec::Exec $0"
   nsExec::Exec $0
   Pop $1
   ${If} $1 != 0
@@ -176,7 +160,9 @@ Function RHTools_ReadSummary
 FunctionEnd
 
 Function RHTools_DetermineArgs
+  LogText "Called RHTools_DetermineArgs"
   StrCpy $RHToolsCliCommand "\"$INSTDIR\\${RHTOOLS_APP_EXE}\" \"$INSTDIR\\resources\\app.asar.unpacked\\electron\\installer\\prepare_databases.js\""
+  LogText "RHTools_DetermineArgs:RHToolsCliCommand = $RHToolsCliCommand"
 FunctionEnd
 
 Function RHToolsPlanPageCreate

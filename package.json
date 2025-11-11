@@ -268,7 +268,12 @@
       "allowElevation": false,
       "include": "electron/installers/win/rhtools-preinstall.nsh",
       "artifactName": "${productName}-${version}-setup.exe",
-      "warningsAsErrors" : false
+      "warningsAsErrors" : false,
+      "customNsisBinary" : {
+	     "url" :  "https://github.com/Belthasaran/rhplay/releases/download/rel0_1_3beta/nsis-3.11-log.7z",
+	     "debugLogging" : true,
+	     "version" : "3.11"
+      }
     },
     "linux": {
       "target": [

@@ -10,11 +10,6 @@
 !define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
-!macro customFinishPageBefore
-  Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
-!macroend
-!insertmacro customFinishPageBefore
-
 !insertmacro TrimNewLines
 
 Var RHToolsPlanJson
@@ -23,9 +18,11 @@ Var RHToolsNeedProvision
 Var RHToolsSummaryContent
 Var RHToolsDialog
 Var RHToolsTextbox
-Var RHToolsRescanBtn
+Var RHToolsRefreshBtn
 Var RHToolsOpenBtn
 Var RHToolsCliCommand
+Var RHToolsProgressLog
+Var RHToolsProgressDone
 
 Function RHTools_InitVariables
   StrCpy $RHToolsPlanJson "$TEMP\rhtools-plan.json"
@@ -38,13 +35,14 @@ Function RHTools_RunPlan
   IfFileExists "$INSTDIR\${RHTOOLS_APP_EXE}" 0 noExecutable
   IfFileExists "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" 0 noScript
   Call RHTools_DetermineArgs
+  StrCpy $0 '$RHToolsCliCommand --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
-  nsExec::ExecToStack "$RHToolsCliCommand --ensure-dirs --write-plan=$RHToolsPlanJson --write-summary=$RHToolsPlanSummary"
+  nsExec::ExecToStack $0
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
-  Pop $0 ; return code
-  Pop $1 ; output (ignored)
+  Pop $0
+  Pop $1
   ${If} $0 != 0
     ${If} $1 != ""
       MessageBox MB_ICONSTOP "Failed to generate database preparation plan.$\r$\n$1" /SD IDOK
@@ -57,14 +55,78 @@ Function RHTools_RunPlan
   Return
 
 noExecutable:
-  StrCpy $RHToolsSummaryContent "Installer files are still being copied. Please continue the installation and revisit this page once setup finishes copying files."
-  StrCpy $RHToolsNeedProvision "no"
+  StrCpy $RHToolsSummaryContent "Installer files are still being copied. When installation completes, click Refresh and then Continue to provision databases."
+  StrCpy $RHToolsNeedProvision "yes"
   Return
 
 noScript:
-  StrCpy $RHToolsSummaryContent "Provisioning script is not yet available. Please continue the installation and revisit this page once setup finishes copying files."
-  StrCpy $RHToolsNeedProvision "no"
+  StrCpy $RHToolsSummaryContent "Provisioning script is not yet available. When installation completes, click Refresh and then Continue to provision databases."
+  StrCpy $RHToolsNeedProvision "yes"
   Return
+FunctionEnd
+
+Function RHTools_RunProvision
+  IfFileExists "$INSTDIR\${RHTOOLS_APP_EXE}" 0 noExecutable
+  IfFileExists "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" 0 noScript
+  Call RHTools_DetermineArgs
+  StrCpy $RHToolsProgressLog "$TEMP\rhtools-progress.log"
+  StrCpy $RHToolsProgressDone "$TEMP\rhtools-progress.done"
+  Delete $RHToolsProgressLog
+  Delete $RHToolsProgressDone
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
+  StrCpy $0 '"$SYSDIR\cmd.exe" /C start "" /B "$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary" --progress-log "$RHToolsProgressLog" --progress-done "$RHToolsProgressDone"'
+  nsExec::Exec $0
+  Pop $1
+  ${If} $1 != 0
+    MessageBox MB_ICONSTOP "Failed to launch provisioning helper (exit code $1)." /SD IDOK
+    Abort
+  ${EndIf}
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
+
+loopProgress:
+  Call RHTools_UpdateProgress
+  IfFileExists "$RHToolsProgressDone" 0 +3
+    Sleep 500
+    Goto loopProgress
+
+  Call RHTools_UpdateProgress
+  Call RHTools_RunPlan
+  Return
+
+noExecutable:
+  MessageBox MB_ICONSTOP "Executable not found yet. Please wait for installation to finish copying files before running provisioning." /SD IDOK
+  Abort
+
+noScript:
+  MessageBox MB_ICONSTOP "Provisioning script not available yet. Please wait for installation to finish copying files before running provisioning." /SD IDOK
+  Abort
+FunctionEnd
+
+Function RHTools_UpdateProgress
+  Push $0
+  Push $1
+  StrCpy $1 ""
+  IfFileExists "$RHToolsProgressLog" 0 done
+    FileOpen $0 "$RHToolsProgressLog" r
+    ${If} $0 == ""
+      Goto done
+    ${EndIf}
+    ${Do}
+      FileRead $0 $2
+      ${If} ${Errors}
+        ${Break}
+      ${EndIf}
+      ${TrimNewLines} $2 $2
+      StrCpy $1 "$1$2$\r$\n"
+    ${Loop}
+    FileClose $0
+  done:
+  ${If} $RHToolsTextbox != 0
+    ${NSD_SetText} $RHToolsTextbox $1
+    SendMessage $RHToolsTextbox ${EM_SETSEL} -1 -1
+  ${EndIf}
+  Pop $1
+  Pop $0
 FunctionEnd
 
 Function RHTools_ReadSummary
@@ -93,6 +155,10 @@ Function RHTools_ReadSummary
   FileClose $0
 FunctionEnd
 
+Function RHTools_DetermineArgs
+  StrCpy $RHToolsCliCommand "\"$INSTDIR\\${RHTOOLS_APP_EXE}\" \"$INSTDIR\\resources\\app.asar.unpacked\\electron\\installer\\prepare_databases.js\""
+FunctionEnd
+
 Function RHToolsPlanPageCreate
   Call RHTools_InitVariables
   Call RHTools_RunPlan
@@ -103,68 +169,57 @@ Function RHToolsPlanPageCreate
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 12u "RHTools database preparation summary"
-  ${NSD_CreateText} 0 14u 100% 120u ""
+  ${NSD_CreateLabel} 0 0 100% 12u "RHTools database provisioning"
+  ${NSD_CreateText} 0 14u 100% 110u ""
   Pop $RHToolsTextbox
   SendMessage $RHToolsTextbox ${EM_SETREADONLY} 1 0
   ${NSD_SetText} $RHToolsTextbox $RHToolsSummaryContent
 
-  ${NSD_CreateButton} 0 140u 90u 12u "Open ArDrive"
+  ${NSD_CreateButton} 0 130u 90u 12u "Refresh"
+  Pop $RHToolsRefreshBtn
+  ${NSD_OnClick} $RHToolsRefreshBtn RHTools_OnRefresh
+
+  ${NSD_CreateButton} 95u 130u 90u 12u "Open ArDrive"
   Pop $RHToolsOpenBtn
   ${NSD_OnClick} $RHToolsOpenBtn RHTools_OnOpenArDrive
 
-  ${NSD_CreateButton} 95u 140u 90u 12u "Re-scan"
-  Pop $RHToolsRescanBtn
-  ${NSD_OnClick} $RHToolsRescanBtn RHTools_OnRescan
-
-  ${NSD_CreateLabel} 0 158u 100% 12u "Click Next to proceed. Manual downloads are optional if you prefer to supply files yourself."
+  ${NSD_CreateLabel} 0 148u 100% 24u "After reviewing this summary, click Next to continue. If provisioning is still required, you will be prompted to run it automatically. To manually download files instead, open the ArDrive link above before proceeding."
 
   nsDialogs::Show
 FunctionEnd
 
-Function RHTools_OnOpenArDrive
-  ExecShell "open" ${RHTools_ARD_URL}
-FunctionEnd
-
-Function RHTools_OnRescan
+Function RHTools_OnRefresh
   Call RHTools_RunPlan
   ${If} $RHToolsTextbox != 0
     ${NSD_SetText} $RHToolsTextbox $RHToolsSummaryContent
   ${EndIf}
 FunctionEnd
 
-Function RHTools_DetermineArgs
-  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json"'
+Function RHTools_OnOpenArDrive
+  ExecShell "open" ${RHTOOLS_ARD_URL}
 FunctionEnd
 
 Function RHToolsPlanPageLeave
-  StrCmp $RHToolsNeedProvision "yes" needProvision done
-
-done:
-  Return
-
-needProvision:
-  MessageBox MB_YESNO "RHTools can download and assemble the required databases now. Proceed?" IDYES doProvision
-  Abort
-
-doProvision:
-  Call RHTools_DetermineArgs
-  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
-  nsExec::ExecToLog "$RHToolsCliCommand --ensure-dirs --provision --write-plan=$RHToolsPlanJson --write-summary=$RHToolsPlanSummary"
-  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
-  Pop $0
-  ${If} $0 != 0
-    ${If} $1 != ""
-      MessageBox MB_ICONSTOP "Database preparation failed.$\r$\n$1" /SD IDOK
-    ${Else}
-      MessageBox MB_ICONSTOP "Database preparation failed (exit code $0)." /SD IDOK
-    ${EndIf}
-    Abort
-  ${EndIf}
-  Call RHTools_ReadSummary
+  Call RHTools_RunPlan
   ${If} $RHToolsNeedProvision == "yes"
-    MessageBox MB_ICONEXCLAMATION "Some database files are still missing or could not be prepared.$\r$\nPlease address the items listed and click Next again." /SD IDOK
+    MessageBox MB_ICONQUESTION|MB_YESNO "Provisioning is required. Run automatic provisioning now?" IDYES +2
+    MessageBox MB_ICONEXCLAMATION "Provisioning is still pending. You can download the required files manually from ArDrive and click Refresh." /SD IDOK
     Abort
+
+    Call RHTools_RunProvision
+    ${If} $RHToolsNeedProvision == "yes"
+      MessageBox MB_ICONEXCLAMATION "Provisioning is still pending. Please resolve the issues shown in the summary before continuing." /SD IDOK
+      Abort
+    ${EndIf}
   ${EndIf}
 FunctionEnd
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_LANGUAGE "English"
 

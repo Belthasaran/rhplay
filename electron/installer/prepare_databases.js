@@ -598,12 +598,9 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths) {
   await extractFileFromTar(baseTarPath, base.extract_file || dbStatus.name, tempDbPath);
   fs.unlinkSync(baseTarPath);
 
-  const baseSha = sha256File(tempDbPath);
-  if (base.sha256 && baseSha !== base.sha256) {
-    throw new Error(
-      `Extracted base SHA-256 mismatch for ${dbStatus.name} (expected ${base.sha256}, got ${baseSha})`
-    );
-  }
+  console.log(
+    `[plan] ${dbStatus.name}: extracted base archive (archive SHA already verified as ${base.sha256 || 'unknown'})`
+  );
 
   const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
   patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));

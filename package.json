@@ -166,6 +166,10 @@
         "to": "db/prepare_databases.js"
       },
       {
+        "from": "node_modules/readable-stream",
+        "to": "app.asar.unpacked/node_modules/readable-stream"
+      },
+      {
         "from": "electron/installer/prepare_databases.js",
         "to": "app.asar.unpacked/electron/installer/prepare_databases.js"
       }
@@ -175,6 +179,7 @@
       "node_modules/better-sqlite3/**/*",
       "node_modules/keccak/**/*",
       "node_modules/lzma-native/**/*",
+      "node_modules/readable-stream/**/*",
       "node_modules/secp256k1/**/*",
       "node_modules/@noble/post-quantum/**/*",
       "native-modules/serialport-nonblock/build/**/*",

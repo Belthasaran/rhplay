@@ -6,8 +6,7 @@
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
-# !define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
-!define RHTOOLS_SCRIPT "resources\db\prepare_databases.js"
+!define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
 !define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 

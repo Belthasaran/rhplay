@@ -135,7 +135,7 @@ Function RHTools_OnRescan
 FunctionEnd
 
 Function RHTools_DetermineArgs
-  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" -- "-" --no-warnings --run-cli-script "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json"'
+  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json"'
 FunctionEnd
 
 Function RHToolsPlanPageLeave

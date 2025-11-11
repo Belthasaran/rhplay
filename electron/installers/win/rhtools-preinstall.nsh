@@ -37,6 +37,7 @@ FunctionEnd
 
 Function RHTools_RunPlan
   IfFileExists "$INSTDIR\${RHTOOLS_APP_EXE}" 0 noExecutable
+  IfFileExists "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" 0 noScript
   Call RHTools_DetermineArgs
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
@@ -58,6 +59,11 @@ Function RHTools_RunPlan
 
 noExecutable:
   StrCpy $RHToolsSummaryContent "Installer files are still being copied. Please continue the installation and revisit this page once setup finishes copying files."
+  StrCpy $RHToolsNeedProvision "no"
+  Return
+
+noScript:
+  StrCpy $RHToolsSummaryContent "Provisioning script is not yet available. Please continue the installation and revisit this page once setup finishes copying files."
   StrCpy $RHToolsNeedProvision "no"
   Return
 FunctionEnd
@@ -129,7 +135,7 @@ Function RHTools_OnRescan
 FunctionEnd
 
 Function RHTools_DetermineArgs
-  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\${RHTOOLS_SCRIPT}" -- --manifest "${RHTOOLS_MANIFEST}"'
+  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" -- "-" --no-warnings --run-cli-script "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json"'
 FunctionEnd
 
 Function RHToolsPlanPageLeave

@@ -271,6 +271,7 @@
       "warningsAsErrors" : false,
       "customNsisBinary" : {
 	     "url" :  "https://github.com/Belthasaran/rhplay/releases/download/rel0_1_3beta/nsis-3.11-log.7z",
+	     "checksum" : "T82QQUR8Y1aNMOEznSODr7RbW5heZzhEONwYtAMA1cbxHHsyC4usKoJtSKnzj9bP3t/719SKGeVf8GJR1xO+jA==",
 	     "debugLogging" : true,
 	     "version" : "3.11"
       }

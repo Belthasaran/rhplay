@@ -40,17 +40,16 @@ Function RHTools_RunPlan
   StrCpy $0 '$RHToolsCliCommand --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
-  LogText "RHTools_RunPlan:Run $0"
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
   nsExec::ExecToStack $0
+  Pop $1 ; return code
+  Pop $2 ; output (ignored)
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
-  Pop $0
-  Pop $1
-  ${If} $0 != 0
-    ${If} $1 != ""
-      MessageBox MB_ICONSTOP "Failed to generate database preparation plan.$\r$\n$1" /SD IDOK
+  ${If} $1 != 0
+    ${If} $2 != ""
+      MessageBox MB_ICONSTOP "Failed to generate database preparation plan.$\r$\n$2" /SD IDOK
     ${Else}
-      MessageBox MB_ICONSTOP "Failed to generate database preparation plan (exit code $0)." /SD IDOK
+      MessageBox MB_ICONSTOP "Failed to generate database preparation plan (exit code $1)." /SD IDOK
     ${EndIf}
     Abort
   ${EndIf}
@@ -77,15 +76,14 @@ Function RHTools_RunProvision
   Delete $RHToolsProgressLog
   Delete $RHToolsProgressDone
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
-  StrCpy $0 '"$SYSDIR\cmd.exe" /C start "" /B "$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js" --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary" --progress-log "$RHToolsProgressLog" --progress-done "$RHToolsProgressDone"'
-  LogText "RHTools_RunProvision: nsExec::Exec $0"
+  StrCpy $0 '"$SYSDIR\cmd.exe" /C start "" /B $RHToolsCliCommand --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --provision --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary" --progress-log "$RHToolsProgressLog" --progress-done "$RHToolsProgressDone"'
   nsExec::Exec $0
   Pop $1
+  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
   ${If} $1 != 0
     MessageBox MB_ICONSTOP "Failed to launch provisioning helper (exit code $1)." /SD IDOK
     Abort
   ${EndIf}
-  System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
 
 loopProgress:
   Call RHTools_UpdateProgress
@@ -160,9 +158,7 @@ Function RHTools_ReadSummary
 FunctionEnd
 
 Function RHTools_DetermineArgs
-  LogText "Called RHTools_DetermineArgs"
-  StrCpy $RHToolsCliCommand "\"$INSTDIR\\${RHTOOLS_APP_EXE}\" \"$INSTDIR\\resources\\app.asar.unpacked\\electron\\installer\\prepare_databases.js\""
-  LogText "RHTools_DetermineArgs:RHToolsCliCommand = $RHToolsCliCommand"
+  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\resources\app.asar.unpacked\electron\installer\prepare_databases.js"'
 FunctionEnd
 
 Function RHToolsPlanPageCreate

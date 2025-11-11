@@ -4,6 +4,20 @@
 !include "nsDialogs.nsh"
 !include "TextFunc.nsh"
 !include "WordFunc.nsh"
+!define ENABLE_LOGGING
+!define LogSet "!insertmacro LogSetMacro"
+!macro LogSetMacro SETTING
+  !ifdef ENABLE_LOGGING
+    LogSet ${SETTING}
+  !endif
+!macroend
+
+!define LogText "!insertmacro LogTextMacro"
+!macro LogTextMacro INPUT_TEXT
+  !ifdef ENABLE_LOGGING
+    LogText ${INPUT_TEXT}
+  !endif
+!macroend
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
 !define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
@@ -24,6 +38,11 @@ Var RHToolsCliCommand
 Var RHToolsProgressLog
 Var RHToolsProgressDone
 
+Function .onInit
+  SetOutPath $INSTDIR
+  ${LogSet} on
+FunctionEnd
+
 Function RHTools_InitVariables
   StrCpy $RHToolsPlanJson "$TEMP\rhtools-plan.json"
   StrCpy $RHToolsPlanSummary "$TEMP\rhtools-plan.txt"
@@ -38,6 +57,7 @@ Function RHTools_RunPlan
   StrCpy $0 '$RHToolsCliCommand --manifest "$INSTDIR\resources\db\dbmanifest.json" --ensure-dirs --write-plan="$RHToolsPlanJson" --write-summary="$RHToolsPlanSummary"'
   Delete $RHToolsPlanJson
   Delete $RHToolsPlanSummary
+  ${LogText} "RHTools_RunPlan: Run $0"
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"1")'
   nsExec::ExecToStack $0
   System::Call 'Kernel32::SetEnvironmentVariableW(w"ELECTRON_RUN_AS_NODE", w"")'
@@ -215,11 +235,10 @@ Function RHToolsPlanPageLeave
 FunctionEnd
 
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
 !insertmacro MUI_PAGE_FINISH
 
-!insertmacro MUI_LANGUAGE "English"
+; !insertmacro MUI_LANGUAGE "English"
 

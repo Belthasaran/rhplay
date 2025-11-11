@@ -60,7 +60,68 @@ Examples:
   prepare_databases.js --overwrite rhdata.db,patchbin.db --ensure-dirs
 `.trim();
 
+let progressLogStream = null;
+let progressDonePath = null;
+let progressLoggingInitialized = false;
+
+function initProgressLogging(opts) {
+  if (progressLoggingInitialized) {
+    return;
+  }
+  progressLoggingInitialized = true;
+
+  if (opts.progressLogPath) {
+    const resolved = path.resolve(opts.progressLogPath);
+    ensureDirectory(path.dirname(resolved));
+    progressLogStream = fs.createWriteStream(resolved, { flags: 'a' });
+  }
+
+  if (opts.progressDonePath) {
+    progressDonePath = path.resolve(opts.progressDonePath);
+    ensureDirectory(path.dirname(progressDonePath));
+  }
+
+  const origLog = console.log.bind(console);
+  const origError = console.error.bind(console);
+
+  console.log = (...args) => {
+    const message = args.join(' ');
+    if (progressLogStream) {
+      progressLogStream.write(`${message}\n`);
+    }
+    origLog(...args);
+  };
+
+  console.error = (...args) => {
+    const message = args.join(' ');
+    if (progressLogStream) {
+      progressLogStream.write(`[error] ${message}\n`);
+    }
+    origError(...args);
+  };
+}
+
+function finalizeProgress(success) {
+  if (progressLogStream) {
+    progressLogStream.end();
+    progressLogStream = null;
+  }
+  if (progressDonePath) {
+    try {
+      fs.writeFileSync(
+        progressDonePath,
+        JSON.stringify({ success, timestamp: new Date().toISOString() }, null, 2)
+      );
+    } catch (err) {
+      // ignore fs errors on finalize
+    }
+  }
+}
+
 function exitWithError(message) {
+  if (progressLoggingInitialized) {
+    finalizeProgress(false);
+  }
   const errorPayload = { success: false, error: message };
   console.error(JSON.stringify(errorPayload));
   process.stdout.write(JSON.stringify(errorPayload));
@@ -77,6 +138,8 @@ function parseArgs(argv) {
     provision: false,
     writePlanPath: null,
     writeSummaryPath: null,
+    progressLogPath: null,
+    progressDonePath: null,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -119,6 +182,16 @@ function parseArgs(argv) {
       opts.writeSummaryPath = path.resolve(argv[++i]);
     } else if (arg.startsWith('--write-summary=')) {
       opts.writeSummaryPath = path.resolve(arg.substring('--write-summary='.length));
+    } else if (arg === '--progress-log') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --progress-log');
+      opts.progressLogPath = argv[++i];
+    } else if (arg.startsWith('--progress-log=')) {
+      opts.progressLogPath = arg.substring('--progress-log='.length);
+    } else if (arg === '--progress-done') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --progress-done');
+      opts.progressDonePath = argv[++i];
+    } else if (arg.startsWith('--progress-done=')) {
+      opts.progressDonePath = arg.substring('--progress-done='.length);
     } else if (arg.startsWith('--')) {
       exitWithError(`Unknown option "${arg}". Use --help for usage details.`);
     } else {
@@ -580,14 +653,17 @@ async function executeProvision(plan, manifest) {
 
   for (const db of plan.databases) {
     if (db.action === 'skip') {
+      console.log(`[provision] ${db.name}: skipping (already up to date)`);
       result.skipped.push({ name: db.name, reason: 'existing kept' });
       continue;
     }
 
     try {
+      console.log(`[provision] ${db.name}: action=${db.action}`);
       if (db.action === 'copy-embedded') {
         const dest = await stageEmbeddedClientDb(paths.finalDir, true);
         result.executed.push({ name: db.name, action: 'copied-embedded', path: dest });
+        console.log(`[provision] ${db.name}: embedded seed copied to ${dest}`);
       } else if (db.action === 'provision-from-manifest') {
         const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name).manifestKey];
         if (!manifestEntry) {
@@ -595,10 +671,13 @@ async function executeProvision(plan, manifest) {
         }
         const dest = await buildDatabaseFromManifest(db, manifestEntry, paths);
         result.executed.push({ name: db.name, action: 'provisioned', path: dest });
+        console.log(`[provision] ${db.name}: provisioning completed -> ${dest}`);
       } else {
         result.skipped.push({ name: db.name, reason: `unknown action ${db.action}` });
+        console.log(`[provision] ${db.name}: skipped (unknown action ${db.action})`);
       }
     } catch (err) {
+      console.error(`[provision] ${db.name}: error ${err.message}`);
       result.errors.push({ name: db.name, message: err.message });
     }
   }
@@ -608,57 +687,66 @@ async function executeProvision(plan, manifest) {
 
 async function run(argv) {
   const opts = parseArgs(argv);
-  const defaultManifestFallback = 'electron/db/dbmanifest.json';
-  const manifestCandidate =
-    opts.manifestPath || resolveResourcePath(defaultManifestFallback) || resolveDefaultManifestPath();
-  const resolvedManifest = resolveResourcePath(manifestCandidate);
-  if (!resolvedManifest) {
-    exitWithError(`Manifest not found. Looked for ${manifestCandidate}`);
-  }
-  opts.manifestPath = resolvedManifest;
-  opts.userDataDir = opts.userDataDir || detectUserDataDir();
-  opts.workingDir = opts.workingDir || defaultWorkingDir(opts.userDataDir);
-
-  const manifest = loadManifest(opts.manifestPath);
-
-  if (opts.ensureDirs) {
-    ensureDirectory(opts.userDataDir);
-    ensureDirectory(opts.workingDir);
-  }
-
-  const dbStatus = inspectDatabases(opts, manifest);
-  const plan = buildPlan(opts, dbStatus);
-
-  if (opts.ensureDirs) {
-    const manifestCopyPath = copyManifestToWorkingDir(opts.manifestPath, opts.workingDir);
-    plan.workingManifestPath = manifestCopyPath;
-    const embeddedSeed = locateEmbeddedClientSeed();
-    if (embeddedSeed) {
-      plan.clientdataSeedSource = embeddedSeed;
-      if (opts.provision) {
-        try {
-          const stagedClientSeed = await stageEmbeddedClientDb(opts.userDataDir, false);
-          plan.clientdataSeedPath = stagedClientSeed;
-        } catch (err) {
-          plan.clientdataSeedError = err.message;
-        }
-      }
-    } else {
-      plan.clientdataSeedError = 'Embedded clientdata seed not found.';
+  initProgressLogging(opts);
+  try {
+    const defaultManifestFallback = 'electron/db/dbmanifest.json';
+    const manifestCandidate =
+      opts.manifestPath || resolveResourcePath(defaultManifestFallback) || resolveDefaultManifestPath();
+    const resolvedManifest = resolveResourcePath(manifestCandidate);
+    if (!resolvedManifest) {
+      exitWithError(`Manifest not found. Looked for ${manifestCandidate}`);
     }
-  }
+    opts.manifestPath = resolvedManifest;
+    opts.userDataDir = opts.userDataDir || detectUserDataDir();
+    opts.workingDir = opts.workingDir || defaultWorkingDir(opts.userDataDir);
 
-  if (opts.provision) {
-    plan.provisionResult = await executeProvision(plan, manifest);
-    const finalDbStatus = inspectDatabases(opts, manifest);
-    plan.databases = finalDbStatus;
-    plan.downloads = [];
-  }
+    const manifest = loadManifest(opts.manifestPath);
 
-  writePlanIfRequested(plan, opts.writePlanPath);
-  writeSummaryIfRequested(plan, opts.writeSummaryPath);
-  console.log(JSON.stringify(plan, null, 2));
-  return plan;
+    if (opts.ensureDirs) {
+      ensureDirectory(opts.userDataDir);
+      ensureDirectory(opts.workingDir);
+    }
+
+    const dbStatus = inspectDatabases(opts, manifest);
+    const plan = buildPlan(opts, dbStatus);
+
+    if (opts.ensureDirs) {
+      const manifestCopyPath = copyManifestToWorkingDir(opts.manifestPath, opts.workingDir);
+      plan.workingManifestPath = manifestCopyPath;
+      const embeddedSeed = locateEmbeddedClientSeed();
+      if (embeddedSeed) {
+        plan.clientdataSeedSource = embeddedSeed;
+        if (opts.provision) {
+          try {
+            const stagedClientSeed = await stageEmbeddedClientDb(opts.userDataDir, false);
+            plan.clientdataSeedPath = stagedClientSeed;
+          } catch (err) {
+            plan.clientdataSeedError = err.message;
+          }
+        }
+      } else {
+        plan.clientdataSeedError = 'Embedded clientdata seed not found.';
+      }
+    }
+
+    if (opts.provision) {
+      plan.provisionResult = await executeProvision(plan, manifest);
+      const finalDbStatus = inspectDatabases(opts, manifest);
+      plan.databases = finalDbStatus;
+      plan.downloads = [];
+    }
+
+    writePlanIfRequested(plan, opts.writePlanPath);
+    writeSummaryIfRequested(plan, opts.writeSummaryPath);
+    console.log(JSON.stringify(plan, null, 2));
+
+    const success = !opts.provision || !plan.provisionResult || plan.provisionResult.errors.length === 0;
+    finalizeProgress(success);
+    return plan;
+  } catch (err) {
+    finalizeProgress(false);
+    throw err;
+  }
 }
 
 module.exports = { run };

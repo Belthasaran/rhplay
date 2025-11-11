@@ -220,14 +220,14 @@ app.whenReady().then(async () => {
             __dirname: __dirname,
             isPackaged: process.env.ELECTRON_IS_PACKAGED || false
         });
-
+        
         dbManager = new DatabaseManager({ autoApplyMigrations: true });
         console.log('Database manager initialized with auto-migrations enabled');
-
+        
         // Register IPC handlers
         registerDatabaseHandlers(dbManager);
         console.log('IPC handlers registered');
-
+        
         // Ensure createdfp is populated
         const { ensureCreatedFp } = require('./ipc-handlers');
         await ensureCreatedFp(dbManager);

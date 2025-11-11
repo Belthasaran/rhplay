@@ -6,13 +6,15 @@
 !include "WordFunc.nsh"
 
 !define RHTOOLS_APP_EXE "RHTools.exe"
-!define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
+# !define RHTOOLS_SCRIPT "electron/installer/prepare_databases.js"
+!define RHTOOLS_SCRIPT "resources\db\prepare_databases.js"
 !define RHTOOLS_MANIFEST "electron/db/dbmanifest.json"
 !define RHTOOLS_ARD_URL "https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH"
 
 !macro customFinishPageBefore
   Page Custom RHToolsPlanPageCreate RHToolsPlanPageLeave
 !macroend
+!insertmacro customFinishPageBefore
 
 !insertmacro TrimNewLines
 
@@ -127,7 +129,7 @@ Function RHTools_OnRescan
 FunctionEnd
 
 Function RHTools_DetermineArgs
-  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" --run-cli-script "${RHTOOLS_SCRIPT}" --manifest "${RHTOOLS_MANIFEST}"'
+  StrCpy $RHToolsCliCommand '"$INSTDIR\${RHTOOLS_APP_EXE}" "$INSTDIR\${RHTOOLS_SCRIPT}" -- --manifest "${RHTOOLS_MANIFEST}"'
 FunctionEnd
 
 Function RHToolsPlanPageLeave

@@ -172,10 +172,13 @@ Function RHToolsPlanPageCreate
   ${EndIf}
 
   ${NSD_CreateLabel} 0 0 100% 12u "RHTools database provisioning"
-  ${NSD_CreateText} 0 14u 100% 110u ""
+  ${NSD_CreateLabel} 0 0 100% 12u "This program requires you copy over or download the romhack data and patchdb database sources to run."
+  ${NSD_CreateMLText} 0 14u 100% 110u ""
   Pop $RHToolsTextbox
   SendMessage $RHToolsTextbox ${EM_SETREADONLY} 1 0
+  SendMessage $RHToolsTextbox ${EM_LIMITTEXT} 0 0
   ${NSD_SetText} $RHToolsTextbox $RHToolsSummaryContent
+  ${NSD_SetFocus} $RHToolsTextbox
 
   ${NSD_CreateButton} 0 130u 90u 12u "Refresh"
   Pop $RHToolsRefreshBtn
@@ -204,13 +207,13 @@ FunctionEnd
 Function RHToolsPlanPageLeave
   Call RHTools_RunPlan
   ${If} $RHToolsNeedProvision == "yes"
-    MessageBox MB_ICONQUESTION|MB_YESNO "Provisioning is required. Run automatic provisioning now?" IDYES +2
-    MessageBox MB_ICONEXCLAMATION "Provisioning is still pending. You can download the required files manually from ArDrive and click Refresh." /SD IDOK
+    MessageBox MB_ICONQUESTION|MB_YESNO "Provisioning of databases is required before using program. Run automatic provisioning now?" IDYES +2
+    MessageBox MB_ICONEXCLAMATION "Provisioning is still pending. You can download the required files manually from ArDrive, copy to working directory, and click Refresh." /SD IDOK
     Abort
 
     Call RHTools_RunProvision
     ${If} $RHToolsNeedProvision == "yes"
-      MessageBox MB_ICONEXCLAMATION "Provisioning is still pending. Please resolve the issues shown in the summary before continuing." /SD IDOK
+      MessageBox MB_ICONEXCLAMATION "Provisioning has not completed.. Please resolve the issues shown in the summary before continuing." /SD IDOK
       Abort
     ${EndIf}
   ${EndIf}

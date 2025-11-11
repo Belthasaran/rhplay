@@ -87,10 +87,13 @@ Function RHTools_RunProvision
 
 loopProgress:
   Call RHTools_UpdateProgress
-  IfFileExists "$RHToolsProgressDone" 0 +3
-    Sleep 500
-    Goto loopProgress
+  IfFileExists "$RHToolsProgressDone" doneProgress waitProgress
 
+waitProgress:
+  Sleep 500
+  Goto loopProgress
+
+doneProgress:
   Call RHTools_UpdateProgress
   Call RHTools_RunPlan
   Return
@@ -107,12 +110,17 @@ FunctionEnd
 Function RHTools_UpdateProgress
   Push $0
   Push $1
+  Push $2
   StrCpy $1 ""
+  ${If} $RHToolsTextbox != 0
+    ${NSD_GetText} $RHToolsTextbox $1
+  ${EndIf}
   IfFileExists "$RHToolsProgressLog" 0 done
     FileOpen $0 "$RHToolsProgressLog" r
     ${If} $0 == ""
       Goto done
     ${EndIf}
+    StrCpy $1 ""
     ${Do}
       FileRead $0 $2
       ${If} ${Errors}
@@ -127,6 +135,7 @@ Function RHTools_UpdateProgress
     ${NSD_SetText} $RHToolsTextbox $1
     SendMessage $RHToolsTextbox ${EM_SETSEL} -1 -1
   ${EndIf}
+  Pop $2
   Pop $1
   Pop $0
 FunctionEnd
@@ -204,10 +213,26 @@ Function RHTools_OnOpenArDrive
   ExecShell "open" ${RHTOOLS_ARD_URL}
 FunctionEnd
 
+Function RHTools_OnRunNow
+  ${If} $RHToolsTextbox != 0
+    ${NSD_SetText} $RHToolsTextbox "Starting provisioning...\r\n"
+  ${EndIf}
+  EnableWindow $RHToolsRefreshBtn 0
+  EnableWindow $RHToolsOpenBtn 0
+  Call RHTools_RunProvision
+  ${If} $RHToolsNeedProvision == "yes"
+    EnableWindow $RHToolsRefreshBtn 1
+    EnableWindow $RHToolsOpenBtn 1
+  ${Else}
+    EnableWindow $RHToolsRefreshBtn 1
+    EnableWindow $RHToolsOpenBtn 1
+  ${EndIf}
+FunctionEnd
+
 Function RHToolsPlanPageLeave
   Call RHTools_RunPlan
   ${If} $RHToolsNeedProvision == "yes"
-    MessageBox MB_ICONQUESTION|MB_YESNO "Provisioning of databases is required before using program. Run automatic provisioning now?" IDYES +2
+    MessageBox MB_ICONQUESTION|MB_YESNO "Provisioning of databases is required before using program. Run automatic provisioning now?" IDYES +3
     MessageBox MB_ICONEXCLAMATION "Provisioning is still pending. You can download the required files manually from ArDrive, copy to working directory, and click Refresh." /SD IDOK
     Abort
 

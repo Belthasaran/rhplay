@@ -1,5 +1,6 @@
 {
   "clientdata.db": {
+	  "final_sha256" : ""b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8,
 	  "base" : {
 		  "source_path" : "packed_db/clientdata.db.initial.xz",
 		  "file_name" : "clientdata.db.initial.xz",
@@ -12,10 +13,12 @@
 		  "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
 		  "data_txid" : "dt_8rJoEVQMTEwTd9nj8Fhb8ItT5q5lA0J-ytQDo0-E",
 		  "metadata_txid" : "dt_8rJoEVQMTEwTd9nj8Fhb8ItT5q5lA0J-ytQDo0-E",
+		  "extracted_sha256" : "b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8",
 		  "size": "36308"
 	  }
   },
-  "rhdata.db": {
+  "rhdata.db": { 
+    "final_sha256" : ""7bab2e567e79805ad432613ae14718c5c64a29e92a2be3ac26c605a58b26d64b",
     "base": {
       "file_name": "full_rhdata_2025_11_01.tar.xz",
       "format": "tar+xz",
@@ -29,7 +32,8 @@
       "data_txid": "t5hmi4FA6b3cAWoBSdQWbSGANdO4X3rIrg4mDOOARVc",
       "metadata_txid": "t5hmi4FA6b3cAWoBSdQWbSGANdO4X3rIrg4mDOOARVc",
       "ipfs_cidv1": "bafybeidhoun3b2wjksyqwj6xvrdqzi22akm5qjyflbevlkhq3v5bit73am",
-      "size": "36643676"
+      "size": "36643676",
+      "extracted_sha256" : "7bab2e567e79805ad432613ae14718c5c64a29e92a2be3ac26c605a58b26d64b"
     }
   },
   "patchbin.db": {
@@ -46,7 +50,8 @@
       "data_txid": "b2H-3lQeJN5BGMsKSbhGsCM1huUdGmIk3_lTncWTEuc",
       "metadata_txid": "b2H-3lQeJN5BGMsKSbhGsCM1huUdGmIk3_lTncWTEuc",
       "ipfs_cidv1": "bafybeibssd5arl2g7g67c5dxa34ai7svchqu76uh77gmat72acohzc3y4m",
-      "size": "1700756"
+      "size": "1700756", 
+      "extracted_sha256" : "cc3d3f8d8510a98feace38827ebc6d97db65d801a7992be2c5457ab512cc1566"
     },
     "sqlpatches": [
       {

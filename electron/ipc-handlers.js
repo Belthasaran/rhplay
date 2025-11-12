@@ -2043,25 +2043,6 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   // ===========================================================================
-  // Shell Operations
-  // ===========================================================================
-
-  /**
-   * Open a folder or file in the system's default file manager/application
-   * Channel: shell:open-path
-   */
-  ipcMain.handle('shell:open-path', async (event, path) => {
-    try {
-      const { shell } = require('electron');
-      await shell.openPath(path);
-      return { success: true };
-    } catch (error) {
-      console.error('Error opening path:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // ===========================================================================
   // File Selection and Validation
   // ===========================================================================
 

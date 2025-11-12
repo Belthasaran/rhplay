@@ -121,6 +121,18 @@ function getMissingDatabases() {
     return DATABASE_FILES.filter((name) => !fs.existsSync(path.join(userDataDir, name)));
 }
 
+function ensureHandlersRegistered() {
+    if (!dbManager) {
+        return false;
+    }
+    if (!handlersRegistered) {
+        registerDatabaseHandlers(dbManager);
+        handlersRegistered = true;
+        console.log('IPC handlers registered');
+    }
+    return handlersRegistered;
+}
+
 const CLI_RUN_FLAG = '--run-cli-script';
 const cliFlagIndex = process.argv.indexOf(CLI_RUN_FLAG);
 const isInstallerCli = cliFlagIndex !== -1;
@@ -320,7 +332,7 @@ function resolveScriptLocation(target) {
 }
 
 async function initializeDatabaseLayer() {
-    if (dbManager) {
+    if (dbManager && handlersRegistered) {
         return;
     }
     try {
@@ -336,17 +348,17 @@ async function initializeDatabaseLayer() {
         dbManager = new DatabaseManager({ autoApplyMigrations: true });
         console.log('Database manager initialized with auto-migrations enabled');
         
-        if (!handlersRegistered) {
-        registerDatabaseHandlers(dbManager);
-            handlersRegistered = true;
-        console.log('IPC handlers registered');
-        }
-        
+        ensureHandlersRegistered();
+
         const { ensureCreatedFp } = require('./ipc-handlers');
         await ensureCreatedFp(dbManager);
     } catch (error) {
         console.error('Failed to initialize database:', error);
         console.error('Error stack:', error.stack);
+        // Reset manager so future attempts can retry
+        dbManager = null;
+        handlersRegistered = false;
+        throw error;
     }
 }
 
@@ -547,6 +559,7 @@ function setupProvisionerIpc() {
             return { success: false, missing };
         }
         await initializeDatabaseLayer();
+        ensureHandlersRegistered();
         await loadRendererMode('app');
         return { success: true };
     });

@@ -47,8 +47,6 @@ const jssha = require('jssha');
 const { spawnSync } = require('child_process');
 const fernet = require('fernet');
 const UrlBase64 = require('urlsafe-base64');
-const fernet = require('fernet');
-const UrlBase64 = require('urlsafe-base64');
 
 const SCRIPT_VERSION = '0.1.0';
 
@@ -60,16 +58,10 @@ const DEFAULT_RESOURCE_DB_PATH = process.env.RESOURCE_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'resource.db');
 const DEFAULT_SCREENSHOT_DB_PATH = process.env.SCREENSHOT_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'screenshot.db');
-const DEFAULT_RESOURCE_DB_PATH = process.env.RESOURCE_DB_PATH ||
-  path.join(__dirname, '..', 'electron', 'resource.db');
-const DEFAULT_SCREENSHOT_DB_PATH = process.env.SCREENSHOT_DB_PATH ||
-  path.join(__dirname, '..', 'electron', 'screenshot.db');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const BLOBS_DIR = path.join(__dirname, 'blobs');
 const PATCH_DIR = path.join(__dirname, 'patch');
-const RESOURCE_DIR = path.join(__dirname, 'resources');
-const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 const RESOURCE_DIR = path.join(__dirname, 'resources');
 const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 

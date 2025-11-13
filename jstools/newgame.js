@@ -5,6 +5,7 @@
  *
  * Usage (run with enode.sh):
  *   enode.sh jstools/newgame.js <json-file> --create   # interactive skeleton wizard
+ *   enode.sh jstools/newgame.js <json-file> --prepare  # stage artifacts and compute metadata
  *   enode.sh jstools/newgame.js <json-file> --check    # validate JSON + database state
  *   enode.sh jstools/newgame.js <json-file> --add      # upsert records into databases
  *   enode.sh jstools/newgame.js <json-file> --remove   # remove records created from JSON
@@ -12,6 +13,8 @@
  * General options:
  *   --rhdatadb=/path/to/rhdata.db
  *   --patchbindb=/path/to/patchbin.db
+ *   --resourcedb=/path/to/resource.db
+ *   --screenshotdb=/path/to/screenshot.db
  *   --force                      # overwrite existing rows when adding
  *   --purge-files                # remove patch/blob files during --remove
  *   --help                       # show help text
@@ -19,10 +22,12 @@
  * Environment overrides:
  *   RHDATA_DB_PATH
  *   PATCHBIN_DB_PATH
+ *   RESOURCE_DB_PATH
+ *   SCREENSHOT_DB_PATH
  *
  * Notes:
  * - The JSON skeleton captures the fields curated via gameversions/gameversion_stats tables.
- * - Patch metadata is generated from the supplied patch file path during --add.
+ * - Artifact metadata is generated during --prepare and verified during --add.
  * - Re-running --add updates existing rows (if --force) without creating duplicates.
  * - --remove deletes database records that were previously inserted by this script.
  */
@@ -40,6 +45,10 @@ const { CID } = require('multiformats/cid');
 const { sha256: multiformatsSha256 } = require('multiformats/hashes/sha2');
 const jssha = require('jssha');
 const { spawnSync } = require('child_process');
+const fernet = require('fernet');
+const UrlBase64 = require('urlsafe-base64');
+const fernet = require('fernet');
+const UrlBase64 = require('urlsafe-base64');
 
 const SCRIPT_VERSION = '0.1.0';
 
@@ -47,9 +56,22 @@ const DEFAULT_RHDATA_DB_PATH = process.env.RHDATA_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'rhdata.db');
 const DEFAULT_PATCHBIN_DB_PATH = process.env.PATCHBIN_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'patchbin.db');
+const DEFAULT_RESOURCE_DB_PATH = process.env.RESOURCE_DB_PATH ||
+  path.join(__dirname, '..', 'electron', 'resource.db');
+const DEFAULT_SCREENSHOT_DB_PATH = process.env.SCREENSHOT_DB_PATH ||
+  path.join(__dirname, '..', 'electron', 'screenshot.db');
+const DEFAULT_RESOURCE_DB_PATH = process.env.RESOURCE_DB_PATH ||
+  path.join(__dirname, '..', 'electron', 'resource.db');
+const DEFAULT_SCREENSHOT_DB_PATH = process.env.SCREENSHOT_DB_PATH ||
+  path.join(__dirname, '..', 'electron', 'screenshot.db');
 
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 const BLOBS_DIR = path.join(__dirname, 'blobs');
 const PATCH_DIR = path.join(__dirname, 'patch');
+const RESOURCE_DIR = path.join(__dirname, 'resources');
+const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
+const RESOURCE_DIR = path.join(__dirname, 'resources');
+const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 
 const ALLOWED_DIFFICULTIES = [
   'Newcomer', 'Casual', 'Skilled', 'Advanced', 'Expert', 'Master', 'Grandmaster'
@@ -95,6 +117,470 @@ function pathToAbsolute(inputPath) {
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function ensureDatabaseFileIfMissing(dbPath) {
+  if (!dbPath) return;
+  const dir = path.dirname(dbPath);
+  ensureDir(dir);
+  if (!fs.existsSync(dbPath)) {
+    const db = new Database(dbPath);
+    db.close();
+  }
+}
+
+function toRelativeProjectPath(absPath) {
+  if (!absPath) return null;
+  return path.relative(PROJECT_ROOT, absPath);
+}
+
+function toAbsoluteProjectPath(relPath) {
+  if (!relPath) return null;
+  if (path.isAbsolute(relPath)) {
+    return relPath;
+  }
+  return path.resolve(PROJECT_ROOT, relPath);
+}
+
+function generateFernetKey() {
+  return UrlBase64.encode(crypto.randomBytes(32)).toString();
+}
+
+function encryptBuffer(buffer, providedKey = null) {
+  const key = providedKey || generateFernetKey();
+  const secret = new fernet.Secret(key);
+  const token = new fernet.Token({ secret, ttl: 0 });
+  const payload = buffer.toString('base64');
+  const tokenString = token.encode(payload);
+  const encryptedBuffer = Buffer.from(tokenString, 'utf8');
+  return {
+    key,
+    token: tokenString,
+    encryptedBuffer,
+    encodedSha256: sha256(encryptedBuffer),
+    decodedSha256: sha256(buffer)
+  };
+}
+
+function decryptFernetToken(tokenStr, key) {
+  const secret = new fernet.Secret(key);
+  const token = new fernet.Token({ secret, token: tokenStr, ttl: 0 });
+  const decodedBase64 = token.decode();
+  return Buffer.from(decodedBase64, 'base64');
+}
+
+function detectFileType(fileName) {
+  if (!fileName) return null;
+  const ext = path.extname(fileName).toLowerCase().replace('.', '');
+  const map = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    svg: 'image/svg+xml',
+    bps: 'application/octet-stream',
+    zip: 'application/zip',
+    '7z': 'application/x-7z-compressed'
+  };
+  return map[ext] || ext || null;
+}
+
+function isLikelyUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+}
+
+function removeStagedFile(relativePath) {
+  if (!relativePath) return;
+  const absolutePath = toAbsoluteProjectPath(relativePath);
+  if (absolutePath && fs.existsSync(absolutePath)) {
+    fs.rmSync(absolutePath, { force: true });
+  }
+}
+
+function pruneAutoGeneratedResources(skeleton) {
+  if (!Array.isArray(skeleton.resources)) {
+    skeleton.resources = [];
+    return;
+  }
+  const keep = [];
+  for (const entry of skeleton.resources) {
+    if (entry && entry.auto_generated) {
+      removeStagedFile(entry.encrypted_data_path);
+    } else if (entry) {
+      keep.push(entry);
+    }
+  }
+  skeleton.resources = keep;
+}
+
+function pruneAutoGeneratedScreenshots(skeleton) {
+  if (!Array.isArray(skeleton.screenshots)) {
+    skeleton.screenshots = [];
+    return;
+  }
+  const keep = [];
+  for (const entry of skeleton.screenshots) {
+    if (entry && entry.auto_generated) {
+      removeStagedFile(entry.encrypted_data_path);
+    } else if (entry) {
+      keep.push(entry);
+    }
+  }
+  skeleton.screenshots = keep;
+}
+
+function mergeResourceEntries(manualEntries, autoEntries) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const entry of manualEntries) {
+    if (!entry) continue;
+    merged.push(entry);
+    if (entry.file_sha256) {
+      seen.add(entry.file_sha256);
+    }
+  }
+
+  for (const entry of autoEntries) {
+    if (!entry) continue;
+    if (entry.file_sha256 && seen.has(entry.file_sha256)) {
+      continue;
+    }
+    merged.push(entry);
+    if (entry.file_sha256) {
+      seen.add(entry.file_sha256);
+    }
+  }
+
+  return merged;
+}
+
+function mergeScreenshotEntries(manualEntries, autoEntries) {
+  const merged = [];
+  const seenSha = new Set();
+  const seenUrl = new Set();
+
+  for (const entry of manualEntries) {
+    if (!entry) continue;
+    merged.push(entry);
+    if (entry.file_sha256) {
+      seenSha.add(entry.file_sha256);
+    }
+    if (entry.source_url) {
+      seenUrl.add(entry.source_url);
+    }
+  }
+
+  for (const entry of autoEntries) {
+    if (!entry) continue;
+    if (entry.file_sha256 && seenSha.has(entry.file_sha256)) {
+      continue;
+    }
+    if (entry.source_url && seenUrl.has(entry.source_url)) {
+      continue;
+    }
+    merged.push(entry);
+    if (entry.file_sha256) {
+      seenSha.add(entry.file_sha256);
+    }
+    if (entry.source_url) {
+      seenUrl.add(entry.source_url);
+    }
+  }
+
+  return merged;
+}
+
+function stageEncryptedFile(buffer, directory, baseName, existingKey = null) {
+  ensureDir(directory);
+  const encryption = encryptBuffer(buffer, existingKey);
+  const fileName = `${baseName}.fernet`;
+  const absolutePath = path.join(directory, fileName);
+  fs.writeFileSync(absolutePath, encryption.token, 'utf8');
+  return {
+    fernetKey: encryption.key,
+    encryptedToken: encryption.token,
+    encryptedSha256: encryption.encodedSha256,
+    decodedSha256: encryption.decodedSha256,
+    relativePath: toRelativeProjectPath(absolutePath)
+  };
+}
+
+function buildPatchResourceEntry(skeleton, artifact) {
+  const gv = skeleton.gameversion;
+  const staged = stageEncryptedFile(artifact.buffer, RESOURCE_DIR, artifact.patSha256);
+  return {
+    resource_uuid: generateUuid(),
+    auto_generated: true,
+    kind: 'patch',
+    description: 'Primary patch resource (prepared automatically)',
+    resource_scope: 'gameversion',
+    linked_type: 'gameversion',
+    linked_uuid: gv.gvuuid,
+    gameid: gv.gameid,
+    gvuuid: gv.gvuuid,
+    file_name: artifact.fileName,
+    file_ext: artifact.extension,
+    file_size: artifact.size,
+    file_sha224: artifact.patSha224,
+    file_sha256: artifact.patSha256,
+    file_sha1: artifact.patSha1,
+    file_md5: artifact.patHashMd5,
+    file_crc16: artifact.crc16,
+    file_crc32: artifact.crc32,
+    encoded_sha256: staged.encryptedSha256,
+    decoded_sha256: staged.decodedSha256,
+    encrypted_data_path: staged.relativePath,
+    fernet_key: staged.fernetKey,
+    ipfs_cid_v1: artifact.ipfsCidV1,
+    ipfs_cid_v0: artifact.ipfsCidV0,
+    download_url: gv.download_url || null,
+    storage_path: artifact.patchStoredRelativePath,
+    blob_storage_path: artifact.patchblobStoredRelativePath,
+    source_path: artifact.sourcePath,
+    created_at: new Date().toISOString()
+  };
+}
+
+async function buildScreenshotEntries(skeleton) {
+  const gv = skeleton.gameversion;
+  if (!Array.isArray(gv.screenshots)) {
+    return [];
+  }
+
+  const entries = [];
+  for (const raw of gv.screenshots) {
+    if (!raw || typeof raw !== 'string') {
+      continue;
+    }
+    const value = raw.trim();
+    if (!value) continue;
+
+    if (isLikelyUrl(value)) {
+      entries.push({
+        screenshot_uuid: generateUuid(),
+        auto_generated: true,
+        kind: 'url',
+        screenshot_type: 'url',
+        source_url: value,
+        gameid: gv.gameid,
+        gvuuid: gv.gvuuid,
+        download_url: value,
+        created_at: new Date().toISOString()
+      });
+      continue;
+    }
+
+    const absolutePath = pathToAbsolute(value);
+    if (!absolutePath || !fs.existsSync(absolutePath)) {
+      console.warn(`  ⚠ Screenshot path not found: ${value}`);
+      continue;
+    }
+
+    const buffer = fs.readFileSync(absolutePath);
+    const stats = fs.statSync(absolutePath);
+    const fileSha224 = sha224(buffer);
+    const fileSha256 = sha256(buffer);
+    const fileSha1 = sha1(buffer);
+    const fileMd5 = md5(buffer);
+    const crc16Value = crc16(buffer);
+    const crc32Value = crc32Hex(buffer);
+    const ipfs = await computeIpfsCids(buffer);
+    const baseName = fileSha256.slice(0, 32);
+    const staged = stageEncryptedFile(buffer, SCREENSHOT_DIR, baseName);
+
+    entries.push({
+      screenshot_uuid: generateUuid(),
+      auto_generated: true,
+      kind: 'file',
+      screenshot_type: detectFileType(absolutePath) || 'file',
+      source_path: absolutePath,
+      storage_path: toRelativeProjectPath(absolutePath),
+      encrypted_data_path: staged.relativePath,
+      fernet_key: staged.fernetKey,
+      file_name: path.basename(absolutePath),
+      file_ext: path.extname(absolutePath).replace('.', '').toLowerCase(),
+      file_size: stats.size,
+      file_sha224: fileSha224,
+      file_sha256: fileSha256,
+      file_sha1: fileSha1,
+      file_md5: fileMd5,
+      file_crc16: crc16Value,
+      file_crc32: crc32Value,
+      encoded_sha256: staged.encryptedSha256,
+      decoded_sha256: staged.decodedSha256,
+      ipfs_cid_v1: ipfs.cidV1,
+      ipfs_cid_v0: ipfs.cidV0,
+      gameid: gv.gameid,
+      gvuuid: gv.gvuuid,
+      created_at: new Date().toISOString()
+    });
+  }
+
+  return entries;
+}
+
+async function loadPreparedPatchArtifact(skeleton) {
+  const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
+  if (!patchInfo) {
+    throw new Error('Prepared patch artifact metadata not found. Run --prepare first.');
+  }
+  const patchStoredAbs = toAbsoluteProjectPath(patchInfo.patch_stored_path);
+  if (!patchStoredAbs || !fs.existsSync(patchStoredAbs)) {
+    throw new Error(`Prepared patch file missing: ${patchInfo.patch_stored_path}`);
+  }
+  const buffer = fs.readFileSync(patchStoredAbs);
+  const recalculatedSha256 = sha256(buffer);
+  if (patchInfo.pat_sha256 && recalculatedSha256 !== patchInfo.pat_sha256) {
+    throw new Error(`Prepared patch hash mismatch. Expected ${patchInfo.pat_sha256}, got ${recalculatedSha256}`);
+  }
+  const recalculatedSha224 = sha224(buffer);
+  if (patchInfo.pat_sha224 && recalculatedSha224 !== patchInfo.pat_sha224) {
+    throw new Error(`Prepared patch SHA-224 mismatch. Expected ${patchInfo.pat_sha224}, got ${recalculatedSha224}`);
+  }
+  const recalculatedSha1 = sha1(buffer);
+  if (patchInfo.pat_sha1 && recalculatedSha1 !== patchInfo.pat_sha1) {
+    throw new Error(`Prepared patch SHA-1 mismatch. Expected ${patchInfo.pat_sha1}, got ${recalculatedSha1}`);
+  }
+  const recalculatedMd5 = md5(buffer);
+  if (patchInfo.pat_md5 && recalculatedMd5 !== patchInfo.pat_md5) {
+    throw new Error(`Prepared patch MD5 mismatch. Expected ${patchInfo.pat_md5}, got ${recalculatedMd5}`);
+  }
+  const recalculatedCrc16 = crc16(buffer);
+  if (patchInfo.crc16 && recalculatedCrc16 !== patchInfo.crc16) {
+    throw new Error(`Prepared patch CRC16 mismatch. Expected ${patchInfo.crc16}, got ${recalculatedCrc16}`);
+  }
+  const recalculatedCrc32 = crc32Hex(buffer);
+  if (patchInfo.crc32 && recalculatedCrc32 !== patchInfo.crc32) {
+    throw new Error(`Prepared patch CRC32 mismatch. Expected ${patchInfo.crc32}, got ${recalculatedCrc32}`);
+  }
+
+  const patchblobName = skeleton.patchblob && skeleton.patchblob.patchblob1_name ? skeleton.patchblob.patchblob1_name : null;
+  if (!patchblobName) {
+    throw new Error('Prepared patchblob name missing in skeleton.');
+  }
+  const patchblobStoredAbs = toAbsoluteProjectPath(patchInfo.patchblob_stored_path);
+  if (!patchblobStoredAbs || !fs.existsSync(patchblobStoredAbs)) {
+    throw new Error(`Prepared patchblob file missing: ${patchInfo.patchblob_stored_path}`);
+  }
+
+  const ipfsResult = await computeIpfsCids(buffer);
+  if (patchInfo.ipfs_cid_v1 && ipfsResult.cidV1 !== patchInfo.ipfs_cid_v1) {
+    throw new Error(`Prepared patch IPFS CID v1 mismatch. Expected ${patchInfo.ipfs_cid_v1}, got ${ipfsResult.cidV1}`);
+  }
+
+  const artifact = {
+    buffer,
+    size: buffer.length,
+    extension: patchInfo.file_ext || path.extname(patchStoredAbs).replace('.', '').toLowerCase(),
+    fileName: patchInfo.file_name || path.basename(patchStoredAbs),
+    sourcePath: patchInfo.source_path || patchStoredAbs,
+    patSha224: patchInfo.pat_sha224 || recalculatedSha224,
+    patSha1: patchInfo.pat_sha1 || recalculatedSha1,
+    patSha256: patchInfo.pat_sha256 || recalculatedSha256,
+    patHashMd5: patchInfo.pat_md5 || recalculatedMd5,
+    patShake128: skeleton.patchblob && skeleton.patchblob.pat_shake_128 ? skeleton.patchblob.pat_shake_128 : shake128Base64Url(buffer),
+    crc16: patchInfo.crc16 || recalculatedCrc16,
+    crc32: patchInfo.crc32 || recalculatedCrc32,
+    ipfsCidV0: patchInfo.ipfs_cid_v0 || ipfsResult.cidV0,
+    ipfsCidV1: patchInfo.ipfs_cid_v1 || ipfsResult.cidV1,
+    patchblobName,
+    patchStoredPath: patchStoredAbs,
+    patchStoredRelativePath: patchInfo.patch_stored_path,
+    patchRelativePath: patchInfo.patch_relative_path || path.posix.join('patch', path.basename(patchStoredAbs)),
+    patchblobStoredPath: patchblobStoredAbs,
+    patchblobStoredRelativePath: patchInfo.patchblob_stored_path,
+    patchblobRelativePath: patchInfo.patchblob_relative_path || path.posix.join('blobs', patchblobName)
+  };
+  return artifact;
+}
+
+async function assembleResourcePayloads(resources) {
+  const payloads = [];
+  for (const entry of resources || []) {
+    if (!entry) {
+      continue;
+    }
+    if (!entry.fernet_key || !entry.encrypted_data_path) {
+      console.warn(`  ⚠ Skipping resource without encrypted data: ${entry.resource_uuid || entry.file_name || '(unnamed)'}`);
+      continue;
+    }
+    const encryptedAbs = toAbsoluteProjectPath(entry.encrypted_data_path);
+    if (!encryptedAbs || !fs.existsSync(encryptedAbs)) {
+      throw new Error(`Resource encrypted data missing: ${entry.encrypted_data_path}`);
+    }
+    const tokenString = fs.readFileSync(encryptedAbs, 'utf8');
+    const encryptedBuffer = Buffer.from(tokenString, 'utf8');
+    const recalculatedEncodedSha = sha256(encryptedBuffer);
+    if (entry.encoded_sha256 && recalculatedEncodedSha !== entry.encoded_sha256) {
+      throw new Error(`Resource encrypted hash mismatch for ${entry.resource_uuid || entry.file_name}`);
+    }
+    const decodedBuffer = decryptFernetToken(tokenString, entry.fernet_key);
+    const recalculatedDecodedSha = sha256(decodedBuffer);
+    if (entry.decoded_sha256 && recalculatedDecodedSha !== entry.decoded_sha256) {
+      throw new Error(`Resource decoded hash mismatch for ${entry.resource_uuid || entry.file_name}`);
+    }
+    if (entry.file_sha256 && recalculatedDecodedSha !== entry.file_sha256) {
+      throw new Error(`Resource recorded file_sha256 mismatch for ${entry.resource_uuid || entry.file_name}`);
+    }
+    const ipfs = await computeIpfsCids(decodedBuffer);
+    if (entry.ipfs_cid_v1 && ipfs.cidV1 !== entry.ipfs_cid_v1) {
+      throw new Error(`Resource IPFS CID v1 mismatch for ${entry.resource_uuid || entry.file_name}`);
+    }
+    payloads.push({
+      entry,
+      tokenString,
+      encryptedBuffer,
+      decodedBuffer
+    });
+  }
+  return payloads;
+}
+
+async function assembleScreenshotPayloads(screenshots) {
+  const payloads = [];
+  for (const entry of screenshots || []) {
+    if (!entry) continue;
+    if (entry.kind === 'url') {
+      payloads.push({ entry, type: 'url' });
+      continue;
+    }
+    if (!entry.fernet_key || !entry.encrypted_data_path) {
+      throw new Error(`Screenshot entry missing encrypted data: ${entry.screenshot_uuid || entry.file_name}`);
+    }
+    const encryptedAbs = toAbsoluteProjectPath(entry.encrypted_data_path);
+    if (!encryptedAbs || !fs.existsSync(encryptedAbs)) {
+      throw new Error(`Screenshot encrypted data missing: ${entry.encrypted_data_path}`);
+    }
+    const tokenString = fs.readFileSync(encryptedAbs, 'utf8');
+    const encryptedBuffer = Buffer.from(tokenString, 'utf8');
+    const recalculatedEncodedSha = sha256(encryptedBuffer);
+    if (entry.encoded_sha256 && recalculatedEncodedSha !== entry.encoded_sha256) {
+      throw new Error(`Screenshot encrypted hash mismatch for ${entry.screenshot_uuid || entry.file_name}`);
+    }
+    const decodedBuffer = decryptFernetToken(tokenString, entry.fernet_key);
+    const recalculatedDecodedSha = sha256(decodedBuffer);
+    if (entry.decoded_sha256 && recalculatedDecodedSha !== entry.decoded_sha256) {
+      throw new Error(`Screenshot decoded hash mismatch for ${entry.screenshot_uuid || entry.file_name}`);
+    }
+    if (entry.file_sha256 && recalculatedDecodedSha !== entry.file_sha256) {
+      throw new Error(`Screenshot file hash mismatch for ${entry.screenshot_uuid || entry.file_name}`);
+    }
+    const ipfs = await computeIpfsCids(decodedBuffer);
+    if (entry.ipfs_cid_v1 && ipfs.cidV1 !== entry.ipfs_cid_v1) {
+      throw new Error(`Screenshot IPFS CID v1 mismatch for ${entry.screenshot_uuid || entry.file_name}`);
+    }
+    payloads.push({
+      entry,
+      type: 'file',
+      tokenString,
+      encryptedBuffer,
+      decodedBuffer
+    });
+  }
+  return payloads;
 }
 
 function shake128Base64Url(buffer, outputBits = 192) {
@@ -160,7 +646,13 @@ function defaultSkeleton() {
       script: 'newgame.js',
       version: SCRIPT_VERSION,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      prepared: false,
+      prepared_at: null,
+      added_at: null
+    },
+    artifacts: {
+      patch: null
     },
     gameversion: {
       gvuuid: generateUuid(),
@@ -226,7 +718,9 @@ function defaultSkeleton() {
       auuid: generateUuid(),
       file_name: null,
       download_urls: []
-    }
+    },
+    resources: [],
+    screenshots: []
   };
 }
 
@@ -326,6 +820,8 @@ function parseArgs(argv) {
     jsonPath: null,
     rhdataPath: DEFAULT_RHDATA_DB_PATH,
     patchbinPath: DEFAULT_PATCHBIN_DB_PATH,
+    resourcePath: DEFAULT_RESOURCE_DB_PATH,
+    screenshotPath: DEFAULT_SCREENSHOT_DB_PATH,
     force: false,
     purgeFiles: false
   };
@@ -335,9 +831,9 @@ function parseArgs(argv) {
       config.jsonPath = pathToAbsolute(arg);
       continue;
     }
-    if (arg === '--create' || arg === '--check' || arg === '--add' || arg === '--remove') {
+    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove') {
       if (config.mode) {
-        throw new Error('Only one mode flag can be provided (--create, --check, --add, --remove)');
+        throw new Error('Only one mode flag can be provided (--create, --prepare, --check, --add, --remove)');
       }
       config.mode = arg.slice(2);
       continue;
@@ -348,6 +844,14 @@ function parseArgs(argv) {
     }
     if (arg.startsWith('--patchbindb=')) {
       config.patchbinPath = path.normalize(arg.split('=')[1]);
+      continue;
+    }
+    if (arg.startsWith('--resourcedb=')) {
+      config.resourcePath = path.normalize(arg.split('=')[1]);
+      continue;
+    }
+    if (arg.startsWith('--screenshotdb=')) {
+      config.screenshotPath = path.normalize(arg.split('=')[1]);
       continue;
     }
     if (arg === '--force') {
@@ -382,19 +886,23 @@ function printHelp() {
     '',
     'Modes (exactly one):',
     '  --create       Run interactive wizard to build or update the skeleton JSON',
+    '  --prepare      Stage patch/resources/screenshots metadata prior to --add',
     '  --check        Validate skeleton contents and database state',
-    '  --add          Upsert records into rhdata.db and patchbin.db',
+    '  --add          Verify prepared artifacts and upsert database records',
     '  --remove       Remove records inserted for the skeleton',
     '',
     'Options:',
     '  --rhdatadb=PATH     Override rhdata.db location (default from env or electron/rhdata.db)',
     '  --patchbindb=PATH   Override patchbin.db location',
+    '  --resourcedb=PATH   Override resource.db location',
+    '  --screenshotdb=PATH Override screenshot.db location',
     '  --force             Allow overwriting existing entries during --add',
     '  --purge-files       Delete stored patch/blob files during --remove',
     '  --help              Show this message',
     '',
     'Examples:',
     '  enode.sh jstools/newgame.js data/newhack.json --create',
+    '  enode.sh jstools/newgame.js data/newhack.json --prepare',
     '  enode.sh jstools/newgame.js data/newhack.json --check',
     '  enode.sh jstools/newgame.js data/newhack.json --add --force',
     '  enode.sh jstools/newgame.js data/newhack.json --remove --purge-files'
@@ -509,6 +1017,7 @@ async function runCreateWizard(filePath, skeleton) {
 function validateSkeleton(skeleton, options = {}) {
   const issues = [];
   const gv = skeleton.gameversion || {};
+  const skipPatchFileCheck = options.skipPatchFileCheck === true;
 
   if (!gv.name) {
     issues.push({ level: 'error', message: 'Game name is required.' });
@@ -519,10 +1028,12 @@ function validateSkeleton(skeleton, options = {}) {
   if (!gv.gvuuid) {
     issues.push({ level: 'error', message: 'gvuuid is missing.' });
   }
-  if (!gv.patch_local_path) {
-    issues.push({ level: 'error', message: 'Patch file path is required.' });
-  } else if (!fs.existsSync(gv.patch_local_path)) {
-    issues.push({ level: 'error', message: `Patch file not found: ${gv.patch_local_path}` });
+  if (!skipPatchFileCheck) {
+    if (!gv.patch_local_path) {
+      issues.push({ level: 'error', message: 'Patch file path is required.' });
+    } else if (!fs.existsSync(gv.patch_local_path)) {
+      issues.push({ level: 'error', message: `Patch file not found: ${gv.patch_local_path}` });
+    }
   }
   if (!ALLOWED_DIFFICULTIES.includes(gv.difficulty)) {
     issues.push({ level: 'warning', message: `Difficulty "${gv.difficulty}" is not in canonical list.` });
@@ -549,6 +1060,71 @@ function validateSkeleton(skeleton, options = {}) {
   if (options.patchbinPath && !fs.existsSync(options.patchbinPath)) {
     issues.push({ level: 'error', message: `patchbin.db not found: ${options.patchbinPath}` });
   }
+  if (options.resourcePath && !fs.existsSync(options.resourcePath)) {
+    issues.push({ level: 'error', message: `resource.db not found: ${options.resourcePath}` });
+  }
+  if (options.screenshotPath && !fs.existsSync(options.screenshotPath)) {
+    issues.push({ level: 'error', message: `screenshot.db not found: ${options.screenshotPath}` });
+  }
+  return issues;
+}
+
+function validatePreparedState(skeleton) {
+  const issues = [];
+  if (!skeleton.metadata || !skeleton.metadata.prepared) {
+    issues.push({ level: 'error', message: 'Skeleton has not been prepared. Run --prepare before --add.' });
+  }
+
+  const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
+  if (!patchInfo) {
+    issues.push({ level: 'error', message: 'Prepared patch artifact details are missing.' });
+  } else {
+    const patchStoredAbs = toAbsoluteProjectPath(patchInfo.patch_stored_path);
+    if (!patchStoredAbs || !fs.existsSync(patchStoredAbs)) {
+      issues.push({ level: 'error', message: `Prepared patch file is missing: ${patchInfo.patch_stored_path || '(not set)'}` });
+    }
+    const blobStoredAbs = toAbsoluteProjectPath(patchInfo.patchblob_stored_path);
+    if (!blobStoredAbs || !fs.existsSync(blobStoredAbs)) {
+      issues.push({ level: 'error', message: `Prepared patchblob file is missing: ${patchInfo.patchblob_stored_path || '(not set)'}` });
+    }
+  }
+
+  if (!Array.isArray(skeleton.resources) || skeleton.resources.length === 0) {
+    issues.push({ level: 'warning', message: 'No prepared resource entries recorded.' });
+  } else {
+    for (const entry of skeleton.resources) {
+      if (!entry) continue;
+      if (entry.encrypted_data_path) {
+        const encryptedAbs = toAbsoluteProjectPath(entry.encrypted_data_path);
+        if (!encryptedAbs || !fs.existsSync(encryptedAbs)) {
+          issues.push({ level: 'error', message: `Resource encrypted data file missing: ${entry.encrypted_data_path}` });
+        }
+      } else if (entry.auto_generated) {
+        issues.push({ level: 'error', message: `Auto-generated resource is missing encrypted data: ${entry.resource_uuid || '(unnamed)'}` });
+      }
+    }
+  }
+
+  if (!Array.isArray(skeleton.screenshots) || skeleton.screenshots.length === 0) {
+    issues.push({ level: 'warning', message: 'No prepared screenshot entries recorded.' });
+  } else {
+    for (const entry of skeleton.screenshots) {
+      if (!entry) continue;
+      if (entry.kind === 'file') {
+        if (!entry.encrypted_data_path) {
+          issues.push({ level: 'error', message: `Screenshot file missing encrypted data path: ${entry.screenshot_uuid || '(unnamed)'}` });
+          continue;
+        }
+        const encryptedAbs = toAbsoluteProjectPath(entry.encrypted_data_path);
+        if (!encryptedAbs || !fs.existsSync(encryptedAbs)) {
+          issues.push({ level: 'error', message: `Screenshot encrypted data file missing: ${entry.encrypted_data_path}` });
+        }
+      } else if (entry.kind === 'url' && !entry.source_url) {
+        issues.push({ level: 'warning', message: 'Screenshot URL entry is missing source_url.' });
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -566,7 +1142,7 @@ function printIssues(issues) {
 
 function summarizeDatabaseState(dbPaths, skeleton) {
   const summary = [];
-  const { rhdataPath, patchbinPath } = dbPaths;
+  const { rhdataPath, patchbinPath, resourcePath, screenshotPath } = dbPaths;
   const gv = skeleton.gameversion;
   try {
     if (fs.existsSync(rhdataPath)) {
@@ -601,6 +1177,28 @@ function summarizeDatabaseState(dbPaths, skeleton) {
         db.close();
       }
     }
+    if (resourcePath && fs.existsSync(resourcePath)) {
+      const db = new Database(resourcePath, { readonly: true });
+      try {
+        const res = db.prepare('SELECT COUNT(*) AS cnt FROM res_attachments WHERE gvuuid = ?').get(gv.gvuuid);
+        if (res && res.cnt > 0) {
+          summary.push(`ℹ resource entries already recorded: ${res.cnt}`);
+        }
+      } finally {
+        db.close();
+      }
+    }
+    if (screenshotPath && fs.existsSync(screenshotPath)) {
+      const db = new Database(screenshotPath, { readonly: true });
+      try {
+        const scr = db.prepare('SELECT COUNT(*) AS cnt FROM res_screenshots WHERE gvuuid = ?').get(gv.gvuuid);
+        if (scr && scr.cnt > 0) {
+          summary.push(`ℹ screenshot entries already recorded: ${scr.cnt}`);
+        }
+      } finally {
+        db.close();
+      }
+    }
   } catch (error) {
     summary.push(`✗ Failed to inspect database state: ${error.message}`);
   }
@@ -608,6 +1206,79 @@ function summarizeDatabaseState(dbPaths, skeleton) {
   for (const line of summary) {
     console.log(line);
   }
+}
+
+async function handlePrepare(config, skeleton) {
+  const issues = validateSkeleton(skeleton, {
+    rhdataPath: config.rhdataPath,
+    patchbinPath: config.patchbinPath
+  });
+  printIssues(issues);
+  if (issues.some((i) => i.level === 'error')) {
+    throw new Error('Cannot prepare artifacts while validation errors exist.');
+  }
+
+  pruneAutoGeneratedResources(skeleton);
+  pruneAutoGeneratedScreenshots(skeleton);
+
+  const artifact = await preparePatchArtifacts(skeleton);
+  ensurePatchStorage(artifact, artifact.buffer);
+
+  const patchResourceEntry = buildPatchResourceEntry(skeleton, artifact);
+  const manualResources = Array.isArray(skeleton.resources) ? skeleton.resources : [];
+  skeleton.resources = mergeResourceEntries(manualResources, [patchResourceEntry]);
+
+  const autoScreenshots = await buildScreenshotEntries(skeleton);
+  const manualScreenshots = Array.isArray(skeleton.screenshots) ? skeleton.screenshots : [];
+  skeleton.screenshots = mergeScreenshotEntries(manualScreenshots, autoScreenshots);
+
+  skeleton.artifacts = skeleton.artifacts || {};
+  skeleton.artifacts.patch = {
+    file_name: artifact.fileName,
+    file_ext: artifact.extension,
+    file_size: artifact.size,
+    pat_sha1: artifact.patSha1,
+    pat_sha224: artifact.patSha224,
+    pat_sha256: artifact.patSha256,
+    pat_md5: artifact.patHashMd5,
+    crc16: artifact.crc16,
+    crc32: artifact.crc32,
+    ipfs_cid_v0: artifact.ipfsCidV0,
+    ipfs_cid_v1: artifact.ipfsCidV1,
+    patch_relative_path: artifact.patchRelativePath,
+    patchblob_relative_path: artifact.patchblobRelativePath,
+    patch_stored_path: artifact.patchStoredRelativePath,
+    patchblob_stored_path: artifact.patchblobStoredRelativePath,
+    source_path: artifact.sourcePath,
+    prepared_at: new Date().toISOString()
+  };
+
+  skeleton.gameversion.patch = artifact.patchRelativePath;
+  skeleton.gameversion.patchblob1_name = artifact.patchblobName;
+  skeleton.gameversion.pat_sha224 = artifact.patSha224;
+
+  skeleton.patchblob = skeleton.patchblob || {};
+  skeleton.patchblob.patchblob1_name = artifact.patchblobName;
+  skeleton.patchblob.patchblob1_sha224 = artifact.patSha224;
+  skeleton.patchblob.pat_sha1 = artifact.patSha1;
+  skeleton.patchblob.pat_sha224 = artifact.patSha224;
+  skeleton.patchblob.pat_shake_128 = artifact.patShake128;
+  skeleton.patchblob.patch_name = artifact.patchRelativePath;
+
+  skeleton.attachment = skeleton.attachment || {};
+  skeleton.attachment.file_name = artifact.patchblobName;
+
+  skeleton.metadata.prepared = true;
+  skeleton.metadata.prepared_at = new Date().toISOString();
+
+  // Remove large buffers before saving
+  delete artifact.buffer;
+
+  saveSkeleton(config.jsonPath, skeleton);
+  console.log(`\n✓ Prepared artifacts for ${skeleton.gameversion.gameid} v${skeleton.gameversion.version}`);
+  console.log(`  Patch stored at: ${skeleton.artifacts.patch.patch_stored_path}`);
+  console.log(`  Resources staged: ${skeleton.resources.length}`);
+  console.log(`  Screenshots staged: ${skeleton.screenshots.length}`);
 }
 
 /**
@@ -627,11 +1298,15 @@ async function preparePatchArtifacts(skeleton) {
   const patShake128 = shake128Base64Url(buffer);
   const ipfsCids = await computeIpfsCids(buffer);
   const patchblobName = `pblob_${gv.gameid}_${patSha224.slice(0, 10)}`;
+  const patchStoredAbs = path.join(PATCH_DIR, patShake128);
+  const patchBlobStoredAbs = path.join(BLOBS_DIR, patchblobName);
 
   return {
     buffer,
     size: stats.size,
     extension,
+    fileName: path.basename(patchPath),
+    sourcePath: patchPath,
     patSha224,
     patSha1,
     patSha256,
@@ -642,9 +1317,12 @@ async function preparePatchArtifacts(skeleton) {
     ipfsCidV0: ipfsCids.cidV0,
     ipfsCidV1: ipfsCids.cidV1,
     patchblobName,
-    patchStoredPath: path.join(PATCH_DIR, patShake128),
-    patchRelativePath: `patch/${patShake128}`,
-    patchblobStoredPath: path.join(BLOBS_DIR, patchblobName)
+    patchStoredPath: patchStoredAbs,
+    patchStoredRelativePath: toRelativeProjectPath(patchStoredAbs),
+    patchRelativePath: path.posix.join('patch', patShake128),
+    patchblobStoredPath: patchBlobStoredAbs,
+    patchblobStoredRelativePath: toRelativeProjectPath(patchBlobStoredAbs),
+    patchblobRelativePath: path.posix.join('blobs', patchblobName)
   };
 }
 
@@ -1012,11 +1690,223 @@ function upsertPatchRecord(db, skeleton, artifact) {
   });
 }
 
+function upsertPreparedResources(resourceDb, skeleton, payloads) {
+  if (!payloads || payloads.length === 0) {
+    return;
+  }
+  const gv = skeleton.gameversion;
+  const insertStmt = resourceDb.prepare(`
+    INSERT INTO res_attachments (
+      rauuid, resource_scope, linked_type, linked_uuid,
+      gameid, gvuuid, description,
+      file_name, file_ext, file_size,
+      file_sha224, file_sha256, file_sha1, file_md5,
+      file_crc16, file_crc32,
+      encoded_sha256, decoded_sha256,
+      encrypted_data, fernet_key,
+      download_url, ipfs_cid_v1, ipfs_cid_v0,
+      arweave_file_id, arweave_file_url,
+      ardrive_file_name, ardrive_file_id, ardrive_file_path,
+      storage_path, blob_storage_path, source_path
+    )
+    VALUES (
+      @rauuid, @resource_scope, @linked_type, @linked_uuid,
+      @gameid, @gvuuid, @description,
+      @file_name, @file_ext, @file_size,
+      @file_sha224, @file_sha256, @file_sha1, @file_md5,
+      @file_crc16, @file_crc32,
+      @encoded_sha256, @decoded_sha256,
+      @encrypted_data, @fernet_key,
+      @download_url, @ipfs_cid_v1, @ipfs_cid_v0,
+      @arweave_file_id, @arweave_file_url,
+      @ardrive_file_name, @ardrive_file_id, @ardrive_file_path,
+      @storage_path, @blob_storage_path, @source_path
+    )
+    ON CONFLICT(file_sha256) DO UPDATE SET
+      resource_scope = excluded.resource_scope,
+      linked_type = excluded.linked_type,
+      linked_uuid = excluded.linked_uuid,
+      gameid = excluded.gameid,
+      gvuuid = excluded.gvuuid,
+      description = excluded.description,
+      encrypted_data = excluded.encrypted_data,
+      fernet_key = excluded.fernet_key,
+      download_url = excluded.download_url,
+      ipfs_cid_v1 = excluded.ipfs_cid_v1,
+      ipfs_cid_v0 = excluded.ipfs_cid_v0,
+      arweave_file_id = excluded.arweave_file_id,
+      arweave_file_url = excluded.arweave_file_url,
+      ardrive_file_name = excluded.ardrive_file_name,
+      ardrive_file_id = excluded.ardrive_file_id,
+      ardrive_file_path = excluded.ardrive_file_path,
+      storage_path = excluded.storage_path,
+      blob_storage_path = excluded.blob_storage_path,
+      source_path = excluded.source_path,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  for (const payload of payloads) {
+    const entry = payload.entry;
+    const rauuid = entry.resource_uuid || generateUuid();
+    entry.resource_uuid = rauuid;
+    insertStmt.run({
+      rauuid,
+      resource_scope: entry.resource_scope || 'gameversion',
+      linked_type: entry.linked_type || 'gameversion',
+      linked_uuid: entry.linked_uuid || gv.gvuuid,
+      gameid: entry.gameid || gv.gameid,
+      gvuuid: entry.gvuuid || gv.gvuuid,
+      description: entry.description || null,
+      file_name: entry.file_name,
+      file_ext: entry.file_ext || null,
+      file_size: entry.file_size || (payload.decodedBuffer ? payload.decodedBuffer.length : null),
+      file_sha224: entry.file_sha224 || null,
+      file_sha256: entry.file_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null),
+      file_sha1: entry.file_sha1 || null,
+      file_md5: entry.file_md5 || null,
+      file_crc16: entry.file_crc16 || null,
+      file_crc32: entry.file_crc32 || null,
+      encoded_sha256: entry.encoded_sha256 || (payload.encryptedBuffer ? sha256(payload.encryptedBuffer) : null),
+      decoded_sha256: entry.decoded_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null),
+      encrypted_data: payload.encryptedBuffer,
+      fernet_key: entry.fernet_key,
+      download_url: entry.download_url || null,
+      ipfs_cid_v1: entry.ipfs_cid_v1 || null,
+      ipfs_cid_v0: entry.ipfs_cid_v0 || null,
+      arweave_file_id: entry.arweave_file_id || null,
+      arweave_file_url: entry.arweave_file_url || null,
+      ardrive_file_name: entry.ardrive_file_name || null,
+      ardrive_file_id: entry.ardrive_file_id || null,
+      ardrive_file_path: entry.ardrive_file_path || null,
+      storage_path: entry.storage_path || null,
+      blob_storage_path: entry.blob_storage_path || null,
+      source_path: entry.source_path || null
+    });
+  }
+}
+
+function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
+  if (!payloads || payloads.length === 0) {
+    return;
+  }
+  const gv = skeleton.gameversion;
+
+  const insertFileStmt = screenshotDb.prepare(`
+    INSERT INTO res_screenshots (
+      rsuuid, screenshot_type, kind,
+      gameid, gvuuid,
+      source_url, file_name, file_ext, file_size,
+      file_sha256, encoded_sha256, decoded_sha256,
+      encrypted_data, fernet_key,
+      download_url, ipfs_cid_v1, ipfs_cid_v0,
+      arweave_file_id, arweave_file_url,
+      ardrive_file_name, ardrive_file_id, ardrive_file_path,
+      storage_path, source_path
+    )
+    VALUES (
+      @rsuuid, @screenshot_type, @kind,
+      @gameid, @gvuuid,
+      @source_url, @file_name, @file_ext, @file_size,
+      @file_sha256, @encoded_sha256, @decoded_sha256,
+      @encrypted_data, @fernet_key,
+      @download_url, @ipfs_cid_v1, @ipfs_cid_v0,
+      @arweave_file_id, @arweave_file_url,
+      @ardrive_file_name, @ardrive_file_id, @ardrive_file_path,
+      @storage_path, @source_path
+    )
+    ON CONFLICT(file_sha256) DO UPDATE SET
+      screenshot_type = excluded.screenshot_type,
+      kind = excluded.kind,
+      gameid = excluded.gameid,
+      gvuuid = excluded.gvuuid,
+      source_url = excluded.source_url,
+      file_name = excluded.file_name,
+      file_ext = excluded.file_ext,
+      file_size = excluded.file_size,
+      encrypted_data = excluded.encrypted_data,
+      fernet_key = excluded.fernet_key,
+      download_url = excluded.download_url,
+      ipfs_cid_v1 = excluded.ipfs_cid_v1,
+      ipfs_cid_v0 = excluded.ipfs_cid_v0,
+      arweave_file_id = excluded.arweave_file_id,
+      arweave_file_url = excluded.arweave_file_url,
+      ardrive_file_name = excluded.ardrive_file_name,
+      ardrive_file_id = excluded.ardrive_file_id,
+      ardrive_file_path = excluded.ardrive_file_path,
+      storage_path = excluded.storage_path,
+      source_path = excluded.source_path,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  const insertUrlStmt = screenshotDb.prepare(`
+    INSERT INTO res_screenshots (
+      rsuuid, screenshot_type, kind,
+      gameid, gvuuid,
+      source_url, download_url
+    )
+    VALUES (
+      @rsuuid, @screenshot_type, @kind,
+      @gameid, @gvuuid,
+      @source_url, @download_url
+    )
+    ON CONFLICT(source_url) DO UPDATE SET
+      gameid = excluded.gameid,
+      gvuuid = excluded.gvuuid,
+      download_url = excluded.download_url,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  for (const payload of payloads) {
+    const entry = payload.entry;
+    const rsuuid = entry.screenshot_uuid || generateUuid();
+    entry.screenshot_uuid = rsuuid;
+
+    if (payload.type === 'file') {
+      insertFileStmt.run({
+        rsuuid,
+        screenshot_type: entry.screenshot_type || 'file',
+        kind: entry.kind || 'file',
+        gameid: entry.gameid || gv.gameid,
+        gvuuid: entry.gvuuid || gv.gvuuid,
+        source_url: entry.source_url || null,
+        file_name: entry.file_name || null,
+        file_ext: entry.file_ext || null,
+        file_size: entry.file_size || (payload.decodedBuffer ? payload.decodedBuffer.length : null),
+        file_sha256: entry.file_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null),
+        encoded_sha256: entry.encoded_sha256 || (payload.encryptedBuffer ? sha256(payload.encryptedBuffer) : null),
+        decoded_sha256: entry.decoded_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null),
+        encrypted_data: payload.encryptedBuffer,
+        fernet_key: entry.fernet_key,
+        download_url: entry.download_url || null,
+        ipfs_cid_v1: entry.ipfs_cid_v1 || null,
+        ipfs_cid_v0: entry.ipfs_cid_v0 || null,
+        arweave_file_id: entry.arweave_file_id || null,
+        arweave_file_url: entry.arweave_file_url || null,
+        ardrive_file_name: entry.ardrive_file_name || null,
+        ardrive_file_id: entry.ardrive_file_id || null,
+        ardrive_file_path: entry.ardrive_file_path || null,
+        storage_path: entry.storage_path || null,
+        source_path: entry.source_path || null
+      });
+    } else {
+      insertUrlStmt.run({
+        rsuuid,
+        screenshot_type: entry.screenshot_type || 'url',
+        kind: entry.kind || 'url',
+        gameid: entry.gameid || gv.gameid,
+        gvuuid: entry.gvuuid || gv.gvuuid,
+        source_url: entry.source_url,
+        download_url: entry.download_url || entry.source_url || null
+      });
+    }
+  }
+}
+
 /**
  * Removal helpers
  */
 
-function removeRecords(rhdataDb, patchbinDb, skeleton, options) {
+function removeRecords(rhdataDb, patchbinDb, resourceDb, screenshotDb, skeleton, options) {
   const gv = skeleton.gameversion;
   const pb = skeleton.patchblob;
   const at = skeleton.attachment;
@@ -1042,6 +1932,13 @@ function removeRecords(rhdataDb, patchbinDb, skeleton, options) {
     patchbinDb.prepare('DELETE FROM attachments WHERE file_name = ?').run(pb.patchblob1_name);
   }
 
+  if (resourceDb) {
+    resourceDb.prepare('DELETE FROM res_attachments WHERE gameid = ? AND gvuuid = ?').run(gv.gameid, gv.gvuuid);
+  }
+  if (screenshotDb) {
+    screenshotDb.prepare('DELETE FROM res_screenshots WHERE gameid = ? AND gvuuid = ?').run(gv.gameid, gv.gvuuid);
+  }
+
   if (options.purgeFiles && pb.patchblob1_name) {
     const blobPath = path.join(BLOBS_DIR, pb.patchblob1_name);
     if (fs.existsSync(blobPath)) {
@@ -1052,6 +1949,20 @@ function removeRecords(rhdataDb, patchbinDb, skeleton, options) {
     const patchPath = path.join(PATCH_DIR, skeleton.patchblob.pat_shake_128);
     if (fs.existsSync(patchPath)) {
       fs.unlinkSync(patchPath);
+    }
+  }
+  if (options.purgeFiles && Array.isArray(skeleton.resources)) {
+    for (const entry of skeleton.resources) {
+      if (entry && entry.auto_generated) {
+        removeStagedFile(entry.encrypted_data_path);
+      }
+    }
+  }
+  if (options.purgeFiles && Array.isArray(skeleton.screenshots)) {
+    for (const entry of skeleton.screenshots) {
+      if (entry && entry.auto_generated && entry.encrypted_data_path) {
+        removeStagedFile(entry.encrypted_data_path);
+      }
     }
   }
 }
@@ -1070,60 +1981,85 @@ async function handleCheck(config, skeleton) {
     console.log('\n✗ Resolve errors above before proceeding.');
     return;
   }
+  if (!skeleton.metadata || !skeleton.metadata.prepared) {
+    console.log('\n⚠ Skeleton has not been prepared with --prepare yet.');
+  } else {
+    console.log(`\n✓ Prepared artifacts recorded on ${skeleton.metadata.prepared_at || 'unknown date'}`);
+  }
   console.log('');
   summarizeDatabaseState({
     rhdataPath: config.rhdataPath,
-    patchbinPath: config.patchbinPath
+    patchbinPath: config.patchbinPath,
+    resourcePath: config.resourcePath,
+    screenshotPath: config.screenshotPath
   }, skeleton);
 }
 
 async function handleAdd(config, skeleton) {
-  const issues = validateSkeleton(skeleton, {
+  ensureDatabaseFileIfMissing(config.resourcePath);
+  ensureDatabaseFileIfMissing(config.screenshotPath);
+
+  const baseIssues = validateSkeleton(skeleton, {
     rhdataPath: config.rhdataPath,
-    patchbinPath: config.patchbinPath
+    patchbinPath: config.patchbinPath,
+    resourcePath: config.resourcePath,
+    screenshotPath: config.screenshotPath,
+    skipPatchFileCheck: true
   });
-  printIssues(issues);
-  if (issues.some((i) => i.level === 'error')) {
+  const preparedIssues = validatePreparedState(skeleton);
+  const combinedIssues = [...baseIssues, ...preparedIssues];
+  printIssues(combinedIssues);
+  if (combinedIssues.some((issue) => issue.level === 'error')) {
     throw new Error('Cannot add records while validation errors exist.');
   }
 
-  const artifact = await preparePatchArtifacts(skeleton);
-  ensurePatchStorage(artifact, artifact.buffer);
+  const patchArtifact = await loadPreparedPatchArtifact(skeleton);
+  const resourcePayloads = await assembleResourcePayloads(skeleton.resources || []);
+  const screenshotPayloads = await assembleScreenshotPayloads(skeleton.screenshots || []);
 
   const rhdataDb = new Database(config.rhdataPath);
   const patchbinDb = new Database(config.patchbinPath);
+  const resourceDb = new Database(config.resourcePath);
+  const screenshotDb = new Database(config.screenshotPath);
+
   try {
     const transactionRh = rhdataDb.transaction(() => {
-      upsertGameversion(rhdataDb, skeleton, artifact, { force: config.force });
+      upsertGameversion(rhdataDb, skeleton, patchArtifact, { force: config.force });
       upsertGameversionStats(rhdataDb, skeleton);
-      upsertPatchblob(rhdataDb, skeleton, artifact);
-      upsertPatchblobExtended(rhdataDb, skeleton, artifact);
-      upsertPatchRecord(rhdataDb, skeleton, artifact);
+      upsertPatchblob(rhdataDb, skeleton, patchArtifact);
+      upsertPatchblobExtended(rhdataDb, skeleton, patchArtifact);
+      upsertPatchRecord(rhdataDb, skeleton, patchArtifact);
     });
     const transactionAttachment = patchbinDb.transaction(() => {
-      upsertAttachment(patchbinDb, skeleton, artifact);
+      upsertAttachment(patchbinDb, skeleton, patchArtifact);
+    });
+    const transactionResource = resourceDb.transaction(() => {
+      upsertPreparedResources(resourceDb, skeleton, resourcePayloads);
+    });
+    const transactionScreenshot = screenshotDb.transaction(() => {
+      upsertPreparedScreenshots(screenshotDb, skeleton, screenshotPayloads);
     });
 
     transactionRh();
     transactionAttachment();
+    if (resourcePayloads.length > 0) {
+      transactionResource();
+    }
+    if (screenshotPayloads.length > 0) {
+      transactionScreenshot();
+    }
   } finally {
     rhdataDb.close();
     patchbinDb.close();
+    resourceDb.close();
+    screenshotDb.close();
   }
 
-  skeleton.patchblob.patchblob1_name = artifact.patchblobName;
-  skeleton.patchblob.patchblob1_sha224 = artifact.patSha224;
-  skeleton.patchblob.pat_sha224 = artifact.patSha224;
-  skeleton.patchblob.pat_sha1 = artifact.patSha1;
-  skeleton.patchblob.pat_shake_128 = artifact.patShake128;
-  skeleton.patchblob.patch_name = artifact.patchRelativePath;
-  skeleton.gameversion.patchblob1_name = artifact.patchblobName;
-  skeleton.gameversion.pat_sha224 = artifact.patSha224;
-  skeleton.gameversion.patch = artifact.patchRelativePath;
-  skeleton.attachment.file_name = artifact.patchblobName;
-
+  skeleton.metadata.added_at = new Date().toISOString();
   saveSkeleton(config.jsonPath, skeleton);
   console.log('✓ Database updated successfully.');
+  console.log(`  Resources processed: ${resourcePayloads.length}`);
+  console.log(`  Screenshots processed: ${screenshotPayloads.length}`);
 }
 
 async function handleRemove(config, skeleton) {
@@ -1136,18 +2072,16 @@ async function handleRemove(config, skeleton) {
 
   const rhdataDb = new Database(config.rhdataPath);
   const patchbinDb = new Database(config.patchbinPath);
+  const resourceDb = new Database(config.resourcePath);
+  const screenshotDb = new Database(config.screenshotPath);
 
   try {
-    const trx = rhdataDb.transaction(() => {
-      const sub = patchbinDb.transaction(() => {
-        removeRecords(rhdataDb, patchbinDb, skeleton, { purgeFiles: config.purgeFiles });
-      });
-      sub();
-    });
-    trx();
+    removeRecords(rhdataDb, patchbinDb, resourceDb, screenshotDb, skeleton, { purgeFiles: config.purgeFiles });
   } finally {
     rhdataDb.close();
     patchbinDb.close();
+    resourceDb.close();
+    screenshotDb.close();
   }
 
   console.log(`✓ Removed database records for ${skeleton.gameversion.gameid} v${skeleton.gameversion.version}`);
@@ -1182,6 +2116,9 @@ async function main() {
   switch (config.mode) {
     case 'create':
       await runCreateWizard(config.jsonPath, skeleton);
+      break;
+    case 'prepare':
+      await handlePrepare(config, skeleton);
       break;
     case 'check':
       await handleCheck(config, skeleton);

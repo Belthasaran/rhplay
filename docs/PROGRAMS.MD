@@ -258,18 +258,22 @@ enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --remove --purge-files
 
 **Modes**:
 - `--create` — wizard-style prompts for major fields; updates JSON defaults when re-run.
+- `--prepare` — stages patch files, resources, and screenshots (encrypts/stores artifacts, populates metadata in `resources`/`screenshots` arrays). Must be executed before `--add`.
 - `--check` — validates required fields, confirms patch file presence, inspects target databases.
-- `--add` — computes patch metadata, copies artefacts into `jstools/patch` + `jstools/blobs`, upserts records in `rhdata.db` and `patchbin.db`.
+- `--add` — verifies staged artifacts, ingests patch/resource/screenshot metadata into `rhdata.db`, `patchbin.db`, `resource.db`, and `screenshot.db`; refuses to run if `--prepare` has not been executed.
 - `--remove` — deletes records (optionally stored files) corresponding to the skeleton.
 
 **Options**:
 - `--rhdatadb=<path>`, `--patchbindb=<path>` — override database locations (also via `RHDATA_DB_PATH`, `PATCHBIN_DB_PATH`).
+- `--resourcedb=<path>`, `--screenshotdb=<path>` — override resource/screenshot staging databases (defaults to `electron/resource.db` and `electron/screenshot.db`).
 - `--force` — overwrite existing rows when adding.
 - `--purge-files` — delete staged patch/blob files while removing.
 
 **Notes**:
 - Skeleton JSON keeps UUIDs and generated hashes so repeated runs stay idempotent.
-- Patch metadata uses SHA-1/224/256, CRC16/CRC32, and IPFS CID generation identical to blob tooling.
+- `--prepare` encrypts staged resources/screenshots with Fernet, writes reusable tokens to `jstools/resources/` and `jstools/screenshots/`, and deduplicates by file hash (resources) or hash/URL (screenshots).
+- `resource.db` gains a `res_attachments` table paralleling `patchbin.attachments`; `screenshot.db` gains `res_screenshots` with partial uniqueness (URL or SHA-256) to deter duplicates while allowing URL-only entries.
+- Patch and resource metadata rely on SHA-1/224/256, CRC16/CRC32, and IPFS CID generation identical to existing blob tooling.
 
 ---
 

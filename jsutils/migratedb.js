@@ -80,6 +80,8 @@ function printUsage() {
     `  --rhdatadb=PATH     Path to rhdata.db (default: electron/rhdata.db)\n` +
     `  --patchbindb=PATH   Path to patchbin.db (default: electron/patchbin.db)\n` +
     `  --clientdata=PATH   Path to clientdata.db (default: electron/clientdata.db)\n` +
+    `  --resourcedb=PATH   Path to resource.db (default: electron/resource.db)\n` +
+    `  --screenshotdb=PATH Path to screenshot.db (default: electron/screenshot.db)\n` +
     `  --verbose           Print detailed progress\n` +
     `  --help              Show this help text\n`);
 }
@@ -108,6 +110,20 @@ function fileExists(p) {
     return true;
   } catch (err) {
     return false;
+  }
+}
+
+function ensureDatabaseFile(dbPath) {
+  if (!dbPath) {
+    return;
+  }
+  const dir = path.dirname(dbPath);
+  if (!fileExists(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  if (!fileExists(dbPath)) {
+    const db = new Database(dbPath);
+    db.close();
   }
 }
 
@@ -611,6 +627,22 @@ const MIGRATIONS = {
     },
   ],
   patchbin: [],
+  resource: [
+    {
+      id: 'resource_001_create_res_attachments',
+      description: 'Create res_attachments table for prepared resources',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/resource_001_create_res_attachments.sql')
+    }
+  ],
+  screenshot: [
+    {
+      id: 'screenshot_001_create_res_screenshots',
+      description: 'Create res_screenshots table for prepared screenshots',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/screenshot_001_create_res_screenshots.sql')
+    }
+  ],
 };
 
 function runSqlMigration(db, file) {
@@ -772,18 +804,25 @@ function main() {
     rhdatadb: resolveRelative('electron', 'rhdata.db'),
     patchbindb: resolveRelative('electron', 'patchbin.db'),
     clientdata: resolveRelative('electron', 'clientdata.db'),
+    resourcedb: resolveRelative('electron', 'resource.db'),
+    screenshotdb: resolveRelative('electron', 'screenshot.db'),
   };
 
   const targets = {
     rhdata: args.rhdatadb || defaults.rhdatadb,
     patchbin: args.patchbindb || defaults.patchbindb,
     clientdata: args.clientdata || defaults.clientdata,
+    resource: args.resourcedb || defaults.resourcedb,
+    screenshot: args.screenshotdb || defaults.screenshotdb,
   };
 
   try {
     if (verbose) {
       console.log('Migration targets:', targets);
     }
+
+    ensureDatabaseFile(targets.resource);
+    ensureDatabaseFile(targets.screenshot);
 
     if (targets.rhdata) {
       applyMigrations(targets.rhdata, MIGRATIONS.rhdata, { verbose });
@@ -795,6 +834,14 @@ function main() {
 
     if (targets.patchbin) {
       applyMigrations(targets.patchbin, MIGRATIONS.patchbin, { verbose });
+    }
+
+    if (targets.resource) {
+      applyMigrations(targets.resource, MIGRATIONS.resource, { verbose });
+    }
+
+    if (targets.screenshot) {
+      applyMigrations(targets.screenshot, MIGRATIONS.screenshot, { verbose });
     }
 
     console.log('\nAll done!');

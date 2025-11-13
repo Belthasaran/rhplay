@@ -589,6 +589,62 @@ async function assembleScreenshotPayloads(screenshots) {
   return payloads;
 }
 
+function normalizeRelativePath(relPath) {
+  return relPath ? relPath.replace(/\\/g, '/') : relPath;
+}
+
+function findExecutable(candidates) {
+  const pathEntries = (process.env.PATH || '').split(path.delimiter);
+  const extensions = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const possible = candidate.includes(path.sep) ? [candidate] : pathEntries.map(dir => path.join(dir, candidate));
+    for (const base of possible) {
+      for (const ext of extensions) {
+        const filePath = base.endsWith(ext) ? base : base + ext;
+        try {
+          fs.accessSync(filePath, fs.constants.X_OK);
+          return filePath;
+        } catch (err) {
+          continue;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function find7zBinary() {
+  const binary = findExecutable(['7z', '7za', '7zz', '7zr']);
+  if (!binary) {
+    throw new Error('Unable to locate a 7z executable (tried 7z/7za/7zz). Please install 7-Zip and ensure it is on PATH.');
+  }
+  return binary;
+}
+
+function create7zArchive(sourceDir, outputPath) {
+  const sevenZip = find7zBinary();
+  ensureDir(path.dirname(outputPath));
+  if (fs.existsSync(outputPath)) {
+    fs.unlinkSync(outputPath);
+  }
+  const args = ['a', '-t7z', '-mx=9', outputPath, '.'];
+  const result = spawnSync(sevenZip, args, { cwd: sourceDir, stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(`7z archiving failed with exit code ${result.status}`);
+  }
+}
+
+function extract7zArchive(archivePath, destinationDir) {
+  const sevenZip = find7zBinary();
+  ensureDir(destinationDir);
+  const args = ['x', archivePath, '-y'];
+  const result = spawnSync(sevenZip, args, { cwd: destinationDir, stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(`7z extraction failed with exit code ${result.status}`);
+  }
+}
+
 function shake128Base64Url(buffer, outputBits = 192) {
   const sha = new jssha('SHAKE128', 'ARRAYBUFFER');
   sha.update(buffer);
@@ -828,6 +884,9 @@ function parseArgs(argv) {
     patchbinPath: DEFAULT_PATCHBIN_DB_PATH,
     resourcePath: DEFAULT_RESOURCE_DB_PATH,
     screenshotPath: DEFAULT_SCREENSHOT_DB_PATH,
+    packageOutput: null,
+    packageInput: null,
+    outputJson: null,
     force: false,
     purgeFiles: false
   };
@@ -842,6 +901,25 @@ function parseArgs(argv) {
         throw new Error('Only one mode flag can be provided (--create, --prepare, --check, --add, --remove)');
       }
       config.mode = arg.slice(2);
+      continue;
+    }
+    if (arg.startsWith('--package=')) {
+      if (config.mode && config.mode !== 'package') {
+        throw new Error('Only one primary mode flag is allowed.');
+      }
+      config.mode = 'package';
+      config.packageOutput = path.resolve(process.cwd(), arg.split('=')[1]);
+      continue;
+    }
+    if (arg === '--import') {
+      if (config.mode && config.mode !== 'import') {
+        throw new Error('Only one primary mode flag is allowed.');
+      }
+      config.mode = 'import';
+      continue;
+    }
+    if (arg.startsWith('--output-json=')) {
+      config.outputJson = path.resolve(process.cwd(), arg.split('=')[1]);
       continue;
     }
     if (arg.startsWith('--rhdatadb=')) {
@@ -879,8 +957,17 @@ function parseArgs(argv) {
     config.mode = 'help';
   }
 
-  if (config.mode !== 'help' && !config.jsonPath) {
-    throw new Error('JSON file path is required as the first argument.');
+  if (config.mode === 'import') {
+    if (!config.jsonPath) {
+      throw new Error('Package file path is required for --import.');
+    }
+    config.packageInput = pathToAbsolute(config.jsonPath);
+    config.jsonPath = null;
+  } else if (config.mode !== 'help') {
+    if (!config.jsonPath) {
+      throw new Error('JSON file path is required as the first argument.');
+    }
+    config.jsonPath = pathToAbsolute(config.jsonPath);
   }
 
   return config;
@@ -896,12 +983,15 @@ function printHelp() {
     '  --check        Validate skeleton contents and database state',
     '  --add          Verify prepared artifacts and upsert database records',
     '  --remove       Remove records inserted for the skeleton',
+    '  --package=FILE Package prepared data into a .rhpak archive (requires prior --prepare)',
+    '  --import       Import a .rhpak package (first argument must be the package path)',
     '',
     'Options:',
     '  --rhdatadb=PATH     Override rhdata.db location (default from env or electron/rhdata.db)',
     '  --patchbindb=PATH   Override patchbin.db location',
     '  --resourcedb=PATH   Override resource.db location',
     '  --screenshotdb=PATH Override screenshot.db location',
+    '  --output-json=PATH  (Import only) Path to write the imported JSON skeleton',
     '  --force             Allow overwriting existing entries during --add',
     '  --purge-files       Delete stored patch/blob files during --remove',
     '  --help              Show this message',
@@ -911,7 +1001,9 @@ function printHelp() {
     '  enode.sh jstools/newgame.js data/newhack.json --prepare',
     '  enode.sh jstools/newgame.js data/newhack.json --check',
     '  enode.sh jstools/newgame.js data/newhack.json --add --force',
-    '  enode.sh jstools/newgame.js data/newhack.json --remove --purge-files'
+    '  enode.sh jstools/newgame.js data/newhack.json --remove --purge-files',
+    '  enode.sh jstools/newgame.js data/newhack.json --package=example.rhpak',
+    '  enode.sh jstools/newgame.js example.rhpak --import --output-json=imported.json'
   ];
   console.log(lines.join('\n'));
 }
@@ -2093,6 +2185,165 @@ async function handleRemove(config, skeleton) {
   console.log(`✓ Removed database records for ${skeleton.gameversion.gameid} v${skeleton.gameversion.version}`);
 }
 
+async function handlePackage(config, skeleton) {
+  if (!config.packageOutput) {
+    throw new Error('The --package option requires a target file via --package=FILE.');
+  }
+  let packageOutput = config.packageOutput;
+  if (!path.extname(packageOutput)) {
+    packageOutput += '.rhpak';
+  }
+  packageOutput = path.resolve(process.cwd(), packageOutput);
+
+  const baseIssues = validatePreparedState(skeleton);
+  printIssues(baseIssues);
+  if (baseIssues.some(issue => issue.level === 'error')) {
+    throw new Error('Resolve preparation issues before packaging.');
+  }
+
+  saveSkeleton(config.jsonPath, skeleton);
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-'));
+  const stagedPaths = new Set();
+
+  try {
+    const clone = JSON.parse(JSON.stringify(skeleton));
+    clone.metadata = clone.metadata || {};
+    clone.metadata.package = {
+      created_at: new Date().toISOString(),
+      source_filename: path.basename(config.jsonPath),
+      package_name: path.basename(packageOutput)
+    };
+
+    const skeletonTempPath = path.join(tempDir, 'skeleton.json');
+    saveSkeleton(skeletonTempPath, clone);
+
+    function stage(relative, absolute) {
+      if (!relative || !absolute) return;
+      const normalized = normalizeRelativePath(relative);
+      if (!fs.existsSync(absolute)) {
+        throw new Error(`Required artifact missing: ${absolute}`);
+      }
+      if (stagedPaths.has(normalized)) {
+        return;
+      }
+      const destination = path.join(tempDir, ...normalized.split('/'));
+      ensureDir(path.dirname(destination));
+      fs.copyFileSync(absolute, destination);
+      stagedPaths.add(normalized);
+    }
+
+    const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
+    if (!patchInfo) {
+      throw new Error('Prepared patch metadata missing from skeleton.');
+    }
+
+    stage(patchInfo.patch_stored_path, toAbsoluteProjectPath(patchInfo.patch_stored_path));
+    stage(patchInfo.patchblob_stored_path, toAbsoluteProjectPath(patchInfo.patchblob_stored_path));
+
+    for (const entry of skeleton.resources || []) {
+      if (!entry || !entry.encrypted_data_path) continue;
+      stage(entry.encrypted_data_path, toAbsoluteProjectPath(entry.encrypted_data_path));
+    }
+
+    for (const entry of skeleton.screenshots || []) {
+      if (!entry || entry.kind === 'url') continue;
+      if (!entry.encrypted_data_path) continue;
+      stage(entry.encrypted_data_path, toAbsoluteProjectPath(entry.encrypted_data_path));
+    }
+
+    create7zArchive(tempDir, packageOutput);
+    console.log(`✓ Created package: ${packageOutput}`);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function handleImport(config) {
+  const packagePath = config.packageInput;
+  const packageAbs = path.resolve(process.cwd(), packagePath);
+  if (!fs.existsSync(packageAbs)) {
+    throw new Error(`Package not found: ${packageAbs}`);
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-import-'));
+  try {
+    extract7zArchive(packageAbs, tempDir);
+
+    let skeletonCandidate = path.join(tempDir, 'skeleton.json');
+    if (!fs.existsSync(skeletonCandidate)) {
+      const candidates = fs.readdirSync(tempDir).filter(name => name.endsWith('.json'));
+      if (candidates.length === 0) {
+        throw new Error('Package did not contain a skeleton JSON file.');
+      }
+      skeletonCandidate = path.join(tempDir, candidates[0]);
+    }
+
+    const skeleton = loadSkeleton(skeletonCandidate);
+    if (!skeleton) {
+      throw new Error('Failed to load skeleton from package.');
+    }
+
+    const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
+    if (!patchInfo) {
+      throw new Error('Package skeleton missing patch artifact metadata.');
+    }
+
+    const defaultJsonName = (skeleton.metadata && skeleton.metadata.package && skeleton.metadata.package.source_filename)
+      || `${path.basename(packageAbs, path.extname(packageAbs))}.json`;
+    const outputJsonPath = config.outputJson
+      ? path.resolve(process.cwd(), config.outputJson)
+      : path.resolve(process.cwd(), defaultJsonName);
+    if (fs.existsSync(outputJsonPath)) {
+      throw new Error(`Output JSON already exists: ${outputJsonPath}. Use --output-json to specify a different file or remove the existing one.`);
+    }
+    ensureDir(path.dirname(outputJsonPath));
+
+    function copyFromPackage(relativePath) {
+      if (!relativePath) return null;
+      const normalized = normalizeRelativePath(relativePath);
+      const source = path.join(tempDir, ...normalized.split('/'));
+      if (!fs.existsSync(source)) {
+        throw new Error(`Package is missing expected artifact: ${normalized}`);
+      }
+      const destination = toAbsoluteProjectPath(normalized);
+      ensureDir(path.dirname(destination));
+      if (!fs.existsSync(destination)) {
+        fs.copyFileSync(source, destination);
+      }
+      return normalized;
+    }
+
+    patchInfo.patch_stored_path = copyFromPackage(patchInfo.patch_stored_path) || patchInfo.patch_stored_path;
+    patchInfo.patchblob_stored_path = copyFromPackage(patchInfo.patchblob_stored_path) || patchInfo.patchblob_stored_path;
+
+    for (const entry of skeleton.resources || []) {
+      if (!entry || !entry.encrypted_data_path) continue;
+      entry.encrypted_data_path = copyFromPackage(entry.encrypted_data_path) || entry.encrypted_data_path;
+    }
+
+    for (const entry of skeleton.screenshots || []) {
+      if (!entry || entry.kind === 'url' || !entry.encrypted_data_path) continue;
+      entry.encrypted_data_path = copyFromPackage(entry.encrypted_data_path) || entry.encrypted_data_path;
+    }
+
+    skeleton.metadata = skeleton.metadata || {};
+    skeleton.metadata.prepared = true;
+    skeleton.metadata.prepared_at = skeleton.metadata.prepared_at || new Date().toISOString();
+    skeleton.metadata.imported_from = {
+      package: path.basename(packageAbs),
+      imported_at: new Date().toISOString()
+    };
+    skeleton.metadata.added_at = null;
+
+    saveSkeleton(outputJsonPath, skeleton);
+    console.log(`✓ Imported package into ${outputJsonPath}`);
+    console.log('  You can now run --check and --add on the imported JSON.');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 /**
  * Entry point
  */
@@ -2109,6 +2360,11 @@ async function main() {
 
   if (config.mode === 'help') {
     printHelp();
+    return;
+  }
+
+  if (config.mode === 'import') {
+    await handleImport(config);
     return;
   }
 
@@ -2131,6 +2387,9 @@ async function main() {
       break;
     case 'add':
       await handleAdd(config, skeleton);
+      break;
+    case 'package':
+      await handlePackage(config, skeleton);
       break;
     case 'remove':
       await handleRemove(config, skeleton);

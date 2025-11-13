@@ -138,18 +138,33 @@ function generateFernetKey() {
   return UrlBase64.encode(crypto.randomBytes(32)).toString();
 }
 
+function fernetTokenToBuffer(token) {
+  let base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  return Buffer.from(base64, 'base64');
+}
+
+function bufferToFernetToken(buffer) {
+  return buffer.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
 function encryptBuffer(buffer, providedKey = null) {
   const key = providedKey || generateFernetKey();
   const secret = new fernet.Secret(key);
   const token = new fernet.Token({ secret, ttl: 0 });
   const payload = buffer.toString('base64');
   const tokenString = token.encode(payload);
-  const encryptedBuffer = Buffer.from(tokenString, 'utf8');
+  const tokenBuffer = fernetTokenToBuffer(tokenString);
   return {
     key,
-    token: tokenString,
-    encryptedBuffer,
-    encodedSha256: sha256(encryptedBuffer),
+    tokenString,
+    tokenBuffer,
+    encodedSha256: sha256(tokenBuffer),
     decodedSha256: sha256(buffer)
   };
 }
@@ -290,10 +305,9 @@ function stageEncryptedFile(buffer, directory, baseName, existingKey = null) {
   const encryption = encryptBuffer(buffer, existingKey);
   const fileName = `${baseName}.fernet`;
   const absolutePath = path.join(directory, fileName);
-  fs.writeFileSync(absolutePath, encryption.token, 'utf8');
+  fs.writeFileSync(absolutePath, encryption.tokenBuffer);
   return {
     fernetKey: encryption.key,
-    encryptedToken: encryption.token,
     encryptedSha256: encryption.encodedSha256,
     decodedSha256: encryption.decodedSha256,
     relativePath: toRelativeProjectPath(absolutePath)
@@ -503,8 +517,8 @@ async function assembleResourcePayloads(resources) {
     if (!encryptedAbs || !fs.existsSync(encryptedAbs)) {
       throw new Error(`Resource encrypted data missing: ${entry.encrypted_data_path}`);
     }
-    const tokenString = fs.readFileSync(encryptedAbs, 'utf8');
-    const encryptedBuffer = Buffer.from(tokenString, 'utf8');
+    const encryptedBuffer = fs.readFileSync(encryptedAbs);
+    const tokenString = bufferToFernetToken(encryptedBuffer);
     const recalculatedEncodedSha = sha256(encryptedBuffer);
     if (entry.encoded_sha256 && recalculatedEncodedSha !== entry.encoded_sha256) {
       throw new Error(`Resource encrypted hash mismatch for ${entry.resource_uuid || entry.file_name}`);
@@ -546,8 +560,8 @@ async function assembleScreenshotPayloads(screenshots) {
     if (!encryptedAbs || !fs.existsSync(encryptedAbs)) {
       throw new Error(`Screenshot encrypted data missing: ${entry.encrypted_data_path}`);
     }
-    const tokenString = fs.readFileSync(encryptedAbs, 'utf8');
-    const encryptedBuffer = Buffer.from(tokenString, 'utf8');
+    const encryptedBuffer = fs.readFileSync(encryptedAbs);
+    const tokenString = bufferToFernetToken(encryptedBuffer);
     const recalculatedEncodedSha = sha256(encryptedBuffer);
     if (entry.encoded_sha256 && recalculatedEncodedSha !== entry.encoded_sha256) {
       throw new Error(`Screenshot encrypted hash mismatch for ${entry.screenshot_uuid || entry.file_name}`);

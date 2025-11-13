@@ -238,6 +238,41 @@ python3 verify-all-blobs.py --full-check --verify-result
 
 ---
 
+### newgame.js
+**Purpose**: Interactive assistant for preparing JSON skeletons and managing database records when onboarding a new game.
+
+**Usage**:
+```bash
+# Launch the interactive wizard (creates or updates JSON skeleton)
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --create
+
+# Validate skeleton and database availability
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --check
+
+# Add or update records (gameversions, patchblobs, attachments)
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --add --force
+
+# Remove records that were inserted from the skeleton
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --remove --purge-files
+```
+
+**Modes**:
+- `--create` — wizard-style prompts for major fields; updates JSON defaults when re-run.
+- `--check` — validates required fields, confirms patch file presence, inspects target databases.
+- `--add` — computes patch metadata, copies artefacts into `jstools/patch` + `jstools/blobs`, upserts records in `rhdata.db` and `patchbin.db`.
+- `--remove` — deletes records (optionally stored files) corresponding to the skeleton.
+
+**Options**:
+- `--rhdatadb=<path>`, `--patchbindb=<path>` — override database locations (also via `RHDATA_DB_PATH`, `PATCHBIN_DB_PATH`).
+- `--force` — overwrite existing rows when adding.
+- `--purge-files` — delete staged patch/blob files while removing.
+
+**Notes**:
+- Skeleton JSON keeps UUIDs and generated hashes so repeated runs stay idempotent.
+- Patch metadata uses SHA-1/224/256, CRC16/CRC32, and IPFS CID generation identical to blob tooling.
+
+---
+
 ### backfill_rhmd.js
 **Purpose**: Export data from SQLite database to Python RHMD file format
 

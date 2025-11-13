@@ -39,6 +39,7 @@ const crc32 = require('crc-32');
 const { CID } = require('multiformats/cid');
 const { sha256: multiformatsSha256 } = require('multiformats/hashes/sha2');
 const jssha = require('jssha');
+const { spawnSync } = require('child_process');
 
 const SCRIPT_VERSION = '0.1.0';
 
@@ -240,6 +241,81 @@ function saveSkeleton(filePath, data) {
   fs.writeFileSync(filePath, JSON.stringify(clone, null, 2) + os.EOL);
 }
 
+function findEditorCommand() {
+  if (process.platform === 'win32') {
+    const winDir = process.env.WINDIR || 'C:\\Windows';
+    const candidates = [
+      path.join(winDir, 'System32', 'edit.exe'),
+      path.join(winDir, 'System32', 'edit.com')
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return { command: candidate, args: [] };
+      }
+    }
+    return null;
+  }
+  const editorPath = '/usr/bin/editor';
+  if (fs.existsSync(editorPath)) {
+    return { command: editorPath, args: [] };
+  }
+  return null;
+}
+
+async function editDescriptionWithEditor(initialText) {
+  const editor = findEditorCommand();
+  if (!editor) {
+    return { status: 'unavailable' };
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhtools-desc-'));
+  const tmpFile = path.join(tmpDir, 'description.txt');
+  fs.writeFileSync(tmpFile, initialText || '', 'utf8');
+
+  try {
+    const result = spawnSync(editor.command, [...editor.args, tmpFile], { stdio: 'inherit' });
+    if (result.error) {
+      console.log(`  ⚠ Failed to launch editor: ${result.error.message}`);
+      return { status: 'failed', text: initialText || '' };
+    }
+    if (result.status !== 0) {
+      console.log(`  ⚠ Editor exited with code ${result.status}; keeping existing description.`);
+      return { status: 'failed', text: initialText || '' };
+    }
+    const edited = fs.readFileSync(tmpFile, 'utf8').replace(/\r\n/g, '\n');
+    return { status: 'success', text: edited };
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+async function promptMultilineDescription(rl, initialText) {
+  console.log('\nEnter description text. Finish with a single "." on its own line.');
+  if (initialText) {
+    console.log('Press Enter without typing anything to keep the existing description.');
+  } else {
+    console.log('Provide at least one line, then use "." on a line by itself to finish.');
+  }
+
+  const lines = [];
+  let isFirstLine = true;
+
+  while (true) {
+    const line = await rl.question('> ');
+    if (isFirstLine && line === '' && initialText !== undefined && initialText !== null && initialText !== '') {
+      console.log('  ↻ Keeping existing description.');
+      return initialText;
+    }
+    if (line === '.') {
+      break;
+    }
+    lines.push(line);
+    isFirstLine = false;
+  }
+
+  return lines.join('\n');
+}
+
 /**
  * CLI argument parsing
  */
@@ -388,7 +464,20 @@ async function runCreateWizard(filePath, skeleton) {
     gv.name_href = await ask(rl, 'Name href (optional)', gv.name_href || '');
     gv.author_href = await ask(rl, 'Author href (optional)', gv.author_href || '');
     gv.obsoleted_by = await ask(rl, 'Obsoleted by (gameid)', gv.obsoleted_by || '');
-    gv.description = await ask(rl, 'Description text', gv.description || '');
+    const editDescriptionChoice = await askChoice(rl, 'Edit Description', ['Yes', 'No'], 'No');
+    if (editDescriptionChoice.toLowerCase() === 'yes') {
+      const editorResult = await editDescriptionWithEditor(gv.description || '');
+      if (editorResult.status === 'success') {
+        gv.description = editorResult.text;
+      } else if (editorResult.status === 'unavailable') {
+        console.log('  ⚠ No external editor available; please enter the description below.');
+        gv.description = await promptMultilineDescription(rl, gv.description || '');
+      } else {
+        gv.description = editorResult.text;
+      }
+    } else {
+      gv.description = await promptMultilineDescription(rl, gv.description || '');
+    }
 
     const tagAnswer = await ask(rl, 'Tags (comma separated)', (gv.tags || []).join(', '), { allowEmpty: true });
     gv.tags = tagAnswer ? tagAnswer.split(',').map((t) => t.trim()).filter(Boolean) : [];

@@ -71,4 +71,6 @@ logs/
 pat_meta/
 patch/
 rom_meta/
+screenshots/*.fernet
+resources/*.fernet
 

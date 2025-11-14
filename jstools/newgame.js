@@ -135,6 +135,14 @@ function ensureDatabaseFileIfMissing(dbPath) {
   }
 }
 
+function disableForeignKeys(db) {
+  try {
+    db.pragma('foreign_keys = OFF');
+  } catch (err) {
+    console.warn(`  ⚠ Unable to disable foreign_keys pragma: ${err.message}`);
+  }
+}
+
 function normalizeRelativePath(relPath) {
   if (!relPath) return relPath;
   return relPath.split(path.sep).join('/');
@@ -1394,7 +1402,13 @@ async function handlePrepare(config, skeleton) {
   }
 
   const metadata = ensureRhpakMetadata(skeleton);
-  metadata.jsfilename = metadata.jsfilename || path.basename(config.jsonPath);
+  if (config.jsonPath) {
+    metadata.jsfilename = metadata.jsfilename || path.basename(config.jsonPath);
+  }
+  if (!metadata.jsfilename && metadata.imported_from && metadata.imported_from.package) {
+    metadata.jsfilename = metadata.imported_from.package.replace(/\.rhpak$/i, '.json');
+  }
+  metadata.jsfilename = metadata.jsfilename || `skeleton-${rhpakuuid}.json`;
   metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
   metadata.rhpakuuid = metadata.rhpakuuid || generateUuid();
 
@@ -1981,19 +1995,20 @@ function upsertPatchRecord(db, skeleton, artifact) {
 }
 
 function upsertRhpakRecord(db, skeleton) {
-  const metadata = skeleton.metadata || {}; 
-  const jsfilename = metadata.jsfilename
+  const metadata = skeleton.metadata || {};
   const rhpakuuid = metadata.rhpakuuid;
   if (!rhpakuuid) {
     throw new Error('rhpakuuid metadata missing for rhpak registration.');
   }
+  const jsfilename = metadata.jsfilename || metadata.imported_from?.package || 'unknown.json';
   const name = (metadata.rhpakname && metadata.rhpakname.trim())
     ? metadata.rhpakname.trim()
     : buildDefaultRhpakName(skeleton.gameversion || {});
   const query = `
-    INSERT INTO rhpackages (rhpakuuid, filename, name)
-    VALUES (@rhpakuuid, @filename, @name)
+    INSERT INTO rhpaks (rhpakuuid, jsfilename, name)
+    VALUES (@rhpakuuid, @jsfilename, @name)
     ON CONFLICT(rhpakuuid) DO UPDATE SET
+      jsfilename = excluded.jsfilename,
       name = excluded.name,
       updated_at = CURRENT_TIMESTAMP
   `;
@@ -2036,7 +2051,7 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
       @ardrive_file_name, @ardrive_file_id, @ardrive_file_path,
       @storage_path, @blob_storage_path, @source_path
     )
-    ON CONFLICT(file_sha256) DO UPDATE SET
+    ON CONFLICT(rauuid) DO UPDATE SET
       resource_scope = excluded.resource_scope,
       linked_type = excluded.linked_type,
       linked_uuid = excluded.linked_uuid,
@@ -2150,7 +2165,7 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
       @ardrive_file_name, @ardrive_file_id, @ardrive_file_path,
       @storage_path, @source_path
     )
-    ON CONFLICT(file_sha256) DO UPDATE SET
+    ON CONFLICT(rsuuid) DO UPDATE SET
       screenshot_type = excluded.screenshot_type,
       kind = excluded.kind,
       gameid = excluded.gameid,
@@ -2186,7 +2201,7 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
       @gameid, @gvuuid, @rhpakuuid,
       @source_url, @download_url
     )
-    ON CONFLICT(source_url) DO UPDATE SET
+    ON CONFLICT(rsuuid) DO UPDATE SET
       gameid = excluded.gameid,
       gvuuid = excluded.gvuuid,
       download_url = excluded.download_url,
@@ -2510,6 +2525,10 @@ async function handleUninstall(config, skeletonFromJson = null) {
     const patchbinDb = new Database(config.patchbinPath);
     const resourceDb = fs.existsSync(config.resourcePath) ? new Database(config.resourcePath) : null;
     const screenshotDb = fs.existsSync(config.screenshotPath) ? new Database(config.screenshotPath) : null;
+    disableForeignKeys(rhdataDb);
+    disableForeignKeys(patchbinDb);
+    if (resourceDb) disableForeignKeys(resourceDb);
+    if (screenshotDb) disableForeignKeys(screenshotDb);
 
     try {
       for (const descriptor of descriptors.values()) {
@@ -2595,10 +2614,16 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
   ensureDatabaseFileIfMissing(config.screenshotPath);
 
   const metadata = ensureRhpakMetadata(skeleton);
+  if (config.jsonPath) {
+    metadata.jsfilename = metadata.jsfilename || path.basename(config.jsonPath);
+  } else if (!metadata.jsfilename && metadata.imported_from && metadata.imported_from.package) {
+    metadata.jsfilename = metadata.imported_from.package.replace(/\.rhpak$/i, '.json');
+  }
   const rhpakuuid = metadata.rhpakuuid;
   if (!rhpakuuid) {
     throw new Error('Prepared skeleton missing rhpakuuid metadata. Re-run --prepare.');
   }
+  metadata.jsfilename = metadata.jsfilename || `skeleton-${rhpakuuid}.json`;
   metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
 
   const baseIssues = validateSkeleton(skeleton, {
@@ -2623,6 +2648,10 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
   const patchbinDb = new Database(config.patchbinPath);
   const resourceDb = new Database(config.resourcePath);
   const screenshotDb = new Database(config.screenshotPath);
+  disableForeignKeys(rhdataDb);
+  disableForeignKeys(patchbinDb);
+  disableForeignKeys(resourceDb);
+  disableForeignKeys(screenshotDb);
 
   try {
     const transactionRh = rhdataDb.transaction(() => {
@@ -2872,6 +2901,7 @@ async function handleExtractPackage(config) {
       package: path.basename(packageAbs),
       imported_at: new Date().toISOString()
     };
+    metadata.jsfilename = metadata.jsfilename || path.basename(outputJsonPath);
     metadata.added_at = null;
 
     const rhpakuuid = metadata.rhpakuuid;
@@ -2944,6 +2974,7 @@ async function handleImportPackage(config) {
       imported_at: new Date().toISOString(),
       mode: 'direct-import'
     };
+    metadata.jsfilename = metadata.jsfilename || metadata.imported_from.package.replace(/\.rhpak$/i, '.json');
     metadata.added_at = null;
 
     const rhpakuuid = metadata.rhpakuuid;

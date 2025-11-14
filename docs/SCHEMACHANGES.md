@@ -5,6 +5,49 @@ This document tracks all database schema changes made to the rhtools project dat
 
 ---
 
+## 2025-11-13: Rhpak Package Tracking (rhdata.db, patchbin.db, resource.db, screenshot.db)
+
+### Date
+November 13, 2025
+
+### Description
+Introduced consistent `rhpakuuid` linkage across all package-related tables and a dedicated `rhpakages` registry so prepared `.rhpak` bundles can be tracked, re-applied, or uninstalled without risking unrelated metadata.
+
+### Rationale
+- **Package Traceability**: Record which database rows originated from a particular `.rhpak` or JSON skeleton.
+- **Safe Replays/Updates**: Allow `--add` to be re-run idempotently while preventing overwrites of data that came from other sources.
+- **Uninstall Support**: Enable the new `--uninstall` workflow to delete only the rows associated with a specific package.
+- **Auditing**: Provide administrators with a single table that enumerates installed packages and their human-readable names.
+
+### Tables/Columns Affected
+
+**Database**: `rhdata.db`
+- Added `rhpakuuid TEXT` column to `gameversions`, `gameversion_stats`, `patchblobs`, `patchblobs_extended`, and `rhpatches`.
+- Created new `rhpakages` table with columns:
+  - `rhpakuuid TEXT PRIMARY KEY`
+  - `name TEXT NOT NULL`
+  - `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+  - `updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+  - Trigger `trg_rhpakages_updated` maintains `updated_at`.
+
+**Database**: `patchbin.db`
+- Added `rhpakuuid TEXT` column to `attachments`.
+
+**Database**: `resource.db`
+- Added `rhpakuuid TEXT` column to `res_attachments`.
+
+**Database**: `screenshot.db`
+- Added `rhpakuuid TEXT` column to `res_screenshots`.
+
+### Migrations
+- Applied via `jsutils/migratedb.js` (new migration identifiers `rhdata_013_add_rhpakuuid_support`, `patchbin_001_add_rhpakuuid`, `resource_002_add_rhpakuuid`, `screenshot_002_add_rhpakuuid`).
+
+### Related Code
+- `jstools/newgame.js` now assigns/stores `metadata.rhpakuuid` and `metadata.rhpakname`, writes entries into `rhpakages`, and enforces matching `rhpakuuid` during `--add`.
+- `jstools/newgame.js --uninstall` removes rows by `rhpakuuid` across all affected databases.
+
+---
+
 ## 2025-11-07: Nostr Relay Catalog (clientdata.db)
 
 ### Date

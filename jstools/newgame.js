@@ -93,6 +93,26 @@ function generateGameId() {
   return `new${parts.join('')}_${now.getUTCMilliseconds().toString().padStart(3, '0')}`;
 }
 
+function buildDefaultRhpakName(gv) {
+  const gameId = gv.gameid || 'unknown-game';
+  const author = gv.author || gv.authors || gv.submitter || 'unknown-author';
+  const gameName = gv.name || 'Untitled';
+  const version = gv.version !== undefined && gv.version !== null ? gv.version : '1';
+  return `${gameId} - ${author} - ${gameName} - ${version}`;
+}
+
+function ensureRhpakMetadata(skeleton) {
+  skeleton.metadata = skeleton.metadata || {};
+  if (!skeleton.metadata.rhpakuuid) {
+    skeleton.metadata.rhpakuuid = generateUuid();
+  }
+  if (!skeleton.metadata.rhpakname) {
+    const gv = skeleton.gameversion || {};
+    skeleton.metadata.rhpakname = buildDefaultRhpakName(gv);
+  }
+  return skeleton.metadata;
+}
+
 function pathToAbsolute(inputPath,baseDir = process.cwd()) {
   if (!inputPath) return '';
   if (path.isAbsolute(inputPath)) {
@@ -328,6 +348,7 @@ function buildPatchResourceEntry(skeleton, artifact, baseDir) {
     linked_uuid: gv.gvuuid,
     gameid: gv.gameid,
     gvuuid: gv.gvuuid,
+    rhpakuuid: skeleton.metadata?.rhpakuuid || null,
     file_name: artifact.fileName,
     file_ext: artifact.extension,
     file_size: artifact.size,
@@ -374,6 +395,7 @@ async function buildScreenshotEntries(skeleton, baseDir) {
         source_url: value,
         gameid: gv.gameid,
         gvuuid: gv.gvuuid,
+        rhpakuuid: skeleton.metadata?.rhpakuuid || null,
         download_url: value,
         created_at: new Date().toISOString()
       });
@@ -409,6 +431,7 @@ async function buildScreenshotEntries(skeleton, baseDir) {
       storage_path: inBase ? relativeSource : null,
       encrypted_data_path: staged.relativePath,
       fernet_key: staged.fernetKey,
+      rhpakuuid: skeleton.metadata?.rhpakuuid || null,
       file_name: path.basename(absolutePath),
       file_ext: path.extname(absolutePath).replace('.', '').toLowerCase(),
       file_size: stats.size,
@@ -512,6 +535,9 @@ async function assembleResourcePayloads(resources, baseDir) {
     if (!entry) {
       continue;
     }
+    if (!entry.rhpakuuid) {
+      throw new Error(`Resource entry missing rhpakuuid metadata: ${entry.resource_uuid || entry.file_name || '(unnamed)'}`);
+    }
     if (!entry.fernet_key || !entry.encrypted_data_path) {
       console.warn(`  ⚠ Skipping resource without encrypted data: ${entry.resource_uuid || entry.file_name || '(unnamed)'}`);
       continue;
@@ -555,6 +581,9 @@ async function assembleScreenshotPayloads(screenshots, baseDir) {
     if (typeof entry === 'string') {
       // Legacy/simple entries carry no metadata; verification only applies to prepared assets.
       continue;
+    }
+    if (!entry.rhpakuuid) {
+      throw new Error(`Screenshot entry missing rhpakuuid metadata: ${entry.screenshot_uuid || entry.file_name || entry.source_path || 'unknown'}`);
     }
     if (entry.kind === 'url') {
       payloads.push({ entry, type: 'url' });
@@ -909,9 +938,9 @@ function parseArgs(argv) {
       config.jsonPath = arg;
       continue;
     }
-    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove') {
+    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove' || arg === '--uninstall') {
       if (config.mode) {
-        throw new Error('Only one primary mode flag is allowed (--create, --prepare, --check, --add, --remove, --package, --import, --verify-package).');
+        throw new Error('Only one primary mode flag is allowed (--create, --prepare, --check, --add, --remove, --uninstall, --package, --import, --verify-package).');
       }
       config.mode = arg.slice(2);
       continue;
@@ -984,6 +1013,10 @@ function parseArgs(argv) {
     config.packageInput = pathToAbsolute(config.jsonPath);
     config.packageBaseDir = path.dirname(config.packageInput);
     config.jsonPath = null;
+  } else if (config.mode === 'uninstall' && config.jsonPath && config.jsonPath.toLowerCase().endsWith('.rhpak')) {
+    config.packageInput = pathToAbsolute(config.jsonPath);
+    config.packageBaseDir = path.dirname(config.packageInput);
+    config.jsonPath = null;
   } else if (config.mode !== 'help') {
     if (!config.jsonPath) {
       throw new Error('JSON file path is required as the first argument.');
@@ -1009,7 +1042,8 @@ function printHelp() {
     '  --prepare      Stage patch/resources/screenshots metadata prior to --add',
     '  --check        Validate skeleton contents and database state',
     '  --add          Verify prepared artifacts and upsert database records',
-    '  --remove       Remove records inserted for the skeleton',
+    '  --remove       (requires --force) Legacy direct removal; prefer --uninstall',
+    '  --uninstall    Remove all database records for a prepared JSON or .rhpak package',
     '  --package=FILE Package prepared data into a .rhpak archive (requires prior --prepare)',
     '  --import       Import a .rhpak package (first argument must be the package path)',
     '  --verify-package Verify the contents of a .rhpak package without importing',
@@ -1020,8 +1054,8 @@ function printHelp() {
     '  --resourcedb=PATH   Override resource.db location',
     '  --screenshotdb=PATH Override screenshot.db location',
     '  --output-json=PATH  (Import only) Path to write the imported JSON skeleton',
-    '  --force             Allow overwriting existing entries during --add',
-    '  --purge-files       Delete stored patch/blob files during --remove',
+    '  --force             Required for --remove (deprecated workflow)',
+    '  --purge-files       Delete staged patch/blob resources when removing/uninstalling from JSON',
     '  --help              Show this message',
     '',
     'Examples:',
@@ -1029,10 +1063,12 @@ function printHelp() {
     '  enode.sh jstools/newgame.js data/newhack.json --prepare',
     '  enode.sh jstools/newgame.js data/newhack.json --check',
     '  enode.sh jstools/newgame.js data/newhack.json --add --force',
-    '  enode.sh jstools/newgame.js data/newhack.json --remove --purge-files',
+    '  enode.sh jstools/newgame.js data/newhack.json --remove --force --purge-files',
+    '  enode.sh jstools/newgame.js data/newhack.json --uninstall',
     '  enode.sh jstools/newgame.js data/newhack.json --package=example.rhpak',
     '  enode.sh jstools/newgame.js example.rhpak --verify-package',
-    '  enode.sh jstools/newgame.js example.rhpak --import --output-json=imported.json'
+    '  enode.sh jstools/newgame.js example.rhpak --import --output-json=imported.json',
+    '  enode.sh jstools/newgame.js example.rhpak --uninstall'
   ];
   console.log(lines.join('\n'));
 }
@@ -1204,6 +1240,12 @@ function validatePreparedState(skeleton, baseDir) {
   if (!skeleton.metadata || !skeleton.metadata.prepared) {
     issues.push({ level: 'error', message: 'Skeleton has not been prepared. Run --prepare before --add.' });
   }
+  if (!skeleton.metadata || !skeleton.metadata.rhpakuuid) {
+    issues.push({ level: 'error', message: 'Prepared skeleton is missing rhpakuuid metadata. Re-run --prepare.' });
+  }
+  if (!skeleton.metadata || !skeleton.metadata.rhpakname) {
+    issues.push({ level: 'warning', message: 'Prepared skeleton is missing rhpakname metadata. It will default during --prepare.' });
+  }
 
   const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
   if (!patchInfo) {
@@ -1349,10 +1391,18 @@ async function handlePrepare(config, skeleton) {
     throw new Error('Cannot prepare artifacts while validation errors exist.');
   }
 
+  const metadata = ensureRhpakMetadata(skeleton);
+  metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
+  metadata.rhpakuuid = metadata.rhpakuuid || generateUuid();
+
   pruneAutoGeneratedResources(skeleton, baseDir);
   pruneAutoGeneratedScreenshots(skeleton, baseDir);
 
   const artifact = await preparePatchArtifacts(skeleton, baseDir);
+
+  const rhpakuuid = metadata.rhpakuuid;
+  skeleton.gameversion = skeleton.gameversion || {};
+  skeleton.gameversion.rhpakuuid = rhpakuuid;
 
   const patchResourceEntry = buildPatchResourceEntry(skeleton, artifact, baseDir);
   const manualResources = Array.isArray(skeleton.resources) ? skeleton.resources : [];
@@ -1361,6 +1411,23 @@ async function handlePrepare(config, skeleton) {
   const autoScreenshots = await buildScreenshotEntries(skeleton, baseDir);
   const manualScreenshots = Array.isArray(skeleton.screenshots) ? skeleton.screenshots : [];
   skeleton.screenshots = mergeScreenshotEntries(manualScreenshots, autoScreenshots);
+
+  skeleton.resources = (skeleton.resources || []).map((entry) => {
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      if (!entry.rhpakuuid) {
+        return { ...entry, rhpakuuid };
+      }
+    }
+    return entry;
+  });
+  skeleton.screenshots = (skeleton.screenshots || []).map((entry) => {
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      if (!entry.rhpakuuid) {
+        return { ...entry, rhpakuuid };
+      }
+    }
+    return entry;
+  });
 
   skeleton.artifacts = skeleton.artifacts || {};
   skeleton.artifacts.patch = {
@@ -1389,6 +1456,7 @@ async function handlePrepare(config, skeleton) {
   skeleton.gameversion.patch_local_path = artifact.patchRelativePath;
 
   skeleton.patchblob = skeleton.patchblob || {};
+  skeleton.patchblob.rhpakuuid = rhpakuuid;
   skeleton.patchblob.patchblob1_name = artifact.patchblobName;
   skeleton.patchblob.patchblob1_sha224 = artifact.patSha224;
   skeleton.patchblob.pat_sha1 = artifact.patSha1;
@@ -1397,6 +1465,7 @@ async function handlePrepare(config, skeleton) {
   skeleton.patchblob.patch_name = artifact.patchRelativePath;
 
   skeleton.attachment = skeleton.attachment || {};
+  skeleton.attachment.rhpakuuid = rhpakuuid;
   skeleton.attachment.file_name = artifact.patchblobName;
 
   skeleton.metadata.prepared = true;
@@ -1476,6 +1545,10 @@ function upsertGameversion(db, skeleton, artifact, options) {
   const now = new Date().toISOString();
   const tagsString = gv.tags && gv.tags.length ? JSON.stringify(gv.tags) : null;
   const warningsString = gv.warnings && gv.warnings.length ? JSON.stringify(gv.warnings) : null;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for gameversion upsert. Re-run --prepare.');
+  }
   const jsonPayload = {
     id: gv.gameid,
     gameid: gv.gameid,
@@ -1520,7 +1593,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
       length, difficulty, url, download_url, name_href, author_href, obsoleted_by,
       patchblob1_name, pat_sha224, size, description, gvjsondata, tags,
       tags_href, gvchange_attributes, gvchanges, fields_type, raw_difficulty,
-      combinedtype, legacy_type
+      combinedtype, legacy_type, rhpakuuid
     )
     VALUES (
       @gvuuid, @section, @gameid, @version, @removed, @obsoleted, @gametype, @name,
@@ -1528,7 +1601,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
       @length, @difficulty, @url, @download_url, @name_href, @author_href, @obsoleted_by,
       @patchblob1_name, @pat_sha224, @size, @description, @gvjsondata, @tags,
       NULL, NULL, NULL, @fields_type, @raw_difficulty,
-      NULL, @legacy_type
+      NULL, @legacy_type, @rhpakuuid
     )
     ON CONFLICT(gameid, version) DO UPDATE SET
       section = excluded.section,
@@ -1559,7 +1632,8 @@ function upsertGameversion(db, skeleton, artifact, options) {
       tags = excluded.tags,
       fields_type = excluded.fields_type,
       raw_difficulty = excluded.raw_difficulty,
-      legacy_type = excluded.legacy_type
+      legacy_type = excluded.legacy_type,
+      rhpakuuid = excluded.rhpakuuid
   `;
 
   const params = {
@@ -1594,14 +1668,18 @@ function upsertGameversion(db, skeleton, artifact, options) {
     tags: tagsString,
     fields_type: gv.type || gv.gametype || '',
     raw_difficulty: gv.raw_difficulty || '',
-    legacy_type: gv.legacy_type || ''
+    legacy_type: gv.legacy_type || '',
+    rhpakuuid
   };
 
-  if (!options.force) {
-    const existing = db.prepare('SELECT gvuuid FROM gameversions WHERE gameid = ? AND version = ?')
-      .get(gv.gameid, gv.version);
-    if (existing && existing.gvuuid !== gv.gvuuid) {
-      throw new Error(`Record already exists for ${gv.gameid} v${gv.version}. Use --force to overwrite.`);
+  const existing = db.prepare('SELECT gvuuid, rhpakuuid FROM gameversions WHERE gameid = ? AND version = ?')
+    .get(gv.gameid, gv.version);
+  if (existing) {
+    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
+      throw new Error(`Existing gameversion ${gv.gameid} v${gv.version} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
+    }
+    if (!existing.rhpakuuid && existing.gvuuid && existing.gvuuid !== gv.gvuuid) {
+      throw new Error(`Existing gameversion ${gv.gameid} v${gv.version} lacks rhpak ownership and cannot be replaced.`);
     }
   }
 
@@ -1610,17 +1688,21 @@ function upsertGameversion(db, skeleton, artifact, options) {
 
 function upsertGameversionStats(db, skeleton) {
   const gv = skeleton.gameversion;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for gameversion_stats upsert.');
+  }
   const stats = skeleton.gameversion_stats || {};
   const query = `
     INSERT INTO gameversion_stats (
       gameid, gvuuid, download_count, view_count, comment_count,
       rating_value, rating_count, favorite_count, hof_status,
-      featured_status, gvjsondata
+      featured_status, gvjsondata, rhpakuuid
     )
     VALUES (
       @gameid, @gvuuid, @download_count, @view_count, @comment_count,
       @rating_value, @rating_count, @favorite_count, @hof_status,
-      @featured_status, @gvjsondata
+      @featured_status, @gvjsondata, @rhpakuuid
     )
     ON CONFLICT(gameid) DO UPDATE SET
       gvuuid = excluded.gvuuid,
@@ -1633,6 +1715,7 @@ function upsertGameversionStats(db, skeleton) {
       hof_status = excluded.hof_status,
       featured_status = excluded.featured_status,
       gvjsondata = excluded.gvjsondata,
+      rhpakuuid = excluded.rhpakuuid,
       last_updated = CURRENT_TIMESTAMP
   `;
 
@@ -1655,8 +1738,19 @@ function upsertGameversionStats(db, skeleton) {
       rating_value: stats.rating_value,
       rating_count: stats.rating_count || 0,
       favorite_count: stats.favorite_count || 0
-    })
+    }),
+    rhpakuuid
   };
+
+  const existing = db.prepare('SELECT rhpakuuid FROM gameversion_stats WHERE gameid = ?').get(gv.gameid);
+  if (existing) {
+    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
+      throw new Error(`Existing gameversion_stats for ${gv.gameid} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
+    }
+    if (!existing.rhpakuuid) {
+      throw new Error(`Existing gameversion_stats for ${gv.gameid} was not installed via an rhpak and cannot be replaced.`);
+    }
+  }
 
   db.prepare(query).run(payload);
 }
@@ -1664,6 +1758,10 @@ function upsertGameversionStats(db, skeleton) {
 function upsertPatchblob(db, skeleton, artifact) {
   const gv = skeleton.gameversion;
   const pb = skeleton.patchblob;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid || pb.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for patchblob upsert.');
+  }
   if (!pb.pbuuid) {
     pb.pbuuid = generateUuid();
   }
@@ -1672,12 +1770,12 @@ function upsertPatchblob(db, skeleton, artifact) {
     INSERT INTO patchblobs (
       pbuuid, gvuuid, patch_name, pat_sha1, pat_sha224, pat_shake_128,
       patchblob1_key, patchblob1_name, patchblob1_sha224,
-      result_sha1, result_sha224, result_shake1, pbjsondata
+      result_sha1, result_sha224, result_shake1, pbjsondata, rhpakuuid
     )
     VALUES (
       @pbuuid, @gvuuid, @patch_name, @pat_sha1, @pat_sha224, @pat_shake_128,
       @patchblob1_key, @patchblob1_name, @patchblob1_sha224,
-      @result_sha1, @result_sha224, @result_shake1, @pbjsondata
+      @result_sha1, @result_sha224, @result_shake1, @pbjsondata, @rhpakuuid
     )
     ON CONFLICT(patchblob1_name) DO UPDATE SET
       gvuuid = excluded.gvuuid,
@@ -1690,7 +1788,8 @@ function upsertPatchblob(db, skeleton, artifact) {
       result_sha1 = excluded.result_sha1,
       result_sha224 = excluded.result_sha224,
       result_shake1 = excluded.result_shake1,
-      pbjsondata = excluded.pbjsondata
+      pbjsondata = excluded.pbjsondata,
+      rhpakuuid = excluded.rhpakuuid
   `;
 
   const payload = {
@@ -1712,8 +1811,19 @@ function upsertPatchblob(db, skeleton, artifact) {
       pat_sha224: artifact.patSha224,
       pat_shake_128: artifact.patShake128,
       patchblob1_name: artifact.patchblobName
-    })
+    }),
+    rhpakuuid
   };
+
+  const existing = db.prepare('SELECT rhpakuuid FROM patchblobs WHERE patchblob1_name = ?').get(artifact.patchblobName);
+  if (existing) {
+    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
+      throw new Error(`Patchblob ${artifact.patchblobName} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
+    }
+    if (!existing.rhpakuuid) {
+      throw new Error(`Patchblob ${artifact.patchblobName} was not installed via an rhpak and cannot be replaced.`);
+    }
+  }
 
   db.prepare(query).run(payload);
   pb.patchblob1_name = artifact.patchblobName;
@@ -1727,26 +1837,42 @@ function upsertPatchblob(db, skeleton, artifact) {
 function upsertPatchblobExtended(db, skeleton, artifact) {
   const pb = skeleton.patchblob;
   const gv = skeleton.gameversion;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid || pb.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for patchblobs_extended upsert.');
+  }
   const query = `
     INSERT INTO patchblobs_extended (
-      pbuuid, patch_filename, patch_type, is_primary, zip_source
+      pbuuid, patch_filename, patch_type, is_primary, zip_source, rhpakuuid
     )
     VALUES (
-      @pbuuid, @patch_filename, @patch_type, @is_primary, @zip_source
+      @pbuuid, @patch_filename, @patch_type, @is_primary, @zip_source, @rhpakuuid
     )
     ON CONFLICT(pbuuid) DO UPDATE SET
       patch_filename = excluded.patch_filename,
       patch_type = excluded.patch_type,
       is_primary = excluded.is_primary,
-      zip_source = excluded.zip_source
+      zip_source = excluded.zip_source,
+      rhpakuuid = excluded.rhpakuuid
   `;
+
+  const existing = db.prepare('SELECT rhpakuuid FROM patchblobs_extended WHERE pbuuid = ?').get(pb.pbuuid);
+  if (existing) {
+    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
+      throw new Error(`patchblobs_extended entry ${pb.pbuuid} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
+    }
+    if (!existing.rhpakuuid) {
+      throw new Error(`patchblobs_extended entry ${pb.pbuuid} was not installed via an rhpak and cannot be replaced.`);
+    }
+  }
 
   db.prepare(query).run({
     pbuuid: pb.pbuuid,
     patch_filename: gv.patch_filename || path.basename(gv.patch_local_path || artifact.patchblobName),
     patch_type: artifact.extension || 'bps',
     is_primary: 1,
-    zip_source: null
+    zip_source: null,
+    rhpakuuid
   });
 }
 
@@ -1754,13 +1880,28 @@ function upsertAttachment(db, skeleton, artifact) {
   const pb = skeleton.patchblob;
   const gv = skeleton.gameversion;
   const at = skeleton.attachment;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid || pb.rhpakuuid || at.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for attachment upsert.');
+  }
   if (!at.auuid) {
     at.auuid = generateUuid();
   }
 
+  const existing = db.prepare('SELECT auuid, rhpakuuid FROM attachments WHERE file_name = ?').get(artifact.patchblobName);
+  if (existing) {
+    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
+      throw new Error(`Attachment ${artifact.patchblobName} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
+    }
+    if (!existing.rhpakuuid) {
+      throw new Error(`Attachment ${artifact.patchblobName} was not installed via an rhpak and cannot be replaced.`);
+    }
+    at.auuid = existing.auuid;
+  }
+
   const query = `
     REPLACE INTO attachments (
-      auuid, pbuuid, gvuuid, resuuid,
+      auuid, pbuuid, gvuuid, rhpakuuid, resuuid,
       file_crc16, file_crc32, locators, parents,
       file_ipfs_cidv0, file_ipfs_cidv1,
       file_hash_sha224, file_hash_sha1, file_hash_md5, file_hash_sha256,
@@ -1770,7 +1911,7 @@ function upsertAttachment(db, skeleton, artifact) {
       file_data, download_urls, file_size
     )
     VALUES (
-      @auuid, @pbuuid, @gvuuid, NULL,
+      @auuid, @pbuuid, @gvuuid, @rhpakuuid, NULL,
       @file_crc16, @file_crc32, @locators, @parents,
       @file_ipfs_cidv0, @file_ipfs_cidv1,
       @file_hash_sha224, @file_hash_sha1, @file_hash_md5, @file_hash_sha256,
@@ -1784,6 +1925,7 @@ function upsertAttachment(db, skeleton, artifact) {
     auuid: at.auuid,
     pbuuid: pb.pbuuid,
     gvuuid: gv.gvuuid,
+    rhpakuuid,
     file_crc16: artifact.crc16,
     file_crc32: artifact.crc32,
     locators: JSON.stringify([]),
@@ -1802,21 +1944,56 @@ function upsertAttachment(db, skeleton, artifact) {
   });
 
   at.file_name = artifact.patchblobName;
+  at.rhpakuuid = rhpakuuid;
 }
 
 function upsertPatchRecord(db, skeleton, artifact) {
   const gv = skeleton.gameversion;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for rhpatches upsert.');
+  }
+  const existing = db.prepare('SELECT rhpakuuid FROM rhpatches WHERE patch_name = ?').get(artifact.patchRelativePath);
+  if (existing) {
+    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
+      throw new Error(`Patch record ${artifact.patchRelativePath} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
+    }
+    if (!existing.rhpakuuid) {
+      throw new Error(`Patch record ${artifact.patchRelativePath} was not installed via an rhpak and cannot be replaced.`);
+    }
+  }
   const query = `
-    INSERT INTO rhpatches (rhpuuid, gameid, patch_name)
-    VALUES (@rhpuuid, @gameid, @patch_name)
+    INSERT INTO rhpatches (rhpuuid, gameid, patch_name, rhpakuuid)
+    VALUES (@rhpuuid, @gameid, @patch_name, @rhpakuuid)
     ON CONFLICT(patch_name) DO UPDATE SET
-      gameid = excluded.gameid
+      gameid = excluded.gameid,
+      rhpakuuid = excluded.rhpakuuid
   `;
   db.prepare(query).run({
     rhpuuid: generateUuid(),
     gameid: gv.gameid,
-    patch_name: artifact.patchRelativePath
+    patch_name: artifact.patchRelativePath,
+    rhpakuuid
   });
+}
+
+function upsertRhpakRecord(db, skeleton) {
+  const metadata = skeleton.metadata || {};
+  const rhpakuuid = metadata.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for rhpak registration.');
+  }
+  const name = (metadata.rhpakname && metadata.rhpakname.trim())
+    ? metadata.rhpakname.trim()
+    : buildDefaultRhpakName(skeleton.gameversion || {});
+  const query = `
+    INSERT INTO rhpakages (rhpakuuid, name)
+    VALUES (@rhpakuuid, @name)
+    ON CONFLICT(rhpakuuid) DO UPDATE SET
+      name = excluded.name,
+      updated_at = CURRENT_TIMESTAMP
+  `;
+  db.prepare(query).run({ rhpakuuid, name });
 }
 
 function upsertPreparedResources(resourceDb, skeleton, payloads) {
@@ -1824,10 +2001,14 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
     return;
   }
   const gv = skeleton.gameversion;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for res_attachments upsert.');
+  }
   const insertStmt = resourceDb.prepare(`
     INSERT INTO res_attachments (
       rauuid, resource_scope, linked_type, linked_uuid,
-      gameid, gvuuid, description,
+      gameid, gvuuid, rhpakuuid, description,
       file_name, file_ext, file_size,
       file_sha224, file_sha256, file_sha1, file_md5,
       file_crc16, file_crc32,
@@ -1840,7 +2021,7 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
     )
     VALUES (
       @rauuid, @resource_scope, @linked_type, @linked_uuid,
-      @gameid, @gvuuid, @description,
+      @gameid, @gvuuid, @rhpakuuid, @description,
       @file_name, @file_ext, @file_size,
       @file_sha224, @file_sha256, @file_sha1, @file_md5,
       @file_crc16, @file_crc32,
@@ -1871,6 +2052,7 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
       storage_path = excluded.storage_path,
       blob_storage_path = excluded.blob_storage_path,
       source_path = excluded.source_path,
+      rhpakuuid = excluded.rhpakuuid,
       updated_at = CURRENT_TIMESTAMP
   `);
 
@@ -1878,6 +2060,22 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
     const entry = payload.entry;
     const rauuid = entry.resource_uuid || generateUuid();
     entry.resource_uuid = rauuid;
+    const effectiveFileSha256 = entry.file_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null);
+    if (effectiveFileSha256) {
+      const existing = resourceDb.prepare('SELECT rhpakuuid FROM res_attachments WHERE file_sha256 = ?').get(effectiveFileSha256);
+      if (existing) {
+        const entryRhpak = entry.rhpakuuid || rhpakuuid;
+        if (existing.rhpakuuid && existing.rhpakuuid !== entryRhpak) {
+          throw new Error(`Resource file ${entry.file_name || effectiveFileSha256} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${entryRhpak}.`);
+        }
+        if (!existing.rhpakuuid) {
+          throw new Error(`Resource file ${entry.file_name || effectiveFileSha256} was not installed via an rhpak and cannot be replaced.`);
+        }
+      }
+    }
+    const effectiveFileSha224 = entry.file_sha224 || (payload.decodedBuffer ? sha224(payload.decodedBuffer) : null);
+    const effectiveEncodedSha = entry.encoded_sha256 || (payload.encryptedBuffer ? sha256(payload.encryptedBuffer) : null);
+    const effectiveDecodedSha = entry.decoded_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null);
     insertStmt.run({
       rauuid,
       resource_scope: entry.resource_scope || 'gameversion',
@@ -1885,18 +2083,19 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
       linked_uuid: entry.linked_uuid || gv.gvuuid,
       gameid: entry.gameid || gv.gameid,
       gvuuid: entry.gvuuid || gv.gvuuid,
+      rhpakuuid: entry.rhpakuuid || rhpakuuid,
       description: entry.description || null,
       file_name: entry.file_name,
       file_ext: entry.file_ext || null,
       file_size: entry.file_size || (payload.decodedBuffer ? payload.decodedBuffer.length : null),
-      file_sha224: entry.file_sha224 || null,
-      file_sha256: entry.file_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null),
+      file_sha224: effectiveFileSha224,
+      file_sha256: effectiveFileSha256,
       file_sha1: entry.file_sha1 || null,
       file_md5: entry.file_md5 || null,
       file_crc16: entry.file_crc16 || null,
       file_crc32: entry.file_crc32 || null,
-      encoded_sha256: entry.encoded_sha256 || (payload.encryptedBuffer ? sha256(payload.encryptedBuffer) : null),
-      decoded_sha256: entry.decoded_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null),
+      encoded_sha256: effectiveEncodedSha,
+      decoded_sha256: effectiveDecodedSha,
       encrypted_data: payload.encryptedBuffer,
       fernet_key: entry.fernet_key,
       download_url: entry.download_url || null,
@@ -1919,11 +2118,15 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
     return;
   }
   const gv = skeleton.gameversion;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for res_screenshots upsert.');
+  }
 
   const insertFileStmt = screenshotDb.prepare(`
     INSERT INTO res_screenshots (
       rsuuid, screenshot_type, kind,
-      gameid, gvuuid,
+      gameid, gvuuid, rhpakuuid,
       source_url, file_name, file_ext, file_size,
       file_sha256, encoded_sha256, decoded_sha256,
       encrypted_data, fernet_key,
@@ -1934,7 +2137,7 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
     )
     VALUES (
       @rsuuid, @screenshot_type, @kind,
-      @gameid, @gvuuid,
+      @gameid, @gvuuid, @rhpakuuid,
       @source_url, @file_name, @file_ext, @file_size,
       @file_sha256, @encoded_sha256, @decoded_sha256,
       @encrypted_data, @fernet_key,
@@ -1964,24 +2167,26 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
       ardrive_file_path = excluded.ardrive_file_path,
       storage_path = excluded.storage_path,
       source_path = excluded.source_path,
+      rhpakuuid = excluded.rhpakuuid,
       updated_at = CURRENT_TIMESTAMP
   `);
 
   const insertUrlStmt = screenshotDb.prepare(`
     INSERT INTO res_screenshots (
       rsuuid, screenshot_type, kind,
-      gameid, gvuuid,
+      gameid, gvuuid, rhpakuuid,
       source_url, download_url
     )
     VALUES (
       @rsuuid, @screenshot_type, @kind,
-      @gameid, @gvuuid,
+      @gameid, @gvuuid, @rhpakuuid,
       @source_url, @download_url
     )
     ON CONFLICT(source_url) DO UPDATE SET
       gameid = excluded.gameid,
       gvuuid = excluded.gvuuid,
       download_url = excluded.download_url,
+      rhpakuuid = excluded.rhpakuuid,
       updated_at = CURRENT_TIMESTAMP
   `);
 
@@ -1991,12 +2196,25 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
     entry.screenshot_uuid = rsuuid;
 
     if (payload.type === 'file') {
+      if (entry.file_sha256) {
+        const existing = screenshotDb.prepare('SELECT rhpakuuid FROM res_screenshots WHERE file_sha256 = ?').get(entry.file_sha256);
+        if (existing) {
+          const entryRhpak = entry.rhpakuuid || rhpakuuid;
+          if (existing.rhpakuuid && existing.rhpakuuid !== entryRhpak) {
+            throw new Error(`Screenshot ${entry.file_name || entry.file_sha256} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${entryRhpak}.`);
+          }
+          if (!existing.rhpakuuid) {
+            throw new Error(`Screenshot ${entry.file_name || entry.file_sha256} was not installed via an rhpak and cannot be replaced.`);
+          }
+        }
+      }
       insertFileStmt.run({
         rsuuid,
         screenshot_type: entry.screenshot_type || 'file',
         kind: entry.kind || 'file',
         gameid: entry.gameid || gv.gameid,
         gvuuid: entry.gvuuid || gv.gvuuid,
+        rhpakuuid: entry.rhpakuuid || rhpakuuid,
         source_url: entry.source_url || null,
         file_name: entry.file_name || null,
         file_ext: entry.file_ext || null,
@@ -2018,12 +2236,25 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
         source_path: entry.source_path || null
       });
     } else {
+      if (entry.source_url) {
+        const existingUrl = screenshotDb.prepare('SELECT rhpakuuid FROM res_screenshots WHERE source_url = ?').get(entry.source_url);
+        if (existingUrl) {
+          const entryRhpak = entry.rhpakuuid || rhpakuuid;
+          if (existingUrl.rhpakuuid && existingUrl.rhpakuuid !== entryRhpak) {
+            throw new Error(`Screenshot URL ${entry.source_url} belongs to rhpak ${existingUrl.rhpakuuid} and cannot be replaced by ${entryRhpak}.`);
+          }
+          if (!existingUrl.rhpakuuid) {
+            throw new Error(`Screenshot URL ${entry.source_url} was not installed via an rhpak and cannot be replaced.`);
+          }
+        }
+      }
       insertUrlStmt.run({
         rsuuid,
         screenshot_type: entry.screenshot_type || 'url',
         kind: entry.kind || 'url',
         gameid: entry.gameid || gv.gameid,
         gvuuid: entry.gvuuid || gv.gvuuid,
+        rhpakuuid: entry.rhpakuuid || rhpakuuid,
         source_url: entry.source_url,
         download_url: entry.download_url || entry.source_url || null
       });
@@ -2039,6 +2270,7 @@ function removeRecords(rhdataDb, patchbinDb, resourceDb, screenshotDb, skeleton,
   const gv = skeleton.gameversion;
   const pb = skeleton.patchblob;
   const at = skeleton.attachment;
+  const rhpakuuid = skeleton.metadata && skeleton.metadata.rhpakuuid;
 
   const deleteRh = rhdataDb.prepare('DELETE FROM rhpatches WHERE gameid = ?');
   const deleteStats = rhdataDb.prepare('DELETE FROM gameversion_stats WHERE gameid = ?');
@@ -2068,6 +2300,22 @@ function removeRecords(rhdataDb, patchbinDb, resourceDb, screenshotDb, skeleton,
     screenshotDb.prepare('DELETE FROM res_screenshots WHERE gameid = ? AND gvuuid = ?').run(gv.gameid, gv.gvuuid);
   }
 
+  if (rhpakuuid) {
+    rhdataDb.prepare('DELETE FROM rhpakages WHERE rhpakuuid = ?').run(rhpakuuid);
+    if (resourceDb) {
+      resourceDb.prepare('DELETE FROM res_attachments WHERE rhpakuuid = ?').run(rhpakuuid);
+    }
+    if (screenshotDb) {
+      screenshotDb.prepare('DELETE FROM res_screenshots WHERE rhpakuuid = ?').run(rhpakuuid);
+    }
+    patchbinDb.prepare('DELETE FROM attachments WHERE rhpakuuid = ?').run(rhpakuuid);
+    rhdataDb.prepare('DELETE FROM patchblobs WHERE rhpakuuid = ?').run(rhpakuuid);
+    rhdataDb.prepare('DELETE FROM patchblobs_extended WHERE rhpakuuid = ?').run(rhpakuuid);
+    rhdataDb.prepare('DELETE FROM gameversion_stats WHERE rhpakuuid = ?').run(rhpakuuid);
+    rhdataDb.prepare('DELETE FROM gameversions WHERE rhpakuuid = ?').run(rhpakuuid);
+    rhdataDb.prepare('DELETE FROM rhpatches WHERE rhpakuuid = ?').run(rhpakuuid);
+  }
+
   const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
   if (options.purgeFiles && patchInfo?.patchblob_stored_path) {
     const blobPath = toAbsolutePath(patchInfo.patchblob_stored_path, baseDir);
@@ -2093,6 +2341,212 @@ function removeRecords(rhdataDb, patchbinDb, resourceDb, screenshotDb, skeleton,
       if (entry && entry.auto_generated && entry.encrypted_data_path) {
         removeStagedFile(entry.encrypted_data_path, baseDir);
       }
+    }
+  }
+}
+
+function deleteRhpakRecords(databases, rhpakuuid) {
+  const summary = {
+    rhdata: {
+      gameversions: 0,
+      gameversion_stats: 0,
+      patchblobs: 0,
+      patchblobs_extended: 0,
+      rhpatches: 0,
+      rhpakages: 0
+    },
+    attachments: 0,
+    resources: 0,
+    screenshots: 0
+  };
+
+  if (databases.rhdata) {
+    const txn = databases.rhdata.transaction((uuid) => {
+      const counts = {
+        rhpatches: databases.rhdata.prepare('DELETE FROM rhpatches WHERE rhpakuuid = ?').run(uuid).changes,
+        patchblobs_extended: databases.rhdata.prepare('DELETE FROM patchblobs_extended WHERE rhpakuuid = ?').run(uuid).changes,
+        patchblobs: databases.rhdata.prepare('DELETE FROM patchblobs WHERE rhpakuuid = ?').run(uuid).changes,
+        gameversion_stats: databases.rhdata.prepare('DELETE FROM gameversion_stats WHERE rhpakuuid = ?').run(uuid).changes,
+        gameversions: databases.rhdata.prepare('DELETE FROM gameversions WHERE rhpakuuid = ?').run(uuid).changes,
+        rhpakages: databases.rhdata.prepare('DELETE FROM rhpakages WHERE rhpakuuid = ?').run(uuid).changes
+      };
+      return counts;
+    });
+    summary.rhdata = txn(rhpakuuid);
+  }
+
+  if (databases.patchbin) {
+    const txn = databases.patchbin.transaction((uuid) => databases.patchbin.prepare('DELETE FROM attachments WHERE rhpakuuid = ?').run(uuid).changes);
+    summary.attachments = txn(rhpakuuid);
+  }
+
+  if (databases.resource) {
+    const txn = databases.resource.transaction((uuid) => databases.resource.prepare('DELETE FROM res_attachments WHERE rhpakuuid = ?').run(uuid).changes);
+    summary.resources = txn(rhpakuuid);
+  }
+
+  if (databases.screenshot) {
+    const txn = databases.screenshot.transaction((uuid) => databases.screenshot.prepare('DELETE FROM res_screenshots WHERE rhpakuuid = ?').run(uuid).changes);
+    summary.screenshots = txn(rhpakuuid);
+  }
+
+  return summary;
+}
+
+function purgePreparedFilesFromSkeleton(skeleton, baseDir) {
+  const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
+  if (patchInfo?.patchblob_stored_path) {
+    const blobPath = toAbsolutePath(patchInfo.patchblob_stored_path, baseDir);
+    if (blobPath && fs.existsSync(blobPath)) {
+      fs.unlinkSync(blobPath);
+    }
+  }
+  if (patchInfo?.patch_stored_path) {
+    const patchPath = toAbsolutePath(patchInfo.patch_stored_path, baseDir);
+    if (patchPath && fs.existsSync(patchPath)) {
+      fs.unlinkSync(patchPath);
+    }
+  }
+
+  if (Array.isArray(skeleton.resources)) {
+    for (const entry of skeleton.resources) {
+      if (entry && entry.auto_generated) {
+        removeStagedFile(entry.encrypted_data_path, baseDir);
+      }
+    }
+  }
+
+  if (Array.isArray(skeleton.screenshots)) {
+    for (const entry of skeleton.screenshots) {
+      if (entry && entry.auto_generated && entry.encrypted_data_path) {
+        removeStagedFile(entry.encrypted_data_path, baseDir);
+      }
+    }
+  }
+}
+
+async function handleUninstall(config, skeletonFromJson = null) {
+  if (!fs.existsSync(config.rhdataPath)) {
+    throw new Error(`rhdata.db not found at ${config.rhdataPath}`);
+  }
+  if (!fs.existsSync(config.patchbinPath)) {
+    throw new Error(`patchbin.db not found at ${config.patchbinPath}`);
+  }
+
+  const descriptors = new Map();
+  let tempDir = null;
+
+  try {
+    if (config.packageInput) {
+      const packageAbs = config.packageInput;
+      if (!fs.existsSync(packageAbs)) {
+        throw new Error(`Package not found: ${packageAbs}`);
+      }
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-uninstall-'));
+      extract7zArchive(packageAbs, tempDir);
+
+      const jsonPaths = [];
+      function collectJsonFiles(dir) {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            collectJsonFiles(fullPath);
+          } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.json')) {
+            jsonPaths.push(fullPath);
+          }
+        }
+      }
+      collectJsonFiles(tempDir);
+      if (jsonPaths.length === 0) {
+        throw new Error('Package did not contain any JSON skeleton files to uninstall.');
+      }
+
+      for (const jsonPath of jsonPaths) {
+        const skeleton = loadSkeleton(jsonPath);
+        if (!skeleton || !skeleton.metadata || !skeleton.metadata.rhpakuuid) {
+          throw new Error(`Skeleton ${path.relative(tempDir, jsonPath)} is missing rhpakuuid metadata and cannot be uninstalled.`);
+        }
+        const rhpakuuid = skeleton.metadata.rhpakuuid;
+        if (!descriptors.has(rhpakuuid)) {
+          descriptors.set(rhpakuuid, {
+            rhpakuuid,
+            name: skeleton.metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {}),
+            skeleton: null,
+            jsonPath: null,
+            baseDir: null,
+            source: path.basename(packageAbs)
+          });
+        }
+      }
+    } else {
+      const skeleton = skeletonFromJson || loadSkeleton(config.jsonPath);
+      if (!skeleton) {
+        throw new Error(`Skeleton not found at ${config.jsonPath}`);
+      }
+      if (!skeleton.metadata || !skeleton.metadata.rhpakuuid) {
+        throw new Error('Skeleton is missing rhpakuuid metadata. Re-run --prepare before uninstalling.');
+      }
+      const rhpakuuid = skeleton.metadata.rhpakuuid;
+      descriptors.set(rhpakuuid, {
+        rhpakuuid,
+        name: skeleton.metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {}),
+        skeleton,
+        jsonPath: config.jsonPath,
+        baseDir: config.baseDir || path.dirname(config.jsonPath),
+        source: path.basename(config.jsonPath)
+      });
+    }
+
+    if (descriptors.size === 0) {
+      throw new Error('No rhpak metadata found to uninstall.');
+    }
+
+    const rhdataDb = new Database(config.rhdataPath);
+    const patchbinDb = new Database(config.patchbinPath);
+    const resourceDb = fs.existsSync(config.resourcePath) ? new Database(config.resourcePath) : null;
+    const screenshotDb = fs.existsSync(config.screenshotPath) ? new Database(config.screenshotPath) : null;
+
+    try {
+      for (const descriptor of descriptors.values()) {
+        const summary = deleteRhpakRecords({
+          rhdata: rhdataDb,
+          patchbin: patchbinDb,
+          resource: resourceDb,
+          screenshot: screenshotDb
+        }, descriptor.rhpakuuid);
+
+        console.log(`✓ Uninstalled rhpak ${descriptor.name} (${descriptor.rhpakuuid})`);
+        console.log(`  Removed gameversions: ${summary.rhdata.gameversions}`);
+        console.log(`  Removed gameversion_stats: ${summary.rhdata.gameversion_stats}`);
+        console.log(`  Removed patchblobs: ${summary.rhdata.patchblobs}`);
+        console.log(`  Removed patchblobs_extended: ${summary.rhdata.patchblobs_extended}`);
+        console.log(`  Removed rhpatches: ${summary.rhdata.rhpatches}`);
+        console.log(`  Removed attachments: ${summary.attachments}`);
+        console.log(`  Removed resource entries: ${summary.resources}`);
+        console.log(`  Removed screenshot entries: ${summary.screenshots}`);
+
+        if (descriptor.skeleton && descriptor.jsonPath) {
+          if (config.purgeFiles) {
+            purgePreparedFilesFromSkeleton(descriptor.skeleton, descriptor.baseDir);
+          }
+          const metadata = descriptor.skeleton.metadata || {};
+          metadata.added_at = null;
+          metadata.rhpak_installed_at = null;
+          metadata.last_uninstalled_at = new Date().toISOString();
+          descriptor.skeleton.metadata = metadata;
+          saveSkeleton(descriptor.jsonPath, descriptor.skeleton);
+        }
+      }
+    } finally {
+      rhdataDb.close();
+      patchbinDb.close();
+      if (resourceDb) resourceDb.close();
+      if (screenshotDb) screenshotDb.close();
+    }
+  } finally {
+    if (tempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   }
 }
@@ -2137,6 +2591,13 @@ async function handleAdd(config, skeleton) {
   ensureDatabaseFileIfMissing(config.resourcePath);
   ensureDatabaseFileIfMissing(config.screenshotPath);
 
+  const metadata = ensureRhpakMetadata(skeleton);
+  const rhpakuuid = metadata.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('Prepared skeleton missing rhpakuuid metadata. Re-run --prepare.');
+  }
+  metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
+
   const baseIssues = validateSkeleton(skeleton, {
     rhdataPath: config.rhdataPath,
     patchbinPath: config.patchbinPath,
@@ -2167,6 +2628,7 @@ async function handleAdd(config, skeleton) {
       upsertPatchblob(rhdataDb, skeleton, patchArtifact);
       upsertPatchblobExtended(rhdataDb, skeleton, patchArtifact);
       upsertPatchRecord(rhdataDb, skeleton, patchArtifact);
+      upsertRhpakRecord(rhdataDb, skeleton);
     });
     const transactionAttachment = patchbinDb.transaction(() => {
       upsertAttachment(patchbinDb, skeleton, patchArtifact);
@@ -2193,7 +2655,8 @@ async function handleAdd(config, skeleton) {
     screenshotDb.close();
   }
 
-  skeleton.metadata.added_at = new Date().toISOString();
+  metadata.added_at = new Date().toISOString();
+  metadata.rhpak_installed_at = metadata.added_at;
   saveSkeleton(config.jsonPath, skeleton);
   console.log('✓ Database updated successfully.');
   console.log(`  Resources processed: ${resourcePayloads.length}`);
@@ -2201,6 +2664,11 @@ async function handleAdd(config, skeleton) {
 }
 
 async function handleRemove(config, skeleton) {
+  if (!config.force) {
+    throw new Error('--remove is deprecated. Use --uninstall instead, or rerun with --remove --force to proceed.');
+  }
+  console.warn('⚠  --remove bypasses rhpak safeguards. Prefer --uninstall unless you have a specific reason.');
+
   if (!fs.existsSync(config.rhdataPath)) {
     throw new Error(`rhdata.db not found at ${config.rhdataPath}`);
   }
@@ -2210,8 +2678,8 @@ async function handleRemove(config, skeleton) {
 
   const rhdataDb = new Database(config.rhdataPath);
   const patchbinDb = new Database(config.patchbinPath);
-  const resourceDb = new Database(config.resourcePath);
-  const screenshotDb = new Database(config.screenshotPath);
+  const resourceDb = fs.existsSync(config.resourcePath) ? new Database(config.resourcePath) : null;
+  const screenshotDb = fs.existsSync(config.screenshotPath) ? new Database(config.screenshotPath) : null;
 
   const baseDir = config.baseDir || path.dirname(config.jsonPath);
 
@@ -2220,9 +2688,15 @@ async function handleRemove(config, skeleton) {
   } finally {
     rhdataDb.close();
     patchbinDb.close();
-    resourceDb.close();
-    screenshotDb.close();
+    if (resourceDb) resourceDb.close();
+    if (screenshotDb) screenshotDb.close();
   }
+
+  skeleton.metadata = skeleton.metadata || {};
+  skeleton.metadata.added_at = null;
+  skeleton.metadata.rhpak_installed_at = null;
+  skeleton.metadata.last_removed_at = new Date().toISOString();
+  saveSkeleton(config.jsonPath, skeleton);
 
   console.log(`✓ Removed database records for ${skeleton.gameversion.gameid} v${skeleton.gameversion.version}`);
 }
@@ -2243,6 +2717,8 @@ async function handlePackage(config, skeleton) {
   if (baseIssues.some(issue => issue.level === 'error')) {
     throw new Error('Resolve preparation issues before packaging.');
   }
+
+  ensureRhpakMetadata(skeleton);
 
   saveSkeleton(config.jsonPath, skeleton);
 
@@ -2374,14 +2850,39 @@ async function handleImport(config) {
     skeleton.gameversion.patch_local_path = patchInfo.patch_stored_path;
     patchInfo.source_path = patchInfo.patch_stored_path;
 
-    skeleton.metadata = skeleton.metadata || {};
-    skeleton.metadata.prepared = true;
-    skeleton.metadata.prepared_at = skeleton.metadata.prepared_at || new Date().toISOString();
-    skeleton.metadata.imported_from = {
+    const metadata = ensureRhpakMetadata(skeleton);
+    metadata.prepared = true;
+    metadata.prepared_at = metadata.prepared_at || new Date().toISOString();
+    metadata.imported_from = {
       package: path.basename(packageAbs),
       imported_at: new Date().toISOString()
     };
-    skeleton.metadata.added_at = null;
+    metadata.added_at = null;
+
+    const rhpakuuid = metadata.rhpakuuid;
+    skeleton.gameversion = skeleton.gameversion || {};
+    skeleton.gameversion.rhpakuuid = rhpakuuid;
+    skeleton.patchblob = skeleton.patchblob || {};
+    skeleton.patchblob.rhpakuuid = rhpakuuid;
+    skeleton.attachment = skeleton.attachment || {};
+    skeleton.attachment.rhpakuuid = rhpakuuid;
+    skeleton.resources = (skeleton.resources || []).map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && !entry.rhpakuuid) {
+        return { ...entry, rhpakuuid };
+      }
+      return entry;
+    });
+    skeleton.screenshots = (skeleton.screenshots || []).map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.kind !== undefined) {
+        if (!entry.rhpakuuid) {
+          return { ...entry, rhpakuuid };
+        }
+      }
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.kind === undefined && !entry.rhpakuuid) {
+        return { ...entry, rhpakuuid };
+      }
+      return entry;
+    });
 
     saveSkeleton(outputJsonPath, skeleton);
     console.log(`✓ Imported package into ${outputJsonPath}`);
@@ -2464,6 +2965,19 @@ async function main() {
   }
   if (config.mode === 'verify-package') {
     await handleVerifyPackage(config);
+    return;
+  }
+  if (config.mode === 'uninstall') {
+    if (config.packageInput) {
+      await handleUninstall(config, null);
+      return;
+    }
+    config.baseDir = config.baseDir || path.dirname(config.jsonPath);
+    const skeleton = loadSkeleton(config.jsonPath);
+    if (!skeleton) {
+      throw new Error(`Skeleton not found at ${config.jsonPath}`);
+    }
+    await handleUninstall(config, skeleton);
     return;
   }
 

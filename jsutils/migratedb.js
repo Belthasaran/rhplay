@@ -190,6 +190,22 @@ function ensureTranslevelsStructures(db) {
   END;`);
 }
 
+function ensureRhpakagesStructures(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS rhpakages (
+    rhpakuuid TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );`);
+  db.exec(`CREATE TRIGGER IF NOT EXISTS trg_rhpakages_updated
+    AFTER UPDATE ON rhpakages
+  BEGIN
+    UPDATE rhpakages
+    SET updated_at = CURRENT_TIMESTAMP
+    WHERE rhpakuuid = NEW.rhpakuuid;
+  END;`);
+}
+
 // Export applyMigrations for use by Electron app
 function applyMigrationsForDatabase(dbPath, migrations, options = {}) {
   return applyMigrations(dbPath, migrations, options);
@@ -275,6 +291,19 @@ const MIGRATIONS = {
       description: 'Populate contest and racelevel from gvjsondata JSON',
       type: 'js',
       file: resolveRelative('electron/sql/migrations/011_populate_contest_racelevel_from_json.js'),
+    },
+    {
+      id: 'rhdata_013_add_rhpakuuid_support',
+      description: 'Add rhpakuuid columns and rhpakages table',
+      type: 'function',
+      apply(db) {
+        ensureColumn(db, 'gameversions', 'rhpakuuid', 'TEXT');
+        ensureColumn(db, 'gameversion_stats', 'rhpakuuid', 'TEXT');
+        ensureColumn(db, 'patchblobs', 'rhpakuuid', 'TEXT');
+        ensureColumn(db, 'patchblobs_extended', 'rhpakuuid', 'TEXT');
+        ensureColumn(db, 'rhpatches', 'rhpakuuid', 'TEXT');
+        ensureRhpakagesStructures(db);
+      },
     },
   ],
   clientdata: [
@@ -626,13 +655,30 @@ const MIGRATIONS = {
       },
     },
   ],
-  patchbin: [],
+  patchbin: [
+    {
+      id: 'patchbin_001_add_rhpakuuid',
+      description: 'Add rhpakuuid column to attachments table',
+      type: 'function',
+      apply(db) {
+        ensureColumn(db, 'attachments', 'rhpakuuid', 'TEXT');
+      },
+    },
+  ],
   resource: [
     {
       id: 'resource_001_create_res_attachments',
       description: 'Create res_attachments table for prepared resources',
       type: 'sql',
       file: resolveRelative('electron/sql/migrations/resource_001_create_res_attachments.sql')
+    },
+    {
+      id: 'resource_002_add_rhpakuuid',
+      description: 'Add rhpakuuid column to res_attachments',
+      type: 'function',
+      apply(db) {
+        ensureColumn(db, 'res_attachments', 'rhpakuuid', 'TEXT');
+      },
     }
   ],
   screenshot: [
@@ -641,6 +687,14 @@ const MIGRATIONS = {
       description: 'Create res_screenshots table for prepared screenshots',
       type: 'sql',
       file: resolveRelative('electron/sql/migrations/screenshot_001_create_res_screenshots.sql')
+    },
+    {
+      id: 'screenshot_002_add_rhpakuuid',
+      description: 'Add rhpakuuid column to res_screenshots',
+      type: 'function',
+      apply(db) {
+        ensureColumn(db, 'res_screenshots', 'rhpakuuid', 'TEXT');
+      },
     }
   ],
 };

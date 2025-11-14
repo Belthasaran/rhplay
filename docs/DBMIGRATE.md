@@ -5,6 +5,47 @@ This document lists all database migration scripts and maintenance commands that
 
 ---
 
+## Migration: Rhpak Package Tracking (rhdata.db, patchbin.db, resource.db, screenshot.db)
+
+### Date Added
+November 13, 2025
+
+### Purpose
+Add package-tracking columns (`rhpakuuid`) across all game/resource/screenshot tables and create the new `rhpakages` registry so prepared `.rhpak` bundles can be audited or uninstalled safely.
+
+### Command
+```bash
+# Applies all pending migrations, including rhpak support, to default database paths
+./enode.sh jsutils/migratedb.js
+
+# Or specify custom locations
+./enode.sh jsutils/migratedb.js \
+  --rhdatadb=/path/to/rhdata.db \
+  --patchbindb=/path/to/patchbin.db \
+  --resourcedb=/path/to/resource.db \
+  --screenshotdb=/path/to/screenshot.db
+```
+
+### What It Does
+- Adds `rhpakuuid` columns to `gameversions`, `gameversion_stats`, `patchblobs`, `patchblobs_extended`, and `rhpatches` (`rhdata.db`).
+- Creates the new `rhpakages` table with timestamps and update trigger (`rhdata.db`).
+- Adds `rhpakuuid` to `attachments` (`patchbin.db`), `res_attachments` (`resource.db`), and `res_screenshots` (`screenshot.db`).
+
+### Prerequisites
+- The target databases should already exist (they are auto-created if missing).
+- Recommended to back up each database before applying migrations.
+
+### Expected Outcome
+- All relevant tables gain the `rhpakuuid` column (defaults to `NULL` until populated by tooling).
+- `rhpakages` table appears in `rhdata.db`, populated when `jstools/newgame.js --add` installs a package.
+- `jsutils/migratedb.js` records the new migration IDs in each database’s `schema_migrations` table.
+
+### Warnings
+- Safe to run multiple times; `jsutils/migratedb.js` skips migrations that already applied.
+- After applying, ensure `jstools/newgame.js --check` / `--add` use the updated paths if databases were relocated.
+
+---
+
 ## Migration 030: Nostr Relay Catalog
 
 ### Date Added

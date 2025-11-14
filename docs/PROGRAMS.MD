@@ -250,10 +250,10 @@ enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --create
 enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --check
 
 # Add or update records (gameversions, patchblobs, attachments)
-enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --add --force
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --add
 
 # Remove records that were inserted from the skeleton
-enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --remove --purge-files
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --remove --force --purge-files
 
 # Package prepared artifacts into a .rhpak bundle
 enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --package=newhack.rhpak
@@ -263,14 +263,19 @@ enode.sh jstools/newgame.js ~/rhplay/work/newhack.rhpak --import --output-json=n
 
 # Verify a prepared package without importing
 enode.sh jstools/newgame.js ~/rhplay/work/newhack.rhpak --verify-package
+
+# Uninstall a JSON skeleton or rhpak from the databases
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.json --uninstall
+enode.sh jstools/newgame.js ~/rhplay/work/newhack.rhpak --uninstall
 ```
 
 **Modes**:
 - `--create` — wizard-style prompts for major fields; updates JSON defaults when re-run.
 - `--prepare` — stages patch files, resources, and screenshots (encrypts/stores artifacts, populates metadata in `resources`/`screenshots` arrays). Must be executed before `--add`.
 - `--check` — validates required fields, confirms patch file presence, inspects target databases.
-- `--add` — verifies staged artifacts, ingests patch/resource/screenshot metadata into `rhdata.db`, `patchbin.db`, `resource.db`, and `screenshot.db`; refuses to run if `--prepare` has not been executed.
-- `--remove` — deletes records (optionally stored files) corresponding to the skeleton.
+- `--add` — verifies staged artifacts, ingests patch/resource/screenshot metadata into `rhdata.db`, `patchbin.db`, `resource.db`, and `screenshot.db`; refuses to run if `--prepare` has not been executed and only updates rows with matching `rhpakuuid`.
+- `--remove` — legacy removal path that deletes records by game identifiers; requires `--force` and should be used with caution. Prefer `--uninstall`.
+- `--uninstall` — removes all database rows associated with the skeleton or `.rhpak` by `rhpakuuid`, and optionally purges staged files when invoked against JSON.
 - `--package=FILE` — produces a `.rhpak` archive with the skeleton JSON plus all staged artifacts, using paths relative to the JSON directory.
 - `--verify-package` — extracts a `.rhpak` (without importing), recalculates raw and encoded hashes for every artifact, and reports any mismatches.
 - `--import` — expands a `.rhpak` package into a new JSON skeleton and local artifact files, preserving relative paths.
@@ -279,13 +284,15 @@ enode.sh jstools/newgame.js ~/rhplay/work/newhack.rhpak --verify-package
 - `--rhdatadb=<path>`, `--patchbindb=<path>` — override database locations (also via `RHDATA_DB_PATH`, `PATCHBIN_DB_PATH`).
 - `--resourcedb=<path>`, `--screenshotdb=<path>` — override resource/screenshot staging databases (defaults to `electron/resource.db` and `electron/screenshot.db`).
 - `--output-json=<path>` — destination for `--import` skeleton output (defaults to `<package-name>.json` in the current directory).
-- `--force` — overwrite existing rows when adding.
-- `--purge-files` — delete staged patch/blob files while removing.
+- `--force` — required only with `--remove` to acknowledge the legacy workflow.
+- `--purge-files` — delete staged patch/blob files while removing or uninstalling from a JSON skeleton.
 
 **Notes**:
 - Skeleton JSON keeps UUIDs and generated hashes so repeated runs stay idempotent.
+- `--prepare` assigns persistent `metadata.rhpakuuid` and human-readable `metadata.rhpakname` values so packages can be tracked across systems; these are honored by `--add`, `--uninstall`, and `--package`.
 - `--prepare` encrypts staged resources/screenshots with Fernet, writes reusable tokens alongside the JSON (relative paths), and deduplicates by file hash (resources) or hash/URL (screenshots).
 - `resource.db` gains a `res_attachments` table paralleling `patchbin.attachments`; `screenshot.db` gains `res_screenshots` with partial uniqueness (URL or SHA-256) to deter duplicates while allowing URL-only entries.
+- Successful adds register the `rhpakuuid` and package name in the new `rhpakages` table so installed bundles can be audited and uninstalled later.
 - Patch and resource metadata rely on SHA-1/224/256, CRC16/CRC32, and IPFS CID generation identical to existing blob tooling.
 
 ---

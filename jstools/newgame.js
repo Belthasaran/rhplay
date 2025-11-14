@@ -918,6 +918,7 @@ async function buildRomBlocklist(config, skeleton) {
 
   addHash(skeleton?.gameversion?.result_sha1);
   addHash(skeleton?.patchblob?.result_sha1);
+  addHash(skeleton?.artifacts?.patch?.result_sha1);
 
   const dbPath = config.rhdataPath || DEFAULT_RHDATA_DB_PATH;
   if (dbPath && fs.existsSync(dbPath)) {

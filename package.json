@@ -259,6 +259,7 @@
       "node_modules/yallist/**/*",
       "node_modules/secp256k1/**/*",
       "node_modules/@noble/post-quantum/**/*",
+      "node_modules/7zip-bin/**/*",
       "native-modules/serialport-nonblock/build/**/*",
       "jsutils/**/*",
       "electron/sql/migrations/**/*",

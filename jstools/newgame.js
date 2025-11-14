@@ -52,6 +52,35 @@ const UrlBase64 = require('urlsafe-base64');
 const BlobCreator = require('../lib/blob-creator');
 const { BinaryFinder } = require('../lib/binary-finder');
 const sevenZip = require('7zip-min');
+const { path7za } = require('7zip-bin');
+
+// Configure 7zip-min to use the correct binary path in Electron
+// When running in Electron, binaries need to be in app.asar.unpacked
+if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
+  // Check if the binary path contains 'app.asar' (we're running from within ASAR)
+  if (path7za && path7za.includes('app.asar') && !path7za.includes('app.asar.unpacked')) {
+    // Replace 'app.asar' with 'app.asar.unpacked' in the binary path
+    // Handle both forward and backward slashes
+    const unpackedPath = path7za.replace(/app\.asar([\\/])/g, 'app.asar.unpacked$1');
+    if (fs.existsSync(unpackedPath)) {
+      sevenZip.config({ binaryPath: unpackedPath });
+    } else {
+      // Fallback: try to reconstruct the unpacked path
+      try {
+        // Normalize separators to the platform default, then replace app.asar with app.asar.unpacked
+        const normalizedPath7za = path.normalize(path7za);
+        // Replace app.asar/ or app.asar\ with app.asar.unpacked/ or app.asar.unpacked\
+        const unpackedBinary = normalizedPath7za.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+        if (fs.existsSync(unpackedBinary)) {
+          sevenZip.config({ binaryPath: unpackedBinary });
+        }
+      } catch (err) {
+        // If path resolution fails, continue with default path (may fail later)
+        console.warn('[newgame.js] Failed to configure 7zip unpacked path:', err.message);
+      }
+    }
+  }
+}
 
 const SCRIPT_VERSION = '0.1.0';
 const DEFAULT_PBKDF2_ITERATIONS = 390000;

@@ -12,4 +12,6 @@ nostr*.db
 db_temp
 moderation.db
 ratings.db
+resource.db*
+screenshot.db*
 

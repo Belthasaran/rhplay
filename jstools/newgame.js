@@ -46,12 +46,14 @@ const { CID } = require('multiformats/cid');
 const { sha256: multiformatsSha256 } = require('multiformats/hashes/sha2');
 const jssha = require('jssha');
 const { spawnSync } = require('child_process');
+const AdmZip = require('adm-zip');
 const fernet = require('fernet');
 const UrlBase64 = require('urlsafe-base64');
 const BlobCreator = require('../lib/blob-creator');
-const BinaryFinder = require('../lib/binary-finder');
+const { BinaryFinder } = require('../lib/binary-finder');
 
 const SCRIPT_VERSION = '0.1.0';
+const DEFAULT_PBKDF2_ITERATIONS = 390000;
 
 const DEFAULT_RHDATA_DB_PATH = process.env.RHDATA_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'rhdata.db');
@@ -516,12 +518,83 @@ async function loadPreparedPatchArtifact(skeleton, baseDir) {
     throw new Error(`Prepared patch IPFS CID v1 mismatch. Expected ${patchInfo.ipfs_cid_v1}, got ${ipfsResult.cidV1}`);
   }
 
+  const archiveEntryName = patchInfo.archive_entry_name || skeleton.gameversion?.patch_archive_entry || null;
+  const isArchiveSource = Boolean(
+    patchInfo.source_is_archive ??
+    skeleton.gameversion?.patch_source_is_archive
+  );
+
+  const blobMetadata = {
+    patchblob1_name: patchblobName,
+    patchblob1_key: skeleton.patchblob?.patchblob1_key || null,
+    patchblob1_sha224: skeleton.patchblob?.patchblob1_sha224 || null
+  };
+
+  if (!blobMetadata.patchblob1_key) {
+    throw new Error('Patchblob key metadata missing. Re-run --prepare to regenerate artifacts.');
+  }
+
+  const attachmentMeta = await computeAttachmentMetadata(patchblobStoredAbs, blobMetadata.patchblob1_key);
+
+  const romRelativePath = patchInfo.rom_relative_path ||
+    skeleton.patchblob?.rom_relative_path ||
+    skeleton.gameversion?.rom_relative_path ||
+    null;
+
+  if (!romRelativePath) {
+    throw new Error('Prepared ROM relative path metadata missing. Re-run --prepare to regenerate artifacts.');
+  }
+
+  const romPath = toAbsolutePath(romRelativePath, baseDir);
+  if (!romPath || !fs.existsSync(romPath)) {
+    throw new Error(`Prepared ROM file missing: ${romRelativePath}`);
+  }
+
+  const romBuffer = fs.readFileSync(romPath);
+  const resultSha1 = sha1(romBuffer);
+  const resultSha224 = sha224(romBuffer);
+  const resultShake1 = shake128Base64Url(romBuffer);
+  const resultMd5 = md5(romBuffer);
+  const resultCrc16 = crc16(romBuffer);
+  const resultCrc32 = crc32Hex(romBuffer);
+
+  const expectedResultSha1 = patchInfo.result_sha1 || skeleton.patchblob?.result_sha1 || skeleton.gameversion?.result_sha1;
+  if (expectedResultSha1 && expectedResultSha1 !== resultSha1) {
+    throw new Error(`Prepared ROM SHA-1 mismatch. Expected ${expectedResultSha1}, got ${resultSha1}`);
+  }
+  const expectedResultSha224 = patchInfo.result_sha224 || skeleton.patchblob?.result_sha224 || skeleton.gameversion?.result_sha224;
+  if (expectedResultSha224 && expectedResultSha224 !== resultSha224) {
+    throw new Error(`Prepared ROM SHA-224 mismatch. Expected ${expectedResultSha224}, got ${resultSha224}`);
+  }
+  const expectedResultShake = patchInfo.result_shake1 || skeleton.patchblob?.result_shake1 || skeleton.gameversion?.result_shake1;
+  if (expectedResultShake && expectedResultShake !== resultShake1) {
+    throw new Error(`Prepared ROM SHAKE128 mismatch. Expected ${expectedResultShake}, got ${resultShake1}`);
+  }
+  const expectedResultMd5 = patchInfo.result_md5 || skeleton.patchblob?.result_md5 || skeleton.gameversion?.result_md5;
+  if (expectedResultMd5 && expectedResultMd5 !== resultMd5) {
+    throw new Error(`Prepared ROM MD5 mismatch. Expected ${expectedResultMd5}, got ${resultMd5}`);
+  }
+  const expectedResultCrc16 = patchInfo.result_crc16 || skeleton.patchblob?.result_crc16 || skeleton.gameversion?.result_crc16;
+  if (expectedResultCrc16 && expectedResultCrc16 !== resultCrc16) {
+    throw new Error(`Prepared ROM CRC16 mismatch. Expected ${expectedResultCrc16}, got ${resultCrc16}`);
+  }
+  const expectedResultCrc32 = patchInfo.result_crc32 || skeleton.patchblob?.result_crc32 || skeleton.gameversion?.result_crc32;
+  if (expectedResultCrc32 && expectedResultCrc32 !== resultCrc32) {
+    throw new Error(`Prepared ROM CRC32 mismatch. Expected ${expectedResultCrc32}, got ${resultCrc32}`);
+  }
+
+  const sourceRelativePath = patchInfo.source_path ||
+    (patchInfo.source_is_archive ? patchInfo.patch_relative_path : patchInfo.patch_relative_path);
+
   const artifact = {
     buffer,
     size: buffer.length,
     extension: patchInfo.file_ext || path.extname(patchStoredAbs).replace('.', '').toLowerCase(),
     fileName: patchInfo.file_name || path.basename(patchStoredAbs),
     sourcePath: patchInfo.source_path || patchStoredAbs,
+    sourceRelativePath,
+    archiveEntryName,
+    isArchiveSource,
     patSha224: patchInfo.pat_sha224 || recalculatedSha224,
     patSha1: patchInfo.pat_sha1 || recalculatedSha1,
     patSha256: patchInfo.pat_sha256 || recalculatedSha256,
@@ -537,7 +610,17 @@ async function loadPreparedPatchArtifact(skeleton, baseDir) {
     patchRelativePath: patchInfo.patch_relative_path || path.posix.join('patch', path.basename(patchStoredAbs)),
     patchblobStoredPath: patchblobStoredAbs,
     patchblobStoredRelativePath: patchInfo.patchblob_stored_path,
-    patchblobRelativePath: patchInfo.patchblob_relative_path || path.posix.join('blobs', patchblobName)
+    patchblobRelativePath: patchInfo.patchblob_relative_path || path.posix.join('blobs', patchblobName),
+    blobMetadata,
+    attachmentMeta,
+    resultSha1,
+    resultSha224,
+    resultShake1,
+    resultMd5,
+    resultCrc16,
+    resultCrc32,
+    romPath,
+    romRelativePath
   };
   return artifact;
 }
@@ -734,6 +817,90 @@ async function computeIpfsCids(buffer) {
     cidV0: cidV0.toString(),
     cidV1: cidV1.toString()
   };
+}
+
+function scoreZipPatchEntries(entries) {
+  return entries.map((entry) => {
+    const name = entry.entryName.toLowerCase();
+    const parts = name.split('/');
+    const basename = parts[parts.length - 1];
+    let score = 0;
+
+    if (parts.length === 1) score += 100;
+    else if (parts.length === 2) score += 50;
+
+    if (entry.type === 'bps') score += 50;
+    else if (entry.type === 'ips') score += 20;
+
+    score += Math.min((entry.size || 0) / 1000, 50);
+
+    if (name.includes('readme') || name.includes('read me') || name.includes('read_me')) score -= 100;
+    if (name.includes('optional')) score -= 50;
+    if (name.includes('alternate')) score -= 30;
+    if (name.includes('alt')) score -= 20;
+    if (name.includes('extra')) score -= 20;
+    if (name.includes('bonus')) score -= 20;
+    if (name.includes('music')) score -= 30;
+    if (name.includes('sound')) score -= 30;
+    if (name.includes('sample')) score -= 40;
+    if (name.includes('test')) score -= 40;
+
+    if (name.includes('hack')) score += 20;
+    if (name.includes('patch')) score += 10;
+    if (name.includes('main')) score += 30;
+    if (basename.includes('smw')) score += 10;
+
+    return { ...entry, score };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function selectPatchFromZip(zipPath) {
+  const zip = new AdmZip(zipPath);
+  const entries = zip.getEntries()
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => {
+      const match = entry.entryName.match(/\.(bps|ips)$/i);
+      if (!match) return null;
+      return {
+        entry,
+        entryName: entry.entryName,
+        type: match[1].toLowerCase(),
+        size: entry.header?.size ?? entry.getData().length
+      };
+    })
+    .filter(Boolean);
+
+  if (entries.length === 0) {
+    throw new Error('No .bps or .ips patch files found in ZIP archive.');
+  }
+
+  const [primary] = scoreZipPatchEntries(entries);
+  const data = primary.entry.getData();
+  if (!data || data.length === 0) {
+    throw new Error(`Selected patch entry ${primary.entryName} is empty or unreadable.`);
+  }
+
+  console.log(`  ✓ Selected patch from ZIP entry: ${primary.entryName}`);
+
+  return {
+    buffer: Buffer.from(data),
+    entryName: primary.entryName,
+    fileName: path.basename(primary.entryName),
+    extension: primary.type,
+    size: data.length
+  };
+}
+
+function isZipFile(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const signature = Buffer.alloc(4);
+    fs.readSync(fd, signature, 0, 4, 0);
+    fs.closeSync(fd);
+    return signature[0] === 0x50 && signature[1] === 0x4b;
+  } catch {
+    return false;
+  }
 }
 
 async function getToolchainPaths() {
@@ -1576,15 +1743,15 @@ async function handlePrepare(config, skeleton) {
   }
 
   const metadata = ensureRhpakMetadata(skeleton);
+  metadata.rhpakuuid = metadata.rhpakuuid || generateUuid();
   if (config.jsonPath) {
     metadata.jsfilename = metadata.jsfilename || path.basename(config.jsonPath);
   }
   if (!metadata.jsfilename && metadata.imported_from && metadata.imported_from.package) {
     metadata.jsfilename = metadata.imported_from.package.replace(/\.rhpak$/i, '.json');
   }
-  metadata.jsfilename = metadata.jsfilename || `skeleton-${rhpakuuid}.json`;
+  metadata.jsfilename = metadata.jsfilename || `skeleton-${metadata.rhpakuuid}.json`;
   metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
-  metadata.rhpakuuid = metadata.rhpakuuid || generateUuid();
 
   pruneAutoGeneratedResources(skeleton, baseDir);
   pruneAutoGeneratedScreenshots(skeleton, baseDir);
@@ -1594,6 +1761,28 @@ async function handlePrepare(config, skeleton) {
   const rhpakuuid = metadata.rhpakuuid;
   skeleton.gameversion = skeleton.gameversion || {};
   skeleton.gameversion.rhpakuuid = rhpakuuid;
+  skeleton.gameversion.patch_filename = artifact.fileName;
+  skeleton.gameversion.pat_sha1 = artifact.patSha1;
+  skeleton.gameversion.pat_sha224 = artifact.patSha224;
+  skeleton.gameversion.pat_sha256 = artifact.patSha256;
+  skeleton.gameversion.pat_shake_128 = artifact.patShake128;
+  skeleton.gameversion.pat_md5 = artifact.patHashMd5;
+  skeleton.gameversion.patch_crc16 = artifact.crc16;
+  skeleton.gameversion.patch_crc32 = artifact.crc32;
+  skeleton.gameversion.result_sha1 = artifact.resultSha1;
+  skeleton.gameversion.result_sha224 = artifact.resultSha224;
+  skeleton.gameversion.result_shake1 = artifact.resultShake1;
+  skeleton.gameversion.result_md5 = artifact.resultMd5;
+  skeleton.gameversion.result_crc16 = artifact.resultCrc16;
+  skeleton.gameversion.result_crc32 = artifact.resultCrc32;
+  skeleton.gameversion.rom_relative_path = artifact.romRelativePath;
+  if (artifact.archiveEntryName) {
+    skeleton.gameversion.patch_archive_entry = artifact.archiveEntryName;
+    skeleton.gameversion.patch_source_is_archive = true;
+  } else {
+    delete skeleton.gameversion.patch_archive_entry;
+    skeleton.gameversion.patch_source_is_archive = false;
+  }
 
   const patchResourceEntry = buildPatchResourceEntry(skeleton, artifact, baseDir);
   const manualResources = Array.isArray(skeleton.resources) ? skeleton.resources : [];
@@ -1638,26 +1827,83 @@ async function handlePrepare(config, skeleton) {
     patch_stored_path: artifact.patchStoredRelativePath,
     patchblob_stored_path: artifact.patchblobStoredRelativePath,
     source_path: artifact.sourceRelativePath || artifact.patchRelativePath,
+    archive_entry_name: artifact.archiveEntryName || null,
+    source_is_archive: artifact.isArchiveSource || false,
+    result_sha1: artifact.resultSha1,
+    result_sha224: artifact.resultSha224,
+    result_shake1: artifact.resultShake1,
+    result_md5: artifact.resultMd5,
+    result_crc16: artifact.resultCrc16,
+    result_crc32: artifact.resultCrc32,
+    rom_relative_path: artifact.romRelativePath,
     prepared_at: new Date().toISOString()
   };
 
   skeleton.gameversion.patch = artifact.patchRelativePath;
   skeleton.gameversion.patchblob1_name = artifact.patchblobName;
-  skeleton.gameversion.pat_sha224 = artifact.patSha224;
   skeleton.gameversion.patch_local_path = artifact.patchRelativePath;
 
-  skeleton.patchblob = skeleton.patchblob || {};
-  skeleton.patchblob.rhpakuuid = rhpakuuid;
-  skeleton.patchblob.patchblob1_name = artifact.patchblobName;
-  skeleton.patchblob.patchblob1_sha224 = artifact.patSha224;
-  skeleton.patchblob.pat_sha1 = artifact.patSha1;
-  skeleton.patchblob.pat_sha224 = artifact.patSha224;
-  skeleton.patchblob.pat_shake_128 = artifact.patShake128;
-  skeleton.patchblob.patch_name = artifact.patchRelativePath;
+  const blobMeta = artifact.blobMetadata || {};
+  skeleton.patchblob = {
+    ...(skeleton.patchblob || {}),
+    rhpakuuid,
+    patchblob1_name: artifact.patchblobName,
+    patchblob1_key: blobMeta.patchblob1_key || null,
+    patchblob1_sha224: blobMeta.patchblob1_sha224 || artifact.patSha224,
+    pat_sha1: artifact.patSha1,
+    pat_sha224: artifact.patSha224,
+    pat_shake_128: artifact.patShake128,
+    patch_name: artifact.patchRelativePath,
+    patchblob_relative_path: artifact.patchblobRelativePath,
+    patchblob_stored_path: artifact.patchblobStoredRelativePath,
+    rom_relative_path: artifact.romRelativePath,
+    result_sha1: artifact.resultSha1,
+    result_sha224: artifact.resultSha224,
+    result_shake1: artifact.resultShake1,
+    result_md5: artifact.resultMd5,
+    result_crc16: artifact.resultCrc16,
+    result_crc32: artifact.resultCrc32,
+    file_size: artifact.attachmentMeta?.file_size ?? null,
+    file_sha1: artifact.attachmentMeta?.file_sha1 ?? null,
+    file_sha224: artifact.attachmentMeta?.file_sha224 ?? null,
+    file_sha256: artifact.attachmentMeta?.file_sha256 ?? null,
+    file_md5: artifact.attachmentMeta?.file_md5 ?? null,
+    file_crc16: artifact.attachmentMeta?.file_crc16 ?? null,
+    file_crc32: artifact.attachmentMeta?.file_crc32 ?? null,
+    encoded_sha256: artifact.attachmentMeta?.encoded_sha256 ?? null,
+    decoded_sha1: artifact.attachmentMeta?.decoded_sha1 ?? null,
+    decoded_sha224: artifact.attachmentMeta?.decoded_sha224 ?? null,
+    decoded_sha256: artifact.attachmentMeta?.decoded_sha256 ?? null,
+    decoded_md5: artifact.attachmentMeta?.decoded_md5 ?? null,
+    decoded_ipfs_cid_v0: artifact.attachmentMeta?.decoded_ipfs_cid_v0 ?? null,
+    decoded_ipfs_cid_v1: artifact.attachmentMeta?.decoded_ipfs_cid_v1 ?? null
+  };
 
-  skeleton.attachment = skeleton.attachment || {};
-  skeleton.attachment.rhpakuuid = rhpakuuid;
-  skeleton.attachment.file_name = artifact.patchblobName;
+  const attachmentMeta = artifact.attachmentMeta || {};
+  skeleton.attachment = {
+    ...(skeleton.attachment || {}),
+    rhpakuuid,
+    file_name: artifact.patchblobName,
+    file_size: attachmentMeta.file_size ?? null,
+    file_crc16: attachmentMeta.file_crc16 ?? null,
+    file_crc32: attachmentMeta.file_crc32 ?? null,
+    file_hash_sha224: attachmentMeta.file_sha224 ?? null,
+    file_hash_sha1: attachmentMeta.file_sha1 ?? null,
+    file_hash_md5: attachmentMeta.file_md5 ?? null,
+    file_hash_sha256: attachmentMeta.file_sha256 ?? null,
+    file_ipfs_cidv0: attachmentMeta.ipfs_cid_v0 ?? null,
+    file_ipfs_cidv1: attachmentMeta.ipfs_cid_v1 ?? null,
+    decoded_hash_sha224: attachmentMeta.decoded_sha224 ?? null,
+    decoded_hash_sha1: attachmentMeta.decoded_sha1 ?? null,
+    decoded_hash_md5: attachmentMeta.decoded_md5 ?? null,
+    decoded_hash_sha256: attachmentMeta.decoded_sha256 ?? null,
+    decoded_ipfs_cidv0: attachmentMeta.decoded_ipfs_cid_v0 ?? null,
+    decoded_ipfs_cidv1: attachmentMeta.decoded_ipfs_cid_v1 ?? null,
+    encoded_sha256: attachmentMeta.encoded_sha256 ?? null,
+    storage_path: artifact.patchblobStoredRelativePath,
+    source_path: artifact.patchblobRelativePath,
+    patch_relative_path: artifact.patchRelativePath
+  };
 
   skeleton.metadata.prepared = true;
   skeleton.metadata.prepared_at = new Date().toISOString();
@@ -1683,22 +1929,43 @@ async function preparePatchArtifacts(skeleton, baseDir) {
     throw new Error(`Patch file not found: ${gv.patch_local_path}`);
   }
 
-  const buffer = fs.readFileSync(patchPath);
-  const stats = fs.statSync(patchPath);
-  const extension = path.extname(patchPath).replace('.', '').toLowerCase();
+  const originalExtension = path.extname(patchPath).replace('.', '').toLowerCase();
+  const treatAsZip = originalExtension === 'zip' || isZipFile(patchPath);
+  let extension = originalExtension;
+  let patchFileName = gv.patch_filename || path.basename(patchPath);
+  let archiveEntryName = null;
+  let patchBuffer;
 
-  const patSha224 = sha224(buffer);
-  const patSha1 = sha1(buffer);
-  const patSha256 = sha256(buffer);
-  const patShake128 = shake128Base64Url(buffer);
-  const ipfsCids = await computeIpfsCids(buffer);
-  const patHashMd5 = md5(buffer);
-  const patCrc16 = crc16(buffer);
-  const patCrc32 = crc32Hex(buffer);
+  if (treatAsZip) {
+    console.log('  • Patch source is a ZIP archive; extracting primary patch...');
+    const selection = selectPatchFromZip(patchPath);
+    patchBuffer = selection.buffer;
+    extension = selection.extension;
+    patchFileName = selection.fileName;
+    archiveEntryName = selection.entryName;
+  } else {
+    patchBuffer = fs.readFileSync(patchPath);
+  }
+
+  if (!patchBuffer || patchBuffer.length === 0) {
+    throw new Error('Patch data is empty after extraction.');
+  }
+
+  const patchSize = patchBuffer.length;
+
+  const patSha224 = sha224(patchBuffer);
+  const patSha1 = sha1(patchBuffer);
+  const patSha256 = sha256(patchBuffer);
+  const patShake128 = shake128Base64Url(patchBuffer);
+  const ipfsCids = await computeIpfsCids(patchBuffer);
+  const patHashMd5 = md5(patchBuffer);
+  const patCrc16 = crc16(patchBuffer);
+  const patCrc32 = crc32Hex(patchBuffer);
 
   const dirs = ensurePrepareDirectories(baseDir);
-  const stagedPatchPath = path.join(dirs.patchDir, patShake128);
-  fs.copyFileSync(patchPath, stagedPatchPath);
+  const patchFileBaseName = extension ? `${patShake128}.${extension}` : patShake128;
+  const stagedPatchPath = path.join(dirs.patchDir, patchFileBaseName);
+  fs.writeFileSync(stagedPatchPath, patchBuffer);
 
   const { flipsPath, baseRomPath } = await getToolchainPaths();
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newgame-flips-'));
@@ -1733,7 +2000,7 @@ async function preparePatchArtifacts(skeleton, baseDir) {
     PAT_META_DIR: dirs.patMetaDir,
     ROM_META_DIR: dirs.romMetaDir,
     BASE_ROM_PATH: baseRomPath,
-    USE_PYTHON_BLOB_CREATOR: false
+    PBKDF2_ITERATIONS: DEFAULT_PBKDF2_ITERATIONS
   };
 
   const blobCreator = new BlobCreator(null, blobConfig);
@@ -1746,7 +2013,7 @@ async function preparePatchArtifacts(skeleton, baseDir) {
     result_sha224: resultSha224,
     result_shake1: resultShake1,
     result_file_path: finalRomPath,
-    patch_filename: gv.patch_filename || path.basename(patchPath),
+    patch_filename: patchFileName,
     patch_type: extension || null,
     is_primary: 1
   };
@@ -1757,18 +2024,20 @@ async function preparePatchArtifacts(skeleton, baseDir) {
 
   const sourceRelative = normalizeRelativePath(path.relative(baseDir, patchPath));
   const patchStoredRelativePath = normalizeRelativePath(path.relative(baseDir, stagedPatchPath));
-  const patchRelative = normalizeRelativePath(path.join('patch', patShake128));
+  const patchRelative = normalizeRelativePath(path.join('patch', patchFileBaseName));
   const patchblobStoredRelativePath = normalizeRelativePath(path.relative(baseDir, patchBlobStoredAbs));
   const patchblobRelativePath = normalizeRelativePath(path.join('blobs', blobMetadata.patchblob1_name));
   const romRelativePath = normalizeRelativePath(path.relative(baseDir, finalRomPath));
 
   return {
-    buffer,
-    size: stats.size,
+    buffer: patchBuffer,
+    size: patchSize,
     extension,
-    fileName: path.basename(patchPath),
+    fileName: patchFileName,
     sourcePath: patchPath,
     sourceRelativePath: sourceRelative.startsWith('..') ? null : sourceRelative,
+    archiveEntryName,
+    isArchiveSource: treatAsZip,
     patSha224,
     patSha1,
     patSha256,
@@ -2178,31 +2447,42 @@ function upsertAttachment(db, skeleton, artifact) {
       @file_ipfs_cidv0, @file_ipfs_cidv1,
       @file_hash_sha224, @file_hash_sha1, @file_hash_md5, @file_hash_sha256,
       @file_name, @filekey,
-      '', '', '', '', '', '',
+      @decoded_ipfs_cidv0, @decoded_ipfs_cidv1,
+      @decoded_hash_sha224, @decoded_hash_sha1, @decoded_hash_md5, @decoded_hash_sha256,
       @file_data, @download_urls, @file_size
     )
   `;
+
+  const attachmentMeta = artifact.attachmentMeta || {};
+  const blobMeta = artifact.blobMetadata || {};
+  const blobBuffer = fs.readFileSync(artifact.patchblobStoredPath);
 
   db.prepare(query).run({
     auuid: at.auuid,
     pbuuid: pb.pbuuid,
     gvuuid: gv.gvuuid,
     rhpakuuid,
-    file_crc16: artifact.crc16,
-    file_crc32: artifact.crc32,
+    file_crc16: attachmentMeta.file_crc16 || artifact.crc16,
+    file_crc32: attachmentMeta.file_crc32 || artifact.crc32,
     locators: JSON.stringify([]),
     parents: JSON.stringify([]),
-    file_ipfs_cidv0: artifact.ipfsCidV0,
-    file_ipfs_cidv1: artifact.ipfsCidV1,
-    file_hash_sha224: artifact.patSha224,
-    file_hash_sha1: artifact.patSha1,
-    file_hash_md5: artifact.patHashMd5,
-    file_hash_sha256: artifact.patSha256,
+    file_ipfs_cidv0: attachmentMeta.ipfs_cid_v0 || '',
+    file_ipfs_cidv1: attachmentMeta.ipfs_cid_v1 || '',
+    file_hash_sha224: attachmentMeta.file_sha224 || artifact.patSha224,
+    file_hash_sha1: attachmentMeta.file_sha1 || artifact.patSha1,
+    file_hash_md5: attachmentMeta.file_md5 || artifact.patHashMd5,
+    file_hash_sha256: attachmentMeta.file_sha256 || artifact.patSha256,
     file_name: artifact.patchblobName,
-    filekey: '',
-    file_data: artifact.buffer,
+    filekey: blobMeta.patchblob1_key || '',
+    decoded_ipfs_cidv0: attachmentMeta.decoded_ipfs_cid_v0 || '',
+    decoded_ipfs_cidv1: attachmentMeta.decoded_ipfs_cid_v1 || '',
+    decoded_hash_sha224: attachmentMeta.decoded_sha224 || '',
+    decoded_hash_sha1: attachmentMeta.decoded_sha1 || '',
+    decoded_hash_md5: attachmentMeta.decoded_md5 || '',
+    decoded_hash_sha256: attachmentMeta.decoded_sha256 || '',
+    file_data: blobBuffer,
     download_urls: (at.download_urls || []).concat(gv.download_url ? [gv.download_url] : []).join(','),
-    file_size: artifact.size
+    file_size: attachmentMeta.file_size || blobBuffer.length
   });
 
   at.file_name = artifact.patchblobName;

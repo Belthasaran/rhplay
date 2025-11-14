@@ -97,7 +97,7 @@ function registerDatabaseHandlers(dbManager) {
   }
 
   const projectRoot = path.resolve(__dirname, '..');
-  const enodePath = path.join(projectRoot, 'enode.sh');
+  const electronBinary = process.execPath;
 
   const getAuxDbPath = (fileName) => {
     const envOverride = fileName === 'resource.db'
@@ -116,12 +116,8 @@ function registerDatabaseHandlers(dbManager) {
 
   function runNewgameCommand(args = []) {
     return new Promise((resolve, reject) => {
-      if (!fs.existsSync(enodePath)) {
-        reject(new Error(`enode.sh not found at ${enodePath}`));
-        return;
-      }
-
-      const child = spawn(enodePath, ['jstools/newgame.js', ...args], {
+      const cliArgs = ['--run-cli-script', 'jstools/newgame.js', ...args];
+      const child = spawn(electronBinary, cliArgs, {
         cwd: projectRoot,
         env: {
           ...process.env,

@@ -936,6 +936,86 @@ async function buildRomBlocklist(config, skeleton) {
   return blocked;
 }
 
+function coerceBooleanFlag(value) {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return false;
+    if (['1', 'true', 't', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'f', 'no', 'n', 'off'].includes(normalized)) return false;
+  }
+  return Boolean(value);
+}
+
+function booleanToSqlText(value) {
+  return coerceBooleanFlag(value) ? '1' : '0';
+}
+
+const RAW_DIFFICULTY_PATTERN = /^diff_[0-7]$/;
+
+function deriveRawDifficultyCode(gv = {}) {
+  const candidate = (gv.raw_difficulty || '').trim().toLowerCase();
+  if (RAW_DIFFICULTY_PATTERN.test(candidate)) {
+    return candidate;
+  }
+  const difficulty = (gv.difficulty || '').trim().toLowerCase();
+  const index = ALLOWED_DIFFICULTIES.findIndex((entry) => entry.toLowerCase() === difficulty);
+  if (index >= 0) {
+    return `diff_${Math.min(index + 1, 7)}`;
+  }
+  return 'diff_0';
+}
+
+function computeCombinedTypeForGameversion(gv = {}, skeleton = {}) {
+  const fieldsType = gv.fields_type ||
+    (gv.fields && gv.fields.type) ||
+    (skeleton.fields && skeleton.fields.type) ||
+    null;
+  const difficulty = gv.difficulty || '';
+  const rawDifficulty = gv.raw_difficulty || '';
+  const rawFields = gv.raw_fields || skeleton.raw_fields || {};
+  let rawFieldsType = null;
+  if (rawFields.type) {
+    rawFieldsType = Array.isArray(rawFields.type)
+      ? rawFields.type.join(', ')
+      : rawFields.type;
+  }
+
+  let result = '';
+  if (fieldsType) {
+    result += `${fieldsType}: `;
+  }
+  if (difficulty) {
+    result += difficulty;
+  }
+  if (rawDifficulty) {
+    result += ` (${rawDifficulty})`;
+  }
+  if (rawFieldsType) {
+    result += ` (${rawFieldsType})`;
+  }
+
+  result = result.trim();
+  if (!result) {
+    const fallback = gv.type || gv.gametype;
+    if (fallback) {
+      result = fallback;
+    }
+  }
+  return result || null;
+}
+
+function ensureGameversionDerivedFields(skeleton) {
+  if (!skeleton || !skeleton.gameversion) {
+    return;
+  }
+  const gv = skeleton.gameversion;
+  gv.fields_type = gv.fields_type ||
+    (gv.fields && gv.fields.type) ||
+    null;
+  gv.raw_difficulty = deriveRawDifficultyCode(gv);
+  gv.combinedtype = computeCombinedTypeForGameversion(gv, skeleton);
+}
+
 function scoreZipPatchEntries(entries) {
   return entries.map((entry) => {
     const name = entry.entryName.toLowerCase();
@@ -1587,6 +1667,7 @@ async function runCreateWizard(filePath, skeleton) {
     gv.section = await ask(rl, 'Section', gv.section || 'smwhacks');
     gv.based_against = await ask(rl, 'Based against', gv.based_against || 'SMW');
     gv.gametype = await ask(rl, 'Game type / category', gv.gametype);
+    gv.fields_type = gv.gametype
     gv.type = await askChoice(rl, 'Type label', [...DEFAULT_TYPES, 'Custom'], gv.type || DEFAULT_TYPES[0]);
     gv.difficulty = await askChoice(rl, 'Difficulty', ALLOWED_DIFFICULTIES, gv.difficulty || ALLOWED_DIFFICULTIES[0]);
     gv.raw_difficulty = await ask(rl, 'Raw difficulty code (diff_N)', gv.raw_difficulty || `diff_${Math.min(ALLOWED_DIFFICULTIES.indexOf(gv.difficulty) + 1, 7)}`);
@@ -1962,6 +2043,8 @@ async function handlePrepare(config, skeleton) {
   skeleton.gameversion.patchblob1_name = artifact.patchblobName;
   skeleton.gameversion.patch_local_path = artifact.patchRelativePath;
 
+  ensureGameversionDerivedFields(skeleton);
+
   const blobMeta = artifact.blobMetadata || {};
   skeleton.patchblob = {
     ...(skeleton.patchblob || {}),
@@ -2194,6 +2277,7 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s) {
 
 function upsertGameversion(db, skeleton, artifact, options) {
   const gv = skeleton.gameversion;
+  ensureGameversionDerivedFields(skeleton);
   const now = new Date().toISOString();
   const tagsString = gv.tags && gv.tags.length ? JSON.stringify(gv.tags) : null;
   const warningsString = gv.warnings && gv.warnings.length ? JSON.stringify(gv.warnings) : null;
@@ -2223,6 +2307,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
     tags: gv.tags || [],
     warnings: gv.warnings || [],
     screenshots: gv.screenshots || [],
+    combinedtype: gv.combinedtype || null,
     patch: artifact.patchRelativePath,
     patch_filename: gv.patch_filename || path.basename(gv.patch_local_path || ''),
     pat_sha1: artifact.patSha1,
@@ -2253,7 +2338,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
       @length, @difficulty, @url, @download_url, @name_href, @author_href, @obsoleted_by,
       @patchblob1_name, @pat_sha224, @size, @description, @gvjsondata, @tags,
       NULL, NULL, NULL, @fields_type, @raw_difficulty,
-      NULL, @legacy_type, @rhpakuuid
+      @combinedtype, @legacy_type, @rhpakuuid
     )
     ON CONFLICT(gameid, version) DO UPDATE SET
       section = excluded.section,
@@ -2284,6 +2369,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
       tags = excluded.tags,
       fields_type = excluded.fields_type,
       raw_difficulty = excluded.raw_difficulty,
+      combinedtype = excluded.combinedtype,
       legacy_type = excluded.legacy_type,
       rhpakuuid = excluded.rhpakuuid
   `;
@@ -2293,18 +2379,18 @@ function upsertGameversion(db, skeleton, artifact, options) {
     section: gv.section || 'smwhacks',
     gameid: gv.gameid,
     version: gv.version || 1,
-    removed: gv.removed || 0,
-    obsoleted: gv.obsoleted || 0,
+    removed: booleanToSqlText(gv.removed),
+    obsoleted: booleanToSqlText(gv.obsoleted),
     gametype: gv.gametype || gv.type || '',
     name: gv.name,
     time: now,
     added: now,
-    moderated: gv.moderated || 0,
+    moderated: booleanToSqlText(gv.moderated),
     author: gv.author || '',
     authors: gv.authors || gv.author || '',
     submitter: gv.submitter || gv.author || '',
     demo: gv.demo || 'No',
-    featured: gv.featured || 0,
+    featured: booleanToSqlText(gv.featured),
     length: gv.length || '',
     difficulty: gv.difficulty || '',
     url: gv.url || '',
@@ -2318,8 +2404,9 @@ function upsertGameversion(db, skeleton, artifact, options) {
     description: gv.description || '',
     gvjsondata: JSON.stringify(jsonPayload),
     tags: tagsString,
-    fields_type: gv.type || gv.gametype || '',
-    raw_difficulty: gv.raw_difficulty || '',
+    fields_type: gv.fields_type || gv.fields?.type || gv.type || gv.gametype || '',
+    raw_difficulty: gv.raw_difficulty || deriveRawDifficultyCode(gv),
+    combinedtype: gv.combinedtype || computeCombinedTypeForGameversion(gv, skeleton),
     legacy_type: gv.legacy_type || '',
     rhpakuuid
   };
@@ -3271,6 +3358,8 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
   }
   metadata.jsfilename = metadata.jsfilename || `skeleton-${rhpakuuid}.json`;
   metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
+
+  ensureGameversionDerivedFields(skeleton);
 
   const baseIssues = validateSkeleton(skeleton, {
     rhdataPath: config.rhdataPath,

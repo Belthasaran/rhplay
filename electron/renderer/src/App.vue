@@ -3617,6 +3617,21 @@
 
         <div class="settings-section">
           <div class="setting-row">
+            <label class="setting-label">RHPAK File Integration</label>
+            <div class="setting-control">
+              <label class="toggle">
+                <input type="checkbox" v-model="settings.rhpakFileAssociationEnabled" />
+                Enable .rhpak file association with RHPlay
+              </label>
+            </div>
+          </div>
+          <div class="setting-caption">
+            When enabled, double-clicking a <code>.rhpak</code> file in your file manager will open the RHPlay installer dialog.
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="setting-row">
             <label class="setting-label">
               <span class="status-icon">{{ settings.vanillaRomValid ? '✓' : '' }}</span>
               Import required Vanilla SMW ROM
@@ -7195,6 +7210,9 @@ const loadError = ref<string | null>(null);
 
 // Main data (will be loaded from database)
 const items = reactive<Item[]>([]);
+const rhpakAssociationRefreshing = ref(false);
+const rhpakAssociationMessage = ref('');
+const rhpakAssociationMessageType = ref<'success' | 'error' | ''>('');
 
 const selectedIds = ref<Set<string>>(new Set());
 const searchQuery = ref('');
@@ -7607,6 +7625,19 @@ async function installRhpakFromPath(filePath: string) {
     installRhpakState.status = 'error';
     installRhpakState.message = (error as any)?.message || 'Failed to install package.';
   }
+}
+
+async function promptInstallRhpakFromOS(filePath: string) {
+  if (!filePath) {
+    return;
+  }
+  if (installRhpakBusy.value) {
+    alert('Another RHPAK installation is already running. Please wait for it to finish before opening a new package.');
+    return;
+  }
+  openInstallRhpakModal();
+  installRhpakState.selectedFile = filePath;
+  await installRhpakFromPath(filePath);
 }
 
 function openInstalledRhpaksModalFromInstall() {
@@ -15583,7 +15614,10 @@ const settings = reactive({
   usb2snesUploadDir: '/work',
   tempDirOverride: '',
   tempDirValid: true,
+  rhpakFileAssociationEnabled: true,
 });
+let rhpakAssociationEnabledAtLoad = true;
+let rhpakOsListenerCleanup: (() => void) | null = null;
 
 function openSettings() {
   settingsModalOpen.value = true;
@@ -15591,6 +15625,50 @@ function openSettings() {
 
 function closeSettings() {
   settingsModalOpen.value = false;
+}
+
+function handleRhpakOpenFromOS(filePath: string) {
+  if (!filePath) {
+    return;
+  }
+  openInstallRhpakModal();
+  installRhpakState.selectedFile = filePath;
+  installRhpakFromPath(filePath).catch((error) => {
+    console.error('Failed to install RHPAK from OS event:', error);
+  });
+}
+
+async function refreshRhpakAssociation() {
+  if (!isElectronAvailable() || typeof (window as any).electronAPI.configureRhpakAssociation !== 'function') {
+    alert('File association changes are only available in the desktop build.');
+    return;
+  }
+  if (!settings.rhpakFileAssociationEnabled) {
+    alert('Enable the RHPAK association toggle before refreshing.');
+    return;
+  }
+  try {
+    rhpakAssociationRefreshing.value = true;
+    rhpakAssociationMessage.value = '';
+    rhpakAssociationMessageType.value = '';
+    const result = await (window as any).electronAPI.configureRhpakAssociation(true);
+    if (result?.success || result?.skipped) {
+      rhpakAssociationMessage.value = result?.skipped
+        ? 'File association is already up to date.'
+        : 'File association refreshed successfully.';
+      rhpakAssociationMessageType.value = 'success';
+      rhpakAssociationEnabledAtLoad = true;
+    } else if (result?.error) {
+      throw new Error(result.error);
+    } else {
+      throw new Error('Unknown error refreshing association.');
+    }
+  } catch (error: any) {
+    rhpakAssociationMessage.value = `Failed to refresh association: ${error?.message || error}`;
+    rhpakAssociationMessageType.value = 'error';
+  } finally {
+    rhpakAssociationRefreshing.value = false;
+  }
 }
 
 // Startup validation handling
@@ -15694,6 +15772,7 @@ async function saveSettings() {
       usb2snesUploadDir: settings.usb2snesUploadDir,
       tempDirOverride: settings.tempDirOverride,
       tempDirValid: String(settings.tempDirValid),
+      enableRhpakFileAssociation: settings.rhpakFileAssociationEnabled ? 'true' : 'false',
     };
     
     const result = await (window as any).electronAPI.saveSettings(settingsToSave);
@@ -15738,6 +15817,27 @@ async function saveSettings() {
             console.warn('[USB2SNES] Permission check failed, showing start modal anyway:', error);
             showUsb2snesFxpStartModal.value = true;
           }
+        }
+      }
+      if (
+        isElectronAvailable() &&
+        typeof (window as any).electronAPI.configureRhpakAssociation === 'function' &&
+        settings.rhpakFileAssociationEnabled !== rhpakAssociationEnabledAtLoad
+      ) {
+        try {
+          const configureResult = await (window as any).electronAPI.configureRhpakAssociation(
+            settings.rhpakFileAssociationEnabled
+          );
+          if (configureResult?.success) {
+            rhpakAssociationEnabledAtLoad = settings.rhpakFileAssociationEnabled;
+          } else if (configureResult?.error) {
+            alert(`RHPAK association update failed: ${configureResult.error}`);
+            settings.rhpakFileAssociationEnabled = rhpakAssociationEnabledAtLoad;
+          }
+        } catch (error) {
+          console.error('Failed to update RHPAK file association:', error);
+          alert('Failed to update RHPAK file association: ' + (error as any).message);
+          settings.rhpakFileAssociationEnabled = rhpakAssociationEnabledAtLoad;
         }
       }
     } else {
@@ -18644,10 +18744,23 @@ async function loadSettings() {
     if (savedSettings.usb2snesUploadDir) settings.usb2snesUploadDir = savedSettings.usb2snesUploadDir;
     if (savedSettings.tempDirOverride !== undefined) settings.tempDirOverride = savedSettings.tempDirOverride;
     if (savedSettings.tempDirValid) settings.tempDirValid = savedSettings.tempDirValid === 'true';
+    if (savedSettings.enableRhpakFileAssociation !== undefined) {
+      settings.rhpakFileAssociationEnabled = savedSettings.enableRhpakFileAssociation !== 'false';
+    } else {
+      settings.rhpakFileAssociationEnabled = true;
+    }
+    rhpakAssociationEnabledAtLoad = settings.rhpakFileAssociationEnabled;
     
     console.log('Settings loaded from database');
   } catch (error) {
     console.error('Error loading settings:', error);
+  }
+  if (isElectronAvailable() && typeof (window as any).electronAPI.configureRhpakAssociation === 'function') {
+    try {
+      await (window as any).electronAPI.configureRhpakAssociation(settings.rhpakFileAssociationEnabled);
+    } catch (error) {
+      console.warn('Failed to configure RHPAK association on startup:', error);
+    }
   }
 }
 
@@ -18931,6 +19044,22 @@ onMounted(async () => {
   } catch (error) {
     console.error('Error loading settings:', error);
   }
+
+  if (isElectronAvailable()) {
+    const api = (window as any).electronAPI;
+    if (typeof api?.onRhpakOpenFromOS === 'function') {
+      rhpakOsListenerCleanup = api.onRhpakOpenFromOS((filePath: string) => {
+        promptInstallRhpakFromOS(filePath);
+      });
+    }
+    if (typeof api?.notifyRhpakRendererReady === 'function') {
+      try {
+        await api.notifyRhpakRendererReady();
+      } catch (error) {
+        console.warn('Failed to notify main process about RHPAK readiness:', error);
+      }
+    }
+  }
   
   // Refresh USB2SNES status on app load
   if (isElectronAvailable() && settings.usb2snesEnabled === 'yes') {
@@ -19036,6 +19165,10 @@ onUnmounted(() => {
   if (removeNostrStatusListener) {
     removeNostrStatusListener();
     removeNostrStatusListener = null;
+  }
+  if (rhpakOsListenerCleanup) {
+    rhpakOsListenerCleanup();
+    rhpakOsListenerCleanup = null;
   }
   if (trustChangeRefreshTimer) {
     clearTimeout(trustChangeRefreshTimer);

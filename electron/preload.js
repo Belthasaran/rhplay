@@ -10,6 +10,27 @@ contextBridge.exposeInMainWorld('rhtools', {
  * Provides type-safe database access via IPC
  */
 contextBridge.exposeInMainWorld('electronAPI', {
+  /**
+   * Configure RHPAK file association state
+   * @param {boolean} enabled
+   */
+  configureRhpakAssociation: (enabled) => ipcRenderer.invoke('rhpak:configure-association', { enabled }),
+  notifyRhpakRendererReady: () => ipcRenderer.invoke('rhpak:renderer-ready'),
+  
+  /**
+   * Subscribe to OS-level RHPAK open events
+   * @param {(filePath: string) => void} callback
+   * @returns {() => void} unsubscribe function
+   */
+  onRhpakOpenFromOS: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+    const handler = (_event, filePath) => callback(filePath);
+    ipcRenderer.on('rhpak:open-from-os', handler);
+    return () => ipcRenderer.removeListener('rhpak:open-from-os', handler);
+  },
+  
   // =============================
   // Game Data Operations
   // =============================

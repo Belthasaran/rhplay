@@ -8,6 +8,7 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const crypto = require('crypto');
 const { app } = require('electron');
+const { ensureRhpakAssociation, removeRhpakAssociation } = require('./rhpak-association');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -68,6 +69,32 @@ function registerDatabaseHandlers(dbManager) {
     restricted: 'Restricted',
     all: 'All Tiers'
   };
+  const RHPAK_ENABLED_SETTING = 'enableRhpakFileAssociation';
+  const RHPAK_HASH_SETTING = 'rhpakAssociationExeHash';
+
+  function getClientSetting(name) {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const row = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get(name);
+      return row ? row.csetting_value : null;
+    } catch (error) {
+      console.warn(`[settings] Failed to read ${name}:`, error.message);
+      return null;
+    }
+  }
+
+  function setClientSetting(name, value) {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(crypto.randomUUID(), name, value);
+    } catch (error) {
+      console.warn(`[settings] Failed to update ${name}:`, error.message);
+    }
+  }
 
   const projectRoot = path.resolve(__dirname, '..');
   const enodePath = path.join(projectRoot, 'enode.sh');
@@ -1029,6 +1056,37 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('Error saving settings:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('rhpak:configure-association', async (_event, { enabled = true } = {}) => {
+    try {
+      if (!enabled) {
+        const result = await removeRhpakAssociation();
+        if (result.success) {
+          setClientSetting(RHPAK_ENABLED_SETTING, 'false');
+          setClientSetting(RHPAK_HASH_SETTING, '');
+        }
+        return result;
+      }
+
+      const exePath = process.execPath;
+      const exeHash = crypto.createHash('sha256').update(exePath).digest('hex');
+      const storedHash = getClientSetting(RHPAK_HASH_SETTING);
+      if (storedHash && storedHash === exeHash) {
+        setClientSetting(RHPAK_ENABLED_SETTING, 'true');
+        return { success: true, skipped: true };
+      }
+
+      const result = await ensureRhpakAssociation(exePath);
+      if (result.success) {
+        setClientSetting(RHPAK_ENABLED_SETTING, 'true');
+        setClientSetting(RHPAK_HASH_SETTING, exeHash);
+      }
+      return result;
+    } catch (error) {
+      console.error('[rhpak:configure-association] Failed:', error);
       return { success: false, error: error.message };
     }
   });

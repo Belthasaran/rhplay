@@ -6,11 +6,13 @@ const { spawn } = require('child_process');
 const { DatabaseManager } = require('./database-manager');
 const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
+const { queueRhpakPath, drainRhpakQueue } = require('./rhpak-queue');
 
 const DATABASE_FILES = ['clientdata.db', 'rhdata.db', 'patchbin.db'];
 let handlersRegistered = false;
 let mainWindow = null;
 let currentMode = 'app';
+let rhpakRendererReady = false;
 
 function resolveLogPath() {
     const dirs = [
@@ -47,6 +49,43 @@ function logTemp(message) {
 }
 
 logTemp(`argv=${process.argv.join(' ')}`);
+
+function extractRhpakFromArgv(argv = []) {
+    if (!Array.isArray(argv)) {
+        return null;
+    }
+    for (const entry of argv) {
+        if (typeof entry !== 'string') {
+            continue;
+        }
+        const trimmed = entry.trim();
+        if (!trimmed) continue;
+        if (trimmed.toLowerCase().endsWith('.rhpak')) {
+            return trimmed.replace(/^["']|["']$/g, '');
+        }
+    }
+    return null;
+}
+
+function flushPendingRhpakEvents() {
+    if (!rhpakRendererReady || !mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+    const pending = drainRhpakQueue();
+    pending.forEach((filePath) => {
+        if (filePath) {
+            mainWindow.webContents.send('rhpak:open-from-os', filePath);
+        }
+    });
+}
+
+function handleRhpakFromOS(filePath) {
+    if (!filePath) {
+        return;
+    }
+    queueRhpakPath(filePath);
+    flushPendingRhpakEvents();
+}
 
 function ensureDirectory(dirPath) {
     if (!dirPath) {
@@ -191,6 +230,40 @@ if (isInstallerCli) {
     })();
 }
 
+if (!isInstallerCli) {
+    const gotLock = app.requestSingleInstanceLock();
+    if (!gotLock) {
+        app.quit();
+    } else {
+        app.on('second-instance', (_event, argv) => {
+            const rhpakPath = extractRhpakFromArgv(argv);
+            if (rhpakPath) {
+                handleRhpakFromOS(rhpakPath);
+            }
+            if (mainWindow) {
+                if (mainWindow.isMinimized()) {
+                    mainWindow.restore();
+                }
+                mainWindow.focus();
+            }
+        });
+    }
+    const initialRhpak = extractRhpakFromArgv(process.argv);
+    if (initialRhpak) {
+        queueRhpakPath(initialRhpak);
+    }
+    app.on('open-file', (event, filePath) => {
+        event.preventDefault();
+        handleRhpakFromOS(filePath);
+    });
+}
+
+ipcMain.handle('rhpak:renderer-ready', async () => {
+    rhpakRendererReady = true;
+    flushPendingRhpakEvents();
+    return { success: true };
+});
+
 // Initialize database manager
 let dbManager = null;
 
@@ -258,6 +331,9 @@ function buildRendererUrl(mode) {
 }
 
 async function loadRendererMode(mode) {
+    if (mode === 'app') {
+        rhpakRendererReady = false;
+    }
     const win = getOrCreateMainWindow();
     const target = buildRendererUrl(mode);
 

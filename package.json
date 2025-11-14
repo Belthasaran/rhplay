@@ -100,9 +100,10 @@
     "serialport": "^13.0.0",
     "socks": "^2.8.7",
     "socks-proxy-agent": "^8.0.3",
-    "urlsafe-base64": "^1.0.0",
     "tar": "^6.2.0",
+    "urlsafe-base64": "^1.0.0",
     "usb": "^2.11.0",
+    "winreg": "^1.2.5",
     "ws": "^8.18.3"
   },
   "devDependencies": {
@@ -169,7 +170,7 @@
         "from": "node_modules/readable-stream",
         "to": "app.asar.unpacked/node_modules/readable-stream"
       },
-     {
+      {
         "from": "node_modules/bindings",
         "to": "app.asar.unpacked/node_modules/bindings"
       },
@@ -218,8 +219,8 @@
         "to": "app.asar.unpacked/node_modules/yallist"
       },
       {
-	      "from" : "node_modules/file-uri-to-path",
-	      "to"   : "app.asar.unpacked/node_modules/file-uri-to-path"
+        "from": "node_modules/file-uri-to-path",
+        "to": "app.asar.unpacked/node_modules/file-uri-to-path"
       },
       {
         "from": "electron/installer/prepare_databases.js",
@@ -277,12 +278,12 @@
       "allowElevation": false,
       "include": "electron/installers/win/rhtools-preinstall.nsh",
       "artifactName": "${productName}-${version}-setup.exe",
-      "warningsAsErrors" : false,
-      "customNsisBinary" : {
-	     "url" :  "https://github.com/Belthasaran/rhplay/releases/download/rel0_1_3beta/nsis-3.11-log.7z",
-	     "checksum" : "T82QQUR8Y1aNMOEznSODr7RbW5heZzhEONwYtAMA1cbxHHsyC4usKoJtSKnzj9bP3t/719SKGeVf8GJR1xO+jA==",
-	     "debugLogging" : true,
-	     "version" : "3.11"
+      "warningsAsErrors": false,
+      "customNsisBinary": {
+        "url": "https://github.com/Belthasaran/rhplay/releases/download/rel0_1_3beta/nsis-3.11-log.7z",
+        "checksum": "T82QQUR8Y1aNMOEznSODr7RbW5heZzhEONwYtAMA1cbxHHsyC4usKoJtSKnzj9bP3t/719SKGeVf8GJR1xO+jA==",
+        "debugLogging": true,
+        "version": "3.11"
       }
     },
     "linux": {
@@ -337,5 +338,5 @@
       ],
       "format": "UDZO"
     }
-  } 
+  }
 }

@@ -8,6 +8,9 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const crypto = require('crypto');
 const { app } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
 const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
@@ -65,6 +68,70 @@ function registerDatabaseHandlers(dbManager) {
     restricted: 'Restricted',
     all: 'All Tiers'
   };
+
+  const projectRoot = path.resolve(__dirname, '..');
+  const enodePath = path.join(projectRoot, 'enode.sh');
+
+  const getAuxDbPath = (fileName) => {
+    const envOverride = fileName === 'resource.db'
+      ? process.env.RESOURCE_DB_PATH
+      : process.env.SCREENSHOT_DB_PATH;
+    if (envOverride) {
+      return envOverride;
+    }
+    const rhdataPath = dbManager.paths?.rhdata;
+    const baseDir = rhdataPath ? path.dirname(rhdataPath) : path.join(projectRoot, 'electron');
+    return path.join(baseDir, fileName);
+  };
+
+  const getResourceDbPath = () => getAuxDbPath('resource.db');
+  const getScreenshotDbPath = () => getAuxDbPath('screenshot.db');
+
+  function runNewgameCommand(args = []) {
+    return new Promise((resolve, reject) => {
+      if (!fs.existsSync(enodePath)) {
+        reject(new Error(`enode.sh not found at ${enodePath}`));
+        return;
+      }
+
+      const child = spawn(enodePath, ['jstools/newgame.js', ...args], {
+        cwd: projectRoot,
+        env: {
+          ...process.env,
+          RHDATA_DB_PATH: dbManager.paths?.rhdata,
+          PATCHBIN_DB_PATH: dbManager.paths?.patchbin,
+          RESOURCE_DB_PATH: getResourceDbPath(),
+          SCREENSHOT_DB_PATH: getScreenshotDbPath()
+        }
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('error', (error) => {
+        reject(error);
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+        } else {
+          const error = new Error(`newgame.js exited with code ${code}`);
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+        }
+      });
+    });
+  }
 
   const isFiniteNumber = (value) => {
     const num = Number(value);
@@ -3676,6 +3743,56 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('Error in import operation:', error);
       return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * List installed RHPAK packages
+   */
+  ipcMain.handle('rhpak:list', async () => {
+    try {
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const rows = rhdataDb.prepare(`
+        SELECT rhpakuuid, jsfilename, name, created_at, updated_at
+        FROM rhpaks
+        ORDER BY COALESCE(updated_at, created_at) DESC
+      `).all();
+      return { success: true, rhpaks: rows };
+    } catch (error) {
+      console.error('[rhpak:list] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Import a RHPAK package via newgame.js
+   */
+  ipcMain.handle('rhpak:import', async (_event, { filePath } = {}) => {
+    try {
+      if (!filePath) {
+        return { success: false, error: 'filePath is required' };
+      }
+      const result = await runNewgameCommand([filePath, '--import']);
+      return { success: true, output: result.stdout };
+    } catch (error) {
+      console.error('[rhpak:import] Failed:', error);
+      return { success: false, error: error.message, output: error.stdout || error.stderr || '' };
+    }
+  });
+
+  /**
+   * Uninstall an RHPAK from the databases by UUID
+   */
+  ipcMain.handle('rhpak:uninstall', async (_event, { rhpakuuid } = {}) => {
+    try {
+      if (!rhpakuuid) {
+        return { success: false, error: 'rhpakuuid is required' };
+      }
+      const result = await runNewgameCommand([`--uninstall-uuid=${rhpakuuid}`]);
+      return { success: true, output: result.stdout };
+    } catch (error) {
+      console.error('[rhpak:uninstall] Failed:', error);
+      return { success: false, error: error.message, output: error.stdout || error.stderr || '' };
     }
   });
 

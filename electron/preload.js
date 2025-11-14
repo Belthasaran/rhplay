@@ -237,6 +237,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importGames: (params) => ipcRenderer.invoke('db:games:import', params),
   
   /**
+   * Install a RHPAK package by invoking the newgame.js workflow
+   * @param {string} filePath - Absolute path to .rhpak file
+   * @returns {Promise<{success: boolean, output?: string, error?: string}>}
+   */
+  rhpakImport: (filePath) => ipcRenderer.invoke('rhpak:import', { filePath }),
+  
+  /**
+   * List installed RHPAK packages
+   * @returns {Promise<{success: boolean, rhpaks?: Array, error?: string}>}
+   */
+  rhpakListInstalled: () => ipcRenderer.invoke('rhpak:list'),
+  
+  /**
+   * Uninstall an RHPAK by UUID
+   * @param {string} rhpakuuid - Identifier of the rhpak to remove
+   * @returns {Promise<{success: boolean, output?: string, error?: string}>}
+   */
+  rhpakUninstall: (rhpakuuid) => ipcRenderer.invoke('rhpak:uninstall', { rhpakuuid }),
+  
+  /**
    * Select directory
    * @param {Object} options - Directory selection options
    * @returns {Promise<{canceled: boolean, filePaths?: Array}>}

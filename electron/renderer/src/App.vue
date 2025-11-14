@@ -1022,6 +1022,9 @@
               <div class="dropdown-separator"></div>
               <button @click="exportFull(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Export Full</button>
               <button @click="importGames(); closeManageDropdown()" class="dropdown-action-btn">Import</button>
+              <div class="dropdown-separator"></div>
+              <button @click="closeManageDropdown(); openInstallRhpakModal()" class="dropdown-action-btn">Install Rhpak</button>
+              <button @click="closeManageDropdown(); openInstalledRhpaksModal()" class="dropdown-action-btn">Show Installed Rhpaks</button>
             </div>
           </div>
         </div>
@@ -1659,6 +1662,106 @@
           </table>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Install RHPAK Modal -->
+  <div v-if="installRhpakModalOpen" class="modal-backdrop" @click.self="closeInstallRhpakModal">
+    <div class="modal install-rhpak-modal">
+      <header class="modal-header">
+        <h3>Install RHPAK</h3>
+        <button class="close" @click="closeInstallRhpakModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <p>Select a <code>.rhpak</code> file to verify and import into your local databases.</p>
+        <div v-if="installRhpakState.selectedFile" class="selected-file-chip">
+          Selected:
+          <code>{{ getFileNameFromPath(installRhpakState.selectedFile) }}</code>
+        </div>
+        <div v-if="installRhpakState.status !== 'idle'" class="rhpak-status" :class="installRhpakState.status">
+          <strong v-if="installRhpakState.status === 'installing'">Installing…</strong>
+          <strong v-else-if="installRhpakState.status === 'success'">Install complete</strong>
+          <strong v-else-if="installRhpakState.status === 'error'">Install failed</strong>
+          <p v-if="installRhpakState.message">{{ installRhpakState.message }}</p>
+          <pre v-if="installRhpakState.output" class="rhpak-log">{{ installRhpakState.output }}</pre>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="chooseRhpakFile" :disabled="installRhpakBusy">
+          {{ installRhpakState.status === 'success' ? 'Install Another' : 'Select File' }}
+        </button>
+        <button 
+          v-if="installRhpakState.status === 'success'" 
+          @click="openInstalledRhpaksModalFromInstall"
+        >
+          Show Installed
+        </button>
+        <button @click="closeInstallRhpakModal">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Installed RHPAKs Modal -->
+  <div v-if="installedRhpaksModalOpen" class="modal-backdrop" @click.self="closeInstalledRhpaksModal">
+    <div class="modal installed-rhpak-modal">
+      <header class="modal-header">
+        <h3>Installed Rhpaks</h3>
+        <button class="close" @click="closeInstalledRhpaksModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <div v-if="installedRhpaksLoading" class="inline-status loading">Loading…</div>
+        <div v-else-if="installedRhpaksError" class="inline-status error">{{ installedRhpaksError }}</div>
+        <div v-else-if="installedRhpaks.length === 0" class="inline-status">No rhpaks are currently installed.</div>
+        <template v-else>
+          <div class="installed-rhpak-table-wrapper">
+            <table class="data-table installed-rhpak-table">
+              <thead>
+                <tr>
+                  <th class="col-check">
+                    <input 
+                      type="checkbox" 
+                      :checked="allInstalledRhpaksSelected"
+                      @change="toggleSelectAllInstalledRhpaks($event)"
+                    />
+                  </th>
+                  <th>Name</th>
+                  <th>UUID</th>
+                  <th>JSON File</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="rhpak in installedRhpaks" :key="rhpak.rhpakuuid">
+                  <td class="col-check">
+                    <input 
+                      type="checkbox"
+                      :checked="selectedInstalledRhpaks.has(rhpak.rhpakuuid)"
+                      @change="toggleInstalledRhpakSelection(rhpak.rhpakuuid, $event)"
+                    />
+                  </td>
+                  <td>{{ rhpak.name || 'Untitled package' }}</td>
+                  <td class="mono">{{ rhpak.rhpakuuid }}</td>
+                  <td>{{ rhpak.jsfilename || '—' }}</td>
+                  <td>{{ rhpak.updated_at ? formatDateTime(rhpak.updated_at) : (rhpak.created_at ? formatDateTime(rhpak.created_at) : '—') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="rhpakListMessage" class="inline-status" :class="rhpakListMessageType">
+            {{ rhpakListMessage }}
+          </div>
+        </template>
+      </section>
+      <footer class="modal-footer">
+        <button @click="refreshInstalledRhpaks" :disabled="installedRhpaksLoading">Refresh</button>
+        <button 
+          @click="uninstallSelectedRhpaks" 
+          :disabled="selectedInstalledRhpaks.size === 0 || rhpakUninstallInProgress"
+        >
+          {{ rhpakUninstallInProgress ? 'Uninstalling…' : 'Uninstall Selected' }}
+        </button>
+        <button @click="closeInstalledRhpaksModal">Close</button>
+      </footer>
     </div>
   </div>
 
@@ -7076,6 +7179,16 @@ type Item = {
   Description?: string;
 };
 
+type InstalledRhpak = {
+  rhpakuuid: string;
+  name?: string;
+  jsfilename?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type InstallRhpakStatus = 'idle' | 'installing' | 'success' | 'error';
+
 // Loading and error states
 const isLoading = ref(false);
 const loadError = ref<string | null>(null);
@@ -7101,6 +7214,30 @@ const selectDropdownOpen = ref(false);
 
 // Manage dropdown state
 const manageDropdownOpen = ref(false);
+const installRhpakModalOpen = ref(false);
+const installRhpakState = reactive<{
+  selectedFile: string;
+  status: InstallRhpakStatus;
+  message: string;
+  output: string;
+}>({
+  selectedFile: '',
+  status: 'idle',
+  message: '',
+  output: ''
+});
+const installRhpakBusy = computed(() => installRhpakState.status === 'installing');
+const installedRhpaksModalOpen = ref(false);
+const installedRhpaks = ref<InstalledRhpak[]>([]);
+const installedRhpaksLoading = ref(false);
+const installedRhpaksError = ref<string | null>(null);
+const selectedInstalledRhpaks = ref<Set<string>>(new Set());
+const rhpakUninstallInProgress = ref(false);
+const rhpakListMessage = ref('');
+const rhpakListMessageType = ref<'success' | 'error' | ''>('');
+const allInstalledRhpaksSelected = computed(() => {
+  return installedRhpaks.value.length > 0 && selectedInstalledRhpaks.value.size === installedRhpaks.value.length;
+});
 
 // USB2SNES Tools modal state
 const usb2snesToolsModalOpen = ref(false);
@@ -7398,6 +7535,172 @@ async function importGames() {
     console.error('Import error:', error);
     alert('Import failed: ' + (error as any).message);
   }
+}
+
+function getFileNameFromPath(filePath: string) {
+  if (!filePath) return '';
+  const normalized = filePath.replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  return parts[parts.length - 1] || filePath;
+}
+
+function resetInstallRhpakState() {
+  installRhpakState.selectedFile = '';
+  installRhpakState.status = 'idle';
+  installRhpakState.message = '';
+  installRhpakState.output = '';
+}
+
+function openInstallRhpakModal() {
+  resetInstallRhpakState();
+  installRhpakModalOpen.value = true;
+}
+
+function closeInstallRhpakModal() {
+  installRhpakModalOpen.value = false;
+  resetInstallRhpakState();
+}
+
+async function chooseRhpakFile() {
+  try {
+    const result = await (window as any).electronAPI.selectFiles({
+      title: 'Select a RHPAK file',
+      filters: [
+        { name: 'RHTools Packages', extensions: ['rhpak'] },
+        { name: 'All Files', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+      const filePath = result.filePaths[0];
+      installRhpakState.selectedFile = filePath;
+      await installRhpakFromPath(filePath);
+    }
+  } catch (error) {
+    console.error('Failed to select RHPAK:', error);
+    installRhpakState.status = 'error';
+    installRhpakState.message = (error as any)?.message || 'Failed to select RHPAK file.';
+  }
+}
+
+async function installRhpakFromPath(filePath: string) {
+  try {
+    installRhpakState.status = 'installing';
+    installRhpakState.message = 'Verifying package…';
+    installRhpakState.output = '';
+
+    const response = await (window as any).electronAPI.rhpakImport(filePath);
+    if (response?.success) {
+      installRhpakState.status = 'success';
+      installRhpakState.message = 'Package installed successfully.';
+      installRhpakState.output = (response.output || '').trim();
+      await refreshInstalledRhpaks();
+    } else {
+      installRhpakState.status = 'error';
+      installRhpakState.message = response?.error || 'Failed to install package.';
+      installRhpakState.output = (response?.output || '').trim();
+    }
+  } catch (error) {
+    console.error('RHPAK install failed:', error);
+    installRhpakState.status = 'error';
+    installRhpakState.message = (error as any)?.message || 'Failed to install package.';
+  }
+}
+
+function openInstalledRhpaksModalFromInstall() {
+  closeInstallRhpakModal();
+  openInstalledRhpaksModal();
+}
+
+function openInstalledRhpaksModal() {
+  installedRhpaksModalOpen.value = true;
+  rhpakListMessage.value = '';
+  rhpakListMessageType.value = '';
+  refreshInstalledRhpaks();
+}
+
+function closeInstalledRhpaksModal() {
+  installedRhpaksModalOpen.value = false;
+  selectedInstalledRhpaks.value = new Set();
+}
+
+async function refreshInstalledRhpaks() {
+  installedRhpaksLoading.value = true;
+  installedRhpaksError.value = null;
+  try {
+    const response = await (window as any).electronAPI.rhpakListInstalled();
+    if (response?.success) {
+      installedRhpaks.value = response.rhpaks || [];
+      const valid = new Set(installedRhpaks.value.map((r) => r.rhpakuuid));
+      selectedInstalledRhpaks.value = new Set(
+        Array.from(selectedInstalledRhpaks.value).filter((uuid) => valid.has(uuid))
+      );
+    } else {
+      installedRhpaks.value = [];
+      installedRhpaksError.value = response?.error || 'Failed to load installed rhpaks.';
+    }
+  } catch (error) {
+    console.error('Failed to load installed rhpaks:', error);
+    installedRhpaks.value = [];
+    installedRhpaksError.value = (error as any)?.message || 'Failed to load installed rhpaks.';
+  } finally {
+    installedRhpaksLoading.value = false;
+  }
+}
+
+function toggleInstalledRhpakSelection(uuid: string, event?: Event) {
+  const target = event?.target as HTMLInputElement | undefined;
+  const shouldSelect = target ? target.checked : !selectedInstalledRhpaks.value.has(uuid);
+  const next = new Set(selectedInstalledRhpaks.value);
+  if (shouldSelect) {
+    next.add(uuid);
+  } else {
+    next.delete(uuid);
+  }
+  selectedInstalledRhpaks.value = next;
+}
+
+function toggleSelectAllInstalledRhpaks(event: Event) {
+  const target = event.target as HTMLInputElement | null;
+  if (target?.checked) {
+    selectedInstalledRhpaks.value = new Set(installedRhpaks.value.map((r) => r.rhpakuuid));
+  } else {
+    selectedInstalledRhpaks.value = new Set();
+  }
+}
+
+async function uninstallSelectedRhpaks() {
+  if (selectedInstalledRhpaks.value.size === 0) {
+    return;
+  }
+  if (!confirm(`Uninstall ${selectedInstalledRhpaks.value.size} rhpak(s)? This will remove their records from the local databases.`)) {
+    return;
+  }
+  rhpakUninstallInProgress.value = true;
+  rhpakListMessage.value = '';
+  rhpakListMessageType.value = '';
+  const errors: string[] = [];
+  for (const uuid of selectedInstalledRhpaks.value) {
+    try {
+      const response = await (window as any).electronAPI.rhpakUninstall(uuid);
+      if (!response?.success) {
+        errors.push(response?.error || `Failed to uninstall ${uuid}`);
+      }
+    } catch (error) {
+      errors.push((error as any)?.message || `Failed to uninstall ${uuid}`);
+    }
+  }
+  rhpakUninstallInProgress.value = false;
+  if (errors.length > 0) {
+    rhpakListMessage.value = errors.join(' ');
+    rhpakListMessageType.value = 'error';
+  } else {
+    rhpakListMessage.value = 'Selected rhpaks were uninstalled.';
+    rhpakListMessageType.value = 'success';
+    selectedInstalledRhpaks.value = new Set();
+  }
+  await refreshInstalledRhpaks();
 }
 
 // USB2SNES Tools modal functions
@@ -20406,6 +20709,85 @@ button:disabled {
 
 /* Resume Run Modal */
 .resume-run-modal { width: 600px; max-width: 95vw; }
+
+.install-rhpak-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.selected-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.9rem;
+}
+
+.rhpak-status {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 0.9rem;
+}
+
+.rhpak-status.installing {
+  border-color: #4da3ff;
+}
+
+.rhpak-status.success {
+  border-color: #2ecc71;
+}
+
+.rhpak-status.error {
+  border-color: #ff6b6b;
+}
+
+.rhpak-log {
+  max-height: 160px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+
+.installed-rhpak-modal {
+  width: 760px;
+  max-width: 95vw;
+}
+
+.installed-rhpak-table-wrapper {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.installed-rhpak-table .mono {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.inline-status {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.inline-status.loading {
+  color: #4da3ff;
+}
+
+.inline-status.error {
+  color: #ff6b6b;
+}
+
+.inline-status.success {
+  color: #2ecc71;
+}
 .resume-run-body { padding: 24px; }
 .resume-message { font-size: 16px; margin-bottom: 16px; color: #374151; }
 .resume-prompt { font-size: 16px; margin-top: 20px; margin-bottom: 0; font-weight: 600; color: #374151; }

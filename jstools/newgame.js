@@ -1476,7 +1476,8 @@ function parseArgs(argv) {
     outputJson: null,
     baseDir: null,
     force: false,
-    purgeFiles: false
+    purgeFiles: false,
+    uninstallUuid: null
   };
 
   for (const arg of args) {
@@ -1484,7 +1485,7 @@ function parseArgs(argv) {
       config.jsonPath = arg;
       continue;
     }
-    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove' || arg === '--uninstall' || arg === '--extract-package') {
+    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove' || arg === '--uninstall' || arg === '--extract-package' || arg === '--list-installed') {
       if (config.mode) {
         throw new Error('Only one primary mode flag is allowed (--create, --prepare, --check, --add, --remove, --uninstall, --package, --import, --extract-package, --verify-package).');
       }
@@ -1511,6 +1512,18 @@ function parseArgs(argv) {
         throw new Error('Only one primary mode flag is allowed.');
       }
       config.mode = 'verify-package';
+      continue;
+    }
+    if (arg.startsWith('--uninstall-uuid=')) {
+      if (config.mode && config.mode !== 'uninstall-uuid') {
+        throw new Error('Only one primary mode flag is allowed.');
+      }
+      const value = arg.split('=')[1];
+      if (!value) {
+        throw new Error('--uninstall-uuid requires a value.');
+      }
+      config.mode = 'uninstall-uuid';
+      config.uninstallUuid = value.trim();
       continue;
     }
     if (arg.startsWith('--output-json=')) {
@@ -1563,6 +1576,11 @@ function parseArgs(argv) {
     config.packageInput = pathToAbsolute(config.jsonPath);
     config.packageBaseDir = path.dirname(config.packageInput);
     config.jsonPath = null;
+  } else if (config.mode === 'list-installed' || config.mode === 'uninstall-uuid') {
+    if (config.jsonPath) {
+      throw new Error(`The ${config.mode} mode does not take a JSON or package file path.`);
+    }
+    config.jsonPath = null;
   } else if (config.mode !== 'help') {
     if (!config.jsonPath) {
       throw new Error('JSON file path is required as the first argument.');
@@ -1590,6 +1608,8 @@ function printHelp() {
     '  --add          Verify prepared artifacts and upsert database records',
     '  --remove       (requires --force) Legacy direct removal; prefer --uninstall',
     '  --uninstall    Remove all database records for a prepared JSON or .rhpak package',
+    '  --uninstall-uuid=UUID Remove installed rhpak records by UUID (no JSON/.rhpak required)',
+    '  --list-installed List rhpaks currently registered in the database',
     '  --package=FILE Package prepared data into a .rhpak archive (requires prior --prepare)',
     '  --extract-package Extract a .rhpak into a JSON skeleton + artifacts on disk',
     '  --import       Import a .rhpak package directly into the databases (no files left behind)',
@@ -1616,7 +1636,9 @@ function printHelp() {
     '  enode.sh jstools/newgame.js example.rhpak --extract-package --output-json=imported.json',
     '  enode.sh jstools/newgame.js example.rhpak --verify-package',
     '  enode.sh jstools/newgame.js example.rhpak --import',
-    '  enode.sh jstools/newgame.js example.rhpak --uninstall'
+    '  enode.sh jstools/newgame.js example.rhpak --uninstall',
+    '  enode.sh jstools/newgame.js --list-installed',
+    '  enode.sh jstools/newgame.js --uninstall-uuid=01234567-89ab-cdef-0123-456789abcdef'
   ];
   console.log(lines.join('\n'));
 }
@@ -1667,7 +1689,7 @@ async function runCreateWizard(filePath, skeleton) {
     gv.section = await ask(rl, 'Section', gv.section || 'smwhacks');
     gv.based_against = await ask(rl, 'Based against', gv.based_against || 'SMW');
     gv.gametype = await ask(rl, 'Game type / category', gv.gametype);
-    gv.fields_type = gv.gametype
+    gv.fields_type = gv.gametype;
     gv.type = await askChoice(rl, 'Type label', [...DEFAULT_TYPES, 'Custom'], gv.type || DEFAULT_TYPES[0]);
     gv.difficulty = await askChoice(rl, 'Difficulty', ALLOWED_DIFFICULTIES, gv.difficulty || ALLOWED_DIFFICULTIES[0]);
     gv.raw_difficulty = await ask(rl, 'Raw difficulty code (diff_N)', gv.raw_difficulty || `diff_${Math.min(ALLOWED_DIFFICULTIES.indexOf(gv.difficulty) + 1, 7)}`);
@@ -3189,7 +3211,30 @@ async function handleUninstall(config, skeletonFromJson = null) {
   let tempDir = null;
 
   try {
-    if (config.packageInput) {
+    if (config.uninstallUuid) {
+      const rhpakuuid = config.uninstallUuid.trim();
+      if (!rhpakuuid) {
+        throw new Error('--uninstall-uuid requires a non-empty UUID.');
+      }
+      const lookupDb = new Database(config.rhdataPath, { readonly: true });
+      let record;
+      try {
+        record = lookupDb.prepare('SELECT rhpakuuid, name, jsfilename FROM rhpaks WHERE rhpakuuid = ?').get(rhpakuuid);
+      } finally {
+        lookupDb.close();
+      }
+      if (!record) {
+        throw new Error(`No rhpak records found for UUID ${rhpakuuid}.`);
+      }
+      descriptors.set(rhpakuuid, {
+        rhpakuuid,
+        name: record.name || `rhpak ${rhpakuuid}`,
+        skeleton: null,
+        jsonPath: null,
+        baseDir: null,
+        source: record.jsfilename || 'database'
+      });
+    } else if (config.packageInput) {
       const packageAbs = config.packageInput;
       if (!fs.existsSync(packageAbs)) {
         throw new Error(`Package not found: ${packageAbs}`);
@@ -3805,6 +3850,36 @@ async function handleVerifyPackage(config) {
   }
 }
 
+async function handleListInstalled(config) {
+  if (!fs.existsSync(config.rhdataPath)) {
+    throw new Error(`rhdata.db not found at ${config.rhdataPath}`);
+  }
+  const db = new Database(config.rhdataPath, { readonly: true });
+  try {
+    const rows = db.prepare(`
+      SELECT rhpakuuid, jsfilename, name, created_at, updated_at
+      FROM rhpaks
+      ORDER BY COALESCE(updated_at, created_at) DESC
+    `).all();
+    if (!rows.length) {
+      console.log('No rhpaks are currently registered in the database.');
+      return;
+    }
+    console.log('Installed rhpaks:');
+    for (const row of rows) {
+      const title = row.name || '(unnamed rhpak)';
+      const jsfile = row.jsfilename || '(none)';
+      const updated = row.updated_at || row.created_at || 'unknown';
+      console.log(`- ${row.rhpakuuid}`);
+      console.log(`    Name: ${title}`);
+      console.log(`    JSON: ${jsfile}`);
+      console.log(`    Updated: ${updated}`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
 /**
  * Entry point
  */
@@ -3821,6 +3896,16 @@ async function main() {
 
   if (config.mode === 'help') {
     printHelp();
+    return;
+  }
+
+  if (config.mode === 'list-installed') {
+    await handleListInstalled(config);
+    return;
+  }
+
+  if (config.mode === 'uninstall-uuid') {
+    await handleUninstall(config, null);
     return;
   }
 

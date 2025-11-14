@@ -41,12 +41,15 @@ const { stdin, stdout } = require('process');
 const Database = require('better-sqlite3');
 const crc = require('crc');
 const crc32 = require('crc-32');
+const lzma = require('lzma-native');
 const { CID } = require('multiformats/cid');
 const { sha256: multiformatsSha256 } = require('multiformats/hashes/sha2');
 const jssha = require('jssha');
 const { spawnSync } = require('child_process');
 const fernet = require('fernet');
 const UrlBase64 = require('urlsafe-base64');
+const BlobCreator = require('../lib/blob-creator');
+const BinaryFinder = require('../lib/binary-finder');
 
 const SCRIPT_VERSION = '0.1.0';
 
@@ -71,6 +74,8 @@ const DEFAULT_WARNINGS = [
   'None', 'Possible Photosensitivity Triggers', 'Suggestive Content or Language',
   'Violence', 'Adult Themes'
 ];
+
+let TOOLCHAIN_CACHE = null;
 
 /**
  * Utility helpers
@@ -728,6 +733,175 @@ async function computeIpfsCids(buffer) {
   return {
     cidV0: cidV0.toString(),
     cidV1: cidV1.toString()
+  };
+}
+
+async function getToolchainPaths() {
+  if (TOOLCHAIN_CACHE) {
+    return TOOLCHAIN_CACHE;
+  }
+
+  const finder = new BinaryFinder({
+    projectRoot: path.join(__dirname, '..')
+  });
+
+  const flipsPath = finder.findFlips();
+  if (!flipsPath) {
+    throw new Error('Unable to locate the flips binary. Set FLIPS_BIN_PATH or configure the path in clientdata settings.');
+  }
+
+  const baseRomPath = finder.findSmwRom();
+  if (!baseRomPath) {
+    const detail = finder.lastError ? ` ${finder.lastError}` : '';
+    throw new Error(`Unable to locate a verified smw.sfc base ROM.${detail}`);
+  }
+
+  TOOLCHAIN_CACHE = {
+    flipsPath,
+    baseRomPath
+  };
+  return TOOLCHAIN_CACHE;
+}
+
+function ensurePrepareDirectories(baseDir) {
+  const dirs = {
+    patchDir: path.join(baseDir, 'patch'),
+    blobsDir: path.join(baseDir, 'blobs'),
+    romDir: path.join(baseDir, 'rom'),
+    tempDir: path.join(baseDir, 'temp'),
+    patMetaDir: path.join(baseDir, 'pat_meta'),
+    romMetaDir: path.join(baseDir, 'rom_meta')
+  };
+  ensureDir(dirs.patchDir);
+  ensureDir(dirs.blobsDir);
+  ensureDir(dirs.romDir);
+  ensureDir(dirs.tempDir);
+  ensureDir(dirs.patMetaDir);
+  ensureDir(dirs.romMetaDir);
+  return dirs;
+}
+
+function applyPatchWithFlips(patchPath, flipsPath, baseRomPath, workDir) {
+  ensureDir(workDir);
+  const tempResultPath = path.join(workDir, `result_${Date.now()}_${Math.random().toString(36).slice(2)}.sfc`);
+  const result = spawnSync(flipsPath, ['--apply', patchPath, baseRomPath, tempResultPath], { stdio: 'pipe' });
+  if (result.status !== 0) {
+    const stderr = result.stderr ? result.stderr.toString().trim() : '';
+    const stdout = result.stdout ? result.stdout.toString().trim() : '';
+    const details = stderr || stdout || `Exit code ${result.status}`;
+    throw new Error(`flips failed to apply patch: ${details}`);
+  }
+  if (!fs.existsSync(tempResultPath)) {
+    throw new Error('flips did not produce a result file.');
+  }
+  const stats = fs.statSync(tempResultPath);
+  if (stats.size < 100000 || stats.size > 10000000) {
+    fs.unlinkSync(tempResultPath);
+    throw new Error(`flips produced an unexpected ROM size (${stats.size} bytes).`);
+  }
+  const buffer = fs.readFileSync(tempResultPath);
+  return { tempResultPath, buffer };
+}
+
+async function decodePatchblobBuffer(encryptedBuffer, keyBase64) {
+  const decompressedStageOne = await new Promise((resolve, reject) => {
+    lzma.decompress(encryptedBuffer, (result, error) => {
+      if (error) reject(error);
+      else resolve(Buffer.from(result));
+    });
+  });
+
+  let fernetKey;
+  try {
+    const decoded = Buffer.from(keyBase64, 'base64').toString('utf8');
+    if (/^[A-Za-z0-9+/\-_]+=*$/.test(decoded) && decoded.length >= 40) {
+      fernetKey = decoded;
+    } else {
+      fernetKey = keyBase64;
+    }
+  } catch {
+    fernetKey = keyBase64;
+  }
+
+  const secret = new fernet.Secret(fernetKey);
+  let tokenString;
+  try {
+    tokenString = decompressedStageOne.toString('utf8');
+  } catch {
+    tokenString = decompressedStageOne.toString('latin1');
+  }
+  const token = new fernet.Token({
+    secret,
+    ttl: 0,
+    token: tokenString
+  });
+  const decrypted = token.decode();
+
+  let lzmaPayload;
+  const hasNonAscii = /[^\x00-\x7F]/.test(decrypted);
+  if (hasNonAscii) {
+    lzmaPayload = Buffer.from(decrypted, 'latin1');
+  } else {
+    lzmaPayload = Buffer.from(decrypted, 'base64');
+    if (lzmaPayload[0] !== 0xfd && lzmaPayload[0] !== 0x5d) {
+      try {
+        lzmaPayload = Buffer.from(lzmaPayload.toString('utf8'), 'base64');
+      } catch {
+        try {
+          lzmaPayload = Buffer.from(lzmaPayload.toString('latin1'), 'base64');
+        } catch {
+          // keep original
+        }
+      }
+    }
+  }
+
+  const decodedBuffer = await new Promise((resolve, reject) => {
+    lzma.decompress(lzmaPayload, (result, error) => {
+      if (error) reject(error);
+      else resolve(Buffer.from(result));
+    });
+  });
+
+  return decodedBuffer;
+}
+
+async function computeAttachmentMetadata(blobPath, patchblobKey) {
+  const fileBuffer = fs.readFileSync(blobPath);
+  const fileSha1 = sha1(fileBuffer);
+  const fileSha224 = sha224(fileBuffer);
+  const fileSha256 = sha256(fileBuffer);
+  const fileMd5 = md5(fileBuffer);
+  const fileCrc16 = crc16(fileBuffer);
+  const fileCrc32 = crc32Hex(fileBuffer);
+  const fileSize = fileBuffer.length;
+  const ipfs = await computeIpfsCids(fileBuffer);
+  const encodedSha256 = sha256(fileBuffer);
+
+  const decodedBuffer = await decodePatchblobBuffer(fileBuffer, patchblobKey);
+  const decodedSha1 = sha1(decodedBuffer);
+  const decodedSha224 = sha224(decodedBuffer);
+  const decodedSha256 = sha256(decodedBuffer);
+  const decodedMd5 = md5(decodedBuffer);
+  const decodedIpfs = await computeIpfsCids(decodedBuffer);
+
+  return {
+    file_size: fileSize,
+    file_sha1: fileSha1,
+    file_sha224: fileSha224,
+    file_sha256: fileSha256,
+    file_md5: fileMd5,
+    file_crc16: fileCrc16,
+    file_crc32: fileCrc32,
+    encoded_sha256: encodedSha256,
+    ipfs_cid_v0: ipfs.cidV0,
+    ipfs_cid_v1: ipfs.cidV1,
+    decoded_sha1: decodedSha1,
+    decoded_sha224: decodedSha224,
+    decoded_sha256: decodedSha256,
+    decoded_md5: decodedMd5,
+    decoded_ipfs_cid_v0: decodedIpfs.cidV0,
+    decoded_ipfs_cid_v1: decodedIpfs.cidV1
   };
 }
 
@@ -1505,6 +1679,10 @@ async function handlePrepare(config, skeleton) {
 async function preparePatchArtifacts(skeleton, baseDir) {
   const gv = skeleton.gameversion;
   const patchPath = toAbsolutePath(gv.patch_local_path, baseDir);
+  if (!patchPath || !fs.existsSync(patchPath)) {
+    throw new Error(`Patch file not found: ${gv.patch_local_path}`);
+  }
+
   const buffer = fs.readFileSync(patchPath);
   const stats = fs.statSync(patchPath);
   const extension = path.extname(patchPath).replace('.', '').toLowerCase();
@@ -1514,18 +1692,75 @@ async function preparePatchArtifacts(skeleton, baseDir) {
   const patSha256 = sha256(buffer);
   const patShake128 = shake128Base64Url(buffer);
   const ipfsCids = await computeIpfsCids(buffer);
-  const patchblobName = `pblob_${gv.gameid}_${patSha224.slice(0, 10)}`;
-  const patchRelative = normalizeRelativePath(path.join('patch', patShake128));
-  const patchStoredAbs = path.join(baseDir, patchRelative);
-  ensureDir(path.dirname(patchStoredAbs));
-  fs.copyFileSync(patchPath, patchStoredAbs);
+  const patHashMd5 = md5(buffer);
+  const patCrc16 = crc16(buffer);
+  const patCrc32 = crc32Hex(buffer);
 
-  const patchblobRelative = normalizeRelativePath(path.join('blobs', patchblobName));
-  const patchBlobStoredAbs = path.join(baseDir, patchblobRelative);
-  ensureDir(path.dirname(patchBlobStoredAbs));
-  fs.writeFileSync(patchBlobStoredAbs, buffer);
+  const dirs = ensurePrepareDirectories(baseDir);
+  const stagedPatchPath = path.join(dirs.patchDir, patShake128);
+  fs.copyFileSync(patchPath, stagedPatchPath);
+
+  const { flipsPath, baseRomPath } = await getToolchainPaths();
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newgame-flips-'));
+
+  let resultInfo;
+  try {
+    resultInfo = applyPatchWithFlips(stagedPatchPath, flipsPath, baseRomPath, workDir);
+  } catch (error) {
+    fs.rmSync(workDir, { recursive: true, force: true });
+    throw error;
+  }
+
+  const resultBuffer = resultInfo.buffer;
+  const resultSha1 = sha1(resultBuffer);
+  const resultSha224 = sha224(resultBuffer);
+  const resultShake1 = shake128Base64Url(resultBuffer);
+  const resultMd5 = md5(resultBuffer);
+  const resultCrc16 = crc16(resultBuffer);
+  const resultCrc32 = crc32Hex(resultBuffer);
+  const romFilename = `${gv.gameid}_${resultShake1}.sfc`;
+  const finalRomPath = path.join(dirs.romDir, romFilename);
+  if (fs.existsSync(finalRomPath)) {
+    fs.unlinkSync(finalRomPath);
+  }
+  fs.renameSync(resultInfo.tempResultPath, finalRomPath);
+  fs.rmSync(workDir, { recursive: true, force: true });
+
+  const blobConfig = {
+    BLOBS_DIR: dirs.blobsDir,
+    TEMP_DIR: dirs.tempDir,
+    ROM_DIR: dirs.romDir,
+    PAT_META_DIR: dirs.patMetaDir,
+    ROM_META_DIR: dirs.romMetaDir,
+    BASE_ROM_PATH: baseRomPath,
+    USE_PYTHON_BLOB_CREATOR: false
+  };
+
+  const blobCreator = new BlobCreator(null, blobConfig);
+  const patchRecord = {
+    patch_file_path: stagedPatchPath,
+    pat_sha1: patSha1,
+    pat_sha224: patSha224,
+    pat_shake_128: patShake128,
+    result_sha1: resultSha1,
+    result_sha224: resultSha224,
+    result_shake1: resultShake1,
+    result_file_path: finalRomPath,
+    patch_filename: gv.patch_filename || path.basename(patchPath),
+    patch_type: extension || null,
+    is_primary: 1
+  };
+  const blobMetadata = await blobCreator.createPatchBlob(gv.gameid, patchRecord);
+  const patchBlobStoredAbs = path.join(dirs.blobsDir, blobMetadata.patchblob1_name);
+
+  const attachmentMeta = await computeAttachmentMetadata(patchBlobStoredAbs, blobMetadata.patchblob1_key);
+
   const sourceRelative = normalizeRelativePath(path.relative(baseDir, patchPath));
-  const sourceInBase = !sourceRelative.startsWith('..');
+  const patchStoredRelativePath = normalizeRelativePath(path.relative(baseDir, stagedPatchPath));
+  const patchRelative = normalizeRelativePath(path.join('patch', patShake128));
+  const patchblobStoredRelativePath = normalizeRelativePath(path.relative(baseDir, patchBlobStoredAbs));
+  const patchblobRelativePath = normalizeRelativePath(path.join('blobs', blobMetadata.patchblob1_name));
+  const romRelativePath = normalizeRelativePath(path.relative(baseDir, finalRomPath));
 
   return {
     buffer,
@@ -1533,23 +1768,33 @@ async function preparePatchArtifacts(skeleton, baseDir) {
     extension,
     fileName: path.basename(patchPath),
     sourcePath: patchPath,
-    sourceRelativePath: sourceInBase ? sourceRelative : null,
+    sourceRelativePath: sourceRelative.startsWith('..') ? null : sourceRelative,
     patSha224,
     patSha1,
     patSha256,
-    patHashMd5: md5(buffer),
+    patHashMd5,
     patShake128,
-    crc16: crc16(buffer),
-    crc32: crc32Hex(buffer),
+    crc16: patCrc16,
+    crc32: patCrc32,
     ipfsCidV0: ipfsCids.cidV0,
     ipfsCidV1: ipfsCids.cidV1,
-    patchblobName,
-    patchStoredPath: patchStoredAbs,
-    patchStoredRelativePath: patchRelative,
+    patchblobName: blobMetadata.patchblob1_name,
+    patchStoredPath: stagedPatchPath,
+    patchStoredRelativePath,
     patchRelativePath: patchRelative,
     patchblobStoredPath: patchBlobStoredAbs,
-    patchblobStoredRelativePath: patchblobRelative,
-    patchblobRelativePath: patchblobRelative
+    patchblobStoredRelativePath,
+    patchblobRelativePath,
+    blobMetadata,
+    attachmentMeta,
+    resultSha1,
+    resultSha224,
+    resultShake1,
+    resultMd5,
+    resultCrc16,
+    resultCrc32,
+    romPath: finalRomPath,
+    romRelativePath
   };
 }
 

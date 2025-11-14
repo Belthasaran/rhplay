@@ -191,16 +191,17 @@ function ensureTranslevelsStructures(db) {
 }
 
 function ensureRhpakagesStructures(db) {
-  db.exec(`CREATE TABLE IF NOT EXISTS rhpakages (
+  db.exec(`CREATE TABLE IF NOT EXISTS rhpaks (
     rhpakuuid TEXT PRIMARY KEY,
+    jsfilename VARCHAR(255) NOT NULL,
     name TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );`);
-  db.exec(`CREATE TRIGGER IF NOT EXISTS trg_rhpakages_updated
-    AFTER UPDATE ON rhpakages
+  db.exec(`CREATE TRIGGER IF NOT EXISTS trg_rhpaks_updated
+    AFTER UPDATE ON rhpaks
   BEGIN
-    UPDATE rhpakages
+    UPDATE rhpaks
     SET updated_at = CURRENT_TIMESTAMP
     WHERE rhpakuuid = NEW.rhpakuuid;
   END;`);
@@ -294,7 +295,7 @@ const MIGRATIONS = {
     },
     {
       id: 'rhdata_013_add_rhpakuuid_support',
-      description: 'Add rhpakuuid columns and rhpakages table',
+      description: 'Add rhpakuuid columns and rhpaks table',
       type: 'function',
       apply(db) {
         ensureColumn(db, 'gameversions', 'rhpakuuid', 'TEXT');

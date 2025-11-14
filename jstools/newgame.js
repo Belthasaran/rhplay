@@ -938,9 +938,9 @@ function parseArgs(argv) {
       config.jsonPath = arg;
       continue;
     }
-    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove' || arg === '--uninstall') {
+    if (arg === '--create' || arg === '--prepare' || arg === '--check' || arg === '--add' || arg === '--remove' || arg === '--uninstall' || arg === '--extract-package') {
       if (config.mode) {
-        throw new Error('Only one primary mode flag is allowed (--create, --prepare, --check, --add, --remove, --uninstall, --package, --import, --verify-package).');
+        throw new Error('Only one primary mode flag is allowed (--create, --prepare, --check, --add, --remove, --uninstall, --package, --import, --extract-package, --verify-package).');
       }
       config.mode = arg.slice(2);
       continue;
@@ -1006,7 +1006,7 @@ function parseArgs(argv) {
     config.mode = 'help';
   }
 
-  if (config.mode === 'import' || config.mode === 'verify-package') {
+  if (config.mode === 'import' || config.mode === 'verify-package' || config.mode === 'extract-package') {
     if (!config.jsonPath) {
       throw new Error('Package file path is required.');
     }
@@ -1045,7 +1045,8 @@ function printHelp() {
     '  --remove       (requires --force) Legacy direct removal; prefer --uninstall',
     '  --uninstall    Remove all database records for a prepared JSON or .rhpak package',
     '  --package=FILE Package prepared data into a .rhpak archive (requires prior --prepare)',
-    '  --import       Import a .rhpak package (first argument must be the package path)',
+    '  --extract-package Extract a .rhpak into a JSON skeleton + artifacts on disk',
+    '  --import       Import a .rhpak package directly into the databases (no files left behind)',
     '  --verify-package Verify the contents of a .rhpak package without importing',
     '',
     'Options:',
@@ -1053,7 +1054,7 @@ function printHelp() {
     '  --patchbindb=PATH   Override patchbin.db location',
     '  --resourcedb=PATH   Override resource.db location',
     '  --screenshotdb=PATH Override screenshot.db location',
-    '  --output-json=PATH  (Import only) Path to write the imported JSON skeleton',
+    '  --output-json=PATH  (--extract-package only) Path to write the extracted JSON skeleton',
     '  --force             Required for --remove (deprecated workflow)',
     '  --purge-files       Delete staged patch/blob resources when removing/uninstalling from JSON',
     '  --help              Show this message',
@@ -1062,12 +1063,13 @@ function printHelp() {
     '  enode.sh jstools/newgame.js data/newhack.json --create',
     '  enode.sh jstools/newgame.js data/newhack.json --prepare',
     '  enode.sh jstools/newgame.js data/newhack.json --check',
-    '  enode.sh jstools/newgame.js data/newhack.json --add --force',
+    '  enode.sh jstools/newgame.js data/newhack.json --add',
     '  enode.sh jstools/newgame.js data/newhack.json --remove --force --purge-files',
     '  enode.sh jstools/newgame.js data/newhack.json --uninstall',
     '  enode.sh jstools/newgame.js data/newhack.json --package=example.rhpak',
+    '  enode.sh jstools/newgame.js example.rhpak --extract-package --output-json=imported.json',
     '  enode.sh jstools/newgame.js example.rhpak --verify-package',
-    '  enode.sh jstools/newgame.js example.rhpak --import --output-json=imported.json',
+    '  enode.sh jstools/newgame.js example.rhpak --import',
     '  enode.sh jstools/newgame.js example.rhpak --uninstall'
   ];
   console.log(lines.join('\n'));
@@ -1392,6 +1394,7 @@ async function handlePrepare(config, skeleton) {
   }
 
   const metadata = ensureRhpakMetadata(skeleton);
+  metadata.jsfilename = metadata.jsfilename || path.basename(config.jsonPath);
   metadata.rhpakname = metadata.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
   metadata.rhpakuuid = metadata.rhpakuuid || generateUuid();
 
@@ -1978,7 +1981,8 @@ function upsertPatchRecord(db, skeleton, artifact) {
 }
 
 function upsertRhpakRecord(db, skeleton) {
-  const metadata = skeleton.metadata || {};
+  const metadata = skeleton.metadata || {}; 
+  const jsfilename = metadata.jsfilename
   const rhpakuuid = metadata.rhpakuuid;
   if (!rhpakuuid) {
     throw new Error('rhpakuuid metadata missing for rhpak registration.');
@@ -1987,13 +1991,13 @@ function upsertRhpakRecord(db, skeleton) {
     ? metadata.rhpakname.trim()
     : buildDefaultRhpakName(skeleton.gameversion || {});
   const query = `
-    INSERT INTO rhpakages (rhpakuuid, name)
-    VALUES (@rhpakuuid, @name)
+    INSERT INTO rhpackages (rhpakuuid, filename, name)
+    VALUES (@rhpakuuid, @filename, @name)
     ON CONFLICT(rhpakuuid) DO UPDATE SET
       name = excluded.name,
       updated_at = CURRENT_TIMESTAMP
   `;
-  db.prepare(query).run({ rhpakuuid, name });
+  db.prepare(query).run({ rhpakuuid, jsfilename, name });
 }
 
 function upsertPreparedResources(resourceDb, skeleton, payloads) {
@@ -2301,7 +2305,7 @@ function removeRecords(rhdataDb, patchbinDb, resourceDb, screenshotDb, skeleton,
   }
 
   if (rhpakuuid) {
-    rhdataDb.prepare('DELETE FROM rhpakages WHERE rhpakuuid = ?').run(rhpakuuid);
+    rhdataDb.prepare('DELETE FROM rhpaks WHERE rhpakuuid = ?').run(rhpakuuid);
     if (resourceDb) {
       resourceDb.prepare('DELETE FROM res_attachments WHERE rhpakuuid = ?').run(rhpakuuid);
     }
@@ -2353,7 +2357,7 @@ function deleteRhpakRecords(databases, rhpakuuid) {
       patchblobs: 0,
       patchblobs_extended: 0,
       rhpatches: 0,
-      rhpakages: 0
+      rhpaks: 0
     },
     attachments: 0,
     resources: 0,
@@ -2368,7 +2372,7 @@ function deleteRhpakRecords(databases, rhpakuuid) {
         patchblobs: databases.rhdata.prepare('DELETE FROM patchblobs WHERE rhpakuuid = ?').run(uuid).changes,
         gameversion_stats: databases.rhdata.prepare('DELETE FROM gameversion_stats WHERE rhpakuuid = ?').run(uuid).changes,
         gameversions: databases.rhdata.prepare('DELETE FROM gameversions WHERE rhpakuuid = ?').run(uuid).changes,
-        rhpakages: databases.rhdata.prepare('DELETE FROM rhpakages WHERE rhpakuuid = ?').run(uuid).changes
+        rhpaks: databases.rhdata.prepare('DELETE FROM rhpaks WHERE rhpakuuid = ?').run(uuid).changes
       };
       return counts;
     });
@@ -2586,8 +2590,7 @@ async function handleCheck(config, skeleton) {
   }, skeleton);
 }
 
-async function handleAdd(config, skeleton) {
-  const baseDir = config.baseDir || path.dirname(config.jsonPath);
+async function performAddOperation(config, skeleton, baseDir, { savePath = null } = {}) {
   ensureDatabaseFileIfMissing(config.resourcePath);
   ensureDatabaseFileIfMissing(config.screenshotPath);
 
@@ -2604,8 +2607,8 @@ async function handleAdd(config, skeleton) {
     resourcePath: config.resourcePath,
     screenshotPath: config.screenshotPath,
     skipPatchFileCheck: true
-  }, config.baseDir);
-  const preparedIssues = validatePreparedState(skeleton, config.baseDir);
+  }, baseDir);
+  const preparedIssues = validatePreparedState(skeleton, baseDir);
   const combinedIssues = [...baseIssues, ...preparedIssues];
   printIssues(combinedIssues);
   if (combinedIssues.some((issue) => issue.level === 'error')) {
@@ -2657,10 +2660,22 @@ async function handleAdd(config, skeleton) {
 
   metadata.added_at = new Date().toISOString();
   metadata.rhpak_installed_at = metadata.added_at;
-  saveSkeleton(config.jsonPath, skeleton);
+  if (savePath) {
+    saveSkeleton(savePath, skeleton);
+  }
+
+  return {
+    resourceCount: resourcePayloads.length,
+    screenshotCount: screenshotPayloads.length
+  };
+}
+
+async function handleAdd(config, skeleton) {
+  const baseDir = config.baseDir || path.dirname(config.jsonPath);
+  const { resourceCount, screenshotCount } = await performAddOperation(config, skeleton, baseDir, { savePath: config.jsonPath });
   console.log('✓ Database updated successfully.');
-  console.log(`  Resources processed: ${resourcePayloads.length}`);
-  console.log(`  Screenshots processed: ${screenshotPayloads.length}`);
+  console.log(`  Resources processed: ${resourceCount}`);
+  console.log(`  Screenshots processed: ${screenshotCount}`);
 }
 
 async function handleRemove(config, skeleton) {
@@ -2779,7 +2794,7 @@ async function handlePackage(config, skeleton) {
   }
 }
 
-async function handleImport(config) {
+async function handleExtractPackage(config) {
   const packageAbs = config.packageInput;
   if (!fs.existsSync(packageAbs)) {
     throw new Error(`Package not found: ${packageAbs}`);
@@ -2885,8 +2900,86 @@ async function handleImport(config) {
     });
 
     saveSkeleton(outputJsonPath, skeleton);
-    console.log(`✓ Imported package into ${outputJsonPath}`);
-    console.log('  You can now run --check and --add on the imported JSON.');
+    console.log(`✓ Extracted package to ${outputJsonPath}`);
+    console.log('  You can now run --check and --add on the extracted JSON.');
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function handleImportPackage(config) {
+  const packageAbs = config.packageInput;
+  if (!fs.existsSync(packageAbs)) {
+    throw new Error(`Package not found: ${packageAbs}`);
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-import-'));
+  try {
+    extract7zArchive(packageAbs, tempDir);
+
+    let skeletonCandidate = path.join(tempDir, 'skeleton.json');
+    if (!fs.existsSync(skeletonCandidate)) {
+      const candidates = fs.readdirSync(tempDir).filter(name => name.endsWith('.json'));
+      if (candidates.length === 0) {
+        throw new Error('Package did not contain a skeleton JSON file.');
+      }
+      skeletonCandidate = path.join(tempDir, candidates[0]);
+    }
+
+    const skeleton = loadSkeleton(skeletonCandidate);
+    if (!skeleton) {
+      throw new Error('Failed to load skeleton from package.');
+    }
+
+    const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
+    if (!patchInfo) {
+      throw new Error('Package skeleton missing patch artifact metadata.');
+    }
+
+    const metadata = ensureRhpakMetadata(skeleton);
+    metadata.prepared = true;
+    metadata.prepared_at = metadata.prepared_at || new Date().toISOString();
+    metadata.imported_from = {
+      package: path.basename(packageAbs),
+      imported_at: new Date().toISOString(),
+      mode: 'direct-import'
+    };
+    metadata.added_at = null;
+
+    const rhpakuuid = metadata.rhpakuuid;
+    skeleton.gameversion = skeleton.gameversion || {};
+    skeleton.gameversion.rhpakuuid = rhpakuuid;
+    skeleton.gameversion.patch_local_path = patchInfo.patch_stored_path;
+
+    skeleton.patchblob = skeleton.patchblob || {};
+    skeleton.patchblob.rhpakuuid = rhpakuuid;
+
+    skeleton.attachment = skeleton.attachment || {};
+    skeleton.attachment.rhpakuuid = rhpakuuid;
+
+    skeleton.resources = (skeleton.resources || []).map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && !entry.rhpakuuid) {
+        return { ...entry, rhpakuuid };
+      }
+      return entry;
+    });
+    skeleton.screenshots = (skeleton.screenshots || []).map((entry) => {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.kind !== undefined) {
+        if (!entry.rhpakuuid) {
+          return { ...entry, rhpakuuid };
+        }
+      }
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.kind === undefined && !entry.rhpakuuid) {
+        return { ...entry, rhpakuuid };
+      }
+      return entry;
+    });
+
+    const { resourceCount, screenshotCount } = await performAddOperation(config, skeleton, tempDir, { savePath: null });
+    const gv = skeleton.gameversion || {};
+    console.log(`✓ Imported package ${path.basename(packageAbs)} into databases for ${gv.gameid || '(unknown gameid)'} v${gv.version || '?'}.`);
+    console.log(`  Resources processed: ${resourceCount}`);
+    console.log(`  Screenshots processed: ${screenshotCount}`);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2960,7 +3053,11 @@ async function main() {
   }
 
   if (config.mode === 'import') {
-    await handleImport(config);
+    await handleImportPackage(config);
+    return;
+  }
+  if (config.mode === 'extract-package') {
+    await handleExtractPackage(config);
     return;
   }
   if (config.mode === 'verify-package') {

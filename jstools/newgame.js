@@ -54,33 +54,63 @@ const { BinaryFinder } = require('../lib/binary-finder');
 const sevenZip = require('7zip-min');
 const { path7za } = require('7zip-bin');
 
-// Configure 7zip-min to use the correct binary path in Electron
-// When running in Electron, binaries need to be in app.asar.unpacked
-if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
-  // Check if the binary path contains 'app.asar' (we're running from within ASAR)
-  if (path7za && path7za.includes('app.asar') && !path7za.includes('app.asar.unpacked')) {
-    // Replace 'app.asar' with 'app.asar.unpacked' in the binary path
-    // Handle both forward and backward slashes
-    const unpackedPath = path7za.replace(/app\.asar([\\/])/g, 'app.asar.unpacked$1');
-    if (fs.existsSync(unpackedPath)) {
-      sevenZip.config({ binaryPath: unpackedPath });
-    } else {
-      // Fallback: try to reconstruct the unpacked path
+// Helper function to configure 7zip-min with the correct unpacked binary path
+function configure7zipPath() {
+  if (typeof process === 'undefined' || !process.versions || !process.versions.electron) {
+    return; // Not running in Electron
+  }
+
+  try {
+    const currentConfig = sevenZip.getConfig();
+    let binaryPath = currentConfig.binaryPath || path7za;
+
+    // Check if the binary path contains 'app.asar' but not 'app.asar.unpacked'
+    if (binaryPath && binaryPath.includes('app.asar') && !binaryPath.includes('app.asar.unpacked')) {
+      // Replace 'app.asar' with 'app.asar.unpacked' in the binary path
+      // Handle both forward and backward slashes with global replace
+      const unpackedPath = binaryPath.replace(/app\.asar([\\/])/g, 'app.asar.unpacked$1');
+      
+      if (fs.existsSync(unpackedPath)) {
+        sevenZip.config({ binaryPath: unpackedPath });
+        return;
+      }
+
+      // Fallback: try to reconstruct the unpacked path using path manipulation
       try {
-        // Normalize separators to the platform default, then replace app.asar with app.asar.unpacked
-        const normalizedPath7za = path.normalize(path7za);
-        // Replace app.asar/ or app.asar\ with app.asar.unpacked/ or app.asar.unpacked\
-        const unpackedBinary = normalizedPath7za.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+        const normalizedPath = path.normalize(binaryPath);
+        const unpackedBinary = normalizedPath.replace(/app\.asar([\\/])/g, 'app.asar.unpacked$1');
         if (fs.existsSync(unpackedBinary)) {
           sevenZip.config({ binaryPath: unpackedBinary });
+          return;
+        }
+
+        // Another fallback: find the base directory and reconstruct
+        const asarIndex = normalizedPath.indexOf('app.asar');
+        if (asarIndex !== -1) {
+          const baseDir = normalizedPath.substring(0, asarIndex);
+          const relativePath = normalizedPath.substring(asarIndex + 'app.asar'.length);
+          const fallbackPath = path.join(baseDir, 'app.asar.unpacked', relativePath);
+          if (fs.existsSync(fallbackPath)) {
+            sevenZip.config({ binaryPath: fallbackPath });
+            return;
+          }
+          
+          // If unpacked doesn't exist, log a warning with the expected path
+          console.warn(`[newgame.js] 7zip binary not found at unpacked path: ${fallbackPath}`);
+          console.warn(`[newgame.js] Original path: ${binaryPath}`);
+          console.warn(`[newgame.js] This may indicate that 7zip-bin was not unpacked during build.`);
         }
       } catch (err) {
-        // If path resolution fails, continue with default path (may fail later)
         console.warn('[newgame.js] Failed to configure 7zip unpacked path:', err.message);
       }
     }
+  } catch (err) {
+    console.warn('[newgame.js] Error checking 7zip path configuration:', err.message);
   }
 }
+
+// Configure 7zip-min on module load
+configure7zipPath();
 
 const SCRIPT_VERSION = '0.1.0';
 const DEFAULT_PBKDF2_ITERATIONS = 390000;
@@ -817,6 +847,9 @@ function create7zArchive(sourceDir, outputPath) {
     fs.unlinkSync(outputPath);
   }
   
+  // Verify and reconfigure 7zip path if needed (in case of late resolution)
+  configure7zipPath();
+  
   return new Promise((resolve, reject) => {
     // 7zip-min pack function: pack(pathToSrc, pathToDest, cb)
     // We need to pack the entire sourceDir into outputPath
@@ -833,6 +866,9 @@ function create7zArchive(sourceDir, outputPath) {
 
 function extract7zArchive(archivePath, destinationDir) {
   ensureDir(destinationDir);
+  
+  // Verify and reconfigure 7zip path if needed (in case of late resolution)
+  configure7zipPath();
   
   return new Promise((resolve, reject) => {
     // 7zip-min unpack function: unpack(pathToPack, destPath, cb)

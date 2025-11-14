@@ -536,21 +536,40 @@ async function loadPreparedPatchArtifact(skeleton, baseDir) {
 
   const attachmentMeta = await computeAttachmentMetadata(patchblobStoredAbs, blobMetadata.patchblob1_key);
 
-  const romRelativePath = patchInfo.rom_relative_path ||
+  let romRelativePath = patchInfo.rom_relative_path ||
     skeleton.patchblob?.rom_relative_path ||
     skeleton.gameversion?.rom_relative_path ||
     null;
 
-  if (!romRelativePath) {
-    throw new Error('Prepared ROM relative path metadata missing. Re-run --prepare to regenerate artifacts.');
+  let romBuffer = null;
+  let romPath = romRelativePath ? toAbsolutePath(romRelativePath, baseDir) : null;
+
+  if (romPath && fs.existsSync(romPath)) {
+    romBuffer = fs.readFileSync(romPath);
+  } else {
+    const { flipsPath, baseRomPath } = await getToolchainPaths();
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newgame-rom-'));
+    try {
+      const { tempResultPath, buffer: regeneratedRom } = applyPatchWithFlips(
+        patchStoredAbs,
+        flipsPath,
+        baseRomPath,
+        tempDir
+      );
+      romBuffer = regeneratedRom;
+      if (tempResultPath && fs.existsSync(tempResultPath)) {
+        fs.unlinkSync(tempResultPath);
+      }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    romPath = null;
   }
 
-  const romPath = toAbsolutePath(romRelativePath, baseDir);
-  if (!romPath || !fs.existsSync(romPath)) {
-    throw new Error(`Prepared ROM file missing: ${romRelativePath}`);
+  if (!romBuffer) {
+    throw new Error('Failed to generate patched ROM for verification.');
   }
 
-  const romBuffer = fs.readFileSync(romPath);
   const resultSha1 = sha1(romBuffer);
   const resultSha224 = sha224(romBuffer);
   const resultShake1 = shake128Base64Url(romBuffer);

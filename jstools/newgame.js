@@ -51,6 +51,7 @@ const fernet = require('fernet');
 const UrlBase64 = require('urlsafe-base64');
 const BlobCreator = require('../lib/blob-creator');
 const { BinaryFinder } = require('../lib/binary-finder');
+const sevenZip = require('7zip-min');
 
 const SCRIPT_VERSION = '0.1.0';
 const DEFAULT_PBKDF2_ITERATIONS = 390000;
@@ -781,35 +782,39 @@ function findExecutable(candidates) {
   return null;
 }
 
-function find7zBinary() {
-  const binary = findExecutable(['7z', '7za', '7zz', '7zr']);
-  if (!binary) {
-    throw new Error('Unable to locate a 7z executable (tried 7z/7za/7zz). Please install 7-Zip and ensure it is on PATH.');
-  }
-  return binary;
-}
-
 function create7zArchive(sourceDir, outputPath) {
-  const sevenZip = find7zBinary();
   ensureDir(path.dirname(outputPath));
   if (fs.existsSync(outputPath)) {
     fs.unlinkSync(outputPath);
   }
-  const args = ['a', '-t7z', '-mx=9', outputPath, '.'];
-  const result = spawnSync(sevenZip, args, { cwd: sourceDir, stdio: 'inherit' });
-  if (result.status !== 0) {
-    throw new Error(`7z archiving failed with exit code ${result.status}`);
-  }
+  
+  return new Promise((resolve, reject) => {
+    // 7zip-min pack function: pack(pathToSrc, pathToDest, cb)
+    // We need to pack the entire sourceDir into outputPath
+    // Since 7zip-min's pack works on a single file/folder, we pack the sourceDir
+    sevenZip.pack(sourceDir, outputPath, (err) => {
+      if (err) {
+        reject(new Error(`7z archiving failed: ${err.message}`));
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 function extract7zArchive(archivePath, destinationDir) {
-  const sevenZip = find7zBinary();
   ensureDir(destinationDir);
-  const args = ['x', archivePath, '-y'];
-  const result = spawnSync(sevenZip, args, { cwd: destinationDir, stdio: 'inherit' });
-  if (result.status !== 0) {
-    throw new Error(`7z extraction failed with exit code ${result.status}`);
-  }
+  
+  return new Promise((resolve, reject) => {
+    // 7zip-min unpack function: unpack(pathToPack, destPath, cb)
+    sevenZip.unpack(archivePath, destinationDir, (err) => {
+      if (err) {
+        reject(new Error(`7z extraction failed: ${err.message}`));
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 function shake128Base64Url(buffer, outputBits = 192) {
@@ -3240,7 +3245,7 @@ async function handleUninstall(config, skeletonFromJson = null) {
         throw new Error(`Package not found: ${packageAbs}`);
       }
       tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-uninstall-'));
-      extract7zArchive(packageAbs, tempDir);
+      await extract7zArchive(packageAbs, tempDir);
 
       const jsonPaths = [];
       function collectJsonFiles(dir) {
@@ -3600,7 +3605,7 @@ async function handlePackage(config, skeleton) {
       stage(entry.encrypted_data_path);
     }
 
-    create7zArchive(tempDir, packageOutput);
+    await create7zArchive(tempDir, packageOutput);
     console.log(`✓ Created package: ${packageOutput}`);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -3615,7 +3620,7 @@ async function handleExtractPackage(config) {
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-import-'));
   try {
-    extract7zArchive(packageAbs, tempDir);
+    await extract7zArchive(packageAbs, tempDir);
 
     let skeletonCandidate = path.join(tempDir, 'skeleton.json');
     if (!fs.existsSync(skeletonCandidate)) {
@@ -3729,7 +3734,7 @@ async function handleImportPackage(config) {
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-import-'));
   try {
-    extract7zArchive(packageAbs, tempDir);
+    await extract7zArchive(packageAbs, tempDir);
 
     let skeletonCandidate = path.join(tempDir, 'skeleton.json');
     if (!fs.existsSync(skeletonCandidate)) {
@@ -3808,7 +3813,7 @@ async function handleVerifyPackage(config) {
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-verify-'));
   try {
-    extract7zArchive(packageAbs, tempDir);
+    await extract7zArchive(packageAbs, tempDir);
 
     let skeletonCandidate = path.join(tempDir, 'skeleton.json');
     if (!fs.existsSync(skeletonCandidate)) {

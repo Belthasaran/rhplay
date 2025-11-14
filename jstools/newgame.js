@@ -54,6 +54,11 @@ const { BinaryFinder } = require('../lib/binary-finder');
 
 const SCRIPT_VERSION = '0.1.0';
 const DEFAULT_PBKDF2_ITERATIONS = 390000;
+const DEFAULT_BLOCKED_ROM_SHA1 = new Set([
+  '6b47bb75d16514b6a476aa0c73a683a2a4c18765',
+  'e7c9d2954aed2814fbb43f259aefc25404da8463'
+]);
+const ROM_FILE_EXTENSIONS = new Set(['.sfc', '.smc']);
 
 const DEFAULT_RHDATA_DB_PATH = process.env.RHDATA_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'rhdata.db');
@@ -387,7 +392,7 @@ function buildPatchResourceEntry(skeleton, artifact, baseDir) {
   };
 }
 
-async function buildScreenshotEntries(skeleton, baseDir) {
+async function buildScreenshotEntries(skeleton, baseDir, blockedSha1s) {
   const gv = skeleton.gameversion;
   if (!Array.isArray(gv.screenshots)) {
     return [];
@@ -424,6 +429,7 @@ async function buildScreenshotEntries(skeleton, baseDir) {
     }
 
     const buffer = fs.readFileSync(absolutePath);
+    enforceNoCommercialRomContentFromBuffer(buffer, absolutePath, blockedSha1s, 'screenshot');
     const stats = fs.statSync(absolutePath);
     const fileSha224 = sha224(buffer);
     const fileSha256 = sha256(buffer);
@@ -469,7 +475,7 @@ async function buildScreenshotEntries(skeleton, baseDir) {
   return entries;
 }
 
-async function loadPreparedPatchArtifact(skeleton, baseDir) {
+async function loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s) {
   const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
   if (!patchInfo) {
     throw new Error('Prepared patch artifact metadata not found. Run --prepare first.');
@@ -516,6 +522,9 @@ async function loadPreparedPatchArtifact(skeleton, baseDir) {
   const ipfsResult = await computeIpfsCids(buffer);
   if (patchInfo.ipfs_cid_v1 && ipfsResult.cidV1 !== patchInfo.ipfs_cid_v1) {
     throw new Error(`Prepared patch IPFS CID v1 mismatch. Expected ${patchInfo.ipfs_cid_v1}, got ${ipfsResult.cidV1}`);
+  }
+  if (blockedSha1s) {
+    enforceNoCommercialRomContentFromBuffer(buffer, patchInfo.file_name || patchblobName || patchInfo.patch_stored_path, blockedSha1s, 'prepared patch');
   }
 
   const archiveEntryName = patchInfo.archive_entry_name || skeleton.gameversion?.patch_archive_entry || null;
@@ -644,7 +653,7 @@ async function loadPreparedPatchArtifact(skeleton, baseDir) {
   return artifact;
 }
 
-async function assembleResourcePayloads(resources, baseDir) {
+async function assembleResourcePayloads(resources, baseDir, blockedSha1s) {
   const payloads = [];
   for (const entry of resources || []) {
     if (!entry) {
@@ -679,6 +688,7 @@ async function assembleResourcePayloads(resources, baseDir) {
     if (entry.ipfs_cid_v1 && ipfs.cidV1 !== entry.ipfs_cid_v1) {
       throw new Error(`Resource IPFS CID v1 mismatch for ${entry.resource_uuid || entry.file_name}`);
     }
+    enforceNoCommercialRomContentFromBuffer(decodedBuffer, entry.file_name || entry.resource_uuid || entry.source_path || entry.encrypted_data_path, blockedSha1s, 'resource');
     payloads.push({
       entry,
       tokenString,
@@ -689,7 +699,7 @@ async function assembleResourcePayloads(resources, baseDir) {
   return payloads;
 }
 
-async function assembleScreenshotPayloads(screenshots, baseDir) {
+async function assembleScreenshotPayloads(screenshots, baseDir, blockedSha1s) {
   const payloads = [];
   for (const entry of screenshots || []) {
     if (!entry) continue;
@@ -734,6 +744,7 @@ async function assembleScreenshotPayloads(screenshots, baseDir) {
     if (entry.ipfs_cid_v1 && ipfs.cidV1 !== entry.ipfs_cid_v1) {
       throw new Error(`Screenshot IPFS CID v1 mismatch for ${entry.screenshot_uuid || entry.file_name || entry.source_path || 'unknown'}`);
     }
+    enforceNoCommercialRomContentFromBuffer(decodedBuffer, entry.file_name || entry.source_path || entry.encrypted_data_path, blockedSha1s, 'screenshot');
     payloads.push({
       entry,
       type: 'file',
@@ -836,6 +847,92 @@ async function computeIpfsCids(buffer) {
     cidV0: cidV0.toString(),
     cidV1: cidV1.toString()
   };
+}
+
+function normalizeSha1(value) {
+  return value ? value.trim().toLowerCase() : '';
+}
+
+function isZipBuffer(buffer) {
+  if (!buffer || buffer.length < 4) return false;
+  return buffer[0] === 0x50 && buffer[1] === 0x4b;
+}
+
+function ensureRomExtensionSafe(name, context) {
+  if (!name) return;
+  const ext = path.extname(name).toLowerCase();
+  if (ROM_FILE_EXTENSIONS.has(ext)) {
+    const details = context ? ` (${context})` : '';
+    throw new Error(`Commercial ROM file detected${details}: ${name}`);
+  }
+}
+
+function enforceNoCommercialRomContentFromBuffer(buffer, identifier, blockedSha1s, context = '') {
+  if (!buffer) return;
+  const label = identifier || 'asset';
+  ensureRomExtensionSafe(label, context);
+
+  const shaValue = sha1(buffer);
+  if (blockedSha1s.has(shaValue)) {
+    const details = context ? ` (${context})` : '';
+    throw new Error(`Commercial ROM hash detected${details}: ${label}`);
+  }
+
+  const nameLower = label.toLowerCase();
+  const looksLikeZip = nameLower.endsWith('.zip') || isZipBuffer(buffer);
+  if (looksLikeZip) {
+    try {
+      const zip = new AdmZip(buffer);
+      for (const entry of zip.getEntries()) {
+        if (entry.isDirectory) continue;
+        enforceNoCommercialRomContentFromBuffer(
+          entry.getData(),
+          `${label}:${entry.entryName}`,
+          blockedSha1s,
+          context || 'archive'
+        );
+      }
+    } catch (error) {
+      // Ignore invalid ZIP parsing; if it's not actually a ZIP we'll continue.
+    }
+  }
+}
+
+function enforceNoCommercialRomContentFromFile(filePath, blockedSha1s, context = '') {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return;
+  }
+  ensureRomExtensionSafe(filePath, context);
+  const buffer = fs.readFileSync(filePath);
+  enforceNoCommercialRomContentFromBuffer(buffer, filePath, blockedSha1s, context);
+}
+
+async function buildRomBlocklist(config, skeleton) {
+  const blocked = new Set(DEFAULT_BLOCKED_ROM_SHA1);
+  const addHash = (value) => {
+    const normalized = normalizeSha1(value);
+    if (normalized) {
+      blocked.add(normalized);
+    }
+  };
+
+  addHash(skeleton?.gameversion?.result_sha1);
+  addHash(skeleton?.patchblob?.result_sha1);
+
+  const dbPath = config.rhdataPath || DEFAULT_RHDATA_DB_PATH;
+  if (dbPath && fs.existsSync(dbPath)) {
+    const db = new Database(dbPath, { readonly: true });
+    try {
+      const rows = db.prepare('SELECT result_sha1 FROM patchblobs WHERE result_sha1 IS NOT NULL').all();
+      for (const row of rows) {
+        addHash(row.result_sha1);
+      }
+    } finally {
+      db.close();
+    }
+  }
+
+  return blocked;
 }
 
 function scoreZipPatchEntries(entries) {
@@ -1775,7 +1872,9 @@ async function handlePrepare(config, skeleton) {
   pruneAutoGeneratedResources(skeleton, baseDir);
   pruneAutoGeneratedScreenshots(skeleton, baseDir);
 
-  const artifact = await preparePatchArtifacts(skeleton, baseDir);
+  const blockedSha1s = await buildRomBlocklist(config, skeleton);
+
+  const artifact = await preparePatchArtifacts(skeleton, baseDir, blockedSha1s);
 
   const rhpakuuid = metadata.rhpakuuid;
   skeleton.gameversion = skeleton.gameversion || {};
@@ -1807,7 +1906,7 @@ async function handlePrepare(config, skeleton) {
   const manualResources = Array.isArray(skeleton.resources) ? skeleton.resources : [];
   skeleton.resources = mergeResourceEntries(manualResources, [patchResourceEntry]);
 
-  const autoScreenshots = await buildScreenshotEntries(skeleton, baseDir);
+  const autoScreenshots = await buildScreenshotEntries(skeleton, baseDir, blockedSha1s);
   const manualScreenshots = Array.isArray(skeleton.screenshots) ? skeleton.screenshots : [];
   skeleton.screenshots = mergeScreenshotEntries(manualScreenshots, autoScreenshots);
 
@@ -1941,12 +2040,13 @@ async function handlePrepare(config, skeleton) {
  * Patch and attachment preparation
  */
 
-async function preparePatchArtifacts(skeleton, baseDir) {
+async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s) {
   const gv = skeleton.gameversion;
   const patchPath = toAbsolutePath(gv.patch_local_path, baseDir);
   if (!patchPath || !fs.existsSync(patchPath)) {
     throw new Error(`Patch file not found: ${gv.patch_local_path}`);
   }
+  enforceNoCommercialRomContentFromFile(patchPath, blockedSha1s, 'patch source');
 
   const originalExtension = path.extname(patchPath).replace('.', '').toLowerCase();
   const treatAsZip = originalExtension === 'zip' || isZipFile(patchPath);
@@ -1969,6 +2069,7 @@ async function preparePatchArtifacts(skeleton, baseDir) {
   if (!patchBuffer || patchBuffer.length === 0) {
     throw new Error('Patch data is empty after extraction.');
   }
+  enforceNoCommercialRomContentFromBuffer(patchBuffer, patchFileName, blockedSha1s, 'patch data');
 
   const patchSize = patchBuffer.length;
 
@@ -3184,9 +3285,11 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
     throw new Error('Cannot add records while validation errors exist.');
   }
 
-  const patchArtifact = await loadPreparedPatchArtifact(skeleton, baseDir);
-  const resourcePayloads = await assembleResourcePayloads(skeleton.resources || [], baseDir);
-  const screenshotPayloads = await assembleScreenshotPayloads(skeleton.screenshots || [], baseDir);
+  const blockedSha1s = await buildRomBlocklist(config, skeleton);
+
+  const patchArtifact = await loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s);
+  const resourcePayloads = await assembleResourcePayloads(skeleton.resources || [], baseDir, blockedSha1s);
+  const screenshotPayloads = await assembleScreenshotPayloads(skeleton.screenshots || [], baseDir, blockedSha1s);
 
   const rhdataDb = new Database(config.rhdataPath);
   const patchbinDb = new Database(config.patchbinPath);
@@ -3312,6 +3415,7 @@ async function handlePackage(config, skeleton) {
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhpak-'));
   const stagedPaths = new Set();
+  const blockedSha1s = await buildRomBlocklist(config, skeleton);
 
   try {
     const clone = JSON.parse(JSON.stringify(skeleton));
@@ -3346,6 +3450,7 @@ async function handlePackage(config, skeleton) {
       throw new Error('Prepared patch metadata missing from skeleton.');
     }
 
+    enforceNoCommercialRomContentFromFile(toAbsolutePath(patchInfo.patch_stored_path, baseDir), blockedSha1s, 'package patch');
     stage(patchInfo.patch_stored_path);
     stage(patchInfo.patchblob_stored_path);
 
@@ -3596,9 +3701,11 @@ async function handleVerifyPackage(config) {
       throw new Error('Package verification failed due to the errors above.');
     }
 
-    await loadPreparedPatchArtifact(skeleton, baseDir);
-    await assembleResourcePayloads(skeleton.resources || [], baseDir);
-    await assembleScreenshotPayloads(skeleton.screenshots || [], baseDir);
+    const blockedSha1s = await buildRomBlocklist(config, skeleton);
+
+    await loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s);
+    await assembleResourcePayloads(skeleton.resources || [], baseDir, blockedSha1s);
+    await assembleScreenshotPayloads(skeleton.screenshots || [], baseDir, blockedSha1s);
 
     console.log(`✓ Package verification succeeded: ${path.basename(packageAbs)}`);
     console.log(`  Resources verified: ${Array.isArray(skeleton.resources) ? skeleton.resources.length : 0}`);

@@ -7596,6 +7596,7 @@ async function installRhpakFromPath(filePath: string) {
       installRhpakState.message = 'Package installed successfully.';
       installRhpakState.output = (response.output || '').trim();
       await refreshInstalledRhpaks();
+      await loadGames();
     } else {
       installRhpakState.status = 'error';
       installRhpakState.message = response?.error || 'Failed to install package.';
@@ -7692,6 +7693,7 @@ async function uninstallSelectedRhpaks() {
     }
   }
   rhpakUninstallInProgress.value = false;
+  const total = selectedInstalledRhpaks.value.size;
   if (errors.length > 0) {
     rhpakListMessage.value = errors.join(' ');
     rhpakListMessageType.value = 'error';
@@ -7701,6 +7703,9 @@ async function uninstallSelectedRhpaks() {
     selectedInstalledRhpaks.value = new Set();
   }
   await refreshInstalledRhpaks();
+  if (errors.length < total) {
+    await loadGames();
+  }
 }
 
 // USB2SNES Tools modal functions

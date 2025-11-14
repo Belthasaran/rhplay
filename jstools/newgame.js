@@ -3875,6 +3875,7 @@ async function handleListInstalled(config) {
       console.log(`    JSON: ${jsfile}`);
       console.log(`    Updated: ${updated}`);
     }
+    return rows;
   } finally {
     db.close();
   }
@@ -3884,55 +3885,39 @@ async function handleListInstalled(config) {
  * Entry point
  */
 
-async function main() {
-  let config;
-  try {
-    config = parseArgs(process.argv);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    printHelp();
-    process.exit(1);
-  }
-
+async function runNewgameWithConfig(config) {
   if (config.mode === 'help') {
     printHelp();
-    return;
+    return null;
   }
 
   if (config.mode === 'list-installed') {
-    await handleListInstalled(config);
-    return;
+    return handleListInstalled(config);
   }
 
   if (config.mode === 'uninstall-uuid') {
-    await handleUninstall(config, null);
-    return;
+    return handleUninstall(config, null);
   }
 
   if (config.mode === 'import') {
-    await handleImportPackage(config);
-    return;
+    return handleImportPackage(config);
   }
   if (config.mode === 'extract-package') {
-    await handleExtractPackage(config);
-    return;
+    return handleExtractPackage(config);
   }
   if (config.mode === 'verify-package') {
-    await handleVerifyPackage(config);
-    return;
+    return handleVerifyPackage(config);
   }
   if (config.mode === 'uninstall') {
     if (config.packageInput) {
-      await handleUninstall(config, null);
-      return;
+      return handleUninstall(config, null);
     }
     config.baseDir = config.baseDir || path.dirname(config.jsonPath);
     const skeleton = loadSkeleton(config.jsonPath);
     if (!skeleton) {
       throw new Error(`Skeleton not found at ${config.jsonPath}`);
     }
-    await handleUninstall(config, skeleton);
-    return;
+    return handleUninstall(config, skeleton);
   }
 
   config.baseDir = config.baseDir || path.dirname(config.jsonPath);
@@ -3965,15 +3950,48 @@ async function main() {
       break;
     default:
       printHelp();
+      return null;
+  }
+  return null;
+}
+
+async function runNewgameWithArgs(args = [], overrides = {}) {
+  const normalizedArgs = Array.isArray(args) ? args : [];
+  const argv = ['node', 'jstools/newgame.js', ...normalizedArgs];
+  const config = parseArgs(argv);
+  Object.assign(config, overrides);
+  return runNewgameWithConfig(config);
+}
+
+async function main() {
+  let config;
+  try {
+    config = parseArgs(process.argv);
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    printHelp();
+    process.exit(1);
+  }
+
+  try {
+    await runNewgameWithConfig(config);
+  } catch (error) {
+    console.error(`\nFatal error: ${error.message}`);
+    console.error(error.stack);
+    process.exit(1);
   }
 }
 
 if (require.main === module) {
-  main().catch((error) => {
-    console.error(`\nFatal error: ${error.message}`);
-    console.error(error.stack);
-    process.exit(1);
-  });
+  main();
 }
+
+module.exports = {
+  runNewgameWithArgs,
+  runNewgameWithConfig,
+  handleImportPackage,
+  handleListInstalled,
+  handleUninstall,
+};
 
 

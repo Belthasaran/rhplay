@@ -12,6 +12,11 @@ const { ensureRhpakAssociation, removeRhpakAssociation } = require('./rhpak-asso
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const {
+  handleImportPackage: newgameHandleImportPackage,
+  handleListInstalled: newgameHandleListInstalled,
+  handleUninstall: newgameHandleUninstall,
+} = require('../jstools/newgame.js');
 const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
@@ -97,7 +102,6 @@ function registerDatabaseHandlers(dbManager) {
   }
 
   const projectRoot = path.resolve(__dirname, '..');
-  const electronBinary = process.execPath;
 
   const getAuxDbPath = (fileName) => {
     const envOverride = fileName === 'resource.db'
@@ -114,46 +118,23 @@ function registerDatabaseHandlers(dbManager) {
   const getResourceDbPath = () => getAuxDbPath('resource.db');
   const getScreenshotDbPath = () => getAuxDbPath('screenshot.db');
 
-  function runNewgameCommand(args = []) {
-    return new Promise((resolve, reject) => {
-      const cliArgs = ['--run-cli-script', 'jstools/newgame.js', ...args];
-      const child = spawn(electronBinary, cliArgs, {
-        cwd: projectRoot,
-        env: {
-          ...process.env,
-          RHDATA_DB_PATH: dbManager.paths?.rhdata,
-          PATCHBIN_DB_PATH: dbManager.paths?.patchbin,
-          RESOURCE_DB_PATH: getResourceDbPath(),
-          SCREENSHOT_DB_PATH: getScreenshotDbPath()
-        }
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      child.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      child.on('error', (error) => {
-        reject(error);
-      });
-
-      child.on('close', (code) => {
-        if (code === 0) {
-          resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
-        } else {
-          const error = new Error(`newgame.js exited with code ${code}`);
-          error.stdout = stdout;
-          error.stderr = stderr;
-          reject(error);
-        }
-      });
-    });
+  function buildNewgameConfig(overrides = {}) {
+    const packageInput = overrides.packageInput ? path.resolve(overrides.packageInput) : null;
+    return {
+      jsonPath: overrides.jsonPath || null,
+      packageInput,
+      packageBaseDir: overrides.packageBaseDir || (packageInput ? path.dirname(packageInput) : null),
+      packageOutput: overrides.packageOutput || null,
+      outputJson: overrides.outputJson || null,
+      baseDir: overrides.baseDir || null,
+      force: !!overrides.force,
+      purgeFiles: !!overrides.purgeFiles,
+      uninstallUuid: overrides.uninstallUuid || null,
+      rhdataPath: overrides.rhdataPath || dbManager.paths?.rhdata,
+      patchbinPath: overrides.patchbinPath || dbManager.paths?.patchbin,
+      resourcePath: overrides.resourcePath || getResourceDbPath(),
+      screenshotPath: overrides.screenshotPath || getScreenshotDbPath()
+    };
   }
 
   const isFiniteNumber = (value) => {
@@ -3826,11 +3807,15 @@ function registerDatabaseHandlers(dbManager) {
       if (!filePath) {
         return { success: false, error: 'filePath is required' };
       }
-      const result = await runNewgameCommand([filePath, '--import']);
-      return { success: true, output: result.stdout };
+      const config = buildNewgameConfig({
+        packageInput: filePath,
+        packageBaseDir: path.dirname(path.resolve(filePath)),
+      });
+      await newgameHandleImportPackage(config);
+      return { success: true };
     } catch (error) {
       console.error('[rhpak:import] Failed:', error);
-      return { success: false, error: error.message, output: error.stdout || error.stderr || '' };
+      return { success: false, error: error.message };
     }
   });
 
@@ -3842,11 +3827,14 @@ function registerDatabaseHandlers(dbManager) {
       if (!rhpakuuid) {
         return { success: false, error: 'rhpakuuid is required' };
       }
-      const result = await runNewgameCommand([`--uninstall-uuid=${rhpakuuid}`]);
-      return { success: true, output: result.stdout };
+      const config = buildNewgameConfig({
+        uninstallUuid: rhpakuuid,
+      });
+      await newgameHandleUninstall(config, null);
+      return { success: true };
     } catch (error) {
       console.error('[rhpak:uninstall] Failed:', error);
-      return { success: false, error: error.message, output: error.stdout || error.stderr || '' };
+      return { success: false, error: error.message };
     }
   });
 

@@ -123,6 +123,7 @@
     },
     "files": [
       "electron/**/*",
+    "jstools/**/*",
       "!electron/renderer/node_modules/**/*",
       "!electron/renderer/src/**/*",
       "!electron/test_data/**/*",

@@ -424,6 +424,26 @@ async function initializeDatabaseLayer() {
         dbManager = new DatabaseManager({ autoApplyMigrations: true });
         console.log('Database manager initialized with auto-migrations enabled');
         
+        // Ensure migrations are applied to all databases at startup
+        // This ensures databases are ready before any operations (like newgame.js) use them
+        try {
+          console.log('Applying migrations to all databases...');
+          const dbNames = ['rhdata', 'patchbin', 'clientdata', 'resource', 'screenshot'];
+          for (const dbName of dbNames) {
+            try {
+              // Trigger getConnection which will apply migrations if needed
+              dbManager.getConnection(dbName);
+              console.log(`✓ Migrations checked/applied for ${dbName}`);
+            } catch (err) {
+              console.warn(`⚠ Failed to apply migrations for ${dbName}:`, err.message);
+            }
+          }
+          console.log('Database migrations completed');
+        } catch (err) {
+          console.error('Error applying database migrations:', err);
+          // Don't fail startup, but log the error
+        }
+        
         ensureHandlersRegistered();
 
         const { ensureCreatedFp } = require('./ipc-handlers');

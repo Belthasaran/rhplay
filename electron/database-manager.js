@@ -65,6 +65,8 @@ class DatabaseManager {
       clientdata: process.env.CLIENTDATA_DB_PATH || path.join(basePath, 'clientdata.db'),
       ratings: process.env.RATINGS_DB_PATH || path.join(basePath, 'ratings.db'),
       moderation: process.env.MODERATION_DB_PATH || path.join(basePath, 'moderation.db'),
+      resource: process.env.RESOURCE_DB_PATH || path.join(basePath, 'resource.db'),
+      screenshot: process.env.SCREENSHOT_DB_PATH || path.join(basePath, 'screenshot.db'),
     };
     
     // In packaged environment, handle external databases
@@ -290,7 +292,9 @@ class DatabaseManager {
       const dbTypeMap = {
         'rhdata': 'rhdata',
         'patchbin': 'patchbin',
-        'clientdata': 'clientdata'
+        'clientdata': 'clientdata',
+        'resource': 'resource',
+        'screenshot': 'screenshot'
       };
       
       const dbType = dbTypeMap[dbName];

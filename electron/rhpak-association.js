@@ -56,7 +56,7 @@ function ensureWindowsRegistryKey(keyPath) {
 async function setRegistryValue(keyPath, name, type, value) {
   const key = await ensureWindowsRegistryKey(keyPath);
   return new Promise((resolve, reject) => {
-    key.set(name, type, value, (err) => {
+    key.set('"' + name + '"', type, value, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -69,7 +69,7 @@ function getRegistryValue(keyPath, name) {
       hive: WinReg.HKCU,
       key: keyPath,
     });
-    key.get(name, (err, item) => {
+    key.get('"' + name + '"', (err, item) => {
       if (err) {
         if (err.code === 1 || err.code === 'ERROR_FILE_NOT_FOUND') {
           resolve(null);
@@ -109,7 +109,7 @@ function deleteRegistryValue(keyPath, name) {
       hive: WinReg.HKCU,
       key: keyPath,
     });
-    key.remove(name, (err) => {
+    key.remove('"' + name + '"', (err) => {
       if (err && err.code !== 1 && err.code !== 'ERROR_FILE_NOT_FOUND') {
         reject(err);
       } else {

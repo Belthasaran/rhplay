@@ -270,12 +270,6 @@ async function copyToClipboard(text: string | undefined) {
   }
 }
 
-const emit = defineEmits<{
-  'create-profile': [];
-  'publish-profile': [];
-  'refresh-status': [];
-}>();
-
 onMounted(() => {
   // Load preferences from storage if needed
 });

@@ -141,27 +141,74 @@
 
       <div v-if="step===4" class="panel">
         <h4>Tags</h4>
-        <div class="grid">
-          <div class="field full">
-            <label>Pick Tags</label>
+        <div class="tags-layout">
+          <div class="cat-pane">
+            <div class="breadcrumb">
+              <button class="btn-link" @click="browseToRoot">Root</button>
+              <span v-for="(crumb, idx) in categoryBreadcrumb" :key="idx">
+                › <button class="btn-link" @click="browseTo(indexPath(idx))">{{ crumb }}</button>
+              </span>
+            </div>
+            <ul class="cat-list">
+              <li v-for="child in visibleCategories" :key="child.name">
+                <button class="btn-link" @click="browseInto(child.name)">{{ child.name }}</button>
+              </li>
+            </ul>
+          </div>
+          <div class="tag-pane">
+            <div class="encouragement">
+              <span :class="['badge', hasGraphicsMusic ? 'ok' : 'missing']">Graphics & Music</span>
+              <span :class="['badge', hasDesignStyle ? 'ok' : 'missing']">Design Style</span>
+              <span :class="['badge', hasTheme ? 'ok' : 'missing']">Theme</span>
+              <span :class="['badge', hasSpecialization ? 'ok' : 'missing']">Specialization</span>
+            </div>
             <div class="tag-picker">
               <div class="tag-input-row">
                 <input
                   v-model.trim="newTag"
                   class="input"
-                  placeholder="Type to search tags (e.g., 'Kaizo')"
-                  @keyup.enter.prevent="addCustomTag"
+                    placeholder="Type to search tags or categories (e.g., 'Kaizo' or 'Graphics')"
+                  @keyup.enter.prevent="addCustomTagFromSuggest"
+                  @input="updateRemoteSuggestions"
                 />
-                <button type="button" class="btn" @click="addCustomTag" :disabled="!newTag">Add</button>
+                <button type="button" class="btn" @click="addCustomTagFromSuggest" :disabled="!newTag">Add</button>
               </div>
-              <ul v-if="filteredSuggestions.length" class="suggestions">
-                <li
-                  v-for="s in filteredSuggestions"
-                  :key="s"
-                  @click="toggleTag(s)"
-                  :title="'Add '+s"
-                >{{ s }}</li>
-              </ul>
+              <div v-if="showAnySuggestions" class="suggestions">
+                <div v-if="categorySuggestions.length" class="suggest-section">
+                  <div class="suggest-title">Categories</div>
+                  <ul class="suggest-list">
+                    <li
+                      v-for="cp in categorySuggestions"
+                      :key="cp"
+                      @click="browseTo(cp)"
+                      :title="'Browse '+cp"
+                    >{{ cp }}</li>
+                  </ul>
+                </div>
+                <div v-if="remoteSuggestions.length" class="suggest-section">
+                  <div class="suggest-title">Tags</div>
+                  <ul class="suggest-list">
+                    <li
+                      v-for="s in remoteSuggestions"
+                      :key="s"
+                      @click="toggleTag(s)"
+                      :title="'Add '+s"
+                    >{{ s }}</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="cat-tags">
+                <div class="cat-header">Tags in {{ currentCategoryPath || 'Root' }}</div>
+                <div class="chips">
+                  <button
+                    v-for="t in categoryTags"
+                    :key="t"
+                    type="button"
+                    :class="['chip', { selected: selectedTags.some(x => x.toLowerCase() === t.toLowerCase()) }]"
+                    @click="toggleTag(t)"
+                  >{{ t }}</button>
+                </div>
+              </div>
               <div v-if="recommendedTags.length" class="selected-tags">
                 <span class="selected-label">Recommended:</span>
                 <button
@@ -185,7 +232,7 @@
                 >{{ t }} ✕</button>
               </div>
               <div class="hint">
-                Aim to include at least: Graphics & Music, Design Style, Theme/Genre, and Specialization tags where applicable.
+                Include at least: Graphics & Music, Design Style, Theme/Genre, and Specialization tags where applicable. A minimum of 4 tags is required to finalize submission.
               </div>
             </div>
           </div>
@@ -307,18 +354,14 @@ const recommendedTags = computed(() => {
   return Array.from(tags)
     .filter(t => !selectedTags.value.some(x => x.toLowerCase() === t.toLowerCase()));
 });
-const filteredSuggestions = computed(() => {
-  const q = (newTag.value || '').toLowerCase();
-  const notSelected = (t: string) => !selectedTags.value.some(x => x.toLowerCase() === t.toLowerCase());
-  const all = Object.keys(tagsMap.value || {});
-  const base = q ? all.filter(t => t.toLowerCase().includes(q)) : all;
-  return base.filter(notSelected).slice(0, 12);
-});
+const remoteSuggestions = ref<string[]>([]);
 
 const canSubmit = computed(() => {
   const c = current.value;
   if (!c) return false;
-  return !!(c.files.patch && c.meta.name && c.meta.author && (c.meta.version ?? 1) >= 1);
+  const hasBasics = !!(c.files.patch && c.meta.name && c.meta.author && (c.meta.version ?? 1) >= 1);
+  const hasTags = selectedTags.value.length >= 4;
+  return hasBasics && hasTags;
 });
 
 function newDraft() {
@@ -413,6 +456,123 @@ onMounted(() => {
       if (res?.success) tagsMap.value = res.tags || {};
     }).catch(() => {});
   }
+});
+
+// ---- Category browsing state & helpers ----
+const currentCategoryPath = ref<string>('');
+const categoryBreadcrumb = computed(() => currentCategoryPath.value ? currentCategoryPath.value.split(' > ').filter(Boolean) : []);
+function indexPath(idx: number) {
+  return categoryBreadcrumb.value.slice(0, idx + 1).join(' > ');
+}
+function browseToRoot() {
+  currentCategoryPath.value = '';
+  fetchCategoryTags();
+}
+function browseTo(pathStr: string) {
+  currentCategoryPath.value = pathStr || '';
+  fetchCategoryTags();
+}
+function browseInto(childName: string) {
+  const next = currentCategoryPath.value ? (currentCategoryPath.value + ' > ' + childName) : childName;
+  currentCategoryPath.value = next;
+  fetchCategoryTags();
+}
+const visibleCategories = computed(() => {
+  // Walk the tree along currentCategoryPath
+  const path = categoryBreadcrumb.value;
+  let node = categoryTree.value;
+  try {
+    if (!node) return [];
+    let children = node.children || [];
+    if (!path.length) return children;
+    for (const part of path) {
+      const found = (children || []).find((c: any) => c.name === part);
+      if (!found) return [];
+      children = found.children || [];
+    }
+    return children || [];
+  } catch {
+    return [];
+  }
+});
+const categoryTags = ref<string[]>([]);
+function fetchCategoryTags() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.getTagsByCategory) { categoryTags.value = []; return; }
+  const cp = currentCategoryPath.value || '';
+  api.getTagsByCategory(cp).then((res: any) => {
+    categoryTags.value = res?.success ? (res.tags || []) : [];
+  }).catch(() => { categoryTags.value = []; });
+}
+
+// Encouragement checks
+const hasGraphicsMusic = computed(() => hasAnySelectedInPrefixes(['Content & Presentation > Graphics & Visual Style', 'Content & Presentation > Music & Audio']));
+const hasDesignStyle = computed(() => hasAnySelectedInPrefixes(['Design & Structure']));
+const hasTheme = computed(() => hasAnySelectedInPrefixes(['Content & Presentation > Themes & Genres']));
+const hasSpecialization = computed(() => hasAnySelectedInPrefixes(['Gameplay & Difficulty > Gameplay Specializations', 'Gameplay & Difficulty > Core Mechanics']));
+function hasAnySelectedInPrefixes(prefixes: string[]) {
+  const map = tagsMap.value || {};
+  for (const tag of selectedTags.value) {
+    const paths = map[tag] || map[String(tag).toLowerCase()] || [];
+    if (paths.some((p: string) => prefixes.some(pref => String(p).startsWith(pref)))) return true;
+  }
+  return false;
+}
+
+// Remote suggestions using IPC suggest with ranking
+let suggestTimer: any = null;
+function updateRemoteSuggestions() {
+  clearTimeout(suggestTimer);
+  suggestTimer = setTimeout(async () => {
+    const api = (window as any)?.electronAPI;
+    if (!api?.suggestTags) return;
+    const query = newTag.value || '';
+    const selected = selectedTags.value.slice();
+    const contextTypes = current.value?.meta?.types || [];
+    try {
+      const res = await api.suggestTags({ query, selected, contextTypes, limit: 12 });
+      remoteSuggestions.value = res?.success ? (res.suggestions || []) : [];
+    } catch {
+      remoteSuggestions.value = [];
+    }
+  }, 120);
+}
+function addCustomTagFromSuggest() {
+  addCustomTag();
+  updateRemoteSuggestions();
+}
+
+// Category suggestions while typing
+const allCategoryPaths = ref<string[]>([]);
+watch(categoryTree, () => {
+  allCategoryPaths.value = [];
+  try {
+    function walk(node: any, prefix: string) {
+      if (!node) return;
+      const name = node.name || '';
+      const pathHere = name ? (prefix ? (prefix + ' > ' + name) : name) : prefix;
+      if (node.children && node.children.length) {
+        for (const child of node.children) walk(child, pathHere);
+      } else if (pathHere) {
+        // include leaf paths
+        allCategoryPaths.value.push(pathHere);
+      }
+      // also include intermediate nodes as selectable categories
+      if (name) allCategoryPaths.value.push(pathHere);
+    }
+    walk(categoryTree.value, '');
+    // dedupe/sort
+    const set = new Set(allCategoryPaths.value);
+    allCategoryPaths.value = Array.from(set).sort((a,b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  } catch {}
+});
+const categorySuggestions = computed(() => {
+  const q = (newTag.value || '').toLowerCase();
+  if (!q) return [];
+  return allCategoryPaths.value.filter(p => p.toLowerCase().includes(q)).slice(0, 10);
+});
+const showAnySuggestions = computed(() => {
+  return (categorySuggestions.value.length + remoteSuggestions.value.length) > 0;
 });
 
 watch(() => current.value?.meta?.tags, () => {
@@ -544,6 +704,21 @@ function buildSubmissionPayload(draft: Draft) {
 .selected-label { font-size: 12px; color: var(--text-secondary,#666); margin-right: 4px; }
 .hint { font-size: 12px; color: var(--text-secondary,#666); }
 .suggestions { margin: 0; padding: 6px 0; list-style: none; border: 1px solid var(--border-color,#eee); border-radius: 6px; max-height: 200px; overflow: auto; background: var(--bg-primary,#fff); }
-.suggestions li { padding: 6px 10px; cursor: pointer; }
-.suggestions li:hover { background: #f0f7ff; }
+.suggestions .suggest-section { padding: 6px 8px; }
+.suggestions .suggest-title { font-size: 11px; color: var(--text-secondary,#666); margin: 4px 0; }
+.suggestions .suggest-list { list-style: none; padding: 0; margin: 0; }
+.suggestions .suggest-list li { padding: 6px 10px; cursor: pointer; }
+.suggestions .suggest-list li:hover { background: #f0f7ff; }
+.tags-layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; }
+.cat-pane { border-right: 1px solid var(--border-color,#eee); padding-right: 10px; }
+.breadcrumb { font-size: 12px; color: var(--text-secondary,#666); margin-bottom: 6px; }
+.cat-list { list-style: none; padding: 0; margin: 0; }
+.cat-list li { padding: 4px 0; }
+.tag-pane { display: flex; flex-direction: column; gap: 10px; }
+.encouragement { display: flex; gap: 8px; flex-wrap: wrap; }
+.badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid #ccc; }
+.badge.ok { background: #e8f5e9; border-color: #2e7d32; color: #2e7d32; }
+.badge.missing { background: #fff3e0; border-color: #ef6c00; color: #ef6c00; }
+.cat-tags .cat-header { font-size: 12px; color: var(--text-secondary,#666); margin: 6px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
 </style>

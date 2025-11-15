@@ -895,6 +895,81 @@ class OnlineProfileManager {
     
     return { success: true, eventId: signedEvent.id };
   }
+
+  /**
+   * Publish a game submission to Nostr and enqueue it in cache_out with table_name 'game_submissions'.
+   * @param {string} profileUuid
+   * @param {object} submissionData - Built by UI (files + meta)
+   * @returns {Promise<{success: boolean, eventId?: string, error?: string}>}
+   */
+  async publishGameSubmission(profileUuid, submissionData) {
+    if (!this.keyguardKey) {
+      throw new Error('Profile Guard must be unlocked to publish submissions');
+    }
+
+    const primaryKeypair = this.getDecryptedPrimaryKeypair(profileUuid);
+    if (!primaryKeypair) {
+      throw new Error('Profile has no primary keypair');
+    }
+    if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
+      throw new Error('Primary keypair must be Nostr type to publish submissions');
+    }
+    if (!primaryKeypair.privateKey) {
+      throw new Error('Private key not available or not decrypted');
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    // Build submission content (metadata only; large assets are referenced by path/size for now)
+    const contentJson = {
+      submission: submissionData || {},
+      created_at_ts: now,
+      app: 'rhplay-submission',
+      version: '1.0'
+    };
+
+    const { finalizeEvent } = require('nostr-tools');
+    const eventTemplate = {
+      kind: 31110, // provisional kind for Game Submission (TBD)
+      created_at: now,
+      tags: [
+        ['d', `submission:${profileUuid}:${now}`],
+        ['app', 'rhplay-submission'],
+        ['v', '1.0']
+      ],
+      content: JSON.stringify(contentJson)
+    };
+
+    let privateKeyHex = primaryKeypair.privateKey;
+    if (Buffer.isBuffer(privateKeyHex)) {
+      privateKeyHex = privateKeyHex.toString('hex');
+    }
+    if (typeof privateKeyHex !== 'string' || !/^[0-9a-fA-F]{64}$/.test(privateKeyHex)) {
+      throw new Error('Invalid private key for signing submission');
+    }
+    const privateKeyBytes = new Uint8Array(Buffer.from(privateKeyHex, 'hex'));
+    const signedEvent = finalizeEvent(eventTemplate, privateKeyBytes);
+
+    const { NostrLocalDBManager } = require('./NostrLocalDBManager');
+    const nostrDBManager = new NostrLocalDBManager();
+    await nostrDBManager.initialize();
+
+    const success = nostrDBManager.addEvent(
+      'cache_out',
+      signedEvent,
+      0,
+      null,
+      'game_submissions',
+      submissionData?.meta?.name || `submission-${now}`,
+      profileUuid
+    );
+
+    nostrDBManager.closeAll();
+
+    if (!success) {
+      return { success: false, error: 'Failed to add submission event to outgoing cache' };
+    }
+    return { success: true, eventId: signedEvent.id };
+  }
 }
 
 module.exports = OnlineProfileManager;

@@ -68,6 +68,12 @@
               >
                 Ratings Publishing
               </button>
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'submissions' }]"
+                @click="onlineActiveTab = 'submissions'"
+              >
+                Submissions
+              </button>
             </div>
 
             <div class="online-dropdown-body">
@@ -499,6 +505,10 @@
                   :loading="ratingsPublishingLoading"
                   @view-details="handleViewRatingDetails"
                 />
+              </div>
+              <!-- Submissions Tab -->
+              <div v-if="onlineActiveTab === 'submissions'" class="tab-content">
+                <GameSubmissionDashboard />
               </div>
             </div>
           </div>
@@ -6964,6 +6974,7 @@ import RelayHealthDashboard from './components/relay/RelayHealthDashboard.vue';
 import PublishingQueueDashboard from './components/publish/PublishingQueueDashboard.vue';
 import ProfilePublishingDashboard from './components/publish/ProfilePublishingDashboard.vue';
 import RatingsPublishingDashboard from './components/publish/RatingsPublishingDashboard.vue';
+import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -7041,7 +7052,7 @@ const bulkStatus = ref('');
 const filterDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
-const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing'>('profile-keys');
+const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing' | 'submissions'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
 // Profile and Ratings Publishing state
@@ -9608,7 +9619,9 @@ async function updateOnlineProfile() {
   }
   
   try {
-    const result = await (window as any).electronAPI.saveOnlineProfile(onlineProfile.value);
+    // Serialize reactive object before sending over IPC to avoid structured clone errors
+    const __payload = JSON.parse(JSON.stringify(onlineProfile.value));
+    const result = await (window as any).electronAPI.saveOnlineProfile(__payload);
     if (!result.success) {
       console.error('Failed to save profile:', result.error);
     }

@@ -6171,6 +6171,29 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Channel: online:submission:enqueue
+   * Enqueue a game submission event via OnlineProfileManager
+   */
+  ipcMain.handle('online:submission:enqueue', async (event, { submission } = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      if (!currentProfileId) {
+        return { success: false, error: 'No current profile found' };
+      }
+      const result = await profileManager.publishGameSubmission(currentProfileId, submission || {});
+      return result;
+    } catch (error) {
+      console.error('Error enqueuing game submission:', error);
+      return { success: false, error: error.message };
+    }
+  });
   /**
    * Export encryption key (password-encrypted backup)
    * Channel: online:encryption-key:export

@@ -1729,3 +1729,11 @@ and try to have a similar module system
 ### Notes
 - Auto-publish behavior is persisted but not yet auto-triggered; will be wired in a subsequent update.
 
+### Planned follow-ups (deferred)
+- Clear Completed UI: add age filter (1d/7d/30d/custom) and stage selector (store_out/cache_out).
+- Queue row hover chip: surface last-attempt summary (success/fail counts, last relay/message).
+- Per-record action: “Retry last failed relays” using most recent failed relay set.
+- Surface history in other inspectors: Ratings and Trust views get “View Publish History”.
+- Close prompts: optional “Don’t ask again” toggle (persist to `csettings`) for Profile and Rating Sheet dialogs.
+- UX polish: toasts/progress for batch actions; clearer empty states in PublishHistory.
+

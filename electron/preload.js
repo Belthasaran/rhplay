@@ -911,6 +911,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Queue maintenance
   clearCompletedQueue: (params) => ipcRenderer.invoke('online:queue:clear-completed', params),
 
+  // Game submission
+  enqueueGameSubmission: (params) => ipcRenderer.invoke('online:submission:enqueue', params),
+
   // Ratings summaries (Nostr ingestion)
   ratings: {
     getSummaries: (gameId) => ipcRenderer.invoke('ratings:summaries:get', { gameId })

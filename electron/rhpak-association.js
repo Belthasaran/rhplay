@@ -56,7 +56,7 @@ function ensureWindowsRegistryKey(keyPath) {
 async function setRegistryValue(keyPath, name, type, value) {
   const key = await ensureWindowsRegistryKey(keyPath);
   return new Promise((resolve, reject) => {
-    key.set('"' + name + '"', type, '"' + value + '", (err) => {
+    key.set('"' + name + '"', type, '"' + value + '"', (err) => {
       if (err) reject(err);
       else resolve();
     });

@@ -111,13 +111,64 @@
 
       <!-- Trust Graph Visualization -->
       <section v-if="showTrustGraph && trustGraph.nodes.length > 0" class="trust-graph-section">
-        <h5>Trust Graph</h5>
+        <div class="graph-section-header">
+          <h5>Trust Graph</h5>
+          <div class="graph-header-controls">
+            <label>
+              <input
+                v-model="graphLayoutMode"
+                type="radio"
+                value="force"
+              />
+              Force-Directed
+            </label>
+            <label>
+              <input
+                v-model="graphLayoutMode"
+                type="radio"
+                value="hierarchical"
+              />
+              Hierarchical
+            </label>
+            <label>
+              <input
+                v-model="graphLayoutMode"
+                type="radio"
+                value="circular"
+              />
+              Circular
+            </label>
+            <label>
+              <input
+                v-model="showEdgeLabels"
+                type="checkbox"
+              />
+              Show Edge Labels
+            </label>
+            <label>
+              <input
+                v-model="showFullScreenGraph"
+                type="checkbox"
+              />
+              Full Screen
+            </label>
+          </div>
+        </div>
         <div class="graph-controls">
           <button class="btn-secondary" @click="resetGraphView">Reset View</button>
           <button class="btn-secondary" @click="zoomIn">Zoom In</button>
           <button class="btn-secondary" @click="zoomOut">Zoom Out</button>
+          <button class="btn-secondary" @click="centerGraph">Center</button>
+          <button class="btn-secondary" @click="applyLayout">Apply Layout</button>
+          <button class="btn-secondary" @click="expandSelectedNode" :disabled="!selectedNode">
+            Expand Node
+          </button>
         </div>
-        <div ref="graphContainer" class="graph-container">
+        <div 
+          ref="graphContainer" 
+          class="graph-container"
+          :class="{ 'fullscreen': showFullScreenGraph }"
+        >
           <svg
             :width="graphWidth"
             :height="graphHeight"
@@ -126,20 +177,59 @@
             @mousemove="handleMouseMove"
             @mouseup="handleMouseUp"
             @wheel.prevent="handleWheel"
+            @contextmenu.prevent="handleContextMenu"
           >
+            <!-- Background grid -->
+            <defs>
+              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e0e0e0" stroke-width="0.5"/>
+              </pattern>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="10"
+                refX="9"
+                refY="3"
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3, 0 6" fill="#999" />
+              </marker>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+            
             <!-- Edges (trust relationships) -->
             <g class="edges">
-              <line
+              <g
                 v-for="edge in trustGraph.edges"
                 :key="`${edge.from}-${edge.to}`"
-                :x1="getNodeX(edge.from)"
-                :y1="getNodeY(edge.from)"
-                :x2="getNodeX(edge.to)"
-                :y2="getNodeY(edge.to)"
-                class="edge"
-                :class="{ 'highlighted': highlightedNode === edge.from || highlightedNode === edge.to }"
-              />
+                class="edge-group"
+                :class="{ 
+                  'highlighted': highlightedNode === edge.from || highlightedNode === edge.to,
+                  'selected-path': isEdgeInSelectedPath(edge)
+                }"
+              >
+                <line
+                  :x1="getNodeX(edge.from)"
+                  :y1="getNodeY(edge.from)"
+                  :x2="getNodeX(edge.to)"
+                  :y2="getNodeY(edge.to)"
+                  class="edge"
+                  :stroke-width="getEdgeWidth(edge)"
+                  @mouseenter="highlightedEdge = edge"
+                  @mouseleave="highlightedEdge = null"
+                />
+                <text
+                  v-if="showEdgeLabels && getEdgeLabel(edge)"
+                  :x="(getNodeX(edge.from) + getNodeX(edge.to)) / 2"
+                  :y="(getNodeY(edge.from) + getNodeY(edge.to)) / 2 - 5"
+                  class="edge-label"
+                  text-anchor="middle"
+                >
+                  {{ getEdgeLabel(edge) }}
+                </text>
+              </g>
             </g>
+            
             <!-- Nodes (public keys) -->
             <g class="nodes">
               <g
@@ -147,24 +237,57 @@
                 :key="node.id"
                 :transform="`translate(${getNodeX(node.id)}, ${getNodeY(node.id)})`"
                 class="node-group"
-                @mouseenter="highlightedNode = node.id"
-                @mouseleave="highlightedNode = null"
+                :class="{
+                  'highlighted': highlightedNode === node.id,
+                  'selected': selectedNode === node.id,
+                  'inspected': node.id === inspectedPubkey,
+                  'expanded': expandedNodes.has(node.id)
+                }"
+                @mouseenter="handleNodeHover(node.id)"
+                @mouseleave="handleNodeLeave"
                 @click="selectNode(node.id)"
+                @dblclick="expandNode(node.id)"
               >
+                <!-- Node circle with glow effect -->
+                <circle
+                  :r="node.radius"
+                  class="node-glow"
+                  :fill="getNodeColor(node)"
+                  opacity="0.3"
+                />
                 <circle
                   :r="node.radius"
                   :class="['node', { 'selected': selectedNode === node.id, 'inspected': node.id === inspectedPubkey }]"
                   :fill="getNodeColor(node)"
                 />
-                <text
+                <!-- Node icon/indicator -->
+                <circle
+                  v-if="node.id === inspectedPubkey"
+                  r="4"
+                  fill="white"
+                  class="node-center"
+                />
+                <!-- Node label background -->
+                <rect
+                  v-if="showNodeLabels"
+                  x="-40"
                   y="25"
+                  width="80"
+                  height="30"
+                  rx="4"
+                  class="node-label-bg"
+                />
+                <text
+                  v-if="showNodeLabels"
+                  y="40"
                   text-anchor="middle"
                   class="node-label"
                 >
                   {{ formatPubkey(node.id) }}
                 </text>
                 <text
-                  y="40"
+                  v-if="showNodeLabels"
+                  y="55"
                   text-anchor="middle"
                   class="node-trust-level"
                 >
@@ -172,10 +295,66 @@
                 </text>
               </g>
             </g>
+            
+            <!-- Tooltip -->
+            <g
+              v-if="tooltipNode"
+              :transform="`translate(${tooltipX}, ${tooltipY})`"
+              class="tooltip-group"
+            >
+              <rect
+                x="-80"
+                y="-50"
+                width="160"
+                height="80"
+                rx="4"
+                class="tooltip-bg"
+              />
+              <text y="-30" text-anchor="middle" class="tooltip-title">
+                {{ formatPubkey(tooltipNode.id) }}
+              </text>
+              <text y="-15" text-anchor="middle" class="tooltip-text">
+                Trust Level: {{ tooltipNode.trust_level || 'N/A' }}
+              </text>
+              <text y="0" text-anchor="middle" class="tooltip-text">
+                Tier: {{ tooltipNode.trust_tier || 'N/A' }}
+              </text>
+              <text y="15" text-anchor="middle" class="tooltip-text">
+                Connections: {{ getNodeConnectionCount(tooltipNode.id) }}
+              </text>
+            </g>
           </svg>
         </div>
+        
+        <!-- Graph Legend -->
+        <div class="graph-legend">
+          <div class="legend-item">
+            <div class="legend-color inspected"></div>
+            <span>Inspected Key</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color selected"></div>
+            <span>Selected</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color trusted"></div>
+            <span>Trusted</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color verified"></div>
+            <span>Verified</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color default"></div>
+            <span>Other</span>
+          </div>
+        </div>
+        
         <div v-if="selectedNode" class="node-details">
-          <h6>Selected Node Details</h6>
+          <div class="node-details-header">
+            <h6>Selected Node Details</h6>
+            <button class="btn-link" @click="selectedNode = null">Clear</button>
+          </div>
           <div class="details-grid">
             <div>
               <label>Public Key</label>
@@ -189,6 +368,15 @@
               <label>Trust Tier</label>
               <span>{{ getNodeData(selectedNode)?.trust_tier || 'N/A' }}</span>
             </div>
+            <div>
+              <label>Connections</label>
+              <span>{{ getNodeConnectionCount(selectedNode) }} ({{ getIncomingCount(selectedNode) }} in, {{ getOutgoingCount(selectedNode) }} out)</span>
+            </div>
+          </div>
+          <div class="node-actions">
+            <button class="btn-secondary" @click="expandNode(selectedNode)">Expand Connections</button>
+            <button class="btn-secondary" @click="inspectNode(selectedNode)">Inspect This Key</button>
+            <button class="btn-secondary" @click="highlightPath(selectedNode)">Highlight Path</button>
           </div>
         </div>
       </section>
@@ -249,7 +437,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 
 type TrustData = {
   pubkey: string;
@@ -315,6 +503,17 @@ const isDragging = ref(false);
 const dragStart = ref({ x: 0, y: 0 });
 const highlightedNode = ref<string | null>(null);
 const selectedNode = ref<string | null>(null);
+const highlightedEdge = ref<GraphEdge | null>(null);
+const tooltipNode = ref<GraphNode | null>(null);
+const tooltipX = ref(0);
+const tooltipY = ref(0);
+const showNodeLabels = ref(true);
+const showEdgeLabels = ref(false);
+const showFullScreenGraph = ref(false);
+const graphLayoutMode = ref<'force' | 'hierarchical' | 'circular'>('force');
+const expandedNodes = reactive(new Set<string>());
+const selectedPath = ref<string[]>([]);
+const edgeData = reactive(new Map<string, { trust_level?: string; scope?: any }>());
 
 watch(() => props.initialPubkey, (newPubkey) => {
   if (newPubkey) {
@@ -390,13 +589,14 @@ function buildTrustGraph(data: TrustData) {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const nodeMap = new Map<string, GraphNode>();
+  edgeData.clear();
 
   // Add the inspected node
   const inspectedNode: GraphNode = {
     id: inspectedPubkey.value,
     trust_level: data.trust_level ?? null,
     trust_tier: data.trust_tier ?? null,
-    radius: 20
+    radius: 24
   };
   nodes.push(inspectedNode);
   nodeMap.set(inspectedPubkey.value, inspectedNode);
@@ -412,7 +612,7 @@ function buildTrustGraph(data: TrustData) {
           id: issuer,
           trust_level: null,
           trust_tier: null,
-          radius: 15
+          radius: 18
         };
         nodes.push(node);
         nodeMap.set(issuer, node);
@@ -423,43 +623,89 @@ function buildTrustGraph(data: TrustData) {
           id: subject,
           trust_level: null,
           trust_tier: null,
-          radius: 15
+          radius: 18
         };
         nodes.push(node);
         nodeMap.set(subject, node);
       }
 
       if (issuer && subject) {
+        const edgeKey = `${issuer}-${subject}`;
         edges.push({ from: issuer, to: subject });
+        
+        // Store edge metadata
+        const trustLevel = extractTrustLevel(decl);
+        const scope = extractScopeObject(decl);
+        edgeData.set(edgeKey, {
+          trust_level: trustLevel || undefined,
+          scope
+        });
       }
     });
   }
 
-  // Layout nodes in a circle
-  const centerX = graphWidth.value / 2;
-  const centerY = graphHeight.value / 2;
-  const radius = Math.min(graphWidth.value, graphHeight.value) / 3;
-  
-  nodes.forEach((node, index) => {
-    const angle = (2 * Math.PI * index) / nodes.length;
-    node.x = centerX + radius * Math.cos(angle);
-    node.y = centerY + radius * Math.sin(angle);
-  });
+  // Apply layout based on selected mode
+  applyLayoutToNodes(nodes);
 
   trustGraph.nodes = nodes;
   trustGraph.edges = edges;
 }
 
+function applyLayoutToNodes(nodes: GraphNode[]) {
+  const centerX = graphWidth.value / 2;
+  const centerY = graphHeight.value / 2;
+  
+  if (graphLayoutMode.value === 'circular') {
+    const radius = Math.min(graphWidth.value, graphHeight.value) / 3;
+    nodes.forEach((node, index) => {
+      const angle = (2 * Math.PI * index) / nodes.length;
+      node.x = centerX + radius * Math.cos(angle);
+      node.y = centerY + radius * Math.sin(angle);
+    });
+  } else if (graphLayoutMode.value === 'hierarchical') {
+    // Hierarchical layout: inspected node at top, others below
+    const inspected = nodes.find(n => n.id === inspectedPubkey.value);
+    if (inspected) {
+      inspected.x = centerX;
+      inspected.y = 100;
+    }
+    
+    const others = nodes.filter(n => n.id !== inspectedPubkey.value);
+    const cols = Math.ceil(Math.sqrt(others.length));
+    const spacing = Math.min(graphWidth.value / (cols + 1), 150);
+    const rowHeight = 120;
+    
+    others.forEach((node, index) => {
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      node.x = spacing * (col + 1);
+      node.y = 250 + row * rowHeight;
+    });
+  } else {
+    // Force-directed: start with circular, will be improved with physics simulation
+    const radius = Math.min(graphWidth.value, graphHeight.value) / 3;
+    nodes.forEach((node, index) => {
+      const angle = (2 * Math.PI * index) / nodes.length;
+      node.x = centerX + radius * Math.cos(angle) + (Math.random() - 0.5) * 50;
+      node.y = centerY + radius * Math.sin(angle) + (Math.random() - 0.5) * 50;
+    });
+  }
+}
+
+function applyLayout() {
+  applyLayoutToNodes(trustGraph.nodes);
+}
+
 function getNodeX(nodeId: string): number {
   const node = trustGraph.nodes.find(n => n.id === nodeId);
   if (!node || node.x === undefined) return graphWidth.value / 2;
-  return (node.x + graphPanX.value) * graphZoom.value;
+  return node.x * graphZoom.value + graphPanX.value;
 }
 
 function getNodeY(nodeId: string): number {
   const node = trustGraph.nodes.find(n => n.id === nodeId);
   if (!node || node.y === undefined) return graphHeight.value / 2;
-  return (node.y + graphPanY.value) * graphZoom.value;
+  return node.y * graphZoom.value + graphPanY.value;
 }
 
 function getNodeColor(node: GraphNode): string {
@@ -510,6 +756,13 @@ function handleMouseMove(event: MouseEvent) {
     graphPanX.value = event.clientX - dragStart.value.x;
     graphPanY.value = event.clientY - dragStart.value.y;
   }
+  
+  // Update tooltip position
+  if (tooltipNode.value && graphContainer.value) {
+    const rect = graphContainer.value.getBoundingClientRect();
+    tooltipX.value = event.clientX - rect.left;
+    tooltipY.value = event.clientY - rect.top;
+  }
 }
 
 function handleMouseUp() {
@@ -518,8 +771,181 @@ function handleMouseUp() {
 
 function handleWheel(event: WheelEvent) {
   const delta = event.deltaY > 0 ? 0.9 : 1.1;
-  graphZoom.value = Math.max(0.5, Math.min(3, graphZoom.value * delta));
+  const oldZoom = graphZoom.value;
+  const newZoom = Math.max(0.5, Math.min(3, graphZoom.value * delta));
+  
+  if (oldZoom === newZoom) return;
+  
+  // Adjust pan to zoom towards mouse position
+  const rect = (event.currentTarget as SVGElement).getBoundingClientRect();
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
+  
+  // Convert mouse position to graph coordinates
+  const graphX = (mouseX - graphPanX.value) / oldZoom;
+  const graphY = (mouseY - graphPanY.value) / oldZoom;
+  
+  // Update zoom
+  graphZoom.value = newZoom;
+  
+  // Adjust pan so the point under the mouse stays in place
+  graphPanX.value = mouseX - graphX * newZoom;
+  graphPanY.value = mouseY - graphY * newZoom;
 }
+
+function handleNodeHover(nodeId: string) {
+  highlightedNode.value = nodeId;
+  const node = trustGraph.nodes.find(n => n.id === nodeId);
+  if (node) {
+    tooltipNode.value = node;
+  }
+}
+
+function handleNodeLeave() {
+  highlightedNode.value = null;
+  tooltipNode.value = null;
+}
+
+function handleContextMenu(event: MouseEvent) {
+  // Could add context menu for node actions
+  event.preventDefault();
+}
+
+function getEdgeWidth(edge: GraphEdge): number {
+  if (highlightedEdge.value === edge || isEdgeInSelectedPath(edge)) {
+    return 4;
+  }
+  if (highlightedNode.value === edge.from || highlightedNode.value === edge.to) {
+    return 3;
+  }
+  return 2;
+}
+
+function getEdgeLabel(edge: GraphEdge): string | null {
+  const edgeKey = `${edge.from}-${edge.to}`;
+  const data = edgeData.get(edgeKey);
+  if (data?.trust_level) {
+    return data.trust_level;
+  }
+  return null;
+}
+
+function isEdgeInSelectedPath(edge: GraphEdge): boolean {
+  if (selectedPath.value.length < 2) return false;
+  for (let i = 0; i < selectedPath.value.length - 1; i++) {
+    if (selectedPath.value[i] === edge.from && selectedPath.value[i + 1] === edge.to) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getNodeConnectionCount(nodeId: string): number {
+  return trustGraph.edges.filter(e => e.from === nodeId || e.to === nodeId).length;
+}
+
+function getIncomingCount(nodeId: string): number {
+  return trustGraph.edges.filter(e => e.to === nodeId).length;
+}
+
+function getOutgoingCount(nodeId: string): number {
+  return trustGraph.edges.filter(e => e.from === nodeId).length;
+}
+
+function expandNode(nodeId: string) {
+  if (expandedNodes.has(nodeId)) {
+    expandedNodes.delete(nodeId);
+  } else {
+    expandedNodes.add(nodeId);
+    // Could load additional connections here
+  }
+}
+
+function expandSelectedNode() {
+  if (selectedNode.value) {
+    expandNode(selectedNode.value);
+  }
+}
+
+function inspectNode(nodeId: string) {
+  inspectedPubkey.value = nodeId;
+  loadTrustGraph();
+}
+
+function highlightPath(nodeId: string) {
+  // Find shortest path from inspected node to selected node
+  const path = findShortestPath(inspectedPubkey.value, nodeId);
+  selectedPath.value = path;
+}
+
+function findShortestPath(from: string, to: string): string[] {
+  if (from === to) return [from];
+  
+  const visited = new Set<string>();
+  const queue: Array<{ node: string; path: string[] }> = [{ node: from, path: [from] }];
+  
+  while (queue.length > 0) {
+    const { node, path } = queue.shift()!;
+    
+    if (node === to) {
+      return path;
+    }
+    
+    if (visited.has(node)) continue;
+    visited.add(node);
+    
+    // Find neighbors
+    const neighbors = trustGraph.edges
+      .filter(e => e.from === node || e.to === node)
+      .map(e => e.from === node ? e.to : e.from);
+    
+    for (const neighbor of neighbors) {
+      if (!visited.has(neighbor)) {
+        queue.push({ node: neighbor, path: [...path, neighbor] });
+      }
+    }
+  }
+  
+  return [];
+}
+
+function centerGraph() {
+  if (trustGraph.nodes.length === 0) return;
+  
+  // Calculate bounding box
+  const xs = trustGraph.nodes.map(n => n.x || 0);
+  const ys = trustGraph.nodes.map(n => n.y || 0);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  
+  // Center the graph
+  graphPanX.value = graphWidth.value / 2 - centerX * graphZoom.value;
+  graphPanY.value = graphHeight.value / 2 - centerY * graphZoom.value;
+}
+
+watch(() => showFullScreenGraph.value, (fullscreen) => {
+  if (fullscreen) {
+    graphWidth.value = window.innerWidth - 100;
+    graphHeight.value = window.innerHeight - 200;
+  } else {
+    graphWidth.value = 800;
+    graphHeight.value = 600;
+  }
+  nextTick(() => {
+    applyLayout();
+    centerGraph();
+  });
+});
+
+watch(() => graphLayoutMode.value, () => {
+  applyLayout();
+  centerGraph();
+});
 
 function formatPubkey(pubkey: string | null | undefined): string {
   if (!pubkey) return 'N/A';
@@ -775,6 +1201,19 @@ function extractPermissions(decl: any): Record<string, any> | null {
   border-radius: 4px;
   overflow: hidden;
   background: white;
+  position: relative;
+}
+
+.graph-container.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  border-radius: 0;
 }
 
 .trust-graph-svg {
@@ -786,14 +1225,45 @@ function extractPermissions(decl: any): Record<string, any> | null {
   cursor: grabbing;
 }
 
-.edge {
-  stroke: #ccc;
-  stroke-width: 2;
+.edge-group {
+  cursor: pointer;
 }
 
-.edge.highlighted {
+.edge {
+  stroke: #999;
+  stroke-width: 2;
+  fill: none;
+  marker-end: url(#arrowhead);
+  transition: stroke-width 0.2s, stroke 0.2s;
+}
+
+.edge-group.highlighted .edge {
   stroke: #1976d2;
   stroke-width: 3;
+}
+
+.edge-group.selected-path .edge {
+  stroke: #f57c00;
+  stroke-width: 4;
+  stroke-dasharray: 5,5;
+}
+
+.edge-label {
+  font-size: 10px;
+  fill: #666;
+  pointer-events: none;
+  background: white;
+  padding: 2px 4px;
+}
+
+.node-glow {
+  filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.node-group:hover .node-glow {
+  opacity: 0.5;
 }
 
 .node {
@@ -801,19 +1271,38 @@ function extractPermissions(decl: any): Record<string, any> | null {
   stroke: white;
   stroke-width: 2;
   cursor: pointer;
+  transition: r 0.2s, stroke-width 0.2s, fill 0.2s;
 }
 
-.node:hover {
+.node-group:hover .node {
   stroke-width: 3;
+  r: calc(var(--node-radius, 18) + 2);
 }
 
-.node.selected {
+.node-group.selected .node {
   stroke: #f57c00;
+  stroke-width: 4;
+  r: calc(var(--node-radius, 18) + 3);
+}
+
+.node-group.inspected .node {
+  fill: #1976d2;
+}
+
+.node-group.expanded .node {
+  stroke: #4caf50;
   stroke-width: 3;
 }
 
-.node.inspected {
-  fill: #1976d2;
+.node-center {
+  pointer-events: none;
+}
+
+.node-label-bg {
+  fill: rgba(255, 255, 255, 0.9);
+  stroke: var(--border-color, #ddd);
+  stroke-width: 1;
+  pointer-events: none;
 }
 
 .node-label {
@@ -828,6 +1317,103 @@ function extractPermissions(decl: any): Record<string, any> | null {
   pointer-events: none;
 }
 
+.tooltip-group {
+  pointer-events: none;
+}
+
+.tooltip-bg {
+  fill: rgba(0, 0, 0, 0.85);
+  stroke: #333;
+  stroke-width: 1;
+}
+
+.tooltip-title {
+  fill: white;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tooltip-text {
+  fill: #ccc;
+  font-size: 11px;
+}
+
+.graph-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.graph-section-header h5 {
+  margin: 0;
+}
+
+.graph-header-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.graph-header-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.graph-header-controls input[type="radio"],
+.graph-header-controls input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.graph-legend {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 4px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.legend-color.inspected {
+  background: #1976d2;
+}
+
+.legend-color.selected {
+  background: #f57c00;
+}
+
+.legend-color.trusted {
+  background: #2e7d32;
+}
+
+.legend-color.verified {
+  background: #1565c0;
+}
+
+.legend-color.default {
+  background: #757575;
+}
+
 .node-details {
   margin-top: 12px;
   padding: 12px;
@@ -836,8 +1422,36 @@ function extractPermissions(decl: any): Record<string, any> | null {
   border: 1px solid var(--border-color, #ddd);
 }
 
-.node-details h6 {
-  margin: 0 0 12px;
+.node-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.node-details-header h6 {
+  margin: 0;
+}
+
+.node-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-primary, #1976d2);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 12px;
+  padding: 0;
+}
+
+.btn-link:hover {
+  opacity: 0.8;
 }
 
 .details-grid {

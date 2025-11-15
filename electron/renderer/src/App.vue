@@ -10289,6 +10289,7 @@ async function submitTrustAssignmentForm() {
     if (!response?.success) {
       throw new Error(response?.error || 'Failed to create trust assignment');
     }
+    // Component will handle closing its own form via resetForm()
     showCreateTrustAssignmentForm.value = false;
     resetTrustAssignmentForm();
     await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
@@ -10593,6 +10594,97 @@ async function loadTrustDeclarationsList() {
   } catch (error) {
     console.error('Error loading trust declarations list:', error);
     trustDeclarationsList.value = [];
+  }
+}
+
+// Handler functions for TrustDeclarationsList component
+function handleTrustDeclarationSelect(uuid: string) {
+  selectTrustDeclaration(uuid);
+}
+
+async function handleTrustDeclarationAction(action: string, uuid?: string) {
+  if (uuid) {
+    selectedTrustDeclarationUuid.value = uuid;
+  }
+  
+  switch (action) {
+    case 'create':
+      showCreateTrustDeclarationModal.value = true;
+      break;
+    case 'import':
+      await importTrustDeclarationBackup();
+      break;
+    case 'view-edit':
+      await openTrustDeclarationDetailsModal();
+      break;
+    case 'sign':
+      await signTrustDeclaration();
+      break;
+    case 'publish':
+      await publishTrustDeclaration();
+      break;
+    case 'export':
+      await exportTrustDeclaration();
+      break;
+    case 'delete':
+      await deleteTrustDeclaration();
+      break;
+    case 'view-summary':
+      openTrustSummaryModal();
+      break;
+    case 'import-all':
+      await importTrustDeclarations();
+      break;
+    case 'export-all':
+      await exportAllTrustDeclarations();
+      break;
+  }
+}
+
+// Handler functions for TrustAssignmentsList component
+function handleTrustAssignmentsRefresh() {
+  loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+}
+
+function handleTrustAssignmentsFilterUpdate(filter: { pubkey?: string; scopeType?: string }) {
+  if (filter.pubkey !== undefined) {
+    trustAssignmentsFilter.pubkey = filter.pubkey;
+  }
+  if (filter.scopeType !== undefined) {
+    trustAssignmentsFilter.scopeType = filter.scopeType as any;
+  }
+}
+
+async function handleTrustAssignmentsAction(action: string, data?: any) {
+  switch (action) {
+    case 'create':
+      // Component handles showing the form internally
+      break;
+    case 'submit':
+      if (data) {
+        // Copy form data to our form state
+        trustAssignmentForm.subjectPubkey = data.subjectPubkey || '';
+        trustAssignmentForm.assignedLevel = data.assignedLevel || '';
+        trustAssignmentForm.trustLimit = data.trustLimit || '';
+        trustAssignmentForm.scopeType = data.scopeType || 'global';
+        trustAssignmentForm.scopeTarget = data.scopeTarget || '';
+        trustAssignmentForm.reason = data.reason || '';
+        trustAssignmentForm.expiresAt = data.expiresAt || '';
+        
+        // Submit using existing function
+        await submitTrustAssignmentForm();
+        
+        // Reset form in component after successful submission
+        if (trustAssignmentsListRef.value) {
+          (trustAssignmentsListRef.value as any).resetForm();
+        }
+      }
+      break;
+    case 'delete':
+      if (typeof data === 'number') {
+        await deleteTrustAssignment(data);
+      }
+      break;
   }
 }
 

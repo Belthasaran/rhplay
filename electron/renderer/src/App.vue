@@ -416,271 +416,28 @@
               <!-- Trust Declarations Tab -->
               <div v-if="onlineActiveTab === 'trust-declarations'" class="tab-content">
                 <div class="online-section">
-                  <h4>Trust Declarations</h4>
-                  <p class="admin-note">Trust declarations establish trust relationships between public keys. These can be preconfigured or learned from the network.</p>
-                  
-                  <!-- Trust Declarations List Widget -->
-                  <div class="keypairs-list-widget">
-                    <div class="keypairs-list-container">
-                      <table class="keypairs-table">
-                        <thead>
-                          <tr>
-                            <th style="width: 40px;"></th>
-                            <th>Issuing Key</th>
-                            <th>Subject Key</th>
-                            <th>Trust Level</th>
-                            <th>Valid From</th>
-                            <th>Valid To</th>
-                            <th>Status</th>
-                            <th>Publish Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr 
-                            v-for="decl in trustDeclarationsList" 
-                            :key="decl.declaration_uuid"
-                            :class="{ 'selected': selectedTrustDeclarationUuid === decl.declaration_uuid }"
-                            @click="selectTrustDeclaration(decl.declaration_uuid)"
-                          >
-                            <td @click.stop>
-                              <input 
-                                type="checkbox" 
-                                :checked="selectedTrustDeclarationUuid === decl.declaration_uuid"
-                                @change.stop="selectTrustDeclaration(decl.declaration_uuid)"
-                                @click.stop
-                              />
-                            </td>
-                            <td><code style="font-size: 10px;">{{ decl.signing_keypair_fingerprint ? decl.signing_keypair_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
-                            <td><code style="font-size: 10px;">{{ decl.target_keypair_fingerprint ? decl.target_keypair_fingerprint.substring(0, 16) + '...' : 'N/A' }}</code></td>
-                            <td>{{ getTrustLevelFromContent(decl) || 'N/A' }}</td>
-                            <td>{{ formatDate(decl.valid_from) }}</td>
-                            <td>{{ decl.valid_until ? formatDate(decl.valid_until) : 'No expiration' }}</td>
-                            <td>
-                              <span :class="getTrustDeclarationStatusClass(decl)">
-                                {{ decl.status || 'Draft' }}
-                              </span>
-                            </td>
-                            <td>
-                              <span
-                                :class="['publish-status-pill', getTrustDeclarationPublishStatusClass(decl)]"
-                                :title="getTrustDeclarationPublishStatusHint(decl) || ''"
-                              >
-                                {{ getTrustDeclarationPublishStatusLabel(decl) }}
-                              </span>
-                            </td>
-                          </tr>
-                          <tr v-if="trustDeclarationsList.length === 0">
-                            <td colspan="7" class="empty-message">No trust declarations found. Use the menu to create or import one.</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    
-                    <!-- Dropdown menu on the right -->
-                    <div class="keypairs-menu-container">
-                      <div class="dropdown-container">
-                        <button @click.stop="toggleTrustDeclarationActionDropdown" class="btn-secondary-small dropdown-toggle">
-                          Actions ▼
-                        </button>
-                        <div v-if="showTrustDeclarationActionDropdown" class="dropdown-menu" @click.stop>
-                          <button @click="showCreateTrustDeclarationModal = true; showTrustDeclarationActionDropdown = false" class="dropdown-item">Create New Declaration</button>
-                          <button @click="importTrustDeclarationBackup(); showTrustDeclarationActionDropdown = false" class="dropdown-item">Import Declaration</button>
-                          <div class="dropdown-divider"></div>
-                          <button 
-                            v-if="selectedTrustDeclarationUuid" 
-                            @click="openTrustDeclarationDetailsModal(); showTrustDeclarationActionDropdown = false" 
-                            class="dropdown-item"
-                          >
-                            View/Edit
-                          </button>
-                          <button 
-                            v-if="selectedTrustDeclarationUuid && canSignTrustDeclaration()" 
-                            @click="signTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
-                            class="dropdown-item"
-                          >
-                            Add Countersignature
-                          </button>
-                          <button 
-                            v-if="selectedTrustDeclarationUuid" 
-                            @click="publishTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
-                            class="dropdown-item"
-                          >
-                            Publish Declaration
-                          </button>
-                          <button 
-                            v-if="selectedTrustDeclarationUuid" 
-                            @click="exportTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
-                            class="dropdown-item"
-                          >
-                            Export Declaration
-                          </button>
-                          <button 
-                            v-if="selectedTrustDeclarationUuid" 
-                            @click="deleteTrustDeclaration(); showTrustDeclarationActionDropdown = false" 
-                            class="dropdown-item danger"
-                          >
-                            Delete Declaration
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                <div class="trust-declarations-actions">
-                  <button class="btn-secondary" @click="openTrustSummaryModal" :disabled="!onlinePrimaryPubkey">
-                    View Trust Summary
-                  </button>
-                  <button class="btn-secondary" @click="importTrustDeclarations">Import</button>
-                  <button class="btn-primary" @click="exportAllTrustDeclarations">Export All</button>
-                </div>
+                  <TrustDeclarationsList
+                    :declarations="trustDeclarationsList"
+                    :selected-uuid="selectedTrustDeclarationUuid"
+                    :primary-pubkey="onlinePrimaryPubkey"
+                    :can-sign="canSignTrustDeclaration()"
+                    @select="handleTrustDeclarationSelect"
+                    @action="handleTrustDeclarationAction"
+                  />
                 </div>
 
                 <div class="online-section trust-assignments-section">
-                  <h4>Manual Trust Assignments</h4>
-                  <p class="admin-note">
-                    Manual assignments can immediately adjust or cap a subject's verification level within a scope. They complement trust declarations for emergency actions or temporary limits.
-                  </p>
-
-                  <div class="trust-assignments-toolbar">
-                    <div class="toolbar-group">
-                      <label>
-                        Filter by pubkey
-                        <input
-                          v-model.trim="trustAssignmentsFilter.pubkey"
-                          type="text"
-                          placeholder="npub… or hex"
-                          @keyup.enter="loadTrustAssignmentsList(trustAssignmentsFilter.pubkey)"
-                        />
-                      </label>
-                      <label>
-                        Scope
-                        <select v-model="trustAssignmentsFilter.scopeType">
-                          <option value="all">All</option>
-                          <option value="global">Global</option>
-                          <option value="section">Section</option>
-                          <option value="channel">Channel</option>
-                          <option value="forum">Forum</option>
-                          <option value="game">Game</option>
-                          <option value="user">User</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div class="toolbar-actions">
-                      <button class="btn-secondary" :disabled="trustAssignmentsLoading" @click="loadTrustAssignmentsList(trustAssignmentsFilter.pubkey)">
-                        {{ trustAssignmentsLoading ? 'Loading…' : 'Refresh' }}
-                      </button>
-                      <button
-                        class="btn-primary"
-                        :disabled="!canManageTrustAssignments"
-                        @click="openCreateTrustAssignmentForm"
-                        title="Requires a profile with an active Nostr key"
-                      >
-                        New Assignment
-                      </button>
-                    </div>
-                  </div>
-
-                  <div v-if="trustAssignmentsError" class="error-message">
-                    {{ trustAssignmentsError }}
-                  </div>
-
-                  <p v-if="!canManageTrustAssignments" class="info-message">
-                    Select a profile with an active Nostr key to issue or revoke manual assignments.
-                  </p>
-
-                  <div v-if="showCreateTrustAssignmentForm" class="trust-assignment-form">
-                    <h5>Create Assignment</h5>
-                    <div class="form-grid">
-                      <label>
-                        Subject Public Key
-                        <input v-model.trim="trustAssignmentForm.subjectPubkey" type="text" placeholder="npub… or hex" />
-                      </label>
-                      <label>
-                        Assigned Trust Level
-                        <input v-model.trim="trustAssignmentForm.assignedLevel" type="number" min="-2" max="30" />
-                      </label>
-                      <label>
-                        Trust Limit (optional)
-                        <input v-model.trim="trustAssignmentForm.trustLimit" type="number" min="-2" max="30" />
-                      </label>
-                      <label>
-                        Scope Type
-                        <select v-model="trustAssignmentForm.scopeType">
-                          <option value="global">Global</option>
-                          <option value="section">Section</option>
-                          <option value="channel">Channel</option>
-                          <option value="forum">Forum</option>
-                          <option value="game">Game</option>
-                          <option value="user">User</option>
-                        </select>
-                      </label>
-                      <label v-if="trustAssignmentForm.scopeType !== 'global'">
-                        Scope Target
-                        <input v-model.trim="trustAssignmentForm.scopeTarget" type="text" placeholder="e.g. kaizo" />
-                      </label>
-                      <label>
-                        Reason (optional)
-                        <input v-model.trim="trustAssignmentForm.reason" type="text" placeholder="Internal note" />
-                      </label>
-                      <label>
-                        Expires At (optional)
-                        <input v-model="trustAssignmentForm.expiresAt" type="datetime-local" />
-                      </label>
-                    </div>
-                    <div class="form-actions">
-                      <button class="btn-secondary" @click="closeCreateTrustAssignmentForm" :disabled="submittingTrustAssignment">
-                        Cancel
-                      </button>
-                      <button class="btn-primary" @click="submitTrustAssignmentForm" :disabled="submittingTrustAssignment">
-                        {{ submittingTrustAssignment ? 'Saving…' : 'Save Assignment' }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="trust-assignments-table-wrapper">
-                    <table class="trust-assignments-table">
-                      <thead>
-                        <tr>
-                          <th>Subject</th>
-                          <th>Level</th>
-                          <th>Limit</th>
-                          <th>Scope</th>
-                          <th>Assigned By</th>
-                          <th>Expires</th>
-                          <th>Source</th>
-                          <th>Reason</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-if="trustAssignmentsLoading">
-                          <td colspan="9" class="empty-message">Loading assignments…</td>
-                        </tr>
-                        <tr v-else-if="filteredTrustAssignments.length === 0">
-                          <td colspan="9" class="empty-message">No assignments found.</td>
-                        </tr>
-                        <tr v-else v-for="row in filteredTrustAssignments" :key="row.assignment_id">
-                          <td><code class="mono">{{ row.pubkey }}</code></td>
-                          <td>{{ row.assigned_trust_level ?? '—' }}</td>
-                          <td>{{ row.trust_limit ?? '—' }}</td>
-                          <td>{{ formatAssignmentScope(row.scope) }}</td>
-                          <td><code class="mono">{{ row.assigned_by_pubkey || '—' }}</code></td>
-                          <td>{{ formatUnixTimestamp(row.expires_at) }}</td>
-                          <td>{{ row.source || 'manual' }}</td>
-                          <td>{{ row.reason || '—' }}</td>
-                          <td class="actions">
-                            <button
-                              class="btn-link danger"
-                              :disabled="deletingTrustAssignmentIds.has(row.assignment_id) || !canManageTrustAssignments"
-                              @click="deleteTrustAssignment(row.assignment_id)"
-                            >
-                              {{ deletingTrustAssignmentIds.has(row.assignment_id) ? 'Removing…' : 'Revoke' }}
-                            </button>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <TrustAssignmentsList
+                    :assignments="trustAssignments"
+                    :loading="trustAssignmentsLoading"
+                    :error="trustAssignmentsError"
+                    :can-manage="canManageTrustAssignments"
+                    :filter="trustAssignmentsFilter"
+                    @refresh="handleTrustAssignmentsRefresh"
+                    @action="handleTrustAssignmentsAction"
+                    @update-filter="handleTrustAssignmentsFilterUpdate"
+                    ref="trustAssignmentsListRef"
+                  />
                 </div>
               </div>
               <!-- End Trust Declarations Tab -->
@@ -7147,6 +6904,8 @@ import {
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
+import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
+import TrustAssignmentsList from './components/trust/TrustAssignmentsList.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -8650,6 +8409,7 @@ const trustDeclarationDetailsTab = ref('summary');
 const localTrustOverride = ref(false);
 const trustSummaryModalOpen = ref(false);
 const trustSummaryModalRef = ref<InstanceType<typeof TrustSummaryModal> | null>(null);
+const trustAssignmentsListRef = ref<InstanceType<typeof TrustAssignmentsList> | null>(null);
 
 const trustAssignments = ref<TrustAssignmentRow[]>([]);
 const trustAssignmentsLoading = ref(false);

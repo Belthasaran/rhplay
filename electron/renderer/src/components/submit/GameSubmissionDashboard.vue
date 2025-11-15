@@ -15,8 +15,10 @@
     <div v-else class="wizard">
       <div class="steps">
         <button :class="['step', { active: step===1 }]" @click="step=1">1. Files</button>
-        <button :class="['step', { active: step===2 }]" @click="step=2">2. Metadata</button>
-        <button :class="['step', { active: step===3 }]" @click="step=3">3. Review & Submit</button>
+        <button :class="['step', { active: step===2 }]" @click="step=2">2. Listing</button>
+        <button :class="['step', { active: step===3 }]" @click="step=3">3. Description</button>
+        <button :class="['step', { active: step===4 }]" @click="step=4">4. Notes</button>
+        <button :class="['step', { active: step===5 }]" @click="step=5">5. Review & Submit</button>
       </div>
 
       <div v-if="step===1" class="panel">
@@ -46,15 +48,45 @@
       </div>
 
       <div v-if="step===2" class="panel">
-        <h4>Metadata</h4>
+        <h4>Listing</h4>
         <div class="grid">
           <div class="field">
             <label>Name *</label>
             <input v-model.trim="current.meta.name" class="input" placeholder="Game name" />
           </div>
           <div class="field">
-            <label>Exit Count</label>
+            <label>Version *</label>
+            <input v-model.number="current.meta.version" class="input" type="number" min="1" />
+          </div>
+          <div class="field">
+            <label>Based Against</label>
+            <input class="input" value="SMW" disabled />
+          </div>
+          <div class="field">
+            <label>Length (exits)</label>
             <input v-model.number="current.meta.length" class="input" type="number" min="0" />
+            <div class="hint">Standard: use exit count (e.g., "Length: 5 exit(s)"). Non-standard lengths require moderator approval.</div>
+          </div>
+          <div class="field">
+            <label>Demo</label>
+            <select v-model="current.meta.demo" class="input">
+              <option :value="false">No</option>
+              <option :value="true">Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>SA-1</label>
+            <select v-model="current.meta.sa1" class="input">
+              <option :value="false">No</option>
+              <option :value="true">Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Collab</label>
+            <select v-model="current.meta.collab" class="input">
+              <option :value="false">No</option>
+              <option :value="true">Yes</option>
+            </select>
           </div>
           <div class="field">
             <label>Difficulty</label>
@@ -74,6 +106,20 @@
               <label v-for="t in typeOptions" :key="t"><input type="checkbox" :value="t" v-model="current.meta.types" /> {{ t }}</label>
             </div>
           </div>
+          <div class="field full">
+            <label>Warnings</label>
+            <div class="chips">
+              <label v-for="w in warningsOptions" :key="w"><input type="checkbox" :value="w" v-model="current.meta.warnings" /> {{ w }}</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Info URL</label>
+            <input v-model.trim="current.meta.url" class="input" placeholder="https://example.com/info" />
+          </div>
+          <div class="field">
+            <label>Download URL</label>
+            <input v-model.trim="current.meta.download_url" class="input" placeholder="https://example.com/download" />
+          </div>
           <div class="field">
             <label>Author *</label>
             <input v-model.trim="current.meta.author" class="input" placeholder="Primary author" />
@@ -83,30 +129,49 @@
             <input v-model.trim="current.meta.authors" class="input" placeholder="Optional, comma-separated" />
           </div>
           <div class="field full">
-            <label>Description</label>
-            <textarea v-model="current.meta.description" class="textarea" rows="5" placeholder="Full description" />
-          </div>
-          <div class="field full">
             <label>Tags (comma-separated)</label>
             <input v-model.trim="current.meta.tags" class="input" placeholder="e.g. vanilla, cape, puzzle" />
-          </div>
-          <div class="field full">
-            <label>Submission Notes (to moderators)</label>
-            <textarea v-model="current.meta.submission_notes" class="textarea" rows="3" />
           </div>
         </div>
       </div>
 
       <div v-if="step===3" class="panel">
+        <h4>Description</h4>
+        <div class="grid">
+          <div class="field full">
+            <label>Description</label>
+            <textarea v-model="current.meta.description" class="textarea" rows="5" placeholder="Full description" />
+          </div>
+        </div>
+      </div>
+
+      <div v-if="step===4" class="panel">
+        <h4>Notes</h4>
+        <div class="grid">
+          <div class="field full">
+            <label>Submission Notes (to moderators)</label>
+            <textarea v-model="current.meta.submission_notes" class="textarea" rows="4" />
+          </div>
+        </div>
+      </div>
+
+      <div v-if="step===5" class="panel">
         <h4>Review</h4>
         <div class="review">
           <div><strong>Patch:</strong> <span class="mono">{{ current.files.patch?.name || '—' }}</span></div>
           <div><strong>Screenshots:</strong> {{ current.files.screenshots.length }}</div>
           <div><strong>Name:</strong> {{ current.meta.name || '—' }}</div>
+          <div><strong>Version:</strong> {{ current.meta.version || 1 }}</div>
           <div><strong>Author:</strong> {{ current.meta.author || '—' }}</div>
           <div><strong>Difficulty:</strong> {{ current.meta.difficulty || '—' }}</div>
           <div><strong>Types:</strong> {{ current.meta.types.join(', ') || '—' }}</div>
-          <div><strong>Exit Count:</strong> {{ current.meta.length ?? '—' }}</div>
+          <div><strong>Length:</strong> {{ current.meta.length != null ? (current.meta.length + ' exit(s)') : '—' }}</div>
+          <div><strong>Demo:</strong> {{ current.meta.demo ? 'Yes' : 'No' }}</div>
+          <div><strong>SA-1:</strong> {{ current.meta.sa1 ? 'Yes' : 'No' }}</div>
+          <div><strong>Collab:</strong> {{ current.meta.collab ? 'Yes' : 'No' }}</div>
+          <div><strong>Warnings:</strong> {{ (current.meta.warnings || []).join(', ') || '—' }}</div>
+          <div><strong>Info URL:</strong> {{ current.meta.url || '—' }}</div>
+          <div><strong>Download URL:</strong> {{ current.meta.download_url || '—' }}</div>
         </div>
         <div class="actions">
           <button class="btn" @click="submitNow" :disabled="!canSubmit">Submit & Publish</button>
@@ -126,6 +191,7 @@ type Draft = {
   files: { patch: PatchFile; screenshots: ShotFile[] };
   meta: {
     name: string;
+    version?: number | null;
     length?: number | null;
     difficulty?: number | null;
     types: string[];
@@ -134,22 +200,35 @@ type Draft = {
     description?: string;
     tags?: string;
     submission_notes?: string;
+    demo?: boolean;
+    sa1?: boolean;
+    collab?: boolean;
+    url?: string;
+    download_url?: string;
+    warnings?: string[];
   };
 };
 
 const typeOptions = ['Standard', 'Kaizo', 'Puzzle', 'Tool-Assisted', 'Pit'];
+const warningsOptions = [
+  'Suggestive Content or Language',
+  'Crude Content or Language',
+  'Possible Photosensitivity Triggers',
+  'Violence',
+  'Mature'
+];
 
-const step = ref<1|2|3>(1);
+const step = ref<1|2|3|4|5>(1);
 const current = ref<Draft | null>(null);
 
 const canSubmit = computed(() => {
   const c = current.value;
   if (!c) return false;
-  return !!(c.files.patch && c.meta.name && c.meta.author);
+  return !!(c.files.patch && c.meta.name && c.meta.author && (c.meta.version ?? 1) >= 1);
 });
 
 function newDraft() {
-  current.value = { files: { patch: null, screenshots: [] }, meta: { name: '', author: '', types: [] } };
+  current.value = { files: { patch: null, screenshots: [] }, meta: { name: '', author: '', types: [], version: 1, demo: false, sa1: false, collab: false, warnings: [] } };
   step.value = 1;
 }
 
@@ -243,7 +322,7 @@ async function submitNow() {
     const result = await api.enqueueGameSubmission({ submission });
     if (result?.success) {
       alert('Submission enqueued for publishing.');
-      step.value = 3;
+      step.value = 5;
     } else {
       alert(`Failed to enqueue submission: ${result?.error || 'Unknown error'}`);
     }

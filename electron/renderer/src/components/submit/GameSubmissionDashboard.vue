@@ -16,9 +16,10 @@
       <div class="steps">
         <button :class="['step', { active: step===1 }]" @click="step=1">1. Files</button>
         <button :class="['step', { active: step===2 }]" @click="step=2">2. Listing</button>
-        <button :class="['step', { active: step===3 }]" @click="step=3">3. Description</button>
-        <button :class="['step', { active: step===4 }]" @click="step=4">4. Notes</button>
-        <button :class="['step', { active: step===5 }]" @click="step=5">5. Review & Submit</button>
+        <button :class="['step', { active: step===3 }]" @click="step=3">3. Listing (More)</button>
+        <button :class="['step', { active: step===4 }]" @click="step=4">4. Description</button>
+        <button :class="['step', { active: step===5 }]" @click="step=5">5. Notes</button>
+        <button :class="['step', { active: step===6 }]" @click="step=6">6. Review & Submit</button>
       </div>
 
       <div v-if="step===1" class="panel">
@@ -106,6 +107,12 @@
               <label v-for="t in typeOptions" :key="t"><input type="checkbox" :value="t" v-model="current.meta.types" /> {{ t }}</label>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div v-if="step===3" class="panel">
+        <h4>Listing (More)</h4>
+        <div class="grid">
           <div class="field full">
             <label>Warnings</label>
             <div class="chips">
@@ -148,6 +155,17 @@
                   :title="'Add '+s"
                 >{{ s }}</li>
               </ul>
+              <div v-if="recommendedTags.length" class="selected-tags">
+                <span class="selected-label">Recommended:</span>
+                <button
+                  v-for="t in recommendedTags"
+                  :key="t"
+                  type="button"
+                  class="chip"
+                  @click="toggleTag(t)"
+                  :title="'Add '+t"
+                >{{ t }}</button>
+              </div>
               <div v-if="selectedTags.length" class="selected-tags">
                 <span class="selected-label">Selected:</span>
                 <button
@@ -159,13 +177,13 @@
                   :title="'Remove '+t"
                 >{{ t }} ✕</button>
               </div>
-              <div class="hint">Final value is saved as a comma-separated list. Prefer predefined tags to ensure consistent search/filtering.</div>
+              <div class="hint">Aim to include: Graphics & Music, Design Style, Theme, and Specialization tags when applicable.</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-if="step===3" class="panel">
+      <div v-if="step===4" class="panel">
         <h4>Description</h4>
         <div class="grid">
           <div class="field full">
@@ -175,7 +193,7 @@
         </div>
       </div>
 
-      <div v-if="step===4" class="panel">
+      <div v-if="step===5" class="panel">
         <h4>Notes</h4>
         <div class="grid">
           <div class="field full">
@@ -185,7 +203,7 @@
         </div>
       </div>
 
-      <div v-if="step===5" class="panel">
+      <div v-if="step===6" class="panel">
         <h4>Review</h4>
         <div class="review">
           <div><strong>Patch:</strong> <span class="mono">{{ current.files.patch?.name || '—' }}</span></div>
@@ -246,7 +264,7 @@ type Draft = {
   };
 };
 
-const typeOptions = ['Standard', 'Kaizo', 'Puzzle', 'Tool-Assisted', 'Pit'];
+const typeOptions = ['Standard', 'Kaizo', 'Troll', 'Puzzle', 'Tool-Assisted', 'Pit'];
 const warningsOptions = [
   'Suggestive Content or Language',
   'Crude Content or Language',
@@ -255,11 +273,29 @@ const warningsOptions = [
   'Mature'
 ];
 
-const step = ref<1|2|3|4|5>(1);
+const step = ref<1|2|3|4|5|6>(1);
 const current = ref<Draft | null>(null);
 const predefinedTags = ref<string[]>([]);
 const selectedTags = ref<string[]>([]);
 const newTag = ref<string>('');
+const recommendedTags = computed(() => {
+  const tags = new Set<string>();
+  const meta = current.value?.meta;
+  // basic recommendations from Types
+  if (meta?.types?.includes('Kaizo')) {
+    tags.add('kaizo');
+  }
+  if (meta?.types?.includes('Troll')) {
+    tags.add('troll');
+  }
+  // simple heuristics from description text
+  const desc = (meta?.description || '').toLowerCase();
+  if (desc.includes('chocolate')) tags.add('chocolate');
+  if (desc.includes('vanilla')) tags.add('vanilla');
+  // return only those not already selected and that exist in predefined list (when present)
+  return Array.from(tags)
+    .filter(t => !selectedTags.value.some(x => x.toLowerCase() === t.toLowerCase()));
+});
 const filteredSuggestions = computed(() => {
   const q = (newTag.value || '').toLowerCase();
   if (!q) return [];

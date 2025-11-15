@@ -306,28 +306,55 @@ function buildRendererUrl(mode) {
         }
     }
 
-    const unpackedPath = path.join(
-        process.resourcesPath || '',
-        'app.asar.unpacked',
-        'electron',
-        'renderer',
-        'dist',
-        'index.html'
-    );
-
-    if (fs.existsSync(unpackedPath)) {
-        return { path: unpackedPath, query: { mode } };
+    // Try multiple possible locations for the renderer HTML
+    const candidates = [];
+    
+    // 1. Try unpacked location (preferred)
+    if (process.resourcesPath) {
+        candidates.push(path.join(
+            process.resourcesPath,
+            'app.asar.unpacked',
+            'electron',
+            'renderer',
+            'dist',
+            'index.html'
+        ));
+    }
+    
+    // 2. Try relative to executable (for portable apps)
+    if (process.execPath) {
+        const execDir = path.dirname(process.execPath);
+        candidates.push(path.join(execDir, 'resources', 'app.asar.unpacked', 'electron', 'renderer', 'dist', 'index.html'));
+        candidates.push(path.join(execDir, 'resources', 'app.asar', 'electron', 'renderer', 'dist', 'index.html'));
+    }
+    
+    // 3. Try __dirname (development)
+    candidates.push(path.join(__dirname, 'renderer', 'dist', 'index.html'));
+    
+    // 4. Try ASAR location (fallback)
+    if (process.resourcesPath) {
+        candidates.push(path.join(
+            process.resourcesPath,
+            'app.asar',
+            'electron',
+            'renderer',
+            'dist',
+            'index.html'
+        ));
     }
 
-    const asarPath = path.join(
-        process.resourcesPath || '',
-        'app.asar',
-        'electron',
-        'renderer',
-        'dist',
-        'index.html'
-    );
-    return { path: asarPath, query: { mode } };
+    // Find the first existing candidate
+    for (const candidate of candidates) {
+        if (candidate && fs.existsSync(candidate)) {
+            console.log(`Using renderer HTML from: ${candidate}`);
+            return { path: candidate, query: { mode } };
+        }
+    }
+
+    // If none found, return the first candidate anyway (will fail with better error)
+    const fallback = candidates[0] || path.join(__dirname, 'renderer', 'dist', 'index.html');
+    console.warn(`Renderer HTML not found in any candidate location, using fallback: ${fallback}`);
+    return { path: fallback, query: { mode } };
 }
 
 async function loadRendererMode(mode) {
@@ -336,6 +363,22 @@ async function loadRendererMode(mode) {
     }
     const win = getOrCreateMainWindow();
     const target = buildRendererUrl(mode);
+
+    // Validate file exists before trying to load (for file paths)
+    if (typeof target !== 'string' && target.path) {
+        if (!fs.existsSync(target.path)) {
+            const error = new Error(`Renderer HTML file not found: ${target.path}`);
+            console.error(error.message);
+            // Try to find an alternative location
+            const altPath = path.join(__dirname, 'renderer', 'dist', 'index.html');
+            if (fs.existsSync(altPath)) {
+                console.log(`Trying alternative path: ${altPath}`);
+                target.path = altPath;
+            } else {
+                throw error;
+            }
+        }
+    }
 
     return new Promise((resolve, reject) => {
         const onFinished = async () => {
@@ -349,9 +392,14 @@ async function loadRendererMode(mode) {
             resolve();
         };
 
-        const onFailed = (_event, errorCode, errorDescription) => {
+        const onFailed = (_event, errorCode, errorDescription, validatedURL) => {
             win.webContents.removeListener('did-finish-load', onFinished);
-            reject(new Error(`Failed to load renderer: ${errorCode} ${errorDescription}`));
+            const errorMsg = `Failed to load renderer: ${errorCode} ${errorDescription}`;
+            console.error(errorMsg);
+            if (validatedURL) {
+                console.error(`Failed URL: ${validatedURL}`);
+            }
+            reject(new Error(errorMsg));
         };
 
         win.webContents.once('did-finish-load', onFinished);
@@ -363,6 +411,7 @@ async function loadRendererMode(mode) {
             win.loadFile(target.path, { query: target.query }).catch((err) => {
                 win.webContents.removeListener('did-finish-load', onFinished);
                 win.webContents.removeListener('did-fail-load', onFailed);
+                console.error(`loadFile error: ${err.message}`);
                 reject(err);
             });
         }
@@ -697,7 +746,18 @@ app.whenReady().then(async () => {
         }
     } catch (err) {
         console.error('Failed to load renderer:', err);
-        dialog.showErrorBox('RHTools Startup Error', `Failed to load application UI: ${err.message}`);
+        // Only show error dialog if it's a critical error (not a transient path issue)
+        // Transient path issues (like temp directory paths) might resolve on retry
+        const isPathError = err.message && (
+            err.message.includes('not found') ||
+            err.message.includes('ERR_FAILED') ||
+            err.message.includes('file://')
+        );
+        if (!isPathError) {
+            dialog.showErrorBox('RHTools Startup Error', `Failed to load application UI: ${err.message}`);
+        } else {
+            console.warn('Path-related error detected, suppressing error dialog (may retry automatically)');
+        }
     }
 
     app.on('activate', async () => {

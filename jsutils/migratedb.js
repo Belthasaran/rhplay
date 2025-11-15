@@ -86,6 +86,25 @@ function printUsage() {
     `  --help              Show this help text\n`);
 }
 
+function resolveRelativeAppData(...segments) {
+  const resolved = path.resolve(process.env("APPDATA"), ...segments);
+  // In packaged environment, try both asar and unpacked locations
+  if (!fs.existsSync(resolved) && process.resourcesPath) {
+    // Try unpacked location
+    const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', ...segments);
+    if (fs.existsSync(unpackedPath)) {
+      return unpackedPath;
+    }
+    // Try asar location
+    const asarPath = path.join(process.resourcesPath, 'app.asar', ...segments);
+    if (fs.existsSync(asarPath)) {
+      return asarPath;
+    }
+  }
+  return resolved;
+}
+
+
 function resolveRelative(...segments) {
   const resolved = path.resolve(ROOT, ...segments);
   // In packaged environment, try both asar and unpacked locations
@@ -855,12 +874,18 @@ function main() {
 
   const verbose = !!args.verbose;
 
-  const defaults = {
+  const defaults = (process.platform !== 'win32') ? {  
     rhdatadb: resolveRelative('electron', 'rhdata.db'),
     patchbindb: resolveRelative('electron', 'patchbin.db'),
     clientdata: resolveRelative('electron', 'clientdata.db'),
     resourcedb: resolveRelative('electron', 'resource.db'),
     screenshotdb: resolveRelative('electron', 'screenshot.db'),
+  } : {
+    rhdatadb: resolveRelativeAppData('electron', 'rhdata.db'),
+    patchbindb: resolveRelativeAppData('electron', 'patchbin.db'),
+    clientdata: resolveRelativeAppData('electron', 'clientdata.db'),
+    resourcedb: resolveRelativeAppData('electron', 'resource.db'),
+    screenshotdb: resolveRelativeAppData('electron', 'screenshot.db'),
   };
 
   const targets = {

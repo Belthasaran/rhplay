@@ -56,6 +56,18 @@
               >
                 Publishing Queue
               </button>
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'profile-publishing' }]"
+                @click="onlineActiveTab = 'profile-publishing'"
+              >
+                Profile Publishing
+              </button>
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'ratings-publishing' }]"
+                @click="onlineActiveTab = 'ratings-publishing'"
+              >
+                Ratings Publishing
+              </button>
             </div>
 
             <div class="online-dropdown-body">
@@ -467,6 +479,26 @@
               <!-- Publishing Queue Tab -->
               <div v-if="onlineActiveTab === 'publishing'" class="tab-content">
                 <PublishingQueueDashboard />
+              </div>
+
+              <!-- Profile Publishing Tab -->
+              <div v-if="onlineActiveTab === 'profile-publishing'" class="tab-content">
+                <ProfilePublishingDashboard
+                  :profile-info="profilePublishingInfo"
+                  :publish-status="profilePublishStatus"
+                  @create-profile="handleCreateProfile"
+                  @refresh-status="handleRefreshProfileStatus"
+                  @update-publish-status="handleUpdateProfilePublishStatus"
+                />
+              </div>
+
+              <!-- Ratings Publishing Tab -->
+              <div v-if="onlineActiveTab === 'ratings-publishing'" class="tab-content">
+                <RatingsPublishingDashboard
+                  :ratings="ratingsForPublishing"
+                  :loading="ratingsPublishingLoading"
+                  @view-details="handleViewRatingDetails"
+                />
               </div>
             </div>
           </div>
@@ -6930,6 +6962,8 @@ import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue'
 import TrustAssignmentsList from './components/trust/TrustAssignmentsList.vue';
 import RelayHealthDashboard from './components/relay/RelayHealthDashboard.vue';
 import PublishingQueueDashboard from './components/publish/PublishingQueueDashboard.vue';
+import ProfilePublishingDashboard from './components/publish/ProfilePublishingDashboard.vue';
+import RatingsPublishingDashboard from './components/publish/RatingsPublishingDashboard.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -7007,8 +7041,14 @@ const bulkStatus = ref('');
 const filterDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
-const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing'>('profile-keys');
+const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
+
+// Profile and Ratings Publishing state
+const profilePublishingInfo = ref<any>(null);
+const profilePublishStatus = ref<any>(null);
+const ratingsForPublishing = ref<any[]>([]);
+const ratingsPublishingLoading = ref(false);
 
 // Select dropdown state
 const selectDropdownOpen = ref(false);
@@ -12703,6 +12743,12 @@ watch(onlineActiveTab, (newTab) => {
   }
   if (newTab === 'trust-declarations' || newTab === 'trust-assignments') {
     loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
+  }
+  if (newTab === 'profile-publishing') {
+    loadProfilePublishingInfo();
+  }
+  if (newTab === 'ratings-publishing') {
+    loadRatingsForPublishing();
   }
 });
 
@@ -19763,6 +19809,77 @@ async function cancelRunFromStartup() {
     console.error('Error cancelling run:', error);
     alert('Error cancelling run');
   }
+}
+
+// Profile and Ratings Publishing functions
+async function loadProfilePublishingInfo() {
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api) return;
+
+    // Get current profile
+    const profileCheck = await api.checkProfileForPublishing();
+    if (profileCheck?.hasProfile) {
+      // Get profile details
+      const profile = onlineProfile.value;
+      if (profile) {
+        profilePublishingInfo.value = {
+          profileId: profile.profileId || profile.uuid,
+          username: profile.username,
+          displayName: profile.displayName || profile.displayname,
+          publicKey: profile.primaryKeypair?.publicKeyHex || profile.primaryKeypair?.publicKey,
+          hasNostrKeypair: profileCheck.hasNostrKeypair,
+          keypairType: profile.primaryKeypair?.type
+        };
+      }
+    } else {
+      profilePublishingInfo.value = null;
+    }
+
+    // Get publish status
+    const statusResult = await api.getProfilePublishStatus();
+    if (statusResult?.success) {
+      profilePublishStatus.value = statusResult.status;
+    }
+  } catch (error) {
+    console.error('Failed to load profile publishing info:', error);
+  }
+}
+
+async function loadRatingsForPublishing() {
+  ratingsPublishingLoading.value = true;
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api) return;
+
+    const result = await api.getRatingsForPublishing();
+    if (result?.success) {
+      ratingsForPublishing.value = result.ratings || [];
+    }
+  } catch (error) {
+    console.error('Failed to load ratings for publishing:', error);
+  } finally {
+    ratingsPublishingLoading.value = false;
+  }
+}
+
+function handleCreateProfile() {
+  // Open profile creation wizard
+  showProfileCreationWizard.value = true;
+}
+
+async function handleRefreshProfileStatus() {
+  await loadOnlineProfile();
+  await loadProfilePublishingInfo();
+}
+
+function handleUpdateProfilePublishStatus(status: any) {
+  profilePublishStatus.value = status;
+}
+
+function handleViewRatingDetails(rating: any) {
+  // Could open a modal or navigate to rating details
+  console.log('View rating details:', rating);
 }
 </script>
 

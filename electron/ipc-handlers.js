@@ -8142,6 +8142,264 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Channel: online:profile:publish-status
+   * Get profile publishing status including last published time and queue status
+   */
+  ipcMain.handle('online:profile:publish-status', async (event) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      
+      const profile = profileManager.getCurrentProfile();
+      if (!profile) {
+        return { success: true, status: null };
+      }
+      
+      const profileUuid = profile.profileId || profile.uuid;
+      if (!profileUuid) {
+        return { success: true, status: null };
+      }
+      
+      // Get queue summary for profile
+      const nostrDb = new NostrLocalDBManager({ logger: console });
+      await nostrDb.initialize();
+      
+      let queueStatus = null;
+      let lastPublished = null;
+      let eventId = null;
+      
+      try {
+        const summary = nostrDb.getEventQueueSummary('user_profiles', profileUuid);
+        if (summary && summary.attempts && summary.attempts.latest) {
+          lastPublished = summary.attempts.latest.attemptAt;
+          eventId = summary.attempts.latest.entries[0]?.eventId || null;
+        }
+        
+        // Check queue status
+        if (summary && summary.stages && summary.stages.length > 0) {
+          const cacheOutStage = summary.stages.find(s => s.stage === 'cache_out');
+          if (cacheOutStage && cacheOutStage.latest) {
+            queueStatus = cacheOutStage.latest.statusLabel || null;
+          }
+        }
+      } catch (error) {
+        console.warn('[online:profile:publish-status] Failed to get queue summary:', error.message);
+      } finally {
+        nostrDb.closeAll();
+      }
+      
+      return {
+        success: true,
+        status: {
+          lastPublished,
+          eventId,
+          queueStatus
+        }
+      };
+    } catch (error) {
+      console.error('Error getting profile publish status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:ratings:list-for-publishing
+   * Get list of user ratings with their publish status
+   */
+  ipcMain.handle('online:ratings:list-for-publishing', async (event) => {
+    try {
+      const clientdataDb = dbManager.getConnection('clientdata');
+      const nostrDb = new NostrLocalDBManager({ logger: console });
+      await nostrDb.initialize();
+      
+      // Get all user ratings
+      const ratings = clientdataDb.prepare(`
+        SELECT 
+          uga.gameid,
+          uga.user_difficulty_rating,
+          uga.user_review_rating,
+          uga.user_skill_rating,
+          uga.status,
+          uga.updated_at
+        FROM user_game_annotations uga
+        WHERE uga.user_difficulty_rating IS NOT NULL 
+           OR uga.user_review_rating IS NOT NULL
+           OR uga.user_skill_rating IS NOT NULL
+        ORDER BY uga.updated_at DESC
+      `).all();
+      
+      // Get game names from rhdata
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const ratingsWithNames = ratings.map(rating => {
+        const game = rhdataDb.prepare(`
+          SELECT name FROM gameversions 
+          WHERE gameid = ? AND version = (
+            SELECT MAX(version) FROM gameversions WHERE gameid = ?
+          )
+        `).get(rating.gameid, rating.gameid);
+        
+        let queueStatus = null;
+        let lastPublished = null;
+        let eventId = null;
+        
+        try {
+          const summary = nostrDb.getEventQueueSummary('user_game_annotations', rating.gameid);
+          if (summary && summary.attempts && summary.attempts.latest) {
+            lastPublished = summary.attempts.latest.attemptAt;
+            eventId = summary.attempts.latest.entries[0]?.eventId || null;
+          }
+          
+          if (summary && summary.stages && summary.stages.length > 0) {
+            const cacheOutStage = summary.stages.find(s => s.stage === 'cache_out');
+            if (cacheOutStage && cacheOutStage.latest) {
+              queueStatus = cacheOutStage.latest.statusLabel || null;
+            }
+          }
+        } catch (error) {
+          // Ignore errors for individual ratings
+        }
+        
+        return {
+          gameid: rating.gameid,
+          gameName: game?.name || null,
+          user_difficulty_rating: rating.user_difficulty_rating,
+          user_review_rating: rating.user_review_rating,
+          user_skill_rating: rating.user_skill_rating,
+          status: rating.status,
+          lastPublished,
+          queueStatus,
+          eventId
+        };
+      });
+      
+      nostrDb.closeAll();
+      
+      return { success: true, ratings: ratingsWithNames };
+    } catch (error) {
+      console.error('Error listing ratings for publishing:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:ratings:publish-batch
+   * Publish multiple ratings in batch
+   */
+  ipcMain.handle('online:ratings:publish-batch', async (event, { gameIds } = {}) => {
+    try {
+      if (!gameIds || !Array.isArray(gameIds) || gameIds.length === 0) {
+        return { success: false, error: 'gameIds array is required' };
+      }
+      
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      if (!currentProfileId) {
+        return { success: false, error: 'No current profile found' };
+      }
+      
+      const clientdataDb = dbManager.getConnection('clientdata');
+      const rhdataDb = dbManager.getConnection('rhdata');
+      
+      const results = [];
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const gameId of gameIds) {
+        try {
+          // Get rating data
+          const rating = clientdataDb.prepare(`
+            SELECT * FROM user_game_annotations WHERE gameid = ?
+          `).get(gameId);
+          
+          if (!rating) {
+            results.push({ gameId, success: false, error: 'Rating not found' });
+            errorCount++;
+            continue;
+          }
+          
+          // Get game info
+          const game = rhdataDb.prepare(`
+            SELECT name, gvuuid, version FROM gameversions 
+            WHERE gameid = ? AND version = (
+              SELECT MAX(version) FROM gameversions WHERE gameid = ?
+            )
+          `).get(gameId, gameId);
+          
+          // Prepare rating data
+          const ratingData = {
+            gameId,
+            gameName: game?.name || '',
+            gvUuid: game?.gvuuid || null,
+            version: game?.version || 1,
+            status: rating.status || 'Default',
+            ratings: {
+              user_difficulty_rating: rating.user_difficulty_rating ?? null,
+              user_review_rating: rating.user_review_rating ?? null,
+              user_skill_rating: rating.user_skill_rating ?? null,
+              user_skill_rating_when_beat: rating.user_skill_rating_when_beat ?? null,
+              user_recommendation_rating: rating.user_recommendation_rating ?? null,
+              user_importance_rating: rating.user_importance_rating ?? null,
+              user_technical_quality_rating: rating.user_technical_quality_rating ?? null,
+              user_gameplay_design_rating: rating.user_gameplay_design_rating ?? null,
+              user_originality_rating: rating.user_originality_rating ?? null,
+              user_visual_aesthetics_rating: rating.user_visual_aesthetics_rating ?? null,
+              user_story_rating: rating.user_story_rating ?? null,
+              user_soundtrack_graphics_rating: rating.user_soundtrack_graphics_rating ?? null
+            },
+            comments: {
+              user_difficulty_comment: rating.user_difficulty_comment || null,
+              user_skill_comment: rating.user_skill_comment || null,
+              user_skill_comment_when_beat: rating.user_skill_comment_when_beat || null,
+              user_review_comment: rating.user_review_comment || null,
+              user_recommendation_comment: rating.user_recommendation_comment || null,
+              user_importance_comment: rating.user_importance_comment || null,
+              user_technical_quality_comment: rating.user_technical_quality_comment || null,
+              user_gameplay_design_comment: rating.user_gameplay_design_comment || null,
+              user_originality_comment: rating.user_originality_comment || null,
+              user_visual_aesthetics_comment: rating.user_visual_aesthetics_comment || null,
+              user_story_comment: rating.user_story_comment || null,
+              user_soundtrack_graphics_comment: rating.user_soundtrack_graphics_comment || null
+            },
+            user_notes: rating.user_notes || null
+          };
+          
+          // Publish rating
+          const result = await profileManager.publishRatingsToNostr(currentProfileId, ratingData);
+          
+          if (result.success) {
+            results.push({ gameId, success: true, eventId: result.eventId });
+            successCount++;
+          } else {
+            results.push({ gameId, success: false, error: result.error });
+            errorCount++;
+          }
+        } catch (error) {
+          results.push({ gameId, success: false, error: error.message });
+          errorCount++;
+        }
+      }
+      
+      return {
+        success: true,
+        results,
+        summary: {
+          total: gameIds.length,
+          success: successCount,
+          errors: errorCount
+        }
+      };
+    } catch (error) {
+      console.error('Error publishing ratings batch:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('ratings:summaries:get', (_event, { gameId } = {}) => {
     if (!gameId) {
       return { success: false, error: 'gameId is required' };

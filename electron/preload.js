@@ -890,8 +890,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Check if user has profile and Nostr keypair for publishing
   checkProfileForPublishing: () => ipcRenderer.invoke('online:check-profile-for-publishing'),
   
+  // Get profile publish status
+  getProfilePublishStatus: () => ipcRenderer.invoke('online:profile:publish-status'),
+  
   // Publish ratings to Nostr as NIP-33 event
   publishRatingsToNostr: (params) => ipcRenderer.invoke('online:publish-ratings-to-nostr', params),
+
+  // Get list of ratings for publishing
+  getRatingsForPublishing: () => ipcRenderer.invoke('online:ratings:list-for-publishing'),
+
+  // Publish multiple ratings in batch
+  publishRatingsBatch: (params) => ipcRenderer.invoke('online:ratings:publish-batch', params),
 
   // Ratings summaries (Nostr ingestion)
   ratings: {

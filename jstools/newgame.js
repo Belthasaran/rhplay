@@ -133,8 +133,12 @@ const ALLOWED_DIFFICULTIES = [
   'Newcomer', 'Casual', 'Skilled', 'Advanced', 'Expert', 'Master', 'Grandmaster'
 ];
 
+const ALLOWED_RAW_DIFFICULTIES = [
+  'diff_1', 'diff_2', 'diff_3', 'diff_4', 'diff_5', 'diff_6', 'diff_7'
+];
+
 const DEFAULT_TYPES = [
-  'Standard', 'Kaizo', 'Puzzle', 'Tool-Assisted', 'Pit'
+  'Standard', 'Kaizo', 'Puzzle', 'Tool-Assisted', 'Pit', 'Troll'
 ];
 
 const DEFAULT_WARNINGS = [
@@ -1817,11 +1821,22 @@ async function runCreateWizard(filePath, skeleton) {
     gv.version = parseInt(await ask(rl, 'Version number', gv.version.toString()), 10) || 1;
     gv.section = await ask(rl, 'Section', gv.section || 'smwhacks');
     gv.based_against = await ask(rl, 'Based against', gv.based_against || 'SMW');
-    gv.gametype = await ask(rl, 'Game type / category', gv.gametype);
-    gv.fields_type = gv.gametype;
-    gv.type = await askChoice(rl, 'Type label', [...DEFAULT_TYPES, 'Custom'], gv.type || DEFAULT_TYPES[0]);
+
+    // For new games: gametype is actually  a field for their difficulty value.
+    //gv.gametype = await ask(rl, 'Game type / category', gv.gametype);
+
+    // fields_type is the new type field
+    gv.fields_type = await askChoice(rl, 'Type label', [...DEFAULT_TYPES, 'Custom'], gv.fields_type || DEFAULT_TYPES[0]);
+    gv.type = gv.fields_type
+    //gv.type = await askChoice(rl, 'Type label', [...DEFAULT_TYPES, 'Custom'], gv.type || DEFAULT_TYPES[0]);
+
     gv.difficulty = await askChoice(rl, 'Difficulty', ALLOWED_DIFFICULTIES, gv.difficulty || ALLOWED_DIFFICULTIES[0]);
+    gv.gametype = gv.difficulty;
+
+    // This SHOULD always be set to a diff_NN where NN is the index corresponding to the difficulty attribute between diff_1 and diff_7.
     gv.raw_difficulty = await ask(rl, 'Raw difficulty code (diff_N)', gv.raw_difficulty || `diff_${Math.min(ALLOWED_DIFFICULTIES.indexOf(gv.difficulty) + 1, 7)}`);
+
+    // Lenmgth of the game (usually specify in exits)
     gv.length = await ask(rl, 'Length (e.g. "12 exit(s)")', gv.length || '');
     gv.demo = await askChoice(rl, 'Demo (Yes/No)', ['Yes', 'No'], gv.demo || 'No');
     gv.sa1 = await askChoice(rl, 'SA-1 (Yes/No)', ['Yes', 'No'], gv.sa1 || 'No');
@@ -1835,6 +1850,8 @@ async function runCreateWizard(filePath, skeleton) {
     gv.name_href = await ask(rl, 'Name href (optional)', gv.name_href || '');
     gv.author_href = await ask(rl, 'Author href (optional)', gv.author_href || '');
     gv.obsoleted_by = await ask(rl, 'Obsoleted by (gameid)', gv.obsoleted_by || '');
+
+    // Description: multi-line text field
     const editDescriptionChoice = await askChoice(rl, 'Edit Description', ['Yes', 'No'], 'No');
     if (editDescriptionChoice.toLowerCase() === 'yes') {
       const editorResult = await editDescriptionWithEditor(gv.description || '');
@@ -1856,12 +1873,16 @@ async function runCreateWizard(filePath, skeleton) {
     const warningAnswer = await ask(rl, 'Warnings (comma separated)', (gv.warnings || []).join(', '), { allowEmpty: true });
     gv.warnings = warningAnswer ? warningAnswer.split(',').map((t) => t.trim()).filter(Boolean) : [];
 
+    // Specify screenshot files
     const screenshotAnswer = await ask(rl, 'Screenshots (comma separated paths or URLs)', (gv.screenshots || []).join(', '), { allowEmpty: true });
     gv.screenshots = screenshotAnswer ? screenshotAnswer.split(',').map((t) => t.trim()).filter(Boolean) : [];
 
+    // File names to be loaded and processed  later in the --prepare stage.
     gv.patch_local_path = pathToAbsolute(await ask(rl, 'Patch file path (.bps/.zip)', gv.patch_local_path || ''));
     gv.patch_filename = await ask(rl, 'Patch filename label', gv.patch_filename || path.basename(gv.patch_local_path || ''));
+    // Multi-line text: optional patch notes field
     gv.patch_notes = await ask(rl, 'Patch notes (optional)', gv.patch_notes || '');
+    // Multi-line text: optional submission notes intended for the reviewer.
     gv.submission_notes = await ask(rl, 'Submission notes (optional)', gv.submission_notes || '');
 
     skeleton.metadata.updated_at = new Date().toISOString();

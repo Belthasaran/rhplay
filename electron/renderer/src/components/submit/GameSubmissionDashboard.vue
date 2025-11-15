@@ -17,9 +17,10 @@
         <button :class="['step', { active: step===1 }]" @click="step=1">1. Files</button>
         <button :class="['step', { active: step===2 }]" @click="step=2">2. Listing</button>
         <button :class="['step', { active: step===3 }]" @click="step=3">3. Listing (More)</button>
-        <button :class="['step', { active: step===4 }]" @click="step=4">4. Description</button>
-        <button :class="['step', { active: step===5 }]" @click="step=5">5. Notes</button>
-        <button :class="['step', { active: step===6 }]" @click="step=6">6. Review & Submit</button>
+        <button :class="['step', { active: step===4 }]" @click="step=4">4. Tags</button>
+        <button :class="['step', { active: step===5 }]" @click="step=5">5. Description</button>
+        <button :class="['step', { active: step===6 }]" @click="step=6">6. Notes</button>
+        <button :class="['step', { active: step===7 }]" @click="step=7">7. Review & Submit</button>
       </div>
 
       <div v-if="step===1" class="panel">
@@ -135,8 +136,14 @@
             <label>Authors (comma-separated)</label>
             <input v-model.trim="current.meta.authors" class="input" placeholder="Optional, comma-separated" />
           </div>
+        </div>
+      </div>
+
+      <div v-if="step===4" class="panel">
+        <h4>Tags</h4>
+        <div class="grid">
           <div class="field full">
-            <label>Tags</label>
+            <label>Pick Tags</label>
             <div class="tag-picker">
               <div class="tag-input-row">
                 <input
@@ -177,13 +184,15 @@
                   :title="'Remove '+t"
                 >{{ t }} ✕</button>
               </div>
-              <div class="hint">Aim to include: Graphics & Music, Design Style, Theme, and Specialization tags when applicable.</div>
+              <div class="hint">
+                Aim to include at least: Graphics & Music, Design Style, Theme/Genre, and Specialization tags where applicable.
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div v-if="step===4" class="panel">
+      <div v-if="step===5" class="panel">
         <h4>Description</h4>
         <div class="grid">
           <div class="field full">
@@ -193,7 +202,7 @@
         </div>
       </div>
 
-      <div v-if="step===5" class="panel">
+      <div v-if="step===6" class="panel">
         <h4>Notes</h4>
         <div class="grid">
           <div class="field full">
@@ -203,7 +212,7 @@
         </div>
       </div>
 
-      <div v-if="step===6" class="panel">
+      <div v-if="step===7" class="panel">
         <h4>Review</h4>
         <div class="review">
           <div><strong>Patch:</strong> <span class="mono">{{ current.files.patch?.name || '—' }}</span></div>
@@ -273,7 +282,7 @@ const warningsOptions = [
   'Mature'
 ];
 
-const step = ref<1|2|3|4|5|6>(1);
+const step = ref<1|2|3|4|5|6|7>(1);
 const current = ref<Draft | null>(null);
 const predefinedTags = ref<string[]>([]);
 const selectedTags = ref<string[]>([]);

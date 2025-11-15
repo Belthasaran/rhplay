@@ -1,0 +1,171 @@
+{
+  "name": "SMW Tag Categories",
+  "children": [
+    {
+      "name": "Gameplay & Difficulty",
+      "children": [
+        {
+          "name": "Difficulty Levels",
+          "children": []
+        },
+        {
+          "name": "Gameplay Specializations",
+          "children": [
+            { "name": "Shell Techniques", "children": [] },
+            { "name": "Movement Techniques", "children": [] },
+            { "name": "Item & Power-Up Techniques", "children": [] },
+            { "name": "Precision & Speed", "children": [] }
+          ]
+        },
+        {
+          "name": "Core Mechanics",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Design & Structure",
+      "children": [
+        {
+          "name": "Level Design Philosophy",
+          "children": []
+        },
+        {
+          "name": "Level Structure",
+          "children": [
+            { "name": "Length & Size", "children": [] },
+            { "name": "World Organization", "children": [] },
+            { "name": "Level Types", "children": [] }
+          ]
+        },
+        {
+          "name": "Game Scope",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Content & Presentation",
+      "children": [
+        {
+          "name": "Graphics & Visual Style",
+          "children": [
+            { "name": "Custom Graphics", "children": [] },
+            { "name": "Visual Themes", "children": [] },
+            { "name": "Graphic Sources", "children": [] }
+          ]
+        },
+        {
+          "name": "Music & Audio",
+          "children": [
+            { "name": "Custom Audio", "children": [] },
+            { "name": "Audio Options", "children": [] }
+          ]
+        },
+        {
+          "name": "Themes & Genres",
+          "children": [
+            { "name": "Environmental Themes", "children": [] },
+            { "name": "Genre & Tone", "children": [] },
+            { "name": "Holiday & Special Events", "children": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Technical & Development",
+      "children": [
+        {
+          "name": "ASM & Programming",
+          "children": [
+            { "name": "Core Technical", "children": [] },
+            { "name": "Custom Features", "children": [] }
+          ]
+        },
+        {
+          "name": "Platform & Compatibility",
+          "children": []
+        },
+        {
+          "name": "Development Status",
+          "children": []
+        },
+        {
+          "name": "Special Technical",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Characters & Universe",
+      "children": [
+        {
+          "name": "Mario Universe",
+          "children": [
+            { "name": "Playable Characters", "children": [] },
+            { "name": "Enemies & Bosses", "children": [] }
+          ]
+        },
+        {
+          "name": "Nintendo Characters",
+          "children": [
+            { "name": "Core Nintendo", "children": [] },
+            { "name": "Pokemon", "children": [] }
+          ]
+        },
+        {
+          "name": "Crossovers & References",
+          "children": [
+            { "name": "Game Crossovers", "children": [] },
+            { "name": "Media References", "children": [] }
+          ]
+        },
+        {
+          "name": "Series & Sequels",
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "Community & Meta",
+      "children": [
+        {
+          "name": "Community Events",
+          "children": []
+        },
+        {
+          "name": "Creator Tags",
+          "children": [
+            { "name": "Individual Creators", "children": [] },
+            { "name": "Teams & Groups", "children": [] }
+          ]
+        },
+        {
+          "name": "Language & Localization",
+          "children": []
+        },
+        {
+          "name": "Content Ratings",
+          "children": [
+            { "name": "Maturity Warnings", "children": [] },
+            { "name": "Content Descriptors", "children": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Player Configuration",
+      "children": [
+        {
+          "name": "Player Count",
+          "children": []
+        },
+        {
+          "name": "Cooperative Modes",
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+

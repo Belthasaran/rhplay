@@ -1,0 +1,2422 @@
+{
+  "categoriesVersion": "revised_complete_v1",
+  "categoryPathConvention": "Major Category > Subcategory > (Optional) Sub-subcategory",
+  "tags": {
+    "1 or 2 players": [
+      "Player Configuration > Player Count"
+    ],
+    "1 world": [
+      "Design & Structure > Level Structure > World Organization",
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "2020": [
+      "Technical & Development > Development Status"
+    ],
+    "2021": [
+      "Technical & Development > Development Status"
+    ],
+    "8 bit": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics",
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "8-bit": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics",
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "8bit": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics",
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "a lenda do heroi": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "a special series": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "abilities": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "adult content": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "advanced": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "advanced kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "Advanced Kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "adventure": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "aeron": [
+      "Characters & Universe > Crossovers & References > Media References",
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "aesthetic": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics",
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "alex no": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "alfaoxtrot": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "alienbirthdayparty": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "all-stars": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "alpha shelltauri": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "alpha sphere": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "altered physics": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "alternate history": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "alternate physics": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "ambient": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "animal crossing": [
+      "Characters & Universe > Nintendo Characters > Core Nintendo"
+    ],
+    "animated": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "animation": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "anime": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "apple boy": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "art": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "asm": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "asm workshop": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "athletic": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "automatic": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "autosave": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "autumn": [
+      "Content & Presentation > Themes & Genres > Environmental Themes",
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "back": [
+      "Design & Structure > Level Structure"
+    ],
+    "background": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "ball": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "banana": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "base": [
+      "Design & Structure > Level Structure"
+    ],
+    "basic": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "bavario": [
+      "Characters & Universe > Series & Sequels",
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "beach": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "begginerfriendly": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "beginner": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "beginner friendly": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "beginner hack": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "beginner kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "beginners": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "bet": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "beta v1": [
+      "Technical & Development > Development Status"
+    ],
+    "beyond the worlds": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "big boo": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "birdo": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "birthday": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "blob": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "block": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "blocks": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "bloodborne": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "blue switch": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "bob-omb": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "body part": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "bomberman": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "bonus stage": [
+      "Design & Structure > Level Structure",
+      "Design & Structure > Level Structure > Level Types"
+    ],
+    "boomerang bro": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "boon": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "bootleg": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "boris": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "boss": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "boss battle": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "boss fight": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "boss rush": [
+      "Design & Structure > Level Structure",
+      "Design & Structure > Level Structure > Level Types"
+    ],
+    "bosses": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "bottawa": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "bounce": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "bouncing": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "bowser": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "bowser jr": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "bowser's": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "brasil": [
+      "Community & Meta > Language & Localization"
+    ],
+    "brazil": [
+      "Community & Meta > Language & Localization"
+    ],
+    "bunbun": [
+      "Characters & Universe > Series & Sequels",
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "bunbun 3": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "bunbun world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "bunbun world 2": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "bunbun world 3": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "butt": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "c3 demo": [
+      "Community & Meta > Community Events",
+      "Technical & Development > Development Status"
+    ],
+    "calm": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "camera": [
+      "Technical & Development > ASM & Programming > Core Technical",
+      "Technical & Development > ASM & Programming > Custom Features"
+    ],
+    "cancelled": [
+      "Technical & Development > Development Status"
+    ],
+    "cape": [
+      "Gameplay & Difficulty > Core Mechanics",
+      "Gameplay & Difficulty > Gameplay Specializations > Movement Techniques"
+    ],
+    "cape level": [
+      "Gameplay & Difficulty > Core Mechanics",
+      "Gameplay & Difficulty > Gameplay Specializations > Movement Techniques"
+    ],
+    "castle": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "casual": [
+      "Content & Presentation > Themes & Genres > Genre & Tone",
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "cats": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Community & Meta > Creator Tags > Individual Creators",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "cave": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "cave level": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "challenge": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "challenges": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "character": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "character switching": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "characters": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "cheep-cheep": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "chill setups": [
+      "Content & Presentation > Themes & Genres > Genre & Tone",
+      "Content & Presentation > Themes & Genres > Tone & Mood",
+      "Gameplay & Difficulty > Core Mechanics",
+      "Gameplay & Difficulty > Gameplay Specializations > Precision & Speed"
+    ],
+    "chiptune": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "chocolate": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Content & Presentation > Graphics & Visual Style > Visual Themes",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "chocolate sprinkles": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "choconilla": [
+      "Characters & Universe > Miscellaneous & Unique Tags > Food & Objects",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "choose your adventure": [
+      "Design & Structure > Level Structure",
+      "Design & Structure > Level Structure > World Organization"
+    ],
+    "christmas": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "christmas special": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "cindy": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "classic": [
+      "Community & Meta > Traditional Style",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "classic mario world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "clock": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "co-op": [
+      "Player Configuration > Cooperative Modes",
+      "Player Configuration > Player Count"
+    ],
+    "coin hunt": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "collab": [
+      "Community & Meta > Community Events"
+    ],
+    "collaboration": [
+      "Community & Meta > Community Events"
+    ],
+    "collaborative hack": [
+      "Community & Meta > Community Events"
+    ],
+    "collectables": [
+      "Community & Meta > Community Events"
+    ],
+    "collectible": [
+      "Community & Meta > Community Events"
+    ],
+    "comedy": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "community": [
+      "Community & Meta > Community Events"
+    ],
+    "competition": [
+      "Community & Meta > Community Events"
+    ],
+    "compilation": [
+      "Design & Structure > Level Structure",
+      "Design & Structure > Level Structure > Level Types",
+      "Technical & Development > Special Technical"
+    ],
+    "contest": [
+      "Community & Meta > Community Events"
+    ],
+    "contract world": [
+      "Design & Structure > Level Structure"
+    ],
+    "cool": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "coolmusic": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "coop": [
+      "Player Configuration > Cooperative Modes",
+      "Player Configuration > Player Count"
+    ],
+    "costum music": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "costum palletes": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "cotum sprites": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "country": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "crash bandicoot": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "creative": [
+      "Design & Structure > Level Structure"
+    ],
+    "creepy": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "creepypasta": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "crossover": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "crude content": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "crude language": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "cryptic": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "custcene": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "custom": [
+      "Technical & Development > ASM & Programming > Core Technical",
+      "Technical & Development > ASM & Programming > Custom Features"
+    ],
+    "custom asm": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "custom backgrounds": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "custom block": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "custom blocks": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "custom boss": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "custom bosses": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "custom caracter": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "custom character": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "custom characters": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "custom gfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "custom graphics": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "custom level pack": [
+      "Design & Structure > Level Structure"
+    ],
+    "custom levels": [
+      "Design & Structure > Level Structure"
+    ],
+    "custom music": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "custom overworld": [
+      "Community & Meta > Community Events"
+    ],
+    "custom palettes": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "custom pla": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "custom player": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "custom powerups": [
+      "Gameplay & Difficulty > Core Mechanics",
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "custom sprite": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "custom sprites": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "customboss": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "cutcene": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "cute": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "cutscene": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "cutscenes": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "d4c": [
+      "Characters & Universe > Series & Sequels",
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "daisy": [
+      "Characters & Universe > Mario Universe > Other Mario Characters"
+    ],
+    "dark": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "dark souls": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "dash": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "delta island": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "demo": [
+      "Technical & Development > Development Status"
+    ],
+    "demo 1": [
+      "Technical & Development > Development Status"
+    ],
+    "demo 3": [
+      "Technical & Development > Development Status"
+    ],
+    "demons souls": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "desert": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "design": [
+      "Design & Structure > Level Structure"
+    ],
+    "destructive": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "determine the anomaly": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "diagnose the deviation": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "difficult": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "difficulty": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "dificulty": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "dinomar": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "distinguish the exception": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "dog": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "domenyx": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "donkey kong country": [
+      "Characters & Universe > Nintendo Characters > Core Nintendo"
+    ],
+    "donkey kong country 2": [
+      "Characters & Universe > Nintendo Characters > Core Nintendo"
+    ],
+    "doopliss": [
+      "Characters & Universe > Mario Universe > Other Mario Characters"
+    ],
+    "downport": [
+      "Community & Meta > Community Events"
+    ],
+    "dr mario": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "dupe": [
+      "Design & Structure > Level Structure"
+    ],
+    "dutch": [
+      "Community & Meta > Language & Localization"
+    ],
+    "easiest": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "easy": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "easy hack": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "educational": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "efgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "efgx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "egg": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "eikro": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "elusive said it was shippable": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "emugamer": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "end": [
+      "Technical & Development > Development Status"
+    ],
+    "enemies": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "enemy": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "english": [
+      "Community & Meta > Language & Localization"
+    ],
+    "enhancement": [
+      "Community & Meta > Community Events"
+    ],
+    "enigmatic": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "epilepsy warning": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "espanol": [
+      "Community & Meta > Language & Localization"
+    ],
+    "esperanto": [
+      "Community & Meta > Language & Localization"
+    ],
+    "establish the distinction": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "exfgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "exfgx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "exgfc": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "exgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "exgfx animated": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "exgfx overworld": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "exgraphics": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "expert": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "exploration": [
+      "Design & Structure > Level Structure"
+    ],
+    "extended sprites": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "factory": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "fail world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "fair": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "fake hdma": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "family": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "fantasy": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "fast paced": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "fast retry": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "fastinputs": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "fat mario": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "fiction": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "final": [
+      "Technical & Development > Development Status"
+    ],
+    "final fantasy": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "find the change": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "finnish": [
+      "Community & Meta > Language & Localization"
+    ],
+    "fire bro": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "first hack": [
+      "Community & Meta > Community Events"
+    ],
+    "fixme": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "food": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "forest": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "french": [
+      "Community & Meta > Language & Localization"
+    ],
+    "full hack": [
+      "Design & Structure > Level Structure"
+    ],
+    "fun": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "game": [
+      "Community & Meta > Community Events"
+    ],
+    "game modes": [
+      "Community & Meta > Community Events"
+    ],
+    "gatekeeper": [
+      "Community & Meta > Community Events"
+    ],
+    "gauntlet": [
+      "Design & Structure > Level Structure"
+    ],
+    "gba": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "german": [
+      "Community & Meta > Language & Localization"
+    ],
+    "german hack": [
+      "Community & Meta > Language & Localization"
+    ],
+    "gfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "ghost": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "ghost house": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "gimmick": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "gimmick remade in vanilla": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "gimmicks": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "gimmicky": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "glitch": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "glitch abuse": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "glitches": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "gmchacker91": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "gnome": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "god do shell": [
+      "Characters & Universe > Series & Sequels",
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "gomba": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "goofy": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "goomba": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "goombario": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "goon nation": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "graphic": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "graphics": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "grass land": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "grassland": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "greek": [
+      "Community & Meta > Language & Localization"
+    ],
+    "greyscale": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "grian": [
+      "Community & Meta > Creator Tags > Individual Creators",
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "hack": [
+      "Community & Meta > Community Events"
+    ],
+    "hack rom": [
+      "Community & Meta > Community Events"
+    ],
+    "hackjam": [
+      "Community & Meta > Community Events"
+    ],
+    "hacks": [
+      "Community & Meta > Community Events"
+    ],
+    "halloween": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "hamburger": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "hammer bro": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "hammer brother": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "hammerbro": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "hand-drawn": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "hanukkah": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "happy birthday": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "hard": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "hard hacks": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "havefun": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "hdma": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "health": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "holiday": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "holidays": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "homage": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "home depot": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "horror": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "huge level": [
+      "Design & Structure > Level Structure"
+    ],
+    "huge levels": [
+      "Design & Structure > Level Structure"
+    ],
+    "hummer team": [
+      "Community & Meta > Creator Tags > Teams & Groups"
+    ],
+    "hungarian": [
+      "Community & Meta > Language & Localization"
+    ],
+    "hybrid": [
+      "Design & Structure > Level Structure"
+    ],
+    "identify the variance": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "iggy": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "improvement": [
+      "Community & Meta > Community Events"
+    ],
+    "indonesian": [
+      "Community & Meta > Language & Localization"
+    ],
+    "instant retry": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "intermediate": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "intermediate kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "Intermediate Kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "Intro Kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "italian": [
+      "Community & Meta > Language & Localization"
+    ],
+    "item abuse": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "item shop": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "item tech": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "items": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "iwbtg": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "japanese": [
+      "Community & Meta > Language & Localization"
+    ],
+    "jojo": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "joke": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "joke hack": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "jquery861": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "jump": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "jumps": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo beginner": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo block": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "kaizo expert": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo hack": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo intermediate": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo light": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo mario": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "kaizo mario world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "kaizo noob": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kaizo shells": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "kamek": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "kazio": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "key": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "key jump": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "keyjump": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "kick jump": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "kids": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "kobold adventure": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "koopa": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "korean": [
+      "Community & Meta > Language & Localization"
+    ],
+    "kuso": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "kwanzaa": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "lakitu": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "language": [
+      "Community & Meta > Language & Localization"
+    ],
+    "law and order": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "layer": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "layer 3": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "layer3": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "learn": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "left": [
+      "Design & Structure > Level Structure"
+    ],
+    "legacy": [
+      "Community & Meta > Community Events"
+    ],
+    "legend of hero": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "less asm": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics",
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "less efgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "less exgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "less gfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "less-exgf": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "less-exgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "let's game it out": [
+      "Community & Meta > Content Creation"
+    ],
+    "level collection": [
+      "Design & Structure > Level Structure"
+    ],
+    "level design": [
+      "Design & Structure > Level Structure"
+    ],
+    "light": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "light chocolate": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "light kaizo": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "line": [
+      "Design & Structure > Level Structure"
+    ],
+    "linear": [
+      "Design & Structure > Level Structure"
+    ],
+    "link": [
+      "Characters & Universe > Nintendo Characters > Core Nintendo"
+    ],
+    "locked": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "lojban": [
+      "Community & Meta > Language & Localization"
+    ],
+    "long": [
+      "Design & Structure > Level Structure"
+    ],
+    "long game": [
+      "Design & Structure > Level Structure"
+    ],
+    "long jump": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "long level": [
+      "Design & Structure > Level Structure"
+    ],
+    "lore": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "love": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "luigi": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "luigi themed": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "luxembourgian": [
+      "Community & Meta > Language & Localization"
+    ],
+    "m and f": [
+      "Community & Meta > Community Events"
+    ],
+    "magikoopa": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "map16": [
+      "Design & Structure > Level Structure"
+    ],
+    "mario": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "mario and friends": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "mario final boss": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "mario land": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "mario's grand adventure": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "marioexe": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "marisa": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "marisa kirisame": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "masked koopa": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "master quest": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "masterpiece": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "mature": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "mature content": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "mature language": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "maze": [
+      "Design & Structure > Level Structure"
+    ],
+    "meditation": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "medium": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "mega man": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "megaman": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "meme": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "memes": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "metroidvania": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "mew": [
+      "Characters & Universe > Nintendo Characters > Pokemon"
+    ],
+    "mice": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "microwave society": [
+      "Community & Meta > Content Creation",
+      "Community & Meta > Creator Tags > Teams & Groups"
+    ],
+    "microwavebrother": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "midair": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "midairs": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "milk": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "minecraft": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "mini hack": [
+      "Design & Structure > Level Structure"
+    ],
+    "mini-hack": [
+      "Design & Structure > Level Structure"
+    ],
+    "minimalist": [
+      "Design & Structure > Level Structure"
+    ],
+    "minor extended sprites": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "mix": [
+      "Design & Structure > Level Structure"
+    ],
+    "mod": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "modded": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "mode 7": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "moley": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "monochrome": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "monty mole": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "moon": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "morton": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "mostly vanilla": [
+      "Community & Meta > Traditional Style"
+    ],
+    "motorskills": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "mountain": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "msu-1": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "msx": [
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "muchshell": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "multiple endings": [
+      "Design & Structure > Level Structure"
+    ],
+    "multiple paths": [
+      "Design & Structure > Level Structure"
+    ],
+    "mushroom platforms": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "music": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "music box": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "music custom": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "musics": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "mustache": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "my little pony": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "mystery": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "nabbit": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "nds graphics": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "needs remoderation": [
+      "Technical & Development > Development Status"
+    ],
+    "neko nightmare": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "nerdina": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "nes": [
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "netplay": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "new character": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "new levels": [
+      "Community & Meta > Community Events"
+    ],
+    "nidoking": [
+      "Characters & Universe > Nintendo Characters > Pokemon"
+    ],
+    "ninji": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "nintendo": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "no audio": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "no boss": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "no cape": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "no mario": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "no music": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "no overworld": [
+      "Community & Meta > Community Events"
+    ],
+    "no shelljumps": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "no story": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "no yoshi": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "no-boss": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "noexgfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "non kaizo": [
+      "Community & Meta > Traditional Style"
+    ],
+    "non mario": [
+      "Characters & Universe > Mario Universe > Playable Characters",
+      "Community & Meta > Traditional Style"
+    ],
+    "non-linear": [
+      "Design & Structure > Level Structure"
+    ],
+    "non-mario": [
+      "Characters & Universe > Mario Universe > Playable Characters",
+      "Community & Meta > Traditional Style"
+    ],
+    "non-plataformer": [
+      "Community & Meta > Traditional Style"
+    ],
+    "non-platformer": [
+      "Community & Meta > Traditional Style"
+    ],
+    "non-sa1": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "nonlinear": [
+      "Design & Structure > Level Structure"
+    ],
+    "normal": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "normal difficulty": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "nostalgia": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "nostalgic": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "not falling off is hard": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "not mario": [
+      "Characters & Universe > Mario Universe > Playable Characters",
+      "Community & Meta > Traditional Style"
+    ],
+    "npc": [
+      "Community & Meta > Community Events"
+    ],
+    "npcs": [
+      "Community & Meta > Community Events"
+    ],
+    "nutrition": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "oghim": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "old": [
+      "Design & Structure > Level Structure"
+    ],
+    "omega jungle": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "one player": [
+      "Player Configuration > Player Count"
+    ],
+    "one room": [
+      "Design & Structure > Level Structure"
+    ],
+    "one screen": [
+      "Design & Structure > Level Structure"
+    ],
+    "oogtar": [
+      "Characters & Universe > Mario Universe > Other Mario Characters"
+    ],
+    "open world": [
+      "Design & Structure > Level Structure"
+    ],
+    "original": [
+      "Community & Meta > Community Events"
+    ],
+    "original character": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "original characters": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "original graphics": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "original music": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "original soundtrack": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "overworld": [
+      "Community & Meta > Community Events"
+    ],
+    "owcounters": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "palette": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "palette animation": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "palette change": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "palettes": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "paper": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "parody": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "patch": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "patches": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "peach": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "percision": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "philips cdi": [
+      "Characters & Universe > Crossovers & References > Media References",
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "photosensitivity warning": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "physics": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "pinpoint the nonconformity": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "pipes": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "piranha plant": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "pirate": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "pit": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "pizza": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "plains": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "plataforma": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "platform": [
+      "Gameplay & Difficulty > Core Mechanics",
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "platformer": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "platforming": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "plattforming": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "playerpatch": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "pleasedonthatemeijustreallylikeshells": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "pog": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "pokemon": [
+      "Characters & Universe > Nintendo Characters > Pokemon"
+    ],
+    "pokey": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "polish": [
+      "Community & Meta > Language & Localization"
+    ],
+    "politics": [
+      "Content & Presentation > Themes & Genres > Content Descriptors"
+    ],
+    "portuguese": [
+      "Community & Meta > Language & Localization"
+    ],
+    "post game": [
+      "Community & Meta > Community Events"
+    ],
+    "power": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "power ups": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "power-up": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "powers": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "powerups": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "practice": [
+      "Community & Meta > Community Events"
+    ],
+    "precision": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "princess daisy": [
+      "Characters & Universe > Mario Universe > Other Mario Characters"
+    ],
+    "purple": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "puzzle": [
+      "Design & Structure > Level Structure"
+    ],
+    "puzzles": [
+      "Design & Structure > Level Structure"
+    ],
+    "qzeq": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "race": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "racelevel": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "races": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "random": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "redrawn": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "redrawn hack": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "reggae shark": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "reimu": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "religious": [
+      "Content & Presentation > Themes & Genres > Content Descriptors"
+    ],
+    "religious studies": [
+      "Content & Presentation > Themes & Genres > Content Descriptors"
+    ],
+    "remake": [
+      "Design & Structure > Level Structure"
+    ],
+    "remix": [
+      "Community & Meta > Community Events"
+    ],
+    "replayable": [
+      "Design & Structure > Level Structure"
+    ],
+    "retro": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "retry": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "rex": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "rhr": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "ricardodemelo": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "robot": [
+      "Characters & Universe > Crossovers & References > Media References",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "romanian": [
+      "Community & Meta > Language & Localization"
+    ],
+    "room": [
+      "Design & Structure > Level Structure"
+    ],
+    "rosalina": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "rpg": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "run": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "russian": [
+      "Community & Meta > Language & Localization"
+    ],
+    "sa-1": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "sa1": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "sanrio": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "sarasaland": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "savestate": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "scenery": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "score": [
+      "Community & Meta > Community Events"
+    ],
+    "scorpion": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "script recommended": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "scyther": [
+      "Characters & Universe > Nintendo Characters > Pokemon"
+    ],
+    "seasonal": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "seasons": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "secret": [
+      "Design & Structure > Level Structure"
+    ],
+    "secret exits": [
+      "Design & Structure > Level Structure"
+    ],
+    "secrets": [
+      "Design & Structure > Level Structure"
+    ],
+    "seek the discrepancy": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "seizure warning": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "sequel": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "series": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "shadow": [
+      "Community & Meta > Community Events"
+    ],
+    "sheffy": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "shell": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shell hack": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shell jump": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shell tech": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shelljump": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shelljumps": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shells": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shellstuff": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "shizuka": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "shop": [
+      "Community & Meta > Community Events"
+    ],
+    "short": [
+      "Design & Structure > Level Structure"
+    ],
+    "short and sweet": [
+      "Design & Structure > Level Structure"
+    ],
+    "short demo": [
+      "Design & Structure > Level Structure"
+    ],
+    "short hack": [
+      "Design & Structure > Level Structure"
+    ],
+    "short levels": [
+      "Design & Structure > Level Structure"
+    ],
+    "short-levels": [
+      "Design & Structure > Level Structure"
+    ],
+    "shortlevels": [
+      "Design & Structure > Level Structure"
+    ],
+    "shy guy": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "shyguy": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "sicari": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "silver wind": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "silver wing": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "single screen": [
+      "Design & Structure > Level Structure"
+    ],
+    "singleplayer": [
+      "Player Configuration > Player Count"
+    ],
+    "six worlds": [
+      "Design & Structure > Level Structure"
+    ],
+    "sloot yoshi": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "small": [
+      "Design & Structure > Level Structure"
+    ],
+    "small level": [
+      "Design & Structure > Level Structure"
+    ],
+    "smas": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "smas soundtrack": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "smb 3": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "smb1": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "smb2": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "smb2 soundtrack": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "smb3": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "sml2": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "smw": [
+      "Community & Meta > Community Events"
+    ],
+    "smw central": [
+      "Community & Meta > Community Events"
+    ],
+    "smw hack": [
+      "Community & Meta > Community Events"
+    ],
+    "snail": [
+      "Characters & Universe > Mario Universe > Enemies & Bosses"
+    ],
+    "snes": [
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "snes classic": [
+      "Technical & Development > ASM & Programming > Core Technical",
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "snes9x": [
+      "Technical & Development > ASM & Programming > Core Technical",
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "snow": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "so retro": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "song": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "songs for a hero": [
+      "Characters & Universe > Series & Sequels",
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "sonic": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "soulsborne": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "soundtrack": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "space": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "spanish": [
+      "Community & Meta > Language & Localization"
+    ],
+    "special world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "speed": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "speedrun": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "speedrun friendly": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "speedrunning": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "spice": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "spirit": [
+      "Community & Meta > Community Events"
+    ],
+    "sponge": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "spooky": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "spot the difference": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "sprite": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "sprite killer": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "sprites": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "standard": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "standard gameplay": [
+      "Design & Structure > Level Structure"
+    ],
+    "star": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "star power": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "star road": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "stars": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "starter": [
+      "Community & Meta > Community Events"
+    ],
+    "statusbar": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "story": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "story line": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "suggestive dialogue": [
+      "Community & Meta > Content Ratings > Maturity Warnings"
+    ],
+    "summer": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "super": [
+      "Community & Meta > Community Events"
+    ],
+    "super bomberman": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "super boy": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "super denis world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "super destructive world": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "super mario 3d world": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "super mario bros 3": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "super mario land": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "super mario the trip": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "super mario world": [
+      "Characters & Universe > Series & Sequels",
+      "Community & Meta > Community Events"
+    ],
+    "super mario world 2025": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "super mario world 4": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "super metroid": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "super nintendo": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "surrealism": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "tails": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "talikuu": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "tas": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "teaching": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "team": [
+      "Player Configuration > Player Count"
+    ],
+    "test": [
+      "Technical & Development > Development Status"
+    ],
+    "tgpa": [
+      "Community & Meta > Community Events"
+    ],
+    "the green plumber's adventure": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "the legend of hero": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "the trip": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "themed": [
+      "Community & Meta > Community Events"
+    ],
+    "themed levels": [
+      "Design & Structure > Level Structure"
+    ],
+    "time up": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "titan": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "toad": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "toadette": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "tortured souls": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "touhou": [
+      "Characters & Universe > Crossovers & References > Game Crossovers"
+    ],
+    "tower": [
+      "Content & Presentation > Themes & Genres > Environmental Themes",
+      "Design & Structure > Level Structure"
+    ],
+    "tradicional": [
+      "Community & Meta > Traditional Style"
+    ],
+    "tradinional": [
+      "Community & Meta > Traditional Style"
+    ],
+    "tradiotional": [
+      "Community & Meta > Traditional Style"
+    ],
+    "traditional": [
+      "Community & Meta > Traditional Style"
+    ],
+    "traditonal": [
+      "Community & Meta > Traditional Style"
+    ],
+    "tradtional": [
+      "Community & Meta > Traditional Style"
+    ],
+    "traidtional": [
+      "Community & Meta > Traditional Style"
+    ],
+    "translation": [
+      "Community & Meta > Language & Localization"
+    ],
+    "tricks": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "troll": [
+      "Community & Meta > Community Events"
+    ],
+    "tsrp": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "tunnel": [
+      "Design & Structure > Level Structure"
+    ],
+    "tutorial": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "tvw": [
+      "Characters & Universe > Series & Sequels"
+    ],
+    "uberasm": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "unfair": [
+      "Gameplay & Difficulty > Difficulty Levels"
+    ],
+    "uwu": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "vanila": [
+      "Community & Meta > Community Events"
+    ],
+    "vanilla": [
+      "Community & Meta > Community Events"
+    ],
+    "vanilla gfx": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "vanilla graphics": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "vanilla kaizo": [
+      "Community & Meta > Community Events"
+    ],
+    "vanilla mechanics": [
+      "Community & Meta > Community Events"
+    ],
+    "vanilla-ish": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "vanillaish": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "vannila": [
+      "Community & Meta > Community Events"
+    ],
+    "variety": [
+      "Design & Structure > Level Structure"
+    ],
+    "veryjump": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "voice acting": [
+      "Content & Presentation > Music & Audio > Custom Audio"
+    ],
+    "wakana": [
+      "Characters & Universe > Crossovers & References > Media References"
+    ],
+    "wall jump": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "wall kick": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "wallkick": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "walmart": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "waluigi": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "wario": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "water": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "water level": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "waterfalls": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "watermelon": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "watermelons": [
+      "Content & Presentation > Graphics & Visual Style > Visual Themes"
+    ],
+    "weird": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "white": [
+      "Content & Presentation > Graphics & Visual Style > Custom Graphics"
+    ],
+    "white moth": [
+      "Community & Meta > Creator Tags > Individual Creators"
+    ],
+    "wholesome": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "win": [
+      "Community & Meta > Community Events"
+    ],
+    "windows": [
+      "Technical & Development > Platform & Compatibility"
+    ],
+    "wing cap": [
+      "Gameplay & Difficulty > Core Mechanics"
+    ],
+    "winter": [
+      "Content & Presentation > Themes & Genres > Environmental Themes"
+    ],
+    "work in progress": [
+      "Technical & Development > Development Status"
+    ],
+    "world": [
+      "Design & Structure > Level Structure"
+    ],
+    "worlds": [
+      "Design & Structure > Level Structure"
+    ],
+    "wornilla": [
+      "Community & Meta > Community Events"
+    ],
+    "wow": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "xmas": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "year": [
+      "Content & Presentation > Themes & Genres > Holiday & Special Events"
+    ],
+    "yikes": [
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "yoshell": [
+      "Gameplay & Difficulty > Gameplay Specializations > Shell Techniques"
+    ],
+    "yoshi": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "yoshi coin": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "yoshi tongue": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "yoshi's island": [
+      "Characters & Universe > Mario Universe > Playable Characters"
+    ],
+    "yoshipatch": [
+      "Technical & Development > ASM & Programming > Core Technical"
+    ],
+    "youtube": [
+      "Community & Meta > Content Creation"
+    ],
+    "yump": [
+      "Community & Meta > Community Events"
+    ],
+    "yumplike": [
+      "Community & Meta > Creator Tags > Individual Creators",
+      "Content & Presentation > Themes & Genres > Genre & Tone"
+    ],
+    "zelda": [
+      "Characters & Universe > Nintendo Characters > Core Nintendo"
+    ],
+    "zemina": [
+      "Community & Meta > Creator Tags > Teams & Groups"
+    ]
+  }
+}

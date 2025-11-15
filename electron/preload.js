@@ -905,6 +905,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Publish multiple ratings in batch
   publishRatingsBatch: (params) => ipcRenderer.invoke('online:ratings:publish-batch', params),
 
+  // Publish history
+  getPublishHistory: (params) => ipcRenderer.invoke('online:publish-history:get', params),
+
+  // Queue maintenance
+  clearCompletedQueue: (params) => ipcRenderer.invoke('online:queue:clear-completed', params),
+
   // Ratings summaries (Nostr ingestion)
   ratings: {
     getSummaries: (gameId) => ipcRenderer.invoke('ratings:summaries:get', { gameId })

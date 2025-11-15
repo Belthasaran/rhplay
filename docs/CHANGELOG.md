@@ -1705,3 +1705,27 @@ and try to have a similar module system
 - Files modified: `electron/renderer/src/App.vue`, `electron/ipc-handlers.js`, `electron/preload.js`
 - See: `docs/BUGFIX_settings_file_paths.md`
 
+## 2025-11-15 - Nostr Publishing Dashboards + Preferences
+
+### New UI Components
+- `ProfilePublishingDashboard.vue`: Shows current profile info and Nostr publish status, with publish and refresh controls.
+- `RatingsPublishingDashboard.vue`: Lists my ratings with publish status, filters, and batch actions (Publish Selected / Publish All).
+
+### Runtime/IPC
+- Added IPC to fetch and set profile publishing preferences in `clientdata.csettings`:
+  - `online:profile:publishing-preferences:get`
+  - `online:profile:publishing-preferences:set`
+- Updated `online:publish-profile-to-nostr` to accept `includePicture`/`includeBanner` flags.
+- Exposed preload APIs: `getProfilePublishingPreferences`, `setProfilePublishingPreferences`.
+
+### Backend
+- `OnlineProfileManager.publishProfileToNostr(profileUuid, { includePicture, includeBanner })` honors preferences when building kind 0 profile content.
+
+### App Integration
+- Added two new tabs under Online:
+  - Profile Publishing (wired to preferences; persists changes)
+  - Ratings Publishing (batch controls and status display)
+
+### Notes
+- Auto-publish behavior is persisted but not yet auto-triggered; will be wired in a subsequent update.
+

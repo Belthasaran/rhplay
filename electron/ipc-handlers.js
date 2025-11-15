@@ -3063,7 +3063,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-
   // ===========================================================================
   // CHAT COMMANDS SYSTEM
   // ===========================================================================
@@ -3834,7 +3833,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   // ===========================================================================
   // ONLINE/NOSTR PROFILE OPERATIONS
   // ===========================================================================
@@ -6173,7 +6171,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Export encryption key (password-encrypted backup)
    * Channel: online:encryption-key:export
@@ -6928,7 +6925,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Sign an admin declaration
    * Channel: online:admin-declaration:sign
@@ -7727,7 +7723,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Channel: online:ratings:publish-batch
    * Publish multiple ratings in batch
@@ -7845,6 +7840,106 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Channel: online:publish-history:get
+   * Returns recent publish attempts grouped by attempt_batch_id; optional scope by table_name and record_uuid
+   * Payload: { tableName?: string, recordUuid?: string, limit?: number }
+   */
+  ipcMain.handle('online:publish-history:get', async (_event, { tableName, recordUuid, limit } = {}) => {
+    try {
+      const manager = new NostrLocalDBManager({ logger: console });
+      await manager.initialize();
+      let history;
+      if (tableName && recordUuid) {
+        history = manager.getPublishAttempts(tableName, recordUuid, Math.max(1, Number(limit) || 20));
+      } else {
+        // Global: fetch latest batches across all records
+        const db = manager.getConnection('cache_out');
+        const batches = db.prepare(`
+          SELECT attempt_batch_id, MAX(attempt_at) AS attempt_at
+          FROM nostr_publish_attempts
+          GROUP BY attempt_batch_id
+          ORDER BY attempt_at DESC
+          LIMIT ?
+        `).all(Math.max(1, Number(limit) || 50));
+        if (batches.length === 0) {
+          history = [];
+        } else {
+          const ids = batches.map(b => b.attempt_batch_id);
+          const placeholders = ids.map(() => '?').join(',');
+          const rows = db.prepare(`
+            SELECT attempt_batch_id, event_id, table_name, record_uuid, relay_url, success, message, attempt_at
+            FROM nostr_publish_attempts
+            WHERE attempt_batch_id IN (${placeholders})
+            ORDER BY attempt_at DESC
+          `).all(...ids);
+          const toIso = (v) => {
+            const n = Number(v); if (!Number.isFinite(n)) return null; const ms = n > 1e12 ? n : n * 1000; try { return new Date(ms).toISOString(); } catch { return null; }
+          };
+          history = batches.map(b => {
+            const entries = rows.filter(r => r.attempt_batch_id === b.attempt_batch_id).map(r => ({
+              tableName: r.table_name,
+              recordUuid: r.record_uuid,
+              eventId: r.event_id,
+              relayUrl: r.relay_url || null,
+              success: r.success === 1,
+              message: r.message || null,
+              attemptAt: r.attempt_at,
+              attemptAtIso: toIso(r.attempt_at)
+            }));
+            const successes = entries.filter(e => e.success);
+            const failures = entries.filter(e => !e.success);
+            return {
+              batchId: b.attempt_batch_id,
+              attemptAt: b.attempt_at,
+              attemptAtIso: toIso(b.attempt_at),
+              entries,
+              successCount: successes.length,
+              failureCount: failures.length
+            };
+          });
+        }
+      }
+      manager.closeAll();
+      return { success: true, history };
+    } catch (error) {
+      console.error('Error getting publish history:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:queue:clear-completed
+   * Removes completed events from store_out (and optionally cache_out) for housekeeping
+   * Payload: { stages?: ('store_out'|'cache_out')[], olderThanSeconds?: number }
+   */
+  ipcMain.handle('online:queue:clear-completed', async (_event, { stages, olderThanSeconds } = {}) => {
+    try {
+      const manager = new NostrLocalDBManager({ logger: console });
+      await manager.initialize();
+      const targetStages = Array.isArray(stages) && stages.length ? stages : ['store_out'];
+      const cutoff = Number(olderThanSeconds);
+      let total = 0;
+      for (const stage of targetStages) {
+        const db = manager.getConnection(stage);
+        if (!db) continue;
+        const whereAge = Number.isFinite(cutoff) && cutoff > 0 ? `AND proc_at IS NOT NULL AND proc_at < (strftime('%s','now') - ${cutoff})` : '';
+        const res = db.prepare(`
+          DELETE FROM nostr_raw_events
+          WHERE proc_status = 2 /* completed */
+          ${whereAge}
+        `).run();
+        total += res.changes || 0;
+      }
+      manager.closeAll();
+      return { success: true, removed: total };
+    } catch (error) {
+      console.error('Error clearing completed queue:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('ratings:summaries:get', (_event, { gameId } = {}) => {
     if (!gameId) {
       return { success: false, error: 'gameId is required' };

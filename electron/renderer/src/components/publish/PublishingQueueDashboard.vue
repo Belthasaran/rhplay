@@ -3,14 +3,17 @@
     <div class="dashboard-header">
       <h4>Publishing Queue Dashboard</h4>
       <div class="header-actions">
-        <button class="btn-secondary" @click="refreshQueue" :disabled="loading">
+        <button class="btn-secondary" @click="refreshStatus" :disabled="loading">
           {{ loading ? 'Refreshing...' : 'Refresh' }}
         </button>
-        <button class="btn-secondary" @click="retryFailed" :disabled="loading || !hasFailed">
-          Retry Failed
+        <button class="btn-secondary" @click="retryAllFailed" :disabled="loading || stats.failed === 0">
+          Retry All Failed
         </button>
-        <button class="btn-secondary" @click="clearCompleted" :disabled="loading || !hasCompleted">
+        <button class="btn-secondary" @click="clearCompleted" :disabled="loading || stats.completed === 0">
           Clear Completed
+        </button>
+        <button class="btn-secondary" @click="openHistory">
+          View Publish History
         </button>
       </div>
     </div>
@@ -96,13 +99,26 @@
       :loading="loading"
       @retry="handleRetry"
       @view-details="handleViewDetails"
+      @view-history="handleViewHistory"
     />
+  </div>
+  <div v-if="historyOpen" class="modal-backdrop" @click.self="historyOpen = false">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Publish History</h3>
+        <button class="close" @click="historyOpen = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <PublishHistory :limit="50" :table-name="historyScope?.tableName" :record-uuid="historyScope?.recordUuid" />
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import PublishingQueueList from './PublishingQueueList.vue';
+import PublishHistory from './PublishHistory.vue';
 
 type QueueEntry = {
   id: string;
@@ -158,6 +174,8 @@ const queueStats = ref<QueueStats>({
   incomingBacklog: 0
 });
 const activeTab = ref<'pending' | 'processing' | 'completed' | 'failed'>('pending');
+const historyOpen = ref(false);
+const historyScope = ref<{ tableName: string; recordUuid: string } | null>(null);
 
 const prioritySummary = computed(() => queueStats.value.outgoingPrioritySummary);
 
@@ -257,10 +275,33 @@ async function retryFailed() {
 }
 
 async function clearCompleted() {
-  if (!confirm('Clear all completed queue entries? This action cannot be undone.')) return;
-  
-  // TODO: Implement clear completed functionality
-  alert('Clear completed functionality will be implemented in a future update.');
+  if (!confirm('Clear completed published events from the store?')) return;
+  loading.value = true;
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api) return;
+    const res = await api.clearCompletedQueue({ stages: ['store_out'], olderThanSeconds: 0 });
+    if (res?.success) {
+      await refreshQueue();
+      alert(`Removed ${res.removed} completed event(s).`);
+    } else {
+      alert(`Failed to clear: ${res?.error || 'Unknown error'}`);
+    }
+  } catch (e: any) {
+    alert(`Error clearing: ${e?.message || String(e)}`);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openHistory() {
+  historyScope.value = null;
+  historyOpen.value = true;
+}
+
+function handleViewHistory(payload: { tableName: string; recordUuid: string }) {
+  historyScope.value = { tableName: payload.tableName, recordUuid: payload.recordUuid };
+  historyOpen.value = true;
 }
 
 async function handleRetry(entry: QueueEntry) {

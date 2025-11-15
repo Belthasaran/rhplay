@@ -67,6 +67,13 @@
                 </button>
                 <button
                   class="btn-action btn-view"
+                  @click="$emit('view-history', { tableName: entry.tableName, recordUuid: entry.recordUuid })"
+                  title="View publish history for this record"
+                >
+                  History
+                </button>
+                <button
+                  class="btn-action btn-view"
                   @click="$emit('view-details', entry)"
                   title="View details"
                 >
@@ -103,6 +110,7 @@ const props = defineProps<{
 defineEmits<{
   retry: [entry: QueueEntry];
   'view-details': [entry: QueueEntry];
+  'view-history': [{ tableName: string; recordUuid: string }];
 }>();
 
 function formatEventId(id: string): string {

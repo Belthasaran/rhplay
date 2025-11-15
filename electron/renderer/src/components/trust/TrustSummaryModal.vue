@@ -138,6 +138,86 @@
               </div>
             </div>
           </section>
+
+          <section v-if="delegationChains.length > 0" class="summary-section delegation-chains-section">
+            <div class="section-header">
+              <h4>Delegation Chains</h4>
+              <div class="section-controls">
+                <label>
+                  <input
+                    v-model="showChainDetails"
+                    type="checkbox"
+                  />
+                  Show Details
+                </label>
+                <label>
+                  <input
+                    v-model="expandAllChains"
+                    type="checkbox"
+                  />
+                  Expand All
+                </label>
+              </div>
+            </div>
+            <div class="chains-container">
+              <div
+                v-for="(chain, chainIndex) in delegationChains"
+                :key="chainIndex"
+                class="delegation-chain"
+              >
+                <details :open="expandAllChains" class="chain-details">
+                  <summary class="chain-header">
+                    <div class="chain-header-content">
+                      <strong>Chain {{ chainIndex + 1 }}</strong>
+                      <span class="chain-meta">
+                        {{ chain.length }} delegation(s) • 
+                        <span class="chain-trust-level">{{ getChainTrustLevel(chain) }}</span>
+                      </span>
+                    </div>
+                    <span class="chain-arrow">→</span>
+                    <code class="mono chain-target">{{ formatPubkey(props.pubkey) }}</code>
+                  </summary>
+                  <div class="chain-path">
+                    <div
+                      v-for="(link, linkIndex) in chain"
+                      :key="linkIndex"
+                      class="chain-link"
+                    >
+                      <div class="link-number">{{ linkIndex + 1 }}</div>
+                      <div class="link-content">
+                        <div class="link-node">
+                          <code class="mono link-issuer">{{ formatPubkey(link.issuer) }}</code>
+                          <span class="link-arrow">→</span>
+                          <code class="mono link-subject">{{ formatPubkey(link.subject) }}</code>
+                        </div>
+                        <div v-if="showChainDetails" class="link-details">
+                          <div class="link-detail-row">
+                            <span class="detail-label">Trust Level:</span>
+                            <span class="trust-level-badge">{{ link.trust_level || 'N/A' }}</span>
+                          </div>
+                          <div v-if="link.scope" class="link-detail-row">
+                            <span class="detail-label">Scope:</span>
+                            <span class="scope-badge">{{ formatScope(link.scope) }}</span>
+                          </div>
+                          <div v-if="link.permissions && Object.keys(link.permissions).length > 0" class="link-detail-row">
+                            <span class="detail-label">Permissions:</span>
+                            <span class="perms-count">{{ Object.keys(link.permissions).filter(k => link.permissions[k]).length }} permission(s)</span>
+                          </div>
+                          <div v-if="link.declaration_uuid" class="link-detail-row">
+                            <span class="detail-label">Declaration:</span>
+                            <code class="mono declaration-uuid">{{ link.declaration_uuid.substring(0, 16) }}…</code>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+            <div v-if="delegationChains.length === 0 && declarations.length > 0" class="no-chains-message">
+              No delegation chains found. Chains are built from trust declarations that reference other keys.
+            </div>
+          </section>
         </div>
       </div>
 
@@ -187,6 +267,8 @@ const state = reactive<{
 });
 
 const copying = ref(false);
+const showChainDetails = ref(true);
+const expandAllChains = ref(false);
 
 const summary = computed(() => state.summary);
 const loading = computed(() => state.loading);
@@ -223,6 +305,114 @@ const permissions = computed(() => {
       };
     })
     .filter((entry) => entry.label);
+});
+
+type DelegationLink = {
+  issuer: string;
+  subject: string;
+  trust_level?: string | null;
+  scope?: any;
+  permissions?: Record<string, any>;
+  declaration_uuid?: string;
+};
+
+const delegationChains = computed(() => {
+  const chains: DelegationLink[][] = [];
+  const decls = declarations.value;
+  
+  if (!decls || decls.length === 0) {
+    return chains;
+  }
+
+  // Build a map of declarations by subject (target)
+  const declarationsBySubject = new Map<string, typeof decls>();
+  const declarationsByIssuer = new Map<string, typeof decls>();
+  
+  decls.forEach((decl) => {
+    const issuer = extractIssuerFingerprint(decl);
+    const subject = extractSubjectFingerprint(decl) || props.pubkey;
+    
+    if (subject) {
+      if (!declarationsBySubject.has(subject)) {
+        declarationsBySubject.set(subject, []);
+      }
+      declarationsBySubject.get(subject)!.push(decl);
+    }
+    
+    if (issuer) {
+      if (!declarationsByIssuer.has(issuer)) {
+        declarationsByIssuer.set(issuer, []);
+      }
+      declarationsByIssuer.get(issuer)!.push(decl);
+    }
+  });
+
+  // Find chains: declarations that lead to the target pubkey
+  // A chain is a sequence: issuer1 → issuer2 → ... → target
+  function buildChainsFromNode(nodePubkey: string, visited: Set<string> = new Set(), currentChain: DelegationLink[] = []): void {
+    if (visited.has(nodePubkey)) {
+      return; // Avoid cycles
+    }
+    
+    visited.add(nodePubkey);
+    
+    // Find all declarations where this node is the subject
+    const incomingDecls = declarationsBySubject.get(nodePubkey) || [];
+    
+    if (incomingDecls.length === 0) {
+      // This is a root node - if we have a chain, save it
+      if (currentChain.length > 0) {
+        chains.push([...currentChain].reverse()); // Reverse to show from root to target
+      }
+      return;
+    }
+    
+    // For each incoming declaration, extend the chain
+    incomingDecls.forEach((decl) => {
+      const issuer = extractIssuerFingerprint(decl);
+      if (!issuer) return;
+      
+      const link: DelegationLink = {
+        issuer,
+        subject: nodePubkey,
+        trust_level: extractTrustLevelFromDecl(decl),
+        scope: extractScopeFromDecl(decl),
+        permissions: extractPermissionsFromDecl(decl),
+        declaration_uuid: decl.declaration_uuid
+      };
+      
+      const newChain = [...currentChain, link];
+      const newVisited = new Set(visited);
+      
+      // Continue building from the issuer
+      buildChainsFromNode(issuer, newVisited, newChain);
+    });
+  }
+
+  // Start building chains from the target pubkey
+  if (props.pubkey) {
+    buildChainsFromNode(props.pubkey);
+  }
+
+  // If no chains found, create direct chains from declarations targeting this pubkey
+  if (chains.length === 0) {
+    const directDecls = declarationsBySubject.get(props.pubkey || '') || [];
+    directDecls.forEach((decl) => {
+      const issuer = extractIssuerFingerprint(decl);
+      if (issuer) {
+        chains.push([{
+          issuer,
+          subject: props.pubkey || '',
+          trust_level: extractTrustLevelFromDecl(decl),
+          scope: extractScopeFromDecl(decl),
+          permissions: extractPermissionsFromDecl(decl),
+          declaration_uuid: decl.declaration_uuid
+        }]);
+      }
+    });
+  }
+
+  return chains;
 });
 
 function emitClose() {
@@ -323,6 +513,68 @@ function formatTimestamp(timestamp?: number | null) {
     return '—';
   }
   return date.toLocaleString();
+}
+
+function formatPubkey(pubkey: string | null | undefined): string {
+  if (!pubkey) return 'N/A';
+  if (pubkey.length > 20) {
+    return pubkey.substring(0, 10) + '…' + pubkey.substring(pubkey.length - 10);
+  }
+  return pubkey;
+}
+
+function formatScope(scope: any): string {
+  if (!scope || typeof scope !== 'object') {
+    return 'Global';
+  }
+  const type = scope.type || 'global';
+  const target = scope.target || (Array.isArray(scope.targets) ? scope.targets.join(', ') : '');
+  if (type === 'global') {
+    return 'Global';
+  }
+  return `${type}: ${target || '*'}`;
+}
+
+function extractIssuerFingerprint(decl: any): string | null {
+  return decl?.issuing_fingerprint || decl?.issuing_keypair_fingerprint || decl?.signing_keypair_fingerprint || null;
+}
+
+function extractSubjectFingerprint(decl: any): string | null {
+  return decl?.target_fingerprint || decl?.target_keypair_fingerprint || null;
+}
+
+function extractTrustLevelFromDecl(decl: any): string | null {
+  try {
+    const content = typeof decl.content === 'string' ? JSON.parse(decl.content) : decl.content;
+    return content?.trust_level || decl.contentSummary?.trustLevel || null;
+  } catch {
+    return decl.contentSummary?.trustLevel || null;
+  }
+}
+
+function extractScopeFromDecl(decl: any): any {
+  try {
+    const content = typeof decl.content === 'string' ? JSON.parse(decl.content) : decl.content;
+    return content?.scopes || null;
+  } catch {
+    return null;
+  }
+}
+
+function extractPermissionsFromDecl(decl: any): Record<string, any> | null {
+  try {
+    const content = typeof decl.content === 'string' ? JSON.parse(decl.content) : decl.content;
+    return content?.permissions || null;
+  } catch {
+    return null;
+  }
+}
+
+function getChainTrustLevel(chain: DelegationLink[]): string {
+  if (chain.length === 0) return 'N/A';
+  // Get the trust level from the last link (closest to target)
+  const lastLink = chain[chain.length - 1];
+  return lastLink.trust_level || 'N/A';
 }
 
 async function copySummary() {
@@ -595,6 +847,235 @@ watch(
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Delegation Chains Section */
+.delegation-chains-section {
+  margin-top: 8px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h4 {
+  margin: 0;
+}
+
+.section-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.section-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.section-controls input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.chains-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delegation-chain {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: white;
+  overflow: hidden;
+}
+
+.chain-details {
+  width: 100%;
+}
+
+.chain-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.chain-header::-webkit-details-marker {
+  display: none;
+}
+
+.chain-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.chain-header strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.chain-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chain-trust-level {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chain-arrow {
+  margin: 0 12px;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.chain-target {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.chain-path {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chain-link {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border-left: 3px solid var(--color-primary, #1976d2);
+  position: relative;
+}
+
+.chain-link:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  bottom: -12px;
+  width: 2px;
+  height: 12px;
+  background: var(--border-color);
+}
+
+.link-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary, #1976d2);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.link-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.link-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.link-issuer,
+.link-subject {
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+}
+
+.link-arrow {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.link-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.link-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.trust-level-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #e3f2fd;
+  color: #1565c0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.scope-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f3e5f5;
+  color: #7b1fa2;
+  font-size: 11px;
+}
+
+.perms-count {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.declaration-uuid {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.no-chains-message {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-style: italic;
 }
 </style>
 

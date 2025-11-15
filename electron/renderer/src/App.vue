@@ -44,6 +44,12 @@
               >
                 Moderation
               </button>
+              <button 
+                :class="['tab-button', { 'active': onlineActiveTab === 'relay-health' }]"
+                @click="onlineActiveTab = 'relay-health'"
+              >
+                Relay Health
+              </button>
             </div>
 
             <div class="online-dropdown-body">
@@ -445,6 +451,11 @@
               <!-- Moderation Tab -->
               <div v-if="onlineActiveTab === 'moderation'" class="tab-content">
                 <ModeratorDashboard :actor-pubkey="onlinePrimaryPubkey" />
+              </div>
+
+              <!-- Relay Health Tab -->
+              <div v-if="onlineActiveTab === 'relay-health'" class="tab-content">
+                <RelayHealthDashboard />
               </div>
             </div>
           </div>
@@ -6906,6 +6917,7 @@ import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
 import TrustAssignmentsList from './components/trust/TrustAssignmentsList.vue';
+import RelayHealthDashboard from './components/relay/RelayHealthDashboard.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -6983,7 +6995,7 @@ const bulkStatus = ref('');
 const filterDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
-const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation'>('profile-keys');
+const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
 // Select dropdown state

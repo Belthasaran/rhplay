@@ -265,6 +265,74 @@ function registerNostrRuntimeIPC(dbManager) {
     }
   });
 
+  ipcMain.handle('nostr:nrs:relay-health:get', () => {
+    try {
+      const health = service.getRelayHealthSnapshot();
+      return { success: true, health };
+    } catch (error) {
+      console.error('[NostrRuntimeIPC] Failed to get relay health:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('nostr:nrs:relay:connect', async (_event, { relayUrl } = {}) => {
+    try {
+      if (!relayUrl) {
+        // Connect to all preferred relays
+        await service.ensureConnections(true);
+      } else {
+        // Connect to specific relay - remove from manually closed set if present
+        if (service.manuallyClosedRelays && service.manuallyClosedRelays.has(relayUrl)) {
+          service.manuallyClosedRelays.delete(relayUrl);
+        }
+        // Force reconnection
+        await service.ensureConnections(true);
+      }
+      return { success: true, status: service.getStatusSnapshot() };
+    } catch (error) {
+      console.error('[NostrRuntimeIPC] Failed to connect relay:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('nostr:nrs:relay:disconnect', async (_event, { relayUrl } = {}) => {
+    try {
+      if (relayUrl) {
+        // Disconnect specific relay by removing it from active connections
+        service.manuallyClosedRelays.add(relayUrl);
+        await service.ensureConnections(true);
+      } else {
+        // Disconnect all relays
+        await service.disconnectFromRelays();
+      }
+      return { success: true, status: service.getStatusSnapshot() };
+    } catch (error) {
+      console.error('[NostrRuntimeIPC] Failed to disconnect relay:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('nostr:nrs:relay:retry', async (_event, { relayUrl } = {}) => {
+    try {
+      if (!relayUrl) {
+        return { success: false, error: 'relayUrl is required' };
+      }
+      // Reset health info to allow immediate retry
+      const healthInfo = service.getRelayHealthInfo(relayUrl);
+      if (healthInfo) {
+        healthInfo.cooldownUntil = 0;
+        healthInfo.backoffMs = 0;
+        healthInfo.status = 'unknown';
+      }
+      // Force reconnection
+      await service.ensureConnections(true);
+      return { success: true, status: service.getStatusSnapshot() };
+    } catch (error) {
+      console.error('[NostrRuntimeIPC] Failed to retry relay:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   broadcastToAll(service.getStatusSnapshot());
 
   return service;

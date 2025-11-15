@@ -523,26 +523,37 @@ function hasAnySelectedInPrefixes(prefixes: string[]) {
 let suggestTimer: any = null;
 function updateRemoteSuggestions() {
   clearTimeout(suggestTimer);
+  const query = (newTag.value || '').trim();
+  if (!query) {
+    remoteSuggestions.value = [];
+    return;
+  }
   suggestTimer = setTimeout(async () => {
     const api = (window as any)?.electronAPI;
-    if (!api?.suggestTags) return;
-    const query = newTag.value || '';
     const selected = selectedTags.value.slice();
     const contextTypes = current.value?.meta?.types || [];
-    try {
-      const res = await api.suggestTags({ query, selected, contextTypes, limit: 12 });
-      let list = res?.success ? (res.suggestions || []) : [];
-      // Fallback to local substring search if remote is empty
-      if ((!list || list.length === 0) && query && Object.keys(tagsMap.value || {}).length) {
-        const all = Object.keys(tagsMap.value);
-        const q = query.toLowerCase();
-        list = all.filter(t => t.toLowerCase().includes(q)).slice(0, 12);
+    let list: string[] = [];
+    
+    // Try IPC first if available
+    if (api?.suggestTags) {
+      try {
+        const res = await api.suggestTags({ query, selected, contextTypes, limit: 12 });
+        list = res?.success ? (res.suggestions || []) : [];
+      } catch (e) {
+        console.warn('IPC suggestTags failed:', e);
       }
-      remoteSuggestions.value = list || [];
-    } catch {
-      remoteSuggestions.value = [];
     }
-  }, 120);
+    
+    // Fallback to local substring search if remote is empty or not available
+    if ((!list || list.length === 0) && Object.keys(tagsMap.value || {}).length > 0) {
+      const all = Object.keys(tagsMap.value);
+      const q = query.toLowerCase();
+      const notSelected = (t: string) => !selected.some(x => x.toLowerCase() === t.toLowerCase());
+      list = all.filter(t => notSelected(t) && t.toLowerCase().includes(q)).slice(0, 12);
+    }
+    
+    remoteSuggestions.value = list || [];
+  }, 150);
 }
 function addCustomTagFromSuggest() {
   addCustomTag();
@@ -582,6 +593,11 @@ const categorySuggestions = computed(() => {
 });
 const showAnySuggestions = computed(() => {
   return (categorySuggestions.value.length + remoteSuggestions.value.length) > 0;
+});
+
+// Watch newTag to update suggestions as user types
+watch(newTag, () => {
+  updateRemoteSuggestions();
 });
 
 // If tags map loads after user has started typing, refresh suggestions so tag matches appear

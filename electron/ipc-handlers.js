@@ -133,7 +133,8 @@ function registerDatabaseHandlers(dbManager) {
       rhdataPath: overrides.rhdataPath || dbManager.paths?.rhdata,
       patchbinPath: overrides.patchbinPath || dbManager.paths?.patchbin,
       resourcePath: overrides.resourcePath || getResourceDbPath(),
-      screenshotPath: overrides.screenshotPath || getScreenshotDbPath()
+      screenshotPath: overrides.screenshotPath || getScreenshotDbPath(),
+      clientDbPath: overrides.clientDbPath || dbManager.paths?.clientdata
     };
   }
 

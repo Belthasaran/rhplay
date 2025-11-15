@@ -575,7 +575,7 @@ async function buildScreenshotEntries(skeleton, baseDir, blockedSha1s) {
   return entries;
 }
 
-async function loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s) {
+async function loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s, config = {}) {
   const patchInfo = skeleton.artifacts && skeleton.artifacts.patch;
   if (!patchInfo) {
     throw new Error('Prepared patch artifact metadata not found. Run --prepare first.');
@@ -656,7 +656,7 @@ async function loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s) {
   if (romPath && fs.existsSync(romPath)) {
     romBuffer = fs.readFileSync(romPath);
   } else {
-    const { flipsPath, baseRomPath } = await getToolchainPaths();
+    const { flipsPath, baseRomPath } = await getToolchainPaths(config);
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newgame-rom-'));
     try {
       const { tempResultPath, buffer: regeneratedRom } = applyPatchWithFlips(
@@ -1220,14 +1220,22 @@ function isZipFile(filePath) {
   }
 }
 
-async function getToolchainPaths() {
-  if (TOOLCHAIN_CACHE) {
+async function getToolchainPaths(config = {}) {
+  // Use cache if available and config hasn't changed
+  if (TOOLCHAIN_CACHE && !config.clientDbPath) {
     return TOOLCHAIN_CACHE;
   }
 
-  const finder = new BinaryFinder({
+  const finderOptions = {
     projectRoot: path.join(__dirname, '..')
-  });
+  };
+  
+  // If clientDbPath is provided in config (e.g., from Electron app), use it
+  if (config.clientDbPath) {
+    finderOptions.clientDbPath = config.clientDbPath;
+  }
+
+  const finder = new BinaryFinder(finderOptions);
 
   const flipsPath = finder.findFlips();
   if (!flipsPath) {
@@ -1591,6 +1599,7 @@ function parseArgs(argv) {
     patchbinPath: DEFAULT_PATCHBIN_DB_PATH,
     resourcePath: DEFAULT_RESOURCE_DB_PATH,
     screenshotPath: DEFAULT_SCREENSHOT_DB_PATH,
+    clientDbPath: process.env.CLIENTDATA_DB_PATH || null,
     packageOutput: null,
     packageInput: null,
     outputJson: null,
@@ -2098,7 +2107,7 @@ async function handlePrepare(config, skeleton) {
 
   const blockedSha1s = await buildRomBlocklist(config, skeleton);
 
-  const artifact = await preparePatchArtifacts(skeleton, baseDir, blockedSha1s);
+  const artifact = await preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config);
 
   const rhpakuuid = metadata.rhpakuuid;
   skeleton.gameversion = skeleton.gameversion || {};
@@ -2266,7 +2275,7 @@ async function handlePrepare(config, skeleton) {
  * Patch and attachment preparation
  */
 
-async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s) {
+async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {}) {
   const gv = skeleton.gameversion;
   const patchPath = toAbsolutePath(gv.patch_local_path, baseDir);
   if (!patchPath || !fs.existsSync(patchPath)) {
@@ -2316,7 +2325,7 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s) {
   const stagedPatchPath = path.join(dirs.patchDir, patchFileBaseName);
   fs.writeFileSync(stagedPatchPath, patchBuffer);
 
-  const { flipsPath, baseRomPath } = await getToolchainPaths();
+  const { flipsPath, baseRomPath } = await getToolchainPaths(config);
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'newgame-flips-'));
 
   let resultInfo;
@@ -3547,7 +3556,7 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
 
   const blockedSha1s = await buildRomBlocklist(config, skeleton);
 
-  const patchArtifact = await loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s);
+  const patchArtifact = await loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s, config);
   const resourcePayloads = await assembleResourcePayloads(skeleton.resources || [], baseDir, blockedSha1s);
   const screenshotPayloads = await assembleScreenshotPayloads(skeleton.screenshots || [], baseDir, blockedSha1s);
 
@@ -3963,7 +3972,7 @@ async function handleVerifyPackage(config) {
 
     const blockedSha1s = await buildRomBlocklist(config, skeleton);
 
-    await loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s);
+    await loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s, config);
     await assembleResourcePayloads(skeleton.resources || [], baseDir, blockedSha1s);
     await assembleScreenshotPayloads(skeleton.screenshots || [], baseDir, blockedSha1s);
 

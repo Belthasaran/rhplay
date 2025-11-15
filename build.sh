@@ -9,7 +9,7 @@ echo "🚀 RHTools Build Script"
 echo "======================"
 echo ""
 
-VERSION_STRING="0.1.6-beta"
+VERSION_STRING="0.1.7-beta"
 
 # Colors for output
 RED='\033[0;31m'

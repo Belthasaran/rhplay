@@ -452,9 +452,23 @@ function registerDatabaseHandlers(dbManager) {
       const fs = require('fs');
       const path = require('path');
       const tagsPath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tags.json');
+      const usagePath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tag_usage.json');
+      const pairsPath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tag_pairs.json');
       const content = fs.readFileSync(tagsPath, 'utf-8');
       const json = JSON.parse(content);
       const tagMap = json?.tags || {};
+      let usage = {};
+      try {
+        const usageContent = fs.readFileSync(usagePath, 'utf-8');
+        const usageJson = JSON.parse(usageContent);
+        usage = usageJson || {};
+      } catch {}
+      let pairs = {};
+      try {
+        const pairsContent = fs.readFileSync(pairsPath, 'utf-8');
+        const pairsJson = JSON.parse(pairsContent);
+        pairs = pairsJson || {};
+      } catch {}
       const q = String(query || '').toLowerCase();
       const selectedSet = new Set((selected || []).map(s => String(s).toLowerCase()));
       const allTags = Object.keys(tagMap);
@@ -463,24 +477,56 @@ function registerDatabaseHandlers(dbManager) {
       if ((contextTypes || []).includes('Kaizo')) typeBased.add('kaizo');
       if ((contextTypes || []).includes('Troll')) typeBased.add('troll');
       const notSelected = (t) => !selectedSet.has(String(t).toLowerCase());
-      const ranked = [
-        ...Array.from(typeBased).filter(notSelected),
-        ...pool.filter(notSelected)
-      ];
-      const unique = [];
-      const seen = new Set();
-      for (const t of ranked) {
-        const key = String(t).toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          unique.push(t);
+      // Rank candidates by: type bonus, pair co-occurrence with selected, usage count, and simple query match score
+      const selectedLower = (selected || []).map(s => String(s).toLowerCase());
+      const scoreFor = (tag) => {
+        const lower = String(tag).toLowerCase();
+        let score = 0;
+        if (typeBased.has(lower)) score += 50;
+        // Pair bonuses
+        for (const s of selectedLower) {
+          const a = s < lower ? `${s}||${lower}` : `${lower}||${s}`;
+          const pairCount = pairs[a] || pairs[`${s},${lower}`] || 0;
+          if (pairCount) score += Math.min(30, Math.log10(1 + pairCount) * 10);
         }
-        if (unique.length >= (limit || 12)) break;
-      }
-      return { success: true, suggestions: unique };
+        // Usage bonus
+        const u = usage[lower] || usage[tag] || 0;
+        if (u) score += Math.min(40, Math.log10(1 + u) * 12);
+        // Query proximity
+        if (q) {
+          if (lower.startsWith(q)) score += 20;
+          else if (lower.includes(q)) score += 8;
+        }
+        return score;
+      };
+      const candidates = pool.filter(notSelected);
+      candidates.sort((a, b) => scoreFor(b) - scoreFor(a));
+      const suggestions = candidates.slice(0, limit || 12);
+      return { success: true, suggestions };
     } catch (error) {
       console.error('[tags:suggest] Failed:', error);
       return { success: false, error: error.message, suggestions: [] };
+    }
+  });
+
+  ipcMain.handle('tags:by-category', async (_event, { categoryPath } = {}) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const tagsPath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tags.json');
+      const content = fs.readFileSync(tagsPath, 'utf-8');
+      const json = JSON.parse(content);
+      const tagMap = json?.tags || {};
+      const cp = String(categoryPath || '').trim();
+      if (!cp) return { success: true, tags: [] };
+      const tags = Object.keys(tagMap).filter((t) => {
+        const paths = tagMap[t] || [];
+        return paths.some((p) => String(p).startsWith(cp));
+      }).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      return { success: true, tags };
+    } catch (error) {
+      console.error('[tags:by-category] Failed:', error);
+      return { success: false, error: error.message, tags: [] };
     }
   });
   

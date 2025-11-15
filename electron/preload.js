@@ -920,6 +920,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTagCategoryTree: () => ipcRenderer.invoke('tags:category-tree:get'),
   getTagsMap: () => ipcRenderer.invoke('tags:map:get'),
   suggestTags: (params) => ipcRenderer.invoke('tags:suggest', params || {}),
+  getTagsByCategory: (categoryPath) => ipcRenderer.invoke('tags:by-category', { categoryPath }),
 
   // Ratings summaries (Nostr ingestion)
   ratings: {

@@ -584,6 +584,13 @@ const showAnySuggestions = computed(() => {
   return (categorySuggestions.value.length + remoteSuggestions.value.length) > 0;
 });
 
+// If tags map loads after user has started typing, refresh suggestions so tag matches appear
+watch(tagsMap, () => {
+  if (newTag.value) {
+    updateRemoteSuggestions();
+  }
+});
+
 watch(() => current.value?.meta?.tags, () => {
   // keep selectedTags in sync if meta.tags changes externally (e.g., loading draft)
   initSelectedTagsFromMeta();

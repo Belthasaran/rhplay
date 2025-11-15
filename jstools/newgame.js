@@ -415,39 +415,79 @@ function stageEncryptedFile(buffer, baseDir, subdir, baseName, existingKey = nul
   };
 }
 
-function buildPatchResourceEntry(skeleton, artifact, baseDir) {
+async function buildPatchResourceEntry(skeleton, artifact, baseDir) {
   const gv = skeleton.gameversion;
-  const staged = stageEncryptedFile(artifact.buffer, baseDir, 'resources', artifact.patSha256);
+  
+  // If source was a ZIP archive, use the original ZIP file for res_attachments
+  // The patchblob and attachments table will still use the extracted BPS
+  let resourceBuffer = artifact.buffer;
+  let resourceFileName = artifact.fileName;
+  let resourceExtension = artifact.extension;
+  let resourceSize = artifact.size;
+  let resourceSha224 = artifact.patSha224;
+  let resourceSha256 = artifact.patSha256;
+  let resourceSha1 = artifact.patSha1;
+  let resourceMd5 = artifact.patHashMd5;
+  let resourceCrc16 = artifact.crc16;
+  let resourceCrc32 = artifact.crc32;
+  let resourceIpfsCidV0 = artifact.ipfsCidV0;
+  let resourceIpfsCidV1 = artifact.ipfsCidV1;
+  let resourceSourcePath = artifact.sourceRelativePath;
+  let resourceDescription = 'Primary patch resource (prepared automatically)';
+  
+  if (artifact.isArchiveSource && artifact.originalArchiveBuffer) {
+    // Use original ZIP file for res_attachments
+    resourceBuffer = artifact.originalArchiveBuffer;
+    resourceFileName = path.basename(artifact.originalArchivePath || artifact.sourcePath);
+    resourceExtension = path.extname(resourceFileName).replace('.', '').toLowerCase();
+    resourceSize = resourceBuffer.length;
+    resourceSha224 = sha224(resourceBuffer);
+    resourceSha256 = sha256(resourceBuffer);
+    resourceSha1 = sha1(resourceBuffer);
+    resourceMd5 = md5(resourceBuffer);
+    resourceCrc16 = crc16(resourceBuffer);
+    resourceCrc32 = crc32Hex(resourceBuffer);
+    resourceSourcePath = artifact.sourceRelativePath; // Original ZIP path
+    resourceDescription = 'Original patch archive resource (ZIP file containing BPS patch and other files)';
+    
+    // Compute IPFS CIDs for the ZIP file
+    const ipfs = await computeIpfsCids(resourceBuffer);
+    resourceIpfsCidV0 = ipfs.cidV0;
+    resourceIpfsCidV1 = ipfs.cidV1;
+  }
+  
+  const staged = stageEncryptedFile(resourceBuffer, baseDir, 'resources', resourceSha256);
+  
   return {
     resource_uuid: generateUuid(),
     auto_generated: true,
     kind: 'patch',
-    description: 'Primary patch resource (prepared automatically)',
+    description: resourceDescription,
     resource_scope: 'gameversion',
     linked_type: 'gameversion',
     linked_uuid: gv.gvuuid,
     gameid: gv.gameid,
     gvuuid: gv.gvuuid,
     rhpakuuid: skeleton.metadata?.rhpakuuid || null,
-    file_name: artifact.fileName,
-    file_ext: artifact.extension,
-    file_size: artifact.size,
-    file_sha224: artifact.patSha224,
-    file_sha256: artifact.patSha256,
-    file_sha1: artifact.patSha1,
-    file_md5: artifact.patHashMd5,
-    file_crc16: artifact.crc16,
-    file_crc32: artifact.crc32,
+    file_name: resourceFileName,
+    file_ext: resourceExtension,
+    file_size: resourceSize,
+    file_sha224: resourceSha224,
+    file_sha256: resourceSha256,
+    file_sha1: resourceSha1,
+    file_md5: resourceMd5,
+    file_crc16: resourceCrc16,
+    file_crc32: resourceCrc32,
     encoded_sha256: staged.encryptedSha256,
     decoded_sha256: staged.decodedSha256,
     encrypted_data_path: staged.relativePath,
     fernet_key: staged.fernetKey,
-    ipfs_cid_v1: artifact.ipfsCidV1,
-    ipfs_cid_v0: artifact.ipfsCidV0,
+    ipfs_cid_v1: resourceIpfsCidV1,
+    ipfs_cid_v0: resourceIpfsCidV0,
     download_url: gv.download_url || null,
-    storage_path: artifact.patchStoredRelativePath,
-    blob_storage_path: artifact.patchblobStoredRelativePath,
-    source_path: artifact.sourceRelativePath || null,
+    storage_path: artifact.isArchiveSource ? resourceSourcePath : artifact.patchStoredRelativePath,
+    blob_storage_path: artifact.patchblobStoredRelativePath, // Always points to patchblob (BPS-derived)
+    source_path: resourceSourcePath || null,
     created_at: new Date().toISOString()
   };
 }
@@ -2076,7 +2116,7 @@ async function handlePrepare(config, skeleton) {
     skeleton.gameversion.patch_source_is_archive = false;
   }
 
-  const patchResourceEntry = buildPatchResourceEntry(skeleton, artifact, baseDir);
+  const patchResourceEntry = await buildPatchResourceEntry(skeleton, artifact, baseDir);
   const manualResources = Array.isArray(skeleton.resources) ? skeleton.resources : [];
   skeleton.resources = mergeResourceEntries(manualResources, [patchResourceEntry]);
 
@@ -2230,9 +2270,12 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s) {
   let patchFileName = gv.patch_filename || path.basename(patchPath);
   let archiveEntryName = null;
   let patchBuffer;
+  let originalArchiveBuffer = null; // Store original ZIP file buffer for res_attachments
 
   if (treatAsZip) {
     console.log('  • Patch source is a ZIP archive; extracting primary patch...');
+    // Read and store the original ZIP file buffer for res_attachments
+    originalArchiveBuffer = fs.readFileSync(patchPath);
     const selection = selectPatchFromZip(patchPath);
     patchBuffer = selection.buffer;
     extension = selection.extension;
@@ -2334,6 +2377,8 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s) {
     sourceRelativePath: sourceRelative.startsWith('..') ? null : sourceRelative,
     archiveEntryName,
     isArchiveSource: treatAsZip,
+    originalArchiveBuffer, // Original ZIP file buffer (if source was a ZIP)
+    originalArchivePath: treatAsZip ? patchPath : null, // Original ZIP file path (if source was a ZIP)
     patSha224,
     patSha1,
     patSha256,

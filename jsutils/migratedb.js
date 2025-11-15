@@ -87,7 +87,7 @@ function printUsage() {
 }
 
 function resolveRelativeAppData(...segments) {
-  const resolved = path.resolve(process.env("APPDATA"), ...segments);
+  const resolved = path.resolve(process.env.APPDATA, ...segments);
   // In packaged environment, try both asar and unpacked locations
   if (!fs.existsSync(resolved) && process.resourcesPath) {
     // Try unpacked location

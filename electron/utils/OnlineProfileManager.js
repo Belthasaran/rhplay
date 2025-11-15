@@ -438,7 +438,7 @@ class OnlineProfileManager {
    * @param {string} profileUuid - Profile UUID to publish
    * @returns {Promise<Object>} Result object with success and eventId
    */
-  async publishProfileToNostr(profileUuid) {
+  async publishProfileToNostr(profileUuid, options = {}) {
     if (!this.keyguardKey) {
       throw new Error('Profile Guard must be unlocked to publish profiles');
     }
@@ -482,11 +482,13 @@ class OnlineProfileManager {
     }
     
     // Build NIP-01 profile metadata content
+    const includePicture = options?.includePicture !== false;
+    const includeBanner = options?.includeBanner !== false;
     const profileContent = {
       name: profile.displayName || profile.username || '',
       about: profile.bio || '',
-      picture: profile.pictureUrl || '',
-      banner: profile.bannerUrl || ''
+      ...(includePicture ? { picture: profile.pictureUrl || '' } : {}),
+      ...(includeBanner ? { banner: profile.bannerUrl || '' } : {})
     };
     
     // Remove empty fields

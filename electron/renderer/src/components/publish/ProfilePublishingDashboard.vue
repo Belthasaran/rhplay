@@ -111,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 type ProfileInfo = {
   profileId?: string;
@@ -178,8 +178,10 @@ async function publishProfile() {
     const api = (window as any)?.electronAPI;
     if (!api) return;
 
-    const result = await api.invoke('online:publish-profile-to-nostr', {
-      profileUuid: props.profileInfo?.profileId
+    const result = await api.publishProfileToNostr({
+      profileUuid: props.profileInfo?.profileId,
+      includePicture: preferences.value.includePicture,
+      includeBanner: preferences.value.includeBanner
     });
 
     if (result?.success) {
@@ -271,8 +273,39 @@ async function copyToClipboard(text: string | undefined) {
 }
 
 onMounted(() => {
-  // Load preferences from storage if needed
+  // Load preferences from storage and apply
+  (async () => {
+    try {
+      const api = (window as any)?.electronAPI;
+      if (!api) return;
+      const res = await api.getProfilePublishingPreferences();
+      if (res?.success && res.preferences) {
+        preferences.value = {
+          autoPublishProfile: !!res.preferences.autoPublishProfile,
+          includePicture: res.preferences.includePicture !== false,
+          includeBanner: res.preferences.includeBanner !== false
+        };
+      }
+    } catch (e) {
+      console.warn('[ProfilePublishing] Failed to load preferences');
+    }
+  })();
 });
+
+// Persist preferences when changed (debounced)
+let _prefSaveTimeout: any = null;
+watch(preferences, (val) => {
+  const api = (window as any)?.electronAPI;
+  if (!api) return;
+  if (_prefSaveTimeout) clearTimeout(_prefSaveTimeout);
+  _prefSaveTimeout = setTimeout(() => {
+    api.setProfilePublishingPreferences({
+      autoPublishProfile: !!val.autoPublishProfile,
+      includePicture: !!val.includePicture,
+      includeBanner: !!val.includeBanner,
+    }).catch(() => {});
+  }, 300);
+}, { deep: true });
 </script>
 
 <style scoped>

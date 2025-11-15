@@ -746,7 +746,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Save version-specific annotation
    * Channel: db:clientdata:set:version-annotation
@@ -1510,7 +1509,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Count games matching random filter criteria
    * Channel: db:count-random-matches
@@ -2293,7 +2291,6 @@ function registerDatabaseHandlers(dbManager) {
       return { valid: false, error: error.message };
     }
   });
-
   /**
    * Validate UberASM executable
    * Channel: file:validate-uberasm
@@ -3070,7 +3067,6 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
   // CHAT COMMANDS SYSTEM
   // ===========================================================================
-
   /**
    * Execute chat command (Chat Hacks + CARL)
    * Channel: chat:executeCommand
@@ -3842,7 +3838,6 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
   // ONLINE/NOSTR PROFILE OPERATIONS
   // ===========================================================================
-
   /**
    * Get online profile
    * Channel: online:profile:get
@@ -4632,7 +4627,6 @@ function registerDatabaseHandlers(dbManager) {
     }
     return `${typeNormalized}_${fingerprint}`;
   }
-
   /**
    * Create online keypair
    * Channel: online:keypair:create
@@ -5433,7 +5427,6 @@ function registerDatabaseHandlers(dbManager) {
       return [];
     }
   });
-
   /**
    * Get admin keypair (with decrypted secret key if Profile Guard is unlocked)
    * Channel: online:admin-keypair:get
@@ -5608,553 +5601,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-  /**
-   * Add existing admin keypair (public key only or full)
-   * Channel: online:admin-keypair:add
-   */
-  ipcMain.handle('online:admin-keypair:add', async (event, { keyType, publicKey, publicKeyHex, privateKey, privateKeyFormat, keyUsage, storageStatus, trustLevel }) => {
-    try {
-      const crypto = require('crypto');
-      const db = dbManager.getConnection('clientdata');
-      
-      // Calculate fingerprint from public key
-      const calculatedFingerprint = publicKeyHex ? crypto.createHash('sha256').update(Buffer.from(publicKeyHex, 'hex')).digest('hex').substring(0, 32) : null;
-      
-      // Generate names
-      const localName = calculatedFingerprint ? generateLocalKeypairName('admin', keyType, calculatedFingerprint, publicKey) : null;
-      const canonicalName = calculatedFingerprint ? generateCanonicalKeypairName(keyType, calculatedFingerprint, publicKeyHex, publicKey) : null;
-      
-      // Encrypt private key if provided
-      let encryptedPrivateKey = null;
-      let privateKeyFormatValue = privateKeyFormat || 'pem';
-      
-      if (privateKey) {
-        const keyguardKey = getKeyguardKey(event);
-        if (!keyguardKey) {
-          return { success: false, error: 'Profile Guard must be unlocked to add keypairs with private keys' };
-        }
-        
-        const keyData = privateKeyFormatValue === 'hex' ? Buffer.from(privateKey, 'hex') : Buffer.from(privateKey, 'utf8');
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-        let encrypted = cipher.update(keyData);
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        encryptedPrivateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
-      }
-      
-      // Save to database
-      const keypairUuid = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO admin_keypairs (
-          keypair_uuid, keypair_type, key_usage, storage_status,
-          public_key, public_key_hex, fingerprint,
-          encrypted_private_key, private_key_format,
-          trust_level, local_name, canonical_name,
-          name, label, comments, profile_uuid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        keypairUuid,
-        keyType,
-        keyUsage || null,
-        storageStatus || 'public-only',
-        publicKey,
-        publicKeyHex || null,
-        calculatedFingerprint || null,
-        encryptedPrivateKey,
-        privateKeyFormatValue,
-        trustLevel || 'Standard',
-        localName,
-        canonicalName,
-        null, // name - can be set later
-        null, // label - can be set later
-        null, // comments - can be set later
-        null  // profile_uuid - NULL for global admin keypairs
-      );
-      
-      return {
-        success: true,
-        keypair: {
-          uuid: keypairUuid,
-          type: keyType,
-          keyUsage: keyUsage,
-          storageStatus: storageStatus || 'public-only',
-          publicKey: publicKey,
-          publicKeyHex: publicKeyHex,
-          fingerprint: calculatedFingerprint,
-          trustLevel: trustLevel || 'Standard',
-          localName: localName,
-          canonicalName: canonicalName,
-          name: null,
-          label: null,
-          comments: null,
-          profileUuid: null,
-          createdAt: new Date().toISOString()
-        }
-      };
-    } catch (error) {
-      console.error('Error adding admin keypair:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  /**
-   * Update admin keypair storage status
-   * Channel: online:admin-keypair:update-storage-status
-   */
-  ipcMain.handle('online:admin-keypair:update-storage-status', async (event, { keypairUuid, storageStatus }) => {
-    try {
-      const crypto = require('crypto');
-      const db = dbManager.getConnection('clientdata');
-      
-      const keypair = db.prepare(`
-        SELECT encrypted_private_key, storage_status FROM admin_keypairs WHERE keypair_uuid = ?
-      `).get(keypairUuid);
-      
-      if (!keypair) {
-        return { success: false, error: 'Keypair not found' };
-      }
-      
-      // If changing to public-only, remove encrypted private key
-      if (storageStatus === 'public-only') {
-        db.prepare(`
-          UPDATE admin_keypairs 
-          SET storage_status = ?, encrypted_private_key = NULL, private_key_format = NULL
-          WHERE keypair_uuid = ?
-        `).run(storageStatus, keypairUuid);
-      } else if (storageStatus === 'full' && !keypair.encrypted_private_key) {
-        // If changing to full but no private key, can't do that
-        return { success: false, error: 'Cannot set storage status to full without a private key' };
-      } else {
-        // Just update storage status
-        db.prepare(`
-          UPDATE admin_keypairs 
-          SET storage_status = ?
-          WHERE keypair_uuid = ?
-        `).run(storageStatus, keypairUuid);
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error updating admin keypair storage status:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  /**
-   * Delete admin keypair
-   * Channel: online:admin-keypair:delete
-   */
-  ipcMain.handle('online:admin-keypair:delete', async (event, { keypairUuid }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      db.prepare(`
-        DELETE FROM admin_keypairs WHERE keypair_uuid = ?
-      `).run(keypairUuid);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting admin keypair:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  /**
-   * Update admin keypair metadata (name, label, comments)
-   * Channel: online:admin-keypair:update-metadata
-   */
-  ipcMain.handle('online:admin-keypair:update-metadata', async (event, { keypairUuid, name, label, comments }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      db.prepare(`
-        UPDATE admin_keypairs 
-        SET name = ?, label = ?, comments = ?
-        WHERE keypair_uuid = ?
-      `).run(name || null, label || null, comments || null, keypairUuid);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error updating admin keypair metadata:', error);
-      return { success: false, error: error.message };
-    }
-  });
-  /**
-   * Export admin keypair secret key in PKCS format
-   * Channel: online:admin-keypair:export-secret-pkcs
-   */
-  ipcMain.handle('online:admin-keypair:export-secret-pkcs', async (event, { keypairUuid, password }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      const keypair = db.prepare(`
-        SELECT encrypted_private_key, private_key_format FROM admin_keypairs WHERE keypair_uuid = ?
-      `).get(keypairUuid);
-      
-      if (!keypair || !keypair.encrypted_private_key) {
-        return { success: false, error: 'Keypair not found or has no private key' };
-      }
-      
-      // Decrypt private key
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard must be unlocked to export secret keys' };
-      }
-      
-      const parts = keypair.encrypted_private_key.split(':');
-      if (parts.length !== 2) {
-        return { success: false, error: 'Invalid encrypted private key format' };
-      }
-      
-      const iv = Buffer.from(parts[0], 'hex');
-      const encrypted = Buffer.from(parts[1], 'hex');
-      const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-      let decrypted = decipher.update(encrypted);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      
-      const privateKey = keypair.private_key_format === 'hex' ? decrypted.toString('hex') : decrypted.toString('utf8');
-      
-      // Encrypt with user-provided password using PBKDF2
-      const salt = crypto.randomBytes(16);
-      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
-      const exportIv = crypto.randomBytes(16);
-      const exportCipher = crypto.createCipheriv('aes-256-cbc', key, exportIv);
-      let passwordEncrypted = exportCipher.update(privateKey, 'utf8');
-      passwordEncrypted = Buffer.concat([passwordEncrypted, exportCipher.final()]);
-      
-      // Create PKCS-like JSON format
-      const pkcsData = {
-        format: 'RHTools-PKCS-v1',
-        keypairUuid: keypairUuid,
-        privateKeyFormat: keypair.private_key_format,
-        encryptedData: {
-          iv: exportIv.toString('hex'),
-          salt: salt.toString('hex'),
-          data: passwordEncrypted.toString('hex')
-        }
-      };
-      
-      return { success: true, pkcsData: JSON.stringify(pkcsData) };
-    } catch (error) {
-      console.error('Error exporting admin keypair secret PKCS:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  /**
-   * Import admin keypair secret key from PKCS format
-   * Channel: online:admin-keypair:import-secret-pkcs
-   */
-  ipcMain.handle('online:admin-keypair:import-secret-pkcs', async (event, { keypairUuid, pkcsDataJson, password }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      const pkcsData = JSON.parse(pkcsDataJson);
-      
-      if (pkcsData.format !== 'RHTools-PKCS-v1') {
-        return { success: false, error: 'Invalid PKCS format' };
-      }
-      
-      // Decrypt with user-provided password
-      const salt = Buffer.from(pkcsData.encryptedData.salt, 'hex');
-      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
-      const iv = Buffer.from(pkcsData.encryptedData.iv, 'hex');
-      const encrypted = Buffer.from(pkcsData.encryptedData.data, 'hex');
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-      let decrypted = decipher.update(encrypted);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      
-      const privateKey = decrypted.toString('utf8');
-      
-      // Re-encrypt with Profile Guard key
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard must be unlocked to import secret keys' };
-      }
-      
-      const privateKeyData = pkcsData.privateKeyFormat === 'hex' ? Buffer.from(privateKey, 'hex') : Buffer.from(privateKey, 'utf8');
-      const reencryptIv = crypto.randomBytes(16);
-      const reencryptCipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, reencryptIv);
-      let reencrypted = reencryptCipher.update(privateKeyData);
-      reencrypted = Buffer.concat([reencrypted, reencryptCipher.final()]);
-      
-      const encryptedPrivateKey = reencryptIv.toString('hex') + ':' + reencrypted.toString('hex');
-      
-      // Update database
-      db.prepare(`
-        UPDATE admin_keypairs 
-        SET encrypted_private_key = ?, private_key_format = ?, storage_status = 'full'
-        WHERE keypair_uuid = ?
-      `).run(encryptedPrivateKey, pkcsData.privateKeyFormat, keypairUuid);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error importing admin keypair secret PKCS:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  /**
-   * Remove admin keypair secret key
-   * Channel: online:admin-keypair:remove-secret
-   */
-  ipcMain.handle('online:admin-keypair:remove-secret', async (event, { keypairUuid }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      db.prepare(`
-        UPDATE admin_keypairs 
-        SET encrypted_private_key = NULL, private_key_format = NULL, storage_status = 'public-only'
-        WHERE keypair_uuid = ?
-      `).run(keypairUuid);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error removing admin keypair secret:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // ===========================================================================
-  // USER OP KEYPAIR OPERATIONS (clientdata.db - admin_keypairs table with profile_uuid)
-  // ===========================================================================
-
-  /**
-   * List User Op keypairs for a specific profile (public info only)
-   * Channel: online:user-op-keypairs:list
-   */
-  ipcMain.handle('online:user-op-keypairs:list', async (event, { profileUuid }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      const keypairs = db.prepare(`
-        SELECT 
-          keypair_uuid,
-          keypair_type,
-          key_usage,
-          storage_status,
-          public_key,
-          public_key_hex,
-          fingerprint,
-          trust_level,
-          local_name,
-          canonical_name,
-          name,
-          label,
-          comments,
-          profile_uuid,
-          created_at,
-          nostr_status,
-          nostr_event_id
-        FROM admin_keypairs
-        WHERE profile_uuid = ?
-        ORDER BY COALESCE(name, local_name, canonical_name), created_at DESC
-      `).all(profileUuid);
-      
-      return keypairs.map(kp => ({
-        uuid: kp.keypair_uuid,
-        type: kp.keypair_type,
-        keyUsage: kp.key_usage,
-        storageStatus: kp.storage_status || 'public-only',
-        publicKey: kp.public_key,
-        publicKeyHex: kp.public_key_hex,
-        fingerprint: kp.fingerprint,
-        trustLevel: kp.trust_level,
-        localName: kp.local_name,
-        canonicalName: kp.canonical_name,
-        name: kp.name,
-        label: kp.label,
-        comments: kp.comments,
-        profileUuid: kp.profile_uuid,
-        nostrStatus: kp.nostr_status || 'pending',
-        nostrEventId: kp.nostr_event_id,
-        createdAt: kp.created_at
-      }));
-    } catch (error) {
-      console.error('Error listing User Op keypairs:', error);
-      return [];
-    }
-  });
-
-  /**
-   * Get User Op keypair (with decrypted secret key if Profile Guard is unlocked)
-   * Channel: online:user-op-keypair:get
-   */
-  ipcMain.handle('online:user-op-keypair:get', async (event, { keypairUuid }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      const keypair = db.prepare(`
-        SELECT * FROM admin_keypairs WHERE keypair_uuid = ?
-      `).get(keypairUuid);
-      
-      if (!keypair) {
-        return { success: false, error: 'Keypair not found' };
-      }
-      
-      const result = {
-        uuid: keypair.keypair_uuid,
-        type: keypair.keypair_type,
-        keyUsage: keypair.key_usage,
-        storageStatus: keypair.storage_status || 'public-only',
-        publicKey: keypair.public_key,
-        publicKeyHex: keypair.public_key_hex,
-        fingerprint: keypair.fingerprint,
-        trustLevel: keypair.trust_level,
-        localName: keypair.local_name,
-        canonicalName: keypair.canonical_name,
-        name: keypair.name,
-        label: keypair.label,
-        comments: keypair.comments,
-        profileUuid: keypair.profile_uuid,
-        createdAt: keypair.created_at
-      };
-      
-      // Decrypt private key if Profile Guard is unlocked and encrypted_private_key exists
-      const keyguardKey = getKeyguardKey(event);
-      if (keyguardKey && keypair.encrypted_private_key) {
-        try {
-          const parts = keypair.encrypted_private_key.split(':');
-          if (parts.length === 2) {
-            const iv = Buffer.from(parts[0], 'hex');
-            const encrypted = Buffer.from(parts[1], 'hex');
-            const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
-            let decrypted = decipher.update(encrypted);
-            decrypted = Buffer.concat([decrypted, decipher.final()]);
-            
-            // Convert back to original format
-            if (keypair.private_key_format === 'hex') {
-              result.privateKey = decrypted.toString('hex');
-            } else {
-              result.privateKey = decrypted.toString('utf8');
-            }
-          }
-        } catch (error) {
-          console.error('Error decrypting User Op keypair:', error);
-          return { success: false, error: 'Failed to decrypt private key' };
-        }
-      } else if (keypair.storage_status === 'full-offline') {
-        // For offline storage, we don't have the private key stored
-        result.privateKey = null;
-      }
-      
-      return { success: true, keypair: result };
-    } catch (error) {
-      console.error('Error getting User Op keypair:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  /**
-   * Create User Op keypair
-   * Channel: online:user-op-keypair:create
-   */
-  ipcMain.handle('online:user-op-keypair:create', async (event, { profileUuid, keyType, keyUsage, trustLevel, username }) => {
-    try {
-      const crypto = require('crypto');
-      const db = dbManager.getConnection('clientdata');
-      
-      if (!profileUuid) {
-        return { success: false, error: 'Profile UUID is required for User Op keypairs' };
-      }
-      
-      // Get username from profile if not provided
-      let usernameForName = username;
-      if (!usernameForName) {
-        const keyguardKey = getKeyguardKey(event);
-        if (keyguardKey) {
-          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-          const currentProfile = profileManager.getCurrentProfile();
-          if (currentProfile) {
-            usernameForName = currentProfile.username || 'user';
-          } else {
-            usernameForName = 'user';
-          }
-        } else {
-          usernameForName = 'user';
-        }
-      }
-      
-      // Generate actual keypair
-      const keypairData = await generateKeypair(keyType || 'ML-DSA-44');
-      
-      // Generate names
-      const localName = generateLocalKeypairName(usernameForName, keypairData.type, keypairData.fingerprint, keypairData.publicKey);
-      const canonicalName = generateCanonicalKeypairName(keypairData.type, keypairData.fingerprint, keypairData.publicKeyHex, keypairData.publicKey);
-      
-      // Encrypt private key with Profile Guard
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard must be unlocked to create User Op keypairs' };
-      }
-      
-      // Encrypt private key
-      const keyToEncrypt = keypairData.privateKeyRaw || keypairData.privateKey;
-      const keyData = keypairData.privateKeyRaw ? Buffer.from(keyToEncrypt, 'hex') : Buffer.from(keyToEncrypt, 'utf8');
-      
-      const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
-      let encrypted = cipher.update(keyData);
-      encrypted = Buffer.concat([encrypted, cipher.final()]);
-      
-      const encryptedPrivateKey = iv.toString('hex') + ':' + encrypted.toString('hex');
-      const privateKeyFormat = keypairData.privateKeyRaw ? 'hex' : 'pem';
-      
-      // Save to database
-      const keypairUuid = crypto.randomUUID();
-      db.prepare(`
-        INSERT INTO admin_keypairs (
-          keypair_uuid, keypair_type, key_usage, storage_status,
-          public_key, public_key_hex, fingerprint,
-          encrypted_private_key, private_key_format,
-          trust_level, local_name, canonical_name,
-          name, label, comments, profile_uuid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        keypairUuid,
-        keypairData.type,
-        keyUsage || null,
-        'full', // Generated keypairs have full storage by default
-        String(keypairData.publicKey),
-        String(keypairData.publicKeyHex),
-        String(keypairData.fingerprint),
-        encryptedPrivateKey,
-        privateKeyFormat,
-        trustLevel || 'Standard',
-        localName,
-        canonicalName,
-        null, // name - can be set later
-        null, // label - can be set later
-        null, // comments - can be set later
-        profileUuid  // profile_uuid - set to profile UUID for User Op keypairs
-      );
-      
-      return {
-        success: true,
-        keypair: {
-          uuid: keypairUuid,
-          type: keypairData.type,
-          keyUsage: keyUsage,
-          storageStatus: 'full',
-          publicKey: String(keypairData.publicKey),
-          publicKeyHex: String(keypairData.publicKeyHex),
-          fingerprint: String(keypairData.fingerprint),
-          trustLevel: trustLevel || 'Standard',
-          localName: localName,
-          canonicalName: canonicalName,
-          name: null,
-          label: null,
-          comments: null,
-          profileUuid: profileUuid,
-          createdAt: new Date().toISOString()
-        }
-      };
-    } catch (error) {
-      console.error('Error creating User Op keypair:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
   /**
    * Add existing User Op keypair (public key only or full)
    * Channel: online:user-op-keypair:add
@@ -6392,6 +5838,7 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
   /**
    * Import User Op keypair secret key from PKCS format
    * Channel: online:user-op-keypair:import-secret-pkcs
@@ -6521,6 +5968,7 @@ function registerDatabaseHandlers(dbManager) {
       return [];
     }
   });
+
   /**
    * Get encryption key details (decrypts keydata if encrypted)
    * Channel: online:encryption-key:get
@@ -6936,7 +6384,6 @@ function registerDatabaseHandlers(dbManager) {
       return [];
     }
   });
-
   ipcMain.handle('online:trust-declarations:export-all', async () => {
     try {
       const { canceled, filePath } = await dialog.showSaveDialog({
@@ -7689,7 +7136,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Channel: online:get-available-nostr-signing-keypairs
    * Get all Nostr keypairs that have private keys available for signing
@@ -8399,7 +7845,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   ipcMain.handle('ratings:summaries:get', (_event, { gameId } = {}) => {
     if (!gameId) {
       return { success: false, error: 'gameId is required' };

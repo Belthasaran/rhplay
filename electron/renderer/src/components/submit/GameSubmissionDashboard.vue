@@ -287,6 +287,8 @@ const current = ref<Draft | null>(null);
 const predefinedTags = ref<string[]>([]);
 const selectedTags = ref<string[]>([]);
 const newTag = ref<string>('');
+const tagsMap = ref<Record<string, string[]>>({});
+const categoryTree = ref<any>(null);
 const recommendedTags = computed(() => {
   const tags = new Set<string>();
   const meta = current.value?.meta;
@@ -307,11 +309,10 @@ const recommendedTags = computed(() => {
 });
 const filteredSuggestions = computed(() => {
   const q = (newTag.value || '').toLowerCase();
-  if (!q) return [];
   const notSelected = (t: string) => !selectedTags.value.some(x => x.toLowerCase() === t.toLowerCase());
-  return predefinedTags.value
-    .filter(t => notSelected(t) && t.toLowerCase().includes(q))
-    .slice(0, 12);
+  const all = Object.keys(tagsMap.value || {});
+  const base = q ? all.filter(t => t.toLowerCase().includes(q)) : all;
+  return base.filter(notSelected).slice(0, 12);
 });
 
 const canSubmit = computed(() => {
@@ -402,6 +403,15 @@ onMounted(() => {
   predefinedTags.value = parsePredefinedTags(tagsText as string);
   if (current.value) {
     initSelectedTagsFromMeta();
+  }
+  const api = (window as any)?.electronAPI;
+  if (api?.getTagCategoryTree && api?.getTagsMap) {
+    api.getTagCategoryTree().then((res: any) => {
+      if (res?.success) categoryTree.value = res.tree;
+    }).catch(() => {});
+    api.getTagsMap().then((res: any) => {
+      if (res?.success) tagsMap.value = res.tags || {};
+    }).catch(() => {});
   }
 });
 

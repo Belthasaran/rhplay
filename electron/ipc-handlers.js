@@ -414,6 +414,75 @@ function registerDatabaseHandlers(dbManager) {
 
   // Initialize Nostr runtime IPC stubs
   registerNostrRuntimeIPC(dbManager);
+
+  // =============================
+  // Tag data (SMW) - categories and tag map
+  // =============================
+  ipcMain.handle('tags:category-tree:get', async () => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tag_category_tree.json');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const json = JSON.parse(content);
+      return { success: true, tree: json };
+    } catch (error) {
+      console.error('[tags:category-tree:get] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('tags:map:get', async () => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tags.json');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const json = JSON.parse(content);
+      const tags = json?.tags || {};
+      return { success: true, tags };
+    } catch (error) {
+      console.error('[tags:map:get] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('tags:suggest', async (_event, { query = '', selected = [], contextTypes = [], limit = 12 } = {}) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const tagsPath = path.resolve(projectRoot, 'electron', 'main', 'tags', 'smw_tags.json');
+      const content = fs.readFileSync(tagsPath, 'utf-8');
+      const json = JSON.parse(content);
+      const tagMap = json?.tags || {};
+      const q = String(query || '').toLowerCase();
+      const selectedSet = new Set((selected || []).map(s => String(s).toLowerCase()));
+      const allTags = Object.keys(tagMap);
+      let pool = q ? allTags.filter(t => t.toLowerCase().includes(q)) : allTags;
+      const typeBased = new Set();
+      if ((contextTypes || []).includes('Kaizo')) typeBased.add('kaizo');
+      if ((contextTypes || []).includes('Troll')) typeBased.add('troll');
+      const notSelected = (t) => !selectedSet.has(String(t).toLowerCase());
+      const ranked = [
+        ...Array.from(typeBased).filter(notSelected),
+        ...pool.filter(notSelected)
+      ];
+      const unique = [];
+      const seen = new Set();
+      for (const t of ranked) {
+        const key = String(t).toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(t);
+        }
+        if (unique.length >= (limit || 12)) break;
+      }
+      return { success: true, suggestions: unique };
+    } catch (error) {
+      console.error('[tags:suggest] Failed:', error);
+      return { success: false, error: error.message, suggestions: [] };
+    }
+  });
   
   // ===========================================================================
   // GAME DATA OPERATIONS (rhdata.db)

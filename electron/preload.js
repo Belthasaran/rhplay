@@ -914,6 +914,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Game submission
   enqueueGameSubmission: (params) => ipcRenderer.invoke('online:submission:enqueue', params),
 
+  // =============================
+  // Tags (SMW) - categories and suggestions
+  // =============================
+  getTagCategoryTree: () => ipcRenderer.invoke('tags:category-tree:get'),
+  getTagsMap: () => ipcRenderer.invoke('tags:map:get'),
+  suggestTags: (params) => ipcRenderer.invoke('tags:suggest', params || {}),
+
   // Ratings summaries (Nostr ingestion)
   ratings: {
     getSummaries: (gameId) => ipcRenderer.invoke('ratings:summaries:get', { gameId })

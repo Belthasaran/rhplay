@@ -891,16 +891,26 @@ function create7zArchive(sourceDir, outputPath) {
   configure7zipPath();
   
   return new Promise((resolve, reject) => {
-    // 7zip-min pack function: pack(pathToSrc, pathToDest, cb)
-    // We need to pack the entire sourceDir into outputPath
-    // Since 7zip-min's pack works on a single file/folder, we pack the sourceDir
-    sevenZip.pack(sourceDir, outputPath, (err) => {
-      if (err) {
-        reject(new Error(`7z archiving failed: ${err.message}`));
-      } else {
-        resolve();
-      }
+    // Get the configured 7zip binary path
+    const config = sevenZip.getConfig();
+    const sevenZipBinary = config.binaryPath || path7za;
+    
+    // Use absolute path for output
+    const absoluteOutput = path.resolve(outputPath);
+    
+    // Use spawnSync directly with cwd option to archive from within sourceDir
+    // This archives only the contents without including the directory name
+    // The '*' pattern archives all files in the current directory (sourceDir)
+    const result = spawnSync(sevenZipBinary, ['a', absoluteOutput, '*'], {
+      cwd: sourceDir,
+      stdio: 'inherit'
     });
+    
+    if (result.status !== 0) {
+      reject(new Error(`7z archiving failed with exit code ${result.status}`));
+    } else {
+      resolve();
+    }
   });
 }
 

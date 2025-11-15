@@ -531,7 +531,14 @@ function updateRemoteSuggestions() {
     const contextTypes = current.value?.meta?.types || [];
     try {
       const res = await api.suggestTags({ query, selected, contextTypes, limit: 12 });
-      remoteSuggestions.value = res?.success ? (res.suggestions || []) : [];
+      let list = res?.success ? (res.suggestions || []) : [];
+      // Fallback to local substring search if remote is empty
+      if ((!list || list.length === 0) && query && Object.keys(tagsMap.value || {}).length) {
+        const all = Object.keys(tagsMap.value);
+        const q = query.toLowerCase();
+        list = all.filter(t => t.toLowerCase().includes(q)).slice(0, 12);
+      }
+      remoteSuggestions.value = list || [];
     } catch {
       remoteSuggestions.value = [];
     }
@@ -550,7 +557,9 @@ watch(categoryTree, () => {
     function walk(node: any, prefix: string) {
       if (!node) return;
       const name = node.name || '';
-      const pathHere = name ? (prefix ? (prefix + ' > ' + name) : name) : prefix;
+      // Skip including the root name in paths; start paths at first-level categories
+      const isRoot = !prefix && name && String(name).toLowerCase().includes('smw tag categories');
+      const pathHere = isRoot ? '' : (name ? (prefix ? (prefix + ' > ' + name) : name) : prefix);
       if (node.children && node.children.length) {
         for (const child of node.children) walk(child, pathHere);
       } else if (pathHere) {
@@ -558,7 +567,7 @@ watch(categoryTree, () => {
         allCategoryPaths.value.push(pathHere);
       }
       // also include intermediate nodes as selectable categories
-      if (name) allCategoryPaths.value.push(pathHere);
+      if (pathHere) allCategoryPaths.value.push(pathHere);
     }
     walk(categoryTree.value, '');
     // dedupe/sort

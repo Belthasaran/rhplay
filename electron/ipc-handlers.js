@@ -538,15 +538,18 @@ function registerDatabaseHandlers(dbManager) {
       if (!json) {
         json = JSON.stringify({ note: 'empty_payload' });
       }
+      if (typeof json !== 'string') {
+        json = JSON.stringify(json || {});
+      }
       const insert = `
         INSERT INTO game_submission_drafts (${cols.id}, ${cols.title}, ${cols.data}, ${cols.created}, ${cols.updated})
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, COALESCE(?, '{}'), ?, ?)
         ON CONFLICT(${cols.id}) DO UPDATE SET
           ${cols.title} = excluded.${cols.title},
-          ${cols.data} = excluded.${cols.data},
+          ${cols.data} = COALESCE(excluded.${cols.data}, ${cols.data}),
           ${cols.updated} = excluded.${cols.updated}
       `;
-      db.prepare(insert).run(id, title || null, json, now, now);
+      db.prepare(insert).run(id, title || 'Untitled Submission', json, now, now);
       return { success: true, draftId: id };
     } catch (error) {
       console.error('[submission:drafts:save] Failed:', error);

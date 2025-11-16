@@ -757,7 +757,7 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-  ipcMain.handle('submission:package', async (_event, { configPath, outPath }) => {
+  ipcMain.handle('submission:package', async (event, { configPath, outPath, options } = {}) => {
     try {
       if (!configPath) return { success: false, error: 'Missing configPath' };
       const out = outPath || '';
@@ -852,7 +852,9 @@ function registerDatabaseHandlers(dbManager) {
         const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
         fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
         skeletonPath = tmp;
+        data = skel;
       }
+
       // If not yet prepared, run prepare implicitly before packaging
       let preparedData;
       try {
@@ -861,7 +863,116 @@ function registerDatabaseHandlers(dbManager) {
       } catch {}
       if (!preparedData || !preparedData.metadata || !preparedData.metadata.prepared) {
         await newgame.handlePrepare(skeletonPath);
+        // Reload prepared skeleton
+        try {
+          const txt3 = fs.readFileSync(skeletonPath, 'utf8');
+          preparedData = JSON.parse(txt3);
+        } catch {}
       }
+      
+      // After prepare, inject packager_profile + packager_signatures if online profile is active
+      if (preparedData) {
+        try {
+          const keyguardKey = getKeyguardKey(event);
+          if (keyguardKey) {
+            const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+            const profileUuid = profileManager.getCurrentProfileId();
+            const profile = profileUuid ? profileManager.getProfile(profileUuid) : null;
+            if (profileUuid && profile) {
+              const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(profileUuid);
+              if (primaryKeypair && primaryKeypair.privateKey) {
+                const crypto = require('crypto');
+                // Compute hash of skeleton.json (the prepared skeleton)
+                const skeletonJson = JSON.stringify(preparedData, null, 2);
+                const hashBuf = crypto.createHash('sha256').update(skeletonJson, 'utf8').digest();
+                let privHex = primaryKeypair.privateKey;
+                if (Buffer.isBuffer(privHex)) {
+                  privHex = privHex.toString('hex');
+                }
+                if (typeof privHex === 'string' && /^[0-9a-fA-F]{64}$/.test(privHex)) {
+                  // Sign hash using Schnorr signature (Nostr-compatible)
+                  // Use nostr-tools finalizeEvent to create a signed event, then extract the signature
+                  // This works because Nostr events use Schnorr signatures
+                  let sigHex = '';
+                  let signedEvent = null;
+                  try {
+                    const { finalizeEvent } = require('nostr-tools');
+                    const privBytes = new Uint8Array(Buffer.from(privHex, 'hex'));
+                    // Create an event with clear metadata identifying it as a rhpak skeleton signature
+                    const eventTemplate = {
+                      kind: 0,
+                      created_at: Math.floor(Date.now() / 1000),
+                      tags: [
+                        ['purpose', 'rhpak-skeleton-signature'],
+                        ['file', 'skeleton.json'],
+                        ['hash', hashBuf.toString('hex')],
+                        ['rhpak-version', '1']
+                      ],
+                      content: hashBuf.toString('hex')
+                    };
+                    signedEvent = finalizeEvent(eventTemplate, privBytes);
+                    // Extract signature from the signed event (64-byte hex string)
+                    sigHex = signedEvent.sig;
+                  } catch (err) {
+                    console.warn('[submission:package] Failed to create signature using nostr-tools:', err?.message || err);
+                    // If signing fails, we'll skip adding the signature but still add the profile
+                    sigHex = '';
+                    signedEvent = null;
+                  }
+                  
+                  const signerPubHex = primaryKeypair.publicKeyHex || primaryKeypair.publicKey || '';
+                  const fp = await calculateProfileFp(profileUuid);
+                  const metadata = preparedData.metadata || (preparedData.metadata = {});
+                  const metaInfo = profile._metadata || {};
+                  const primary = profile.primaryKeypair || profile.primaryKeyPair || primaryKeypair || {};
+                  
+                  // Always add packager_profile when online profile is active
+                  metadata.packager_profile = {
+                    profileId: profile.profileId || metaInfo.profileUuid || profileUuid,
+                    username: profile.username || '',
+                    displayName: profile.displayName || '',
+                    bio: profile.bio || '',
+                    socialIds: profile.socialIds || [],
+                    pictureUrl: profile.pictureUrl || '',
+                    bannerUrl: profile.bannerUrl || '',
+                    fp,
+                    public_nostr_version: metaInfo.publicNostrVersion || null,
+                    primaryKeypair: {
+                      canonicalName: primary.canonicalName || primary.publicKey || '',
+                      publicKeyHex: primary.publicKeyHex || primary.publicKey || '',
+                      fingerprint: primary.fingerprint || '',
+                      createdAt: metaInfo.createdAt || null
+                    }
+                  };
+                  
+                  // Only add signatures if we successfully created a signature
+                  if (sigHex && signedEvent) {
+                    metadata.packager_signatures = [
+                      {
+                        file_path: 'skeleton.json',
+                        signer: signerPubHex,
+                        hashvalue: hashBuf.toString('hex'),
+                        signature: sigHex
+                      }
+                    ];
+                    // Store the full signed event for inclusion in rhpak.json
+                    metadata.packager_signing_event = signedEvent;
+                  } else {
+                    metadata.packager_signatures = [];
+                    metadata.packager_signing_event = null;
+                  }
+                  
+                  // Update skeleton file with packager metadata
+                  fs.writeFileSync(skeletonPath, JSON.stringify(preparedData, null, 2), 'utf8');
+                }
+              }
+            }
+          }
+        } catch (sigErr) {
+          console.warn('[submission:package] Failed to attach packager signature:', sigErr?.message || sigErr);
+        }
+      }
+      
       await newgame.handlePackage(skeletonPath, out);
       return { success: true };
     } catch (error) {

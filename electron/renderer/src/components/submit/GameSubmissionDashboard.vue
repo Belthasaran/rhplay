@@ -1098,7 +1098,17 @@ async function runPackage() {
         return;
       }
       const outPath = saveRes.filePath;
-      const res = await api.packageSubmission(preparedPath, outPath);
+      // If an online profile with Nostr keypair is active, request packager signature metadata
+      let includePackagerSignature = false;
+      try {
+        if (api.checkProfileForPublishing) {
+          const status = await api.checkProfileForPublishing();
+          includePackagerSignature = !!(status?.hasProfile && status?.hasNostrKeypair);
+        }
+      } catch {
+        includePackagerSignature = false;
+      }
+      const res = await api.packageSubmission(preparedPath, outPath, includePackagerSignature ? { includePackagerSignature: true } : {});
       if (res?.success) alert('Package completed.');
       else alert(`Package failed: ${res?.error || 'Unknown error'}`);
     } else {

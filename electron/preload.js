@@ -927,7 +927,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     return ipcRenderer.invoke('submission:prepare', params || {});
   },
-  packageSubmission: (configPath, outPath) => ipcRenderer.invoke('submission:package', { configPath, outPath }),
+  packageSubmission: (configPath, outPath, options) => ipcRenderer.invoke('submission:package', { configPath, outPath, options: options || {} }),
   validateScreenshot: (params) => ipcRenderer.invoke('submission:validate-screenshot', params || {}),
 
   // File helpers for submission flows

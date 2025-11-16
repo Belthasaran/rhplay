@@ -3719,6 +3719,17 @@ async function handlePackage(config, skeleton) {
     const skeletonTempPath = path.join(tempDir, 'skeleton.json');
     saveSkeleton(skeletonTempPath, clone);
 
+    // If packager metadata is present, write rhpak.json alongside skeleton.json
+    if (clone.metadata.packager_profile || clone.metadata.packager_signatures) {
+      const rhpakMeta = {
+        packager_profile: clone.metadata.packager_profile || null,
+        packager_signatures: clone.metadata.packager_signatures || [],
+        packager_signing_event: clone.metadata.packager_signing_event || null
+      };
+      const rhpakPath = path.join(tempDir, 'rhpak.json');
+      fs.writeFileSync(rhpakPath, JSON.stringify(rhpakMeta, null, 2), 'utf8');
+    }
+
     function stage(relative, absoluteOverride) {
       if (!relative) return;
       const normalized = normalizeRelativePath(relative);

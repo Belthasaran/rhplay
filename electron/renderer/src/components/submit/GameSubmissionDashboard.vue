@@ -6,7 +6,7 @@
         <button class="btn" @click="newDraft">New Draft</button>
         <button class="btn" @click="importDraft">Import Draft…</button>
         <button class="btn" :disabled="!current" @click="exportDraft">Export Draft…</button>
-        <button class="btn" :disabled="!current" @click="saveAndClose">Save & Close</button>
+        <button class="btn" :disabled="!current" @click="saveAndClose">Save &amp; Close</button>
       </div>
     </div>
 
@@ -34,18 +34,19 @@
         <button :class="['step', { active: step===4 }]" @click="step=4">4. Tags</button>
         <button :class="['step', { active: step===5 }]" @click="step=5">5. Description</button>
         <button :class="['step', { active: step===6 }]" @click="step=6">6. Notes</button>
-        <button :class="['step', { active: step===7 }]" @click="step=7">7. Review & Submit</button>
+        <button :class="['step', { active: step===7 }]" @click="step=7">7. Developer Options</button>
+        <button :class="['step', { active: step===8 }]" @click="step=8">8. Review &amp; Submit</button>
       </div>
 
       <div v-if="step===1" class="panel">
-        <h4>Patch & Screenshots</h4>
+        <h4>Patch &amp; Screenshots</h4>
         <div class="field">
           <label>Patch (BPS ≤ 4 MiB)</label>
           <div class="file-row">
-            <input type="text" class="input" :value="current.files.patch?.path || ''" placeholder="Select .bps file" readonly />
+            <input type="text" class="input" :value="current.files?.patch?.path || ''" placeholder="Select .bps file" readonly />
             <button class="btn" @click="pickPatch">Browse…</button>
           </div>
-          <div v-if="current.files.patch?.size" class="hint">Size: {{ formatBytes(current.files.patch.size) }}</div>
+          <div v-if="current.files?.patch?.size" class="hint">Size: {{ formatBytes(current.files!.patch!.size) }}</div>
         </div>
 
         <div class="field">
@@ -54,7 +55,7 @@
             <button class="btn" @click="pickScreenshots">Add Screenshots…</button>
           </div>
           <ul class="shots">
-            <li v-for="(s, idx) in current.files.screenshots" :key="s.path">
+            <li v-for="(s, idx) in current.files!.screenshots" :key="s.path">
               <span class="mono">{{ s.name }}</span>
               <span class="meta">{{ s.width }}×{{ s.height }}, {{ formatBytes(s.size) }}</span>
               <button class="btn-link" @click="removeShot(idx)">Remove</button>
@@ -68,7 +69,7 @@
         <div class="grid">
           <div class="field">
             <label>Name *</label>
-            <input v-model.trim="current.meta.name" class="input" placeholder="Game name" />
+            <input v-model="current.meta.name" class="input" placeholder="Game name" />
           </div>
           <div class="field">
             <label>Version *</label>
@@ -144,11 +145,11 @@
           </div>
           <div class="field">
             <label>Author *</label>
-            <input v-model.trim="current.meta.author" class="input" placeholder="Primary author" />
+            <input v-model="current!.meta.author" class="input" placeholder="Primary author" />
           </div>
           <div class="field">
             <label>Authors (comma-separated)</label>
-            <input v-model.trim="current.meta.authors" class="input" placeholder="Optional, comma-separated" />
+            <input v-model.trim="current!.meta.authors" class="input" placeholder="Optional, comma-separated" />
           </div>
         </div>
       </div>
@@ -274,9 +275,24 @@
       </div>
 
       <div v-if="step===7" class="panel">
+        <h4>Developer Options</h4>
+        <div class="grid">
+          <div class="field full">
+            <label><input type="checkbox" v-model="current!.meta.admin_only" /> Admin-only submission</label>
+            <div class="hint">Checking this box will prevent the game from being listed on the main site, only visible to admins.</div>
+          </div>
+          <div class="field full">
+            <label>Override Game ID (for testing)</label>
+            <input v-model.trim="overrideGameIdValue" class="input" placeholder="e.g., my_game_id" />
+            <div class="hint">Enter a game ID to override the game ID used in the RHPAK package. Only use this for testing purposes.</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="step===8" class="panel">
         <h4>Review</h4>
         <div class="review">
-          <div><strong>Patch:</strong> <span class="mono">{{ current.files.patch?.name || '—' }}</span></div>
+          <div><strong>Patch:</strong> <span class="mono">{{ current.files?.patch?.name || '—' }}</span></div>
           <div><strong>Screenshots:</strong> {{ current.files.screenshots.length }}</div>
           <div><strong>Name:</strong> {{ current.meta.name || '—' }}</div>
           <div><strong>Version:</strong> {{ current.meta.version || 1 }}</div>
@@ -335,6 +351,12 @@ type Draft = {
     url?: string;
     download_url?: string;
     warnings?: string[];
+    gameid?: string;
+    gvuuid?: string;
+    section?: string;
+    admin_only?: boolean;
+    moderation_result?: string;
+    admin_comments?: string;
   };
 };
 
@@ -347,7 +369,7 @@ const warningsOptions = [
   'Mature'
 ];
 
-const step = ref<1|2|3|4|5|6|7>(1);
+const step = ref<1|2|3|4|5|6|7|8>(1);
 const current = ref<Draft | null>(null);
 const predefinedTags = ref<string[]>([]);
 const selectedTags = ref<string[]>([]);
@@ -843,12 +865,13 @@ function mapSkeletonToDraftMeta(skel: any): Draft['meta'] {
   // version: number
   meta.version = (typeof gv.version === 'number') ? gv.version : (gv.version ? Number(gv.version) || 1 : 1);
   // length may be string in skeleton
-  if (gv.length != null && gv.length !== '') {
+  if (gv.length != null && gv !== '') {
     const n = Number(gv.length);
     meta.length = Number.isFinite(n) ? n : undefined;
   }
   meta.demo = (String(gv.demo || '').toLowerCase() === 'yes');
   meta.sa1 = (String(gv.sa1 || '').toLowerCase() === 'yes');
+  meta.bruteforce = false;
   meta.collab = (String(gv.collab || '').toLowerCase() === 'yes');
   // difficulty: map back to 1..7
   const diffMap: Record<string, number> = {
@@ -892,12 +915,37 @@ async function runPackage() {
     if (api.saveTextAsTempFile) {
       const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
       const tempPath = tempRes?.filePath || tempRes;
+      // Optional override validation
+      let overrideGameId: string | undefined = undefined;
+      if (overrideGameIdEnabled.value) {
+        const ov = (overrideGameIdValue.value || '').trim();
+        if (!ov) {
+          alert('Override gameid is enabled. Please enter a value or uncheck the override option.');
+          return;
+        }
+        if (!/^[A-Za-z_]+$/.test(ov)) {
+          alert('Override gameid may only contain alphabetic characters and underscores.');
+          return;
+        }
+        // Check for conflict in rhdata
+        const version = current.value?.meta?.version || 1;
+        try {
+          const existing = await api.getGame(ov, Number(version));
+          if (existing && !confirm(`A game with id "${ov}" and version ${version} already exists. Using this override will conflict. Continue anyway (for testing only)?`)) {
+            return;
+          }
+        } catch {}
+        if (!confirm(`You are about to package a RHPAK with override gameid "${ov}" for testing purposes. This will not be persisted to your draft. Continue?`)) {
+          return;
+        }
+        overrideGameId = ov;
+      }
       // Build default filename: gameid-gamename.rhpak
       const meta = current.value?.meta || {};
-      const safe = (s: string) => (s || '').toString().toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      const gameId = safe((meta as any).gameid || meta.name || 'submission');
+      const safe = (s: string) => (s || '').toString().toLowerCase().trim().replace(/[^a-z0-9_]+/g, '-').replace(/^-+|-+$/g, '');
+      const gameId = safe((overrideGameId || (meta as any).gameid || meta.name || 'submission') as string);
       const gameName = safe(meta.name || '');
-      const defaultName = `${gameId}${gameName ? '-' + gameName : ''}.rhpak`;
+      const defaultName = `${gameId}${gameName ? '-' + gameName : ''}.jpg`.replace(/\.jpg$/, '.rhpak');
       const saveRes = await api.chooseSavePath({
         title: 'Save RHPAK',
         defaultPath: defaultName,
@@ -907,7 +955,7 @@ async function runPackage() {
         return;
       }
       const outPath = saveRes.filePath;
-      const res = await api.packageSubmission(tempPath, outPath);
+      const res = await api.packageSubmission(tempPath, outPath, overrideGameId ? { overrideGameId } : undefined);
       if (res?.success) alert('Package completed.');
       else alert(`Package failed: ${res?.error || 'Unknown error'}`);
     } else {

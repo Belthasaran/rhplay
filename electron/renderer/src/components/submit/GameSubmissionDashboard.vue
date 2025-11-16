@@ -652,7 +652,9 @@ async function saveDraftToDb() {
   if (!api?.saveSubmissionDraft) { await saveDraft(); return; }
   const title = current.value?.meta?.name || 'Untitled Submission';
   try {
-    const res = await api.saveSubmissionDraft({ draftId: (current.value as any)?.meta?.draft_uuid, title, payload: current.value });
+    // Serialize reactive object to plain JSON to avoid IPC cloning errors
+    const plainPayload = JSON.parse(JSON.stringify(current.value));
+    const res = await api.saveSubmissionDraft({ draftId: (current.value as any)?.meta?.draft_uuid, title, payload: plainPayload });
     if (res?.success) {
       alert('Draft saved.');
     } else {
@@ -695,7 +697,8 @@ async function runPrepare() {
   try {
     const payload = JSON.stringify(current.value, null, 2);
     if (api.saveTextAsTempFile) {
-      const tempPath = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
+      const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
+      const tempPath = tempRes?.filePath || tempRes;
       const res = await api.prepareSubmission(tempPath);
       if (res?.success) alert('Prepare completed.');
       else alert(`Prepare failed: ${res?.error || 'Unknown error'}`);
@@ -713,7 +716,8 @@ async function runPackage() {
   try {
     const payload = JSON.stringify(current.value, null, 2);
     if (api.saveTextAsTempFile) {
-      const tempPath = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
+      const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
+      const tempPath = tempRes?.filePath || tempRes;
       const outPick = await api.selectDirectory({ title: 'Select output folder for RHPAK' });
       const outDir = outPick?.filePaths?.[0];
       const outPath = outDir ? (outDir + '/submission.rhpak') : undefined;

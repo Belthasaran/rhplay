@@ -523,30 +523,12 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('submission:prepare', async (_event, { configPath }) => {
     try {
       if (!configPath) return { success: false, error: 'Missing configPath' };
-      // Prefer programmatic module exports if available
-      try {
-        const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
-        if (newgame && typeof newgame.handlePrepare === 'function') {
-          const res = await newgame.handlePrepare(configPath);
-          return { success: true, result: res };
-        }
-      } catch (e) {
-        // Fallback to enode.sh invocation (dev env)
-        try {
-          const { spawnSync } = require('child_process');
-          const script = path.resolve(projectRoot, 'enode.sh');
-          const args = ['jstools/newgame.js', configPath, '--prepare'];
-          const proc = spawnSync(script, args, { cwd: projectRoot, encoding: 'utf-8' });
-          if (proc.status === 0) {
-            return { success: true, stdout: proc.stdout };
-          } else {
-            return { success: false, error: proc.stderr || `Exit ${proc.status}` };
-          }
-        } catch (shellErr) {
-          return { success: false, error: `Prepare failed: ${shellErr.message}` };
-        }
+      const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
+      if (!newgame || typeof newgame.handlePrepare !== 'function') {
+        return { success: false, error: 'newgame.handlePrepare is unavailable' };
       }
-      return { success: false, error: 'No available prepare method' };
+      const res = await newgame.handlePrepare(configPath);
+      return { success: true, result: res };
     } catch (error) {
       console.error('[submission:prepare] Failed:', error);
       return { success: false, error: error.message };
@@ -557,30 +539,12 @@ function registerDatabaseHandlers(dbManager) {
     try {
       if (!configPath) return { success: false, error: 'Missing configPath' };
       const out = outPath || '';
-      // Prefer programmatic module exports if available
-      try {
-        const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
-        if (newgame && typeof newgame.handlePackage === 'function') {
-          const res = await newgame.handlePackage(configPath, out);
-          return { success: true, result: res };
-        }
-      } catch (e) {
-        // Fallback to enode.sh invocation (dev env)
-        try {
-          const { spawnSync } = require('child_process');
-          const script = path.resolve(projectRoot, 'enode.sh');
-          const args = ['jstools/newgame.js', configPath, out ? `--package=${out}` : '--package'];
-          const proc = spawnSync(script, args, { cwd: projectRoot, encoding: 'utf-8' });
-          if (proc.status === 0) {
-            return { success: true, stdout: proc.stdout };
-          } else {
-            return { success: false, error: proc.stderr || `Exit ${proc.status}` };
-          }
-        } catch (shellErr) {
-          return { success: false, error: `Package failed: ${shellErr.message}` };
-        }
+      const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
+      if (!newgame || typeof newgame.handlePackage !== 'function') {
+        return { success: false, error: 'newgame.handlePackage is unavailable' };
       }
-      return { success: false, error: 'No available package method' };
+      const res = await newgame.handlePackage(configPath, out);
+      return { success: true, result: res };
     } catch (error) {
       console.error('[submission:package] Failed:', error);
       return { success: false, error: error.message };

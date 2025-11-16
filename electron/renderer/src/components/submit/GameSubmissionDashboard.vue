@@ -50,7 +50,7 @@
         </div>
 
         <div class="field">
-          <label>Screenshots (PNG 256×224, up to 5, ≤ 300 KB each)</label>
+          <label>Screenshots (PNG 256×224, up to 12, ≤ 300 KB each)</label>
           <div class="file-row">
             <button class="btn" @click="pickScreenshots">Add Screenshots…</button>
           </div>
@@ -360,6 +360,13 @@ import tagsText from './smwtags.txt?raw';
 const overrideGameIdEnabled = ref<boolean>(false);
 const overrideGameIdValue = ref<string>('');
 
+const MAX_SCREENSHOTS = 12;
+const REQUIRED_WIDTH = 256;
+const REQUIRED_HEIGHT = 224;
+const MAX_SCREENSHOT_BYTES = 300 * 1024; // 300KB
+const MAX_TOTAL_SCREENSHOTS_BYTES = MAX_SCREENSHOTS * MAX_SCREENSHOT_BYTES; // 3.6MB
+const MAX_PATCH_BYTES = 4 * 1024 * 1024; // 4MB
+
 type PatchFile = { path: string; name: string; size: number } | null;
 type ShotFile = { path: string; name: string; size: number; width?: number; height?: number };
 
@@ -432,7 +439,16 @@ const canSubmit = computed(() => {
   if (!c) return false;
   const hasBasics = !!(c.files.patch && c.meta.name && c.meta.author && (c.meta.version ?? 1) >= 1);
   const hasTags = selectedTags.value.length >= 4;
-  return hasBasics && hasTags;
+  // Validate patch size if known
+  const patchOk = (c.files.patch?.size || 0) === 0 || (c.files.patch!.size <= MAX_PATCH_BYTES);
+  // Validate screenshots constraints
+  const shots = c.files.screenshots || [];
+  const countOk = shots.length <= MAX_SCREENSHOTS;
+  const dimsOk = shots.every(s => (!s.width && !s.height) || (s.width === REQUIRED_WIDTH && s.height === REQUIRED_HEIGHT));
+  const perSizeOk = shots.every(s => (s.size || 0) <= MAX_SCREENSHOT_BYTES);
+  const totalSize = shots.reduce((sum, s) => sum + (s.size || 0), 0);
+  const totalOk = totalSize <= MAX_TOTAL_SCREENSHOTS_BYTES;
+  return hasBasics && hasTags && patchOk && countOk && dimsOk && perSizeOk && totalOk;
 });
 
 function newDraft() {
@@ -448,9 +464,19 @@ async function pickPatch() {
   const res = await api.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'BPS patch', extensions: ['bps','zip'] }] });
   const file = res?.filePaths?.[0];
   if (!file) return;
-  // We cannot directly read file size here without fs; accept path and name. Size unknown → optional.
   const name = file.split(/[/\\]/).pop();
-  current.value!.files.patch = { path: file, name: name || 'patch.bps', size: 0 };
+  // Try to probe size with fetch(file://)
+  let size = 0;
+  try {
+    const resp = await fetch(`file://${file}`);
+    const blob = await resp.blob();
+    size = blob.size || 0;
+  } catch {}
+  if (size && size > MAX_PATCH_BYTES) {
+    alert('Selected patch exceeds 4MB limit. Please choose a smaller patch or a ZIP containing the patch.');
+    return;
+  }
+  current.value!.files.patch = { path: file, name: name || 'patch.bps', size };
 }
 
 async function pickScreenshots() {
@@ -458,10 +484,57 @@ async function pickScreenshots() {
   if (!api) return;
   const res = await api.showOpenDialog({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'PNG', extensions: ['png'] }] });
   const paths: string[] = res?.filePaths || [];
-  for (const p of paths) {
-    const name = p.split(/[/\\]/).pop() || 'image.png';
-    current.value!.files.screenshots.push({ path: p, name, size: 0 });
+  const existing = current.value!.files.screenshots;
+  // Enforce max count
+  if (existing.length + paths.length > MAX_SCREENSHOTS) {
+    alert(`You can select up to ${MAX_SCREENSHOTS} screenshots.`);
   }
+  const allowedSlots = Math.max(0, MAX_SCREENSHOTS - existing.length);
+  const toAdd = paths.slice(0, allowedSlots);
+  for (const p of toAdd) {
+    const name = p.split(/[/\\]/).pop() || 'image.png';
+    const info = await probeImageInfo(p);
+    if (!info.ok) {
+      alert(`Failed to load screenshot: ${name}`);
+      continue;
+    }
+    if (info.width !== REQUIRED_WIDTH || info.height !== REQUIRED_HEIGHT) {
+      alert(`Screenshot ${name} must be exactly ${REQUIRED_WIDTH}x${REQUIRED_HEIGHT}.`);
+      continue;
+    }
+    if (info.size > MAX_SCREENSHOT_BYTES) {
+      alert(`Screenshot ${name} exceeds ${Math.floor(MAX_SCREENSHOT_BYTES/1024)}KB.`);
+      continue;
+    }
+    const currentTotal = existing.reduce((sum, s) => sum + (s.size || 0), 0);
+    if (currentTotal + info.size > MAX_TOTAL_SCREENSHOTS_BYTES) {
+      alert(`Total screenshots size exceeds ${(MAX_TOTAL_SCREENSHOTS_BYTES/1024).toFixed(0)}KB. Remove some or choose smaller images.`);
+      break;
+    }
+    existing.push({ path: p, name, size: info.size, width: info.width, height: info.height });
+  }
+}
+
+async function probeImageInfo(pathStr: string): Promise<{ ok: boolean; width: number; height: number; size: number }> {
+  // Get dimensions via Image + file URL
+  const widthHeight = await new Promise<{ ok: boolean; width: number; height: number }>((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => resolve({ ok: true, width: img.naturalWidth || (img as any).width || 0, height: img.naturalHeight || (img as any).height || 0 });
+      img.onerror = () => resolve({ ok: false, width: 0, height: 0 });
+      img.src = `file://${pathStr}`;
+    } catch {
+      resolve({ ok: false, width: 0, height: 0 });
+    }
+  });
+  // Get size via fetch(file://)
+  let size = 0;
+  try {
+    const resp = await fetch(`file://${pathStr}`);
+    const blob = await resp.blob();
+    size = blob.size || 0;
+  } catch {}
+  return { ok: widthHeight.ok, width: widthHeight.width, height: widthHeight.height, size };
 }
 
 // ---- Tag selection helpers ----

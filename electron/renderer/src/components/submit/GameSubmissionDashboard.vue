@@ -805,12 +805,24 @@ async function runPrepare() {
       const draftUuid = (current.value as any)?.meta?.draft_uuid || null;
       const res = await api.prepareSubmission({ configPath: tempPath, draftUuid });
       if (res?.success) {
-        if (res?.skeleton) {
-          current.value = res.skeleton;
-          (current.value as any).meta = current.value?.meta || {};
-          if (res.draftUuid) {
-            (current.value as any).meta.draft_uuid = res.draftUuid;
+        // If backend returned a newgame skeleton, map it back into our Draft shape
+        if (res?.skeleton && current.value) {
+          const oldFiles = current.value.files ? JSON.parse(JSON.stringify(current.value.files)) : { patch: null, screenshots: [] };
+          const mappedMeta = mapSkeletonToDraftMeta(res.skeleton);
+          // preserve existing tags if mapping can't infer them
+          if (!mappedMeta.tags && current.value.meta?.tags) {
+            mappedMeta.tags = current.value.meta.tags;
           }
+          const newDraft: Draft = {
+            files: oldFiles,
+            meta: mappedMeta
+          };
+          // carry forward draft uuid if returned
+          if (res.draftUuid) {
+            (newDraft as any).meta = newDraft.meta || {};
+            (newDraft as any).meta.draft_uuid = res.draftUuid;
+          }
+          current.value = newDraft;
           initSelectedTagsFromMeta();
         }
         alert('Prepare completed.');
@@ -822,6 +834,54 @@ async function runPrepare() {
   } catch (e: any) {
     alert(`Prepare error: ${e?.message || String(e)}`);
   }
+}
+
+function mapSkeletonToDraftMeta(skel: any): Draft['meta'] {
+  const gv = (skel && skel.gameversion) ? skel.gameversion : {};
+  const meta: any = {};
+  meta.name = gv.name || '';
+  // version: number
+  meta.version = (typeof gv.version === 'number') ? gv.version : (gv.version ? Number(gv.version) || 1 : 1);
+  // length may be string in skeleton
+  if (gv.length != null && gv.length !== '') {
+    const n = Number(gv.length);
+    meta.length = Number.isFinite(n) ? n : undefined;
+  }
+  meta.demo = (String(gv.demo || '').toLowerCase() === 'yes');
+  meta.sa1 = (String(gv.sa1 || '').toLowerCase() === 'yes');
+  meta.collab = (String(gv.collab || '').toLowerCase() === 'yes');
+  // difficulty: map back to 1..7
+  const diffMap: Record<string, number> = {
+    'newcomer': 1, 'casual': 2, 'skilled': 3, 'advanced': 4, 'expert': 5, 'master': 6, 'grandmaster': 7
+  };
+  if (gv.difficulty) {
+    const key = String(gv.difficulty).toLowerCase().trim();
+    meta.difficulty = diffMap[key] || undefined;
+  } else if (gv.raw_difficulty && /^diff_(\d)$/.test(String(gv.raw_difficulty))) {
+    const m = String(gv.raw_difficulty).match(/^diff_(\d)$/);
+    meta.difficulty = m ? Number(m[1]) : undefined;
+  }
+  // types: from type or gametype (comma separated) → array
+  const typeStr = gv.type || gv.gametype || '';
+  meta.types = typeStr ? String(typeStr).split(',').map((s: string) => s.trim()).filter((s: string) => !!s) : [];
+  meta.based_against = gv.based_against || 'SMW';
+  meta.warnings = Array.isArray(gv.warnings) ? gv.warnings : [];
+  // tags: array→csv
+  if (Array.isArray(gv.tags)) {
+    meta.tags = gv.tags.join(', ');
+  } else if (typeof gv.tags === 'string') {
+    meta.tags = gv.tags;
+  }
+  meta.author = gv.author || '';
+  meta.authors = gv.authors || '';
+  meta.url = gv.url || '';
+  meta.download_url = gv.download_url || '';
+  meta.description = gv.description || '';
+  meta.submission_notes = gv.submission_notes || '';
+  meta.gameid = gv.gameid || (skel?.metadata?.gameid) || meta.gameid || '';
+  meta.gvuuid = gv.gvuuid || (skel?.metadata?.gvuuid) || meta.gvuuid || '';
+  meta.section = gv.section || 'smwhacks';
+  return meta as Draft['meta'];
 }
 
 async function runPackage() {

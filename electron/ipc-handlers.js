@@ -344,7 +344,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   ipcMain.handle('moderation:list-actions', (_event, payload = {}) => {
     try {
       const actions = moderationManager.listModerationActions({ target: payload.target, status: payload.status });
@@ -679,7 +678,10 @@ function registerDatabaseHandlers(dbManager) {
           demo: meta.demo ? 'Yes' : 'No',
           sa1: meta.sa1 ? 'Yes' : 'No',
           collab: meta.collab ? 'Yes' : 'No',
-          screenshots: [],
+          // Pass screenshot source paths to newgame for staging
+          screenshots: screenshots
+            .filter(s => s && s.path)
+            .map(s => String(s.path)),
           patch_filename: patch.name || (patch.path ? path.basename(patch.path) : ''),
           patch_local_path: patch.path || '',
           patch_notes: '',
@@ -709,10 +711,39 @@ function registerDatabaseHandlers(dbManager) {
           },
           patchblob: { pbuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
           attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
-          resources: [],
-          screenshots: screenshots
-            .filter(s => s && s.path)
-            .map(s => ({ source_path: s.path }))
+          resources: []
+        };
+        // Save to temp path so newgame can load it
+        const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
+        fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
+        skeletonPath = tmp;
+      }
+      await newgame.handlePrepare(skeletonPath);
+        const skel = {
+          metadata: {
+            script: 'newgame.js',
+            version: 'ui-submit',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            prepared: false,
+            prepared_at: null,
+            added_at: null
+          },
+          artifacts: { patch: null },
+          gameversion: gv,
+          gameversion_stats: {
+            download_count: 0,
+            view_count: 0,
+            comment_count: 0,
+            rating_value: null,
+            rating_count: 0,
+            favorite_count: 0,
+            hof_status: null,
+            featured_status: null
+          },
+          patchblob: { pbuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
+          attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
+          resources: []
         };
         // Save to temp path so newgame can load it
         const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
@@ -778,7 +809,10 @@ function registerDatabaseHandlers(dbManager) {
           section: 'smwhacks',
           based_against: meta.based_against || 'SMW',
           version: meta.version || 1,
-          removed: 0, obsoleted: 0, moderated: 0, featured: 0,
+          removed: 0,
+          obsoleted: 0,
+          moderated: 0,
+          featured: 0,
           name: draftName,
           gametype: Array.isArray(meta.types) ? meta.types.join(', ') : (meta.type || ''),
           difficulty: (typeof meta.difficulty === 'number') ? (diffMap[meta.difficulty] || '') : (meta.difficulty || ''),
@@ -786,38 +820,69 @@ function registerDatabaseHandlers(dbManager) {
           type: Array.isArray(meta.types) ? meta.types.join(', ') : (meta.type || ''),
           warnings: Array.isArray(meta.warnings) ? meta.warnings : [],
           tags: typeof meta.tags === 'string' ? meta.tags.split(',').map(s => s.trim()).filter(Boolean) : (Array.isArray(meta.tags) ? meta.tags : []),
-          author: meta.author || '', authors: meta.authors || '', submitter: '',
-          legacy_type: '', url: meta.url || '', download_url: meta.download_url || '',
-          name_href: '', author_href: '', obsoleted_by: '',
-          description: meta.description || '', length: (meta.length != null) ? String(meta.length) : '',
-          demo: meta.demo ? 'Yes' : 'No', sa1: meta.sa1 ? 'Yes' : 'No', collab: meta.collab ? 'Yes' : 'No',
-          screenshots: [],
+          author: meta.author || '',
+          authors: meta.authors || '',
+          submitter: '',
+          legacy_type: '',
+          url: meta.url || '',
+          download_url: meta.download_url || '',
+          name_href: '',
+          author_href: '',
+          obsoleted_by: '',
+          description: meta.description || '',
+          length: (meta.length != null) ? String(meta.length) : '',
+          demo: meta.demo ? 'Yes' : 'No',
+          sa1: meta.sa1 ? 'Yes' : 'No',
+          collab: meta.collab ? 'Yes' : 'No',
+          screenshots: screenshots
+            .filter(s => s && s.path)
+            .map(s => String(s.path)),
           patch_filename: patch.name || (patch.path ? path.basename(patch.path) : ''),
-          patch_local_path: patch.path || '', patch_notes: '', submission_notes: meta.submission_notes || ''
+          patch_local_path: patch.path || '',
+          patch_notes: '',
+          submission_notes: meta.submission_notes || ''
         };
         const skel = {
-          metadata: { script:'newgame.js', version:'ui-submit', created_at:new Date().toISOString(), updated_at:new Date().toISOString(), prepared:false, prepared_at:null, added_at:null },
-          artifacts:{ patch:null },
+          metadata: {
+            script: 'newgame.js',
+            version: 'ui-submit',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            prepared: false,
+            prepared_at: null,
+            added_at: null
+          },
+          artifacts: { patch: null },
           gameversion: gv,
-          gameversion_stats: { download_count:0, view_count:0, comment_count:0, rating_value:null, rating_count:0, favorite_count:0, hof_status:null, featured_status:null },
-          patchblob:{ pbuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
-          attachment:{ auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
-          resources: [],
-          screenshots: screenshots.filter(s => s && s.path).map(s => ({ source_path: s.path }))
+          gameversion_stats: {
+            download_count: 0,
+            view_count: 0,
+            comment_count: 0,
+            rating_value: null,
+            rating_count: 0,
+            favorite_count: 0,
+            hof_status: null,
+            featured_status: null
+          },
+          patchblob: { pbuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
+          attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
+          resources: []
         };
         const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
         fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
         skeletonPath = tmp;
       }
-      // If not prepared, prepare first
-      let prepTxt = fs.readFileSync(skeletonPath, 'utf8');
-      let prep;
-      try { prep = JSON.parse(prepTxt); } catch { prep = null; }
-      if (!prep?.metadata?.prepared) {
+      // If not yet prepared, run prepare implicitly before packaging
+      let preparedData;
+      try {
+        const txt2 = fs.readFileSync(skeletonPath, 'utf8');
+        preparedData = JSON.parse(txt2);
+      } catch {}
+      if (!preparedData || !preparedData.metadata || !preparedData.metadata.prepared) {
         await newgame.handlePrepare(skeletonPath);
       }
-      const result = await newgame.handlePackage(skeletonPath, out);
-      return { success: true, result: result || out };
+      await newgame.handlePackage(skeletonPath, out);
+      return { success: true };
     } catch (error) {
       console.error('[submission:package] Failed:', error);
       return { success: false, error: error.message };
@@ -1979,7 +2044,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Unpause a run
    * Channel: db:runs:unpause
@@ -2655,7 +2719,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-
   /**
    * Validate a seed
    * Channel: db:seeds:validate
@@ -2991,7 +3054,6 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('usb2snes:ssh-console-history', async () => {
     return sshManager.getConsoleHistory();
   });
-
   // ===========================================================================
   // USB2SNES EMBEDDED SERVER (USBFXP) OPERATIONS
   // ===========================================================================
@@ -3336,7 +3398,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-
   /**
    * Read multiple memory addresses in one call (batch operation)
    * Channel: usb2snes:readMemoryBatch
@@ -3670,7 +3731,6 @@ function registerDatabaseHandlers(dbManager) {
       } catch (error) {
         console.error('[ChatCommands] Error loading ASAR path from settings:', error);
       }
-      
       console.log(`[ChatCommands] Executing: ${command}`);
       
       // Check if this is a CARL command
@@ -4341,7 +4401,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * List installed RHPAK packages
    */
@@ -4960,7 +5019,6 @@ function registerDatabaseHandlers(dbManager) {
       return await hostFP.getv(profileUuid || '', '');
     }
   }
-
   /**
    * Generate keypair based on type
    * @param {string} keyType - Nostr, ML-DSA-44, ML-DSA-87, ED25519, or RSA-2048
@@ -5280,7 +5338,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Regenerate online keypair
    * Channel: online:keypair:regenerate
@@ -5933,7 +5990,6 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
   // ADMIN KEYPAIR OPERATIONS (clientdata.db - admin_keypairs table)
   // ===========================================================================
-
   /**
    * List all admin keypairs (public info only)
    * Channel: online:admin-keypairs:list
@@ -6256,7 +6312,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Update User Op keypair storage status
    * Channel: online:user-op-keypair:update-storage-status
@@ -6608,7 +6663,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Create new encryption key
    * Channel: online:encryption-key:create
@@ -7655,7 +7709,6 @@ function registerDatabaseHandlers(dbManager) {
           declarationData.target_keypair_canonical_name || null,
         status: declarationData.status || 'Draft'
       });
-      
       return { success: true, declarationUuid: declarationData.declaration_uuid };
     } catch (error) {
       console.error('Error saving admin declaration:', error);
@@ -7995,7 +8048,6 @@ function registerDatabaseHandlers(dbManager) {
           AND storage_status IN ('full', 'full-offline')
           AND encrypted_private_key IS NOT NULL
       `).all();
-      
       console.log(`[getAvailableNostrSigningKeypairs] Found ${userOpKeypairs.length} user-op keypairs matching Nostr pattern`);
       
       for (const kp of userOpKeypairs) {
@@ -8329,7 +8381,6 @@ function registerDatabaseHandlers(dbManager) {
       return { hasProfile: false, hasNostrKeypair: false };
     }
   });
-
   /**
    * Channel: online:publish-ratings-to-nostr
    * Create and sign a Nostr NIP-33 event (kind 31001) for publishing game ratings

@@ -767,6 +767,24 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('dialog:chooseSavePath', async (_event, { title, defaultPath, filters } = {}) => {
+    try {
+      const { dialog } = require('electron');
+      const res = await dialog.showSaveDialog({
+        title: title || 'Save As',
+        defaultPath: defaultPath || '',
+        filters: Array.isArray(filters) && filters.length ? filters : undefined,
+        properties: []
+      });
+      if (res.canceled || !res.filePath) {
+        return { success: false, canceled: true };
+      }
+      return { success: true, filePath: res.filePath };
+    } catch (error) {
+      console.error('[dialog:chooseSavePath] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
   ipcMain.handle('fs:writeTempText', async (_event, { prefix, suffix, content } = {}) => {
     try {
       const fs = require('fs');
@@ -6681,6 +6699,45 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       const now = Math.floor(Date.now() / 1000);
       const uuid = draftUuid || crypto.randomUUID();
+      // Ensure draftData/meta shape and identifiers
+      if (!draftData || typeof draftData !== 'object') {
+        draftData = {};
+      }
+      if (!draftData.meta || typeof draftData.meta !== 'object') {
+        draftData.meta = {};
+      }
+      // Ensure gameid per rule: newYYMMDDHH_<SHAKE128-8(npub)>
+      const ensureStr = (v) => (v == null ? '' : String(v));
+      if (!ensureStr(draftData.meta.gameid)) {
+        const dt = new Date();
+        const y = String(dt.getUTCFullYear()).slice(-2);
+        const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(dt.getUTCDate()).padStart(2, '0');
+        const h = String(dt.getUTCHours()).padStart(2, '0');
+        const tsYYMMDDHH = `${y}${m}${d}${h}`;
+        let h8 = '00000000';
+        try {
+          if (submitterPubkey) {
+            if (crypto.getHashes().includes('shake128')) {
+              h8 = crypto.createHash('shake128', { outputLength: 4 }).update(Buffer.from(submitterPubkey)).digest('hex');
+            } else if (crypto.getHashes().includes('shake256')) {
+              h8 = crypto.createHash('shake256', { outputLength: 4 }).update(Buffer.from(submitterPubkey)).digest('hex');
+            } else {
+              h8 = crypto.createHash('sha256').update(submitterPubkey).digest('hex').slice(0, 8);
+            }
+          }
+        } catch {}
+        draftData.meta.gameid = `new${tsYYMMDDHH}_${h8}`;
+      }
+      // Ensure gvuuid hashed from timestamp + submitter npub
+      if (!ensureStr(draftData.meta.gvuuid)) {
+        const seed = `${Date.now()}-${submitterPubkey || ''}`;
+        draftData.meta.gvuuid = crypto.createHash('sha256').update(seed).digest('hex');
+      }
+      // Default section if missing
+      if (!ensureStr(draftData.meta.section)) {
+        draftData.meta.section = 'Game';
+      }
       // Robust JSON serialization to satisfy NOT NULL constraint
       let json = (typeof draftData === 'string') ? draftData : JSON.stringify(draftData ?? {});
       if (json == null) json = '{}';
@@ -6703,7 +6760,7 @@ function registerDatabaseHandlers(dbManager) {
         `).run(uuid, submitterPubkey, draftName || 'Untitled Draft', json, now, now);
       }
       
-      return { success: true, draftUuid: uuid };
+      return { success: true, draftUuid: uuid, gameid: draftData.meta.gameid, gvuuid: draftData.meta.gvuuid };
     } catch (error) {
       console.error('Error saving submission draft:', error);
       return { success: false, error: error.message };

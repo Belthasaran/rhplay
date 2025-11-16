@@ -927,6 +927,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File helpers for submission flows
   saveTextAsFile: ({ defaultPath, content }) => ipcRenderer.invoke('dialog:saveTextFile', { defaultPath, content }),
   saveTextAsTempFile: ({ prefix, suffix, content }) => ipcRenderer.invoke('fs:writeTempText', { prefix, suffix, content }),
+  chooseSavePath: ({ title, defaultPath, filters }) => ipcRenderer.invoke('dialog:chooseSavePath', { title, defaultPath, filters }),
 
   // Game submission drafts
   saveSubmissionDraft: (params) => ipcRenderer.invoke('online:submission:draft:save', params),

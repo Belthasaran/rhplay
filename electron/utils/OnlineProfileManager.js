@@ -920,11 +920,21 @@ class OnlineProfileManager {
 
     const now = Math.floor(Date.now() / 1000);
     // Build submission content (metadata only; large assets are referenced by path/size for now)
+    // Include RHPAK download information if provided
+    const rhpak = submissionData?.rhpak || {};
     const contentJson = {
       submission: submissionData || {},
       created_at_ts: now,
       app: 'rhplay-submission',
-      version: '1.0'
+      version: '1.0',
+      rhpak: {
+        sha256: rhpak.sha256 || '',
+        size_bytes: rhpak.size_bytes || 0,
+        ipfs_cid: rhpak.ipfs_cid || undefined,
+        download_url: rhpak.download_url || undefined,
+        verified: rhpak.verified || false,
+        verified_at: rhpak.verified_at || undefined
+      }
     };
 
     const { finalizeEvent } = require('nostr-tools');

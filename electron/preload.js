@@ -929,6 +929,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   packageSubmission: (configPath, outPath, options) => ipcRenderer.invoke('submission:package', { configPath, outPath, options: options || {} }),
   validateScreenshot: (params) => ipcRenderer.invoke('submission:validate-screenshot', params || {}),
+  calculateFileHash: (params) => ipcRenderer.invoke('submission:calculate-file-hash', params || {}),
+  verifyRHPakDownload: (params) => ipcRenderer.invoke('submission:verify-rhpak-download', params || {}),
 
   // File helpers for submission flows
   saveTextAsFile: ({ defaultPath, content }) => ipcRenderer.invoke('dialog:saveTextFile', { defaultPath, content }),

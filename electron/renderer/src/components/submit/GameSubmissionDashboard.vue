@@ -36,6 +36,7 @@
         <button :class="['step', { active: step===6 }]" @click="step=6">6. Notes</button>
         <button :class="['step', { active: step===7 }]" @click="step=7">7. Developer Options</button>
         <button :class="['step', { active: step===8 }]" @click="step=8">8. Review &amp; Submit</button>
+        <button :class="['step', { active: step===9 }]" @click="step=9">9. Publish &amp; Verify</button>
       </div>
 
       <div v-if="step===1" class="panel">
@@ -339,7 +340,67 @@
           <button class="btn" @click="loadDraftFromDb">Load Draft…</button>
           <button class="btn" @click="runPrepare" :disabled="!canSubmit">Prepare</button>
           <button class="btn" @click="runPackage" :disabled="!canSubmit">Package RHPAK</button>
-          <button class="btn" @click="submitNow" :disabled="!canSubmit">Submit &amp; Publish</button>
+        </div>
+        <div class="hint" style="margin-top: 12px; padding: 8px; background: #fff3e0; border: 1px solid #ef6c00; border-radius: 4px;">
+          <strong>Next Step:</strong> After packaging your RHPAK, proceed to step 9 "Publish & Verify" to provide download information and verify your uploaded file before submitting to Nostr.
+        </div>
+      </div>
+
+      <div v-if="step===9" class="panel">
+        <h4>Publish &amp; Verify</h4>
+        <div class="instructions" style="padding: 12px; background: #e3f2fd; border: 1px solid #1976d2; border-radius: 4px; margin-bottom: 16px;">
+          <h5 style="margin: 0 0 8px 0; color: #1976d2;">Instructions</h5>
+          <ol style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6;">
+            <li>Upload your packaged RHPAK file to a public location (ArDrive, IPFS, or any public HTTP/HTTPS server).</li>
+            <li>If using IPFS, provide the IPFS v1 CID (starts with "bafy").</li>
+            <li>If using a direct download URL, provide the full URL where the file can be downloaded.</li>
+            <li>Click "Verify Download" to check that the file is accessible and matches the expected SHA256 hash.</li>
+            <li>Once verified, you can proceed to submit your submission to Nostr.</li>
+          </ol>
+          <div style="margin-top: 8px; font-size: 12px; color: #666;">
+            <strong>Note:</strong> If you make any changes to your draft (including tags or metadata), you will need to re-package the RHPAK and provide new download information, as the file contents will have changed.
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="field full">
+            <label>RHPAK File Path</label>
+            <input class="input" :value="current.meta.rhpak_path || '—'" readonly />
+            <div class="hint">The local path where your RHPAK was saved. This file must be uploaded externally before verification.</div>
+          </div>
+          <div class="field">
+            <label>SHA256 Hash</label>
+            <input class="input" :value="current.meta.rhpak_sha256 || '—'" readonly />
+            <div class="hint">Automatically calculated from your RHPAK file. Used to verify the downloaded file matches.</div>
+          </div>
+          <div class="field">
+            <label>File Size</label>
+            <input class="input" :value="current.meta.rhpak_size ? formatBytes(current.meta.rhpak_size) : '—'" readonly />
+          </div>
+          <div class="field full">
+            <label>IPFS v1 CID (bafy...)</label>
+            <input class="input" v-model.trim="current.meta.rhpak_ipfs_cid" placeholder="bafybei..." />
+            <div class="hint">If you uploaded to IPFS, provide the v1 CID (must start with "bafy"). Leave empty if using a download URL instead.</div>
+          </div>
+          <div class="field full">
+            <label>OR Download URL</label>
+            <input class="input" v-model.trim="current.meta.rhpak_download_url" placeholder="https://example.com/path/to/file.rhpak" />
+            <div class="hint">If you uploaded to ArDrive or another HTTP/HTTPS server, provide the direct download URL. Leave empty if using IPFS CID.</div>
+          </div>
+        </div>
+
+        <div v-if="current.meta.rhpak_verified" class="verified-badge" style="padding: 8px; background: #e8f5e9; border: 1px solid #2e7d32; border-radius: 4px; margin: 12px 0;">
+          <strong style="color: #2e7d32;">✓ Verified</strong>
+          <span style="font-size: 12px; color: #666; margin-left: 8px;">
+            File verified on {{ current.meta.rhpak_verified_at ? new Date(current.meta.rhpak_verified_at * 1000).toLocaleString() : '—' }}
+          </span>
+        </div>
+
+        <div class="actions">
+          <button class="btn" @click="calculateRHPakHash" :disabled="!current.meta.rhpak_path">Calculate Hash</button>
+          <button class="btn" @click="verifyRHPakDownload" :disabled="!canVerify">Verify Download</button>
+          <button class="btn" @click="saveDraftToDb" :disabled="!current">Save Draft</button>
+          <button class="btn" @click="submitNow" :disabled="!canSubmitVerified">Submit &amp; Publish</button>
         </div>
       </div>
     </div>
@@ -395,6 +456,14 @@ type Draft = {
     admin_only?: boolean;
     moderation_result?: string;
     admin_comments?: string;
+    // RHPAK publish & verify fields
+    rhpak_path?: string;
+    rhpak_sha256?: string;
+    rhpak_size?: number;
+    rhpak_ipfs_cid?: string;
+    rhpak_download_url?: string;
+    rhpak_verified?: boolean;
+    rhpak_verified_at?: number;
   };
 };
 
@@ -407,7 +476,7 @@ const warningsOptions = [
   'Mature'
 ];
 
-const step = ref<1|2|3|4|5|6|7|8>(1);
+const step = ref<1|2|3|4|5|6|7|8|9>(1);
 const current = ref<Draft | null>(null);
 const predefinedTags = ref<string[]>([]);
 const selectedTags = ref<string[]>([]);
@@ -445,6 +514,20 @@ const canSubmit = computed(() => {
   const shots = c.files.screenshots || [];
   const countOk = shots.length <= MAX_SCREENSHOTS;
   return hasBasics && hasTags && patchOk && countOk;
+});
+
+const canVerify = computed(() => {
+  const c = current.value;
+  if (!c || !c.meta.rhpak_path) return false;
+  const hasIpfs = !!(c.meta.rhpak_ipfs_cid && c.meta.rhpak_ipfs_cid.trim().startsWith('bafy'));
+  const hasUrl = !!(c.meta.rhpak_download_url && c.meta.rhpak_download_url.trim().startsWith('http'));
+  return hasIpfs || hasUrl;
+});
+
+const canSubmitVerified = computed(() => {
+  const c = current.value;
+  if (!c) return false;
+  return !!(c.meta.rhpak_verified && c.meta.rhpak_sha256 && (c.meta.rhpak_ipfs_cid || c.meta.rhpak_download_url));
 });
 
 function newDraft() {
@@ -1109,8 +1192,29 @@ async function runPackage() {
         includePackagerSignature = false;
       }
       const res = await api.packageSubmission(preparedPath, outPath, includePackagerSignature ? { includePackagerSignature: true } : {});
-      if (res?.success) alert('Package completed.');
-      else alert(`Package failed: ${res?.error || 'Unknown error'}`);
+      if (res?.success) {
+        // Store RHPAK path and calculate hash
+        if (current.value) {
+          current.value.meta.rhpak_path = outPath;
+          // Calculate hash and size
+          try {
+            const hashRes = await api.calculateFileHash({ filePath: outPath });
+            if (hashRes?.success) {
+              current.value.meta.rhpak_sha256 = hashRes.sha256;
+              current.value.meta.rhpak_size = hashRes.sizeBytes || 0;
+              // Clear verification status since file may have changed
+              current.value.meta.rhpak_verified = false;
+              current.value.meta.rhpak_verified_at = undefined;
+            }
+          } catch (e) {
+            console.warn('Failed to calculate RHPAK hash:', e);
+          }
+        }
+        alert('Package completed. Proceed to step 9 "Publish & Verify" to provide download information.');
+        step.value = 9;
+      } else {
+        alert(`Package failed: ${res?.error || 'Unknown error'}`);
+      }
     } else {
       alert('Package requires Electron environment with temp file support.');
     }
@@ -1139,8 +1243,15 @@ async function loadDraft() {
 
 async function submitNow() {
   if (!current.value) return;
-  if (!canSubmit.value) {
-    alert('Please provide required fields and a patch file.');
+  if (!canSubmitVerified.value) {
+    if (!canSubmit.value) {
+      alert('Please provide required fields and a patch file.');
+    } else if (!current.value.meta.rhpak_verified) {
+      alert('Please verify your RHPAK download in step 9 "Publish & Verify" before submitting.');
+      step.value = 9;
+    } else {
+      alert('Please provide RHPAK download information (IPFS CID or download URL) and verify it before submitting.');
+    }
     return;
   }
   const api = (window as any)?.electronAPI;
@@ -1156,14 +1267,67 @@ async function submitNow() {
     const submission = buildSubmissionPayload(current.value);
     const result = await api.enqueueGameSubmission({ submission });
     if (result?.success) {
-      alert('Submission enqueued for publishing.');
-      step.value = 5;
+      alert('Submission enqueued for publishing to Nostr.');
+      // Optionally navigate back to review or close
     } else {
       alert(`Failed to enqueue submission: ${result?.error || 'Unknown error'}`);
     }
   } catch (e: any) {
     console.error('Submit error', e);
     alert(`Error: ${e?.message || String(e)}`);
+  }
+}
+
+async function calculateRHPakHash() {
+  const api = (window as any)?.electronAPI;
+  if (!api || !current.value?.meta.rhpak_path) return;
+  try {
+    const hashRes = await api.calculateFileHash({ filePath: current.value.meta.rhpak_path });
+    if (hashRes?.success) {
+      if (current.value) {
+        current.value.meta.rhpak_sha256 = hashRes.sha256;
+        current.value.meta.rhpak_size = hashRes.sizeBytes || 0;
+      }
+      alert('Hash calculated successfully.');
+    } else {
+      alert(`Failed to calculate hash: ${hashRes?.error || 'Unknown error'}`);
+    }
+  } catch (e: any) {
+    alert(`Error calculating hash: ${e?.message || String(e)}`);
+  }
+}
+
+async function verifyRHPakDownload() {
+  const api = (window as any)?.electronAPI;
+  if (!api || !current.value) return;
+  const meta = current.value.meta;
+  if (!meta.rhpak_sha256) {
+    alert('Please calculate the hash first.');
+    return;
+  }
+  const ipfsCid = meta.rhpak_ipfs_cid?.trim();
+  const downloadUrl = meta.rhpak_download_url?.trim();
+  if (!ipfsCid && !downloadUrl) {
+    alert('Please provide either an IPFS CID or a download URL.');
+    return;
+  }
+  try {
+    const verifyRes = await api.verifyRHPakDownload({
+      expectedSha256: meta.rhpak_sha256,
+      ipfsCid: ipfsCid || undefined,
+      downloadUrl: downloadUrl || undefined
+    });
+    if (verifyRes?.success) {
+      if (current.value) {
+        current.value.meta.rhpak_verified = true;
+        current.value.meta.rhpak_verified_at = Math.floor(Date.now() / 1000);
+      }
+      alert('✓ Verification successful! The file is accessible and matches the expected hash.');
+    } else {
+      alert(`Verification failed: ${verifyRes?.error || 'Unknown error'}`);
+    }
+  } catch (e: any) {
+    alert(`Error verifying download: ${e?.message || String(e)}`);
   }
 }
 
@@ -1175,7 +1339,15 @@ function buildSubmissionPayload(draft: Draft) {
       patch: draft.files.patch ? { path: draft.files.patch.path, name: draft.files.patch.name, size: draft.files.patch.size } : null,
       screenshots: draft.files.screenshots.map(s => ({ path: s.path, name: s.name, size: s.size, width: s.width, height: s.height }))
     },
-    meta: { ...draft.meta }
+    meta: { ...draft.meta },
+    rhpak: {
+      sha256: draft.meta.rhpak_sha256 || '',
+      size_bytes: draft.meta.rhpak_size || 0,
+      ipfs_cid: draft.meta.rhpak_ipfs_cid || undefined,
+      download_url: draft.meta.rhpak_download_url || undefined,
+      verified: draft.meta.rhpak_verified || false,
+      verified_at: draft.meta.rhpak_verified_at || undefined
+    }
   };
 }
 </script>

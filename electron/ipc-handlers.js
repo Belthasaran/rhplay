@@ -981,6 +981,99 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('submission:calculate-file-hash', async (_event, { filePath } = {}) => {
+    try {
+      if (!filePath) return { success: false, error: 'Missing filePath' };
+      const fs = require('fs');
+      const crypto = require('crypto');
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: `File not found: ${filePath}` };
+      }
+      const stat = fs.statSync(filePath);
+      const fileBuffer = fs.readFileSync(filePath);
+      const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      return {
+        success: true,
+        sha256: hash,
+        sizeBytes: stat.size || 0
+      };
+    } catch (error) {
+      console.error('[submission:calculate-file-hash] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('submission:verify-rhpak-download', async (_event, { expectedSha256, ipfsCid, downloadUrl } = {}) => {
+    try {
+      if (!expectedSha256) return { success: false, error: 'Missing expectedSha256' };
+      if (!ipfsCid && !downloadUrl) {
+        return { success: false, error: 'Must provide either ipfsCid or downloadUrl' };
+      }
+      if (ipfsCid && downloadUrl) {
+        return { success: false, error: 'Provide either ipfsCid or downloadUrl, not both' };
+      }
+      
+      const https = require('https');
+      const http = require('http');
+      const crypto = require('crypto');
+      const { URL } = require('url');
+      
+      let fileUrl;
+      if (ipfsCid) {
+        // Validate IPFS CID format (v1 should start with 'bafy')
+        if (!ipfsCid.trim().startsWith('bafy')) {
+          return { success: false, error: 'IPFS CID must be v1 format (starts with "bafy")' };
+        }
+        // Use a public IPFS gateway (user can configure this later)
+        fileUrl = `https://ipfs.io/ipfs/${ipfsCid.trim()}`;
+      } else {
+        fileUrl = downloadUrl.trim();
+        try {
+          const parsed = new URL(fileUrl);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return { success: false, error: 'Download URL must use HTTP or HTTPS' };
+          }
+        } catch {
+          return { success: false, error: 'Invalid download URL format' };
+        }
+      }
+      
+      // Download the file
+      return new Promise((resolve) => {
+        const protocol = fileUrl.startsWith('https:') ? https : http;
+        protocol.get(fileUrl, (res) => {
+          if (res.statusCode !== 200) {
+            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage || 'Failed to download'}` });
+            return;
+          }
+          const chunks = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            try {
+              const fileBuffer = Buffer.concat(chunks);
+              const actualHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+              if (actualHash.toLowerCase() !== expectedSha256.toLowerCase()) {
+                resolve({ success: false, error: `Hash mismatch. Expected: ${expectedSha256}, Got: ${actualHash}` });
+                return;
+              }
+              resolve({ success: true, sizeBytes: fileBuffer.length });
+            } catch (err) {
+              resolve({ success: false, error: `Failed to verify hash: ${err.message}` });
+            }
+          });
+          res.on('error', (err) => {
+            resolve({ success: false, error: `Download error: ${err.message}` });
+          });
+        }).on('error', (err) => {
+          resolve({ success: false, error: `Connection error: ${err.message}` });
+        });
+      });
+    } catch (error) {
+      console.error('[submission:verify-rhpak-download] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // =============================
   // Utility: Save text to file (Save As...) and write temp text file
   // =============================

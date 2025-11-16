@@ -4,13 +4,27 @@
       <h3>Game Submissions</h3>
       <div class="actions">
         <button class="btn" @click="newDraft">New Draft</button>
-        <button class="btn" @click="loadDraft">Load Draft…</button>
-        <button class="btn" :disabled="!current" @click="saveDraft">Save Draft…</button>
-        <button class="btn" :disabled="!current || !canSubmit" @click="submitNow">Submit & Publish</button>
+        <button class="btn" @click="importDraft">Import Draft…</button>
+        <button class="btn" :disabled="!current" @click="exportDraft">Export Draft…</button>
+        <button class="btn" :disabled="!current" @click="saveAndClose">Save & Close</button>
       </div>
     </div>
 
-    <div v-if="!current" class="empty">No draft selected. Create a new draft or load one.</div>
+    <div v-if="!current" class="empty">
+      <div>No draft selected.</div>
+      <div class="field" style="margin-top:8px;">
+        <label>Choose a saved draft to load</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select v-model="selectedDraftUuid" class="input" style="flex:1;">
+            <option v-for="d in draftsDb" :key="d.draft_uuid" :value="d.draft_uuid">
+              {{ d.draft_name || '(untitled)' }} — {{ new Date((d.updated_at_utc||0)*1000).toLocaleString() }} ({{ d.state || 'draft' }})
+            </option>
+          </select>
+          <button class="btn" @click="loadSelectedDraft" :disabled="!selectedDraftUuid">Load</button>
+          <button class="btn" @click="refreshDraftList">Refresh</button>
+        </div>
+      </div>
+    </div>
 
     <div v-else class="wizard">
       <div class="steps">
@@ -617,6 +631,11 @@ watch(() => current.value?.meta?.tags, () => {
   initSelectedTagsFromMeta();
 });
 
+// Initial load of drafts list when component mounts
+onMounted(() => {
+  refreshDraftList();
+});
+
 function removeShot(idx: number) {
   current.value?.files.screenshots.splice(idx, 1);
 }
@@ -629,7 +648,7 @@ function formatBytes(v: number) {
   return `${n.toFixed(1)} ${units[i]}`;
 }
 
-async function saveDraft() {
+async function exportDraft() {
   if (!current.value) return;
   const api = (window as any)?.electronAPI;
   if (!api) return;
@@ -646,11 +665,11 @@ async function saveDraft() {
   }
 }
 
-// --- DB-backed draft save/load ---
+// --- Import/Export + DB-backed draft save/load ---
 async function saveDraftToDb() {
   if (!current.value) return;
   const api = (window as any)?.electronAPI;
-  if (!api?.saveSubmissionDraft) { await saveDraft(); return; }
+  if (!api?.saveSubmissionDraft) { await exportDraft(); return; }
   const title = current.value?.meta?.name || 'Untitled Submission';
   try {
     // Serialize reactive object to plain JSON to avoid IPC cloning errors
@@ -671,6 +690,24 @@ async function saveDraftToDb() {
     }
   } catch (e: any) {
     alert(`Error saving draft: ${e?.message || String(e)}`);
+  }
+}
+
+async function importDraft() {
+  const api = (window as any)?.electronAPI;
+  if (!api) return;
+  const res = await api.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+  const file = res?.filePaths?.[0];
+  if (!file) return;
+  try {
+    const rf = await api.readFile({ filePath: file });
+    const text = rf?.content || '';
+    if (!text) throw new Error('Empty file or failed to read file');
+    current.value = JSON.parse(text);
+    step.value = 2;
+    initSelectedTagsFromMeta();
+  } catch (e: any) {
+    alert(`Error importing draft: ${e?.message || String(e)}`);
   }
 }
 
@@ -699,6 +736,55 @@ async function loadDraftFromDb() {
   } catch (e: any) {
     alert(`Error loading draft: ${e?.message || String(e)}`);
   }
+}
+
+// Load list of drafts and support selecting one when no current draft is open
+const draftsDb = ref<any[]>([]);
+const selectedDraftUuid = ref<string>('');
+async function refreshDraftList() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.listSubmissionDrafts) return;
+  try {
+    const res = await api.listSubmissionDrafts();
+    draftsDb.value = res?.drafts || [];
+    if (!draftsDb.value.find(d => d.draft_uuid === selectedDraftUuid.value)) {
+      selectedDraftUuid.value = draftsDb.value[0]?.draft_uuid || '';
+    }
+  } catch {
+    draftsDb.value = [];
+    selectedDraftUuid.value = '';
+  }
+}
+async function loadSelectedDraft() {
+  if (!selectedDraftUuid.value) return;
+  const api = (window as any)?.electronAPI;
+  try {
+    const got = await api.loadSubmissionDraft({ draftUuid: selectedDraftUuid.value });
+    if (got?.success && got?.draft?.draftData) {
+      current.value = got.draft.draftData;
+      (current.value as any).meta = current.value?.meta || {};
+      (current.value as any).meta.draft_uuid = selectedDraftUuid.value;
+      step.value = 2;
+      initSelectedTagsFromMeta();
+    } else {
+      alert(`Failed to load draft: ${got?.error || 'Unknown error'}`);
+    }
+  } catch (e: any) {
+    alert(`Error loading draft: ${e?.message || String(e)}`);
+  }
+}
+
+function saveAndClose() {
+  if (!current.value) return;
+  const name = current.value?.meta?.name?.trim();
+  if (!name) {
+    alert('Please provide a unique game Name before saving and closing the draft.');
+    return;
+  }
+  saveDraftToDb().then(() => {
+    current.value = null;
+    refreshDraftList();
+  });
 }
 
 // --- Prepare / Package via IPC ---

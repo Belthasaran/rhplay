@@ -6667,16 +6667,16 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:submission:draft:save', async (event, { draftUuid, draftName, draftData } = {}) => {
     try {
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard not unlocked' };
-      }
-      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      const currentProfile = profileManager.getCurrentProfile();
-      if (!currentProfile) {
-        return { success: false, error: 'No current profile found' };
-      }
-      const submitterPubkey = currentProfile.npub || null;
+      // Make Profile Guard optional for local draft saving; if unlocked, scope to current profile
+      let submitterPubkey = null;
+      try {
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          submitterPubkey = currentProfile?.npub || null;
+        }
+      } catch {}
       
       const db = dbManager.getConnection('clientdata');
       const now = Math.floor(Date.now() / 1000);
@@ -6716,24 +6716,29 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:submission:draft:list', async (event) => {
     try {
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard not unlocked' };
-      }
-      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      const currentProfile = profileManager.getCurrentProfile();
-      if (!currentProfile) {
-        return { success: true, drafts: [] };
-      }
-      const submitterPubkey = currentProfile.npub || null;
-      
+      // Profile Guard optional for listing; if available, filter by current user, else list all
+      let submitterPubkey = null;
+      try {
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          submitterPubkey = currentProfile?.npub || null;
+        }
+      } catch {}
       const db = dbManager.getConnection('clientdata');
-      const drafts = db.prepare(`
-        SELECT draft_uuid, draft_name, created_at_utc, updated_at_utc, prepared_at_utc, packaged_at_utc, state
-        FROM game_submission_drafts
-        WHERE submitter_pubkey_npub = ?
-        ORDER BY updated_at_utc DESC
-      `).all(submitterPubkey);
+      const drafts = submitterPubkey
+        ? db.prepare(`
+            SELECT draft_uuid, draft_name, created_at_utc, updated_at_utc, prepared_at_utc, packaged_at_utc, state
+            FROM game_submission_drafts
+            WHERE submitter_pubkey_npub = ?
+            ORDER BY updated_at_utc DESC
+          `).all(submitterPubkey)
+        : db.prepare(`
+            SELECT draft_uuid, draft_name, created_at_utc, updated_at_utc, prepared_at_utc, packaged_at_utc, state
+            FROM game_submission_drafts
+            ORDER BY updated_at_utc DESC
+          `).all();
       
       return { success: true, drafts };
     } catch (error) {
@@ -6748,22 +6753,23 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:submission:draft:load', async (event, { draftUuid } = {}) => {
     try {
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard not unlocked' };
-      }
-      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      const currentProfile = profileManager.getCurrentProfile();
-      if (!currentProfile) {
-        return { success: false, error: 'No current profile found' };
-      }
-      const submitterPubkey = currentProfile.npub || null;
-      
+      // Profile Guard optional for loading; if available, prefer scoped load, else load by uuid
+      let submitterPubkey = null;
+      try {
+        const keyguardKey = getKeyguardKey(event);
+        if (keyguardKey) {
+          const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+          const currentProfile = profileManager.getCurrentProfile();
+          submitterPubkey = currentProfile?.npub || null;
+        }
+      } catch {}
       const db = dbManager.getConnection('clientdata');
-      const draft = db.prepare(`
-        SELECT * FROM game_submission_drafts
-        WHERE draft_uuid = ? AND submitter_pubkey_npub = ?
-      `).get(draftUuid, submitterPubkey);
+      const draft = submitterPubkey
+        ? db.prepare(`
+            SELECT * FROM game_submission_drafts
+            WHERE draft_uuid = ? AND submitter_pubkey_npub = ?
+          `).get(draftUuid, submitterPubkey)
+        : db.prepare(`SELECT * FROM game_submission_drafts WHERE draft_uuid = ?`).get(draftUuid);
       
       if (!draft) {
         return { success: false, error: 'Draft not found' };

@@ -479,8 +479,39 @@ async function pickScreenshots() {
   const toAdd = paths.slice(0, allowedSlots);
   for (const p of toAdd) {
     const name = p.split(/[/\\]/).pop() || 'image.png';
-    // Do not try to load file:// in renderer (blocked by Electron); backend Prepare will validate.
-    existing.push({ path: p, name, size: 0 });
+    let width = 0;
+    let height = 0;
+    let sizeBytes = 0;
+    try {
+      if (api.validateScreenshot) {
+        const info = await api.validateScreenshot({ filePath: p });
+        if (!info?.success) {
+          alert(`Failed to validate screenshot ${name}: ${info?.error || 'Unknown error'}`);
+          continue;
+        }
+        width = info.width || 0;
+        height = info.height || 0;
+        sizeBytes = info.sizeBytes || 0;
+      }
+    } catch (e: any) {
+      console.warn('validateScreenshot IPC failed:', e);
+    }
+    if (width && height) {
+      if (width !== REQUIRED_WIDTH || height !== REQUIRED_HEIGHT) {
+        alert(`Screenshot ${name} must be exactly ${REQUIRED_WIDTH}x${REQUIRED_HEIGHT} (got ${width}x${height}).`);
+        continue;
+      }
+    }
+    if (sizeBytes && sizeBytes > MAX_SCREENSHOT_BYTES) {
+      alert(`Screenshot ${name} exceeds ${Math.floor(MAX_SCREENSHOT_BYTES/1024)}KB.`);
+      continue;
+    }
+    const currentTotal = existing.reduce((sum, s) => sum + (s.size || 0), 0);
+    if (sizeBytes && currentTotal + sizeBytes > MAX_TOTAL_SCREENSHOTS_BYTES) {
+      alert(`Total screenshots size exceeds ${(MAX_TOTAL_SCREENSHOTS_BYTES/1024).toFixed(0)}KB. Remove some or choose smaller images.`);
+      break;
+    }
+    existing.push({ path: p, name, size: sizeBytes || 0, width: width || undefined, height: height || undefined });
   }
 }
 

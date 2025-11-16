@@ -928,6 +928,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('submission:prepare', params || {});
   },
   packageSubmission: (configPath, outPath) => ipcRenderer.invoke('submission:package', { configPath, outPath }),
+  validateScreenshot: (params) => ipcRenderer.invoke('submission:validate-screenshot', params || {}),
 
   // File helpers for submission flows
   saveTextAsFile: ({ defaultPath, content }) => ipcRenderer.invoke('dialog:saveTextFile', { defaultPath, content }),

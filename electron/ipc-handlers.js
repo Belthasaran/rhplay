@@ -618,6 +618,32 @@ function registerDatabaseHandlers(dbManager) {
   // =============================
   // Submission preparation/packaging (newgame.js)
   // =============================
+  ipcMain.handle('submission:validate-screenshot', async (_event, { filePath } = {}) => {
+    try {
+      if (!filePath) return { success: false, error: 'Missing filePath' };
+      const fs = require('fs');
+      const { nativeImage } = require('electron');
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: `File not found: ${filePath}` };
+      }
+      const stat = fs.statSync(filePath);
+      const img = nativeImage.createFromPath(filePath);
+      const size = img.getSize();
+      if (!size || !size.width || !size.height) {
+        return { success: false, error: 'Unable to read image dimensions', sizeBytes: stat.size || 0 };
+      }
+      return {
+        success: true,
+        width: size.width,
+        height: size.height,
+        sizeBytes: stat.size || 0
+      };
+    } catch (error) {
+      console.error('[submission:validate-screenshot] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('submission:prepare', async (_event, { configPath, draftUuid } = {}) => {
     try {
       if (!configPath) return { success: false, error: 'Missing configPath' };
@@ -719,24 +745,12 @@ function registerDatabaseHandlers(dbManager) {
         skeletonPath = tmp;
       }
       await newgame.handlePrepare(skeletonPath);
-      // Read prepared skeleton and persist back to DB if we have a draftUuid
+      // Read prepared skeleton (returned to renderer; draft persistence handled in renderer Save Draft)
       let prepared = null;
       try {
         const preparedTxt = fs.readFileSync(skeletonPath, 'utf8');
         prepared = JSON.parse(preparedTxt);
       } catch {}
-      if (draftUuid && prepared) {
-        try {
-          const db = dbManager.getConnection('clientdata');
-          db.prepare(`
-            UPDATE game_submission_drafts
-            SET draft_data_json = ?, updated_at_utc = ?
-            WHERE draft_uuid = ?
-          `).run(JSON.stringify(prepared), Math.floor(Date.now() / 1000), draftUuid);
-        } catch (persistErr) {
-          console.warn('[submission:prepare] failed to persist prepared skeleton:', persistErr?.message);
-        }
-      }
       return { success: true, skeleton: prepared || null, draftUuid: draftUuid || null };
     } catch (error) {
       console.error('[submission:prepare] Failed:', error);

@@ -879,9 +879,8 @@ async function runPrepare() {
     const payload = JSON.stringify(current.value, null, 2);
     if (api.saveTextAsTempFile) {
       const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
-      const tempPath = tempRes?.filePath || tempRes;
       const draftUuid = (current.value as any)?.meta?.draft_uuid || null;
-      const res = await api.prepareSubmission({ configPath: tempPath, draftUuid });
+      const res = await api.prepareSubmission({ configPath: tempRes?.filePath || tempRes, draftUuid });
       if (res?.success) {
         // If backend returned a newgame skeleton, map it back into our Draft shape
         if (res?.skeleton && current.value) {
@@ -982,20 +981,25 @@ async function runPackage() {
   try {
     const payload = JSON.stringify(current.value, null, 2);
     if (api.saveTextAsTempFile) {
+      // Always run a fresh Prepare first to ensure artifacts (screenshots, etc.) are embedded
       const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
-      const tempPath = tempRes?.filePath || tempRes;
+      const draftTempPath = tempRes?.filePath || tempRes;
+      const draftUuid = (current.value as any)?.meta?.draft_uuid || null;
+      const prep = await api.prepareSubmission({ configPath: draftTempPath, draftUuid });
+      if (!prep?.success || !prep?.skeleton) {
+        alert(`Package failed: Prepare step did not succeed (${prep?.error || 'Unknown error'})`);
+        return;
+      }
+
       // Optional override validation
       let overrideGameId: string | undefined = undefined;
       if (overrideGameIdEnabled.value) {
         const ov = (overrideGameIdValue.value || '').trim();
-        if (!ov) {
-          // no override requested
-        } else {
+        if (ov) {
           if (!/^[A-Za-z0-9_]+$/.test(ov)) {
             alert('Override gameid may only contain alphanumeric characters and underscores.');
             return;
           }
-          // Check for conflict in rhdata
           const version = current.value?.meta?.version || 1;
           try {
             const existing = await api.getGame(ov, Number(version));
@@ -1009,10 +1013,29 @@ async function runPackage() {
           overrideGameId = ov;
         }
       }
+
+      // If overriding, mutate the prepared skeleton's gameid before packaging
+      let preparedForPackage = prep.skeleton;
+      if (overrideGameId) {
+        try {
+          if (preparedForPackage.gameversion) {
+            preparedForPackage.gameversion.gameid = overrideGameId;
+          }
+          if (preparedForPackage.metadata) {
+            preparedForPackage.metadata.gameid = overrideGameId;
+          }
+        } catch {}
+      }
+
+      // Write prepared skeleton to a temp file for packaging
+      const preparedJson = JSON.stringify(preparedForPackage, null, 2);
+      const prepTempRes = await api.saveTextAsTempFile({ prefix: 'prepared_', suffix: '.json', content: preparedJson });
+      const preparedPath = prepTempRes?.filePath || prepTempRes;
+
       // Build default filename: gameid-gamename.rhpak
       const meta = current.value?.meta || {};
       const safe = (s: string) => (s || '').toString().toLowerCase().trim().replace(/[^a-z0-9_]+/g, '-').replace(/^-+|-+$/g, '');
-      const gameId = safe((overrideGameId || (meta as any).gameid || meta.name || 'submission') as string);
+      const gameId = safe((overrideGameId || (preparedForPackage?.gameversion?.gameid) || (meta as any).gameid || meta.name || 'submission') as string);
       const gameName = safe(meta.name || '');
       const defaultName = `${gameId}${gameName ? '-' + gameName : ''}.jpg`.replace(/\.jpg$/, '.rhpak');
       const saveRes = await api.chooseSavePath({
@@ -1024,7 +1047,7 @@ async function runPackage() {
         return;
       }
       const outPath = saveRes.filePath;
-      const res = await api.packageSubmission(tempPath, outPath, overrideGameId ? { overrideGameId } : undefined);
+      const res = await api.packageSubmission(preparedPath, outPath);
       if (res?.success) alert('Package completed.');
       else alert(`Package failed: ${res?.error || 'Unknown error'}`);
     } else {

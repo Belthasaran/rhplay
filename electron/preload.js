@@ -921,7 +921,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteSubmissionDraft: (draftId) => ipcRenderer.invoke('submission:drafts:delete', { draftId }),
 
   // Submission preparation/packaging
-  prepareSubmission: (configPath) => ipcRenderer.invoke('submission:prepare', { configPath }),
+  prepareSubmission: (params) => {
+    if (typeof params === 'string') {
+      return ipcRenderer.invoke('submission:prepare', { configPath: params });
+    }
+    return ipcRenderer.invoke('submission:prepare', params || {});
+  },
   packageSubmission: (configPath, outPath) => ipcRenderer.invoke('submission:package', { configPath, outPath }),
 
   // File helpers for submission flows

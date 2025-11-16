@@ -802,8 +802,19 @@ async function runPrepare() {
     if (api.saveTextAsTempFile) {
       const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
       const tempPath = tempRes?.filePath || tempRes;
-      const res = await api.prepareSubmission(tempPath);
-      if (res?.success) alert('Prepare completed.');
+      const draftUuid = (current.value as any)?.meta?.draft_uuid || null;
+      const res = await api.prepareSubmission({ configPath: tempPath, draftUuid });
+      if (res?.success) {
+        if (res?.skeleton) {
+          current.value = res.skeleton;
+          (current.value as any).meta = current.value?.meta || {};
+          if (res.draftUuid) {
+            (current.value as any).meta.draft_uuid = res.draftUuid;
+          }
+          initSelectedTagsFromMeta();
+        }
+        alert('Prepare completed.');
+      }
       else alert(`Prepare failed: ${res?.error || 'Unknown error'}`);
     } else {
       alert('Prepare requires Electron environment with temp file support.');

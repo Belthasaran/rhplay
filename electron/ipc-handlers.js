@@ -440,11 +440,16 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       db.prepare(`
         CREATE TABLE IF NOT EXISTS game_submission_drafts (
-          draft_id TEXT PRIMARY KEY,
-          title TEXT,
-          payload_json TEXT NOT NULL,
+          draft_uuid TEXT PRIMARY KEY,
+          submitter_pubkey_npub TEXT,
+          draft_name TEXT,
+          draft_data_json TEXT NOT NULL,
           created_at_utc INTEGER NOT NULL,
-          updated_at_utc INTEGER NOT NULL
+          updated_at_utc INTEGER NOT NULL,
+          prepared_at_utc INTEGER NULL,
+          packaged_at_utc INTEGER NULL,
+          rhpak_path TEXT NULL,
+          state TEXT NOT NULL DEFAULT 'draft'
         )
       `).run();
       return db;
@@ -457,7 +462,7 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('submission:drafts:list', async () => {
     try {
       const db = ensureSubmissionDraftsTable();
-      const rows = db.prepare(`SELECT draft_id, title, created_at_utc, updated_at_utc FROM game_submission_drafts ORDER BY updated_at_utc DESC`).all();
+      const rows = db.prepare(`SELECT draft_uuid, draft_name, created_at_utc, updated_at_utc, state FROM game_submission_drafts ORDER BY updated_at_utc DESC`).all();
       return { success: true, drafts: rows };
     } catch (error) {
       console.error('[submission:drafts:list] Failed:', error);
@@ -469,7 +474,7 @@ function registerDatabaseHandlers(dbManager) {
     try {
       if (!draftId) return { success: false, error: 'Missing draftId' };
       const db = ensureSubmissionDraftsTable();
-      const row = db.prepare(`SELECT draft_id, title, payload_json, created_at_utc, updated_at_utc FROM game_submission_drafts WHERE draft_id = ?`).get(draftId);
+      const row = db.prepare(`SELECT draft_uuid, draft_name, draft_data_json, created_at_utc, updated_at_utc, state, rhpak_path FROM game_submission_drafts WHERE draft_uuid = ?`).get(draftId);
       if (!row) return { success: false, error: 'Not found' };
       return { success: true, draft: row };
     } catch (error) {
@@ -486,11 +491,11 @@ function registerDatabaseHandlers(dbManager) {
       const id = draftId || `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
       const json = typeof payload === 'string' ? payload : JSON.stringify(payload);
       db.prepare(`
-        INSERT INTO game_submission_drafts (draft_id, title, payload_json, created_at_utc, updated_at_utc)
+        INSERT INTO game_submission_drafts (draft_uuid, draft_name, draft_data_json, created_at_utc, updated_at_utc)
         VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(draft_id) DO UPDATE SET
-          title = excluded.title,
-          payload_json = excluded.payload_json,
+        ON CONFLICT(draft_uuid) DO UPDATE SET
+          draft_name = excluded.draft_name,
+          draft_data_json = excluded.draft_data_json,
           updated_at_utc = excluded.updated_at_utc
       `).run(id, title || null, json, now, now);
       return { success: true, draftId: id };
@@ -504,7 +509,7 @@ function registerDatabaseHandlers(dbManager) {
     try {
       if (!draftId) return { success: false, error: 'Missing draftId' };
       const db = ensureSubmissionDraftsTable();
-      db.prepare(`DELETE FROM game_submission_drafts WHERE draft_id = ?`).run(draftId);
+      db.prepare(`DELETE FROM game_submission_drafts WHERE draft_uuid = ?`).run(draftId);
       return { success: true };
     } catch (error) {
       console.error('[submission:drafts:delete] Failed:', error);

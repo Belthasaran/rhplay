@@ -652,7 +652,7 @@ async function saveDraftToDb() {
   if (!api?.saveSubmissionDraft) { await saveDraft(); return; }
   const title = current.value?.meta?.name || 'Untitled Submission';
   try {
-    const res = await api.saveSubmissionDraft({ draftId: (current.value as any)?.meta?.draft_id, title, payload: current.value });
+    const res = await api.saveSubmissionDraft({ draftId: (current.value as any)?.meta?.draft_uuid, title, payload: current.value });
     if (res?.success) {
       alert('Draft saved.');
     } else {
@@ -670,14 +670,14 @@ async function loadDraftFromDb() {
     const list = await api.listSubmissionDrafts();
     const drafts = list?.drafts || [];
     if (!drafts.length) { alert('No drafts saved.'); return; }
-    const labels = drafts.map((d: any) => `${d.draft_id} — ${d.title || '(untitled)'} — updated ${new Date((d.updated_at_utc||0)*1000).toLocaleString()}`);
+    const labels = drafts.map((d: any) => `${d.draft_uuid} — ${d.draft_name || '(untitled)'} — updated ${new Date((d.updated_at_utc||0)*1000).toLocaleString()} (${d.state||'draft'})`);
     const pick = prompt(`Enter draft number to load:\n${labels.map((s: string, i: number) => `${i+1}. ${s}`).join('\n')}`);
     const idx = pick ? (parseInt(pick, 10) - 1) : -1;
     if (idx < 0 || idx >= drafts.length) return;
     const chosen = drafts[idx];
-    const got = await api.getSubmissionDraft(chosen.draft_id);
-    if (got?.success && got?.draft?.payload_json) {
-      current.value = JSON.parse(got.draft.payload_json);
+    const got = await api.getSubmissionDraft(chosen.draft_uuid);
+    if (got?.success && got?.draft?.draft_data_json) {
+      current.value = JSON.parse(got.draft.draft_data_json);
       step.value = 2;
       initSelectedTagsFromMeta();
     } else {

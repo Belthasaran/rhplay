@@ -674,6 +674,15 @@ const MIGRATIONS = {
         return columnExists(db, 'admindeclarations', 'target_keypair_public_hex');
       },
     },
+    {
+      id: 'clientdata_032_game_submission_drafts',
+      description: 'Create game_submission_drafts table for storing draft game submissions',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/032_clientdata_game_submission_drafts.sql'),
+      skipIf(db) {
+        return tableExists(db, 'game_submission_drafts');
+      },
+    },
   ],
   patchbin: [
     {

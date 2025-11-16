@@ -1526,3 +1526,50 @@ Added `target_keypair_public_hex` column to the `admindeclarations` table so tru
 
 ---
 
+## 2025-01-XX: Game Submission Drafts (clientdata.db)
+
+### Date
+January XX, 2025
+
+### Description
+Added `game_submission_drafts` table to store draft game submissions in the client database, allowing users to save and resume work on submissions before finalization and packaging.
+
+### Rationale
+- **Draft Persistence**: Allow users to save incomplete submissions and resume later
+- **Workflow Support**: Enable multi-stage submission process (draft → prepare → package → submit)
+- **User Experience**: Prevent data loss when working on complex submissions
+- **State Tracking**: Track draft progression through states (draft → prepared → packaged → submitted)
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+- Created new `game_submission_drafts` table with columns:
+  - `draft_uuid TEXT PRIMARY KEY` - Unique identifier for each draft
+  - `submitter_pubkey_npub TEXT` - Submitter's Nostr public key (npub format)
+  - `draft_name TEXT` - User-friendly name for the draft
+  - `draft_data_json TEXT NOT NULL` - JSON-encoded draft submission data
+  - `created_at_utc INTEGER NOT NULL` - Creation timestamp (Unix seconds)
+  - `updated_at_utc INTEGER NOT NULL` - Last update timestamp (Unix seconds)
+  - `prepared_at_utc INTEGER NULL` - Timestamp when draft was prepared (patchblobs/attachments created)
+  - `packaged_at_utc INTEGER NULL` - Timestamp when RHPAK was created
+  - `rhpak_path TEXT NULL` - Path to generated RHPAK file
+  - `state TEXT NOT NULL DEFAULT 'draft'` - Current state: 'draft', 'prepared', 'packaged', 'submitted'
+- Created indexes:
+  - `idx_game_submission_drafts_submitter` on `submitter_pubkey_npub`
+  - `idx_game_submission_drafts_state` on `state`
+  - `idx_game_submission_drafts_updated` on `updated_at_utc DESC`
+
+### Migrations
+- Applied via `jsutils/migratedb.js` (migration identifier `clientdata_032_game_submission_drafts`)
+
+### Related Code
+- `electron/ipc-handlers.js`: Added IPC handlers for draft operations:
+  - `online:submission:draft:save` - Save or update a draft
+  - `online:submission:draft:list` - List all drafts for current user
+  - `online:submission:draft:load` - Load a specific draft by UUID
+  - `online:submission:draft:delete` - Delete a draft
+- `electron/preload.js`: Exposed draft APIs to renderer process
+- `electron/renderer/src/components/submit/GameSubmissionDashboard.vue`: Updated to use database persistence instead of JSON file save/load
+
+---
+

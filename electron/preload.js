@@ -913,6 +913,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Game submission
   enqueueGameSubmission: (params) => ipcRenderer.invoke('online:submission:enqueue', params),
+  
+  // Game submission drafts
+  saveSubmissionDraft: (params) => ipcRenderer.invoke('online:submission:draft:save', params),
+  listSubmissionDrafts: () => ipcRenderer.invoke('online:submission:draft:list'),
+  loadSubmissionDraft: (params) => ipcRenderer.invoke('online:submission:draft:load', params),
+  deleteSubmissionDraft: (params) => ipcRenderer.invoke('online:submission:draft:delete', params),
 
   // =============================
   // Tags (SMW) - categories and suggestions

@@ -6309,6 +6309,155 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Channel: online:submission:draft:save
+   * Save a game submission draft to database
+   */
+  ipcMain.handle('online:submission:draft:save', async (event, { draftUuid, draftName, draftData } = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfile = profileManager.getCurrentProfile();
+      if (!currentProfile) {
+        return { success: false, error: 'No current profile found' };
+      }
+      const submitterPubkey = currentProfile.npub || null;
+      
+      const db = dbManager.getConnection('clientdata');
+      const now = Math.floor(Date.now() / 1000);
+      const uuid = draftUuid || crypto.randomUUID();
+      
+      const existing = db.prepare('SELECT draft_uuid FROM game_submission_drafts WHERE draft_uuid = ?').get(uuid);
+      
+      if (existing) {
+        db.prepare(`
+          UPDATE game_submission_drafts
+          SET draft_name = ?, draft_data_json = ?, updated_at_utc = ?
+          WHERE draft_uuid = ?
+        `).run(draftName || 'Untitled Draft', JSON.stringify(draftData), now, uuid);
+      } else {
+        db.prepare(`
+          INSERT INTO game_submission_drafts (draft_uuid, submitter_pubkey_npub, draft_name, draft_data_json, created_at_utc, updated_at_utc, state)
+          VALUES (?, ?, ?, ?, ?, ?, 'draft')
+        `).run(uuid, submitterPubkey, draftName || 'Untitled Draft', JSON.stringify(draftData), now, now);
+      }
+      
+      return { success: true, draftUuid: uuid };
+    } catch (error) {
+      console.error('Error saving submission draft:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:submission:draft:list
+   * List all drafts for current user
+   */
+  ipcMain.handle('online:submission:draft:list', async (event) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfile = profileManager.getCurrentProfile();
+      if (!currentProfile) {
+        return { success: true, drafts: [] };
+      }
+      const submitterPubkey = currentProfile.npub || null;
+      
+      const db = dbManager.getConnection('clientdata');
+      const drafts = db.prepare(`
+        SELECT draft_uuid, draft_name, created_at_utc, updated_at_utc, prepared_at_utc, packaged_at_utc, state
+        FROM game_submission_drafts
+        WHERE submitter_pubkey_npub = ?
+        ORDER BY updated_at_utc DESC
+      `).all(submitterPubkey);
+      
+      return { success: true, drafts };
+    } catch (error) {
+      console.error('Error listing submission drafts:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:submission:draft:load
+   * Load a specific draft by UUID
+   */
+  ipcMain.handle('online:submission:draft:load', async (event, { draftUuid } = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfile = profileManager.getCurrentProfile();
+      if (!currentProfile) {
+        return { success: false, error: 'No current profile found' };
+      }
+      const submitterPubkey = currentProfile.npub || null;
+      
+      const db = dbManager.getConnection('clientdata');
+      const draft = db.prepare(`
+        SELECT * FROM game_submission_drafts
+        WHERE draft_uuid = ? AND submitter_pubkey_npub = ?
+      `).get(draftUuid, submitterPubkey);
+      
+      if (!draft) {
+        return { success: false, error: 'Draft not found' };
+      }
+      
+      return {
+        success: true,
+        draft: {
+          ...draft,
+          draftData: JSON.parse(draft.draft_data_json)
+        }
+      };
+    } catch (error) {
+      console.error('Error loading submission draft:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Channel: online:submission:draft:delete
+   * Delete a draft by UUID
+   */
+  ipcMain.handle('online:submission:draft:delete', async (event, { draftUuid } = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard not unlocked' };
+      }
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfile = profileManager.getCurrentProfile();
+      if (!currentProfile) {
+        return { success: false, error: 'No current profile found' };
+      }
+      const submitterPubkey = currentProfile.npub || null;
+      
+      const db = dbManager.getConnection('clientdata');
+      const result = db.prepare(`
+        DELETE FROM game_submission_drafts
+        WHERE draft_uuid = ? AND submitter_pubkey_npub = ?
+      `).run(draftUuid, submitterPubkey);
+      
+      if (result.changes === 0) {
+        return { success: false, error: 'Draft not found or access denied' };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting submission draft:', error);
+      return { success: false, error: error.message };
+    }
+  });
   /**
    * Export encryption key (password-encrypted backup)
    * Channel: online:encryption-key:export

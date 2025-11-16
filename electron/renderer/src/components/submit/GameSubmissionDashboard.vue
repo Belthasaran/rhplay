@@ -731,12 +731,37 @@ async function importDraft() {
     const rf = await api.readFile({ filePath: file });
     const text = rf?.content || '';
     if (!text) throw new Error('Empty file or failed to read file');
-    current.value = JSON.parse(text);
+    const raw = JSON.parse(text);
+    current.value = coerceLoadedDraft(raw);
     step.value = 2;
     initSelectedTagsFromMeta();
   } catch (e: any) {
     alert(`Error importing draft: ${e?.message || String(e)}`);
   }
+}
+
+function coerceLoadedDraft(raw: any): Draft {
+  // If it already looks like our Draft shape
+  if (raw && raw.files && raw.meta && typeof raw.meta === 'object') {
+    const draft: Draft = {
+      files: { patch: raw.files.patch || null, screenshots: Array.isArray(raw.files.screenshots) ? raw.files.screenshots : [] },
+      meta: raw.meta
+    };
+    return draft;
+  }
+  // If it looks like a prepared skeleton from newgame.js
+  if (raw && (raw.gameversion || raw.metadata)) {
+    const mapped = mapSkeletonToDraftMeta(raw);
+    const draft: Draft = { files: { patch: null, screenshots: [] }, meta: mapped };
+    return draft;
+  }
+  // If it's only meta-like
+  if (raw && raw.name) {
+    const draft: Draft = { files: { patch: null, screenshots: [] }, meta: raw } as Draft;
+    return draft;
+  }
+  // Fallback to empty draft
+  return { files: { patch: null, screenshots: [] }, meta: { name: '', author: '', types: [], version: 1, demo: false, sa1: false, collab: false, warnings: [] } };
 }
 
 async function loadDraftFromDb() {
@@ -753,7 +778,7 @@ async function loadDraftFromDb() {
     const chosen = drafts[idx];
     const got = await api.loadSubmissionDraft({ draftUuid: chosen.draft_uuid });
     if (got?.success && got?.draft?.draftData) {
-      current.value = got.draft.draftData;
+      current.value = coerceLoadedDraft(got.draft.draftData);
       (current.value as any).meta = current.value?.meta || {};
       (current.value as any).meta.draft_uuid = chosen.draft_uuid;
       step.value = 2;
@@ -789,7 +814,7 @@ async function loadSelectedDraft() {
   try {
     const got = await api.loadSubmissionDraft({ draftUuid: selectedDraftUuid.value });
     if (got?.success && got?.draft?.draftData) {
-      current.value = got.draft.draftData;
+      current.value = coerceLoadedDraft(got.draft.draftData);
       (current.value as any).meta = current.value?.meta || {};
       (current.value as any).meta.draft_uuid = selectedDraftUuid.value;
       step.value = 2;

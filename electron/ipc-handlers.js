@@ -458,11 +458,38 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   }
+  function getDraftsColumnSet(db) {
+    try {
+      const cols = db.prepare(`PRAGMA table_info(game_submission_drafts)`).all().map(r => r.name);
+      const isNew = cols.includes('draft_data_json');
+      return {
+        isNew,
+        id: isNew ? 'draft_uuid' : 'draft_id',
+        title: isNew ? 'draft_name' : 'title',
+        data: isNew ? 'draft_data_json' : 'payload_json',
+        created: isNew ? 'created_at_utc' : 'created_at_utc',
+        updated: isNew ? 'updated_at_utc' : 'updated_at_utc',
+        state: cols.includes('state') ? 'state' : null,
+        rhpak: cols.includes('rhpak_path') ? 'rhpak_path' : null,
+      };
+    } catch {
+      return { isNew: true, id: 'draft_uuid', title: 'draft_name', data: 'draft_data_json', created: 'created_at_utc', updated: 'updated_at_utc', state: 'state', rhpak: 'rhpak_path' };
+    }
+  }
 
   ipcMain.handle('submission:drafts:list', async () => {
     try {
       const db = ensureSubmissionDraftsTable();
-      const rows = db.prepare(`SELECT draft_uuid, draft_name, created_at_utc, updated_at_utc, state FROM game_submission_drafts ORDER BY updated_at_utc DESC`).all();
+      const cols = getDraftsColumnSet(db);
+      const select = `
+        SELECT ${cols.id} AS draft_uuid,
+               ${cols.title} AS draft_name,
+               ${cols.created} AS created_at_utc,
+               ${cols.updated} AS updated_at_utc
+               ${cols.state ? `, ${cols.state} AS state` : ''}
+        FROM game_submission_drafts
+        ORDER BY ${cols.updated} DESC`;
+      const rows = db.prepare(select).all();
       return { success: true, drafts: rows };
     } catch (error) {
       console.error('[submission:drafts:list] Failed:', error);
@@ -474,7 +501,18 @@ function registerDatabaseHandlers(dbManager) {
     try {
       if (!draftId) return { success: false, error: 'Missing draftId' };
       const db = ensureSubmissionDraftsTable();
-      const row = db.prepare(`SELECT draft_uuid, draft_name, draft_data_json, created_at_utc, updated_at_utc, state, rhpak_path FROM game_submission_drafts WHERE draft_uuid = ?`).get(draftId);
+      const cols = getDraftsColumnSet(db);
+      const select = `
+        SELECT ${cols.id} AS draft_uuid,
+               ${cols.title} AS draft_name,
+               ${cols.data} AS draft_data_json,
+               ${cols.created} AS created_at_utc,
+               ${cols.updated} AS updated_at_utc
+               ${cols.state ? `, ${cols.state} AS state` : ''}
+               ${cols.rhpak ? `, ${cols.rhpak} AS rhpak_path` : ''}
+        FROM game_submission_drafts
+        WHERE ${cols.id} = ?`;
+      const row = db.prepare(select).get(draftId);
       if (!row) return { success: false, error: 'Not found' };
       return { success: true, draft: row };
     } catch (error) {
@@ -487,6 +525,7 @@ function registerDatabaseHandlers(dbManager) {
     try {
       if (!payload) return { success: false, error: 'Missing payload' };
       const db = ensureSubmissionDraftsTable();
+      const cols = getDraftsColumnSet(db);
       const now = Math.floor(Date.now() / 1000);
       const id = draftId || `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
       let json;
@@ -499,14 +538,15 @@ function registerDatabaseHandlers(dbManager) {
       if (!json) {
         json = JSON.stringify({ note: 'empty_payload' });
       }
-      db.prepare(`
-        INSERT INTO game_submission_drafts (draft_uuid, draft_name, draft_data_json, created_at_utc, updated_at_utc)
+      const insert = `
+        INSERT INTO game_submission_drafts (${cols.id}, ${cols.title}, ${cols.data}, ${cols.created}, ${cols.updated})
         VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(draft_uuid) DO UPDATE SET
-          draft_name = excluded.draft_name,
-          draft_data_json = excluded.draft_data_json,
-          updated_at_utc = excluded.updated_at_utc
-      `).run(id, title || null, json, now, now);
+        ON CONFLICT(${cols.id}) DO UPDATE SET
+          ${cols.title} = excluded.${cols.title},
+          ${cols.data} = excluded.${cols.data},
+          ${cols.updated} = excluded.${cols.updated}
+      `;
+      db.prepare(insert).run(id, title || null, json, now, now);
       return { success: true, draftId: id };
     } catch (error) {
       console.error('[submission:drafts:save] Failed:', error);

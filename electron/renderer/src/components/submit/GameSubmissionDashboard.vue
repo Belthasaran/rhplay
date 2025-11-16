@@ -680,9 +680,15 @@ async function saveDraftToDb() {
     const params = JSON.parse(JSON.stringify({ draftUuid, draftName, draftData }));
     const res = await api.saveSubmissionDraft(params);
     if (res?.success) {
+      (current.value as any).meta = current.value?.meta || {};
       if (res.draftUuid) {
-        (current.value as any).meta = current.value?.meta || {};
         (current.value as any).meta.draft_uuid = res.draftUuid;
+      }
+      if (res.gameid) {
+        (current.value as any).meta.gameid = res.gameid;
+      }
+      if (res.gvuuid) {
+        (current.value as any).meta.gvuuid = res.gvuuid;
       }
       alert('Draft saved.');
     } else {
@@ -815,9 +821,21 @@ async function runPackage() {
     if (api.saveTextAsTempFile) {
       const tempRes = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
       const tempPath = tempRes?.filePath || tempRes;
-      const outPick = await api.selectDirectory({ title: 'Select output folder for RHPAK' });
-      const outDir = outPick?.filePaths?.[0];
-      const outPath = outDir ? (outDir + '/submission.rhpak') : undefined;
+      // Build default filename: gameid-gamename.rhpak
+      const meta = current.value?.meta || {};
+      const safe = (s: string) => (s || '').toString().toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const gameId = safe((meta as any).gameid || meta.name || 'submission');
+      const gameName = safe(meta.name || '');
+      const defaultName = `${gameId}${gameName ? '-' + gameName : ''}.rhpak`;
+      const saveRes = await api.chooseSavePath({
+        title: 'Save RHPAK',
+        defaultPath: defaultName,
+        filters: [{ name: 'RHPAK Package', extensions: ['rhpak'] }]
+      });
+      if (!saveRes?.success || !saveRes.filePath) {
+        return;
+      }
+      const outPath = saveRes.filePath;
       const res = await api.packageSubmission(tempPath, outPath);
       if (res?.success) alert('Package completed.');
       else alert(`Package failed: ${res?.error || 'Unknown error'}`);

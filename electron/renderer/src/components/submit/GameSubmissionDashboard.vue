@@ -279,12 +279,39 @@
         <div class="grid">
           <div class="field full">
             <label><input type="checkbox" v-model="current!.meta.admin_only" /> Admin-only submission</label>
-            <div class="hint">Checking this box will prevent the game from being listed on the main site, only visible to admins.</div>
+            <div class="hint">Do not check this unless you are a delegated admin or moderator for the Nostr system; otherwise your RHPAK will be rejected.</div>
+          </div>
+          <div class="field">
+            <label>gvuuid</label>
+            <input class="input" :value="current?.meta?.gvuuid || ''" readonly />
+          </div>
+          <div class="field">
+            <label>gameid</label>
+            <input class="input" :readonly="!current?.meta?.admin_only" v-model.trim="current!.meta.gameid" />
+            <div class="hint" v-if="!current?.meta?.admin_only">Read-only. Auto-generated during save. Only editable when Admin-only is checked.</div>
+          </div>
+          <div class="field" v-if="current?.meta?.admin_only">
+            <label>moderation_result</label>
+            <select v-model="current!.meta.moderation_result" class="input">
+              <option value=""></option>
+              <option value="accept">Accept</option>
+              <option value="reject">Reject</option>
+              <option value="extinguish">Extinguish</option>
+              <option value="extinguish_block">Extinguish and Block</option>
+            </select>
+          </div>
+          <div class="field" v-if="current?.meta?.admin_only">
+            <label>admin_comments</label>
+            <input class="input" v-model.trim="current!.meta.admin_comments" placeholder="Optional admin/moderator comments" />
           </div>
           <div class="field full">
-            <label>Override Game ID (for testing)</label>
-            <input v-model.trim="overrideGameIdValue" class="input" placeholder="e.g., my_game_id" />
-            <div class="hint">Enter a game ID to override the game ID used in the RHPAK package. Only use this for testing purposes.</div>
+            <label><input type="checkbox" v-model="overrideGameIdEnabled" /> Override RHPAK gameid for testing purposes</label>
+            <div class="hint">For test packages only. The override gameid will be written into the RHPAK, but not persisted to your draft. Use only for non-final testing; do not publish such RHPAKs to Nostr.</div>
+          </div>
+          <div class="field" v-if="overrideGameIdEnabled">
+            <label>Override gameid</label>
+            <input class="input" v-model.trim="overrideGameIdValue" placeholder="e.g., My_Test_Game" />
+            <div class="hint">Only alphanumeric characters and underscores are allowed. Must not conflict with an existing (gameid, version) in your database.</div>
           </div>
         </div>
       </div>
@@ -312,7 +339,7 @@
           <button class="btn" @click="loadDraftFromDb">Load Draft…</button>
           <button class="btn" @click="runPrepare" :disabled="!canSubmit">Prepare</button>
           <button class="btn" @click="runPackage" :disabled="!canSubmit">Package RHPAK</button>
-          <button class="btn" @click="submitNow" :disabled="!canSubmit">Submit & Publish</button>
+          <button class="btn" @click="submitNow" :disabled="!canSubmit">Submit &amp; Publish</button>
         </div>
       </div>
     </div>
@@ -328,6 +355,10 @@ import { ref, computed, onMounted, watch } from 'vue';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import tagsText from './smwtags.txt?raw';
+
+// Developer option: override RHPAK gameid (testing only)
+const overrideGameIdEnabled = ref<boolean>(false);
+const overrideGameIdValue = ref<string>('');
 
 type PatchFile = { path: string; name: string; size: number } | null;
 type ShotFile = { path: string; name: string; size: number; width?: number; height?: number };
@@ -414,7 +445,7 @@ function newDraft() {
 async function pickPatch() {
   const api = (window as any)?.electronAPI;
   if (!api) return;
-  const res = await api.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'BPS patch', extensions: ['bps'] }] });
+  const res = await api.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'BPS patch', extensions: ['bps','zip'] }] });
   const file = res?.filePaths?.[0];
   if (!file) return;
   // We cannot directly read file size here without fs; accept path and name. Size unknown → optional.
@@ -958,25 +989,25 @@ async function runPackage() {
       if (overrideGameIdEnabled.value) {
         const ov = (overrideGameIdValue.value || '').trim();
         if (!ov) {
-          alert('Override gameid is enabled. Please enter a value or uncheck the override option.');
-          return;
-        }
-        if (!/^[A-Za-z_]+$/.test(ov)) {
-          alert('Override gameid may only contain alphabetic characters and underscores.');
-          return;
-        }
-        // Check for conflict in rhdata
-        const version = current.value?.meta?.version || 1;
-        try {
-          const existing = await api.getGame(ov, Number(version));
-          if (existing && !confirm(`A game with id "${ov}" and version ${version} already exists. Using this override will conflict. Continue anyway (for testing only)?`)) {
+          // no override requested
+        } else {
+          if (!/^[A-Za-z0-9_]+$/.test(ov)) {
+            alert('Override gameid may only contain alphanumeric characters and underscores.');
             return;
           }
-        } catch {}
-        if (!confirm(`You are about to package a RHPAK with override gameid "${ov}" for testing purposes. This will not be persisted to your draft. Continue?`)) {
-          return;
+          // Check for conflict in rhdata
+          const version = current.value?.meta?.version || 1;
+          try {
+            const existing = await api.getGame(ov, Number(version));
+            if (existing && !confirm(`A game with id "${ov}" and version ${version} already exists. Using this override will conflict. Continue anyway (for testing only)?`)) {
+              return;
+            }
+          } catch {}
+          if (!confirm(`You are about to package a RHPAK with override gameid "${ov}" for testing purposes. This will not be persisted to your draft. Continue?`)) {
+            return;
+          }
+          overrideGameId = ov;
         }
-        overrideGameId = ov;
       }
       // Build default filename: gameid-gamename.rhpak
       const meta = current.value?.meta || {};

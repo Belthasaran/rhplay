@@ -460,20 +460,22 @@ function registerDatabaseHandlers(dbManager) {
   }
   function getDraftsColumnSet(db) {
     try {
-      const cols = db.prepare(`PRAGMA table_info(game_submission_drafts)`).all().map(r => r.name);
-      const isNew = cols.includes('draft_data_json');
+      const cols = db.prepare(`PRAGMA table_info(game_submission_drafts)`).all().map(r => String(r.name || '').toLowerCase());
+      const hasDraftDataJson = cols.includes('draft_data_json');
+      const hasPayloadJson = cols.includes('payload_json');
       return {
-        isNew,
-        id: isNew ? 'draft_uuid' : 'draft_id',
-        title: isNew ? 'draft_name' : 'title',
-        data: isNew ? 'draft_data_json' : 'payload_json',
+        hasDraftDataJson,
+        hasPayloadJson,
+        id: cols.includes('draft_uuid') ? 'draft_uuid' : 'draft_id',
+        title: cols.includes('draft_name') ? 'draft_name' : 'title',
+        data: hasDraftDataJson ? 'draft_data_json' : 'payload_json',
         created: isNew ? 'created_at_utc' : 'created_at_utc',
         updated: isNew ? 'updated_at_utc' : 'updated_at_utc',
         state: cols.includes('state') ? 'state' : null,
         rhpak: cols.includes('rhpak_path') ? 'rhpak_path' : null,
       };
     } catch {
-      return { isNew: true, id: 'draft_uuid', title: 'draft_name', data: 'draft_data_json', created: 'created_at_utc', updated: 'updated_at_utc', state: 'state', rhpak: 'rhpak_path' };
+      return { hasDraftDataJson: true, hasPayloadJson: false, id: 'draft_uuid', title: 'draft_name', data: 'draft_data_json', created: 'created_at_utc', updated: 'updated_at_utc', state: 'state', rhpak: 'rhpak_path' };
     }
   }
 
@@ -544,15 +546,57 @@ function registerDatabaseHandlers(dbManager) {
       if (typeof json !== 'string') {
         json = JSON.stringify(json || {});
       }
-      const insert = `
-        INSERT INTO game_submission_drafts (${cols.id}, ${cols.title}, ${cols.data}, ${cols.created}, ${cols.updated})
-        VALUES (?, ?, COALESCE(?, '{}'), ?, ?)
-        ON CONFLICT(${cols.id}) DO UPDATE SET
-          ${cols.title} = excluded.${cols.title},
-          ${cols.data} = COALESCE(excluded.${cols.data}, ${cols.data}),
-          ${cols.updated} = excluded.${cols.updated}
-      `;
-      db.prepare(insert).run(id, title || 'Untitled Submission', json, now, now);
+      // Log values being written for precise diagnostics
+      try {
+        const preview = typeof json === 'string' ? json.slice(0, 200) : '';
+        console.log('[submission:drafts:save] Using columns:', cols);
+        console.log('[submission:drafts:save] Writing id:', id, 'title:', title || 'Untitled Submission');
+        console.log('[submission:drafts:save] JSON length:', json.length, 'preview:', preview);
+      } catch {}
+      // Explicit insert-or-update (write both JSON columns if they exist)
+      const exists = db.prepare(`SELECT 1 FROM game_submission_drafts WHERE ${cols.id} = ?`).get(id);
+      try {
+        if (exists) {
+          // Build dynamic SET clause
+          const sets = [`${cols.title} = ?`, `${cols.updated} = ?`];
+          const params = [title || 'Untitled Submission', now];
+          if (cols.hasDraftDataJson) { sets.push(`draft_data_json = ?`); params.push(json); }
+          if (cols.hasPayloadJson) { sets.push(`payload_json = ?`); params.push(json); }
+          const upd = `UPDATE game_submission_drafts SET ${sets.join(', ')} WHERE ${cols.id} = ?`;
+          params.push(id);
+          db.prepare(upd).run(...params);
+        } else {
+          // Build dynamic columns/values
+          const columns = [cols.id, cols.title, cols.created, cols.updated];
+          const values = [id, title || 'Untitled Submission', now, now];
+          if (cols.hasDraftDataJson) { columns.push('draft_data_json'); values.push(json); }
+          if (cols.hasPayloadJson) { columns.push('payload_json'); values.push(json); }
+          const placeholders = columns.map(() => '?').join(', ');
+          const ins = `INSERT INTO game_submission_drafts (${columns.join(', ')}) VALUES (${placeholders})`;
+          db.prepare(ins).run(...values);
+        }
+      } catch (writeErr) {
+        // Force minimal JSON on constraint errors and retry once
+        console.error('[submission:drafts:save] Write failed; retrying with minimal JSON:', writeErr?.message);
+        const minimal = '{}';
+        if (exists) {
+          const sets = [`${cols.title} = ?`, `${cols.updated} = ?`];
+          const params = [title || 'Untitled Submission', now];
+          if (cols.hasDraftDataJson) { sets.push(`draft_data_json = ?`); params.push(minimal); }
+          if (cols.hasPayloadJson) { sets.push(`payload_json = ?`); params.push(minimal); }
+          const upd = `UPDATE game_submission_drafts SET ${sets.join(', ')} WHERE ${cols.id} = ?`;
+          params.push(id);
+          db.prepare(upd).run(...params);
+        } else {
+          const columns = [cols.id, cols.title, cols.created, cols.updated];
+          const values = [id, title || 'Untitled Submission', now, now];
+          if (cols.hasDraftDataJson) { columns.push('draft_data_json'); values.push(minimal); }
+          if (cols.hasPayloadJson) { columns.push('payload_json'); values.push(minimal); }
+          const placeholders = columns.map(() => '?').join(', ');
+          const ins = `INSERT INTO game_submission_drafts (${columns.join(', ')}) VALUES (${placeholders})`;
+          db.prepare(ins).run(...values);
+        }
+      }
       return { success: true, draftId: id };
     } catch (error) {
       console.error('[submission:drafts:save] Failed:', error);
@@ -6544,20 +6588,26 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       const now = Math.floor(Date.now() / 1000);
       const uuid = draftUuid || crypto.randomUUID();
-      
+      // Robust JSON serialization to satisfy NOT NULL constraint
+      let json = (typeof draftData === 'string') ? draftData : JSON.stringify(draftData ?? {});
+      if (json == null) json = '{}';
+      if (typeof json !== 'string') {
+        try { json = JSON.stringify(json); } catch { json = '{}'; }
+      }
+      if (json === 'null' || json.trim().length === 0) json = '{}';
+      // Write
       const existing = db.prepare('SELECT draft_uuid FROM game_submission_drafts WHERE draft_uuid = ?').get(uuid);
-      
       if (existing) {
         db.prepare(`
           UPDATE game_submission_drafts
           SET draft_name = ?, draft_data_json = ?, updated_at_utc = ?
           WHERE draft_uuid = ?
-        `).run(draftName || 'Untitled Draft', JSON.stringify(draftData), now, uuid);
+        `).run(draftName || 'Untitled Draft', json, now, uuid);
       } else {
         db.prepare(`
           INSERT INTO game_submission_drafts (draft_uuid, submitter_pubkey_npub, draft_name, draft_data_json, created_at_utc, updated_at_utc, state)
           VALUES (?, ?, ?, ?, ?, ?, 'draft')
-        `).run(uuid, submitterPubkey, draftName || 'Untitled Draft', JSON.stringify(draftData), now, now);
+        `).run(uuid, submitterPubkey, draftName || 'Untitled Draft', json, now, now);
       }
       
       return { success: true, draftUuid: uuid };

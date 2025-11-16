@@ -655,8 +655,16 @@ async function saveDraftToDb() {
   try {
     // Serialize reactive object to plain JSON to avoid IPC cloning errors
     const plainPayload = JSON.parse(JSON.stringify(current.value));
-    const res = await api.saveSubmissionDraft({ draftId: (current.value as any)?.meta?.draft_uuid, title, payload: plainPayload });
+    const draftUuid = (current.value as any)?.meta?.draft_uuid || null;
+    const draftName = title;
+    const draftData = plainPayload;
+    const params = JSON.parse(JSON.stringify({ draftUuid, draftName, draftData }));
+    const res = await api.saveSubmissionDraft(params);
     if (res?.success) {
+      if (res.draftUuid) {
+        (current.value as any).meta = current.value?.meta || {};
+        (current.value as any).meta.draft_uuid = res.draftUuid;
+      }
       alert('Draft saved.');
     } else {
       alert(`Failed to save draft: ${res?.error || 'Unknown error'}`);
@@ -668,7 +676,7 @@ async function saveDraftToDb() {
 
 async function loadDraftFromDb() {
   const api = (window as any)?.electronAPI;
-  if (!api?.listSubmissionDrafts || !api?.getSubmissionDraft) { await loadDraft(); return; }
+  if (!api?.listSubmissionDrafts || !api?.loadSubmissionDraft) { await loadDraft(); return; }
   try {
     const list = await api.listSubmissionDrafts();
     const drafts = list?.drafts || [];
@@ -678,9 +686,11 @@ async function loadDraftFromDb() {
     const idx = pick ? (parseInt(pick, 10) - 1) : -1;
     if (idx < 0 || idx >= drafts.length) return;
     const chosen = drafts[idx];
-    const got = await api.getSubmissionDraft(chosen.draft_uuid);
-    if (got?.success && got?.draft?.draft_data_json) {
-      current.value = JSON.parse(got.draft.draft_data_json);
+    const got = await api.loadSubmissionDraft({ draftUuid: chosen.draft_uuid });
+    if (got?.success && got?.draft?.draftData) {
+      current.value = got.draft.draftData;
+      (current.value as any).meta = current.value?.meta || {};
+      (current.value as any).meta.draft_uuid = chosen.draft_uuid;
       step.value = 2;
       initSelectedTagsFromMeta();
     } else {

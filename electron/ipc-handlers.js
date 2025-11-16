@@ -489,7 +489,16 @@ function registerDatabaseHandlers(dbManager) {
       const db = ensureSubmissionDraftsTable();
       const now = Math.floor(Date.now() / 1000);
       const id = draftId || `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
-      const json = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      let json;
+      try {
+        json = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      } catch (e) {
+        // As a last resort, store minimal shape with error
+        json = JSON.stringify({ error: 'serialization_failed', message: String(e) });
+      }
+      if (!json) {
+        json = JSON.stringify({ note: 'empty_payload' });
+      }
       db.prepare(`
         INSERT INTO game_submission_drafts (draft_uuid, draft_name, draft_data_json, created_at_utc, updated_at_utc)
         VALUES (?, ?, ?, ?, ?)

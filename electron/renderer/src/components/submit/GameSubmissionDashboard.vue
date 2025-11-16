@@ -871,6 +871,19 @@ async function runPrepare() {
           }
           current.value = newDraft;
           initSelectedTagsFromMeta();
+
+          // Persist merged draft (including files) back to DB so Files survive restart
+          try {
+            if (api.saveSubmissionDraft) {
+              const plainPayload = JSON.parse(JSON.stringify(current.value));
+              const params = JSON.parse(JSON.stringify({
+                draftUuid: (current.value as any)?.meta?.draft_uuid || draftUuid || null,
+                draftName: current.value?.meta?.name || 'Untitled Submission',
+                draftData: plainPayload
+              }));
+              await api.saveSubmissionDraft(params);
+            }
+          } catch {}
         }
         alert('Prepare completed.');
       }

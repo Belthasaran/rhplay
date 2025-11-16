@@ -278,6 +278,10 @@
           <div><strong>Download URL:</strong> {{ current.meta.download_url || '—' }}</div>
         </div>
         <div class="actions">
+          <button class="btn" @click="saveDraftToDb" :disabled="!current">Save Draft</button>
+          <button class="btn" @click="loadDraftFromDb">Load Draft…</button>
+          <button class="btn" @click="runPrepare" :disabled="!canSubmit">Prepare</button>
+          <button class="btn" @click="runPackage" :disabled="!canSubmit">Package RHPAK</button>
           <button class="btn" @click="submitNow" :disabled="!canSubmit">Submit & Publish</button>
         </div>
       </div>
@@ -641,6 +645,88 @@ async function saveDraft() {
   }
 }
 
+// --- DB-backed draft save/load ---
+async function saveDraftToDb() {
+  if (!current.value) return;
+  const api = (window as any)?.electronAPI;
+  if (!api?.saveSubmissionDraft) { await saveDraft(); return; }
+  const title = current.value?.meta?.name || 'Untitled Submission';
+  try {
+    const res = await api.saveSubmissionDraft({ draftId: (current.value as any)?.meta?.draft_id, title, payload: current.value });
+    if (res?.success) {
+      alert('Draft saved.');
+    } else {
+      alert(`Failed to save draft: ${res?.error || 'Unknown error'}`);
+    }
+  } catch (e: any) {
+    alert(`Error saving draft: ${e?.message || String(e)}`);
+  }
+}
+
+async function loadDraftFromDb() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.listSubmissionDrafts || !api?.getSubmissionDraft) { await loadDraft(); return; }
+  try {
+    const list = await api.listSubmissionDrafts();
+    const drafts = list?.drafts || [];
+    if (!drafts.length) { alert('No drafts saved.'); return; }
+    const labels = drafts.map((d: any) => `${d.draft_id} — ${d.title || '(untitled)'} — updated ${new Date((d.updated_at_utc||0)*1000).toLocaleString()}`);
+    const pick = prompt(`Enter draft number to load:\n${labels.map((s: string, i: number) => `${i+1}. ${s}`).join('\n')}`);
+    const idx = pick ? (parseInt(pick, 10) - 1) : -1;
+    if (idx < 0 || idx >= drafts.length) return;
+    const chosen = drafts[idx];
+    const got = await api.getSubmissionDraft(chosen.draft_id);
+    if (got?.success && got?.draft?.payload_json) {
+      current.value = JSON.parse(got.draft.payload_json);
+      step.value = 2;
+      initSelectedTagsFromMeta();
+    } else {
+      alert(`Failed to load draft: ${got?.error || 'Unknown error'}`);
+    }
+  } catch (e: any) {
+    alert(`Error loading draft: ${e?.message || String(e)}`);
+  }
+}
+
+// --- Prepare / Package via IPC ---
+async function runPrepare() {
+  const api = (window as any)?.electronAPI;
+  if (!api) return;
+  try {
+    const payload = JSON.stringify(current.value, null, 2);
+    if (api.saveTextAsTempFile) {
+      const tempPath = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
+      const res = await api.prepareSubmission(tempPath);
+      if (res?.success) alert('Prepare completed.');
+      else alert(`Prepare failed: ${res?.error || 'Unknown error'}`);
+    } else {
+      alert('Prepare requires Electron environment with temp file support.');
+    }
+  } catch (e: any) {
+    alert(`Prepare error: ${e?.message || String(e)}`);
+  }
+}
+
+async function runPackage() {
+  const api = (window as any)?.electronAPI;
+  if (!api) return;
+  try {
+    const payload = JSON.stringify(current.value, null, 2);
+    if (api.saveTextAsTempFile) {
+      const tempPath = await api.saveTextAsTempFile({ prefix: 'submission_', suffix: '.json', content: payload });
+      const outPick = await api.selectDirectory({ title: 'Select output folder for RHPAK' });
+      const outDir = outPick?.filePaths?.[0];
+      const outPath = outDir ? (outDir + '/submission.rhpak') : undefined;
+      const res = await api.packageSubmission(tempPath, outPath);
+      if (res?.success) alert('Package completed.');
+      else alert(`Package failed: ${res?.error || 'Unknown error'}`);
+    } else {
+      alert('Package requires Electron environment with temp file support.');
+    }
+  } catch (e: any) {
+    alert(`Package error: ${e?.message || String(e)}`);
+  }
+}
 async function loadDraft() {
   const api = (window as any)?.electronAPI;
   if (!api) return;

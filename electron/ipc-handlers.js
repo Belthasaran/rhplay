@@ -432,6 +432,156 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // =============================
+  // Submission Drafts (clientdata)
+  // =============================
+  function ensureSubmissionDraftsTable() {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS game_submission_drafts (
+          draft_id TEXT PRIMARY KEY,
+          title TEXT,
+          payload_json TEXT NOT NULL,
+          created_at_utc INTEGER NOT NULL,
+          updated_at_utc INTEGER NOT NULL
+        )
+      `).run();
+      return db;
+    } catch (error) {
+      console.error('[drafts] ensure table failed:', error);
+      throw error;
+    }
+  }
+
+  ipcMain.handle('submission:drafts:list', async () => {
+    try {
+      const db = ensureSubmissionDraftsTable();
+      const rows = db.prepare(`SELECT draft_id, title, created_at_utc, updated_at_utc FROM game_submission_drafts ORDER BY updated_at_utc DESC`).all();
+      return { success: true, drafts: rows };
+    } catch (error) {
+      console.error('[submission:drafts:list] Failed:', error);
+      return { success: false, error: error.message, drafts: [] };
+    }
+  });
+
+  ipcMain.handle('submission:drafts:get', async (_event, { draftId }) => {
+    try {
+      if (!draftId) return { success: false, error: 'Missing draftId' };
+      const db = ensureSubmissionDraftsTable();
+      const row = db.prepare(`SELECT draft_id, title, payload_json, created_at_utc, updated_at_utc FROM game_submission_drafts WHERE draft_id = ?`).get(draftId);
+      if (!row) return { success: false, error: 'Not found' };
+      return { success: true, draft: row };
+    } catch (error) {
+      console.error('[submission:drafts:get] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('submission:drafts:save', async (_event, { draftId, title, payload }) => {
+    try {
+      if (!payload) return { success: false, error: 'Missing payload' };
+      const db = ensureSubmissionDraftsTable();
+      const now = Math.floor(Date.now() / 1000);
+      const id = draftId || `draft_${now}_${Math.random().toString(36).slice(2, 8)}`;
+      const json = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      db.prepare(`
+        INSERT INTO game_submission_drafts (draft_id, title, payload_json, created_at_utc, updated_at_utc)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(draft_id) DO UPDATE SET
+          title = excluded.title,
+          payload_json = excluded.payload_json,
+          updated_at_utc = excluded.updated_at_utc
+      `).run(id, title || null, json, now, now);
+      return { success: true, draftId: id };
+    } catch (error) {
+      console.error('[submission:drafts:save] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('submission:drafts:delete', async (_event, { draftId }) => {
+    try {
+      if (!draftId) return { success: false, error: 'Missing draftId' };
+      const db = ensureSubmissionDraftsTable();
+      db.prepare(`DELETE FROM game_submission_drafts WHERE draft_id = ?`).run(draftId);
+      return { success: true };
+    } catch (error) {
+      console.error('[submission:drafts:delete] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // =============================
+  // Submission preparation/packaging (newgame.js)
+  // =============================
+  ipcMain.handle('submission:prepare', async (_event, { configPath }) => {
+    try {
+      if (!configPath) return { success: false, error: 'Missing configPath' };
+      // Prefer programmatic module exports if available
+      try {
+        const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
+        if (newgame && typeof newgame.handlePrepare === 'function') {
+          const res = await newgame.handlePrepare(configPath);
+          return { success: true, result: res };
+        }
+      } catch (e) {
+        // Fallback to enode.sh invocation (dev env)
+        try {
+          const { spawnSync } = require('child_process');
+          const script = path.resolve(projectRoot, 'enode.sh');
+          const args = ['jstools/newgame.js', configPath, '--prepare'];
+          const proc = spawnSync(script, args, { cwd: projectRoot, encoding: 'utf-8' });
+          if (proc.status === 0) {
+            return { success: true, stdout: proc.stdout };
+          } else {
+            return { success: false, error: proc.stderr || `Exit ${proc.status}` };
+          }
+        } catch (shellErr) {
+          return { success: false, error: `Prepare failed: ${shellErr.message}` };
+        }
+      }
+      return { success: false, error: 'No available prepare method' };
+    } catch (error) {
+      console.error('[submission:prepare] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('submission:package', async (_event, { configPath, outPath }) => {
+    try {
+      if (!configPath) return { success: false, error: 'Missing configPath' };
+      const out = outPath || '';
+      // Prefer programmatic module exports if available
+      try {
+        const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
+        if (newgame && typeof newgame.handlePackage === 'function') {
+          const res = await newgame.handlePackage(configPath, out);
+          return { success: true, result: res };
+        }
+      } catch (e) {
+        // Fallback to enode.sh invocation (dev env)
+        try {
+          const { spawnSync } = require('child_process');
+          const script = path.resolve(projectRoot, 'enode.sh');
+          const args = ['jstools/newgame.js', configPath, out ? `--package=${out}` : '--package'];
+          const proc = spawnSync(script, args, { cwd: projectRoot, encoding: 'utf-8' });
+          if (proc.status === 0) {
+            return { success: true, stdout: proc.stdout };
+          } else {
+            return { success: false, error: proc.stderr || `Exit ${proc.status}` };
+          }
+        } catch (shellErr) {
+          return { success: false, error: `Package failed: ${shellErr.message}` };
+        }
+      }
+      return { success: false, error: 'No available package method' };
+    } catch (error) {
+      console.error('[submission:package] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('tags:map:get', async () => {
     try {
       const fs = require('fs');

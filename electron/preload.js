@@ -914,6 +914,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Game submission
   enqueueGameSubmission: (params) => ipcRenderer.invoke('online:submission:enqueue', params),
   
+  // Submission drafts
+  listSubmissionDrafts: () => ipcRenderer.invoke('submission:drafts:list'),
+  getSubmissionDraft: (draftId) => ipcRenderer.invoke('submission:drafts:get', { draftId }),
+  saveSubmissionDraft: (params) => ipcRenderer.invoke('submission:drafts:save', params || {}),
+  deleteSubmissionDraft: (draftId) => ipcRenderer.invoke('submission:drafts:delete', { draftId }),
+
+  // Submission preparation/packaging
+  prepareSubmission: (configPath) => ipcRenderer.invoke('submission:prepare', { configPath }),
+  packageSubmission: (configPath, outPath) => ipcRenderer.invoke('submission:package', { configPath, outPath }),
+
   // Game submission drafts
   saveSubmissionDraft: (params) => ipcRenderer.invoke('online:submission:draft:save', params),
   listSubmissionDrafts: () => ipcRenderer.invoke('online:submission:draft:list'),

@@ -535,13 +535,14 @@ function updateRemoteSuggestions() {
   suggestTimer = setTimeout(async () => {
     const api = (window as any)?.electronAPI;
     const selected = selectedTags.value.slice();
-    const contextTypes = current.value?.meta?.types || [];
+    const contextTypes = Array.isArray(current.value?.meta?.types) ? [...current.value!.meta!.types] : [];
     let list: string[] = [];
     
     // Try IPC first if available
     if (api?.suggestTags) {
       try {
-        const res = await api.suggestTags({ query, selected, contextTypes, limit: 12 });
+        const params = JSON.parse(JSON.stringify({ query, selected, contextTypes, limit: 12 }));
+        const res = await api.suggestTags(params);
         list = res?.success ? (res.suggestions || []) : [];
       } catch (e) {
         console.warn('IPC suggestTags failed:', e);

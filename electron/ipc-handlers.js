@@ -535,9 +535,12 @@ function registerDatabaseHandlers(dbManager) {
         // As a last resort, store minimal shape with error
         json = JSON.stringify({ error: 'serialization_failed', message: String(e) });
       }
-      if (!json) {
-        json = JSON.stringify({ note: 'empty_payload' });
+      if (json == null) json = '{}';
+      if (typeof json !== 'string') {
+        try { json = JSON.stringify(json || {}); } catch { json = '{}'; }
       }
+      if (json === 'null') json = '{}';
+      if (json.trim().length === 0) json = '{}';
       if (typeof json !== 'string') {
         json = JSON.stringify(json || {});
       }

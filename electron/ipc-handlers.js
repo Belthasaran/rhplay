@@ -587,6 +587,46 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // =============================
+  // Utility: Save text to file (Save As...) and write temp text file
+  // =============================
+  ipcMain.handle('dialog:saveTextFile', async (_event, { defaultPath, content } = {}) => {
+    try {
+      const { dialog } = require('electron');
+      const fs = require('fs');
+      const path = require('path');
+      const res = await dialog.showSaveDialog({
+        title: 'Save File',
+        defaultPath: defaultPath || 'submission.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }, { name: 'All Files', extensions: ['*'] }],
+      });
+      if (res.canceled || !res.filePath) {
+        return { success: false, canceled: true };
+      }
+      fs.writeFileSync(res.filePath, String(content ?? ''), 'utf-8');
+      return { success: true, filePath: res.filePath };
+    } catch (error) {
+      console.error('[dialog:saveTextFile] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:writeTempText', async (_event, { prefix, suffix, content } = {}) => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const os = require('os');
+      const dir = os.tmpdir();
+      const name = `${prefix || 'rhtmp_'}${Date.now()}_${Math.random().toString(36).slice(2,8)}${suffix || ''}`;
+      const filePath = path.join(dir, name);
+      fs.writeFileSync(filePath, String(content ?? ''), 'utf-8');
+      return { success: true, filePath };
+    } catch (error) {
+      console.error('[fs:writeTempText] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('tags:map:get', async () => {
     try {
       const fs = require('fs');

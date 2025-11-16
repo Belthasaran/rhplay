@@ -924,6 +924,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   prepareSubmission: (configPath) => ipcRenderer.invoke('submission:prepare', { configPath }),
   packageSubmission: (configPath, outPath) => ipcRenderer.invoke('submission:package', { configPath, outPath }),
 
+  // File helpers for submission flows
+  saveTextAsFile: ({ defaultPath, content }) => ipcRenderer.invoke('dialog:saveTextFile', { defaultPath, content }),
+  saveTextAsTempFile: ({ prefix, suffix, content }) => ipcRenderer.invoke('fs:writeTempText', { prefix, suffix, content }),
+
   // Game submission drafts
   saveSubmissionDraft: (params) => ipcRenderer.invoke('online:submission:draft:save', params),
   listSubmissionDrafts: () => ipcRenderer.invoke('online:submission:draft:list'),

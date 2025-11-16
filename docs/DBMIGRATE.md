@@ -1,3 +1,16 @@
+- 2025-11-16 — Add clientdata submission drafts
+  - Purpose: Create `game_submission_drafts` table to persist submission drafts and statuses
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_032_game_submission_drafts`
+    - SQL: `electron/sql/migrations/032_clientdata_game_submission_drafts.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome: `game_submission_drafts` table and indexes exist; no data loss for existing tables
+  - Notes: Safe to run multiple times; script skips applied migrations
 # Database Migration Commands
 
 ## Purpose

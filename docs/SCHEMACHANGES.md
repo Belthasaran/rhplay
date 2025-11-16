@@ -1,3 +1,20 @@
+- 2025-11-16: clientdata - Add `game_submission_drafts` table
+  - Description: Store submission draft payloads and status for the Game Submission wizard
+  - Rationale: Persist drafts across sessions and track prepare/package state
+  - Tables/columns:
+    - `game_submission_drafts`:
+      - `draft_uuid` TEXT PRIMARY KEY
+      - `submitter_pubkey_npub` TEXT
+      - `draft_name` TEXT
+      - `draft_data_json` TEXT NOT NULL
+      - `created_at_utc` INTEGER NOT NULL
+      - `updated_at_utc` INTEGER NOT NULL
+      - `prepared_at_utc` INTEGER NULL
+      - `packaged_at_utc` INTEGER NULL
+      - `rhpak_path` TEXT NULL
+      - `state` TEXT NOT NULL DEFAULT 'draft'
+  - Migration: `clientdata_032_game_submission_drafts` via `jsutils/migratedb.js`
+  - Notes: Indexes added on submitter, state, and updated_at_utc
 # Database Schema Changes Log
 
 ## Purpose

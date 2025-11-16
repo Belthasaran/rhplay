@@ -4147,6 +4147,57 @@ module.exports = {
   handleImportPackage,
   handleListInstalled,
   handleUninstall,
+  /**
+   * Programmatic prepare: accepts a JSON config path, loads skeleton, and runs prepare.
+   * Returns true on success.
+   */
+  async handlePrepare(jsonPath) {
+    if (!jsonPath) {
+      throw new Error('handlePrepare requires a JSON path');
+    }
+    const config = { jsonPath, baseDir: path.dirname(jsonPath), mode: 'prepare' };
+    const skeleton = loadSkeleton(jsonPath) || defaultSkeleton();
+    await handlePrepare(config, skeleton);
+    return true;
+  },
+  /**
+   * Programmatic package: accepts a JSON config path and optional output file.
+   * Returns the output path on success.
+   */
+  async handlePackage(jsonPath, outPath) {
+    if (!jsonPath) {
+      throw new Error('handlePackage requires a JSON path');
+    }
+    const config = { jsonPath, baseDir: path.dirname(jsonPath), mode: 'package', packageOutput: outPath };
+    const skeleton = loadSkeleton(jsonPath);
+    if (!skeleton) {
+      throw new Error(`Skeleton not found at ${jsonPath}`);
+    }
+    await handlePackage(config, skeleton);
+    // resolve final out path similar to internal logic
+    let packageOutput = outPath || '';
+    if (!packageOutput) {
+      // Use default from internal naming if not provided
+      const meta = ensureRhpakMetadata(skeleton);
+      const name = meta.rhpakname || buildDefaultRhpakName(skeleton.gameversion || {});
+      packageOutput = path.resolve(config.baseDir, name.endsWith('.rhpak') ? name : `${name}.rhpak`);
+    } else {
+      if (!path.extname(packageOutput)) packageOutput += '.rhpak';
+      packageOutput = path.resolve(config.baseDir, packageOutput);
+    }
+    return packageOutput;
+  },
+  /**
+   * Programmatic verify: verify an existing .rhpak
+   */
+  async handleVerifyPackage(packagePath) {
+    if (!packagePath) {
+      throw new Error('handleVerifyPackage requires a package path');
+    }
+    const config = { packageInput: packagePath, mode: 'verify-package' };
+    await handleVerifyPackage(config);
+    return true;
+  },
 };
 
 

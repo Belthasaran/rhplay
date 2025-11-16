@@ -651,7 +651,7 @@ function registerDatabaseHandlers(dbManager) {
         const gv = {
           gvuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}`,
           gameid: genId,
-          section: meta.section || 'Game',
+          section: meta.section || 'smwhacks',
           based_against: meta.based_against || 'SMW',
           version: meta.version || 1,
           removed: 0,

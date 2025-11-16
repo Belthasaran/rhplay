@@ -341,8 +341,8 @@
           <button class="btn" @click="runPrepare" :disabled="!canSubmit">Prepare</button>
           <button class="btn" @click="runPackage" :disabled="!canSubmit">Package RHPAK</button>
         </div>
-        <div class="hint" style="margin-top: 12px; padding: 8px; background: #fff3e0; border: 1px solid #ef6c00; border-radius: 4px;">
-          <strong>Next Step:</strong> After packaging your RHPAK, proceed to step 9 "Publish & Verify" to provide download information and verify your uploaded file before submitting to Nostr.
+        <div class="hint" style="margin-top: 12px; padding: 8px; background: #fff3e0; border: 1px solid #ef6c00; border-radius: 4px; color: #333;">
+          <strong style="color: #333;">Next Step:</strong> <span style="color: #333;">After packaging your RHPAK, proceed to step 9 "Publish & Verify" to provide download information and verify your uploaded file before submitting to Nostr.</span>
         </div>
       </div>
 
@@ -350,15 +350,16 @@
         <h4>Publish &amp; Verify</h4>
         <div class="instructions" style="padding: 12px; background: #e3f2fd; border: 1px solid #1976d2; border-radius: 4px; margin-bottom: 16px;">
           <h5 style="margin: 0 0 8px 0; color: #1976d2;">Instructions</h5>
-          <ol style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6;">
+          <ol style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: #1a1a1a;">
             <li>Upload your packaged RHPAK file to a public location (ArDrive, IPFS, or any public HTTP/HTTPS server).</li>
             <li>If using IPFS, provide the IPFS v1 CID (starts with "bafy").</li>
+            <li>If using ArDrive, provide the ArDrive file ID and file path.</li>
             <li>If using a direct download URL, provide the full URL where the file can be downloaded.</li>
             <li>Click "Verify Download" to check that the file is accessible and matches the expected SHA256 hash.</li>
             <li>Once verified, you can proceed to submit your submission to Nostr.</li>
           </ol>
-          <div style="margin-top: 8px; font-size: 12px; color: #666;">
-            <strong>Note:</strong> If you make any changes to your draft (including tags or metadata), you will need to re-package the RHPAK and provide new download information, as the file contents will have changed.
+          <div style="margin-top: 8px; font-size: 12px; color: #1a1a1a;">
+            <strong style="color: #1a1a1a;">Note:</strong> If you make any changes to your draft (including tags or metadata), you will need to re-package the RHPAK and provide new download information, as the file contents will have changed.
           </div>
         </div>
 
@@ -378,20 +379,46 @@
             <input class="input" :value="current.meta.rhpak_size ? formatBytes(current.meta.rhpak_size) : '—'" readonly />
           </div>
           <div class="field full">
+            <label>Upload Method</label>
+            <select class="input" v-model="rhpakUploadMethod">
+              <option value="ipfs">IPFS</option>
+              <option value="ardrive">ArDrive</option>
+              <option value="url">Direct Download URL</option>
+            </select>
+            <div class="hint">Select the method you used to upload your RHPAK file.</div>
+          </div>
+          <div v-if="rhpakUploadMethod === 'ipfs'" class="field full">
             <label>IPFS v1 CID (bafy...)</label>
             <input class="input" v-model.trim="current.meta.rhpak_ipfs_cid" placeholder="bafybei..." />
-            <div class="hint">If you uploaded to IPFS, provide the v1 CID (must start with "bafy"). Leave empty if using a download URL instead.</div>
+            <div class="hint">Provide the IPFS v1 CID (must start with "bafy").</div>
           </div>
-          <div class="field full">
-            <label>OR Download URL</label>
+          <template v-if="rhpakUploadMethod === 'ardrive'">
+            <div class="field">
+              <label>ArDrive File ID *</label>
+              <input class="input" v-model.trim="current.meta.rhpak_ardrive_file_id" placeholder="e.g., abc123..." />
+              <div class="hint">The ArDrive transaction/file ID for your uploaded file.</div>
+            </div>
+            <div class="field">
+              <label>ArDrive File Path</label>
+              <input class="input" v-model.trim="current.meta.rhpak_ardrive_file_path" placeholder="e.g., /MyDrive/game.rhpak" />
+              <div class="hint">Optional: The path/name of the file in ArDrive.</div>
+            </div>
+            <div class="field full">
+              <label>ArDrive Download URL</label>
+              <input class="input" v-model.trim="current.meta.rhpak_download_url" placeholder="https://arweave.net/..." />
+              <div class="hint">The direct download URL for the file (usually from ArDrive or Arweave gateway).</div>
+            </div>
+          </template>
+          <div v-if="rhpakUploadMethod === 'url'" class="field full">
+            <label>Download URL *</label>
             <input class="input" v-model.trim="current.meta.rhpak_download_url" placeholder="https://example.com/path/to/file.rhpak" />
-            <div class="hint">If you uploaded to ArDrive or another HTTP/HTTPS server, provide the direct download URL. Leave empty if using IPFS CID.</div>
+            <div class="hint">Provide the full HTTP/HTTPS URL where the file can be downloaded.</div>
           </div>
         </div>
 
         <div v-if="current.meta.rhpak_verified" class="verified-badge" style="padding: 8px; background: #e8f5e9; border: 1px solid #2e7d32; border-radius: 4px; margin: 12px 0;">
           <strong style="color: #2e7d32;">✓ Verified</strong>
-          <span style="font-size: 12px; color: #666; margin-left: 8px;">
+          <span style="font-size: 12px; color: #1a1a1a; margin-left: 8px;">
             File verified on {{ current.meta.rhpak_verified_at ? new Date(current.meta.rhpak_verified_at * 1000).toLocaleString() : '—' }}
           </span>
         </div>
@@ -420,6 +447,9 @@ import tagsText from './smwtags.txt?raw';
 // Developer option: override RHPAK gameid (testing only)
 const overrideGameIdEnabled = ref<boolean>(false);
 const overrideGameIdValue = ref<string>('');
+
+// RHPAK upload method selector
+const rhpakUploadMethod = ref<'ipfs' | 'ardrive' | 'url'>('ipfs');
 
 const MAX_SCREENSHOTS = 12;
 const REQUIRED_WIDTH = 256;
@@ -462,6 +492,8 @@ type Draft = {
     rhpak_size?: number;
     rhpak_ipfs_cid?: string;
     rhpak_download_url?: string;
+    rhpak_ardrive_file_id?: string;
+    rhpak_ardrive_file_path?: string;
     rhpak_verified?: boolean;
     rhpak_verified_at?: number;
   };
@@ -519,15 +551,30 @@ const canSubmit = computed(() => {
 const canVerify = computed(() => {
   const c = current.value;
   if (!c || !c.meta.rhpak_path) return false;
-  const hasIpfs = !!(c.meta.rhpak_ipfs_cid && c.meta.rhpak_ipfs_cid.trim().startsWith('bafy'));
-  const hasUrl = !!(c.meta.rhpak_download_url && c.meta.rhpak_download_url.trim().startsWith('http'));
-  return hasIpfs || hasUrl;
+  if (rhpakUploadMethod.value === 'ipfs') {
+    return !!(c.meta.rhpak_ipfs_cid && c.meta.rhpak_ipfs_cid.trim().startsWith('bafy'));
+  } else if (rhpakUploadMethod.value === 'ardrive') {
+    return !!(c.meta.rhpak_ardrive_file_id && c.meta.rhpak_ardrive_file_id.trim()) && 
+           !!(c.meta.rhpak_download_url && c.meta.rhpak_download_url.trim().startsWith('http'));
+  } else if (rhpakUploadMethod.value === 'url') {
+    return !!(c.meta.rhpak_download_url && c.meta.rhpak_download_url.trim().startsWith('http'));
+  }
+  return false;
 });
 
 const canSubmitVerified = computed(() => {
   const c = current.value;
   if (!c) return false;
-  return !!(c.meta.rhpak_verified && c.meta.rhpak_sha256 && (c.meta.rhpak_ipfs_cid || c.meta.rhpak_download_url));
+  if (!c.meta.rhpak_verified || !c.meta.rhpak_sha256) return false;
+  if (rhpakUploadMethod.value === 'ipfs') {
+    return !!(c.meta.rhpak_ipfs_cid && c.meta.rhpak_ipfs_cid.trim().startsWith('bafy'));
+  } else if (rhpakUploadMethod.value === 'ardrive') {
+    return !!(c.meta.rhpak_ardrive_file_id && c.meta.rhpak_ardrive_file_id.trim()) && 
+           !!(c.meta.rhpak_download_url && c.meta.rhpak_download_url.trim().startsWith('http'));
+  } else if (rhpakUploadMethod.value === 'url') {
+    return !!(c.meta.rhpak_download_url && c.meta.rhpak_download_url.trim().startsWith('http'));
+  }
+  return false;
 });
 
 function newDraft() {
@@ -929,6 +976,19 @@ function coerceLoadedDraft(raw: any): Draft {
   return { files: { patch: null, screenshots: [] }, meta: { name: '', author: '', types: [], version: 1, demo: false, sa1: false, collab: false, warnings: [] } };
 }
 
+// Initialize upload method based on existing draft data
+function updateUploadMethodFromDraft() {
+  if (!current.value) return;
+  const meta = current.value.meta;
+  if (meta.rhpak_ipfs_cid && meta.rhpak_ipfs_cid.trim().startsWith('bafy')) {
+    rhpakUploadMethod.value = 'ipfs';
+  } else if (meta.rhpak_ardrive_file_id && meta.rhpak_ardrive_file_id.trim()) {
+    rhpakUploadMethod.value = 'ardrive';
+  } else if (meta.rhpak_download_url && meta.rhpak_download_url.trim().startsWith('http')) {
+    rhpakUploadMethod.value = 'url';
+  }
+}
+
 async function loadDraftFromDb() {
   const api = (window as any)?.electronAPI;
   if (!api?.listSubmissionDrafts || !api?.loadSubmissionDraft) { await loadDraft(); return; }
@@ -948,6 +1008,7 @@ async function loadDraftFromDb() {
       (current.value as any).meta.draft_uuid = chosen.draft_uuid;
       step.value = 2;
       initSelectedTagsFromMeta();
+      updateUploadMethodFromDraft();
     } else {
       alert(`Failed to load draft: ${got?.error || 'Unknown error'}`);
     }
@@ -1233,6 +1294,8 @@ async function loadDraft() {
     try {
       current.value = JSON.parse(text);
       step.value = 2;
+      initSelectedTagsFromMeta();
+      updateUploadMethodFromDraft();
     } catch (e) {
       alert('Invalid draft JSON');
     }
@@ -1305,12 +1368,33 @@ async function verifyRHPakDownload() {
     alert('Please calculate the hash first.');
     return;
   }
-  const ipfsCid = meta.rhpak_ipfs_cid?.trim();
-  const downloadUrl = meta.rhpak_download_url?.trim();
-  if (!ipfsCid && !downloadUrl) {
-    alert('Please provide either an IPFS CID or a download URL.');
-    return;
+  let ipfsCid: string | undefined = undefined;
+  let downloadUrl: string | undefined = undefined;
+  
+  if (rhpakUploadMethod.value === 'ipfs') {
+    ipfsCid = meta.rhpak_ipfs_cid?.trim();
+    if (!ipfsCid) {
+      alert('Please provide an IPFS CID.');
+      return;
+    }
+  } else if (rhpakUploadMethod.value === 'ardrive') {
+    if (!meta.rhpak_ardrive_file_id?.trim()) {
+      alert('Please provide an ArDrive File ID.');
+      return;
+    }
+    downloadUrl = meta.rhpak_download_url?.trim();
+    if (!downloadUrl) {
+      alert('Please provide an ArDrive download URL.');
+      return;
+    }
+  } else if (rhpakUploadMethod.value === 'url') {
+    downloadUrl = meta.rhpak_download_url?.trim();
+    if (!downloadUrl) {
+      alert('Please provide a download URL.');
+      return;
+    }
   }
+  
   try {
     const verifyRes = await api.verifyRHPakDownload({
       expectedSha256: meta.rhpak_sha256,
@@ -1345,6 +1429,8 @@ function buildSubmissionPayload(draft: Draft) {
       size_bytes: draft.meta.rhpak_size || 0,
       ipfs_cid: draft.meta.rhpak_ipfs_cid || undefined,
       download_url: draft.meta.rhpak_download_url || undefined,
+      ardrive_file_id: draft.meta.rhpak_ardrive_file_id || undefined,
+      ardrive_file_path: draft.meta.rhpak_ardrive_file_path || undefined,
       verified: draft.meta.rhpak_verified || false,
       verified_at: draft.meta.rhpak_verified_at || undefined
     }

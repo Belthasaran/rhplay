@@ -932,6 +932,8 @@ class OnlineProfileManager {
         size_bytes: rhpak.size_bytes || 0,
         ipfs_cid: rhpak.ipfs_cid || undefined,
         download_url: rhpak.download_url || undefined,
+        ardrive_file_id: rhpak.ardrive_file_id || undefined,
+        ardrive_file_path: rhpak.ardrive_file_path || undefined,
         verified: rhpak.verified || false,
         verified_at: rhpak.verified_at || undefined
       }

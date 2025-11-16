@@ -622,11 +622,104 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('submission:prepare', async (_event, { configPath }) => {
     try {
       if (!configPath) return { success: false, error: 'Missing configPath' };
+      const fs = require('fs');
+      const os = require('os');
       const newgame = require(path.resolve(projectRoot, 'jstools', 'newgame.js'));
       if (!newgame || typeof newgame.handlePrepare !== 'function') {
         return { success: false, error: 'newgame.handlePrepare is unavailable' };
       }
-      const res = await newgame.handlePrepare(configPath);
+      // Detect if provided JSON is a newgame skeleton; if not, map our draft shape to skeleton
+      let jsonText = fs.readFileSync(configPath, 'utf8');
+      let parsed;
+      try { parsed = JSON.parse(jsonText); } catch { parsed = null; }
+      let skeletonPath = configPath;
+      if (!parsed || !parsed.gameversion) {
+        // Map from draft { files, meta } to skeleton expected by newgame.js
+        const draft = parsed || {};
+        const meta = draft.meta || {};
+        const files = draft.files || {};
+        const patch = files.patch || {};
+        const screenshots = Array.isArray(files.screenshots) ? files.screenshots : [];
+        const diffMap = {
+          1: 'Newcomer', 2: 'Casual', 3: 'Skilled', 4: 'Advanced',
+          5: 'Expert', 6: 'Master', 7: 'Grandmaster'
+        };
+        const draftName = (meta.name || '').toString();
+        const gameIdSlug = (draftName || '').toLowerCase().trim()
+          .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const genId = gameIdSlug || ('subm-' + Math.random().toString(36).slice(2, 10));
+        const gv = {
+          gvuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}`,
+          gameid: genId,
+          section: 'smwhacks',
+          based_against: meta.based_against || 'SMW',
+          version: meta.version || 1,
+          removed: 0,
+          obsoleted: 0,
+          moderated: 0,
+          featured: 0,
+          name: draftName,
+          gametype: Array.isArray(meta.types) ? meta.types.join(', ') : (meta.type || ''),
+          difficulty: (typeof meta.difficulty === 'number') ? (diffMap[meta.difficulty] || '') : (meta.difficulty || ''),
+          raw_difficulty: (typeof meta.difficulty === 'number') ? (`diff_${meta.difficulty}`) : (meta.raw_difficulty || ''),
+          type: Array.isArray(meta.types) ? meta.types.join(', ') : (meta.type || ''),
+          warnings: Array.isArray(meta.warnings) ? meta.warnings : [],
+          tags: typeof meta.tags === 'string' ? meta.tags.split(',').map(s => s.trim()).filter(Boolean) : (Array.isArray(meta.tags) ? meta.tags : []),
+          author: meta.author || '',
+          authors: meta.authors || '',
+          submitter: '', // will be set during publishing
+          legacy_type: '',
+          url: meta.url || '',
+          download_url: meta.download_url || '',
+          name_href: '',
+          author_href: '',
+          obsoleted_by: '',
+          description: meta.description || '',
+          length: (meta.length != null) ? String(meta.length) : '',
+          demo: meta.demo ? 'Yes' : 'No',
+          sa1: meta.sa1 ? 'Yes' : 'No',
+          collab: meta.collab ? 'Yes' : 'No',
+          screenshots: [],
+          patch_filename: patch.name || (patch.path ? path.basename(patch.path) : ''),
+          patch_local_path: patch.path || '',
+          patch_notes: '',
+          submission_notes: meta.submission_notes || ''
+        };
+        const skel = {
+          metadata: {
+            script: 'newgame.js',
+            version: 'ui-submit',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            prepared: false,
+            prepared_at: null,
+            added_at: null
+          },
+          artifacts: { patch: null },
+          gameversion: gv,
+          gameversion_stats: {
+            download_count: 0,
+            view_count: 0,
+            comment_count: 0,
+            rating_value: null,
+            rating_count: 0,
+            favorite_count: 0,
+            hof_status: null,
+            featured_status: null
+          },
+          patchblob: { pbuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
+          attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
+          resources: [],
+          screenshots: screenshots
+            .filter(s => s && s.path)
+            .map(s => ({ source_path: s.path }))
+        };
+        // Save to temp path so newgame can load it
+        const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
+        fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
+        skeletonPath = tmp;
+      }
+      const res = await newgame.handlePrepare(skeletonPath);
       return { success: true, result: res };
     } catch (error) {
       console.error('[submission:prepare] Failed:', error);

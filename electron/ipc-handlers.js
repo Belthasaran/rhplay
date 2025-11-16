@@ -719,38 +719,6 @@ function registerDatabaseHandlers(dbManager) {
         skeletonPath = tmp;
       }
       await newgame.handlePrepare(skeletonPath);
-        const skel = {
-          metadata: {
-            script: 'newgame.js',
-            version: 'ui-submit',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            prepared: false,
-            prepared_at: null,
-            added_at: null
-          },
-          artifacts: { patch: null },
-          gameversion: gv,
-          gameversion_stats: {
-            download_count: 0,
-            view_count: 0,
-            comment_count: 0,
-            rating_value: null,
-            rating_count: 0,
-            favorite_count: 0,
-            hof_status: null,
-            featured_status: null
-          },
-          patchblob: { pbuuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
-          attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
-          resources: []
-        };
-        // Save to temp path so newgame can load it
-        const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
-        fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
-        skeletonPath = tmp;
-      }
-      await newgame.handlePrepare(skeletonPath);
       // Read prepared skeleton and persist back to DB if we have a draftUuid
       let prepared = null;
       try {
@@ -775,7 +743,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   ipcMain.handle('submission:package', async (_event, { configPath, outPath }) => {
     try {
       if (!configPath) return { success: false, error: 'Missing configPath' };
@@ -3105,7 +3072,6 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('usb2snes:fxp-status', async () => {
     return usbfxpServer.getStatus();
   });
-
   ipcMain.handle('usb2snes:fxp-console-history', async () => {
     return usbfxpServer.getConsoleHistory();
   });
@@ -3899,7 +3865,6 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
-  
   /**
    * Delete file from cache
    * Channel: snesContents:delete
@@ -4652,7 +4617,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-
   /**
    * Create a new profile (add to standby or make current if no current profile)
    * Channel: online:profile:create-new
@@ -5447,7 +5411,6 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
   // PROFILE GUARD OPERATIONS
   // ===========================================================================
-
   /**
    * Check Profile Guard status
    * Channel: profile-guard:check

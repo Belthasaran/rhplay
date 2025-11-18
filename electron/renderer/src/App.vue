@@ -888,7 +888,7 @@
       <div class="right-actions">
         <button @click="openRunModal">Prepare Run</button>
         <button @click="startSelected" :disabled="!canStartGames">Start</button>
-        <button @click="editNotes" :disabled="!exactlyOneSelected">Edit notes</button>
+        <button @click="openAdvancedPatchModal" :disabled="!exactlyOneSelected">+Patch</button>
         <button @click="setMyRating" :disabled="!exactlyOneSelected">My rating</button>
         
         <!-- SNES Contents Dropdown -->
@@ -6373,6 +6373,17 @@
   @close="trustSummaryModalOpen = false"
 />
 
+<AdvancedPatchModal
+  :is-open="advancedPatchModalOpen"
+  :game-id="advancedPatchGameId"
+  :game-version="advancedPatchGameVersion"
+  :game-name="advancedPatchGameName"
+  :usb2snes-enabled="settings.usb2snesEnabled === 'yes'"
+  :usb2snes-connected="usb2snesStatus.connected"
+  @close="closeAdvancedPatchModal"
+  @build="handleAdvancedPatchBuild"
+/>
+
   <!-- Upload File Modal (standalone) -->
   <div v-if="uploadFileModalOpen" class="modal-backdrop" @click.self="closeUploadFileModal">
     <div class="modal upload-file-modal">
@@ -6975,6 +6986,7 @@ import PublishingQueueDashboard from './components/publish/PublishingQueueDashbo
 import ProfilePublishingDashboard from './components/publish/ProfilePublishingDashboard.vue';
 import RatingsPublishingDashboard from './components/publish/RatingsPublishingDashboard.vue';
 import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard.vue';
+import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -7137,6 +7149,10 @@ const usb2snesFxpConsoleHistory = ref<any[]>([]);
 const usb2snesFxpHistoryLogContainer = ref<HTMLElement | null>(null);
 const showUsb2snesFxpStartModal = ref(false);
 const showUsb2snesFxpPermissionModal = ref(false);
+const advancedPatchModalOpen = ref(false);
+const advancedPatchGameId = ref('');
+const advancedPatchGameVersion = ref(0);
+const advancedPatchGameName = ref('');
 const usb2snesFxpPermissionResult = ref<any>(null);
 const grantingPermission = ref(false);
 const usbOptionsWizardOpen = ref(false);
@@ -15491,6 +15507,56 @@ async function startSelected() {
     console.error('Error staging games for quick launch:', error);
     quickLaunchProgressModalOpen.value = false;
     alert('Error staging games: ' + error.message);
+  }
+}
+
+function openAdvancedPatchModal() {
+  const it = getSingleSelected();
+  if (!it) return;
+  advancedPatchGameId.value = it.Id;
+  advancedPatchGameVersion.value = it.Version || 1;
+  advancedPatchGameName.value = it.Name || '';
+  advancedPatchModalOpen.value = true;
+}
+
+function closeAdvancedPatchModal() {
+  advancedPatchModalOpen.value = false;
+}
+
+async function handleAdvancedPatchBuild(options: {
+  gameId: string;
+  gameVersion: number;
+  selectedPatches: string[];
+  globalParams: Record<string, any>;
+  localParams: Record<string, Record<string, any>>;
+  action: 'build' | 'upload' | 'boot';
+}) {
+  const api = (window as any)?.electronAPI;
+  if (!api) {
+    alert('Electron API not available');
+    return;
+  }
+
+  try {
+    const result = await api.buildPlusPatchedGame({
+      gameId: options.gameId,
+      gameVersion: options.gameVersion,
+      selectedPatches: options.selectedPatches,
+      globalParams: options.globalParams,
+      localParams: options.localParams,
+      action: options.action,
+      vanillaRomPath: settings.vanillaRomPath,
+      flipsPath: settings.flipsPath,
+    });
+
+    if (result?.success) {
+      alert(`Successfully built patched game: ${result.outputPath || result.filename}`);
+      closeAdvancedPatchModal();
+    } else {
+      alert(`Failed to build patched game: ${result?.error || 'Unknown error'}`);
+    }
+  } catch (error: any) {
+    alert(`Error building patched game: ${error?.message || String(error)}`);
   }
 }
 

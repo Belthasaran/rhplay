@@ -1,3 +1,17 @@
+- 2025-01-XX — Add rhdata extrapatches table
+  - Purpose: Create `extrapatches` table to store extra patch templates (IPS, BPS, ASAR, UberASMTree) that can be applied after initial game patching
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_033_extrapatches`
+    - SQL: `electron/sql/migrations/033_rhdata_extrapatches.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome: `extrapatches` table and indexes exist; no data loss for existing tables
+  - Notes: Safe to run multiple times; script skips applied migrations
+
 - 2025-11-16 — Add clientdata submission drafts
   - Purpose: Create `game_submission_drafts` table to persist submission drafts and statuses
   - Command:

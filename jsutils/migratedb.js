@@ -325,6 +325,15 @@ const MIGRATIONS = {
         ensureRhpakagesStructures(db);
       },
     },
+    {
+      id: 'rhdata_033_extrapatches',
+      description: 'Create extrapatches table for extra patch templates',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/033_rhdata_extrapatches.sql'),
+      skipIf(db) {
+        return tableExists(db, 'extrapatches');
+      },
+    },
   ],
   clientdata: [
     {

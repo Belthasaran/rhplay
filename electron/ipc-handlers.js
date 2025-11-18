@@ -2565,6 +2565,41 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Get available extra patches for a game
+   * Channel: extra-patches:get-available
+   */
+  ipcMain.handle('extra-patches:get-available', async (_event, { gameId, gameVersion }) => {
+    try {
+      const result = await gameStager.getAvailableExtraPatches({
+        dbManager,
+        gameId,
+        gameVersion
+      });
+      return result;
+    } catch (error) {
+      console.error('Error getting available extra patches:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Build plus-patched game with extra patches
+   * Channel: extra-patches:build-plus
+   */
+  ipcMain.handle('extra-patches:build-plus', async (_event, params) => {
+    try {
+      const result = await gameStager.buildPlusPatchedGame({
+        dbManager,
+        ...params
+      });
+      return result;
+    } catch (error) {
+      console.error('Error building plus-patched game:', error);
+      return { success: false, error: error.message };
+    }
+  });
   /**
    * Upload run files to USB2SNES subdirectory
    * Channel: db:runs:upload-to-snes

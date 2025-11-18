@@ -1,3 +1,27 @@
+- 2025-01-XX: rhdata - Add `extrapatches` table
+  - Description: Store extra patch templates that can be applied after initial game patching
+  - Rationale: Support custom modifications (IPS, BPS, ASAR, UberASMTree) with parameter mappings, filtering, and dependency management
+  - Tables/columns:
+    - `extrapatches`:
+      - `epuuid` TEXT PRIMARY KEY
+      - `patch_code` TEXT NOT NULL UNIQUE (short code like "cc" or "blu1")
+      - `name` TEXT NOT NULL
+      - `description` TEXT
+      - `patch_type` TEXT NOT NULL CHECK(patch_type IN ('ips', 'bps', 'asar', 'uberasmtree'))
+      - `file_data` BLOB (binary data for IPS/BPS/UberASMTree)
+      - `template_text` TEXT (template text for ASAR patches)
+      - `parameter_mappings` TEXT (JSON object mapping input params to template outputs)
+      - `restrictions` TEXT (JSON object for game/tag filtering)
+      - `conflicts` TEXT (JSON array of conflicting patch codes)
+      - `dependencies` TEXT (JSON array of required patch codes)
+      - `priority` INTEGER DEFAULT 100 (lower = applied first)
+      - `requires_parameters` INTEGER DEFAULT 0
+      - `max_codestring_length` INTEGER DEFAULT 14
+      - `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      - `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  - Migration: `rhdata_033_extrapatches` via `jsutils/migratedb.js`
+  - Notes: Indexes on patch_code, patch_type, and priority
+
 - 2025-11-16: clientdata - Add `game_submission_drafts` table
   - Description: Store submission draft payloads and status for the Game Submission wizard
   - Rationale: Persist drafts across sessions and track prepare/package state

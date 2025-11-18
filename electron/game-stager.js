@@ -559,6 +559,526 @@ async function stageQuickLaunchGames(params) {
   }
 }
 
+/**
+ * Get available extra patches for a game
+ * @param {Object} params - { dbManager, gameId, gameVersion }
+ * @returns {Promise<Object>} { success, patches, error }
+ */
+async function getAvailableExtraPatches(params) {
+  const { dbManager, gameId, gameVersion } = params;
+  
+  try {
+    // Get game info to check tags
+    const game = dbManager.getGame(gameId, gameVersion);
+    if (!game) {
+      return { success: false, error: `Game ${gameId} version ${gameVersion} not found` };
+    }
+    
+    const gameTags = (game.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+    
+    // Get all extra patches
+    const patches = dbManager.db.prepare(`
+      SELECT * FROM extrapatches 
+      ORDER BY priority ASC, name ASC
+    `).all();
+    
+    // Filter patches based on restrictions
+    const availablePatches = patches.filter(patch => {
+      if (!patch.restrictions) return true;
+      
+      try {
+        const restrictions = JSON.parse(patch.restrictions);
+        
+        // Check allowed games
+        if (restrictions.allowed_games && Array.isArray(restrictions.allowed_games)) {
+          if (!restrictions.allowed_games.includes(gameId)) return false;
+        }
+        
+        // Check required tags
+        if (restrictions.required_tags && Array.isArray(restrictions.required_tags)) {
+          const hasAllTags = restrictions.required_tags.every(tag => 
+            gameTags.some(gt => gt.toLowerCase() === tag.toLowerCase())
+          );
+          if (!hasAllTags) return false;
+        }
+        
+        // Check excluded tags
+        if (restrictions.excluded_tags && Array.isArray(restrictions.excluded_tags)) {
+          const hasExcludedTag = restrictions.excluded_tags.some(tag =>
+            gameTags.some(gt => gt.toLowerCase() === tag.toLowerCase())
+          );
+          if (hasExcludedTag) return false;
+        }
+        
+        return true;
+      } catch (e) {
+        console.error('Error parsing restrictions for patch', patch.patch_code, e);
+        return true; // Include patch if restrictions can't be parsed
+      }
+    });
+    
+    return { success: true, patches: availablePatches };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Generate patch code string from selected patches and parameters
+ * @param {Array} patches - Selected patch objects
+ * @param {Object} globalParams - Global parameters
+ * @param {Object} localParams - Local parameters per patch
+ * @param {number} maxLength - Maximum code string length before hashing
+ * @returns {string} Patch code string
+ */
+function generatePatchCodeString(patches, globalParams, localParams, maxLength = 14) {
+  let codeString = '';
+  
+  // Sort patches by priority
+  const sortedPatches = [...patches].sort((a, b) => (a.priority || 100) - (b.priority || 100));
+  
+  for (const patch of sortedPatches) {
+    codeString += patch.patch_code;
+    
+    // Add parameter values if patch has parameter mappings
+    if (patch.parameter_mappings) {
+      try {
+        const mappings = JSON.parse(patch.parameter_mappings);
+        const patchLocalParams = localParams[patch.epuuid] || {};
+        
+        // Extract parameter values and append as hex
+        for (const [paramName, mapping] of Object.entries(mappings)) {
+          const value = patchLocalParams[paramName];
+          if (value !== undefined && value !== null && value !== '') {
+            if (Array.isArray(value)) {
+              // Bitflag vector - convert to hex byte
+              let byte = 0;
+              for (const bit of value) {
+                if (bit >= 0 && bit < 8) {
+                  byte |= (1 << (7 - bit)); // High bit first
+                }
+              }
+              codeString += byte.toString(16).padStart(2, '0');
+            } else if (typeof value === 'string') {
+              // Hex string - pad to appropriate length
+              const hexValue = value.replace(/[^0-9A-Fa-f]/g, '');
+              if (paramName.startsWith('local11') || paramName.startsWith('local12')) {
+                codeString += hexValue.padStart(4, '0').slice(0, 4);
+              } else {
+                codeString += hexValue.padStart(2, '0').slice(0, 2);
+              }
+            } else if (typeof value === 'number') {
+              codeString += value.toString(16).padStart(2, '0');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error processing parameter mappings for patch', patch.patch_code, e);
+      }
+    }
+  }
+  
+  // Add global parameters to code string
+  if (globalParams.glevelnum) {
+    const levelHex = globalParams.glevelnum.replace(/[^0-9A-Fa-f]/g, '').padStart(2, '0').slice(0, 2);
+    codeString += levelHex;
+  }
+  
+  if (globalParams.gonoffv && Array.isArray(globalParams.gonoffv) && globalParams.gonoffv.length > 0) {
+    let byte = 0;
+    for (const bit of globalParams.gonoffv) {
+      if (bit >= 0 && bit < 8) {
+        byte |= (1 << (7 - bit));
+      }
+    }
+    codeString += byte.toString(16).padStart(2, '0');
+  }
+  
+  // Hash if too long
+  if (codeString.length > maxLength) {
+    try {
+      const hash = crypto.createHash('shake128', { outputLength: 16 });
+      hash.update(codeString);
+      return hash.digest('hex');
+    } catch (error) {
+      // Fallback to SHA256 if SHAKE128 not available
+      console.warn('SHAKE128 not available, using SHA256 for patch code hash');
+      const hash = crypto.createHash('sha256');
+      hash.update(codeString);
+      return hash.digest('hex').slice(0, 32); // 16 bytes = 32 hex chars
+    }
+  }
+  
+  return codeString;
+}
+
+/**
+ * Apply extra patches to a patched SFC file
+ * @param {Object} params - Patch application parameters
+ * @returns {Promise<Object>} { success, outputPath, error }
+ */
+async function buildPlusPatchedGame(params) {
+  const {
+    dbManager,
+    gameId,
+    gameVersion,
+    selectedPatches,
+    globalParams,
+    localParams,
+    action,
+    vanillaRomPath,
+    flipsPath,
+    outputDir
+  } = params;
+  
+  try {
+    // Step 1: Create initial patched SFC (same as Start button)
+    const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rhtools-pluspatch-'));
+    const initialSfcPath = path.join(tempDir, 'initial.sfc');
+    
+    const initialResult = await createPatchedSFC({
+      dbManager,
+      gameid: gameId,
+      version: gameVersion,
+      vanillaRomPath,
+      flipsPath,
+      outputPath: initialSfcPath
+    });
+    
+    if (!initialResult.success) {
+      return { success: false, error: `Initial patching failed: ${initialResult.error}` };
+    }
+    
+    // Step 2: Get selected patch objects
+    const patchObjects = dbManager.db.prepare(`
+      SELECT * FROM extrapatches WHERE epuuid IN (${selectedPatches.map(() => '?').join(',')})
+    `).all(...selectedPatches);
+    
+    if (patchObjects.length !== selectedPatches.length) {
+      return { success: false, error: 'Some selected patches not found' };
+    }
+    
+    // Step 3: Check conflicts and dependencies
+    for (const patch of patchObjects) {
+      if (patch.conflicts) {
+        try {
+          const conflicts = JSON.parse(patch.conflicts);
+          for (const conflictCode of conflicts) {
+            if (patchObjects.some(p => p.patch_code === conflictCode)) {
+              return { success: false, error: `Patch ${patch.patch_code} conflicts with ${conflictCode}` };
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing conflicts for patch', patch.patch_code, e);
+        }
+      }
+    }
+    
+    // Step 4: Sort patches by priority and dependencies
+    const sortedPatches = [];
+    const processed = new Set();
+    
+    function addPatch(patch) {
+      if (processed.has(patch.epuuid)) return;
+      
+      // Check dependencies
+      if (patch.dependencies) {
+        try {
+          const deps = JSON.parse(patch.dependencies);
+          for (const depCode of deps) {
+            const depPatch = patchObjects.find(p => p.patch_code === depCode);
+            if (depPatch && !processed.has(depPatch.epuuid)) {
+              addPatch(depPatch);
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing dependencies for patch', patch.patch_code, e);
+        }
+      }
+      
+      sortedPatches.push(patch);
+      processed.add(patch.epuuid);
+    }
+    
+    // Sort by priority first, then add respecting dependencies
+    const prioritySorted = [...patchObjects].sort((a, b) => (a.priority || 100) - (b.priority || 100));
+    for (const patch of prioritySorted) {
+      addPatch(patch);
+    }
+    
+    // Step 5: Apply patches in sequence
+    let currentSfcPath = initialSfcPath;
+    
+    for (const patch of sortedPatches) {
+      const nextSfcPath = path.join(tempDir, `after_${patch.patch_code}.sfc`);
+      
+      let applyResult;
+      switch (patch.patch_type) {
+        case 'ips':
+        case 'bps':
+          applyResult = await applyFilePatch({
+            patch,
+            inputSfcPath: currentSfcPath,
+            outputSfcPath: nextSfcPath,
+            flipsPath
+          });
+          break;
+        case 'asar':
+          applyResult = await applyAsarPatch({
+            patch,
+            inputSfcPath: currentSfcPath,
+            outputSfcPath: nextSfcPath,
+            globalParams,
+            localParams: localParams[patch.epuuid] || {}
+          });
+          break;
+        case 'uberasmtree':
+          applyResult = await applyUberASMTreePatch({
+            patch,
+            inputSfcPath: currentSfcPath,
+            outputSfcPath: nextSfcPath,
+            globalParams,
+            localParams: localParams[patch.epuuid] || {}
+          });
+          break;
+        default:
+          return { success: false, error: `Unknown patch type: ${patch.patch_type}` };
+      }
+      
+      if (!applyResult.success) {
+        return { success: false, error: `Failed to apply patch ${patch.patch_code}: ${applyResult.error}` };
+      }
+      
+      currentSfcPath = nextSfcPath;
+    }
+    
+    // Step 6: Generate final filename
+    const codeString = generatePatchCodeString(sortedPatches, globalParams, localParams);
+    const finalFilename = `sm${gameId}_${codeString}.sfc`;
+    
+    // Step 7: Determine output path
+    let finalOutputPath;
+    if (outputDir) {
+      finalOutputPath = path.join(outputDir, finalFilename);
+    } else {
+      const basePath = getQuickLaunchBasePath(params.tempDirOverride);
+      finalOutputPath = path.join(basePath, finalFilename);
+    }
+    
+    // Ensure output directory exists
+    fs.mkdirSync(path.dirname(finalOutputPath), { recursive: true });
+    
+    // Copy final SFC to output location
+    fs.copyFileSync(currentSfcPath, finalOutputPath);
+    
+    // Step 8: Handle action (upload/boot if requested)
+    if (action === 'upload' || action === 'boot') {
+      // This would integrate with USB2SNES upload logic
+      // For now, just return success - upload can be handled separately
+    }
+    
+    // Cleanup temp directory
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (e) {
+      console.warn('Failed to cleanup temp directory:', e);
+    }
+    
+    return {
+      success: true,
+      outputPath: finalOutputPath,
+      filename: finalFilename
+    };
+    
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Apply IPS or BPS patch using FLIPS
+ */
+async function applyFilePatch(params) {
+  const { patch, inputSfcPath, outputSfcPath, flipsPath } = params;
+  
+  try {
+    // Write patch file to temp location
+    const patchPath = path.join(require('os').tmpdir(), `patch_${patch.patch_code}.${patch.patch_type}`);
+    fs.writeFileSync(patchPath, patch.file_data);
+    
+    // Apply patch using FLIPS
+    const flipsCmd = `"${flipsPath}" --apply "${patchPath}" "${inputSfcPath}" "${outputSfcPath}"`;
+    execSync(flipsCmd, { stdio: 'pipe' });
+    
+    // Verify output
+    if (!fs.existsSync(outputSfcPath)) {
+      return { success: false, error: 'FLIPS did not create output file' };
+    }
+    
+    // Cleanup patch file
+    try {
+      fs.unlinkSync(patchPath);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Apply ASAR patch
+ */
+async function applyAsarPatch(params) {
+  const { patch, inputSfcPath, outputSfcPath, globalParams, localParams } = params;
+  
+  try {
+    // Get parameter mappings
+    let templateText = patch.template_text || '';
+    const mappings = patch.parameter_mappings ? JSON.parse(patch.parameter_mappings) : {};
+    
+    // Replace template variables
+    for (const [paramName, mapping] of Object.entries(mappings)) {
+      const outputVar = mapping.output || `\${${paramName}}`;
+      let value = localParams[paramName];
+      
+      if (value === undefined || value === null) {
+        // Try global params
+        if (paramName === 'glevelnum') value = globalParams.glevelnum;
+        else if (paramName === 'gonoffv') {
+          // Convert bit array to value
+          if (Array.isArray(globalParams.gonoffv)) {
+            let byte = 0;
+            for (const bit of globalParams.gonoffv) {
+              if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+            }
+            value = byte.toString(16).padStart(2, '0');
+          }
+        }
+      }
+      
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          // Convert bit array to hex
+          let byte = 0;
+          for (const bit of value) {
+            if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+          }
+          value = byte.toString(16).padStart(2, '0');
+        }
+        templateText = templateText.replace(new RegExp(outputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), String(value));
+      }
+    }
+    
+    // Write ASAR script to temp file
+    const asarScriptPath = path.join(require('os').tmpdir(), `asar_${patch.patch_code}.asm`);
+    fs.writeFileSync(asarScriptPath, templateText);
+    
+    // Run ASAR
+    // Note: This assumes ASAR is in PATH or configured separately
+    // You may need to add ASAR path to settings
+    const asarCmd = `asar "${asarScriptPath}" "${inputSfcPath}"`;
+    execSync(asarCmd, { stdio: 'pipe' });
+    
+    // ASAR modifies the file in place, so copy it
+    fs.copyFileSync(inputSfcPath, outputSfcPath);
+    
+    // Cleanup
+    try {
+      fs.unlinkSync(asarScriptPath);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Apply UberASMTree patch
+ */
+async function applyUberASMTreePatch(params) {
+  const { patch, inputSfcPath, outputSfcPath, globalParams, localParams } = params;
+  
+  try {
+    // Extract zip file
+    const extractDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'uberasm_'));
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(patch.file_data);
+    zip.extractAllTo(extractDir, true);
+    
+    // Get parameter mappings
+    const mappings = patch.parameter_mappings ? JSON.parse(patch.parameter_mappings) : {};
+    
+    // Replace template variables in all files
+    function replaceInFile(filePath) {
+      let content = fs.readFileSync(filePath, 'utf8');
+      for (const [paramName, mapping] of Object.entries(mappings)) {
+        const outputVar = mapping.output || `\${${paramName}}`;
+        let value = localParams[paramName];
+        
+        if (value === undefined || value === null) {
+          if (paramName === 'glevelnum') value = globalParams.glevelnum;
+          else if (paramName === 'gonoffv' && Array.isArray(globalParams.gonoffv)) {
+            let byte = 0;
+            for (const bit of globalParams.gonoffv) {
+              if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+            }
+            value = byte.toString(16).padStart(2, '0');
+          }
+        }
+        
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            let byte = 0;
+            for (const bit of value) {
+              if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+            }
+            value = byte.toString(16).padStart(2, '0');
+          }
+          content = content.replace(new RegExp(outputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), String(value));
+        }
+      }
+      fs.writeFileSync(filePath, content, 'utf8');
+    }
+    
+    // Recursively process all files
+    function processDirectory(dir) {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          processDirectory(fullPath);
+        } else if (entry.isFile()) {
+          replaceInFile(fullPath);
+        }
+      }
+    }
+    
+    processDirectory(extractDir);
+    
+    // Run UberASM
+    // Note: This assumes UberASM is in PATH or configured separately
+    const uberasmCmd = `uberasm "${extractDir}" "${inputSfcPath}" "${outputSfcPath}"`;
+    execSync(uberasmCmd, { stdio: 'pipe' });
+    
+    // Cleanup
+    try {
+      fs.rmSync(extractDir, { recursive: true, force: true });
+    } catch (e) {
+      console.warn('Failed to cleanup UberASM extract directory:', e);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   createPatchedSFC,
   stageRunGames,
@@ -567,6 +1087,8 @@ module.exports = {
   getQuickLaunchBasePath,
   generateRunFolderName,
   getActiveRun,
+  getAvailableExtraPatches,
+  buildPlusPatchedGame,
   isRunPaused,
   calculateRunElapsed
 };

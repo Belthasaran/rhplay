@@ -327,6 +327,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stageRunGames: (params) => ipcRenderer.invoke('db:runs:stage-games', params),
   stageQuickLaunchGames: (params) => ipcRenderer.invoke('db:games:quick-launch-stage', params),
   uploadRunToSnes: (params) => ipcRenderer.invoke('db:runs:upload-to-snes', params),
+  getAvailableExtraPatches: (params) => ipcRenderer.invoke('extra-patches:get-available', params),
+  buildPlusPatchedGame: (params) => ipcRenderer.invoke('extra-patches:build-plus', params),
   
   // =============================
   // Seed Management

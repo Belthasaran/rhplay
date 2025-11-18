@@ -462,6 +462,7 @@ async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
 }
 
 const IPFS_GATEWAYS = [
+  'https://ipfs.4everland.io/ipfs/',
   'https://w3s.link/ipfs/',
   'https://cloudflare-ipfs.com/ipfs/',
   'https://ipfs.io/ipfs/',

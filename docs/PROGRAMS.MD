@@ -372,6 +372,33 @@ enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json 
 
 ---
 
+### arjson2tree.js
+**Purpose**: Parse JSON input containing ArDrive file metadata and generate an HTML index file with a table displaying file information in a tree-like structure.
+
+**Usage**:
+```bash
+./enode.sh jsutils/arjson2tree.js < input.json > index.html
+./enode.sh jsutils/arjson2tree.js --input=input.json --output=index.html
+./enode.sh jsutils/arjson2tree.js --ltrim=2 < input.json > index.html
+```
+
+**Key Options**:
+- `--input=PATH` - Path to input JSON file (default: read from stdin).
+- `--output=PATH` - Path to output HTML file (default: write to stdout).
+- `--ltrim=N` - Number of path components to remove from links (default: 2).
+- `--help` - Show usage details.
+
+**Features**:
+- Generates HTML table with columns: Name, Size, LastModified, DataContentType, Path, entityType, entityId, parentFolderId.
+- Clickable Name and Path columns with relative HTTP links (first N path components removed).
+- Expandable rows showing txIdPath and entityIdPath on click.
+- Dark theme styling matching project aesthetic.
+- Inline CSS (no external dependencies).
+
+**Output**: HTML file with styled table and interactive row expansion.
+
+---
+
 ### prepare_databases.js
 **Purpose**: Produce a provisioning plan for installer builds by inspecting `dbmanifest.json`, evaluating existing databases in the user settings directory, and staging manifest resources.
 

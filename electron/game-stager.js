@@ -1375,23 +1375,36 @@ async function applyUberASMTreePatch(params) {
         }
       }
       
-      // Check local params first
+      // Check local params first, but treat empty strings as unset
       let value = localParams[inputVar];
       
-      if (value === undefined || value === null) {
-        // Try global params
-        if (inputVar === 'glevelnum') {
-          value = globalParams.glevelnum;
-        } else if (inputVar === 'gonoffv') {
-          // Convert bit array to value
-          if (Array.isArray(globalParams.gonoffv)) {
-            let byte = 0;
-            for (const bit of globalParams.gonoffv) {
-              if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+      // If value is undefined, null, or empty string, try global params
+      if (value === undefined || value === null || value === '') {
+        // Try global params - check if inputVar exists as a key in globalParams
+        if (globalParams && globalParams.hasOwnProperty(inputVar)) {
+          value = globalParams[inputVar];
+        } else {
+          // Fallback to specific known global params for backwards compatibility
+          if (inputVar === 'glevelnum') {
+            value = globalParams?.glevelnum;
+          } else if (inputVar === 'gonoffv') {
+            // Convert bit array to value
+            if (Array.isArray(globalParams?.gonoffv)) {
+              let byte = 0;
+              for (const bit of globalParams.gonoffv) {
+                if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+              }
+              value = byte.toString(16).padStart(2, '0');
             }
-            value = byte.toString(16).padStart(2, '0');
           }
         }
+      }
+      
+      // Debug logging
+      console.log(`[UberASM] getParameterValue("${inputVar}", forWine=${forWine}): value=${value}, type=${typeof value}`);
+      if (inputVar === 'glevelnum') {
+        console.log(`[UberASM] globalParams:`, JSON.stringify(globalParams));
+        console.log(`[UberASM] localParams:`, JSON.stringify(localParams));
       }
       
       // Convert value to string representation
@@ -1447,29 +1460,46 @@ async function applyUberASMTreePatch(params) {
           value = expression.replace(new RegExp(inputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), getParameterValue(inputVar, useWinePaths) || '');
         }
         
-        if (value !== null && value !== undefined) {
-          // Escape special regex characters in the placeholder name
-          const escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          
-          // Replace {PLACEHOLDER} format (without $ prefix)
-          const placeholderPattern1 = `\\{${escapedPlaceholder}\\}`;
-          const regex1 = new RegExp(placeholderPattern1, 'g');
-          if (content.match(regex1)) {
-            // Use a function replacement to avoid $ being treated as special
-            content = content.replace(regex1, () => String(value));
-            modified = true;
-          }
-          
-          // Replace ${PLACEHOLDER} format (with $ prefix - common in ASM files)
-          // The $ is just literal text, not a regex special character
-          const placeholderPattern2 = `\\$\\{${escapedPlaceholder}\\}`;
-          const regex2 = new RegExp(placeholderPattern2, 'g');
-          if (content.match(regex2)) {
-            // Replace ${placeholder} with $value (keeping the $ prefix)
-            // Use a function to avoid $ being interpreted as special in replacement
-            content = content.replace(regex2, () => '$' + String(value));
-            modified = true;
-          }
+        // Convert value to string, handling null/undefined
+        const valueStr = (value !== null && value !== undefined) ? String(value) : '';
+        
+        // Debug logging
+        console.log(`[UberASM] Processing placeholder "${placeholder}" (inputVar: "${inputVar}"), value: "${valueStr}"`);
+        
+        // Escape special regex characters in the placeholder name
+        const escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Replace {PLACEHOLDER} format (without $ prefix)
+        const placeholderPattern1 = `\\{${escapedPlaceholder}\\}`;
+        const regex1 = new RegExp(placeholderPattern1, 'g');
+        if (content.match(regex1)) {
+          console.log(`[UberASM] Replacing {${placeholder}} with "${valueStr}"`);
+          // Use a function replacement to avoid $ being treated as special
+          content = content.replace(regex1, () => valueStr);
+          modified = true;
+        }
+        
+        // Replace ${PLACEHOLDER} format (with $ prefix - common in ASM files)
+        // The $ is just literal text, not a regex special character
+        const placeholderPattern2 = `\\$\\{${escapedPlaceholder}\\}`;
+        const regex2 = new RegExp(placeholderPattern2, 'g');
+        if (content.match(regex2)) {
+          console.log(`[UberASM] Replacing $${placeholder} with "$${valueStr}"`);
+          // Replace ${placeholder} with $value (keeping the $ prefix)
+          // Use a function to avoid $ being interpreted as special in replacement
+          // Store valueStr in closure to ensure it's captured correctly
+          const replacementValue = valueStr;
+          content = content.replace(regex2, (match) => {
+            const result = '$' + replacementValue;
+            console.log(`[UberASM] Replacement: "${match}" -> "${result}"`);
+            return result;
+          });
+          modified = true;
+        }
+        
+        if (valueStr === '') {
+          // Log warning if placeholder is in mapping but value is empty
+          console.warn(`[UberASM] Placeholder "${placeholder}" (inputVar: "${inputVar}") has empty value`);
         }
       }
       
@@ -1579,16 +1609,24 @@ async function applyUberASMTreePatch(params) {
     
     // Run UberASMTool with working directory set to extractDir
     // The tool modifies the input file in place, so outputSfcPath will be modified
+    console.log(`[UberASM] Executing command: ${command}`);
+    console.log(`[UberASM] Working directory: ${extractDir}`);
+    
     let execResult;
+    let exitCode = 0;
     try {
       execResult = execSync(command, { 
         stdio: 'pipe',
         cwd: extractDir,
         encoding: 'utf8'
       });
+      exitCode = 0;
+      console.log(`[UberASM] Command completed successfully with exit code: ${exitCode}`);
     } catch (execError) {
       // execSync throws an error if exit code is non-zero
-      const exitCode = execError.status || execError.code || -1;
+      exitCode = execError.status || execError.code || -1;
+      console.log(`[UberASM] Command failed with exit code: ${exitCode}`);
+      console.log(`[UberASM] Error message: ${execError.message}`);
       
       // Check if output file was created/modified (tool may have succeeded despite error code)
       if (!fs.existsSync(outputSfcPath)) {
@@ -1602,7 +1640,7 @@ async function applyUberASMTreePatch(params) {
       // Exit code 0 = success, non-zero = error/warning
       if (exitCode !== 0) {
         // Log warning but continue if file was created
-        console.warn(`UberASMTool returned exit code ${exitCode}, but output file exists. This may be a warning.`);
+        console.warn(`[UberASM] UberASMTool returned exit code ${exitCode}, but output file exists. This may be a warning.`);
         // For now, we'll consider it a success if the file exists
         // You may want to make this stricter based on specific exit codes
       }
@@ -1610,11 +1648,14 @@ async function applyUberASMTreePatch(params) {
     
     // Verify the output file exists and has content
     if (!fs.existsSync(outputSfcPath)) {
+      console.error(`[UberASM] Output file does not exist: ${outputSfcPath}`);
       return { success: false, error: 'UberASMTool did not create output file' };
     }
     
     const stats = fs.statSync(outputSfcPath);
+    console.log(`[UberASM] Output file created: ${outputSfcPath} (${stats.size} bytes)`);
     if (stats.size === 0) {
+      console.error(`[UberASM] Output file is empty`);
       return { success: false, error: 'UberASMTool created empty output file' };
     }
     

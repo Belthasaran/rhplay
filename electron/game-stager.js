@@ -1756,6 +1756,7 @@ async function applyUberASMTreePatch(params) {
         encoding: 'utf8'
       });
       exitCode = 0;
+      console.log(`[UberASM] Output: ${execResult}`)
       console.log(`[UberASM] Command completed successfully with exit code: ${exitCode}`);
     } catch (execError) {
       // execSync throws an error if exit code is non-zero

@@ -1,0 +1,18 @@
+; UberASM Tool list file.
+; See the readme for detailed information on its format.
+
+; sets verbose level, optional
+verbose: on
+level:
+*  level_all.asm
+
+overworld:
+gamemode:
+*  gamemode_all.asm
+
+global:         other/global_code.asm
+statusbar:      other/status_code.asm
+macrolib:       other/macro_library.asm
+freeram:        $7FAC80                    ; 2 bytes of free RAM
+
+

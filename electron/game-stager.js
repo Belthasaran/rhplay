@@ -12,6 +12,8 @@ const fernet = require('fernet');
 const sevenZip = require('7zip-min');
 const { path7za } = require('7zip-bin');
 
+const SKIP_CLEANUP_FOR_NOW = 1;
+
 // Helper function to configure 7zip-min with the correct unpacked binary path
 // This is needed for Electron packaged apps where the binary is in app.asar.unpacked
 function configure7zipPath() {
@@ -969,12 +971,14 @@ async function buildPlusPatchedGame(params) {
       // This would integrate with USB2SNES upload logic
       // For now, just return success - upload can be handled separately
     }
-    
+  
     // Cleanup temp directory
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch (e) {
-      console.warn('Failed to cleanup temp directory:', e);
+    if (SKIP_CLEANUP_FOR_NOW == 0) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (e) {
+        console.warn('Failed to cleanup temp directory:', e);
+      }
     }
     
     return {
@@ -1515,7 +1519,7 @@ async function applyUberASMTreePatch(params) {
     
     // Determine command based on platform
     const platform = process.platform;
-    const isLinux = platform === 'linux';
+    //const isLinux = platform === 'linux';
     
     // On Linux, check for wine
     if (isLinux) {
@@ -1564,12 +1568,14 @@ async function applyUberASMTreePatch(params) {
     }
     
     // Cleanup
-    try {
-      fs.unlinkSync(stdinFile);
-      fs.unlinkSync(listFilePath);
-      fs.rmSync(extractDir, { recursive: true, force: true });
-    } catch (e) {
-      console.warn('Failed to cleanup UberASM extract directory:', e);
+    if (SKIP_CLEANUP_FOR_NOW == 0) {
+      try {
+        fs.unlinkSync(stdinFile);
+        fs.unlinkSync(listFilePath);
+        fs.rmSync(extractDir, { recursive: true, force: true });
+      } catch (e) {
+        console.warn('Failed to cleanup UberASM extract directory:', e);
+      }
     }
     
     return { success: true };

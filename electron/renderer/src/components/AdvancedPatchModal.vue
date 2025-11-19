@@ -102,7 +102,7 @@
                       v-for="(mapping, placeholder) in getParameterMappings(patch)" 
                       :key="placeholder"
                       class="param-field"
-                      v-if="mapping.input !== 'rom_file'"
+                      v-if="mapping && mapping.input && mapping.input !== 'rom_file'"
                     >
                       <label>{{ mapping.description || mapping.input || placeholder }}:</label>
                       <input 
@@ -534,12 +534,21 @@ async function loadAvailablePatches() {
       return;
     }
     
+    if (!props.gameId || !props.gameVersion) {
+      console.warn('Cannot load patches: missing gameId or gameVersion', { gameId: props.gameId, gameVersion: props.gameVersion });
+      availablePatches.value = [];
+      return;
+    }
+    
+    console.log(`[AdvancedPatchModal] Loading available patches for game ${props.gameId} v${props.gameVersion}`);
+    
     const result = await api.getAvailableExtraPatches({
       gameId: props.gameId,
       gameVersion: props.gameVersion,
     });
     
     if (result?.success) {
+      console.log(`[AdvancedPatchModal] Loaded ${result.patches?.length || 0} available patches`);
       availablePatches.value = result.patches || [];
     } else {
       console.error('Failed to load patches:', result?.error);
@@ -556,7 +565,15 @@ async function loadAvailablePatches() {
 function getParameterMappings(patch: ExtraPatch): Record<string, ParameterMapping> {
   if (!patch.parameter_mappings) return {};
   try {
-    return JSON.parse(patch.parameter_mappings);
+    const parsed = JSON.parse(patch.parameter_mappings);
+    // Filter out any invalid entries (null, undefined, or missing 'input' field)
+    const valid: Record<string, ParameterMapping> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value && typeof value === 'object' && 'input' in value && value.input) {
+        valid[key] = value as ParameterMapping;
+      }
+    }
+    return valid;
   } catch {
     return {};
   }
@@ -709,6 +726,10 @@ async function deletePatch(patch: ExtraPatch) {
       await loadAllPatches();
       // Also reload available patches if on apply tab
       if (activeTab.value === 'apply') {
+        await loadAvailablePatches();
+      }
+      // Also reload if we're currently viewing the apply tab
+      if (props.isOpen && activeTab.value === 'apply') {
         await loadAvailablePatches();
       }
     } else {
@@ -955,8 +976,8 @@ async function savePatch() {
     if (result?.success) {
       closePatchForm();
       await loadAllPatches();
-      // Also reload available patches if on apply tab
-      if (activeTab.value === 'apply') {
+      // Always reload available patches when saving/editing, in case restrictions changed
+      if (props.isOpen && activeTab.value === 'apply') {
         await loadAvailablePatches();
       }
     } else {

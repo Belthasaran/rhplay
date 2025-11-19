@@ -630,12 +630,18 @@ async function getAvailableExtraPatches(params) {
   
   try {
     // Get game info to check tags
-    const game = dbManager.getGame(gameId, gameVersion);
-    if (!game) {
-      return { success: false, error: `Game ${gameId} version ${gameVersion} not found` };
+    let gameTags = [];
+    try {
+      const game = dbManager.getGame(gameId, gameVersion);
+      if (game) {
+        gameTags = (game.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+      } else {
+        console.warn(`[getAvailableExtraPatches] Game ${gameId} version ${gameVersion} not found, using empty tags`);
+      }
+    } catch (e) {
+      console.warn(`[getAvailableExtraPatches] Error getting game info:`, e.message);
+      // Continue with empty tags - patches without restrictions will still be available
     }
-    
-    const gameTags = (game.tags || '').split(',').map(t => t.trim()).filter(Boolean);
     
     // Get all extra patches
     const db = dbManager.getConnection('rhdata');
@@ -646,38 +652,50 @@ async function getAvailableExtraPatches(params) {
     
     // Filter patches based on restrictions
     const availablePatches = patches.filter(patch => {
-      if (!patch.restrictions) return true;
+      // If no restrictions are set (null, undefined, or empty string), patch is available
+      if (!patch.restrictions || (typeof patch.restrictions === 'string' && patch.restrictions.trim() === '')) {
+        return true;
+      }
       
       try {
         const restrictions = JSON.parse(patch.restrictions);
         
         // Check allowed games
         if (restrictions.allowed_games && Array.isArray(restrictions.allowed_games)) {
-          if (!restrictions.allowed_games.includes(gameId)) return false;
+          if (restrictions.allowed_games.length > 0 && !restrictions.allowed_games.includes(gameId)) {
+            return false;
+          }
         }
         
         // Check required tags
         if (restrictions.required_tags && Array.isArray(restrictions.required_tags)) {
-          const hasAllTags = restrictions.required_tags.every(tag => 
-            gameTags.some(gt => gt.toLowerCase() === tag.toLowerCase())
-          );
-          if (!hasAllTags) return false;
+          if (restrictions.required_tags.length > 0) {
+            const hasAllTags = restrictions.required_tags.every(tag => 
+              gameTags.some(gt => gt.toLowerCase() === tag.toLowerCase())
+            );
+            if (!hasAllTags) return false;
+          }
         }
         
         // Check excluded tags
         if (restrictions.excluded_tags && Array.isArray(restrictions.excluded_tags)) {
-          const hasExcludedTag = restrictions.excluded_tags.some(tag =>
-            gameTags.some(gt => gt.toLowerCase() === tag.toLowerCase())
-          );
-          if (hasExcludedTag) return false;
+          if (restrictions.excluded_tags.length > 0) {
+            const hasExcludedTag = restrictions.excluded_tags.some(tag =>
+              gameTags.some(gt => gt.toLowerCase() === tag.toLowerCase())
+            );
+            if (hasExcludedTag) return false;
+          }
         }
         
         return true;
       } catch (e) {
         console.error('Error parsing restrictions for patch', patch.patch_code, e);
-        return true; // Include patch if restrictions can't be parsed
+        // Include patch if restrictions can't be parsed (fail open)
+        return true;
       }
     });
+    
+    console.log(`[getAvailableExtraPatches] Found ${patches.length} total patches, ${availablePatches.length} available for game ${gameId} v${gameVersion}`);
     
     return { success: true, patches: availablePatches };
   } catch (error) {

@@ -979,8 +979,8 @@ async function savePatch() {
 
 .tab-navigation {
   display: flex;
-  border-bottom: 1px solid #ddd;
-  background: #f5f5f5;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
 }
 
 .tab-button {
@@ -990,18 +990,18 @@ async function savePatch() {
   cursor: pointer;
   font-size: 13px;
   border-bottom: 2px solid transparent;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .tab-button:hover {
-  background: #eee;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .tab-button.active {
-  color: #1976d2;
-  border-bottom-color: #1976d2;
-  background: #fff;
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+  background: var(--bg-primary);
   font-weight: 500;
 }
 
@@ -1027,9 +1027,10 @@ async function savePatch() {
 
 .game-info {
   padding: 6px 8px;
-  background: #f5f5f5;
+  background: var(--bg-secondary);
   border-radius: 4px;
   font-size: 12px;
+  color: var(--text-primary);
 }
 
 .parameter-group {
@@ -1069,11 +1070,30 @@ async function savePatch() {
   white-space: nowrap;
 }
 
+.input {
+  padding: 6px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
 .hex-input {
   width: 60px;
   font-family: monospace;
   font-size: 12px;
   padding: 4px 6px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .checkbox-group {
@@ -1105,9 +1125,9 @@ async function savePatch() {
   gap: 2px;
   margin: 0;
   padding: 2px 4px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-primary);
   border-radius: 3px;
-  background: #fafafa;
+  background: var(--bg-secondary);
   font-size: 11px;
   min-width: 24px;
   width: auto;
@@ -1116,8 +1136,8 @@ async function savePatch() {
 }
 
 .checkbox-label.compact-checkbox-label:hover {
-  background: #f0f0f0;
-  border-color: #bbb;
+  background: var(--bg-hover);
+  border-color: var(--border-secondary);
 }
 
 .checkbox-label.compact-checkbox-label input[type="checkbox"] {
@@ -1127,7 +1147,7 @@ async function savePatch() {
 
 .checkbox-label.compact-checkbox-label input[type="checkbox"]:checked + .bit-number {
   font-weight: 600;
-  color: #1976d2;
+  color: var(--accent-primary);
 }
 
 .bit-number {
@@ -1144,14 +1164,15 @@ async function savePatch() {
 }
 
 .patch-item {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-primary);
   border-radius: 4px;
   padding: 8px 10px;
-  background: #fff;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .patch-item.has-params {
-  border-color: #1976d2;
+  border-color: var(--accent-primary);
 }
 
 .patch-header {
@@ -1177,15 +1198,15 @@ async function savePatch() {
 .patch-code {
   font-family: monospace;
   font-size: 12px;
-  color: #666;
-  background: #f5f5f5;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: 3px;
 }
 
 .patch-description {
   font-size: 11px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 4px;
   line-height: 1.3;
 }
@@ -1193,7 +1214,7 @@ async function savePatch() {
 .patch-params {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-primary);
 }
 
 .param-mappings {
@@ -1216,13 +1237,13 @@ async function savePatch() {
 .loading-message {
   text-align: center;
   padding: 40px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .empty-message {
   text-align: center;
   padding: 20px;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -1234,27 +1255,36 @@ async function savePatch() {
 
 .btn-primary {
   padding: 8px 16px;
-  background: #1976d2;
-  color: white;
+  background: var(--accent-primary);
+  color: var(--button-text);
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
 }
 
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
 .btn-primary:disabled {
-  background: #ccc;
+  background: var(--bg-tertiary);
+  color: var(--disabled-text);
   cursor: not-allowed;
 }
 
 .btn-secondary {
   padding: 8px 16px;
-  background: #f5f5f5;
-  color: #333;
-  border: 1px solid #ddd;
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-primary);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.btn-secondary:hover {
+  background: var(--button-hover-bg);
 }
 
 .btn-small {
@@ -1265,15 +1295,19 @@ async function savePatch() {
 .btn-link-small {
   background: none;
   border: none;
-  color: #1976d2;
+  color: var(--accent-primary);
   cursor: pointer;
   text-decoration: underline;
   font-size: 12px;
   padding: 2px 4px;
 }
 
+.btn-link-small:hover {
+  color: var(--accent-hover);
+}
+
 .btn-link-small.btn-danger {
-  color: #d32f2f;
+  color: var(--error-color);
 }
 
 /* Editor tab styles */
@@ -1299,10 +1333,11 @@ async function savePatch() {
 }
 
 .patch-editor-item {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-primary);
   border-radius: 4px;
   padding: 10px;
-  background: #fff;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .patch-editor-header {
@@ -1327,16 +1362,16 @@ async function savePatch() {
 .patch-editor-code {
   font-family: monospace;
   font-size: 12px;
-  color: #666;
-  background: #f5f5f5;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: 3px;
 }
 
 .patch-editor-type {
   font-size: 11px;
-  color: #1976d2;
-  background: #e3f2fd;
+  color: var(--accent-primary);
+  background: var(--selected-bg);
   padding: 2px 6px;
   border-radius: 3px;
   font-weight: 500;
@@ -1349,7 +1384,7 @@ async function savePatch() {
 
 .patch-editor-description {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
@@ -1372,12 +1407,12 @@ async function savePatch() {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay);
 }
 
 .patch-form-content {
   position: relative;
-  background: #fff;
+  background: var(--modal-bg);
   border-radius: 8px;
   max-width: none;
   max-height: 90vh;
@@ -1386,6 +1421,7 @@ async function savePatch() {
   flex-direction: column;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   z-index: 1001;
+  color: var(--text-primary);
 }
 
 .patch-form-header {
@@ -1393,12 +1429,13 @@ async function savePatch() {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .patch-form-header h4 {
   margin: 0;
   font-size: 16px;
+  color: var(--text-primary);
 }
 
 .close-small {
@@ -1406,7 +1443,7 @@ async function savePatch() {
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 0;
   width: 24px;
   height: 24px;
@@ -1416,7 +1453,7 @@ async function savePatch() {
 }
 
 .close-small:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .patch-form-body {
@@ -1430,7 +1467,7 @@ async function savePatch() {
 
 .patch-form-footer {
   padding: 12px 16px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--border-primary);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -1445,24 +1482,27 @@ async function savePatch() {
 .form-field label {
   font-size: 12px;
   font-weight: 500;
+  color: var(--text-primary);
 }
 
 .form-field .hint {
   font-size: 11px;
-  color: #666;
+  color: var(--text-tertiary);
   font-weight: normal;
   font-style: italic;
 }
 
 .textarea {
   padding: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-primary);
   border-radius: 4px;
   font-size: 12px;
   font-family: inherit;
   resize: vertical;
   width: 100%;
   box-sizing: border-box;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .code-textarea {
@@ -1471,11 +1511,11 @@ async function savePatch() {
 }
 
 .code-textarea.valid {
-  border-color: #4caf50;
+  border-color: var(--success-color);
 }
 
 .code-textarea.invalid {
-  border-color: #f44336;
+  border-color: var(--error-color);
 }
 
 .parameter-mappings-editor {
@@ -1515,12 +1555,12 @@ async function savePatch() {
 }
 
 .valid-indicator {
-  color: #4caf50;
+  color: var(--success-color);
   font-weight: 500;
 }
 
 .invalid-indicator {
-  color: #f44336;
+  color: var(--error-color);
   font-weight: 500;
 }
 
@@ -1532,7 +1572,7 @@ async function savePatch() {
 
 .file-name {
   font-size: 12px;
-  color: #333;
+  color: var(--text-primary);
   font-family: monospace;
 }
 </style>

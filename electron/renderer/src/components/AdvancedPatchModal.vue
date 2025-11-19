@@ -383,7 +383,7 @@
           <button 
             @click="buildPlusAndBoot" 
             class="btn-primary"
-            :disabled="loading || selectedPatches.length === 0 || !usb2snesEnabled || !usb2snesConnected"
+            :disabled="loading || selectedPatches.length === 0 || !usb2snesEnabled"
           >
             Build Plus and Boot on USB2SNES
           </button>
@@ -627,13 +627,40 @@ function close() {
   emit('close');
 }
 
+// Helper function to serialize reactive objects to plain objects for IPC
+// Uses JSON parse/stringify to remove Vue reactivity proxies
+function serializeForIPC(obj: any): any {
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch (e) {
+    // If JSON serialization fails, try manual conversion
+    console.warn('JSON serialization failed, using manual conversion:', e);
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(item => serializeForIPC(item));
+    }
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          result[key] = serializeForIPC(obj[key]);
+        }
+      }
+      return result;
+    }
+    return obj;
+  }
+}
+
 function buildPlus() {
   emit('build', {
     gameId: props.gameId,
     gameVersion: props.gameVersion,
-    selectedPatches: selectedPatches.value,
-    globalParams: globalParams.value,
-    localParams: localParams.value,
+    selectedPatches: serializeForIPC(selectedPatches.value),
+    globalParams: serializeForIPC(globalParams.value),
+    localParams: serializeForIPC(localParams.value),
     action: 'build',
   });
 }
@@ -642,9 +669,9 @@ function buildPlusAndUpload() {
   emit('build', {
     gameId: props.gameId,
     gameVersion: props.gameVersion,
-    selectedPatches: selectedPatches.value,
-    globalParams: globalParams.value,
-    localParams: localParams.value,
+    selectedPatches: serializeForIPC(selectedPatches.value),
+    globalParams: serializeForIPC(globalParams.value),
+    localParams: serializeForIPC(localParams.value),
     action: 'upload',
   });
 }
@@ -653,9 +680,9 @@ function buildPlusAndBoot() {
   emit('build', {
     gameId: props.gameId,
     gameVersion: props.gameVersion,
-    selectedPatches: selectedPatches.value,
-    globalParams: globalParams.value,
-    localParams: localParams.value,
+    selectedPatches: serializeForIPC(selectedPatches.value),
+    globalParams: serializeForIPC(globalParams.value),
+    localParams: serializeForIPC(localParams.value),
     action: 'boot',
   });
 }

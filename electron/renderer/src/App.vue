@@ -15538,6 +15538,7 @@ async function handleAdvancedPatchBuild(options: {
   }
 
   try {
+    // Build the patched game
     const result = await api.buildPlusPatchedGame({
       gameId: options.gameId,
       gameVersion: options.gameVersion,
@@ -15549,11 +15550,101 @@ async function handleAdvancedPatchBuild(options: {
       flipsPath: settings.flipsPath,
     });
 
-    if (result?.success) {
-      alert(`Successfully built patched game: ${result.outputPath || result.filename}`);
-      closeAdvancedPatchModal();
-    } else {
+    if (!result?.success) {
       alert(`Failed to build patched game: ${result?.error || 'Unknown error'}`);
+      return;
+    }
+
+    // If just building, we're done
+    if (options.action === 'build') {
+      alert(`Successfully built patched game: ${result.filename}`);
+      closeAdvancedPatchModal();
+      return;
+    }
+
+    // For upload or boot actions, we need USB2SNES
+    if (options.action === 'upload' || options.action === 'boot') {
+      if (settings.usb2snesEnabled !== 'yes') {
+        alert('USB2SNES is not enabled. Please enable it in settings first.');
+        return;
+      }
+
+      // Check connection and auto-connect if needed
+      await refreshUsb2snesStatus();
+      
+      if (!usb2snesStatus.connected) {
+        try {
+          const connectOptions = buildUsb2snesConnectOptions();
+          const connectResult = await api.usb2snesConnect(connectOptions);
+          
+          usb2snesStatus.connected = true;
+          usb2snesStatus.device = connectResult.device;
+          usb2snesStatus.firmwareVersion = connectResult.firmwareVersion || 'N/A';
+          usb2snesStatus.versionString = connectResult.versionString || 'N/A';
+          usb2snesStatus.romRunning = connectResult.romRunning || 'N/A';
+          startHealthMonitoring();
+        } catch (connectError: any) {
+          alert(`Failed to connect to USB2SNES: ${formatErrorMessage(connectError)}`);
+          return;
+        }
+      }
+
+      // Upload the file
+      const filename = result.filename;
+      const srcPath = result.outputPath;
+      const dstPath = `/work/${filename}`;
+
+      try {
+        // Show progress
+        uploadProgressStatus.value = `Uploading ${filename}...`;
+        uploadProgressPercent.value = 0;
+        uploadProgressModalOpen.value = true;
+
+        // Setup progress listener
+        let progressListenerActive = true;
+        const removeProgressListener = api.onUploadProgress?.((transferred: number, total: number, percent: number) => {
+          if (progressListenerActive) {
+            uploadProgressPercent.value = percent;
+            uploadProgressStatus.value = `Uploading ${filename}... ${percent}%`;
+          }
+        });
+
+        // Upload file
+        const uploadResult = await api.usb2snesUploadRom(srcPath, dstPath);
+        
+        progressListenerActive = false;
+        if (removeProgressListener) {
+          removeProgressListener();
+        }
+
+        if (!uploadResult?.success) {
+          uploadProgressStatus.value = `Upload failed: ${uploadResult?.error || 'Unknown error'}`;
+          uploadSuccess.value = false;
+          return;
+        }
+
+        uploadProgressStatus.value = `✓ Uploaded ${filename}`;
+        uploadProgressPercent.value = 100;
+        uploadSuccess.value = true;
+        uploadedFilePath.value = dstPath;
+
+        // If boot action, also boot the file
+        if (options.action === 'boot') {
+          uploadProgressStatus.value = `Booting ${filename}...`;
+          try {
+            await api.usb2snesBoot(dstPath);
+            uploadProgressStatus.value = `✓ Uploaded and booted ${filename}`;
+          } catch (bootError: any) {
+            uploadProgressStatus.value = `✓ Uploaded ${filename}, but boot failed: ${formatErrorMessage(bootError)}`;
+            uploadSuccess.value = false;
+          }
+        }
+
+        closeAdvancedPatchModal();
+      } catch (uploadError: any) {
+        uploadProgressStatus.value = `Upload failed: ${formatErrorMessage(uploadError)}`;
+        uploadSuccess.value = false;
+      }
     }
   } catch (error: any) {
     alert(`Error building patched game: ${error?.message || String(error)}`);

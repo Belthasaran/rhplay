@@ -930,7 +930,8 @@ async function buildPlusPatchedGame(params) {
             inputSfcPath: currentSfcPath,
             outputSfcPath: nextSfcPath,
             globalParams,
-            localParams: localParams[patch.epuuid] || {}
+            localParams: localParams[patch.epuuid] || {},
+            dbManager
           });
           break;
         default:
@@ -1126,11 +1127,197 @@ async function applyAsarPatch(params) {
   }
 }
 
+// Expected SHA256 hashes for UberASMTool validation
+const UBERASMTOOL_EXE_SHA256 = 'f227ad292c2a28c30c57b626bfe78ed26fe1c55ae77a1f117e0a1de77e78c6c2';
+const UBERASMTOOL_ASAR_DLL_SHA256 = 'bd25cd481dcb052d4e743380417a2a19c9e46c2be558a7ad754e1d7cc1f039de';
+const UBERASMTOOL_ZIP_SHA256 = '026e5f38516c51e196f8fd8af6226b42b745701c02cb9b79fa1cc62ecf1c6863';
+
+/**
+ * Find UberASMTool.exe with validation
+ * @param {Object} dbManager - Database manager for checking settings
+ * @returns {Promise<string|null>} Path to UberASMTool.exe or null if not found
+ */
+async function findUberASMTool(dbManager) {
+  const platform = process.platform;
+  const isWindows = platform === 'win32';
+  const isLinux = platform === 'linux';
+  
+  // Step 1: Check database setting
+  try {
+    const clientDb = dbManager.getConnection('clientdata');
+    const row = clientDb.prepare(`
+      SELECT csetting_value FROM csettings 
+      WHERE csetting_name = 'uberAsmPath'
+    `).get();
+    
+    if (row && row.csetting_value) {
+      const exePath = path.join(row.csetting_value, 'UberASMTool.exe');
+      if (fs.existsSync(exePath) && validateUberASMTool(exePath)) {
+        console.log(`  ✓ Found UberASMTool via database setting: ${exePath}`);
+        return exePath;
+      }
+    }
+  } catch (e) {
+    // Continue to next check
+  }
+  
+  // Step 2: Search in common locations
+  const searchDirs = [];
+  
+  // Add project root and script directory
+  const projectRoot = process.cwd();
+  searchDirs.push(projectRoot);
+  
+  // Add packaged app resources
+  if (process.resourcesPath) {
+    searchDirs.push(process.resourcesPath);
+    searchDirs.push(path.join(process.resourcesPath, 'app.asar.unpacked'));
+  }
+  
+  // Add common installation directories
+  if (isWindows) {
+    const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'AppData', 'Local');
+    const appData = process.env.APPDATA || path.join(process.env.USERPROFILE || 'C:\\Users\\Default', 'AppData', 'Roaming');
+    
+    searchDirs.push(programFiles);
+    searchDirs.push(programFilesX86);
+    searchDirs.push(localAppData);
+    searchDirs.push(appData);
+    searchDirs.push(path.join(appData, 'rhtools'));
+    searchDirs.push(path.join(appData, 'rhplay'));
+  } else {
+    const homeDir = process.env.HOME || '/root';
+    searchDirs.push('/usr/local');
+    searchDirs.push('/opt');
+    searchDirs.push(homeDir);
+    searchDirs.push(path.join(homeDir, '.local'));
+  }
+  
+  // Search for UberASM21 first, then UberASM
+  const dirNames = ['UberASM21', 'UberASM'];
+  
+  for (const searchDir of searchDirs) {
+    if (!fs.existsSync(searchDir)) continue;
+    
+    for (const dirName of dirNames) {
+      // Case-insensitive search
+      try {
+        const entries = fs.readdirSync(searchDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name.toLowerCase() === dirName.toLowerCase()) {
+            const candidateDir = path.join(searchDir, entry.name);
+            const exePath = path.join(candidateDir, 'UberASMTool.exe');
+            if (fs.existsSync(exePath) && validateUberASMTool(exePath)) {
+              console.log(`  ✓ Found UberASMTool: ${exePath}`);
+              return exePath;
+            }
+          }
+        }
+      } catch (e) {
+        // Continue to next directory
+      }
+    }
+  }
+  
+  // Step 3: Search for zip file
+  for (const searchDir of searchDirs) {
+    if (!fs.existsSync(searchDir)) continue;
+    
+    try {
+      const entries = fs.readdirSync(searchDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.toLowerCase() === 'uberasmtool21.zip') {
+          const zipPath = path.join(searchDir, entry.name);
+          if (validateUberASMToolZip(zipPath)) {
+            // Extract to program directory/UberASMTool21
+            const extractDir = path.join(projectRoot, 'UberASMTool21');
+            try {
+              if (!fs.existsSync(extractDir)) {
+                fs.mkdirSync(extractDir, { recursive: true });
+              }
+              
+              // Extract zip
+              await new Promise((resolve, reject) => {
+                sevenZip.unpack(zipPath, extractDir, (err) => {
+                  if (err) reject(err);
+                  else resolve();
+                });
+              });
+              
+              const exePath = path.join(extractDir, 'UberASMTool.exe');
+              if (fs.existsSync(exePath) && validateUberASMTool(exePath)) {
+                console.log(`  ✓ Extracted and found UberASMTool: ${exePath}`);
+                return exePath;
+              }
+            } catch (e) {
+              console.warn(`Failed to extract UberASMTool zip: ${e.message}`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Continue to next directory
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Validate UberASMTool.exe and asar.dll
+ * @param {string} exePath - Path to UberASMTool.exe
+ * @returns {boolean} True if valid
+ */
+function validateUberASMTool(exePath) {
+  try {
+    // Check exe hash
+    const exeData = fs.readFileSync(exePath);
+    const exeHash = crypto.createHash('sha256').update(exeData).digest('hex');
+    if (exeHash.toLowerCase() !== UBERASMTOOL_EXE_SHA256.toLowerCase()) {
+      return false;
+    }
+    
+    // Check asar.dll in same directory
+    const exeDir = path.dirname(exePath);
+    const dllPath = path.join(exeDir, 'asar.dll');
+    if (!fs.existsSync(dllPath)) {
+      return false;
+    }
+    
+    const dllData = fs.readFileSync(dllPath);
+    const dllHash = crypto.createHash('sha256').update(dllData).digest('hex');
+    if (dllHash.toLowerCase() !== UBERASMTOOL_ASAR_DLL_SHA256.toLowerCase()) {
+      return false;
+    }
+    
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Validate UberASMTool21.zip
+ * @param {string} zipPath - Path to zip file
+ * @returns {boolean} True if valid
+ */
+function validateUberASMToolZip(zipPath) {
+  try {
+    const zipData = fs.readFileSync(zipPath);
+    const zipHash = crypto.createHash('sha256').update(zipData).digest('hex');
+    return zipHash.toLowerCase() === UBERASMTOOL_ZIP_SHA256.toLowerCase();
+  } catch (e) {
+    return false;
+  }
+}
+
 /**
  * Apply UberASMTree patch
  */
 async function applyUberASMTreePatch(params) {
-  const { patch, inputSfcPath, outputSfcPath, globalParams, localParams } = params;
+  const { patch, inputSfcPath, outputSfcPath, globalParams, localParams, dbManager } = params;
   
   try {
     // Extract 7z file
@@ -1166,11 +1353,22 @@ async function applyUberASMTreePatch(params) {
     // Get parameter mappings
     const mappings = patch.parameter_mappings ? JSON.parse(patch.parameter_mappings) : {};
     
+    // Determine if we need wine paths (for Linux)
+    const isLinux = process.platform === 'linux';
+    const useWinePaths = isLinux;
+    
     // Helper function to get parameter value
-    function getParameterValue(inputVar) {
-      // Special parameter: rom_file
-      if (inputVar === 'rom_file') {
-        return inputSfcPath;
+    function getParameterValue(inputVar, forWine = false) {
+      // Special parameter: rom_file or rom_path - return the ROM path
+      // Format appropriately for the platform (Windows paths for wine on Linux)
+      if (inputVar === 'rom_file' || inputVar === 'rom_path') {
+        if (forWine && process.platform === 'linux') {
+          // Convert to Windows path format for wine (Z: drive mapping)
+          return inputSfcPath.replace(/\//g, '\\').replace(/^/, 'Z:');
+        } else {
+          // Use native path format
+          return inputSfcPath;
+        }
       }
       
       // Check local params first
@@ -1213,33 +1411,58 @@ async function applyUberASMTreePatch(params) {
     // Placeholder name (without {}) maps to {PLACEHOLDER} in template
     function replaceInFile(filePath) {
       let content = fs.readFileSync(filePath, 'utf8');
+      let modified = false;
+      
+      // First, handle parameter mappings
       for (const [placeholder, mapping] of Object.entries(mappings)) {
         const inputVar = mapping.input;
         const expression = mapping.expression || inputVar; // Default to input variable name
         
-        // Get the value
-        let value = getParameterValue(inputVar);
+        // Get the value (with wine path formatting if needed)
+        let value = getParameterValue(inputVar, useWinePaths);
         
         // If expression is just the input variable name, use the value directly
         // Otherwise, we could evaluate the expression (for now, just use inputVar value)
         if (expression === inputVar) {
-          value = getParameterValue(inputVar);
+          value = getParameterValue(inputVar, useWinePaths);
         } else {
           // For now, simple expression evaluation: if expression references inputVar, substitute it
           // This could be extended later for more complex expressions
-          value = expression.replace(new RegExp(inputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), getParameterValue(inputVar) || '');
+          value = expression.replace(new RegExp(inputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), getParameterValue(inputVar, useWinePaths) || '');
         }
         
         if (value !== null) {
           // Replace {PLACEHOLDER} in template (placeholder name is without {})
           const placeholderPattern = `{${placeholder}}`;
-          content = content.replace(new RegExp(placeholderPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+          const regex = new RegExp(placeholderPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+          if (content.match(regex)) {
+            content = content.replace(regex, value);
+            modified = true;
+          }
         }
       }
-      fs.writeFileSync(filePath, content, 'utf8');
+      
+      // Also handle special {rom_path} placeholder (even if not in mappings)
+      // This is a common placeholder in UberASM list.txt files
+      if (content.includes('{rom_path}')) {
+        const romPathValue = getParameterValue('rom_path', useWinePaths);
+        content = content.replace(/{rom_path}/g, romPathValue);
+        modified = true;
+      }
+      
+      // Also handle {rom_file} placeholder (for consistency)
+      if (content.includes('{rom_file}')) {
+        const romFileValue = getParameterValue('rom_file', useWinePaths);
+        content = content.replace(/{rom_file}/g, romFileValue);
+        modified = true;
+      }
+      
+      if (modified) {
+        fs.writeFileSync(filePath, content, 'utf8');
+      }
     }
     
-    // Recursively process all files
+    // Recursively process all text files (skip binary files)
     function processDirectory(dir) {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
@@ -1247,20 +1470,103 @@ async function applyUberASMTreePatch(params) {
         if (entry.isDirectory()) {
           processDirectory(fullPath);
         } else if (entry.isFile()) {
-          replaceInFile(fullPath);
+          // Only process text files (check extension or try to read as text)
+          const ext = path.extname(entry.name).toLowerCase();
+          const textExtensions = ['.txt', '.asm']; /*TXT: , '.json', '.cfg', '.ini', '.list', '']; */
+          // Also try to process files without extension (like 'list' or files with no extension)
+          if (textExtensions.includes(ext) || !ext) {
+            try {
+              // Try to read as text to verify it's not binary
+              const content = fs.readFileSync(fullPath, 'utf8');
+              // If we can read it as UTF-8, process it
+              replaceInFile(fullPath);
+            } catch (e) {
+              // Skip binary files or files that can't be read as text
+              console.warn(`Skipping non-text file: ${fullPath}`);
+            }
+          }
         }
       }
     }
     
+    // Process all text files to replace template variables
+    // This includes list.txt and any other text files in the UberASM tree
     processDirectory(extractDir);
     
-    // Run UberASM
-    // Note: This assumes UberASM is in PATH or configured separately
-    const uberasmCmd = `uberasm "${extractDir}" "${inputSfcPath}" "${outputSfcPath}"`;
-    execSync(uberasmCmd, { stdio: 'pipe' });
+    // Find UberASMTool
+    const uberasmToolPath = await findUberASMTool(dbManager);
+    if (!uberasmToolPath) {
+      return { success: false, error: 'UberASMTool.exe not found. Please ensure it is installed or set uberAsmPath in settings.' };
+    }
+    
+    // Copy input to output first (tool modifies file in place)
+    fs.copyFileSync(inputSfcPath, outputSfcPath);
+    
+    // Check if list.txt exists (it should, as it's part of the UberASM tree)
+    // We don't create it - it should already exist from the extracted archive
+    const listFilePath = path.join(extractDir, 'list.txt');
+    if (!fs.existsSync(listFilePath)) {
+      return { success: false, error: 'list.txt not found in extracted UberASM tree. The patch archive may be invalid.' };
+    }
+    
+    // Create stdin file with blank line (Enter key) - tool requires pressing Enter
+    const stdinFile = path.join(extractDir, '_stdin0.txt');
+    fs.writeFileSync(stdinFile, '\n', 'utf8');
+    
+    // Determine command based on platform
+    const platform = process.platform;
+    const isLinux = platform === 'linux';
+    
+    // On Linux, check for wine
+    if (isLinux) {
+      try {
+        execSync('which wine', { stdio: 'pipe' });
+      } catch (e) {
+        return { success: false, error: 'Wine is required to run UberASMTool.exe on Linux. Please install wine first.' };
+      }
+    }
+    
+    // Build command
+    // Format: UberASMTool.exe list.txt inputfile.smc
+    // The tool modifies inputfile.smc in place, so we use outputSfcPath (which is a copy of input)
+    let command;
+    
+    if (isLinux) {
+      // On Linux, use wine
+      // Wine maps / to Z: by default, so we convert Unix paths to Windows-style paths
+      // Use absolute paths and convert forward slashes to backslashes, prefix with Z:
+      const wineToolPath = uberasmToolPath.replace(/\//g, '\\').replace(/^/, 'Z:');
+      const wineListPath = listFilePath.replace(/\//g, '\\').replace(/^/, 'Z:');
+      const wineOutputPath = outputSfcPath.replace(/\//g, '\\').replace(/^/, 'Z:');
+      
+      // Note: stdin redirection (<) is handled by the shell, so we use the Unix path for stdinFile
+      command = `wine "${wineToolPath}" "${wineListPath}" "${wineOutputPath}" < "${stdinFile}"`;
+    } else {
+      // Windows - use direct paths
+      command = `"${uberasmToolPath}" "${listFilePath}" "${outputSfcPath}" < "${stdinFile}"`;
+    }
+    
+    // Run UberASMTool with working directory set to extractDir
+    // The tool modifies the input file in place, so outputSfcPath will be modified
+    try {
+      execSync(command, { 
+        stdio: 'pipe',
+        cwd: extractDir,
+        encoding: 'utf8'
+      });
+    } catch (execError) {
+      // Check if output file was created/modified (tool may have succeeded despite error code)
+      if (!fs.existsSync(outputSfcPath)) {
+        return { success: false, error: `UberASMTool execution failed: ${execError.message}` };
+      }
+      // If file exists, assume success (tool may return non-zero on warnings)
+      console.warn('UberASMTool returned non-zero exit code, but output file exists:', execError.message);
+    }
     
     // Cleanup
     try {
+      fs.unlinkSync(stdinFile);
+      fs.unlinkSync(listFilePath);
       fs.rmSync(extractDir, { recursive: true, force: true });
     } catch (e) {
       console.warn('Failed to cleanup UberASM extract directory:', e);

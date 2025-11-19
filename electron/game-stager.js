@@ -577,7 +577,8 @@ async function getAvailableExtraPatches(params) {
     const gameTags = (game.tags || '').split(',').map(t => t.trim()).filter(Boolean);
     
     // Get all extra patches
-    const patches = dbManager.db.prepare(`
+    const db = dbManager.getConnection('rhdata');
+    const patches = db.prepare(`
       SELECT * FROM extrapatches 
       ORDER BY priority ASC, name ASC
     `).all();
@@ -623,15 +624,17 @@ async function getAvailableExtraPatches(params) {
   }
 }
 
+// Maximum code string length before hashing (constant for all patches)
+const MAX_PATCH_CODE_STRING_LENGTH = 14;
+
 /**
  * Generate patch code string from selected patches and parameters
  * @param {Array} patches - Selected patch objects
  * @param {Object} globalParams - Global parameters
  * @param {Object} localParams - Local parameters per patch
- * @param {number} maxLength - Maximum code string length before hashing
  * @returns {string} Patch code string
  */
-function generatePatchCodeString(patches, globalParams, localParams, maxLength = 14) {
+function generatePatchCodeString(patches, globalParams, localParams) {
   let codeString = '';
   
   // Sort patches by priority
@@ -647,8 +650,17 @@ function generatePatchCodeString(patches, globalParams, localParams, maxLength =
         const patchLocalParams = localParams[patch.epuuid] || {};
         
         // Extract parameter values and append as hex
-        for (const [paramName, mapping] of Object.entries(mappings)) {
-          const value = patchLocalParams[paramName];
+        // New format: {"PLACEHOLDER": {"input": "inputvar", ...}}
+        // We need to look up the input variable name from the mapping
+        for (const [placeholder, mapping] of Object.entries(mappings)) {
+          const inputVar = mapping.input;
+          if (!inputVar) continue;
+          
+          // Skip special parameters that don't contribute to code string
+          if (inputVar === 'rom_file') continue;
+          
+          // Get value from local params (mapped by input variable name)
+          const value = patchLocalParams[inputVar];
           if (value !== undefined && value !== null && value !== '') {
             if (Array.isArray(value)) {
               // Bitflag vector - convert to hex byte
@@ -662,7 +674,7 @@ function generatePatchCodeString(patches, globalParams, localParams, maxLength =
             } else if (typeof value === 'string') {
               // Hex string - pad to appropriate length
               const hexValue = value.replace(/[^0-9A-Fa-f]/g, '');
-              if (paramName.startsWith('local11') || paramName.startsWith('local12')) {
+              if (inputVar === 'local11' || inputVar === 'local12') {
                 codeString += hexValue.padStart(4, '0').slice(0, 4);
               } else {
                 codeString += hexValue.padStart(2, '0').slice(0, 2);
@@ -695,7 +707,7 @@ function generatePatchCodeString(patches, globalParams, localParams, maxLength =
   }
   
   // Hash if too long
-  if (codeString.length > maxLength) {
+  if (codeString.length > MAX_PATCH_CODE_STRING_LENGTH) {
     try {
       const hash = crypto.createHash('shake128', { outputLength: 16 });
       hash.update(codeString);
@@ -750,7 +762,8 @@ async function buildPlusPatchedGame(params) {
     }
     
     // Step 2: Get selected patch objects
-    const patchObjects = dbManager.db.prepare(`
+    const db = dbManager.getConnection('rhdata');
+    const patchObjects = db.prepare(`
       SELECT * FROM extrapatches WHERE epuuid IN (${selectedPatches.map(() => '?').join(',')})
     `).all(...selectedPatches);
     
@@ -939,15 +952,21 @@ async function applyAsarPatch(params) {
     let templateText = patch.template_text || '';
     const mappings = patch.parameter_mappings ? JSON.parse(patch.parameter_mappings) : {};
     
-    // Replace template variables
-    for (const [paramName, mapping] of Object.entries(mappings)) {
-      const outputVar = mapping.output || `\${${paramName}}`;
-      let value = localParams[paramName];
+    // Helper function to get parameter value
+    function getParameterValue(inputVar) {
+      // Special parameter: rom_file
+      if (inputVar === 'rom_file') {
+        return inputSfcPath;
+      }
+      
+      // Check local params first
+      let value = localParams[inputVar];
       
       if (value === undefined || value === null) {
         // Try global params
-        if (paramName === 'glevelnum') value = globalParams.glevelnum;
-        else if (paramName === 'gonoffv') {
+        if (inputVar === 'glevelnum') {
+          value = globalParams.glevelnum;
+        } else if (inputVar === 'gonoffv') {
           // Convert bit array to value
           if (Array.isArray(globalParams.gonoffv)) {
             let byte = 0;
@@ -959,6 +978,7 @@ async function applyAsarPatch(params) {
         }
       }
       
+      // Convert value to string representation
       if (value !== undefined && value !== null) {
         if (Array.isArray(value)) {
           // Convert bit array to hex
@@ -968,7 +988,36 @@ async function applyAsarPatch(params) {
           }
           value = byte.toString(16).padStart(2, '0');
         }
-        templateText = templateText.replace(new RegExp(outputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), String(value));
+        return String(value);
+      }
+      
+      return null;
+    }
+    
+    // Replace template variables
+    // New format: {"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar"}}
+    // Placeholder name (without {}) maps to {PLACEHOLDER} in template
+    for (const [placeholder, mapping] of Object.entries(mappings)) {
+      const inputVar = mapping.input;
+      const expression = mapping.expression || inputVar; // Default to input variable name
+      
+      // Get the value
+      let value = getParameterValue(inputVar);
+      
+      // If expression is just the input variable name, use the value directly
+      // Otherwise, we could evaluate the expression (for now, just use inputVar value)
+      if (expression === inputVar) {
+        value = getParameterValue(inputVar);
+      } else {
+        // For now, simple expression evaluation: if expression references inputVar, substitute it
+        // This could be extended later for more complex expressions
+        value = expression.replace(new RegExp(inputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), getParameterValue(inputVar) || '');
+      }
+      
+      if (value !== null) {
+        // Replace {PLACEHOLDER} in template (placeholder name is without {})
+        const placeholderPattern = `{${placeholder}}`;
+        templateText = templateText.replace(new RegExp(placeholderPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
       }
     }
     
@@ -1005,25 +1054,49 @@ async function applyUberASMTreePatch(params) {
   const { patch, inputSfcPath, outputSfcPath, globalParams, localParams } = params;
   
   try {
-    // Extract zip file
+    // Extract 7z file
     const extractDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'uberasm_'));
-    const AdmZip = require('adm-zip');
-    const zip = new AdmZip(patch.file_data);
-    zip.extractAllTo(extractDir, true);
+    
+    // Write 7z archive to temp file
+    const archivePath = path.join(require('os').tmpdir(), `uberasm_${patch.patch_code}.7z`);
+    fs.writeFileSync(archivePath, patch.file_data);
+    
+    // Use 7zip-bin to get the 7z executable path
+    const path7za = require('7zip-bin').path7za;
+    
+    // Extract 7z archive using 7z command
+    // -y: assume yes to all queries
+    // -o: output directory (no space after -o)
+    const extractCmd = `"${path7za}" x -y -o"${extractDir}" "${archivePath}"`;
+    execSync(extractCmd, { stdio: 'pipe' });
+    
+    // Cleanup temp archive file
+    try {
+      fs.unlinkSync(archivePath);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
     
     // Get parameter mappings
     const mappings = patch.parameter_mappings ? JSON.parse(patch.parameter_mappings) : {};
     
-    // Replace template variables in all files
-    function replaceInFile(filePath) {
-      let content = fs.readFileSync(filePath, 'utf8');
-      for (const [paramName, mapping] of Object.entries(mappings)) {
-        const outputVar = mapping.output || `\${${paramName}}`;
-        let value = localParams[paramName];
-        
-        if (value === undefined || value === null) {
-          if (paramName === 'glevelnum') value = globalParams.glevelnum;
-          else if (paramName === 'gonoffv' && Array.isArray(globalParams.gonoffv)) {
+    // Helper function to get parameter value
+    function getParameterValue(inputVar) {
+      // Special parameter: rom_file
+      if (inputVar === 'rom_file') {
+        return inputSfcPath;
+      }
+      
+      // Check local params first
+      let value = localParams[inputVar];
+      
+      if (value === undefined || value === null) {
+        // Try global params
+        if (inputVar === 'glevelnum') {
+          value = globalParams.glevelnum;
+        } else if (inputVar === 'gonoffv') {
+          // Convert bit array to value
+          if (Array.isArray(globalParams.gonoffv)) {
             let byte = 0;
             for (const bit of globalParams.gonoffv) {
               if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
@@ -1031,16 +1104,50 @@ async function applyUberASMTreePatch(params) {
             value = byte.toString(16).padStart(2, '0');
           }
         }
-        
-        if (value !== undefined && value !== null) {
-          if (Array.isArray(value)) {
-            let byte = 0;
-            for (const bit of value) {
-              if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
-            }
-            value = byte.toString(16).padStart(2, '0');
+      }
+      
+      // Convert value to string representation
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          // Convert bit array to hex
+          let byte = 0;
+          for (const bit of value) {
+            if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
           }
-          content = content.replace(new RegExp(outputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), String(value));
+          value = byte.toString(16).padStart(2, '0');
+        }
+        return String(value);
+      }
+      
+      return null;
+    }
+    
+    // Replace template variables in all files
+    // New format: {"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar"}}
+    // Placeholder name (without {}) maps to {PLACEHOLDER} in template
+    function replaceInFile(filePath) {
+      let content = fs.readFileSync(filePath, 'utf8');
+      for (const [placeholder, mapping] of Object.entries(mappings)) {
+        const inputVar = mapping.input;
+        const expression = mapping.expression || inputVar; // Default to input variable name
+        
+        // Get the value
+        let value = getParameterValue(inputVar);
+        
+        // If expression is just the input variable name, use the value directly
+        // Otherwise, we could evaluate the expression (for now, just use inputVar value)
+        if (expression === inputVar) {
+          value = getParameterValue(inputVar);
+        } else {
+          // For now, simple expression evaluation: if expression references inputVar, substitute it
+          // This could be extended later for more complex expressions
+          value = expression.replace(new RegExp(inputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), getParameterValue(inputVar) || '');
+        }
+        
+        if (value !== null) {
+          // Replace {PLACEHOLDER} in template (placeholder name is without {})
+          const placeholderPattern = `{${placeholder}}`;
+          content = content.replace(new RegExp(placeholderPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
         }
       }
       fs.writeFileSync(filePath, content, 'utf8');

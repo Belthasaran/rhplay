@@ -2600,6 +2600,183 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Get all extra patches (for editor)
+   * Channel: extra-patches:get-all
+   */
+  ipcMain.handle('extra-patches:get-all', async () => {
+    try {
+      const db = dbManager.getConnection('rhdata');
+      const patches = db.prepare(`
+        SELECT * FROM extrapatches 
+        ORDER BY priority ASC, name ASC
+      `).all();
+      return { success: true, patches };
+    } catch (error) {
+      console.error('Error getting all extra patches:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Save extra patch (create or update)
+   * Channel: extra-patches:save
+   */
+  ipcMain.handle('extra-patches:save', async (_event, params) => {
+    try {
+      const {
+        epuuid,
+        patch_code,
+        name,
+        description,
+        patch_type,
+        priority,
+        requires_parameters,
+        template_text,
+        file_data,
+        parameter_mappings,
+        restrictions,
+        conflicts,
+        dependencies
+      } = params;
+
+      if (!patch_code || !name || !patch_type) {
+        return { success: false, error: 'Missing required fields: patch_code, name, patch_type' };
+      }
+
+      // Convert file_data array to Buffer if provided
+      let fileDataBuffer = null;
+      if (file_data && Array.isArray(file_data)) {
+        fileDataBuffer = Buffer.from(file_data);
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      
+      if (epuuid) {
+        // Update existing patch
+        // Only update file_data if new file_data is provided
+        if (fileDataBuffer) {
+          const stmt = db.prepare(`
+            UPDATE extrapatches SET
+              name = ?,
+              description = ?,
+              patch_type = ?,
+              priority = ?,
+              requires_parameters = ?,
+              template_text = ?,
+              file_data = ?,
+              parameter_mappings = ?,
+              restrictions = ?,
+              conflicts = ?,
+              dependencies = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE epuuid = ?
+          `);
+          
+          stmt.run(
+            name,
+            description || null,
+            patch_type,
+            priority || 100,
+            requires_parameters || 0,
+            template_text || null,
+            fileDataBuffer,
+            parameter_mappings || null,
+            restrictions || null,
+            conflicts || null,
+            dependencies || null,
+            epuuid
+          );
+        } else {
+          // Don't update file_data if not provided (keep existing)
+          const stmt = db.prepare(`
+            UPDATE extrapatches SET
+              name = ?,
+              description = ?,
+              patch_type = ?,
+              priority = ?,
+              requires_parameters = ?,
+              template_text = ?,
+              parameter_mappings = ?,
+              restrictions = ?,
+              conflicts = ?,
+              dependencies = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE epuuid = ?
+          `);
+          
+          stmt.run(
+            name,
+            description || null,
+            patch_type,
+            priority || 100,
+            requires_parameters || 0,
+            template_text || null,
+            parameter_mappings || null,
+            restrictions || null,
+            conflicts || null,
+            dependencies || null,
+            epuuid
+          );
+        }
+      } else {
+        // Insert new patch
+        const stmt = db.prepare(`
+          INSERT INTO extrapatches (
+            patch_code, name, description, patch_type, priority,
+            requires_parameters, template_text, file_data,
+            parameter_mappings, restrictions, conflicts, dependencies
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        stmt.run(
+          patch_code,
+          name,
+          description || null,
+          patch_type,
+          priority || 100,
+          requires_parameters || 0,
+          template_text || null,
+          fileDataBuffer,
+          parameter_mappings || null,
+          restrictions || null,
+          conflicts || null,
+          dependencies || null
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving extra patch:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete extra patch
+   * Channel: extra-patches:delete
+   */
+  ipcMain.handle('extra-patches:delete', async (_event, { epuuid }) => {
+    try {
+      if (!epuuid) {
+        return { success: false, error: 'Missing epuuid' };
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      const stmt = db.prepare('DELETE FROM extrapatches WHERE epuuid = ?');
+      const result = stmt.run(epuuid);
+
+      if (result.changes === 0) {
+        return { success: false, error: 'Patch not found' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting extra patch:', error);
+      return { success: false, error: error.message };
+    }
+  });
   /**
    * Upload run files to USB2SNES subdirectory
    * Channel: db:runs:upload-to-snes

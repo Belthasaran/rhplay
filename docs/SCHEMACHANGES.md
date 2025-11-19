@@ -16,7 +16,6 @@
       - `dependencies` TEXT (JSON array of required patch codes)
       - `priority` INTEGER DEFAULT 100 (lower = applied first)
       - `requires_parameters` INTEGER DEFAULT 0
-      - `max_codestring_length` INTEGER DEFAULT 14
       - `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       - `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   - Migration: `rhdata_033_extrapatches` via `jsutils/migratedb.js`

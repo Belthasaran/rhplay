@@ -329,6 +329,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uploadRunToSnes: (params) => ipcRenderer.invoke('db:runs:upload-to-snes', params),
   getAvailableExtraPatches: (params) => ipcRenderer.invoke('extra-patches:get-available', params),
   buildPlusPatchedGame: (params) => ipcRenderer.invoke('extra-patches:build-plus', params),
+  getAllExtraPatches: () => ipcRenderer.invoke('extra-patches:get-all'),
+  saveExtraPatch: (params) => ipcRenderer.invoke('extra-patches:save', params),
+  deleteExtraPatch: (params) => ipcRenderer.invoke('extra-patches:delete', params),
   
   // =============================
   // Seed Management

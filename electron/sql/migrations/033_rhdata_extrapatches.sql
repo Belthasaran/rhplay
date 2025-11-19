@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS extrapatches (
   description TEXT,
   patch_type TEXT NOT NULL CHECK(patch_type IN ('ips', 'bps', 'asar', 'uberasmtree')),
   
-  -- File data storage (binary data for IPS/BPS patches, zip for UberASMTree, template text for ASAR)
+  -- File data storage (binary data for IPS/BPS patches, 7z for UberASMTree, template text for ASAR)
   file_data BLOB,
   
   -- Template text for ASAR patches
@@ -36,9 +36,6 @@ CREATE TABLE IF NOT EXISTS extrapatches (
   
   -- Whether this patch requires parameters
   requires_parameters INTEGER DEFAULT 0, -- 0 = false, 1 = true
-  
-  -- Maximum code string length before hashing (default 14)
-  max_codestring_length INTEGER DEFAULT 14,
   
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

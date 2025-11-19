@@ -1411,36 +1411,63 @@ async function applyUberASMTreePatch(params) {
     }
     
     // Replace template variables in all files
-    // New format: {"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar"}}
-    // Placeholder name (without {}) maps to {PLACEHOLDER} in template
+    // Supports two formats:
+    // 1. {"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar"}} - key is placeholder name
+    // 2. {"inputvar": {"output": "PLACEHOLDER", "description": "..."}} - key is input var, output is placeholder name
+    // IMPORTANT: Only replaces placeholders that are explicitly in the mappings. All other text is preserved as-is.
     function replaceInFile(filePath) {
       let content = fs.readFileSync(filePath, 'utf8');
       let modified = false;
       
-      // First, handle parameter mappings
-      for (const [placeholder, mapping] of Object.entries(mappings)) {
-        const inputVar = mapping.input;
-        const expression = mapping.expression || inputVar; // Default to input variable name
+      // Build a map of placeholder -> input variable
+      const placeholderToInput = {};
+      for (const [key, mapping] of Object.entries(mappings)) {
+        if (mapping.input) {
+          // Format 1: key is placeholder, mapping.input is input variable
+          placeholderToInput[key] = mapping.input;
+        } else if (mapping.output) {
+          // Format 2: key is input variable, mapping.output is placeholder
+          placeholderToInput[mapping.output] = key;
+        }
+      }
+      
+      // Process each placeholder (ONLY those in our mapping list)
+      for (const [placeholder, inputVar] of Object.entries(placeholderToInput)) {
+        const mapping = mappings[inputVar] || mappings[placeholder];
+        const expression = mapping?.expression || inputVar; // Default to input variable name
         
         // Get the value (with wine path formatting if needed)
         let value = getParameterValue(inputVar, useWinePaths);
         
         // If expression is just the input variable name, use the value directly
         // Otherwise, we could evaluate the expression (for now, just use inputVar value)
-        if (expression === inputVar) {
-          value = getParameterValue(inputVar, useWinePaths);
-        } else {
+        if (expression !== inputVar) {
           // For now, simple expression evaluation: if expression references inputVar, substitute it
           // This could be extended later for more complex expressions
           value = expression.replace(new RegExp(inputVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), getParameterValue(inputVar, useWinePaths) || '');
         }
         
-        if (value !== null) {
-          // Replace {PLACEHOLDER} in template (placeholder name is without {})
-          const placeholderPattern = `{${placeholder}}`;
-          const regex = new RegExp(placeholderPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-          if (content.match(regex)) {
-            content = content.replace(regex, value);
+        if (value !== null && value !== undefined) {
+          // Escape special regex characters in the placeholder name
+          const escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          
+          // Replace {PLACEHOLDER} format (without $ prefix)
+          const placeholderPattern1 = `\\{${escapedPlaceholder}\\}`;
+          const regex1 = new RegExp(placeholderPattern1, 'g');
+          if (content.match(regex1)) {
+            // Use a function replacement to avoid $ being treated as special
+            content = content.replace(regex1, () => String(value));
+            modified = true;
+          }
+          
+          // Replace ${PLACEHOLDER} format (with $ prefix - common in ASM files)
+          // The $ is just literal text, not a regex special character
+          const placeholderPattern2 = `\\$\\{${escapedPlaceholder}\\}`;
+          const regex2 = new RegExp(placeholderPattern2, 'g');
+          if (content.match(regex2)) {
+            // Replace ${placeholder} with $value (keeping the $ prefix)
+            // Use a function to avoid $ being interpreted as special in replacement
+            content = content.replace(regex2, () => '$' + String(value));
             modified = true;
           }
         }
@@ -1552,19 +1579,43 @@ async function applyUberASMTreePatch(params) {
     
     // Run UberASMTool with working directory set to extractDir
     // The tool modifies the input file in place, so outputSfcPath will be modified
+    let execResult;
     try {
-      execSync(command, { 
+      execResult = execSync(command, { 
         stdio: 'pipe',
         cwd: extractDir,
         encoding: 'utf8'
       });
     } catch (execError) {
+      // execSync throws an error if exit code is non-zero
+      const exitCode = execError.status || execError.code || -1;
+      
       // Check if output file was created/modified (tool may have succeeded despite error code)
       if (!fs.existsSync(outputSfcPath)) {
-        return { success: false, error: `UberASMTool execution failed: ${execError.message}` };
+        return { 
+          success: false, 
+          error: `UberASMTool execution failed with exit code ${exitCode}: ${execError.message}` 
+        };
       }
-      // If file exists, assume success (tool may return non-zero on warnings)
-      console.warn('UberASMTool returned non-zero exit code, but output file exists:', execError.message);
+      
+      // If file exists but exit code is non-zero, check if it's a warning or actual error
+      // Exit code 0 = success, non-zero = error/warning
+      if (exitCode !== 0) {
+        // Log warning but continue if file was created
+        console.warn(`UberASMTool returned exit code ${exitCode}, but output file exists. This may be a warning.`);
+        // For now, we'll consider it a success if the file exists
+        // You may want to make this stricter based on specific exit codes
+      }
+    }
+    
+    // Verify the output file exists and has content
+    if (!fs.existsSync(outputSfcPath)) {
+      return { success: false, error: 'UberASMTool did not create output file' };
+    }
+    
+    const stats = fs.statSync(outputSfcPath);
+    if (stats.size === 0) {
+      return { success: false, error: 'UberASMTool created empty output file' };
     }
     
     // Cleanup

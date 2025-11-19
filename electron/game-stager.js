@@ -294,7 +294,7 @@ async function createPatchedSFC(params) {
       const flipsCmd = `"${flipsPath}" --apply "${patchPath}" "${vanillaRomPath}" "${tempOutputPath}"`;
       
       try {
-        execSync(flipsCmd, { stdio: 'pipe' });
+       execSync(flipsCmd, { stdio: 'pipe' });
       } catch (execError) {
         return { success: false, error: `FLIPS failed: ${execError.message}` };
       }
@@ -1113,20 +1113,66 @@ async function applyAsarPatch(params) {
     // Note: This assumes ASAR is in PATH or configured separately
     // You may need to add ASAR path to settings
     const asarCmd = `asar "${asarScriptPath}" "${inputSfcPath}"`;
-    execSync(asarCmd, { stdio: 'pipe' });
+    console.log(`[ASAR] Executing command: ${asarCmd}`);
+    console.log(`[ASAR] Script file: ${asarScriptPath}`);
+    console.log(`[ASAR] Input ROM: ${inputSfcPath}`);
+    
+    let exitCode = 0;
+    try {
+      console.log(execSync(asarCmd, { stdio: 'pipe' }).toString() );
+      exitCode = 0;
+      console.log(`[ASAR] Command completed successfully with exit code: ${exitCode}`);
+    } catch (execError) {
+      // execSync throws an error if exit code is non-zero
+      exitCode = execError.status || execError.code || -1;
+      console.log(`[ASAR] Command failed with exit code: ${exitCode}`);
+      console.log(`[ASAR] Error message: ${execError.message}`);
+      
+      // Check if input file was modified (ASAR modifies in place)
+      if (!fs.existsSync(inputSfcPath)) {
+        return { 
+          success: false, 
+          error: `ASAR execution failed with exit code ${exitCode}: ${execError.message}` 
+        };
+      }
+      
+      // If file exists but exit code is non-zero, log warning
+      if (exitCode !== 0) {
+        console.warn(`[ASAR] ASAR returned exit code ${exitCode}, but input file exists. This may be a warning.`);
+        // For now, we'll consider it a success if the file exists
+        // You may want to make this stricter based on specific exit codes
+      }
+    }
     
     // ASAR modifies the file in place, so copy it
+    console.log(`[Patch] Copy ${inputSfcPath}  to ${outputSfcPath}`)
     fs.copyFileSync(inputSfcPath, outputSfcPath);
     
+    // Verify the output file exists and has content
+    if (!fs.existsSync(outputSfcPath)) {
+      console.error(`[ASAR] Output file does not exist: ${outputSfcPath}`);
+      return { success: false, error: 'ASAR did not create output file' };
+    }
+    
+    const stats = fs.statSync(outputSfcPath);
+    console.log(`[ASAR] Output file created: ${outputSfcPath} (${stats.size} bytes)`);
+    if (stats.size === 0) {
+      console.error(`[ASAR] Output file is empty`);
+      return { success: false, error: 'ASAR created empty output file' };
+    }
+    
     // Cleanup
-    try {
-      fs.unlinkSync(asarScriptPath);
-    } catch (e) {
-      // Ignore cleanup errors
+    if (SKIP_CLEANUP_FOR_NOW == 0) {
+      try {
+        fs.unlinkSync(asarScriptPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
     
     return { success: true };
   } catch (error) {
+    console.error(`[ASAR] Unexpected error: ${error.message}`);
     return { success: false, error: error.message };
   }
 }

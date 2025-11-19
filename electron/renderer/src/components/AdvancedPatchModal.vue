@@ -1379,7 +1379,7 @@ async function savePatch() {
   position: relative;
   background: #fff;
   border-radius: 8px;
-  max-width: 700px;
+  max-width: none;
   max-height: 90vh;
   width: 90%;
   display: flex;
@@ -1461,6 +1461,8 @@ async function savePatch() {
   font-size: 12px;
   font-family: inherit;
   resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .code-textarea {
@@ -1495,6 +1497,13 @@ async function savePatch() {
 
 .textarea-wrapper {
   position: relative;
+  width: 100%;
+}
+
+.textarea-wrapper .code-textarea {
+  width: 100%;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 .validation-indicator {

@@ -6,7 +6,7 @@
  */
 
 export type ThemeName = 'light' | 'dark' | 'onyx' | 'ash';
-export type TextSize = 'small' | 'medium' | 'large' | 'xlarge';
+export type TextSize = 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
 
 export interface ThemeColors {
   // Background colors
@@ -73,7 +73,7 @@ export const DEFAULT_THEME: ThemeName = 'light';
 /**
  * DEFAULT TEXT SIZE
  * Change this constant to set the application's default text size
- * Options: 'small' | 'medium' | 'large' | 'xlarge'
+ * Options: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge'
  */
 export const DEFAULT_TEXT_SIZE: TextSize = 'medium';
 
@@ -268,6 +268,14 @@ export const TEXT_SIZES: Record<TextSize, TextSizeConfig> = {
     inputPadding: '10px 12px',
     buttonPadding: '10px 14px',
   },
+  xxlarge: {
+    baseFontSize: '20px',
+    smallFontSize: '18px',
+    mediumFontSize: '20px',
+    largeFontSize: '22px',
+    inputPadding: '12px 14px',
+    buttonPadding: '12px 16px',
+  }
 };
 
 /**
@@ -329,6 +337,7 @@ export function getTextSizeDisplayName(size: TextSize): string {
     medium: 'Medium',
     large: 'Large',
     xlarge: 'Extra Large',
+    xxlarge: 'Extra-Extra Large',
   };
   return names[size];
 }

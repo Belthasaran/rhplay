@@ -3424,7 +3424,7 @@
                 v-model.number="textSizeSliderValue" 
                 @input="onTextSizeChange"
                 min="0" 
-                max="3" 
+                max="4" 
                 step="1" 
                 class="text-size-slider"
               />
@@ -15695,7 +15695,7 @@ window.electronAPI.onStartupValidationResults((results) => {
 window.electronAPI.onOpenSettingsModal(openSettingsModal);
 
 // Text size slider mapping (0-3 to text sizes)
-const textSizeOptions: TextSize[] = ['small', 'medium', 'large', 'xlarge'];
+const textSizeOptions: TextSize[] = ['small', 'medium', 'large', 'xlarge', 'xxlarge'];
 const textSizeSliderValue = ref(textSizeOptions.indexOf(settings.textSize));
 
 // Theme change handler

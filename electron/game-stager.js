@@ -9,6 +9,67 @@ const { execSync } = require('child_process');
 const crypto = require('crypto');
 const lzma = require('lzma-native');
 const fernet = require('fernet');
+const sevenZip = require('7zip-min');
+const { path7za } = require('7zip-bin');
+
+// Helper function to configure 7zip-min with the correct unpacked binary path
+// This is needed for Electron packaged apps where the binary is in app.asar.unpacked
+function configure7zipPath() {
+  if (typeof process === 'undefined' || !process.versions || !process.versions.electron) {
+    return; // Not running in Electron
+  }
+
+  try {
+    const currentConfig = sevenZip.getConfig();
+    let binaryPath = currentConfig.binaryPath || path7za;
+
+    // Check if the binary path contains 'app.asar' but not 'app.asar.unpacked'
+    if (binaryPath && binaryPath.includes('app.asar') && !binaryPath.includes('app.asar.unpacked')) {
+      // Replace 'app.asar' with 'app.asar.unpacked' in the binary path
+      // Handle both forward and backward slashes with global replace
+      const unpackedPath = binaryPath.replace(/app\.asar([\\/])/g, 'app.asar.unpacked$1');
+      
+      if (fs.existsSync(unpackedPath)) {
+        sevenZip.config({ binaryPath: unpackedPath });
+        return;
+      }
+
+      // Fallback: try to reconstruct the unpacked path using path manipulation
+      try {
+        const normalizedPath = path.normalize(binaryPath);
+        const unpackedBinary = normalizedPath.replace(/app\.asar([\\/])/g, 'app.asar.unpacked$1');
+        if (fs.existsSync(unpackedBinary)) {
+          sevenZip.config({ binaryPath: unpackedBinary });
+          return;
+        }
+
+        // Another fallback: find the base directory and reconstruct
+        const asarIndex = normalizedPath.indexOf('app.asar');
+        if (asarIndex !== -1) {
+          const baseDir = normalizedPath.substring(0, asarIndex);
+          const relativePath = normalizedPath.substring(asarIndex + 'app.asar'.length);
+          const fallbackPath = path.join(baseDir, 'app.asar.unpacked', relativePath);
+          if (fs.existsSync(fallbackPath)) {
+            sevenZip.config({ binaryPath: fallbackPath });
+            return;
+          }
+          
+          // If unpacked doesn't exist, log a warning with the expected path
+          console.warn(`[game-stager.js] 7zip binary not found at unpacked path: ${fallbackPath}`);
+          console.warn(`[game-stager.js] Original path: ${binaryPath}`);
+          console.warn(`[game-stager.js] This may indicate that 7zip-bin was not unpacked during build.`);
+        }
+      } catch (err) {
+        console.warn('[game-stager.js] Failed to configure 7zip unpacked path:', err.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[game-stager.js] Error checking 7zip path configuration:', err.message);
+  }
+}
+
+// Configure 7zip-min on module load (for Electron packaged apps)
+configure7zipPath();
 
 /**
  * Decode encrypted/compressed blob data
@@ -1061,14 +1122,21 @@ async function applyUberASMTreePatch(params) {
     const archivePath = path.join(require('os').tmpdir(), `uberasm_${patch.patch_code}.7z`);
     fs.writeFileSync(archivePath, patch.file_data);
     
-    // Use 7zip-bin to get the 7z executable path
-    const path7za = require('7zip-bin').path7za;
+    // Verify and reconfigure 7zip path if needed (in case of late resolution)
+    configure7zipPath();
     
-    // Extract 7z archive using 7z command
-    // -y: assume yes to all queries
-    // -o: output directory (no space after -o)
-    const extractCmd = `"${path7za}" x -y -o"${extractDir}" "${archivePath}"`;
-    execSync(extractCmd, { stdio: 'pipe' });
+    // Extract 7z archive using 7zip-min unpack function
+    // This uses the bundled 7z binary from 7zip-bin, works on Linux, Windows, etc.
+    // Same library and approach as newgame.js uses
+    await new Promise((resolve, reject) => {
+      sevenZip.unpack(archivePath, extractDir, (err) => {
+        if (err) {
+          reject(new Error(`7z extraction failed: ${err.message}`));
+        } else {
+          resolve();
+        }
+      });
+    });
     
     // Cleanup temp archive file
     try {

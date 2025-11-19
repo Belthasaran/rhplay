@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const lzma = require('lzma-native');
 const fernet = require('fernet');
@@ -821,6 +821,7 @@ async function buildPlusPatchedGame(params) {
     action,
     vanillaRomPath,
     flipsPath,
+    asarPath,
     outputDir
   } = params;
   
@@ -923,7 +924,8 @@ async function buildPlusPatchedGame(params) {
             inputSfcPath: currentSfcPath,
             outputSfcPath: nextSfcPath,
             globalParams,
-            localParams: localParams[patch.epuuid] || {}
+            localParams: localParams[patch.epuuid] || {},
+            asarPath
           });
           break;
         case 'uberasmtree':
@@ -1029,35 +1031,69 @@ async function applyFilePatch(params) {
  * Apply ASAR patch
  */
 async function applyAsarPatch(params) {
-  const { patch, inputSfcPath, outputSfcPath, globalParams, localParams } = params;
+  const { patch, inputSfcPath, outputSfcPath, globalParams, localParams, asarPath } = params;
   
   try {
+    // Find ASAR binary if not provided
+    let asarBinary = asarPath;
+    if (!asarBinary) {
+      try {
+        const BinaryFinder = require('../../lib/binary-finder');
+        const finder = new BinaryFinder({ 
+          projectRoot: path.resolve(__dirname, '../..'),
+          clientDbPath: path.join(__dirname, '../clientdata.db')
+        });
+        const foundAsar = finder.findAsar();
+        if (foundAsar) {
+          asarBinary = foundAsar;
+        } else {
+          // Fallback to 'asar' or 'asar.exe' based on platform
+          asarBinary = process.platform === 'win32' ? 'asar.exe' : 'asar';
+        }
+      } catch (e) {
+        // BinaryFinder not available, use platform-specific default
+        asarBinary = process.platform === 'win32' ? 'asar.exe' : 'asar';
+        console.log(`[ASAR] Could not use BinaryFinder, using default: ${asarBinary}`);
+      }
+    }
+    
+    if (!fs.existsSync(asarBinary)) {
+      return { success: false, error: `ASAR not found at: ${asarBinary}. Please configure ASAR path in Settings.` };
+    }
+    
     // Get parameter mappings
     let templateText = patch.template_text || '';
     const mappings = patch.parameter_mappings ? JSON.parse(patch.parameter_mappings) : {};
     
     // Helper function to get parameter value
     function getParameterValue(inputVar) {
-      // Special parameter: rom_file
-      if (inputVar === 'rom_file') {
+      // Special parameter: rom_file or rom_path - return the ROM path
+      // ASAR doesn't use wine, so always use native path format
+      if (inputVar === 'rom_file' || inputVar === 'rom_path') {
         return inputSfcPath;
       }
       
-      // Check local params first
+      // Check local params first, but treat empty strings as unset
       let value = localParams[inputVar];
       
-      if (value === undefined || value === null) {
-        // Try global params
-        if (inputVar === 'glevelnum') {
-          value = globalParams.glevelnum;
-        } else if (inputVar === 'gonoffv') {
-          // Convert bit array to value
-          if (Array.isArray(globalParams.gonoffv)) {
-            let byte = 0;
-            for (const bit of globalParams.gonoffv) {
-              if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+      // If value is undefined, null, or empty string, try global params
+      if (value === undefined || value === null || value === '') {
+        // Try global params - check if inputVar exists as a key in globalParams
+        if (globalParams && globalParams.hasOwnProperty(inputVar)) {
+          value = globalParams[inputVar];
+        } else {
+          // Fallback to specific known global params for backwards compatibility
+          if (inputVar === 'glevelnum') {
+            value = globalParams?.glevelnum;
+          } else if (inputVar === 'gonoffv') {
+            // Convert bit array to value
+            if (Array.isArray(globalParams?.gonoffv)) {
+              let byte = 0;
+              for (const bit of globalParams.gonoffv) {
+                if (bit >= 0 && bit < 8) byte |= (1 << (7 - bit));
+              }
+              value = byte.toString(16).padStart(2, '0');
             }
-            value = byte.toString(16).padStart(2, '0');
           }
         }
       }
@@ -1109,30 +1145,72 @@ async function applyAsarPatch(params) {
     const asarScriptPath = path.join(require('os').tmpdir(), `asar_${patch.patch_code}.asm`);
     fs.writeFileSync(asarScriptPath, templateText);
     
-    // Run ASAR
-    // Note: This assumes ASAR is in PATH or configured separately
-    // You may need to add ASAR path to settings
-    const asarCmd = `asar "${asarScriptPath}" "${inputSfcPath}"`;
-    console.log(`[ASAR] Executing command: ${asarCmd}`);
+    // Use array format to avoid shell interpretation issues
+    // This ensures arguments are passed exactly as-is without shell parsing
+    const asarArgs = [asarScriptPath, inputSfcPath];
+    console.log(`[ASAR] ASAR binary: ${asarBinary}`);
+    console.log(`[ASAR] Arguments:`, JSON.stringify(asarArgs));
     console.log(`[ASAR] Script file: ${asarScriptPath}`);
     console.log(`[ASAR] Input ROM: ${inputSfcPath}`);
+    console.log(`[ASAR] Script file exists: ${fs.existsSync(asarScriptPath)}`);
+    console.log(`[ASAR] Input ROM exists: ${fs.existsSync(inputSfcPath)}`);
+    if (fs.existsSync(asarScriptPath)) {
+      const scriptStats = fs.statSync(asarScriptPath);
+      console.log(`[ASAR] Script file size: ${scriptStats.size} bytes`);
+    }
+    
+    // Build command string for logging (what it would look like in shell)
+    const asarCmd = `"${asarBinary}" "${asarScriptPath}" "${inputSfcPath}"`;
+    console.log(`[ASAR] Command (for reference): ${asarCmd}`);
     
     let exitCode = 0;
+    let stdout = '';
+    let stderr = '';
     try {
-      console.log(execSync(asarCmd, { stdio: 'pipe' }).toString() );
-      exitCode = 0;
-      console.log(`[ASAR] Command completed successfully with exit code: ${exitCode}`);
+      // Use spawnSync with array format to avoid shell interpretation
+      // This passes arguments directly without shell parsing, avoiding quote issues
+      const result = spawnSync(asarBinary, asarArgs, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        encoding: 'utf8'
+      });
+      
+      exitCode = result.status || 0;
+      stdout = result.stdout?.toString() || '';
+      stderr = result.stderr?.toString() || '';
+      
+      if (stdout) {
+        console.log(`[ASAR] stdout: ${stdout}`);
+      }
+      if (stderr) {
+        console.log(`[ASAR] stderr: ${stderr}`);
+      }
+      
+      if (exitCode === 0) {
+        console.log(`[ASAR] Command completed with exit code: ${exitCode}`);
+      } else {
+        throw new Error(`ASAR exited with code ${exitCode}`);
+      }
     } catch (execError) {
-      // execSync throws an error if exit code is non-zero
+      // spawnSync doesn't throw on non-zero exit, but we check status
+      // If we get here, it's a different error (like command not found)
       exitCode = execError.status || execError.code || -1;
+      stdout = execError.stdout?.toString() || '';
+      stderr = execError.stderr?.toString() || execError.message || '';
+      
       console.log(`[ASAR] Command failed with exit code: ${exitCode}`);
+      if (stdout) {
+        console.log(`[ASAR] stdout: ${stdout}`);
+      }
+      if (stderr) {
+        console.log(`[ASAR] stderr: ${stderr}`);
+      }
       console.log(`[ASAR] Error message: ${execError.message}`);
       
       // Check if input file was modified (ASAR modifies in place)
       if (!fs.existsSync(inputSfcPath)) {
         return { 
           success: false, 
-          error: `ASAR execution failed with exit code ${exitCode}: ${execError.message}` 
+          error: `ASAR execution failed with exit code ${exitCode}: ${stderr || execError.message}` 
         };
       }
       
@@ -1142,6 +1220,17 @@ async function applyAsarPatch(params) {
         // For now, we'll consider it a success if the file exists
         // You may want to make this stricter based on specific exit codes
       }
+    }
+    
+    // Check stderr even if exit code is 0 (ASAR might report errors but return 0)
+    // Also check stdout for error messages
+    if (stderr || (stdout && (stdout.includes('error') || stdout.includes('Error') || stdout.includes('is not an asar command')))) {
+      const errorMsg = stderr || stdout;
+      console.error(`[ASAR] ASAR reported an error (exit code ${exitCode}): ${errorMsg}`);
+      return { 
+        success: false, 
+        error: `ASAR reported an error: ${errorMsg}` 
+      };
     }
     
     // ASAR modifies the file in place, so copy it

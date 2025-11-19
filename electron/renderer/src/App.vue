@@ -15548,6 +15548,7 @@ async function handleAdvancedPatchBuild(options: {
       action: options.action,
       vanillaRomPath: settings.vanillaRomPath,
       flipsPath: settings.flipsPath,
+      asarPath: settings.asarPath,
     });
 
     if (!result?.success) {

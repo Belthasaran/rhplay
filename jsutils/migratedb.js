@@ -356,6 +356,12 @@ const MIGRATIONS = {
       description: 'Enhance ratings and run tracking tables',
       type: 'sql',
       file: resolveRelative('electron/sql/migrations/002_clientdata_enhanced_ratings_and_runs.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_game_annotations', 'user_difficulty_rating')
+          && columnExists(db, 'user_game_annotations', 'user_review_rating')
+          && columnExists(db, 'user_game_annotations', 'exclude_from_random')
+          && tableExists(db, 'user_game_version_annotations');
+      },
     },
     {
       id: 'clientdata_003_extrapatchpresets',
@@ -364,13 +370,6 @@ const MIGRATIONS = {
       file: resolveRelative('electron/sql/migrations/003_clientdata_extrapatchpresets.sql'),
       skipIf(db) {
         return tableExists(db, 'extrapatchpresets');
-      },
-    },
-      skipIf(db) {
-        return columnExists(db, 'user_game_annotations', 'user_difficulty_rating')
-          && columnExists(db, 'user_game_annotations', 'user_review_rating')
-          && columnExists(db, 'user_game_annotations', 'exclude_from_random')
-          && tableExists(db, 'user_game_version_annotations');
       },
     },
     {

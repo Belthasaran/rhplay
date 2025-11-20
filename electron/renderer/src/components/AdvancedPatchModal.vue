@@ -69,8 +69,9 @@
           <div class="patch-section">
             <div class="section-header-with-button">
               <h4>Available Custom Patches</h4>
-              <button @click="presetsDropdownOpen = !presetsDropdownOpen" class="btn-secondary btn-small">Presets</button>
-              <div v-if="presetsDropdownOpen" class="presets-dropdown">
+              <div class="presets-button-wrapper">
+                <button @click="presetsDropdownOpen = !presetsDropdownOpen" class="btn-secondary btn-small">Presets</button>
+                <div v-if="presetsDropdownOpen" class="presets-dropdown">
                 <div class="presets-dropdown-header">
                   <strong>Presets</strong>
                   <button @click="presetsDropdownOpen = false" class="close-small">✕</button>
@@ -109,37 +110,12 @@
                   </div>
                 </div>
                 <div class="presets-dropdown-footer">
-                  <button @click="showSavePresetDialog = true" class="btn-primary btn-small">Save Current as Preset</button>
+                  <button @click="showSavePresetDialog = true; presetsDropdownOpen = false" class="btn-primary btn-small">Save Current as Preset</button>
                 </div>
-              </div>
-              <!-- Save Preset Dialog -->
-              <div v-if="showSavePresetDialog" class="preset-save-dialog">
-                <div class="preset-save-backdrop" @click="showSavePresetDialog = false"></div>
-                <div class="preset-save-content">
-                  <div class="preset-save-header">
-                    <h4>Save Preset</h4>
-                    <button @click="showSavePresetDialog = false" class="close-small">✕</button>
-                  </div>
-                  <div class="preset-save-body">
-                    <div class="form-field">
-                      <label>Preset Name *</label>
-                      <input 
-                        v-model="newPresetName" 
-                        type="text" 
-                        class="input" 
-                        placeholder="My Preset"
-                        @keydown.enter="savePreset"
-                        @keydown.esc="showSavePresetDialog = false"
-                      />
-                    </div>
-                  </div>
-                  <div class="preset-save-footer">
-                    <button @click="showSavePresetDialog = false" class="btn-secondary btn-small">Cancel</button>
-                    <button @click="savePreset" class="btn-primary btn-small" :disabled="!newPresetName.trim()">Save</button>
-                  </div>
                 </div>
               </div>
             </div>
+
             <div v-if="availablePatches.length === 0" class="empty-message">
               No patches available for this game.
             </div>
@@ -484,10 +460,38 @@
       </footer>
     </div>
   </div>
+
+  <!-- Save Preset Dialog (separate root-level element) -->
+  <div v-if="showSavePresetDialog && isOpen" class="preset-save-dialog">
+    <div class="preset-save-backdrop" @click="showSavePresetDialog = false"></div>
+    <div class="preset-save-content">
+      <div class="preset-save-header">
+        <h4>Save Preset</h4>
+        <button @click="showSavePresetDialog = false" class="close-small">✕</button>
+      </div>
+      <div class="preset-save-body">
+        <div class="form-field">
+          <label>Preset Name *</label>
+          <input 
+            v-model="newPresetName" 
+            type="text" 
+            class="input" 
+            placeholder="My Preset"
+            @keydown.enter="savePreset"
+            @keydown.esc="showSavePresetDialog = false"
+          />
+        </div>
+      </div>
+      <div class="preset-save-footer">
+        <button @click="showSavePresetDialog = false" class="btn-secondary btn-small">Cancel</button>
+        <button @click="savePreset" class="btn-primary btn-small" :disabled="!newPresetName.trim()">Save</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 interface ParameterMapping {
   input: string; // Input parameter name (glevelnum, local1, rom_file, etc.)
@@ -652,6 +656,25 @@ watch([selectedPatches, () => globalParams.value.gonoffv, localParams], () => {
     saveState();
   }
 }, { deep: true });
+
+// Close presets dropdown when clicking outside
+let clickOutsideHandler: ((event: MouseEvent) => void) | null = null;
+
+onMounted(() => {
+  clickOutsideHandler = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (presetsDropdownOpen.value && !target.closest('.presets-button-wrapper')) {
+      presetsDropdownOpen.value = false;
+    }
+  };
+  document.addEventListener('click', clickOutsideHandler);
+});
+
+onUnmounted(() => {
+  if (clickOutsideHandler) {
+    document.removeEventListener('click', clickOutsideHandler);
+  }
+});
 
 // Load available patches when modal opens
 watch(() => props.isOpen, async (newVal) => {
@@ -1218,6 +1241,7 @@ function loadPreset(preset: Preset) {
   try {
     selectedPatches.value = JSON.parse(preset.selected_patches || '[]');
     globalParams.value.gonoffv = JSON.parse(preset.global_onoffv || '[]');
+    // Note: glevelnum is NOT loaded from preset (always starts empty per user request)
     localParams.value = JSON.parse(preset.patch_variables || '{}');
     presetsDropdownOpen.value = false;
     saveState(); // Save the loaded preset state
@@ -1242,8 +1266,8 @@ async function savePreset() {
     const result = await api.savePreset({
       preset_name: newPresetName.value.trim(),
       selected_patches: selectedPatches.value,
-      global_onoffv: globalParams.value.gonoffv,
-      patch_variables: localParams.value,
+      global_onoffv: globalParams.value.gonoffv, // Only save on/off switches, NOT glevelnum
+      patch_variables: localParams.value, // Save all local patch variables
       is_system: false, // User presets are never system
     });
     
@@ -1903,11 +1927,14 @@ async function deletePreset(preset: Preset) {
   margin: 0;
 }
 
+.presets-button-wrapper {
+  position: relative;
+}
+
 .presets-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   right: 0;
-  margin-top: 4px;
   background: var(--modal-bg);
   border: 1px solid var(--border-primary);
   border-radius: 4px;

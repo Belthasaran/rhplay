@@ -87,8 +87,16 @@
                         class="preset-item"
                         @click="loadPreset(preset)"
                       >
-                        <span class="preset-name">{{ preset.preset_name }}</span>
-                        <span class="preset-badge system">System</span>
+                        <div class="preset-main">
+                          <div class="preset-header">
+                            <span class="preset-name">{{ preset.preset_name }}</span>
+                            <span class="preset-badge system">System</span>
+                          </div>
+                          <div class="preset-meta">
+                            <span class="preset-date">{{ formatPresetDate(preset.created_at) }}</span>
+                          </div>
+                          <div class="preset-summary">{{ getPresetSummary(preset) }}</div>
+                        </div>
                       </div>
                     </div>
                     <div v-if="userPresets.length > 0" class="presets-group">
@@ -98,7 +106,15 @@
                         :key="preset.preset_uuid"
                         class="preset-item"
                       >
-                        <span class="preset-name" @click="loadPreset(preset)">{{ preset.preset_name }}</span>
+                        <div class="preset-main" @click="loadPreset(preset)">
+                          <div class="preset-header">
+                            <span class="preset-name">{{ preset.preset_name }}</span>
+                          </div>
+                          <div class="preset-meta">
+                            <span class="preset-date">{{ formatPresetDate(preset.created_at) }}</span>
+                          </div>
+                          <div class="preset-summary">{{ getPresetSummary(preset) }}</div>
+                        </div>
                         <div class="preset-actions">
                           <button @click.stop="deletePreset(preset)" class="btn-link-small btn-danger">Delete</button>
                         </div>
@@ -522,6 +538,8 @@ interface Preset {
   selected_patches: string; // JSON array
   global_onoffv: string; // JSON array
   patch_variables: string; // JSON object
+  created_at?: string; // ISO timestamp
+  updated_at?: string; // ISO timestamp
 }
 
 interface Props {
@@ -1222,6 +1240,11 @@ async function loadPresets() {
       return;
     }
     
+    // Ensure allPatches is loaded so we can generate summaries
+    if (allPatches.value.length === 0) {
+      await loadAllPatches();
+    }
+    
     const result = await api.getPresets();
     if (result?.success) {
       allPresets.value = result.presets || [];
@@ -1250,6 +1273,82 @@ function loadPreset(preset: Preset) {
   }
 }
 
+function formatPresetDate(dateStr?: string): string {
+  if (!dateStr) return 'Unknown date';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function getPresetSummary(preset: Preset): string {
+  const parts: string[] = [];
+  
+  try {
+    // Get selected patches
+    const selectedPatches = JSON.parse(preset.selected_patches || '[]') as string[];
+    if (selectedPatches.length > 0) {
+      // Get patch names/codes from allPatches (preferred) or availablePatches (fallback)
+      const patchInfo: string[] = [];
+      for (const epuuid of selectedPatches.slice(0, 5)) { // Limit to 5 patches
+        const patch = allPatches.value.find(p => p.epuuid === epuuid) 
+          || availablePatches.value.find(p => p.epuuid === epuuid);
+        if (patch) {
+          patchInfo.push(patch.patch_code || patch.name);
+        } else {
+          patchInfo.push(epuuid.substring(0, 8)); // Fallback to UUID prefix
+        }
+      }
+      if (selectedPatches.length > 5) {
+        patchInfo.push(`+${selectedPatches.length - 5} more`);
+      }
+      parts.push(patchInfo.join(', '));
+    }
+    
+    // Get global on/off switches
+    const globalOnOffv = JSON.parse(preset.global_onoffv || '[]') as number[];
+    if (globalOnOffv.length > 0) {
+      parts.push(`Switches: ${globalOnOffv.map(i => i + 1).join(',')}`);
+    }
+    
+    // Get patch variables
+    const patchVars = JSON.parse(preset.patch_variables || '{}') as Record<string, any>;
+    const varParts: string[] = [];
+    for (const [epuuid, vars] of Object.entries(patchVars)) {
+      if (vars && typeof vars === 'object') {
+        for (const [varName, varValue] of Object.entries(vars)) {
+          if (varValue !== '' && varValue !== null && varValue !== undefined) {
+            const patch = allPatches.value.find(p => p.epuuid === epuuid)
+              || availablePatches.value.find(p => p.epuuid === epuuid);
+            const patchLabel = patch ? (patch.patch_code || patch.name.substring(0, 6)) : epuuid.substring(0, 6);
+            const valueStr = String(varValue);
+            // Truncate long values
+            const displayValue = valueStr.length > 8 ? valueStr.substring(0, 8) + '...' : valueStr;
+            varParts.push(`${patchLabel}.${varName}=${displayValue}`);
+            if (varParts.length >= 3) break; // Limit variables shown
+          }
+        }
+        if (varParts.length >= 3) break;
+      }
+    }
+    if (varParts.length > 0) {
+      parts.push(varParts.join(', '));
+    }
+  } catch (error) {
+    console.error('Error generating preset summary:', error);
+  }
+  
+  return parts.length > 0 ? parts.join(' • ') : 'No patches or variables';
+}
+
 async function savePreset() {
   if (!newPresetName.value.trim()) {
     alert('Please enter a preset name');
@@ -1263,11 +1362,12 @@ async function savePreset() {
       return;
     }
     
+    // Serialize data for IPC
     const result = await api.savePreset({
       preset_name: newPresetName.value.trim(),
-      selected_patches: selectedPatches.value,
-      global_onoffv: globalParams.value.gonoffv, // Only save on/off switches, NOT glevelnum
-      patch_variables: localParams.value, // Save all local patch variables
+      selected_patches: serializeForIPC(selectedPatches.value),
+      global_onoffv: serializeForIPC(globalParams.value.gonoffv), // Only save on/off switches, NOT glevelnum
+      patch_variables: serializeForIPC(localParams.value), // Save all local patch variables
       is_system: false, // User presets are never system
     });
     
@@ -1980,23 +2080,40 @@ async function deletePreset(preset: Preset) {
 .preset-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 8px;
+  align-items: flex-start;
+  padding: 10px;
   border: 1px solid var(--border-primary);
   border-radius: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   cursor: pointer;
   background: var(--bg-primary);
+  gap: 8px;
 }
 
 .preset-item:hover {
   background: var(--bg-hover);
 }
 
-.preset-name {
+.preset-main {
   flex: 1;
-  font-size: var(--small-font-size);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0; /* Allow text truncation */
+}
+
+.preset-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-name {
+  font-size: var(--medium-font-size);
+  font-weight: 500;
   color: var(--text-primary);
+  flex: 0 1 auto;
 }
 
 .preset-badge {
@@ -2005,6 +2122,7 @@ async function deletePreset(preset: Preset) {
   border-radius: 3px;
   background: var(--bg-secondary);
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .preset-badge.system {
@@ -2012,9 +2130,35 @@ async function deletePreset(preset: Preset) {
   color: var(--button-text);
 }
 
+.preset-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--small-font-size);
+  color: var(--text-tertiary);
+}
+
+.preset-date {
+  font-size: var(--small-font-size);
+  color: var(--text-tertiary);
+}
+
+.preset-summary {
+  font-size: var(--small-font-size);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .preset-actions {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
+  align-items: flex-start;
 }
 
 .presets-dropdown-footer {

@@ -338,6 +338,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deletePreset: (params) => ipcRenderer.invoke('extra-patches:delete-preset', params),
   
   // =============================
+  // Game Stages Operations
+  // =============================
+  getGameStages: (params) => ipcRenderer.invoke('gamestages:get', params),
+  saveGameStage: (params) => ipcRenderer.invoke('gamestages:save', params),
+  deleteGameStage: (params) => ipcRenderer.invoke('gamestages:delete', params),
+  
+  // =============================
   // Seed Management
   // =============================
   

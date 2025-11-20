@@ -343,6 +343,15 @@ const MIGRATIONS = {
         return columnExists(db, 'extrapatches', 'is_system');
       },
     },
+    {
+      id: 'rhdata_035_gamestages',
+      description: 'Create gamestages table for storing verified warpable level id numbers',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/035_rhdata_gamestages.sql'),
+      skipIf(db) {
+        return tableExists(db, 'gamestages');
+      },
+    },
   ],
   clientdata: [
     {

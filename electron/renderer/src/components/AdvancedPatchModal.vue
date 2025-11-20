@@ -41,7 +41,9 @@
           <div class="patch-section compact-section">
             <h4>Global Input Parameters</h4>
             <div class="parameter-group compact-group">
-              <label class="inline-label">Level Number:</label>
+              <label class="inline-label">
+                <span class="clickable-label" @click="openGameStagesDialog" title="Click to select from game stages">Level Number:</span>
+              </label>
               <input 
                 v-model="globalParams.glevelnum" 
                 type="text" 
@@ -524,11 +526,23 @@
         </div>
       </div>
     </div>
+
+    <!-- Game Stages Dialog -->
+    <GameStagesDialog
+      :isOpen="showGameStagesDialog"
+      :gameId="gameId"
+      :gameVersion="gameVersion"
+      mode="select"
+      :initialLevelNumber="parseInt(globalParams.glevelnum, 16) || null"
+      @close="showGameStagesDialog = false"
+      @select="handleStageSelected"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import GameStagesDialog from './GameStagesDialog.vue';
 
 interface ParameterMapping {
   input: string; // Input parameter name (glevelnum, local1, rom_file, etc.)
@@ -606,6 +620,7 @@ const allPresets = ref<Preset[]>([]);
 const showSavePresetDialog = ref(false);
 const newPresetName = ref('');
 const isDevAdmin = ref(false);
+const showGameStagesDialog = ref(false);
 
 // Editor tab state
 const loadingPatches = ref(false);
@@ -1483,6 +1498,34 @@ function openSavePresetDialog() {
   });
 }
 
+function openGameStagesDialog() {
+  showGameStagesDialog.value = true;
+}
+
+function handleStageSelected(stage: any) {
+  if (stage.levelnumber !== null && stage.levelnumber !== undefined) {
+    // Convert level number to hex string (pad to 2-3 characters as appropriate)
+    globalParams.value.glevelnum = stage.levelnumber.toString(16).toUpperCase().padStart(2, '0').slice(0, 3);
+  }
+  
+  // Automatically select requisite patches if any
+  if (stage.requisites) {
+    const requisiteTags = stage.requisites.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+    
+    // Find patches matching the requisite tags (by patch_code)
+    for (const tag of requisiteTags) {
+      const matchingPatch = availablePatches.value.find(p => p.patch_code === tag);
+      if (matchingPatch && !selectedPatches.value.includes(matchingPatch.epuuid)) {
+        selectedPatches.value.push(matchingPatch.epuuid);
+        // Initialize local params for this patch if needed
+        if (!localParams.value[matchingPatch.epuuid]) {
+          localParams.value[matchingPatch.epuuid] = {};
+        }
+      }
+    }
+  }
+}
+
 async function savePreset() {
   if (!newPresetName.value.trim()) {
     alert('Please enter a preset name');
@@ -1619,6 +1662,16 @@ async function deletePreset(preset: Preset) {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.clickable-label {
+  cursor: pointer;
+  text-decoration: underline;
+  color: var(--accent-primary);
+}
+
+.clickable-label:hover {
+  color: var(--accent-hover);
 }
 
 .inline-label {

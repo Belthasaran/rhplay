@@ -2623,7 +2623,13 @@ function registerDatabaseHandlers(dbManager) {
    * Check if DEVADMIN mode is enabled
    */
   function isDevAdmin() {
-    return process.env.DEVADMIN === '1';
+    // Check environment variable first
+    if (process.env.DEVADMIN === '1') {
+      return true;
+    }
+    // Also check csettings table
+    const csettingDevAdmin = getClientSetting('DEVADMIN');
+    return csettingDevAdmin === '1';
   }
 
   /**
@@ -2835,7 +2841,13 @@ function registerDatabaseHandlers(dbManager) {
    * Channel: extra-patches:is-dev-admin
    */
   ipcMain.handle('extra-patches:is-dev-admin', async () => {
-    return { isDevAdmin: isDevAdmin() };
+    const result = isDevAdmin();
+    console.log('[isDevAdmin] Checking DEVADMIN:', {
+      env: process.env.DEVADMIN,
+      csetting: getClientSetting('DEVADMIN'),
+      result
+    });
+    return { isDevAdmin: result };
   });
 
   /**
@@ -2965,6 +2977,248 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Get game stages for a game
+   * Channel: gamestages:get
+   */
+  ipcMain.handle('gamestages:get', async (_event, { gameid, version }) => {
+    try {
+      const db = dbManager.getConnection('rhdata');
+      
+      // Get stages for this gameid that match the version pattern
+      const stages = db.prepare(`
+        SELECT * FROM gamestages 
+        WHERE gameid = ?
+        ORDER BY levelnumber ASC, levelname ASC
+      `).all(gameid);
+      
+      // Filter by version if provided
+      let filteredStages = stages;
+      if (version !== undefined && version !== null) {
+        filteredStages = stages.filter(stage => {
+          const versionPattern = stage.versions || '*';
+          return matchesVersionPattern(version, versionPattern);
+        });
+      }
+      
+      return { success: true, stages: filteredStages };
+    } catch (error) {
+      console.error('[gamestages:get] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Save game stage (create or update)
+   * Channel: gamestages:save
+   */
+  ipcMain.handle('gamestages:save', async (_event, params) => {
+    try {
+      const {
+        stage_uuid,
+        gameid,
+        levelnumber,
+        levelname,
+        versions,
+        submapid,
+        translevel_13bf,
+        requisites,
+        playable,
+        rando,
+        difficulty,
+        mainexit,
+        keyhole,
+        credits,
+        ghouse,
+        spalace,
+        castle,
+        boss,
+        secret,
+        troll,
+        final
+      } = params;
+
+      if (!gameid || !levelname) {
+        return { success: false, error: 'Missing required fields: gameid, levelname' };
+      }
+
+      // Check DEVADMIN mode
+      const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
+      if (!isDevAdmin) {
+        return { success: false, error: 'Gamestages can only be edited in DEVADMIN mode. Set DEVADMIN=1 or set csetting DEVADMIN=1' };
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      
+      // Calculate translevel_13bf from levelnumber if not provided
+      let calculatedTranslevel = translevel_13bf;
+      if (!calculatedTranslevel && levelnumber !== null && levelnumber !== undefined) {
+        // Simplified calculation: if levelnumber > 0x24, then levelnumber - 0x24, else levelnumber
+        // The actual formula is more complex, but this is a common simplification
+        calculatedTranslevel = levelnumber > 0x24 ? levelnumber - 0x24 : levelnumber;
+      }
+
+      if (stage_uuid) {
+        // Update existing stage
+        const stmt = db.prepare(`
+          UPDATE gamestages SET
+            gameid = ?,
+            levelnumber = ?,
+            levelname = ?,
+            versions = ?,
+            submapid = ?,
+            translevel_13bf = ?,
+            requisites = ?,
+            playable = ?,
+            rando = ?,
+            difficulty = ?,
+            mainexit = ?,
+            keyhole = ?,
+            credits = ?,
+            ghouse = ?,
+            spalace = ?,
+            castle = ?,
+            boss = ?,
+            secret = ?,
+            troll = ?,
+            final = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE stage_uuid = ?
+        `);
+        
+        stmt.run(
+          gameid,
+          levelnumber || null,
+          levelname,
+          versions || '*',
+          submapid || null,
+          calculatedTranslevel || null,
+          requisites || null,
+          playable ? 1 : 0,
+          rando ? 1 : 0,
+          difficulty || 0,
+          mainexit ? 1 : 0,
+          keyhole ? 1 : 0,
+          credits ? 1 : 0,
+          ghouse ? 1 : 0,
+          spalace ? 1 : 0,
+          castle ? 1 : 0,
+          boss ? 1 : 0,
+          secret ? 1 : 0,
+          troll ? 1 : 0,
+          final ? 1 : 0,
+          stage_uuid
+        );
+      } else {
+        // Insert new stage
+        const stmt = db.prepare(`
+          INSERT INTO gamestages (
+            gameid, levelnumber, levelname, versions, submapid, translevel_13bf,
+            requisites, playable, rando, difficulty,
+            mainexit, keyhole, credits, ghouse, spalace, castle, boss, secret, troll, final
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        stmt.run(
+          gameid,
+          levelnumber || null,
+          levelname,
+          versions || '*',
+          submapid || null,
+          calculatedTranslevel || null,
+          requisites || null,
+          playable ? 1 : 0,
+          rando ? 1 : 0,
+          difficulty || 0,
+          mainexit ? 1 : 0,
+          keyhole ? 1 : 0,
+          credits ? 1 : 0,
+          ghouse ? 1 : 0,
+          spalace ? 1 : 0,
+          castle ? 1 : 0,
+          boss ? 1 : 0,
+          secret ? 1 : 0,
+          troll ? 1 : 0,
+          final ? 1 : 0
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[gamestages:save] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete game stage
+   * Channel: gamestages:delete
+   */
+  ipcMain.handle('gamestages:delete', async (_event, { stage_uuid }) => {
+    try {
+      if (!stage_uuid) {
+        return { success: false, error: 'Missing stage_uuid' };
+      }
+
+      // Check DEVADMIN mode
+      const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
+      if (!isDevAdmin) {
+        return { success: false, error: 'Gamestages can only be deleted in DEVADMIN mode. Set DEVADMIN=1 or set csetting DEVADMIN=1' };
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      const stmt = db.prepare('DELETE FROM gamestages WHERE stage_uuid = ?');
+      const result = stmt.run(stage_uuid);
+
+      if (result.changes === 0) {
+        return { success: false, error: 'Stage not found' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[gamestages:delete] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Helper function to match version patterns
+  function matchesVersionPattern(version, pattern) {
+    if (!pattern || pattern === '*') {
+      return true;
+    }
+    
+    const patterns = pattern.split(',').map(p => p.trim());
+    
+    for (const p of patterns) {
+      if (p === '*') {
+        return true;
+      }
+      
+      if (p.startsWith('!')) {
+        // Exclusion pattern: !3 means not version 3
+        const excludeVersion = parseInt(p.slice(1), 10);
+        if (version === excludeVersion) {
+          return false;
+        }
+      } else if (p.startsWith('>')) {
+        // Greater than: >3 means versions greater than 3
+        const minVersion = parseInt(p.slice(1), 10);
+        if (version > minVersion) {
+          return true;
+        }
+      } else {
+        // Exact match
+        const exactVersion = parseInt(p, 10);
+        if (version === exactVersion) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
   /**
    * Upload run files to USB2SNES subdirectory
    * Channel: db:runs:upload-to-snes

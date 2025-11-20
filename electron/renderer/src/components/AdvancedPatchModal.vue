@@ -362,7 +362,7 @@
                   <span class="hint">Enter SNES GameGenie codes, one per line (format: XXXX-XXXX)</span>
                 </div>
 
-                <div class="form-field">
+                <div class="form-field" v-if="patchForm.patch_type !== 'gamegenie'">
                   <label>
                     <input type="checkbox" v-model="patchForm.requires_parameters" />
                     Requires Parameters
@@ -762,6 +762,8 @@ watch(activeTab, async (newTab) => {
 // Validate GameGenie codes when patch type changes
 watch(() => patchForm.value.patch_type, (newType) => {
   if (newType === 'gamegenie') {
+    // GameGenie patches never require parameters
+    patchForm.value.requires_parameters = false;
     validateGameGenieCodes();
   } else {
     gameGenieCodesValid.value = true;
@@ -967,7 +969,7 @@ function editPatch(patch: ExtraPatch) {
     description: patch.description || '',
     patch_type: patch.patch_type,
     priority: patch.priority || 100,
-    requires_parameters: patch.requires_parameters ? true : false,
+    requires_parameters: patch.patch_type === 'gamegenie' ? false : (patch.requires_parameters ? true : false),
     is_system: patch.is_system ? true : false,
     template_text: patch.template_text || '',
     parameter_mappings_json: patch.parameter_mappings ? JSON.stringify(JSON.parse(patch.parameter_mappings), null, 2) : '',
@@ -979,6 +981,9 @@ function editPatch(patch: ExtraPatch) {
   };
   // Validate on load
   validateParameterMappings();
+  if (patch.patch_type === 'gamegenie') {
+    validateGameGenieCodes();
+  }
 }
 
 async function deletePatch(patch: ExtraPatch) {
@@ -1160,6 +1165,59 @@ function validateParameterMappings() {
   } catch (e: any) {
     parameterMappingsValid.value = false;
     parameterMappingsError.value = `Invalid JSON: ${e.message}`;
+  }
+}
+
+function validateGameGenieCodes() {
+  const codesText = patchForm.value.template_text?.trim();
+  if (!codesText) {
+    gameGenieCodesValid.value = true;
+    gameGenieCodesError.value = '';
+    return;
+  }
+  
+  // SNES GameGenie code validation
+  const lines = codesText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  if (lines.length === 0) {
+    gameGenieCodesValid.value = false;
+    gameGenieCodesError.value = 'No codes found';
+    return;
+  }
+  
+  const ALPHABET_SNES = ['D', 'F', '4', '7', '0', '9', '1', '5', '6', 'B', 'C', '8', 'A', '2', '3', 'E'];
+  const errors: string[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNum = i + 1;
+    
+    if (line.length !== 9) {
+      errors.push(`Line ${lineNum}: Code must be 9 characters (format: XXXX-XXXX)`);
+      continue;
+    }
+    
+    if (line.charAt(4) !== '-') {
+      errors.push(`Line ${lineNum}: Code must have a dash at position 5`);
+      continue;
+    }
+    
+    const code = line.toUpperCase();
+    for (let j = 0; j < code.length; j++) {
+      if (j === 4) continue; // Skip dash
+      if (ALPHABET_SNES.indexOf(code.charAt(j)) === -1) {
+        errors.push(`Line ${lineNum}: Invalid character "${code.charAt(j)}" in code`);
+        break;
+      }
+    }
+  }
+  
+  if (errors.length > 0) {
+    gameGenieCodesValid.value = false;
+    gameGenieCodesError.value = errors[0]; // Show first error
+  } else {
+    gameGenieCodesValid.value = true;
+    gameGenieCodesError.value = '';
   }
 }
 

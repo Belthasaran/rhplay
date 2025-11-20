@@ -334,6 +334,15 @@ const MIGRATIONS = {
         return tableExists(db, 'extrapatches');
       },
     },
+    {
+      id: 'rhdata_034_extrapatches_is_system',
+      description: 'Add is_system flag to extrapatches table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/034_rhdata_extrapatches_is_system.sql'),
+      skipIf(db) {
+        return columnExists(db, 'extrapatches', 'is_system');
+      },
+    },
   ],
   clientdata: [
     {
@@ -347,6 +356,16 @@ const MIGRATIONS = {
       description: 'Enhance ratings and run tracking tables',
       type: 'sql',
       file: resolveRelative('electron/sql/migrations/002_clientdata_enhanced_ratings_and_runs.sql'),
+    },
+    {
+      id: 'clientdata_003_extrapatchpresets',
+      description: 'Create extrapatchpresets table for storing patch presets',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/003_clientdata_extrapatchpresets.sql'),
+      skipIf(db) {
+        return tableExists(db, 'extrapatchpresets');
+      },
+    },
       skipIf(db) {
         return columnExists(db, 'user_game_annotations', 'user_difficulty_rating')
           && columnExists(db, 'user_game_annotations', 'user_review_rating')

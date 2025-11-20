@@ -2620,6 +2620,13 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Check if DEVADMIN mode is enabled
+   */
+  function isDevAdmin() {
+    return process.env.DEVADMIN === '1';
+  }
+
+  /**
    * Save extra patch (create or update)
    * Channel: extra-patches:save
    */
@@ -2638,11 +2645,27 @@ function registerDatabaseHandlers(dbManager) {
         parameter_mappings,
         restrictions,
         conflicts,
-        dependencies
+        dependencies,
+        is_system
       } = params;
 
       if (!patch_code || !name || !patch_type) {
         return { success: false, error: 'Missing required fields: patch_code, name, patch_type' };
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      
+      // Check if editing an existing system patch
+      if (epuuid) {
+        const existing = db.prepare('SELECT is_system FROM extrapatches WHERE epuuid = ?').get(epuuid);
+        if (existing && existing.is_system && !isDevAdmin()) {
+          return { success: false, error: 'Cannot modify system patches. Set DEVADMIN=1 to enable editing.' };
+        }
+      }
+
+      // Check if trying to set is_system without DEVADMIN
+      if (is_system && !isDevAdmin()) {
+        return { success: false, error: 'Cannot create system patches. Set DEVADMIN=1 to enable.' };
       }
 
       // Convert file_data array to Buffer if provided
@@ -2650,11 +2673,23 @@ function registerDatabaseHandlers(dbManager) {
       if (file_data && Array.isArray(file_data)) {
         fileDataBuffer = Buffer.from(file_data);
       }
-
-      const db = dbManager.getConnection('rhdata');
       
       if (epuuid) {
         // Update existing patch
+        const existingPatch = db.prepare('SELECT * FROM extrapatches WHERE epuuid = ?').get(epuuid);
+        if (!existingPatch) {
+          return { success: false, error: 'Patch not found' };
+        }
+
+        // Preserve existing file_data if no new file is provided
+        if (!fileDataBuffer) {
+          const existingFile = db.prepare('SELECT file_data FROM extrapatches WHERE epuuid = ?').get(epuuid);
+          fileDataBuffer = existingFile?.file_data || null;
+        }
+
+        // Only allow is_system changes if DEVADMIN
+        const finalIsSystem = (isDevAdmin() && is_system !== undefined) ? (is_system ? 1 : 0) : (existingPatch.is_system || 0);
+
         // Only update file_data if new file_data is provided
         if (fileDataBuffer) {
           const stmt = db.prepare(`
@@ -2670,6 +2705,7 @@ function registerDatabaseHandlers(dbManager) {
               restrictions = ?,
               conflicts = ?,
               dependencies = ?,
+              is_system = ?,
               updated_at = CURRENT_TIMESTAMP
             WHERE epuuid = ?
           `);
@@ -2686,6 +2722,7 @@ function registerDatabaseHandlers(dbManager) {
             restrictions || null,
             conflicts || null,
             dependencies || null,
+            finalIsSystem,
             epuuid
           );
         } else {
@@ -2702,6 +2739,7 @@ function registerDatabaseHandlers(dbManager) {
               restrictions = ?,
               conflicts = ?,
               dependencies = ?,
+              is_system = ?,
               updated_at = CURRENT_TIMESTAMP
             WHERE epuuid = ?
           `);
@@ -2717,17 +2755,19 @@ function registerDatabaseHandlers(dbManager) {
             restrictions || null,
             conflicts || null,
             dependencies || null,
+            finalIsSystem,
             epuuid
           );
         }
       } else {
         // Insert new patch
+        const finalIsSystem = (isDevAdmin() && is_system) ? 1 : 0;
         const stmt = db.prepare(`
           INSERT INTO extrapatches (
             patch_code, name, description, patch_type, priority,
             requires_parameters, template_text, file_data,
-            parameter_mappings, restrictions, conflicts, dependencies
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            parameter_mappings, restrictions, conflicts, dependencies, is_system
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
@@ -2742,7 +2782,8 @@ function registerDatabaseHandlers(dbManager) {
           parameter_mappings || null,
           restrictions || null,
           conflicts || null,
-          dependencies || null
+          dependencies || null,
+          finalIsSystem
         );
       }
 
@@ -2764,6 +2805,17 @@ function registerDatabaseHandlers(dbManager) {
       }
 
       const db = dbManager.getConnection('rhdata');
+      
+      // Check if it's a system patch
+      const patch = db.prepare('SELECT is_system FROM extrapatches WHERE epuuid = ?').get(epuuid);
+      if (!patch) {
+        return { success: false, error: 'Patch not found' };
+      }
+      
+      if (patch.is_system && !isDevAdmin()) {
+        return { success: false, error: 'Cannot delete system patches. Set DEVADMIN=1 to enable deletion.' };
+      }
+
       const stmt = db.prepare('DELETE FROM extrapatches WHERE epuuid = ?');
       const result = stmt.run(epuuid);
 
@@ -2774,6 +2826,142 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('Error deleting extra patch:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Check if DEVADMIN mode is enabled
+   * Channel: extra-patches:is-dev-admin
+   */
+  ipcMain.handle('extra-patches:is-dev-admin', async () => {
+    return { isDevAdmin: isDevAdmin() };
+  });
+
+  /**
+   * Get all presets (user and system)
+   * Channel: extra-patches:get-presets
+   */
+  ipcMain.handle('extra-patches:get-presets', async () => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const presets = db.prepare(`
+        SELECT * FROM extrapatchpresets 
+        ORDER BY is_system DESC, preset_name ASC
+      `).all();
+      return { success: true, presets };
+    } catch (error) {
+      console.error('Error getting presets:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Save preset (create or update)
+   * Channel: extra-patches:save-preset
+   */
+  ipcMain.handle('extra-patches:save-preset', async (_event, params) => {
+    try {
+      const {
+        preset_uuid,
+        preset_name,
+        selected_patches,
+        global_onoffv,
+        patch_variables,
+        is_system
+      } = params;
+
+      if (!preset_name) {
+        return { success: false, error: 'Missing preset_name' };
+      }
+
+      // Only allow system presets if DEVADMIN
+      const finalIsSystem = (isDevAdmin() && is_system) ? 1 : 0;
+
+      const db = dbManager.getConnection('clientdata');
+      
+      if (preset_uuid) {
+        // Update existing preset
+        const existing = db.prepare('SELECT is_system FROM extrapatchpresets WHERE preset_uuid = ?').get(preset_uuid);
+        if (existing && existing.is_system && !isDevAdmin()) {
+          return { success: false, error: 'Cannot modify system presets. Set DEVADMIN=1 to enable editing.' };
+        }
+
+        const stmt = db.prepare(`
+          UPDATE extrapatchpresets SET
+            preset_name = ?,
+            selected_patches = ?,
+            global_onoffv = ?,
+            patch_variables = ?,
+            is_system = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE preset_uuid = ?
+        `);
+        
+        stmt.run(
+          preset_name,
+          JSON.stringify(selected_patches || []),
+          JSON.stringify(global_onoffv || []),
+          JSON.stringify(patch_variables || {}),
+          finalIsSystem,
+          preset_uuid
+        );
+      } else {
+        // Insert new preset
+        const stmt = db.prepare(`
+          INSERT INTO extrapatchpresets (
+            preset_name, selected_patches, global_onoffv, patch_variables, is_system
+          ) VALUES (?, ?, ?, ?, ?)
+        `);
+        
+        stmt.run(
+          preset_name,
+          JSON.stringify(selected_patches || []),
+          JSON.stringify(global_onoffv || []),
+          JSON.stringify(patch_variables || {}),
+          finalIsSystem
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving preset:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Delete preset
+   * Channel: extra-patches:delete-preset
+   */
+  ipcMain.handle('extra-patches:delete-preset', async (_event, { preset_uuid }) => {
+    try {
+      if (!preset_uuid) {
+        return { success: false, error: 'Missing preset_uuid' };
+      }
+
+      const db = dbManager.getConnection('clientdata');
+      
+      // Check if it's a system preset
+      const preset = db.prepare('SELECT is_system FROM extrapatchpresets WHERE preset_uuid = ?').get(preset_uuid);
+      if (!preset) {
+        return { success: false, error: 'Preset not found' };
+      }
+      
+      if (preset.is_system && !isDevAdmin()) {
+        return { success: false, error: 'Cannot delete system presets. Set DEVADMIN=1 to enable deletion.' };
+      }
+
+      const stmt = db.prepare('DELETE FROM extrapatchpresets WHERE preset_uuid = ?');
+      const result = stmt.run(preset_uuid);
+
+      if (result.changes === 0) {
+        return { success: false, error: 'Preset not found' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting preset:', error);
       return { success: false, error: error.message };
     }
   });

@@ -332,6 +332,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAllExtraPatches: () => ipcRenderer.invoke('extra-patches:get-all'),
   saveExtraPatch: (params) => ipcRenderer.invoke('extra-patches:save', params),
   deleteExtraPatch: (params) => ipcRenderer.invoke('extra-patches:delete', params),
+  isDevAdmin: () => ipcRenderer.invoke('extra-patches:is-dev-admin'),
+  getPresets: () => ipcRenderer.invoke('extra-patches:get-presets'),
+  savePreset: (params) => ipcRenderer.invoke('extra-patches:save-preset', params),
+  deletePreset: (params) => ipcRenderer.invoke('extra-patches:delete-preset', params),
   
   // =============================
   // Seed Management

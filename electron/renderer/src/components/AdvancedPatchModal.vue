@@ -67,7 +67,79 @@
 
           <!-- Available Patches Section -->
           <div class="patch-section">
-            <h4>Available Custom Patches</h4>
+            <div class="section-header-with-button">
+              <h4>Available Custom Patches</h4>
+              <button @click="presetsDropdownOpen = !presetsDropdownOpen" class="btn-secondary btn-small">Presets</button>
+              <div v-if="presetsDropdownOpen" class="presets-dropdown">
+                <div class="presets-dropdown-header">
+                  <strong>Presets</strong>
+                  <button @click="presetsDropdownOpen = false" class="close-small">✕</button>
+                </div>
+                <div class="presets-list">
+                  <div v-if="loadingPresets" class="loading-message">Loading presets...</div>
+                  <div v-else>
+                    <div v-if="systemPresets.length > 0" class="presets-group">
+                      <div class="presets-group-label">System Presets</div>
+                      <div 
+                        v-for="preset in systemPresets" 
+                        :key="preset.preset_uuid"
+                        class="preset-item"
+                        @click="loadPreset(preset)"
+                      >
+                        <span class="preset-name">{{ preset.preset_name }}</span>
+                        <span class="preset-badge system">System</span>
+                      </div>
+                    </div>
+                    <div v-if="userPresets.length > 0" class="presets-group">
+                      <div class="presets-group-label">User Presets</div>
+                      <div 
+                        v-for="preset in userPresets" 
+                        :key="preset.preset_uuid"
+                        class="preset-item"
+                      >
+                        <span class="preset-name" @click="loadPreset(preset)">{{ preset.preset_name }}</span>
+                        <div class="preset-actions">
+                          <button @click.stop="deletePreset(preset)" class="btn-link-small btn-danger">Delete</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="systemPresets.length === 0 && userPresets.length === 0" class="empty-message">
+                      No presets available
+                    </div>
+                  </div>
+                </div>
+                <div class="presets-dropdown-footer">
+                  <button @click="showSavePresetDialog = true" class="btn-primary btn-small">Save Current as Preset</button>
+                </div>
+              </div>
+              <!-- Save Preset Dialog -->
+              <div v-if="showSavePresetDialog" class="preset-save-dialog">
+                <div class="preset-save-backdrop" @click="showSavePresetDialog = false"></div>
+                <div class="preset-save-content">
+                  <div class="preset-save-header">
+                    <h4>Save Preset</h4>
+                    <button @click="showSavePresetDialog = false" class="close-small">✕</button>
+                  </div>
+                  <div class="preset-save-body">
+                    <div class="form-field">
+                      <label>Preset Name *</label>
+                      <input 
+                        v-model="newPresetName" 
+                        type="text" 
+                        class="input" 
+                        placeholder="My Preset"
+                        @keydown.enter="savePreset"
+                        @keydown.esc="showSavePresetDialog = false"
+                      />
+                    </div>
+                  </div>
+                  <div class="preset-save-footer">
+                    <button @click="showSavePresetDialog = false" class="btn-secondary btn-small">Cancel</button>
+                    <button @click="savePreset" class="btn-primary btn-small" :disabled="!newPresetName.trim()">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div v-if="availablePatches.length === 0" class="empty-message">
               No patches available for this game.
             </div>
@@ -173,8 +245,9 @@
                   <span class="patch-editor-type">{{ patch.patch_type.toUpperCase() }}</span>
                 </div>
                 <div class="patch-editor-actions">
-                  <button @click="editPatch(patch)" class="btn-link-small">Edit</button>
-                  <button @click="deletePatch(patch)" class="btn-link-small btn-danger">Delete</button>
+                  <span v-if="patch.is_system" class="system-badge">System</span>
+                  <button @click="editPatch(patch)" class="btn-link-small" :disabled="patch.is_system && !isDevAdmin.value">Edit</button>
+                  <button @click="deletePatch(patch)" class="btn-link-small btn-danger" :disabled="patch.is_system && !isDevAdmin.value">Delete</button>
                 </div>
               </div>
               <div v-if="patch.description" class="patch-editor-description">{{ patch.description }}</div>
@@ -283,6 +356,14 @@
                   </label>
                 </div>
 
+                <div v-if="isDevAdmin.value" class="form-field">
+                  <label>
+                    <input type="checkbox" v-model="patchForm.is_system" />
+                    System Patch (read-only for users)
+                  </label>
+                  <span class="hint">System patches can only be edited/deleted when DEVADMIN=1</span>
+                </div>
+
                 <div v-if="patchForm.requires_parameters" class="form-field">
                   <label>Parameter Mappings (JSON)</label>
                   <div class="parameter-mappings-editor">
@@ -367,6 +448,12 @@
       <footer v-if="activeTab === 'apply'" class="modal-footer">
         <div class="modal-actions">
           <button 
+            @click="resetToDefaults" 
+            class="btn-secondary"
+          >
+            Reset
+          </button>
+          <button 
             @click="buildPlus" 
             class="btn-primary"
             :disabled="loading || selectedPatches.length === 0"
@@ -421,6 +508,16 @@ interface ExtraPatch {
   dependencies?: string; // JSON string
   priority?: number;
   requires_parameters: number;
+  is_system?: number; // 0 = user patch, 1 = system patch
+}
+
+interface Preset {
+  preset_uuid: string;
+  preset_name: string;
+  is_system: number; // 0 = user preset, 1 = system preset
+  selected_patches: string; // JSON array
+  global_onoffv: string; // JSON array
+  patch_variables: string; // JSON object
 }
 
 interface Props {
@@ -459,6 +556,14 @@ const globalParams = ref({
 });
 const localParams = ref<Record<string, Record<string, any>>>({});
 
+// Presets state
+const presetsDropdownOpen = ref(false);
+const loadingPresets = ref(false);
+const allPresets = ref<Preset[]>([]);
+const showSavePresetDialog = ref(false);
+const newPresetName = ref('');
+const isDevAdmin = ref(false);
+
 // Editor tab state
 const loadingPatches = ref(false);
 const allPatches = ref<ExtraPatch[]>([]);
@@ -485,6 +590,7 @@ const patchForm = ref({
   patch_type: 'ips' as 'ips' | 'bps' | 'asar' | 'uberasmtree',
   priority: 100,
   requires_parameters: false,
+  is_system: false,
   template_text: '',
   parameter_mappings_json: '',
   restrictions_json: '',
@@ -494,22 +600,87 @@ const patchForm = ref({
   fileName: '',
 });
 
+// Computed properties for presets
+const systemPresets = computed(() => allPresets.value.filter(p => p.is_system === 1));
+const userPresets = computed(() => allPresets.value.filter(p => p.is_system === 0));
+
+// Get localStorage key for this game
+function getStorageKey() {
+  return `extrapatch_state_${props.gameId}_v${props.gameVersion}`;
+}
+
+// Save state to localStorage
+function saveState() {
+  const state = {
+    selectedPatches: selectedPatches.value,
+    globalParams: {
+      gonoffv: globalParams.value.gonoffv,
+      // Note: glevelnum is NOT saved per user request
+    },
+    localParams: localParams.value,
+  };
+  localStorage.setItem(getStorageKey(), JSON.stringify(state));
+}
+
+// Load state from localStorage
+function loadState() {
+  try {
+    const stored = localStorage.getItem(getStorageKey());
+    if (stored) {
+      const state = JSON.parse(stored);
+      selectedPatches.value = state.selectedPatches || [];
+      globalParams.value.gonoffv = state.globalParams?.gonoffv || [];
+      localParams.value = state.localParams || {};
+      // Note: glevelnum is NOT loaded (always starts empty)
+    }
+  } catch (e) {
+    console.error('Error loading state:', e);
+  }
+}
+
+// Reset to defaults
+function resetToDefaults() {
+  selectedPatches.value = [];
+  globalParams.value = { glevelnum: '', gonoffv: [] };
+  localParams.value = {};
+  localStorage.removeItem(getStorageKey());
+}
+
+// Watch for changes and save state
+watch([selectedPatches, () => globalParams.value.gonoffv, localParams], () => {
+  if (props.isOpen && activeTab.value === 'apply') {
+    saveState();
+  }
+}, { deep: true });
+
 // Load available patches when modal opens
 watch(() => props.isOpen, async (newVal) => {
   if (newVal) {
+    // Check DEVADMIN status
+    const api = (window as any)?.electronAPI;
+    if (api?.isDevAdmin) {
+      const result = await api.isDevAdmin();
+      isDevAdmin.value = result?.isDevAdmin || false;
+    }
+    
     if (activeTab.value === 'apply') {
       await loadAvailablePatches();
+      loadState(); // Load saved state
     } else {
       await loadAllPatches();
     }
+    await loadPresets();
   } else {
-    // Reset state when closing
+    // Save state when closing
+    if (activeTab.value === 'apply') {
+      saveState();
+    }
+    // Reset UI state
     activeTab.value = 'apply';
-    selectedPatches.value = [];
-    globalParams.value = { glevelnum: '', gonoffv: [] };
-    localParams.value = {};
     showAddPatchForm.value = false;
     editingPatch.value = null;
+    presetsDropdownOpen.value = false;
+    showSavePresetDialog.value = false;
   }
 });
 
@@ -723,6 +894,7 @@ function editPatch(patch: ExtraPatch) {
     patch_type: patch.patch_type,
     priority: patch.priority || 100,
     requires_parameters: patch.requires_parameters ? true : false,
+    is_system: patch.is_system ? true : false,
     template_text: patch.template_text || '',
     parameter_mappings_json: patch.parameter_mappings ? JSON.stringify(JSON.parse(patch.parameter_mappings), null, 2) : '',
     restrictions_json: patch.restrictions ? JSON.stringify(JSON.parse(patch.restrictions), null, 2) : '',
@@ -779,6 +951,7 @@ function closePatchForm() {
     patch_type: 'ips',
     priority: 100,
     requires_parameters: false,
+    is_system: false,
     template_text: '',
     parameter_mappings_json: '',
     restrictions_json: '',
@@ -992,6 +1165,7 @@ async function savePatch() {
       patch_type: patchForm.value.patch_type,
       priority: patchForm.value.priority || 100,
       requires_parameters: patchForm.value.requires_parameters ? 1 : 0,
+      is_system: patchForm.value.is_system,
       template_text: patchForm.value.patch_type === 'asar' ? patchForm.value.template_text : null,
       file_data: patchForm.value.fileData ? Array.from(new Uint8Array(patchForm.value.fileData)) : null,
       parameter_mappings: parameterMappings ? JSON.stringify(parameterMappings) : null,
@@ -1012,6 +1186,100 @@ async function savePatch() {
     }
   } catch (error: any) {
     alert(`Error saving patch: ${error?.message || String(error)}`);
+  }
+}
+
+// Preset functions
+async function loadPresets() {
+  loadingPresets.value = true;
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getPresets) {
+      allPresets.value = [];
+      return;
+    }
+    
+    const result = await api.getPresets();
+    if (result?.success) {
+      allPresets.value = result.presets || [];
+    } else {
+      console.error('Failed to load presets:', result?.error);
+      allPresets.value = [];
+    }
+  } catch (error) {
+    console.error('Error loading presets:', error);
+    allPresets.value = [];
+  } finally {
+    loadingPresets.value = false;
+  }
+}
+
+function loadPreset(preset: Preset) {
+  try {
+    selectedPatches.value = JSON.parse(preset.selected_patches || '[]');
+    globalParams.value.gonoffv = JSON.parse(preset.global_onoffv || '[]');
+    localParams.value = JSON.parse(preset.patch_variables || '{}');
+    presetsDropdownOpen.value = false;
+    saveState(); // Save the loaded preset state
+  } catch (error) {
+    alert(`Error loading preset: ${error}`);
+  }
+}
+
+async function savePreset() {
+  if (!newPresetName.value.trim()) {
+    alert('Please enter a preset name');
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.savePreset) {
+      alert('Save preset functionality not available');
+      return;
+    }
+    
+    const result = await api.savePreset({
+      preset_name: newPresetName.value.trim(),
+      selected_patches: selectedPatches.value,
+      global_onoffv: globalParams.value.gonoffv,
+      patch_variables: localParams.value,
+      is_system: false, // User presets are never system
+    });
+    
+    if (result?.success) {
+      newPresetName.value = '';
+      showSavePresetDialog.value = false;
+      await loadPresets();
+    } else {
+      alert(`Failed to save preset: ${result?.error || 'Unknown error'}`);
+    }
+  } catch (error: any) {
+    alert(`Error saving preset: ${error?.message || String(error)}`);
+  }
+}
+
+async function deletePreset(preset: Preset) {
+  if (!confirm(`Are you sure you want to delete preset "${preset.preset_name}"?`)) {
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.deletePreset) {
+      alert('Delete preset functionality not available');
+      return;
+    }
+    
+    const result = await api.deletePreset({ preset_uuid: preset.preset_uuid });
+    
+    if (result?.success) {
+      await loadPresets();
+    } else {
+      alert(`Failed to delete preset: ${result?.error || 'Unknown error'}`);
+    }
+  } catch (error: any) {
+    alert(`Error deleting preset: ${error?.message || String(error)}`);
   }
 }
 </script>
@@ -1622,6 +1890,177 @@ async function savePatch() {
   font-size: var(--small-font-size);
   color: var(--text-primary);
   font-family: monospace;
+}
+
+.section-header-with-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.section-header-with-button h4 {
+  margin: 0;
+}
+
+.presets-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--modal-bg);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  min-width: 300px;
+  max-width: 400px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.presets-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.presets-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.presets-group {
+  margin-bottom: 16px;
+}
+
+.presets-group:last-child {
+  margin-bottom: 0;
+}
+
+.presets-group-label {
+  font-size: var(--small-font-size);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.preset-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  background: var(--bg-primary);
+}
+
+.preset-item:hover {
+  background: var(--bg-hover);
+}
+
+.preset-name {
+  flex: 1;
+  font-size: var(--small-font-size);
+  color: var(--text-primary);
+}
+
+.preset-badge {
+  font-size: var(--small-font-size);
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.preset-badge.system {
+  background: var(--accent-primary);
+  color: var(--button-text);
+}
+
+.preset-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.presets-dropdown-footer {
+  padding: 8px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.system-badge {
+  font-size: var(--small-font-size);
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  color: var(--button-text);
+  margin-right: 8px;
+}
+
+.preset-save-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preset-save-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--modal-overlay);
+}
+
+.preset-save-content {
+  position: relative;
+  background: var(--modal-bg);
+  border-radius: 8px;
+  min-width: 300px;
+  max-width: 500px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+}
+
+.preset-save-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.preset-save-header h4 {
+  margin: 0;
+  font-size: var(--large-font-size);
+  color: var(--text-primary);
+}
+
+.preset-save-body {
+  padding: 16px;
+}
+
+.preset-save-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 </style>
 

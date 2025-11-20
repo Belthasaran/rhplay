@@ -47,8 +47,8 @@
                 type="text" 
                 class="input hex-input" 
                 placeholder="00"
-                maxlength="2"
-                pattern="[0-9A-Fa-f]{0,2}"
+                maxlength="3"
+                pattern="[0-9A-Fa-f]{0,3}"
               />
               
               <label class="inline-label">On/Off Switches:</label>
@@ -1032,11 +1032,11 @@ async function savePatch() {
 }
 
 .tab-button {
-  padding: 10px 20px;
+  padding: var(--button-padding);
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--base-font-size);
   border-bottom: 2px solid transparent;
   color: var(--text-secondary);
 }
@@ -1069,15 +1069,15 @@ async function savePatch() {
 
 .patch-section h4 {
   margin: 0 0 8px 0;
-  font-size: 15px;
+  font-size: var(--large-font-size);
   font-weight: 600;
 }
 
 .game-info {
-  padding: 6px 8px;
+  padding: var(--input-padding);
   background: var(--bg-secondary);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--text-primary);
 }
 
@@ -1096,7 +1096,7 @@ async function savePatch() {
 }
 
 .inline-label {
-  font-size: 12px;
+  font-size: var(--small-font-size);
   font-weight: 500;
   white-space: nowrap;
   margin: 0;
@@ -1113,16 +1113,16 @@ async function savePatch() {
 }
 
 .parameter-field label {
-  font-size: 12px;
+  font-size: var(--small-font-size);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .input {
-  padding: 6px 8px;
+  padding: var(--input-padding);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--base-font-size);
   font-family: inherit;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -1136,8 +1136,8 @@ async function savePatch() {
 .hex-input {
   width: 60px;
   font-family: monospace;
-  font-size: 12px;
-  padding: 4px 6px;
+  font-size: var(--small-font-size);
+  padding: var(--input-padding);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   background: var(--bg-primary);
@@ -1164,7 +1164,7 @@ async function savePatch() {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   cursor: pointer;
 }
 
@@ -1176,7 +1176,7 @@ async function savePatch() {
   border: 1px solid var(--border-primary);
   border-radius: 3px;
   background: var(--bg-secondary);
-  font-size: 11px;
+  font-size: var(--small-font-size);
   min-width: 24px;
   width: auto;
   justify-content: center;
@@ -1200,7 +1200,7 @@ async function savePatch() {
 
 .bit-number {
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--small-font-size);
   min-width: 14px;
   text-align: center;
 }
@@ -1240,12 +1240,12 @@ async function savePatch() {
 
 .patch-name {
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--medium-font-size);
 }
 
 .patch-code {
   font-family: monospace;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--text-secondary);
   background: var(--bg-secondary);
   padding: 2px 6px;
@@ -1253,7 +1253,7 @@ async function savePatch() {
 }
 
 .patch-description {
-  font-size: 11px;
+  font-size: var(--small-font-size);
   color: var(--text-secondary);
   margin-bottom: 4px;
   line-height: 1.3;
@@ -1278,7 +1278,7 @@ async function savePatch() {
 }
 
 .param-field label {
-  font-size: 11px;
+  font-size: var(--small-font-size);
   font-weight: 500;
 }
 
@@ -1302,13 +1302,13 @@ async function savePatch() {
 }
 
 .btn-primary {
-  padding: 8px 16px;
+  padding: var(--button-padding);
   background: var(--accent-primary);
   color: var(--button-text);
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--base-font-size);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -1322,13 +1322,13 @@ async function savePatch() {
 }
 
 .btn-secondary {
-  padding: 8px 16px;
+  padding: var(--button-padding);
   background: var(--button-bg);
   color: var(--button-text);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--base-font-size);
 }
 
 .btn-secondary:hover {
@@ -1336,8 +1336,8 @@ async function savePatch() {
 }
 
 .btn-small {
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: var(--input-padding);
+  font-size: var(--small-font-size);
 }
 
 .btn-link-small {
@@ -1346,7 +1346,7 @@ async function savePatch() {
   color: var(--accent-primary);
   cursor: pointer;
   text-decoration: underline;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   padding: 2px 4px;
 }
 
@@ -1404,12 +1404,12 @@ async function savePatch() {
 
 .patch-editor-name {
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--medium-font-size);
 }
 
 .patch-editor-code {
   font-family: monospace;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--text-secondary);
   background: var(--bg-secondary);
   padding: 2px 6px;
@@ -1417,7 +1417,7 @@ async function savePatch() {
 }
 
 .patch-editor-type {
-  font-size: 11px;
+  font-size: var(--small-font-size);
   color: var(--accent-primary);
   background: var(--selected-bg);
   padding: 2px 6px;
@@ -1431,7 +1431,7 @@ async function savePatch() {
 }
 
 .patch-editor-description {
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--text-secondary);
   margin-top: 4px;
 }
@@ -1482,14 +1482,14 @@ async function savePatch() {
 
 .patch-form-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--large-font-size);
   color: var(--text-primary);
 }
 
 .close-small {
   background: none;
   border: none;
-  font-size: 20px;
+  font-size: var(--large-font-size);
   cursor: pointer;
   color: var(--text-secondary);
   padding: 0;
@@ -1528,23 +1528,23 @@ async function savePatch() {
 }
 
 .form-field label {
-  font-size: 12px;
+  font-size: var(--small-font-size);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .form-field .hint {
-  font-size: 11px;
+  font-size: var(--small-font-size);
   color: var(--text-tertiary);
   font-weight: normal;
   font-style: italic;
 }
 
 .textarea {
-  padding: 8px;
+  padding: var(--input-padding);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--base-font-size);
   font-family: inherit;
   resize: vertical;
   width: 100%;
@@ -1555,7 +1555,7 @@ async function savePatch() {
 
 .code-textarea {
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--small-font-size);
 }
 
 .code-textarea.valid {
@@ -1579,8 +1579,8 @@ async function savePatch() {
 }
 
 .quick-insert-buttons button {
-  font-size: 12px;
-  padding: 4px 8px;
+  font-size: var(--small-font-size);
+  padding: var(--input-padding);
 }
 
 .textarea-wrapper {
@@ -1598,7 +1598,7 @@ async function savePatch() {
   position: absolute;
   top: 4px;
   right: 8px;
-  font-size: 11px;
+  font-size: var(--small-font-size);
   pointer-events: none;
 }
 
@@ -1619,7 +1619,7 @@ async function savePatch() {
 }
 
 .file-name {
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--text-primary);
   font-family: monospace;
 }

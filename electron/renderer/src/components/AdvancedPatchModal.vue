@@ -126,7 +126,7 @@
                   </div>
                 </div>
                 <div class="presets-dropdown-footer">
-                  <button @click="showSavePresetDialog = true; presetsDropdownOpen = false" class="btn-primary btn-small">Save Current as Preset</button>
+                  <button @click="openSavePresetDialog" class="btn-primary btn-small">Save Current as Preset</button>
                 </div>
                 </div>
               </div>
@@ -298,6 +298,7 @@
                     <option value="bps">BPS</option>
                     <option value="asar">ASAR</option>
                     <option value="uberasmtree">UberASMTree</option>
+                    <option value="gamegenie">GameGenie</option>
                   </select>
                 </div>
 
@@ -339,6 +340,26 @@
                     rows="10"
                     placeholder="ASAR assembly code with template variables like ${level_number}"
                   ></textarea>
+                </div>
+
+                <!-- GameGenie codes -->
+                <div v-if="patchForm.patch_type === 'gamegenie'" class="form-field">
+                  <label>GameGenie Codes (one per line)</label>
+                  <div class="textarea-wrapper">
+                    <textarea 
+                      v-model="patchForm.template_text" 
+                      class="textarea code-textarea"
+                      :class="{ 'valid': gameGenieCodesValid, 'invalid': !gameGenieCodesValid && patchForm.template_text }"
+                      rows="10"
+                      placeholder="C222-D4DD&#10;A123-B456"
+                      @input="validateGameGenieCodes"
+                    ></textarea>
+                    <span v-if="patchForm.template_text" class="validation-indicator">
+                      <span v-if="gameGenieCodesValid" class="valid-indicator">✓ Valid</span>
+                      <span v-else class="invalid-indicator">✗ {{ gameGenieCodesError }}</span>
+                    </span>
+                  </div>
+                  <span class="hint">Enter SNES GameGenie codes, one per line (format: XXXX-XXXX)</span>
                 </div>
 
                 <div class="form-field">
@@ -475,39 +496,39 @@
         </div>
       </footer>
     </div>
-  </div>
 
-  <!-- Save Preset Dialog (separate root-level element) -->
-  <div v-if="showSavePresetDialog && isOpen" class="preset-save-dialog">
-    <div class="preset-save-backdrop" @click="showSavePresetDialog = false"></div>
-    <div class="preset-save-content">
-      <div class="preset-save-header">
-        <h4>Save Preset</h4>
-        <button @click="showSavePresetDialog = false" class="close-small">✕</button>
-      </div>
-      <div class="preset-save-body">
-        <div class="form-field">
-          <label>Preset Name *</label>
-          <input 
-            v-model="newPresetName" 
-            type="text" 
-            class="input" 
-            placeholder="My Preset"
-            @keydown.enter="savePreset"
-            @keydown.esc="showSavePresetDialog = false"
-          />
+    <!-- Save Preset Dialog (inside modal-backdrop, above modal) -->
+    <div v-if="showSavePresetDialog" class="preset-save-dialog">
+      <div class="preset-save-backdrop" @click="showSavePresetDialog = false"></div>
+      <div class="preset-save-content">
+        <div class="preset-save-header">
+          <h4>Save Preset</h4>
+          <button @click="showSavePresetDialog = false" class="close-small">✕</button>
         </div>
-      </div>
-      <div class="preset-save-footer">
-        <button @click="showSavePresetDialog = false" class="btn-secondary btn-small">Cancel</button>
-        <button @click="savePreset" class="btn-primary btn-small" :disabled="!newPresetName.trim()">Save</button>
+        <div class="preset-save-body">
+          <div class="form-field">
+            <label>Preset Name *</label>
+            <input 
+              v-model="newPresetName" 
+              type="text" 
+              class="input" 
+              placeholder="My Preset"
+              @keydown.enter="savePreset"
+              @keydown.esc="showSavePresetDialog = false"
+            />
+          </div>
+        </div>
+        <div class="preset-save-footer">
+          <button @click="showSavePresetDialog = false" class="btn-secondary btn-small">Cancel</button>
+          <button @click="savePreset" class="btn-primary btn-small" :disabled="!newPresetName.trim()">Save</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 
 interface ParameterMapping {
   input: string; // Input parameter name (glevelnum, local1, rom_file, etc.)
@@ -520,7 +541,7 @@ interface ExtraPatch {
   patch_code: string;
   name: string;
   description?: string;
-  patch_type: 'ips' | 'bps' | 'asar' | 'uberasmtree';
+  patch_type: 'ips' | 'bps' | 'asar' | 'uberasmtree' | 'gamegenie';
   template_text?: string;
   parameter_mappings?: string; // JSON string
   restrictions?: string; // JSON string
@@ -594,6 +615,8 @@ const editingPatch = ref<ExtraPatch | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const parameterMappingsValid = ref(true);
 const parameterMappingsError = ref('');
+const gameGenieCodesValid = ref(true);
+const gameGenieCodesError = ref('');
 
 // Known valid input parameter names
 const VALID_INPUT_PARAMS = [
@@ -733,6 +756,16 @@ watch(activeTab, async (newTab) => {
     } else {
       await loadAllPatches();
     }
+  }
+});
+
+// Validate GameGenie codes when patch type changes
+watch(() => patchForm.value.patch_type, (newType) => {
+  if (newType === 'gamegenie') {
+    validateGameGenieCodes();
+  } else {
+    gameGenieCodesValid.value = true;
+    gameGenieCodesError.value = '';
   }
 });
 
@@ -985,6 +1018,8 @@ function closePatchForm() {
   editingPatch.value = null;
   parameterMappingsValid.value = true;
   parameterMappingsError.value = '';
+  gameGenieCodesValid.value = true;
+  gameGenieCodesError.value = '';
   patchForm.value = {
     patch_code: '',
     name: '',
@@ -1058,6 +1093,9 @@ function insertParameterMapping(inputVar: string) {
     textarea.setSelectionRange(newCursorPos, newCursorPos);
     textarea.focus();
     validateParameterMappings();
+    if (patchForm.value.patch_type === 'gamegenie') {
+      validateGameGenieCodes();
+    }
   }, 0);
 }
 
@@ -1137,6 +1175,19 @@ async function savePatch() {
     return;
   }
   
+  // Validate GameGenie codes
+  if (patchForm.value.patch_type === 'gamegenie') {
+    validateGameGenieCodes();
+    if (!gameGenieCodesValid.value) {
+      alert(`Invalid GameGenie Codes: ${gameGenieCodesError.value}`);
+      return;
+    }
+    if (!patchForm.value.template_text?.trim()) {
+      alert('Please provide GameGenie codes');
+      return;
+    }
+  }
+  
   try {
     // Validate JSON fields
     let parameterMappings = null;
@@ -1192,6 +1243,12 @@ async function savePatch() {
       return;
     }
     
+    // Validate template text for GameGenie
+    if (patchForm.value.patch_type === 'gamegenie' && !patchForm.value.template_text) {
+      alert('Please provide GameGenie codes');
+      return;
+    }
+    
     const api = (window as any)?.electronAPI;
     if (!api?.saveExtraPatch) {
       alert('Save functionality not available');
@@ -1207,7 +1264,7 @@ async function savePatch() {
       priority: patchForm.value.priority || 100,
       requires_parameters: patchForm.value.requires_parameters ? 1 : 0,
       is_system: patchForm.value.is_system,
-      template_text: patchForm.value.patch_type === 'asar' ? patchForm.value.template_text : null,
+      template_text: (patchForm.value.patch_type === 'asar' || patchForm.value.patch_type === 'gamegenie') ? patchForm.value.template_text : null,
       file_data: patchForm.value.fileData ? Array.from(new Uint8Array(patchForm.value.fileData)) : null,
       parameter_mappings: parameterMappings ? JSON.stringify(parameterMappings) : null,
       restrictions: restrictions ? JSON.stringify(restrictions) : null,
@@ -1347,6 +1404,25 @@ function getPresetSummary(preset: Preset): string {
   }
   
   return parts.length > 0 ? parts.join(' • ') : 'No patches or variables';
+}
+
+function openSavePresetDialog() {
+  console.log('[Preset Dialog] Opening save preset dialog');
+  presetsDropdownOpen.value = false;
+  showSavePresetDialog.value = true;
+  console.log('[Preset Dialog] showSavePresetDialog.value =', showSavePresetDialog.value);
+  // Focus the input after dialog appears
+  nextTick(() => {
+    setTimeout(() => {
+      const input = document.querySelector('.preset-save-content input') as HTMLInputElement;
+      if (input) {
+        input.focus();
+        input.select();
+      } else {
+        console.warn('[Preset Dialog] Input not found');
+      }
+    }, 100);
+  });
 }
 
 async function savePreset() {

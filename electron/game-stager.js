@@ -13,6 +13,7 @@ const sevenZip = require('7zip-min');
 const { path7za } = require('7zip-bin');
 
 const SKIP_CLEANUP_FOR_NOW = 1;
+const gameGenieDecoder = require('./utils/gamegenie-decoder');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path
 // This is needed for Electron packaged apps where the binary is in app.asar.unpacked
@@ -928,6 +929,14 @@ async function buildPlusPatchedGame(params) {
             asarPath
           });
           break;
+        case 'gamegenie':
+          applyResult = await applyGameGeniePatch({
+            patch,
+            inputSfcPath: currentSfcPath,
+            outputSfcPath: nextSfcPath,
+            asarPath
+          });
+          break;
         case 'uberasmtree':
           applyResult = await applyUberASMTreePatch({
             patch,
@@ -1023,6 +1032,57 @@ async function applyFilePatch(params) {
     
     return { success: true };
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Apply GameGenie patch (converts codes to ASAR and applies)
+ */
+async function applyGameGeniePatch(params) {
+  const { patch, inputSfcPath, outputSfcPath, asarPath } = params;
+  
+  try {
+    // Get GameGenie codes from template_text
+    const codesText = patch.template_text || '';
+    if (!codesText.trim()) {
+      return { success: false, error: 'No GameGenie codes provided' };
+    }
+    
+    // Validate codes
+    const validation = gameGenieDecoder.validateGameGenieCodes(codesText);
+    if (!validation.valid) {
+      return { success: false, error: `Invalid GameGenie codes: ${validation.errors.join('; ')}` };
+    }
+    
+    // Convert codes to ASAR script
+    const asarScript = gameGenieDecoder.gameGenieCodesToAsar(validation.codes);
+    
+    if (!asarScript.trim()) {
+      return { success: false, error: 'Failed to generate ASAR script from GameGenie codes' };
+    }
+    
+    console.log(`[GameGenie] Converted ${validation.codes.length} code(s) to ASAR script`);
+    console.log(`[GameGenie] ASAR script:\n${asarScript}`);
+    
+    // Create a temporary patch object with the generated ASAR script
+    const asarPatch = {
+      ...patch,
+      template_text: asarScript,
+      parameter_mappings: null // GameGenie patches don't use parameter mappings
+    };
+    
+    // Apply as ASAR patch (without parameter mappings)
+    return await applyAsarPatch({
+      patch: asarPatch,
+      inputSfcPath,
+      outputSfcPath,
+      globalParams: {},
+      localParams: {},
+      asarPath
+    });
+  } catch (error) {
+    console.error('[GameGenie] Error applying GameGenie patch:', error);
     return { success: false, error: error.message };
   }
 }

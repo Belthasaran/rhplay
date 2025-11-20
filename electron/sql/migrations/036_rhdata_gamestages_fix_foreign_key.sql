@@ -1,10 +1,18 @@
--- Migration: 035_rhdata_gamestages
--- Description: Create gamestages table for storing verified "warpable" level id numbers for games
+-- Migration: 036_rhdata_gamestages_fix_foreign_key
+-- Description: Fix foreign key constraint issue in gamestages table
 -- Date: 2025-01-XX
+-- 
+-- The gamestages table was created with a foreign key constraint referencing
+-- gameversions(gameid), but gameid is not a PRIMARY KEY or UNIQUE in gameversions.
+-- This migration drops and recreates the table without the foreign key constraint.
 
+-- Drop the existing table (safe since it's empty or can be recreated)
+DROP TABLE IF EXISTS gamestages;
+
+-- Recreate the table without the foreign key constraint
 CREATE TABLE IF NOT EXISTS gamestages (
   stage_uuid TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  gameid TEXT NOT NULL, -- Links to gameversions by gameid
+  gameid TEXT NOT NULL, -- Links to gameversions by gameid (no FK constraint - gameid is not unique in gameversions)
   
   -- Level identification
   levelnumber TEXT, -- Lunar magic level number as 3-digit hex (000-13C)
@@ -20,7 +28,7 @@ CREATE TABLE IF NOT EXISTS gamestages (
   translevel_13bf TEXT, -- 13BF value: Translevel number as hex string
   
   -- Prerequisites
-  requisites TEXT, -- Comma-separated list of prerequisite tags (e.g., "greenswitch")
+  requisites TEXT, -- Comma-separated list of prerequisite tags (e.g., patch codes)
   
   -- Flags
   playable INTEGER DEFAULT 1, -- Is this a good level to play assuming all pre-requisites can be patched?

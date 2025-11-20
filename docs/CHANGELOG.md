@@ -1,3 +1,5 @@
+- P20251120
+
 - Cross-platform provisioner for portable apps - avoid needing installer:
 
 - Added cross-platform **Provisioner** startup flow: when `clientdata.db`, `rhdata.db`, or `patchbin.db` are missing the Electron app now launches a dedicated provisioning UI (`Provisioner.vue`) that orchestrates the existing `prepare_databases.js` helper, streams real-time download/apply progress, and after success reloads the full app without requiring a separate installer.

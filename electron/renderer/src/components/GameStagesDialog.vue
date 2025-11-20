@@ -19,6 +19,7 @@
           <!-- Action Buttons (DEVADMIN only) -->
           <div v-if="isDevAdmin && currentMode === 'edit'" class="action-buttons">
             <button @click="addNewStage" class="btn-primary btn-small">+ New Stage</button>
+            <button @click="openDetectedLevelsDialog" class="btn-secondary btn-small">Detected Levels</button>
           </div>
 
           <!-- Stages Table -->
@@ -31,20 +32,22 @@
                   <th>L.Name</th>
                   <th>Trans</th>
                   <th>Sub</th>
+                  <th>X</th>
+                  <th>Y</th>
                   <th>Req</th>
                   <th>Diff</th>
-                  <th>P</th>
-                  <th>R</th>
-                  <th>M</th>
-                  <th>K</th>
-                  <th>C</th>
-                  <th>G</th>
-                  <th>S</th>
-                  <th>Ca</th>
-                  <th>Bo</th>
-                  <th>Se</th>
+                  <th class="col-playable" title="Playable level (Excludes cusscenes, Invalid, or Auto win/lose levels)">P</th>
+                  <th class="col-rando" title="Rando level (Playable levels suitable for use in randomizers)">R</th>
+                  <th class="col-mainexit" title="Levels with a main exit (Primary exit used in overworld)">M</th>
+                  <th class="col-keyhole" title="Levels with a keydoor exit used in overworld">K</th>
+                  <th class="col-credits" title="Credits level (Level used to show in-game credits)">C</th>
+                  <th class="col-ghouse" title="Ghost House Level">G</th>
+                  <th class="col-spalace" title="Switch Palace Level">S</th>
+                  <th class="col-castle" title="Castle Level">Ca</th>
+                  <th class="col-boss" title="Level goes straight to a boss">Bo</th>
+                  <th class="col-secret" title="Secret level">Se</th>
                   <th>T</th>
-                  <th>F</th>
+                  <th class="col-final" title="Final level. This generally designates the last level of a game.">F</th>
                   <th v-if="isDevAdmin && currentMode === 'edit'">Actions</th>
                 </tr>
               </thead>
@@ -52,7 +55,10 @@
                 <tr 
                   v-for="stage in stages" 
                   :key="stage.stage_uuid"
-                  :class="{ 'selected': selectedStageUuid === stage.stage_uuid }"
+                  :class="{ 
+                    'selected': selectedStageUuid === stage.stage_uuid,
+                    'secret-level': stage.secret === 1 && currentMode !== 'edit'
+                  }"
                   @click="selectStage(stage)"
                 >
                   <td v-if="currentMode === 'select'" class="checkbox-cell">
@@ -65,12 +71,17 @@
                   <td>
                     <input 
                       v-if="isDevAdmin && currentMode === 'edit'"
-                      v-model="stage.levelnumber" 
-                      type="number"
+                      v-model="stage.levelnumber"
+                      @input="handleLevelNumberInput($event, stage)"
+                      @blur="handleLevelNumberBlur($event, stage)"
+                      type="text"
                       class="input-small"
-                      @input="updateTranslevel(stage)"
+                      placeholder="000"
+                      maxlength="3"
+                      pattern="[0-9A-Fa-f]{0,3}"
                     />
-                    <span v-else>{{ stage.levelnumber || '-' }}</span>
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ formatLevelNumberHex(stage.levelnumber) || '-' }}</span>
+                    <span v-else>-</span>
                   </td>
                   <td>
                     <input 
@@ -79,9 +90,13 @@
                       type="text"
                       class="input-medium"
                     />
-                    <span v-else>{{ stage.levelname }}</span>
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ stage.levelname }}</span>
+                    <span v-else>-</span>
                   </td>
-                  <td class="readonly-cell">{{ calculateTranslevel(stage) || '-' }}</td>
+                  <td class="readonly-cell">
+                    <span v-if="stage.secret !== 1 || currentMode === 'edit'">{{ calculateTranslevel(stage) || '-' }}</span>
+                    <span v-else>-</span>
+                  </td>
                   <td>
                     <input 
                       v-if="isDevAdmin && currentMode === 'edit'"
@@ -92,7 +107,34 @@
                       maxlength="2"
                       pattern="[0-9A-Fa-f]{0,2}"
                     />
-                    <span v-else>{{ stage.submapid || '-' }}</span>
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ stage.submapid || '-' }}</span>
+                    <span v-else>-</span>
+                  </td>
+                  <td>
+                    <input 
+                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-model="stage.tile_x" 
+                      type="text"
+                      class="input-tiny"
+                      placeholder="-"
+                      pattern="[0-9]*"
+                      @input="validateIntegerInput($event, stage, 'tile_x')"
+                    />
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ stage.tile_x || '-' }}</span>
+                    <span v-else>-</span>
+                  </td>
+                  <td>
+                    <input 
+                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-model="stage.tile_y" 
+                      type="text"
+                      class="input-tiny"
+                      placeholder="-"
+                      pattern="[0-9]*"
+                      @input="validateIntegerInput($event, stage, 'tile_y')"
+                    />
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ stage.tile_y || '-' }}</span>
+                    <span v-else>-</span>
                   </td>
                   <td>
                     <div v-if="isDevAdmin && currentMode === 'edit'" class="requisites-tag-selector">
@@ -106,34 +148,34 @@
                           <button @click.stop="removeRequisiteTag(stage, tag)" class="tag-remove">×</button>
                         </span>
                       </div>
-                      <div class="tag-input-row">
-                        <input 
-                          v-model="newRequisiteTag"
-                          type="text"
-                          class="tag-input"
-                          placeholder="Type patch code..."
-                          @keydown.enter.prevent="addRequisiteTag(stage)"
-                          @focus="editingRequisitesForStage = stage.stage_uuid"
-                          @blur="setTimeout(() => editingRequisitesForStage = null, 200)"
-                        />
-                        <select 
-                          v-if="availablePatches.length > 0"
-                          @change="if ($event.target.value) { newRequisiteTag = $event.target.value; addRequisiteTag(stage); $event.target.value = ''; }"
-                          class="tag-select"
+                      <input 
+                        v-model="newRequisiteTag"
+                        type="text"
+                        class="tag-input"
+                        placeholder="Type patch code..."
+                        @keydown.enter.prevent="addRequisiteTag(stage)"
+                        @focus="editingRequisitesForStage = stage.stage_uuid"
+                        @blur="setTimeout(() => editingRequisitesForStage = null, 200)"
+                      />
+                      <select 
+                        v-if="availablePatches.length > 0"
+                        @change="if ($event.target.value) { newRequisiteTag = $event.target.value; addRequisiteTag(stage); $event.target.value = ''; }"
+                        class="tag-select"
+                      >
+                        <option value="">Add patch...</option>
+                        <option 
+                          v-for="patch in availablePatches" 
+                          :key="patch.epuuid"
+                          :value="patch.patch_code"
+                          :disabled="getRequisiteTags(stage).includes(patch.patch_code)"
+                          :title="patch.patch_code + ' - ' + patch.name"
                         >
-                          <option value="">Add patch...</option>
-                          <option 
-                            v-for="patch in availablePatches" 
-                            :key="patch.epuuid"
-                            :value="patch.patch_code"
-                            :disabled="getRequisiteTags(stage).includes(patch.patch_code)"
-                          >
-                            {{ patch.patch_code }} - {{ patch.name }}
-                          </option>
-                        </select>
-                      </div>
+                          {{ abbreviatePatchName(patch.patch_code, patch.name) }}
+                        </option>
+                      </select>
                     </div>
-                    <span v-else>{{ formatRequisites(stage.requisites) || '-' }}</span>
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ formatRequisites(stage.requisites) || '-' }}</span>
+                    <span v-else>-</span>
                   </td>
                   <td>
                     <input 
@@ -144,9 +186,10 @@
                       max="10"
                       class="input-tiny"
                     />
-                    <span v-else>{{ stage.difficulty ?? 0 }}</span>
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ stage.difficulty ?? 0 }}</span>
+                    <span v-else>-</span>
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-playable">
                     <input 
                       type="checkbox" 
                       :checked="stage.playable === 1"
@@ -154,7 +197,7 @@
                       @change="stage.playable = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-rando">
                     <input 
                       type="checkbox" 
                       :checked="stage.rando === 1"
@@ -162,7 +205,7 @@
                       @change="stage.rando = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-mainexit">
                     <input 
                       type="checkbox" 
                       :checked="stage.mainexit === 1"
@@ -170,7 +213,7 @@
                       @change="stage.mainexit = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-keyhole">
                     <input 
                       type="checkbox" 
                       :checked="stage.keyhole === 1"
@@ -178,7 +221,7 @@
                       @change="stage.keyhole = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-credits">
                     <input 
                       type="checkbox" 
                       :checked="stage.credits === 1"
@@ -186,7 +229,7 @@
                       @change="stage.credits = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-ghouse">
                     <input 
                       type="checkbox" 
                       :checked="stage.ghouse === 1"
@@ -194,7 +237,7 @@
                       @change="stage.ghouse = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-spalace">
                     <input 
                       type="checkbox" 
                       :checked="stage.spalace === 1"
@@ -202,7 +245,7 @@
                       @change="stage.spalace = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-castle">
                     <input 
                       type="checkbox" 
                       :checked="stage.castle === 1"
@@ -210,7 +253,7 @@
                       @change="stage.castle = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-boss">
                     <input 
                       type="checkbox" 
                       :checked="stage.boss === 1"
@@ -218,7 +261,7 @@
                       @change="stage.boss = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-secret">
                     <input 
                       type="checkbox" 
                       :checked="stage.secret === 1"
@@ -234,7 +277,7 @@
                       @change="stage.troll = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td class="checkbox-cell">
+                  <td class="checkbox-cell col-final">
                     <input 
                       type="checkbox" 
                       :checked="stage.final === 1"
@@ -243,11 +286,25 @@
                     />
                   </td>
                   <td v-if="isDevAdmin && currentMode === 'edit'" class="actions-cell">
-                    <button @click.stop="deleteStage(stage)" class="btn-link-small btn-danger">Delete</button>
+                    <button 
+                      @click.stop="testLevel(stage)" 
+                      class="btn-icon btn-test"
+                      title="Test level - Build and Boot with 1lvno patch"
+                      :disabled="testingLevel || !stage.levelnumber"
+                    >
+                      🧪
+                    </button>
+                    <button 
+                      @click.stop="deleteStage(stage)" 
+                      class="btn-icon btn-delete"
+                      title="Delete stage"
+                    >
+                      ✕
+                    </button>
                   </td>
                 </tr>
                 <tr v-if="stages.length === 0">
-                  <td :colspan="isDevAdmin && currentMode === 'edit' ? 20 : 19" class="empty-message">
+                  <td :colspan="isDevAdmin && currentMode === 'edit' ? 22 : 21" class="empty-message">
                     No stages found for this game
                   </td>
                 </tr>
@@ -286,19 +343,79 @@
       </footer>
     </div>
   </div>
+
+  <!-- Level Patch Test Progress Dialog -->
+  <Teleport to="body">
+    <div v-if="testProgressDialogOpen" class="modal-backdrop" @click.self.prevent>
+      <div class="modal test-progress-modal">
+        <header class="modal-header">
+          <h3>🧪 Level Patch Test</h3>
+        </header>
+        <section class="modal-body">
+          <div class="test-progress-content">
+            <div class="test-progress-message" v-if="testProgressMessage">
+              {{ testProgressMessage }}
+            </div>
+            <div v-if="testingLevel" class="loading-spinner"></div>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button @click="testProgressDialogOpen = false; testingLevel = false" class="btn-secondary">Close</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Detected Levels Dialog - Rendered outside parent modal -->
+  <Teleport to="body">
+    <DetectedLevelsDialog
+      :isOpen="showDetectedLevelsDialog"
+      :gameId="gameId"
+      :gameVersion="gameVersion || null"
+      :existingLevelNumbers="stages.map(s => s.levelnumber).filter(n => n) as string[]"
+      @close="closeDetectedLevelsDialog"
+      @levels-selected="handleDetectedLevelsSelected"
+    />
+  </Teleport>
+
+  <!-- Level Patch Test Progress Dialog -->
+  <Teleport to="body">
+    <div v-if="testProgressDialogOpen" class="modal-backdrop" @click.self.prevent>
+      <div class="modal test-progress-modal">
+        <header class="modal-header">
+          <h3>🧪 Level Patch Test</h3>
+        </header>
+        <section class="modal-body">
+          <div class="test-progress-content">
+            <div class="test-progress-message" v-if="testProgressMessage">
+              {{ testProgressMessage }}
+            </div>
+            <div v-if="testingLevel" class="loading-spinner"></div>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button @click="testProgressDialogOpen = false; testingLevel = false" class="btn-secondary">Close</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, nextTick, Teleport } from 'vue';
+import DetectedLevelsDialog from './DetectedLevelsDialog.vue';
 
 interface GameStage {
   stage_uuid?: string;
   gameid: string;
-  levelnumber?: number | null;
+  levelnumber?: string | null; // 3-digit hex string (000-13C)
   levelname: string;
   versions?: string;
   submapid?: string | null;
-  translevel_13bf?: number | null;
+  translevel_13bf?: string | null; // Hex string
+  tile_x?: string | null; // Integer string
+  tile_y?: string | null; // Integer string
+  tile_value?: string | null; // Internal attribute, not displayed
   requisites?: string | null;
   playable: number;
   rando: number;
@@ -340,6 +457,9 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const saving = ref(false);
+const testingLevel = ref(false);
+const testProgressDialogOpen = ref(false);
+const testProgressMessage = ref('');
 const stages = ref<GameStage[]>([]);
 const selectedStageUuid = ref<string | null>(null);
 const isDevAdmin = ref(false);
@@ -347,6 +467,7 @@ const availablePatches = ref<Array<{epuuid: string, patch_code: string, name: st
 const loadingPatches = ref(false);
 const editingRequisitesForStage = ref<string | null>(null); // stage_uuid being edited
 const newRequisiteTag = ref('');
+const showDetectedLevelsDialog = ref(false);
 
 // Get requisites as array of tags
 function getRequisiteTags(stage: GameStage): string[] {
@@ -388,19 +509,194 @@ function formatRequisites(requisites: string | null | undefined): string {
   return tags.join(', ');
 }
 
-function calculateTranslevel(stage: GameStage): number | null {
-  if (stage.translevel_13bf !== null && stage.translevel_13bf !== undefined) {
-    return stage.translevel_13bf;
+// Validate integer input for tile_x and tile_y
+function validateIntegerInput(event: Event, stage: GameStage, field: 'tile_x' | 'tile_y') {
+  const target = event.target as HTMLInputElement;
+  const value = target.value.trim();
+  
+  // Allow empty or integer string
+  if (value === '') {
+    stage[field] = null;
+    return;
   }
-  if (stage.levelnumber !== null && stage.levelnumber !== undefined) {
-    // Simplified calculation: if levelnumber > 0x24, then levelnumber - 0x24, else levelnumber
-    return stage.levelnumber > 0x24 ? stage.levelnumber - 0x24 : stage.levelnumber;
+  
+  // Check if it's a valid integer
+  if (/^\d+$/.test(value)) {
+    stage[field] = value;
+  } else {
+    // Revert to previous value if invalid
+    target.value = stage[field] || '';
   }
+}
+
+// Abbreviate patch name for dropdown display (max 20 characters)
+function abbreviatePatchName(patchCode: string, patchName: string): string {
+  const fullText = `${patchCode} - ${patchName}`;
+  if (fullText.length <= 20) return fullText;
+  
+  // Try to fit code and abbreviated name
+  const codePart = patchCode + ' - ';
+  const availableSpace = 20 - codePart.length;
+  
+  if (availableSpace > 0) {
+    return codePart + patchName.substring(0, availableSpace - 1) + '…';
+  }
+  
+  // If code itself is too long, just show code
+  return patchCode.length <= 20 ? patchCode : patchCode.substring(0, 19) + '…';
+}
+
+// Format levelnumber as hex string (000-13C) - normalizes and validates
+function formatLevelNumberHex(levelnumber: string | null | undefined): string {
+  if (!levelnumber || levelnumber.trim() === '') return '';
+  // Parse hex string to number for validation
+  const num = parseInt(levelnumber.trim(), 16);
+  if (isNaN(num)) return '';
+  // Clamp to valid range 0-0x13C (0-316 decimal)
+  const clamped = Math.max(0, Math.min(0x13C, num));
+  return clamped.toString(16).toUpperCase().padStart(3, '0');
+}
+
+// Validate and normalize hex string input
+function normalizeHexInput(hexStr: string): string | null {
+  if (!hexStr || hexStr.trim() === '') return null;
+  const trimmed = hexStr.trim().toUpperCase();
+  // Parse to validate
+  const num = parseInt(trimmed, 16);
+  if (isNaN(num)) return null;
+  // Clamp to valid range 0-0x13C (0-316 decimal)
+  const clamped = Math.max(0, Math.min(0x13C, num));
+  return clamped.toString(16).toUpperCase().padStart(3, '0');
+}
+
+// Validate hex input (only allow 0-9, A-F, a-f, up to 3 characters)
+function isValidHexInput(value: string): boolean {
+  if (value === '') return true; // Allow empty
+  if (value.length > 3) return false;
+  return /^[0-9A-Fa-f]{0,3}$/.test(value);
+}
+
+// Handle levelnumber input - allow free typing, only validate format
+function handleLevelNumberInput(event: Event, stage: GameStage) {
+  const target = event.target as HTMLInputElement;
+  let value = target.value.trim().toUpperCase();
+  
+  // Validate input format (allow empty for editing)
+  if (value !== '' && !isValidHexInput(value)) {
+    // Revert to previous value if invalid
+    target.value = stage.levelnumber || '';
+    return;
+  }
+  
+  // Store raw input value (user can type freely)
+  // Don't format/pad during typing - only on blur
+  stage.levelnumber = value === '' ? null : value;
+  
+  // Immediately calculate and update translevel if we have a valid value
+  if (value !== '') {
+    const parsed = parseInt(value, 16);
+    if (!isNaN(parsed)) {
+      // Validate range
+      const clamped = Math.max(0, Math.min(0x13C, parsed));
+      if (clamped !== parsed) {
+        // Value is out of range, but don't change it during typing
+        // User can fix it or we'll clamp on blur
+        return;
+      }
+      
+      // Calculate translevel from current value
+      stage.translevel_13bf = null;
+      const newTranslevel = calculateTranslevel(stage);
+      stage.translevel_13bf = newTranslevel;
+    }
+  } else {
+    // Empty input - clear translevel
+    stage.translevel_13bf = null;
+  }
+}
+
+// Handle levelnumber blur - format and pad the value when user finishes editing
+function handleLevelNumberBlur(event: Event, stage: GameStage) {
+  const target = event.target as HTMLInputElement;
+  const value = target.value.trim().toUpperCase();
+  
+  if (value === '') {
+    // Empty - allow it, don't format
+    stage.levelnumber = null;
+    stage.translevel_13bf = null;
+    return;
+  }
+  
+  // Validate and normalize the value
+  if (!isValidHexInput(value)) {
+    // Invalid - revert to previous valid value
+    target.value = formatLevelNumberHex(stage.levelnumber) || '';
+    return;
+  }
+  
+  // Normalize and pad to 3 hex digits
+  const normalizedHex = normalizeHexInput(value);
+  if (normalizedHex === null) {
+    // Couldn't parse - revert
+    target.value = formatLevelNumberHex(stage.levelnumber) || '';
+    return;
+  }
+  
+  // Update with formatted value
+  stage.levelnumber = normalizedHex;
+  target.value = normalizedHex;
+  
+  // Recalculate translevel with formatted value
+  stage.translevel_13bf = null;
+  const newTranslevel = calculateTranslevel(stage);
+  stage.translevel_13bf = newTranslevel;
+}
+
+function calculateTranslevel(stage: GameStage): string | null {
+  // Always calculate from levelnumber if available (don't use cached translevel_13bf)
+  // This ensures the display updates when levelnumber changes
+  if (stage.levelnumber !== null && stage.levelnumber !== undefined && stage.levelnumber !== '') {
+    // Parse hex string to number
+    const levelnum = parseInt(stage.levelnumber.trim(), 16);
+    if (isNaN(levelnum)) return null;
+    
+    let translevel: number;
+    if (levelnum <= 0x24) {
+      // Level number <= 0x24: translevel = level number
+      translevel = levelnum;
+    } else if (levelnum >= 0x101) {
+      // Level number >= 0x101: translevel = level number - 0xDC
+      translevel = levelnum - 0xDC;
+      // Ensure translevel is valid (0x25 to 0xFF)
+      if (translevel < 0x25 || translevel > 0xFF) {
+        // Invalid mapping, return null or use closest valid value
+        return null;
+      }
+    } else {
+      // Level numbers 0x25-0x100 are in the gap and don't map to valid translevels
+      // Return null to indicate invalid mapping
+      return null;
+    }
+    
+    // Return as hex string, padded to 2 digits (translevels are 0x00-0xFF)
+    return translevel.toString(16).toUpperCase().padStart(2, '0');
+  }
+  
+  // If no levelnumber, return stored translevel if available
+  if (stage.translevel_13bf !== null && stage.translevel_13bf !== undefined && stage.translevel_13bf !== '') {
+    // Normalize translevel hex string (pad to 2 digits)
+    const parsed = parseInt(stage.translevel_13bf.trim(), 16);
+    if (isNaN(parsed)) return null;
+    return parsed.toString(16).toUpperCase().padStart(2, '0');
+  }
+  
   return null;
 }
 
 function updateTranslevel(stage: GameStage) {
-  stage.translevel_13bf = calculateTranslevel(stage);
+  // Always recalculate and update the stored value
+  const calculated = calculateTranslevel(stage);
+  stage.translevel_13bf = calculated;
 }
 
 async function loadAvailablePatches() {
@@ -455,9 +751,15 @@ async function loadStages() {
     if (result?.success) {
       stages.value = result.stages || [];
       
-      // Select initial level if provided
+      // Select initial level if provided (initialLevelNumber is expected as decimal number from AdvancedPatchModal)
       if (props.initialLevelNumber !== null && props.initialLevelNumber !== undefined) {
-        const matchingStage = stages.value.find(s => s.levelnumber === props.initialLevelNumber);
+        // Convert decimal to hex for matching
+        const initialHex = props.initialLevelNumber.toString(16).toUpperCase().padStart(3, '0');
+        const matchingStage = stages.value.find(s => {
+          if (!s.levelnumber) return false;
+          const stageHex = formatLevelNumberHex(s.levelnumber);
+          return stageHex === initialHex;
+        });
         if (matchingStage) {
           selectedStageUuid.value = matchingStage.stage_uuid || null;
         }
@@ -511,11 +813,14 @@ function addNewStage() {
   const newStage: GameStage = {
     stage_uuid: undefined,
     gameid: props.gameId,
-    levelnumber: null,
+    levelnumber: null, // Will be stored as hex string
     levelname: 'New Stage',
     versions: '*',
     submapid: null,
-    translevel_13bf: null,
+    translevel_13bf: null, // Will be stored as hex string
+    tile_x: null,
+    tile_y: null,
+    tile_value: null,
     requisites: null,
     playable: 1,
     rando: 1,
@@ -534,6 +839,157 @@ function addNewStage() {
   stages.value.push(newStage);
 }
 
+async function testLevel(stage: GameStage) {
+  if (!stage.levelnumber) {
+    alert('Level number is required to test this level');
+    return;
+  }
+  
+  if (testingLevel.value) {
+    return; // Already testing
+  }
+  
+  try {
+    testingLevel.value = true;
+    testProgressDialogOpen.value = true;
+    testProgressMessage.value = 'Preparing test build...';
+    
+    const api = (window as any)?.electronAPI;
+    if (!api?.buildPlusPatchedGame || !api?.getAllExtraPatches) {
+      testProgressMessage.value = 'Error: Test functionality not available';
+      return;
+    }
+    
+    // Get all patches to find the "1lvno" patch
+    testProgressMessage.value = 'Finding 1lvno patch...';
+    const patchesResult = await api.getAllExtraPatches();
+    
+    if (!patchesResult?.success) {
+      testProgressMessage.value = `Error: Failed to load patches - ${patchesResult?.error || 'Unknown error'}`;
+      return;
+    }
+    
+    const allPatches = patchesResult.patches || [];
+    const lvnoPatch = allPatches.find((p: any) => p.patch_code === '1lvno');
+    
+    if (!lvnoPatch) {
+      testProgressMessage.value = 'Error: 1lvno patch not found. Please ensure the patch is defined in the system.';
+      return;
+    }
+    
+    // Get settings for paths
+    testProgressMessage.value = 'Loading settings...';
+    let currentSettings: any = {};
+    if (api.getSettings) {
+      const settingsResult = await api.getSettings();
+      if (settingsResult && typeof settingsResult === 'object') {
+        currentSettings = settingsResult;
+      }
+    }
+    
+    // Prepare build parameters
+    testProgressMessage.value = 'Starting build...';
+    const levelHex = formatLevelNumberHex(stage.levelnumber);
+    
+    const buildParams = {
+      gameId: props.gameId,
+      gameVersion: props.gameVersion || 1,
+      selectedPatches: [lvnoPatch.epuuid],
+      globalParams: {
+        glevelnum: levelHex,
+        gonoffv: []
+      },
+      localParams: {},
+      action: 'boot' as const,
+      vanillaRomPath: currentSettings.vanillaRomPath || '',
+      flipsPath: currentSettings.flipsPath || '',
+      asarPath: currentSettings.asarPath || '',
+    };
+    
+    testProgressMessage.value = `Building with level number ${levelHex}...`;
+    
+    const result = await api.buildPlusPatchedGame(buildParams);
+    
+    if (!result?.success) {
+      testProgressMessage.value = `Build failed: ${result?.error || 'Unknown error'}`;
+      testingLevel.value = false;
+      return;
+    }
+    
+    testProgressMessage.value = 'Build complete! Connecting to USB2SNES...';
+    
+    // Check USB2SNES connection and upload/boot if needed
+    if (buildParams.action === 'boot' && api.usb2snesConnect && api.usb2snesUploadRom && api.usb2snesBoot) {
+      // Refresh USB2SNES status first
+      if (api.refreshUsb2snesStatus) {
+        await api.refreshUsb2snesStatus();
+      }
+      
+      // Check if we need to connect (we'll assume it's already connected or auto-connect)
+      // For now, just try to upload and boot
+      const filename = result.filename;
+      const srcPath = result.outputPath;
+      const dstPath = `/work/${filename}`;
+      
+      testProgressMessage.value = `Uploading ${filename} to USB2SNES...`;
+      
+      try {
+        // Setup progress listener if available
+        let uploadPercent = 0;
+        const removeProgressListener = api.onUploadProgress?.((transferred: number, total: number, percent: number) => {
+          uploadPercent = percent;
+          testProgressMessage.value = `Uploading ${filename}... ${percent}%`;
+        });
+        
+        // Upload file
+        const uploadResult = await api.usb2snesUploadRom(srcPath, dstPath);
+        
+        if (removeProgressListener) {
+          removeProgressListener();
+        }
+        
+        if (!uploadResult?.success) {
+          testProgressMessage.value = `Upload failed: ${uploadResult?.error || 'Unknown error'}`;
+          testingLevel.value = false;
+          return;
+        }
+        
+        testProgressMessage.value = `Upload complete! Booting ${filename}...`;
+        
+        // Boot the file
+        try {
+          await api.usb2snesBoot(dstPath);
+          testProgressMessage.value = `✓ Test complete! Level ${levelHex} - ${stage.levelname} is now running on SNES`;
+        } catch (bootError: any) {
+          testProgressMessage.value = `Uploaded but boot failed: ${bootError?.message || String(bootError)}`;
+          testingLevel.value = false;
+          return;
+        }
+        
+      } catch (uploadError: any) {
+        testProgressMessage.value = `Upload failed: ${uploadError?.message || String(uploadError)}`;
+        testingLevel.value = false;
+        return;
+      }
+    } else {
+      // Just report build success
+      testProgressMessage.value = `✓ Build complete! Level ${levelHex} - ${stage.levelname}`;
+    }
+    
+    // Close dialog after a delay
+    setTimeout(() => {
+      testProgressDialogOpen.value = false;
+      testingLevel.value = false;
+      testProgressMessage.value = '';
+    }, 3000);
+    
+  } catch (error: any) {
+    console.error('Error testing level:', error);
+    testProgressMessage.value = `Error: ${error?.message || String(error)}`;
+    testingLevel.value = false;
+  }
+}
+
 async function deleteStage(stage: GameStage) {
   if (!stage.stage_uuid) {
     // Remove from local array if it's a new stage
@@ -544,7 +1000,8 @@ async function deleteStage(stage: GameStage) {
     return;
   }
   
-  if (!confirm(`Are you sure you want to delete stage "${stage.levelname}" (Level ${stage.levelnumber})?`)) {
+  const levelHex = formatLevelNumberHex(stage.levelnumber);
+  if (!confirm(`Are you sure you want to delete stage "${stage.levelname}" (Level ${levelHex})?`)) {
     return;
   }
   
@@ -593,6 +1050,9 @@ async function saveAll() {
         versions: stage.versions || '*',
         submapid: stage.submapid,
         translevel_13bf: stage.translevel_13bf,
+        tile_x: stage.tile_x || null,
+        tile_y: stage.tile_y || null,
+        tile_value: stage.tile_value || null,
         requisites: stage.requisites || null,
         playable: stage.playable,
         rando: stage.rando,
@@ -631,6 +1091,48 @@ function close() {
   emit('close');
 }
 
+function openDetectedLevelsDialog() {
+  showDetectedLevelsDialog.value = true;
+}
+
+function closeDetectedLevelsDialog() {
+  showDetectedLevelsDialog.value = false;
+}
+
+function handleDetectedLevelsSelected(selectedLevels: any[]) {
+  // Add selected detected levels as new stages
+  for (const level of selectedLevels) {
+    const newStage: GameStage = {
+      stage_uuid: undefined,
+      gameid: props.gameId,
+      levelnumber: level.levelnumber || null,
+      levelname: level.levelname || 'New Stage',
+      versions: '*',
+      submapid: level.submapid || null,
+      translevel_13bf: level.translevel || null,
+      tile_x: level.tile_x || null,
+      tile_y: level.tile_y || null,
+      tile_value: level.tile_value || null,
+      requisites: null,
+      playable: 1,
+      rando: 1,
+      difficulty: 0,
+      mainexit: 1,
+      keyhole: 0,
+      credits: 0,
+      ghouse: 0,
+      spalace: 0,
+      castle: 0,
+      boss: 0,
+      secret: 0,
+      troll: 0,
+      final: 0,
+    };
+    stages.value.push(newStage);
+  }
+  showDetectedLevelsDialog.value = false;
+}
+
 watch(() => props.isOpen, async (newVal) => {
   if (newVal) {
     currentMode.value = props.mode || 'select';
@@ -658,7 +1160,13 @@ watch(() => props.gameId, async () => {
 
 watch(() => props.initialLevelNumber, () => {
   if (props.isOpen && props.initialLevelNumber !== null && props.initialLevelNumber !== undefined) {
-    const matchingStage = stages.value.find(s => s.levelnumber === props.initialLevelNumber);
+    // Convert decimal to hex for matching
+    const initialHex = props.initialLevelNumber.toString(16).toUpperCase().padStart(3, '0');
+    const matchingStage = stages.value.find(s => {
+      if (!s.levelnumber) return false;
+      const stageHex = formatLevelNumberHex(s.levelnumber);
+      return stageHex === initialHex;
+    });
     if (matchingStage) {
       selectedStageUuid.value = matchingStage.stage_uuid || null;
     }
@@ -716,6 +1224,128 @@ watch(() => props.initialLevelNumber, () => {
   border-bottom: 2px solid var(--border-primary);
   color: var(--text-primary);
   white-space: nowrap;
+  cursor: help;
+}
+
+/* Background colors for checkbox columns */
+.stages-table th.col-playable,
+.stages-table td.col-playable {
+  background-color: rgba(76, 175, 80, 0.2); /* Light green */
+}
+
+.stages-table th.col-rando,
+.stages-table td.col-rando {
+  background-color: rgba(156, 39, 176, 0.2); /* Light purple */
+}
+
+.stages-table th.col-mainexit,
+.stages-table td.col-mainexit {
+  background-color: rgba(33, 150, 243, 0.2); /* Light blue */
+}
+
+.stages-table th.col-keyhole,
+.stages-table td.col-keyhole {
+  background-color: rgba(255, 152, 0, 0.2); /* Light orange */
+}
+
+.stages-table th.col-credits,
+.stages-table td.col-credits {
+  background-color: rgba(255, 193, 7, 0.2); /* Light yellow */
+}
+
+.stages-table th.col-ghouse,
+.stages-table td.col-ghouse {
+  background-color: rgba(158, 158, 158, 0.2); /* Light gray */
+}
+
+.stages-table th.col-spalace,
+.stages-table td.col-spalace {
+  background-color: rgba(0, 188, 212, 0.2); /* Light cyan */
+}
+
+.stages-table th.col-castle,
+.stages-table td.col-castle {
+  background-color: rgba(121, 85, 72, 0.2); /* Light brown */
+}
+
+.stages-table th.col-boss,
+.stages-table td.col-boss {
+  background-color: rgba(244, 67, 54, 0.2); /* Light red */
+}
+
+.stages-table th.col-secret,
+.stages-table td.col-secret {
+  background-color: rgba(63, 81, 181, 0.2); /* Light indigo */
+}
+
+.stages-table th.col-final,
+.stages-table td.col-final {
+  background-color: rgba(233, 30, 99, 0.2); /* Light pink */
+}
+
+/* Brighten table cells when checkbox is checked */
+.stages-table td.col-playable:has(input[type="checkbox"]:checked) {
+  background-color: rgba(76, 175, 80, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-rando:has(input[type="checkbox"]:checked) {
+  background-color: rgba(156, 39, 176, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-mainexit:has(input[type="checkbox"]:checked) {
+  background-color: rgba(33, 150, 243, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-keyhole:has(input[type="checkbox"]:checked) {
+  background-color: rgba(255, 152, 0, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-credits:has(input[type="checkbox"]:checked) {
+  background-color: rgba(255, 193, 7, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-ghouse:has(input[type="checkbox"]:checked) {
+  background-color: rgba(158, 158, 158, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-spalace:has(input[type="checkbox"]:checked) {
+  background-color: rgba(0, 188, 212, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-castle:has(input[type="checkbox"]:checked) {
+  background-color: rgba(121, 85, 72, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-boss:has(input[type="checkbox"]:checked) {
+  background-color: rgba(244, 67, 54, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-secret:has(input[type="checkbox"]:checked) {
+  background-color: rgba(63, 81, 181, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-final:has(input[type="checkbox"]:checked) {
+  background-color: rgba(233, 30, 99, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+/* Secret level rows - hide data when not in edit mode */
+.stages-table tr.secret-level td:not(.col-secret) {
+  color: var(--text-disabled, #999);
+}
+
+.stages-table tr.secret-level:hover td {
+  background-color: var(--bg-hover);
 }
 
 .stages-table td {
@@ -738,6 +1368,67 @@ watch(() => props.initialLevelNumber, () => {
   width: 30px;
 }
 
+/* Improve checkbox visibility across all themes */
+.stages-table input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  cursor: pointer;
+  /* Use accent-color for modern browsers - ensures checkmark is visible */
+  accent-color: var(--accent-primary, #4CAF50);
+  /* Dark background for unchecked state ensures visibility */
+  background-color: var(--bg-secondary, #f5f5f5);
+  border: 2px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  /* Make checkmark larger and bolder */
+  appearance: checkbox;
+  -webkit-appearance: checkbox;
+  /* Increase checkmark size */
+  transform: scale(1.1);
+}
+
+/* Enhanced visibility for checked checkboxes - use high contrast colors */
+.stages-table input[type="checkbox"]:checked {
+  /* Use accent color with high contrast */
+  accent-color: var(--accent-primary, #4CAF50);
+  background-color: var(--accent-primary, #4CAF50);
+  border-color: var(--accent-primary, #4CAF50);
+  /* Add a subtle shadow to make checked state stand out */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+/* Ensure checkmark is visible - use filter to increase contrast */
+.stages-table input[type="checkbox"]:checked {
+  filter: contrast(1.2) brightness(0.95);
+}
+
+/* Disabled checkbox styling - still visible */
+.stages-table input[type="checkbox"]:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
+/* Disabled checked checkbox - ensure checkmark is still visible */
+.stages-table input[type="checkbox"]:disabled:checked {
+  opacity: 0.8;
+  filter: contrast(1.3) brightness(0.9);
+}
+
+/* Hover state for enabled checkboxes */
+.stages-table input[type="checkbox"]:not(:disabled):hover {
+  border-color: var(--accent-primary, #4CAF50);
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+  transform: scale(1.15);
+}
+
+/* Focus state for accessibility */
+.stages-table input[type="checkbox"]:focus {
+  outline: 2px solid var(--accent-primary, #4CAF50);
+  outline-offset: 2px;
+}
+
 .readonly-cell {
   color: var(--text-tertiary);
   font-family: monospace;
@@ -745,6 +1436,94 @@ watch(() => props.initialLevelNumber, () => {
 
 .actions-cell {
   white-space: nowrap;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  transform: scale(1.1);
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-test {
+  background: var(--bg-primary);
+  border-color: var(--accent-primary, #4CAF50);
+}
+
+.btn-test:hover:not(:disabled) {
+  background: var(--accent-primary, #4CAF50);
+  color: white;
+}
+
+.btn-delete {
+  background: var(--bg-primary);
+  border-color: #f44336;
+  color: #f44336;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #f44336;
+  color: white;
+}
+
+/* Test Progress Dialog */
+.test-progress-modal {
+  max-width: 400px;
+}
+
+.test-progress-content {
+  padding: 20px;
+  text-align: center;
+}
+
+.test-progress-message {
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--accent-primary, #4CAF50);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .input-small {
@@ -755,6 +1534,11 @@ watch(() => props.initialLevelNumber, () => {
   border-radius: 3px;
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.input-small[type="text"] {
+  font-family: monospace;
+  text-transform: uppercase;
 }
 
 .input-medium {
@@ -851,14 +1635,8 @@ watch(() => props.initialLevelNumber, () => {
   border-radius: 50%;
 }
 
-.tag-input-row {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
 .tag-input {
-  flex: 1;
+  width: 100%;
   padding: 4px 6px;
   font-size: var(--small-font-size);
   font-family: monospace;
@@ -867,9 +1645,12 @@ watch(() => props.initialLevelNumber, () => {
   background: var(--bg-primary);
   color: var(--text-primary);
   min-width: 80px;
+  margin-bottom: 4px;
 }
 
 .tag-select {
+  width: 100%;
+  max-width: 200px;
   padding: 4px 6px;
   font-size: var(--small-font-size);
   border: 1px solid var(--border-primary);

@@ -3023,6 +3023,9 @@ function registerDatabaseHandlers(dbManager) {
         versions,
         submapid,
         translevel_13bf,
+        tile_x,
+        tile_y,
+        tile_value,
         requisites,
         playable,
         rando,
@@ -3051,12 +3054,72 @@ function registerDatabaseHandlers(dbManager) {
 
       const db = dbManager.getConnection('rhdata');
       
+      // Normalize levelnumber and translevel as hex strings
+      let normalizedLevelnumber = levelnumber;
+      if (normalizedLevelnumber && typeof normalizedLevelnumber === 'string') {
+        // Ensure it's a valid hex string, normalize format
+        const parsed = parseInt(normalizedLevelnumber.trim(), 16);
+        if (!isNaN(parsed)) {
+          // Clamp to valid range 0-0x13C
+          const clamped = Math.max(0, Math.min(0x13C, parsed));
+          normalizedLevelnumber = clamped.toString(16).toUpperCase().padStart(3, '0');
+        } else {
+          normalizedLevelnumber = null;
+        }
+      } else if (normalizedLevelnumber !== null && normalizedLevelnumber !== undefined) {
+        // Handle legacy numeric values (shouldn't happen, but be safe)
+        const num = typeof normalizedLevelnumber === 'number' ? normalizedLevelnumber : parseInt(String(normalizedLevelnumber), 10);
+        if (!isNaN(num)) {
+          const clamped = Math.max(0, Math.min(0x13C, num));
+          normalizedLevelnumber = clamped.toString(16).toUpperCase().padStart(3, '0');
+        } else {
+          normalizedLevelnumber = null;
+        }
+      }
+
       // Calculate translevel_13bf from levelnumber if not provided
+      // Inverse of: if translevel > 0x24, then level number = translevel + 0xDC
+      // So the mapping is:
+      //   - translevel 0x00-0x24 -> level number 0x00-0x24
+      //   - translevel 0x25-0xFF -> level number 0x101-0x1DB (translevel + 0xDC)
+      // The inverse mapping:
+      //   - If level number <= 0x24, then translevel = level number
+      //   - If level number >= 0x101, then translevel = level number - 0xDC
+      //   - Level numbers 0x25-0x100 are not valid (gap in mapping)
       let calculatedTranslevel = translevel_13bf;
-      if (!calculatedTranslevel && levelnumber !== null && levelnumber !== undefined) {
-        // Simplified calculation: if levelnumber > 0x24, then levelnumber - 0x24, else levelnumber
-        // The actual formula is more complex, but this is a common simplification
-        calculatedTranslevel = levelnumber > 0x24 ? levelnumber - 0x24 : levelnumber;
+      if (!calculatedTranslevel && normalizedLevelnumber) {
+        // Parse hex string to number for calculation
+        const levelnum = parseInt(normalizedLevelnumber, 16);
+        if (!isNaN(levelnum)) {
+          let translevel;
+          if (levelnum <= 0x24) {
+            // Level number <= 0x24: translevel = level number
+            translevel = levelnum;
+            calculatedTranslevel = translevel.toString(16).toUpperCase().padStart(2, '0');
+          } else if (levelnum >= 0x101) {
+            // Level number >= 0x101: translevel = level number - 0xDC
+            translevel = levelnum - 0xDC;
+            // Ensure translevel is valid (0x25 to 0xFF)
+            if (translevel >= 0x25 && translevel <= 0xFF) {
+              // Return as hex string, padded to 2 digits
+              calculatedTranslevel = translevel.toString(16).toUpperCase().padStart(2, '0');
+            } else {
+              // Invalid mapping, use null
+              calculatedTranslevel = null;
+            }
+          } else {
+            // Level numbers 0x25-0x100 are in the gap and don't map to valid translevels
+            calculatedTranslevel = null;
+          }
+        }
+      } else if (calculatedTranslevel && typeof calculatedTranslevel === 'string') {
+        // Normalize translevel hex string
+        const parsed = parseInt(calculatedTranslevel.trim(), 16);
+        if (!isNaN(parsed)) {
+          calculatedTranslevel = parsed.toString(16).toUpperCase().padStart(2, '0');
+        } else {
+          calculatedTranslevel = null;
+        }
       }
 
       if (stage_uuid) {
@@ -3069,6 +3132,9 @@ function registerDatabaseHandlers(dbManager) {
             versions = ?,
             submapid = ?,
             translevel_13bf = ?,
+            tile_x = ?,
+            tile_y = ?,
+            tile_value = ?,
             requisites = ?,
             playable = ?,
             rando = ?,
@@ -3089,11 +3155,14 @@ function registerDatabaseHandlers(dbManager) {
         
         stmt.run(
           gameid,
-          levelnumber || null,
+          normalizedLevelnumber || null,
           levelname,
           versions || '*',
           submapid || null,
           calculatedTranslevel || null,
+          tile_x || null,
+          tile_y || null,
+          tile_value || null,
           requisites || null,
           playable ? 1 : 0,
           rando ? 1 : 0,
@@ -3115,18 +3184,22 @@ function registerDatabaseHandlers(dbManager) {
         const stmt = db.prepare(`
           INSERT INTO gamestages (
             gameid, levelnumber, levelname, versions, submapid, translevel_13bf,
+            tile_x, tile_y, tile_value,
             requisites, playable, rando, difficulty,
             mainexit, keyhole, credits, ghouse, spalace, castle, boss, secret, troll, final
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
           gameid,
-          levelnumber || null,
+          normalizedLevelnumber || null,
           levelname,
           versions || '*',
           submapid || null,
           calculatedTranslevel || null,
+          tile_x || null,
+          tile_y || null,
+          tile_value || null,
           requisites || null,
           playable ? 1 : 0,
           rando ? 1 : 0,
@@ -3147,6 +3220,202 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('[gamestages:save] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get detected levels for a game
+   * Channel: gamestages:get-detected-levels
+   */
+  ipcMain.handle('gamestages:get-detected-levels', async (_event, { gameid, version }) => {
+    try {
+      const db = dbManager.getConnection('rhdata');
+      
+      // Get game info
+      const gameInfo = db.prepare(`
+        SELECT gvuuid, name, lmlevels, detectedlevels
+        FROM gameversions
+        WHERE gameid = ? AND (version = ? OR ? IS NULL)
+        ORDER BY version DESC
+        LIMIT 1
+      `).get(gameid, version || null, version || null);
+      
+      if (!gameInfo) {
+        return { success: false, error: 'Game not found' };
+      }
+      
+      const detectedLevelsMap = new Map();
+      
+      // Source 1: Parse lmlevels JSON array (most reliable)
+      if (gameInfo.lmlevels) {
+        try {
+          const lmlevelsArray = JSON.parse(gameInfo.lmlevels);
+          if (Array.isArray(lmlevelsArray)) {
+            for (const levelHex of lmlevelsArray) {
+              // Remove "0x" prefix if present and normalize to 3-digit hex
+              const normalized = levelHex.replace(/^0x/i, '').trim().toUpperCase().padStart(3, '0');
+              if (!detectedLevelsMap.has(normalized)) {
+                detectedLevelsMap.set(normalized, {
+                  levelnumber: normalized,
+                  levelname: null,
+                  translevel: null,
+                  submapid: null,
+                  tile_x: null,
+                  tile_y: null,
+                  tile_value: null,
+                  sources: [],
+                  sourceCount: 0,
+                });
+              }
+              const level = detectedLevelsMap.get(normalized);
+              if (!level.sources.includes('lmlevels')) {
+                level.sources.push('lmlevels');
+                level.sourceCount++;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[gamestages:get-detected-levels] Failed to parse lmlevels:', e);
+        }
+      }
+      
+      // Source 2: Parse detectedlevels JSON array
+      if (gameInfo.detectedlevels) {
+        try {
+          const detectedArray = JSON.parse(gameInfo.detectedlevels);
+          if (Array.isArray(detectedArray)) {
+            for (const levelHex of detectedArray) {
+              const normalized = levelHex.replace(/^0x/i, '').trim().toUpperCase().padStart(3, '0');
+              if (!detectedLevelsMap.has(normalized)) {
+                detectedLevelsMap.set(normalized, {
+                  levelnumber: normalized,
+                  levelname: null,
+                  translevel: null,
+                  submapid: null,
+                  tile_x: null,
+                  tile_y: null,
+                  tile_value: null,
+                  sources: [],
+                  sourceCount: 0,
+                });
+              }
+              const level = detectedLevelsMap.get(normalized);
+              if (!level.sources.includes('detect')) {
+                level.sources.push('detect');
+                level.sourceCount++;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[gamestages:get-detected-levels] Failed to parse detectedlevels:', e);
+        }
+      }
+      
+      // Source 3: Fetch from gameversions_translevels table
+      const translevels = db.prepare(`
+        SELECT DISTINCT t.translevel, t.level_number, t.locations
+        FROM gameversions_translevels t
+        JOIN gameversions gv ON t.gvuuid = gv.gvuuid
+        WHERE gv.gameid = ? AND (gv.version = ? OR ? IS NULL)
+      `).all(gameid, version || null, version || null);
+      
+      for (const trans of translevels) {
+        if (trans.level_number) {
+          const normalized = trans.level_number.replace(/^0x/i, '').trim().toUpperCase().padStart(3, '0');
+          if (!detectedLevelsMap.has(normalized)) {
+            detectedLevelsMap.set(normalized, {
+              levelnumber: normalized,
+              levelname: null,
+              translevel: trans.translevel || null,
+              submapid: null,
+              tile_x: null,
+              tile_y: null,
+              tile_value: null,
+              sources: [],
+              sourceCount: 0,
+            });
+          }
+          const level = detectedLevelsMap.get(normalized);
+          if (!level.sources.includes('trans')) {
+            level.sources.push('trans');
+            level.sourceCount++;
+          }
+          // Update translevel if available
+          if (trans.translevel && !level.translevel) {
+            level.translevel = trans.translevel;
+          }
+          // Parse locations for tile_x and tile_y if available
+          if (trans.locations) {
+            try {
+              const locations = JSON.parse(trans.locations);
+              if (Array.isArray(locations) && locations.length > 0) {
+                const firstLoc = locations[0];
+                if (firstLoc.x !== undefined && !level.tile_x) {
+                  level.tile_x = String(firstLoc.x);
+                }
+                if (firstLoc.y !== undefined && !level.tile_y) {
+                  level.tile_y = String(firstLoc.y);
+                }
+              }
+            } catch (e) {
+              // Ignore parsing errors
+            }
+          }
+        }
+      }
+      
+      // Source 4: Fetch from levelnames table
+      const levelnames = db.prepare(`
+        SELECT ln.levelid, ln.levelname
+        FROM levelnames ln
+        JOIN gameversion_levelnames gvn ON ln.lvluuid = gvn.lvluuid
+        JOIN gameversions gv ON gvn.gvuuid = gv.gvuuid
+        WHERE gv.gameid = ? AND (gv.version = ? OR ? IS NULL)
+      `).all(gameid, version || null, version || null);
+      
+      for (const ln of levelnames) {
+        if (ln.levelid) {
+          const normalized = ln.levelid.replace(/^0x/i, '').trim().toUpperCase().padStart(3, '0');
+          if (!detectedLevelsMap.has(normalized)) {
+            detectedLevelsMap.set(normalized, {
+              levelnumber: normalized,
+              levelname: null,
+              translevel: null,
+              submapid: null,
+              tile_x: null,
+              tile_y: null,
+              tile_value: null,
+              sources: [],
+              sourceCount: 0,
+            });
+          }
+          const level = detectedLevelsMap.get(normalized);
+          if (!level.sources.includes('levelnames')) {
+            level.sources.push('levelnames');
+            level.sourceCount++;
+          }
+          // Update levelname if available
+          if (ln.levelname && !level.levelname) {
+            level.levelname = ln.levelname;
+          }
+        }
+      }
+      
+      // Convert map to array and sort by levelnumber
+      const levelsArray = Array.from(detectedLevelsMap.values()).sort((a, b) => {
+        const aNum = parseInt(a.levelnumber, 16);
+        const bNum = parseInt(b.levelnumber, 16);
+        return aNum - bNum;
+      });
+      
+      return { 
+        success: true, 
+        levels: levelsArray,
+        gameName: gameInfo.name || ''
+      };
+    } catch (error) {
+      console.error('[gamestages:get-detected-levels] Failed:', error);
       return { success: false, error: error.message };
     }
   });

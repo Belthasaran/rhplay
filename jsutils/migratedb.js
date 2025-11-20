@@ -352,6 +352,67 @@ const MIGRATIONS = {
         return tableExists(db, 'gamestages');
       },
     },
+    {
+      id: 'rhdata_036_gamestages_fix_foreign_key',
+      description: 'Fix foreign key constraint issue in gamestages table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/036_rhdata_gamestages_fix_foreign_key.sql'),
+      skipIf(db) {
+        // Check if the table exists and if it has a foreign key constraint
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip (035 will create it)
+          }
+          // Check the schema for foreign key constraint
+          const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='gamestages'").get();
+          if (schema && schema.sql && schema.sql.includes('FOREIGN KEY')) {
+            return false; // Has foreign key, need to fix
+          }
+          // Table exists without foreign key, already fixed
+          return true;
+        } catch (e) {
+          // If there's an error checking, run the migration to be safe
+          return false;
+        }
+      },
+    },
+    {
+      id: 'rhdata_037_gamestages_hex_strings',
+      description: 'Change levelnumber and translevel_13bf to TEXT for hex string storage',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/037_rhdata_gamestages_hex_strings.sql'),
+      skipIf(db) {
+        // Check if levelnumber column is TEXT type
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          const info = db.prepare("PRAGMA table_info(gamestages)").all();
+          const levelnumberCol = info.find((col: any) => col.name === 'levelnumber');
+          // If levelnumber is TEXT, migration already applied
+          return levelnumberCol && levelnumberCol.type && levelnumberCol.type.toUpperCase() === 'TEXT';
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
+    {
+      id: 'rhdata_038_gamestages_tile_coords',
+      description: 'Add tile_x and tile_y columns to gamestages table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/038_rhdata_gamestages_tile_coords.sql'),
+      skipIf(db) {
+        // Check if tile_x column exists
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'gamestages', 'tile_x');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   clientdata: [
     {

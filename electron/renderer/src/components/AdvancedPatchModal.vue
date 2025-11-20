@@ -1504,8 +1504,10 @@ function openGameStagesDialog() {
 
 function handleStageSelected(stage: any) {
   if (stage.levelnumber !== null && stage.levelnumber !== undefined) {
-    // Convert level number to hex string (pad to 2-3 characters as appropriate)
-    globalParams.value.glevelnum = stage.levelnumber.toString(16).toUpperCase().padStart(2, '0').slice(0, 3);
+    // levelnumber is already a hex string, just normalize it
+    const hexStr = typeof stage.levelnumber === 'string' ? stage.levelnumber.trim().toUpperCase() : stage.levelnumber.toString(16).toUpperCase();
+    // Ensure it's 3 digits, pad with zeros
+    globalParams.value.glevelnum = hexStr.padStart(3, '0').slice(0, 3);
   }
   
   // Automatically select requisite patches if any

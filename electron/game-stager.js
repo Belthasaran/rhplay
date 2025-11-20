@@ -1723,7 +1723,8 @@ async function applyUberASMTreePatch(params) {
     }
     
     // Build command
-    // Format: UberASMTool.exe list.txt inputfile.smc
+    // Format: UberASMTool.exe -d <EXTRACT_DIR> list.txt inputfile.smc
+    // The -d flag sets the working directory so paths in list.txt are relative to extractDir
     // The tool modifies inputfile.smc in place, so we use outputSfcPath (which is a copy of input)
     let command;
     
@@ -1732,43 +1733,108 @@ async function applyUberASMTreePatch(params) {
       // Wine maps / to Z: by default, so we convert Unix paths to Windows-style paths
       // Use absolute paths and convert forward slashes to backslashes, prefix with Z:
       const wineToolPath = uberasmToolPath.replace(/\//g, '\\').replace(/^/, 'Z:');
+      const wineExtractDir = extractDir.replace(/\//g, '\\').replace(/^/, 'Z:');
       const wineListPath = listFilePath.replace(/\//g, '\\').replace(/^/, 'Z:');
       const wineOutputPath = outputSfcPath.replace(/\//g, '\\').replace(/^/, 'Z:');
       
       // Note: stdin redirection (<) is handled by the shell, so we use the Unix path for stdinFile
-      command = `wine "${wineToolPath}" "${wineListPath}" "${wineOutputPath}" < "${stdinFile}"`;
+      // Format: wine "tool.exe" -d "extractDir" "list.txt" "output.sfc"
+      command = `wine "${wineToolPath}" -d "${wineExtractDir}" "${wineListPath}" "${wineOutputPath}" < "${stdinFile}"`;
     } else {
       // Windows - use direct paths
-      command = `"${uberasmToolPath}" "${listFilePath}" "${outputSfcPath}" < "${stdinFile}"`;
+      // Format: "tool.exe" -d "extractDir" "list.txt" "output.sfc"
+      command = `"${uberasmToolPath}" -d "${extractDir}" "${listFilePath}" "${outputSfcPath}" < "${stdinFile}"`;
     }
+    
+    // Build arguments array for spawnSync (avoids shell interpretation)
+    // Format: [-d, extractDir, list.txt, output.sfc]
+    let toolArgs;
+    if (isLinux) {
+      // On Linux with wine, convert paths to Windows format
+      const wineExtractDir = extractDir.replace(/\//g, '\\').replace(/^/, 'Z:');
+      const wineListPath = listFilePath.replace(/\//g, '\\').replace(/^/, 'Z:');
+      const wineOutputPath = outputSfcPath.replace(/\//g, '\\').replace(/^/, 'Z:');
+      toolArgs = ['-d', wineExtractDir, wineListPath, wineOutputPath];
+    } else {
+      // Windows - use native paths
+      toolArgs = ['-d', extractDir, listFilePath, outputSfcPath];
+    }
+    
+    console.log(`[UberASM] Executing: ${uberasmToolPath}`);
+    console.log(`[UberASM] Arguments:`, JSON.stringify(toolArgs));
+    console.log(`[UberASM] Working directory: ${extractDir}`);
+    console.log(`[UberASM] Command (for reference): ${command}`);
     
     // Run UberASMTool with working directory set to extractDir
     // The tool modifies the input file in place, so outputSfcPath will be modified
-    console.log(`[UberASM] Executing command: ${command}`);
-    console.log(`[UberASM] Working directory: ${extractDir}`);
-    
     let execResult;
     let exitCode = 0;
+    let stdout = '';
+    let stderr = '';
+    
     try {
-      execResult = execSync(command, { 
-        stdio: 'pipe',
-        cwd: extractDir,
-        encoding: 'utf8'
-      });
-      exitCode = 0;
-      console.log(`[UberASM] Output: ${execResult}`)
-      console.log(`[UberASM] Command completed successfully with exit code: ${exitCode}`);
+      if (isLinux) {
+        // On Linux, use wine with spawnSync
+        // stdin redirection needs to be handled via input option
+        const stdinContent = fs.readFileSync(stdinFile, 'utf8');
+        const result = spawnSync('wine', [uberasmToolPath, ...toolArgs], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          encoding: 'utf8',
+          input: stdinContent,
+          cwd: extractDir
+        });
+        
+        exitCode = result.status || 0;
+        stdout = result.stdout?.toString() || '';
+        stderr = result.stderr?.toString() || '';
+      } else {
+        // Windows - use spawnSync directly
+        const stdinContent = fs.readFileSync(stdinFile, 'utf8');
+        const result = spawnSync(uberasmToolPath, toolArgs, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          encoding: 'utf8',
+          input: stdinContent,
+          cwd: extractDir
+        });
+        
+        exitCode = result.status || 0;
+        stdout = result.stdout?.toString() || '';
+        stderr = result.stderr?.toString() || '';
+      }
+      
+      if (stdout) {
+        console.log(`[UberASM] stdout: ${stdout}`);
+      }
+      if (stderr) {
+        console.log(`[UberASM] stderr: ${stderr}`);
+      }
+      
+      if (exitCode === 0) {
+        console.log(`[UberASM] Command completed successfully with exit code: ${exitCode}`);
+      } else {
+        throw new Error(`UberASMTool exited with code ${exitCode}`);
+      }
     } catch (execError) {
-      // execSync throws an error if exit code is non-zero
+      // spawnSync doesn't throw on non-zero exit, but we check status
+      // If we get here, it's a different error (like command not found)
       exitCode = execError.status || execError.code || -1;
+      stdout = execError.stdout?.toString() || '';
+      stderr = execError.stderr?.toString() || execError.message || '';
+      
       console.log(`[UberASM] Command failed with exit code: ${exitCode}`);
+      if (stdout) {
+        console.log(`[UberASM] stdout: ${stdout}`);
+      }
+      if (stderr) {
+        console.log(`[UberASM] stderr: ${stderr}`);
+      }
       console.log(`[UberASM] Error message: ${execError.message}`);
       
       // Check if output file was created/modified (tool may have succeeded despite error code)
       if (!fs.existsSync(outputSfcPath)) {
         return { 
           success: false, 
-          error: `UberASMTool execution failed with exit code ${exitCode}: ${execError.message}` 
+          error: `UberASMTool execution failed with exit code ${exitCode}: ${stderr || execError.message}` 
         };
       }
       
@@ -1780,6 +1846,15 @@ async function applyUberASMTreePatch(params) {
         // For now, we'll consider it a success if the file exists
         // You may want to make this stricter based on specific exit codes
       }
+    }
+    
+    // Check stderr even if exit code is 0 (tool might report errors but return 0)
+    if (stderr && (stderr.includes('error') || stderr.includes('Error') || stderr.includes('failed'))) {
+      console.error(`[UberASM] UberASMTool reported an error (exit code ${exitCode}): ${stderr}`);
+      return { 
+        success: false, 
+        error: `UberASMTool reported an error: ${stderr}` 
+      };
     }
     
     // Verify the output file exists and has content

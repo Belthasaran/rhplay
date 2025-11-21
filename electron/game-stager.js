@@ -960,7 +960,17 @@ async function buildPlusPatchedGame(params) {
     
     // Step 6: Generate final filename
     const codeString = generatePatchCodeString(sortedPatches, globalParams, localParams);
-    const finalFilename = `sm${gameId}_${codeString}.sfc`;
+    
+    // Include level number in filename if set
+    let levelSuffix = '';
+    if (globalParams && globalParams.glevelnum && globalParams.glevelnum.trim()) {
+      // glevelnum is expected to be a hex string (e.g., "11", "001", "13C")
+      // Format it as _gl<LEVELNUMBER> in uppercase hex
+      const levelHex = globalParams.glevelnum.trim().toUpperCase();
+      levelSuffix = `_gl${levelHex}`;
+    }
+    
+    const finalFilename = `sm${gameId}_${codeString}${levelSuffix}.sfc`;
     
     // Step 7: Determine output path
     let finalOutputPath;

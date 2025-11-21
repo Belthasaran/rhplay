@@ -691,6 +691,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   snesContentsDelete: (fullpath) => ipcRenderer.invoke('snesContents:delete', fullpath),
   
+  /**
+   * Record a recent boot/upload to recentboots table
+   * @param {Object} bootInfo - Boot information
+   * @returns {Promise<{success: boolean}>}
+   */
+  recordRecentBoot: (bootInfo) => ipcRenderer.invoke('recentboots:record', bootInfo),
+  
   // =============================
   // Online/NOSTR Profile Operations
   // =============================

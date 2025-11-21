@@ -935,13 +935,62 @@ async function testLevel(stage: GameStage) {
     
     // Check USB2SNES connection and upload/boot if needed
     if (buildParams.action === 'boot' && api.usb2snesConnect && api.usb2snesUploadRom && api.usb2snesBoot) {
-      // Refresh USB2SNES status first
-      if (api.refreshUsb2snesStatus) {
-        await api.refreshUsb2snesStatus();
+      // Check if USB2SNES is configured
+      if (currentSettings.usb2snesEnabled !== 'yes') {
+        testProgressMessage.value = 'Error: USB2SNES is not enabled. Please enable it in Settings first.';
+        testingLevel.value = false;
+        return;
       }
       
-      // Check if we need to connect (we'll assume it's already connected or auto-connect)
-      // For now, just try to upload and boot
+      // Get USB2SNES connection status
+      testProgressMessage.value = 'Checking USB2SNES connection...';
+      let usb2snesConnected = false;
+      
+      try {
+        const statusResult = await api.usb2snesStatus?.();
+        if (statusResult && statusResult.connected) {
+          usb2snesConnected = true;
+        }
+      } catch (statusError) {
+        console.warn('Failed to get USB2SNES status:', statusError);
+      }
+      
+      // Auto-connect if configured but not connected
+      if (!usb2snesConnected) {
+        testProgressMessage.value = 'Connecting to USB2SNES...';
+        try {
+          // Build connection options from settings
+          const connectOptions: any = {
+            library: currentSettings.usb2snesLibrary || 'usb2snes',
+            address: currentSettings.usb2snesAddress || 'ws://localhost:64213',
+            hostingMethod: currentSettings.usb2snesHostingMethod || 'external',
+            proxyMode: currentSettings.usb2snesProxyMode || 'direct'
+          };
+          
+          if (currentSettings.usb2snesProxyMode === 'socks' && currentSettings.usb2snesSocksProxyUrl) {
+            connectOptions.socksProxyUrl = currentSettings.usb2snesSocksProxyUrl;
+          }
+          
+          if (currentSettings.usb2snesProxyMode === 'ssh' || currentSettings.usb2snesProxyMode === 'direct-with-ssh') {
+            connectOptions.ssh = {
+              host: currentSettings.usb2snesSshHost,
+              username: currentSettings.usb2snesSshUsername,
+              localPort: currentSettings.usb2snesSshLocalPort || 64213,
+              remotePort: currentSettings.usb2snesSshRemotePort || 64213,
+              identityFile: currentSettings.usb2snesSshIdentityFile
+            };
+          }
+          
+          const connectResult = await api.usb2snesConnect(connectOptions);
+          usb2snesConnected = true;
+          console.log('[TestLevel] USB2SNES connected:', connectResult);
+        } catch (connectError: any) {
+          testProgressMessage.value = `Failed to connect to USB2SNES: ${connectError?.message || String(connectError)}`;
+          testingLevel.value = false;
+          return;
+        }
+      }
+      
       const filename = result.filename;
       const srcPath = result.outputPath;
       const dstPath = `/work/${filename}`;
@@ -967,6 +1016,48 @@ async function testLevel(stage: GameStage) {
           testProgressMessage.value = `Upload failed: ${uploadResult?.error || 'Unknown error'}`;
           testingLevel.value = false;
           return;
+        }
+        
+        // Record upload to snes_contents
+        try {
+          const uploadedFileInfo = {
+            fullpath: dstPath,
+            filename: filename,
+            gameid: props.gameId,
+            version: props.gameVersion || 1,
+            levelnumber: stage.levelnumber || null,
+            levelname: stage.levelname || null,
+            metadata: {
+              gamename: props.gameName || null
+            },
+            part_of_a_run: false
+          };
+          
+          if (api.snesContentsSync) {
+            await api.snesContentsSync(uploadedFileInfo);
+            console.log('[TestLevel] SNES contents cache synced');
+          }
+        } catch (syncError: any) {
+          console.warn('[TestLevel] Cache sync failed:', syncError);
+          // Don't fail the upload if sync fails
+        }
+        
+        // Record to recentboots
+        try {
+          if (api.recordRecentBoot) {
+            await api.recordRecentBoot({
+              filename: filename,
+              fullpath: dstPath,
+              gameid: props.gameId,
+              gamename: props.gameName || null,
+              levelnumber: stage.levelnumber || null,
+              levelname: stage.levelname || null
+            });
+            console.log('[TestLevel] Recent boot recorded');
+          }
+        } catch (recordError: any) {
+          console.warn('[TestLevel] Recent boot recording failed:', recordError);
+          // Don't fail the upload if recording fails
         }
         
         testProgressMessage.value = `Upload complete! Booting ${filename}...`;

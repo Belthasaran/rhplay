@@ -5025,6 +5025,73 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
+  
+  /**
+   * Record a recent boot/upload to recentboots table
+   * Channel: recentboots:record
+   * @param {Object} bootInfo - Boot information
+   * @param {string} bootInfo.filename - Filename
+   * @param {string} bootInfo.fullpath - Full path on SNES
+   * @param {string} bootInfo.gameid - Game ID (optional)
+   * @param {string} bootInfo.gamename - Game name (optional)
+   * @param {string} bootInfo.levelnumber - Level number (optional)
+   * @param {string} bootInfo.levelname - Level name (optional)
+   * @param {boolean} bootInfo.booted - Whether the file was booted (optional)
+   */
+  ipcMain.handle('recentboots:record', async (event, bootInfo) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const { filename, fullpath, gameid, gamename, levelnumber, levelname, booted } = bootInfo;
+      
+      if (!filename || !fullpath) {
+        return { success: false, error: 'filename and fullpath are required' };
+      }
+      
+      // Check if record already exists (by fullpath)
+      const existing = db.prepare('SELECT id FROM recentboots WHERE fullpath = ?').get(fullpath);
+      
+      if (existing) {
+        // Update existing record
+        db.prepare(`
+          UPDATE recentboots 
+          SET filename = ?, gameid = ?, gamename = ?, levelnumber = ?, levelname = ?,
+              uploaded_at = strftime('%s', 'now'),
+              booted_at = CASE WHEN ? = 1 THEN strftime('%s', 'now') ELSE booted_at END
+          WHERE id = ?
+        `).run(
+          filename,
+          gameid || null,
+          gamename || null,
+          levelnumber || null,
+          levelname || null,
+          booted ? 1 : 0,
+          existing.id
+        );
+      } else {
+        // Insert new record
+        db.prepare(`
+          INSERT INTO recentboots (
+            filename, fullpath, gameid, gamename, levelnumber, levelname,
+            uploaded_at, booted_at
+          ) VALUES (?, ?, ?, ?, ?, ?, strftime('%s', 'now'), ?)
+        `).run(
+          filename,
+          fullpath,
+          gameid || null,
+          gamename || null,
+          levelnumber || null,
+          levelname || null,
+          booted ? Date.now() / 1000 : null
+        );
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[RecentBoots] Record error:', error);
+      return { success: false, error: error.message };
+    }
+  });
   // ===========================================================================
   // PAST RUNS OPERATIONS
   // ===========================================================================

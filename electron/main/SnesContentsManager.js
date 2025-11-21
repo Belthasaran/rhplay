@@ -123,8 +123,9 @@ class SnesContentsManager {
             this.db.prepare(`
               INSERT INTO snes_contents (
                 filename, fullpath, gameid, version, gamename, gametype, 
-                difficulty, combinedtype, part_of_a_run, upload_timestamp
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
+                difficulty, combinedtype, part_of_a_run, upload_timestamp,
+                levelnumber, levelname
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), ?, ?)
             `).run(
               filename,
               fullpath,
@@ -134,7 +135,9 @@ class SnesContentsManager {
               uploadedFile.metadata?.gametype || null,
               uploadedFile.metadata?.difficulty || null,
               uploadedFile.metadata?.combinedtype || null,
-              uploadedFile.part_of_a_run ? 1 : 0
+              uploadedFile.part_of_a_run ? 1 : 0,
+              uploadedFile.levelnumber || null,
+              uploadedFile.levelname || null
             );
             console.log('[SnesContents] Added uploaded file:', filename);
           } else {

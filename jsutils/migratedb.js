@@ -780,6 +780,25 @@ const MIGRATIONS = {
         return tableExists(db, 'game_submission_drafts');
       },
     },
+    {
+      id: 'clientdata_009_snes_contents_levelnumber',
+      description: 'Add levelnumber and levelname columns to snes_contents table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/009_clientdata_snes_contents_levelnumber.sql'),
+      skipIf(db) {
+        return columnExists(db, 'snes_contents', 'levelnumber')
+          && columnExists(db, 'snes_contents', 'levelname');
+      },
+    },
+    {
+      id: 'clientdata_010_recentboots',
+      description: 'Create recentboots table to track recently uploaded files',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/010_clientdata_recentboots.sql'),
+      skipIf(db) {
+        return tableExists(db, 'recentboots');
+      },
+    },
   ],
   patchbin: [
     {

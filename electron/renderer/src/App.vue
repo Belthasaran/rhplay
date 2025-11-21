@@ -15629,6 +15629,67 @@ async function handleAdvancedPatchBuild(options: {
         uploadSuccess.value = true;
         uploadedFilePath.value = dstPath;
 
+        // Record upload to snes_contents with levelnumber if available
+        const levelnumber = options.globalParams?.glevelnum?.trim() || null;
+        let levelname = null;
+        
+        // If levelnumber is set, try to get levelname from gamestages
+        if (levelnumber && api.getGameStages) {
+          try {
+            const stagesResult = await api.getGameStages(options.gameId);
+            if (stagesResult && stagesResult.success && stagesResult.stages) {
+              const matchingStage = stagesResult.stages.find((s: any) => 
+                s.levelnumber && s.levelnumber.toUpperCase().trim() === levelnumber.toUpperCase().trim()
+              );
+              if (matchingStage && matchingStage.levelname) {
+                levelname = matchingStage.levelname;
+              }
+            }
+          } catch (stageError) {
+            console.warn('[Upload] Failed to lookup levelname:', stageError);
+          }
+        }
+        
+        try {
+          const uploadedFileInfo: any = {
+            fullpath: dstPath,
+            filename: filename,
+            gameid: options.gameId,
+            version: options.gameVersion || 1,
+            levelnumber: levelnumber,
+            levelname: levelname,
+            metadata: {
+              gamename: advancedPatchGameName.value || null
+            },
+            part_of_a_run: false
+          };
+          
+          if (api.snesContentsSync) {
+            await api.snesContentsSync(uploadedFileInfo);
+            console.log('[Upload] SNES contents cache synced');
+          }
+        } catch (syncError: any) {
+          console.warn('[Upload] Cache sync failed:', syncError);
+        }
+        
+        // Record to recentboots
+        try {
+          if (api.recordRecentBoot) {
+            await api.recordRecentBoot({
+              filename: filename,
+              fullpath: dstPath,
+              gameid: options.gameId,
+              gamename: advancedPatchGameName.value || null,
+              levelnumber: levelnumber,
+              levelname: levelname,
+              booted: options.action === 'boot'
+            });
+            console.log('[Upload] Recent boot recorded');
+          }
+        } catch (recordError: any) {
+          console.warn('[Upload] Recent boot recording failed:', recordError);
+        }
+
         // If boot action, also boot the file
         if (options.action === 'boot') {
           uploadProgressStatus.value = `Booting ${filename}...`;

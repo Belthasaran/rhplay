@@ -1,4 +1,4 @@
-!val = $00A
+!val = $0A
 if !val >= $25
   !anumber #= !val-$DC
 else
@@ -43,34 +43,44 @@ Main:
     PHX
     PHP
     ;LDA #!anumber
-;    REP #$20
+   ; REP #$20
+   ; LDA #$000000
 ;    LDA #!anumber
-;
-;;010B - The first two bytes is the current level number in most hacks.
-;;;
-;    ;STZ.w $010B  
-;    ;STZ.w $7FB403
-;;;  ;      LDA $010B
-;;;        STA $7FB403
-;
+   ;; "010B - The first two bytes is the current level number in most hacks." 
+    ; < Or so they claimed
+    ;STZ.w $010B  
+    ;STZ.w $7FB403
 ;    ;LDA.l #$FF30
 ;;;;-----
 ;;;    SBC #$00DC
 ;    STA $13BF|!addr
+    ;REP #$20
+    ;LDA #!anumber
+    ;STA $010B
     SEP #$20
     LDA #!anumber
     STA $13BF
-    STA $17BB|!addr
-    ;;;
-    STZ $010B
+;if !val >= $25
+    ;LDA.b   #1
+;else
+    ;SEC
+    LDA.b   #0  ; Turns out the carry flag and A value are important at this point
+    LDA #!anumber
+    ;SBC $13C0
+;endif
+    ;STZ $13C0
+    ;STZ $1F11 ;tl highbyte
+    ;STA !7ED000 
+    ;STA $7ED000
+    ;STA $0108
+    ;STA $17BB|!addr
     ;STZ $7FB403
-    ;;;
-    ;  SBC #$24
+    ;;  SBC #$24
     ;INY
 Ret2:
     PLP
     PLX
     PLY
-      INY
+      ;INY
 RTL
 ;;#P7_C##;;

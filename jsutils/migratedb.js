@@ -388,7 +388,7 @@ const MIGRATIONS = {
             return true; // Table doesn't exist, skip
           }
           const info = db.prepare("PRAGMA table_info(gamestages)").all();
-          const levelnumberCol = info.find((col: any) => col.name === 'levelnumber');
+          const levelnumberCol = info.find((col) => col.name === 'levelnumber');
           // If levelnumber is TEXT, migration already applied
           return levelnumberCol && levelnumberCol.type && levelnumberCol.type.toUpperCase() === 'TEXT';
         } catch (e) {

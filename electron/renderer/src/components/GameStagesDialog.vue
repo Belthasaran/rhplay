@@ -877,6 +877,21 @@ async function testLevel(stage: GameStage) {
       return;
     }
     
+    // Collect patches from requisites
+    const selectedPatchUuids: string[] = [lvnoPatch.epuuid]; // Always include 1lvno
+    
+    // Get requisite tags from stage and find matching patches
+    const requisiteTags = getRequisiteTags(stage);
+    if (requisiteTags.length > 0) {
+      for (const tag of requisiteTags) {
+        // Find patch with matching patch_code
+        const matchingPatch = allPatches.find((p: any) => p.patch_code === tag);
+        if (matchingPatch && !selectedPatchUuids.includes(matchingPatch.epuuid)) {
+          selectedPatchUuids.push(matchingPatch.epuuid);
+        }
+      }
+    }
+    
     // Get settings for paths
     testProgressMessage.value = 'Loading settings...';
     let currentSettings: any = {};
@@ -894,7 +909,7 @@ async function testLevel(stage: GameStage) {
     const buildParams = {
       gameId: props.gameId,
       gameVersion: props.gameVersion || 1,
-      selectedPatches: [lvnoPatch.epuuid],
+      selectedPatches: selectedPatchUuids,
       globalParams: {
         glevelnum: levelHex,
         gonoffv: []

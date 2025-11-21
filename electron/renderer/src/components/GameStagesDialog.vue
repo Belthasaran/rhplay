@@ -955,17 +955,23 @@ async function testLevel(stage: GameStage) {
         console.warn('Failed to get USB2SNES status:', statusError);
       }
       
-      // Auto-connect if configured but not connected
-      if (!usb2snesConnected) {
-        testProgressMessage.value = 'Connecting to USB2SNES...';
-        try {
-          // Build connection options from settings
-          const connectOptions: any = {
-            library: currentSettings.usb2snesLibrary || 'usb2snes',
-            address: currentSettings.usb2snesAddress || 'ws://localhost:64213',
-            hostingMethod: currentSettings.usb2snesHostingMethod || 'external',
-            proxyMode: currentSettings.usb2snesProxyMode || 'direct'
-          };
+        // Auto-connect if configured but not connected
+        if (!usb2snesConnected) {
+          testProgressMessage.value = 'Connecting to USB2SNES...';
+          try {
+            // Build connection options from settings
+            // Library must be one of: usb2snes_a, usb2snes_b, qusb2snes, node-usb
+            const library = currentSettings.usb2snesLibrary || 'usb2snes_a';
+            if (!['usb2snes_a', 'usb2snes_b', 'qusb2snes', 'node-usb'].includes(library)) {
+              throw new Error(`Invalid USB2SNES library setting: ${library}. Must be one of: usb2snes_a, usb2snes_b, qusb2snes, node-usb`);
+            }
+            
+            const connectOptions: any = {
+              library: library,
+              address: currentSettings.usb2snesAddress || 'ws://localhost:64213',
+              hostingMethod: currentSettings.usb2snesHostingMethod || 'external',
+              proxyMode: currentSettings.usb2snesProxyMode || 'direct'
+            };
           
           if (currentSettings.usb2snesProxyMode === 'socks' && currentSettings.usb2snesSocksProxyUrl) {
             connectOptions.socksProxyUrl = currentSettings.usb2snesSocksProxyUrl;

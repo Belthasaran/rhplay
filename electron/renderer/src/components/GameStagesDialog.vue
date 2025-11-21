@@ -48,16 +48,18 @@
                   <th class="col-secret" title="Secret level">Se</th>
                   <th>T</th>
                   <th class="col-final" title="Final level. This generally designates the last level of a game.">F</th>
-                  <th v-if="isDevAdmin && currentMode === 'edit'">Actions</th>
+                  <th class="col-lock" title="Lock - Level only accessible in Edit mode">L</th>
+                  <th v-if="isDevAdmin && currentMode === 'edit' || currentMode === 'select'">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr 
-                  v-for="stage in stages" 
+                  v-for="stage in filteredStages" 
                   :key="stage.stage_uuid"
                   :class="{ 
                     'selected': selectedStageUuid === stage.stage_uuid,
-                    'secret-level': stage.secret === 1 && currentMode !== 'edit'
+                    'secret-level': stage.secret === 1 && currentMode !== 'edit',
+                    'locked-level': stage.lock === 1 && currentMode !== 'edit'
                   }"
                   @click="selectStage(stage)"
                 >
@@ -65,6 +67,7 @@
                     <input 
                       type="checkbox" 
                       :checked="selectedStageUuid === stage.stage_uuid"
+                      :disabled="stage.lock === 1 && currentMode !== 'edit'"
                       @change.stop="selectStage(stage)"
                     />
                   </td>
@@ -285,16 +288,26 @@
                       @change="stage.final = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td v-if="isDevAdmin && currentMode === 'edit'" class="actions-cell">
+                  <td class="checkbox-cell col-lock">
+                    <input 
+                      type="checkbox" 
+                      :checked="stage.lock === 1"
+                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      @change="stage.lock = $event.target.checked ? 1 : 0"
+                    />
+                  </td>
+                  <td v-if="isDevAdmin && currentMode === 'edit' || (currentMode === 'select' && canTestStage(stage))" class="actions-cell">
                     <button 
+                      v-if="isDevAdmin && currentMode === 'edit' || (currentMode === 'select' && canTestStage(stage))"
                       @click.stop="testLevel(stage)" 
                       class="btn-icon btn-test"
                       title="Test level - Build and Boot with 1lvno patch"
-                      :disabled="testingLevel || !stage.levelnumber"
+                      :disabled="testingLevel || !stage.levelnumber || !canTestStage(stage)"
                     >
                       🧪
                     </button>
                     <button 
+                      v-if="isDevAdmin && currentMode === 'edit'"
                       @click.stop="deleteStage(stage)" 
                       class="btn-icon btn-delete"
                       title="Delete stage"
@@ -430,6 +443,7 @@ interface GameStage {
   secret: number;
   troll: number;
   final: number;
+  lock?: number; // Lock flag - level only accessible in Edit mode
 }
 
 interface Props {
@@ -793,8 +807,31 @@ async function checkDevAdmin() {
   }
 }
 
+// Filter stages based on mode - hide locked stages in view-only mode
+const filteredStages = computed(() => {
+  if (currentMode.value === 'edit' || isDevAdmin.value) {
+    // In edit mode or if dev admin, show all stages
+    return stages.value;
+  }
+  // In view-only mode, filter out locked stages
+  return stages.value.filter(stage => !stage.lock || stage.lock === 0);
+});
+
+// Check if a stage can be tested (available in view-only mode)
+function canTestStage(stage: GameStage): boolean {
+  // Can't test if secret, locked, or difficulty > 8
+  if (stage.secret === 1) return false;
+  if (stage.lock === 1 && currentMode.value !== 'edit') return false;
+  if ((stage.difficulty || 0) > 8) return false;
+  return true;
+}
+
 function selectStage(stage: GameStage) {
   if (currentMode.value === 'select') {
+    // Don't allow selection of locked stages in view-only mode
+    if (stage.lock === 1 && !isDevAdmin.value) {
+      return;
+    }
     selectedStageUuid.value = stage.stage_uuid || null;
   }
 }
@@ -835,6 +872,7 @@ function addNewStage() {
     secret: 0,
     troll: 0,
     final: 0,
+    lock: 0,
   };
   stages.value.push(newStage);
 }
@@ -1179,6 +1217,7 @@ async function saveAll() {
         secret: stage.secret,
         troll: stage.troll,
         final: stage.final,
+        lock: stage.lock || 0,
       });
       
       if (!result?.success) {
@@ -1239,6 +1278,7 @@ function handleDetectedLevelsSelected(selectedLevels: any[]) {
       secret: 0,
       troll: 0,
       final: 0,
+      lock: 0,
     };
     stages.value.push(newStage);
   }
@@ -1395,6 +1435,11 @@ watch(() => props.initialLevelNumber, () => {
   background-color: rgba(233, 30, 99, 0.2); /* Light pink */
 }
 
+.stages-table th.col-lock,
+.stages-table td.col-lock {
+  background-color: rgba(255, 152, 0, 0.2); /* Light orange */
+}
+
 /* Brighten table cells when checkbox is checked */
 .stages-table td.col-playable:has(input[type="checkbox"]:checked) {
   background-color: rgba(76, 175, 80, 0.4) !important;
@@ -1451,12 +1496,26 @@ watch(() => props.initialLevelNumber, () => {
   filter: brightness(1.2);
 }
 
+.stages-table td.col-lock:has(input[type="checkbox"]:checked) {
+  background-color: rgba(255, 152, 0, 0.4) !important;
+  filter: brightness(1.2);
+}
+
 /* Secret level rows - hide data when not in edit mode */
 .stages-table tr.secret-level td:not(.col-secret) {
   color: var(--text-disabled, #999);
 }
 
 .stages-table tr.secret-level:hover td {
+  background-color: var(--bg-hover);
+}
+
+/* Locked level rows - similar styling to secret levels */
+.stages-table tr.locked-level td:not(.col-lock) {
+  color: var(--text-disabled, #999);
+}
+
+.stages-table tr.locked-level:hover td {
   background-color: var(--bg-hover);
 }
 

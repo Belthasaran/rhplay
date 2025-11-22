@@ -20,6 +20,7 @@
           <div v-if="isDevAdmin && currentMode === 'edit'" class="action-buttons">
             <button @click="addNewStage" class="btn-primary btn-small">+ New Stage</button>
             <button @click="openDetectedLevelsDialog" class="btn-secondary btn-small">Detected Levels</button>
+            <button @click="openSetPlaylevelPatchDialog" class="btn-secondary btn-small">Set Playlevel Patch</button>
           </div>
 
           <!-- Stages Table -->
@@ -35,6 +36,7 @@
                   <th>X</th>
                   <th>Y</th>
                   <th>Req</th>
+                  <th>LvlPat</th>
                   <th>Diff</th>
                   <th class="col-playable" title="Playable level (Excludes cusscenes, Invalid, or Auto win/lose levels)">P</th>
                   <th class="col-rando" title="Rando level (Playable levels suitable for use in randomizers)">R</th>
@@ -444,6 +446,7 @@ interface GameStage {
   troll: number;
   final: number;
   lock?: number; // Lock flag - level only accessible in Edit mode
+  playlevel_patch_code?: string | null; // Playlevel patch code (defaults to '1lvno')
 }
 
 interface Props {

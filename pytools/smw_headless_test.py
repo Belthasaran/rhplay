@@ -60,11 +60,23 @@ class HeadlessTester:
         target_level_lo = self.target_level & 0xFF
         target_level_hi = (self.target_level >> 8) & 0x01
         
-        screenshot_cmd = ''
-        if screenshot_dir:
-            screenshot_cmd = f'gui.savescreenshot("{screenshot_dir}/frame_" .. string.format("%06d", frame) .. ".png")'
+        # Generate screenshot code based on whether screenshot_dir is provided
+        enable_screenshots = screenshot_dir is not None
+        screenshot_dir_str = str(screenshot_dir) if screenshot_dir else '.'
         
-        return f'''--[[
+        if enable_screenshots:
+            screenshot_code = f'''        -- Capture screenshot
+        local screenshot_file = "{screenshot_dir_str}/frame_" .. string.format("%06d", frame) .. ".png"
+        gui.savescreenshot(screenshot_file)
+        table.insert(screenshots, {{
+            frame = frame,
+            file = screenshot_file
+        }})'''
+        else:
+            screenshot_code = '        -- Screenshots disabled'
+        
+        # Build the Lua script with all Python variables replaced
+        lua_script = f'''--[[
     SMW Headless Test Script for BizHawk
     Tests level {self.target_level:03X} (0x{self.target_level:03X})
     Target: Low={target_level_lo:02X}, High={target_level_hi}
@@ -148,16 +160,12 @@ function run_test()
             sample.ram.level_low, sample.ram.level_high))
         
         -- Capture screenshot at key moments
-        if screenshot_dir and (
+        if {str(enable_screenshots).lower()} and (
             sample.ram.game_mode_name == "InLevel" or
             sample.ram.game_mode_name == "Overworld" or
             frame == 60 or frame == 120 or frame == 300
         ) then
-            {screenshot_cmd}
-            table.insert(screenshots, {{
-                frame = frame,
-                file = string.format("frame_%06d.png", frame)
-            }})
+{screenshot_code}
         end
     end
     
@@ -230,6 +238,52 @@ function run_test()
     emu.frameadvance()
 end
 
+-- Simple JSON encoder (BizHawk doesn't have json.encode)
+function json_encode(obj)
+    if type(obj) == "table" then
+        local parts = {{}}
+        local is_array = true
+        local max_index = 0
+        
+        -- Check if it's an array
+        for k, v in pairs(obj) do
+            if type(k) ~= "number" then
+                is_array = false
+                break
+            end
+            if k > max_index then
+                max_index = k
+            end
+        end
+        
+        if is_array then
+            -- Array format
+            for i = 1, max_index do
+                table.insert(parts, json_encode(obj[i]))
+            end
+            return "[" .. table.concat(parts, ",") .. "]"
+        else
+            -- Object format
+            for k, v in pairs(obj) do
+                local key = '"' .. tostring(k) .. '"'
+                local value = json_encode(v)
+                table.insert(parts, key .. ":" .. value)
+            end
+            return "{{" .. table.concat(parts, ",") .. "}}"
+        end
+    elseif type(obj) == "string" then
+        return '"' .. obj:gsub('"', '\\\\"') .. '"'
+    elseif type(obj) == "number" then
+        return tostring(obj)
+    elseif type(obj) == "boolean" then
+        return obj and "true" or "false"
+    elseif obj == nil then
+        return "null"
+    else
+        return '"' .. tostring(obj) .. '"'
+    end
+end
+
 -- Save test results to JSON
 function save_results()
     local results = {{
@@ -240,8 +294,8 @@ function save_results()
         test_complete = test_complete
     }}
     
-    local json_file = "{screenshot_dir or '.'}/test_results.json"
-    local json_str = json.encode(results)
+    local json_file = "{screenshot_dir_str}/test_results.json"
+    local json_str = json_encode(results)
     
     local f = io.open(json_file, "w")
     if f then
@@ -253,12 +307,21 @@ function save_results()
     end
 end
 
--- Register callback
-event.onframeend(run_test)
+-- Register callback (try both API versions for compatibility)
+if event and event.onframeend then
+    event.onframeend(run_test)
+elseif emu and emu.registerafter then
+    emu.registerafter(run_test)
+else
+    print("ERROR: Could not register frame callback")
+end
+
 print("SMW Headless Test Script loaded")
 print("Target level: 0x" .. string.format("%03X", {self.target_level}))
 print("Starting test...")
 '''
+        
+        return lua_script
     
     def run_bizhawk_test(self, screenshot_dir: Optional[Path] = None) -> Dict:
         """Run test using BizHawk emulator"""

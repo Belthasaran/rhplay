@@ -1,6 +1,8 @@
 - P20251120
 
-- SMW Overworld Level Force Patch (test5.asm): Working version created for gameid 18238, level $106. Successfully forces all overworld tiles to enter target level on first attempt. Uses dual-hook approach: intercepts $7ED000 read at $05D89B and overrides at $05DCDD. Known side effect: player's overworld location/submap changes after exiting level (Start+Select). Backup saved as test5_working_backup.asm.
+- SMW Overworld Level Force Patch (test5.asm): Working version created for gameid 18238, level $106. Successfully forces all overworld tiles to enter target level on first attempt. Uses dual-hook approach: intercepts $7ED000 read at $05D89B and overrides at $05DCDD. Fixed side effect where player's overworld location/submap changed after exiting level by setting $0F directly instead of modifying $1F11. Backup saved as test5_working_backup.asm.
+
+- SMW Headless Automated Testing Tool (smw_headless_test.py): Created comprehensive headless testing tool for SMW ROM patches. Supports BizHawk, RetroArch, and Mesen-S emulators. Features include: automatic input simulation (Start button, menu navigation, level entry), RAM sampling at execution points (game mode, level IDs, submap, flags), optional screenshot capture, and JSON results export. Includes standalone Lua script (luatools/smw_headless_test.lua) for direct BizHawk use. Documented in devdocs/SMW_HEADLESS_TESTING.md and added to docs/PROGRAMS.MD.
 
 - Cross-platform provisioner for portable apps - avoid needing installer:
 

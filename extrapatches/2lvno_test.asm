@@ -1,9 +1,14 @@
-!val = $0A
+!val = $106
 if !val >= $25
   !anumber #= !val-$DC
 else
   !anumber #= !val
 endif
+
+;if !val >= $25
+;org $851f11
+; db $01
+;endif
 
 
 if read1($00FFD5) == $23
@@ -39,7 +44,7 @@ freedata
 
 Main:
     ;#H#;
-    PHY
+    ;PHY
     PHX
     PHP
     ;LDA #!anumber
@@ -48,8 +53,8 @@ Main:
 ;    LDA #!anumber
    ;; "010B - The first two bytes is the current level number in most hacks." 
     ; < Or so they claimed
-    ;STZ.w $010B  
-    ;STZ.w $7FB403
+;    ;STZ.w $010B  
+;    ;STZ.w $7FB403
 ;    ;LDA.l #$FF30
 ;;;;-----
 ;;;    SBC #$00DC
@@ -60,13 +65,24 @@ Main:
     SEP #$20
     LDA #!anumber
     STA $13BF
-;if !val >= $25
-    ;LDA.b   #1
-;else
-    ;SEC
+;ADC #$24
+;STA $0109
+if !val >= $25
+    ;LDA.b   #$fe
+    ;STA $17BB
+    LDA.b #$01
+    STA.w $851f11
+    ;STA.b $13C3 ; submap
+    ;TYA
+    ;ORA #$01
+    ;TAY
+    LDA.b   #0
+else
     LDA.b   #0  ; Turns out the carry flag and A value are important at this point
+endif
     LDA #!anumber
-    ;SBC $13C0
+;if $val >= $25
+;    
 ;endif
     ;STZ $13C0
     ;STZ $1F11 ;tl highbyte
@@ -80,7 +96,9 @@ Main:
 Ret2:
     PLP
     PLX
-    PLY
+    ;PLY
       ;INY
 RTL
 ;;#P7_C##;;
+
+

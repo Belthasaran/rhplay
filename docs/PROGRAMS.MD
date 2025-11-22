@@ -685,6 +685,46 @@ python3 create_blob_python.py <patch_file> <gameid> <blobs_dir> <pat_sha224> [re
 
 ---
 
+### smw_headless_test.py
+**Purpose**: Automated headless testing for SMW ROM patches with input simulation and RAM sampling
+
+**Usage**:
+```bash
+# Test if level 0x106 loads correctly
+./pytools/smw_headless_test.py rom.sfc --target-level 0x106
+
+# With screenshots
+./pytools/smw_headless_test.py rom.sfc --target-level 0x106 --screenshot-dir screenshots
+
+# Save results to JSON
+./pytools/smw_headless_test.py rom.sfc --target-level 0x106 --output results.json
+
+# Use different emulator
+./pytools/smw_headless_test.py rom.sfc --target-level 0x106 --emulator bizhawk
+```
+
+**Features**:
+- Headless emulator execution (suitable for CI/CD)
+- Automatic input simulation (Start button, menu navigation, level entry)
+- RAM sampling at execution points (game mode, level IDs, submap, flags)
+- Optional screenshot capture at key moments
+- JSON results export for analysis
+- Supports BizHawk (recommended), RetroArch, Mesen-S
+
+**Use Cases**:
+- Automated testing of ASM patches (e.g., `test5.asm`)
+- Verify level override patches work correctly
+- Regression testing across multiple level IDs
+- CI/CD integration for patch validation
+
+**Output**: JSON file with RAM samples, screenshots, test completion status
+
+**Documentation**: `devdocs/SMW_HEADLESS_TESTING.md`
+
+**See Also**: `luatools/smw_headless_test.lua` - Standalone Lua script for BizHawk
+
+---
+
 ### smw_overworld_analyzer.py
 **Purpose**: Analyze overworld starting positions and data
 

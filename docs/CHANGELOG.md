@@ -1,5 +1,7 @@
 - P20251120
 
+- SMW Overworld Level Force Patch (test5.asm): Working version created for gameid 18238, level $106. Successfully forces all overworld tiles to enter target level on first attempt. Uses dual-hook approach: intercepts $7ED000 read at $05D89B and overrides at $05DCDD. Known side effect: player's overworld location/submap changes after exiting level (Start+Select). Backup saved as test5_working_backup.asm.
+
 - Cross-platform provisioner for portable apps - avoid needing installer:
 
 - Added cross-platform **Provisioner** startup flow: when `clientdata.db`, `rhdata.db`, or `patchbin.db` are missing the Electron app now launches a dedicated provisioning UI (`Provisioner.vue`) that orchestrates the existing `prepare_databases.js` helper, streams real-time download/apply progress, and after success reloads the full app without requiring a separate installer.

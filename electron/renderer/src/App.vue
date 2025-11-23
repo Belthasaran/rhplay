@@ -26898,6 +26898,7 @@ button:disabled {
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-secondary);
   gap: 16px;
+  --challenge-info-padding: 16px;
 }
 
 .challenge-info-left {
@@ -27037,6 +27038,10 @@ button:disabled {
 }
 
 /* Difficulty Dropdown */
+.current-challenge-info {
+  position: relative;
+}
+
 .difficulty-dropdown-wrapper {
   position: relative;
 }
@@ -27073,23 +27078,24 @@ button:disabled {
 .difficulty-dropdown {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  width: 100%;
+  left: calc(-1 * var(--challenge-info-padding, 16px));
+  right: calc(-1 * var(--challenge-info-padding, 16px));
+  width: calc(100% + var(--challenge-info-padding, 16px) * 2);
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
   padding: 12px;
-  max-height: 80vh;
-  overflow-y: auto;
+  overflow: visible;
+  max-height: none;
 }
 
 .difficulty-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   gap: 8px;
+  width: 100%;
 }
 
 .difficulty-grid-item {
@@ -27105,6 +27111,8 @@ button:disabled {
   transition: background 0.2s, border-color 0.2s, transform 0.1s;
   text-align: center;
   min-height: 70px;
+  box-sizing: border-box;
+  background: var(--bg-secondary);
 }
 
 .difficulty-grid-item:hover {

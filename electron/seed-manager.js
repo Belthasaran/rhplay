@@ -596,23 +596,26 @@ function exportRun(dbManager, runUuid) {
   `).all(runUuid);
   
   // Get expanded entries (actual games from run_results with filenames)
+  // Join with plan_entries to get entry_type
   const expandedResults = db.prepare(`
     SELECT 
-      sequence_number,
-      gameid,
-      game_name,
-      exit_number,
-      stage_description,
-      was_random,
-      plan_entry_uuid,
-      conditions,
-      sfcpath,
-      levelnumber,
-      translevel,
-      levelname
-    FROM run_results
-    WHERE run_uuid = ?
-    ORDER BY sequence_number
+      rr.sequence_number,
+      rr.gameid,
+      rr.game_name,
+      rr.exit_number,
+      rr.stage_description,
+      rr.was_random,
+      rr.plan_entry_uuid,
+      rr.conditions,
+      rr.sfcpath,
+      rr.levelnumber,
+      rr.translevel,
+      rr.levelname,
+      rpe.entry_type
+    FROM run_results rr
+    LEFT JOIN run_plan_entries rpe ON rr.plan_entry_uuid = rpe.entry_uuid
+    WHERE rr.run_uuid = ?
+    ORDER BY rr.sequence_number
   `).all(runUuid);
   
   // Generate run directory name (same logic as stageRunGames)
@@ -647,7 +650,11 @@ function exportRun(dbManager, runUuid) {
       run_directory: runDirName,
       filename: filename,
       sfcpath: result.sfcpath || null,  // USB2SNES path if uploaded
-      conditions: result.conditions
+      conditions: result.conditions,
+      entry_type: result.entry_type || null,  // Include entry_type from plan entry
+      levelnumber: result.levelnumber || null,
+      translevel: result.translevel || null,
+      levelname: result.levelname || null
     };
   });
   

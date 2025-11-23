@@ -44,6 +44,7 @@
                   <th class="col-mainexit" title="Levels with a main exit (Primary exit used in overworld)">M</th>
                   <th class="col-keyhole" title="Levels with a keydoor exit used in overworld">K</th>
                   <th class="col-credits" title="Credits level (Level used to show in-game credits)">C</th>
+                  <th class="col-water" title="Water Level">W</th>
                   <th class="col-ghouse" title="Ghost House Level">G</th>
                   <th class="col-spalace" title="Switch Palace Level">S</th>
                   <th class="col-castle" title="Castle Level">Ca</th>
@@ -280,6 +281,14 @@
                       @change="stage.credits = $event.target.checked ? 1 : 0"
                     />
                   </td>
+                  <td class="checkbox-cell col-water">
+                    <input 
+                      type="checkbox" 
+                      :checked="stage.water === 1"
+                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      @change="stage.water = $event.target.checked ? 1 : 0"
+                    />
+                  </td>
                   <td class="checkbox-cell col-ghouse">
                     <input 
                       type="checkbox" 
@@ -353,6 +362,13 @@
                       :disabled="testingLevel || !stage.levelnumber || !canTestStage(stage)"
                     >
                       🧪
+                    </button>
+                    <button 
+                      @click.stop="openExtraDescriptionDialog(stage)" 
+                      class="btn-icon btn-memo"
+                      title="Edit/View Extra Description"
+                    >
+                      📝
                     </button>
                     <button 
                       v-if="isDevAdmin && currentMode === 'edit'"
@@ -534,6 +550,43 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Extra Description Dialog -->
+  <Teleport to="body">
+    <div v-if="showExtraDescriptionDialog" class="modal-backdrop" @click.self="closeExtraDescriptionDialog" style="z-index: 25000;">
+      <div class="modal" style="max-width: 600px; width: 90%;">
+        <header class="modal-header">
+          <h3>Extra Description - {{ editingExtraDescriptionStage?.levelname || 'Stage' }}</h3>
+          <button class="close" @click="closeExtraDescriptionDialog">✕</button>
+        </header>
+        <section class="modal-body">
+          <div class="field">
+            <label>Extra Description</label>
+            <textarea 
+              v-model="editingExtraDescriptionText" 
+              class="textarea" 
+              rows="8" 
+              placeholder="Enter optional free-form description for this stage..."
+              :readonly="!(isDevAdmin && currentMode === 'edit')"
+            />
+            <div class="hint" v-if="!(isDevAdmin && currentMode === 'edit')">
+              This field is read-only in view mode. Switch to edit mode to modify.
+            </div>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button 
+            v-if="isDevAdmin && currentMode === 'edit'"
+            @click="saveExtraDescription" 
+            class="btn-primary"
+          >
+            Save
+          </button>
+          <button @click="closeExtraDescriptionDialog" class="btn-secondary">Close</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -558,6 +611,7 @@ interface GameStage {
   mainexit: number;
   keyhole: number;
   credits: number;
+  water: number;
   ghouse: number;
   spalace: number;
   castle: number;
@@ -568,6 +622,7 @@ interface GameStage {
   lock?: number; // Lock flag - level only accessible in Edit mode
   playlevel_patch_code?: string | null; // Playlevel patch code (defaults to '1lvno')
   excluded_patchcodes?: string | null; // JSON array of patch codes or declarative tags to exclude
+  extradescription?: string | null; // Optional free-form description
 }
 
 interface Props {
@@ -616,6 +671,9 @@ const showDetectedLevelsDialog = ref(false);
 const showSetPlaylevelPatchDialog = ref(false);
 const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage_uuid set
 const newPlaylevelPatchCode = ref('1lvno');
+const showExtraDescriptionDialog = ref(false);
+const editingExtraDescriptionStage = ref<GameStage | null>(null);
+const editingExtraDescriptionText = ref<string>('');
 
 // Get requisites as array of tags
 function getRequisiteTags(stage: GameStage): string[] {
@@ -1096,6 +1154,7 @@ function addNewStage() {
     mainexit: 1,
     keyhole: 0,
     credits: 0,
+    water: 0,
     ghouse: 0,
     spalace: 0,
     castle: 0,
@@ -1457,6 +1516,7 @@ async function saveAll() {
         mainexit: stage.mainexit,
         keyhole: stage.keyhole,
         credits: stage.credits,
+        water: stage.water ?? 0,
         ghouse: stage.ghouse,
         spalace: stage.spalace,
         castle: stage.castle,
@@ -1466,6 +1526,7 @@ async function saveAll() {
         final: stage.final,
         lock: stage.lock || 0,
         playlevel_patch_code: stage.playlevel_patch_code || '1lvno',
+        extradescription: stage.extradescription || null,
       });
       
       if (!result?.success) {
@@ -1496,6 +1557,24 @@ function openDetectedLevelsDialog() {
 
 function closeDetectedLevelsDialog() {
   showDetectedLevelsDialog.value = false;
+}
+
+function openExtraDescriptionDialog(stage: GameStage) {
+  editingExtraDescriptionStage.value = stage;
+  editingExtraDescriptionText.value = stage.extradescription || '';
+  showExtraDescriptionDialog.value = true;
+}
+
+function closeExtraDescriptionDialog() {
+  showExtraDescriptionDialog.value = false;
+  editingExtraDescriptionStage.value = null;
+  editingExtraDescriptionText.value = '';
+}
+
+function saveExtraDescription() {
+  if (!editingExtraDescriptionStage.value) return;
+  editingExtraDescriptionStage.value.extradescription = editingExtraDescriptionText.value.trim() || null;
+  closeExtraDescriptionDialog();
 }
 
 function openSetPlaylevelPatchDialog() {
@@ -1756,6 +1835,11 @@ watch(() => props.initialLevelNumber, () => {
   background-color: rgba(255, 193, 7, 0.2); /* Light yellow */
 }
 
+.stages-table th.col-water,
+.stages-table td.col-water {
+  background-color: rgba(0, 150, 255, 0.2); /* Light blue (water) */
+}
+
 .stages-table th.col-ghouse,
 .stages-table td.col-ghouse {
   background-color: rgba(158, 158, 158, 0.2); /* Light gray */
@@ -1814,6 +1898,11 @@ watch(() => props.initialLevelNumber, () => {
 
 .stages-table td.col-credits:has(input[type="checkbox"]:checked) {
   background-color: rgba(255, 193, 7, 0.4) !important;
+  filter: brightness(1.2);
+}
+
+.stages-table td.col-water:has(input[type="checkbox"]:checked) {
+  background-color: rgba(0, 150, 255, 0.4) !important;
   filter: brightness(1.2);
 }
 
@@ -1962,6 +2051,21 @@ watch(() => props.initialLevelNumber, () => {
   gap: 8px;
   justify-content: center;
   align-items: center;
+}
+
+.btn-icon.btn-memo {
+  font-size: 16px;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon.btn-memo:hover {
+  background: var(--bg-tertiary);
+  transform: scale(1.1);
 }
 
 .btn-icon {

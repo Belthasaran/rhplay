@@ -2898,14 +2898,14 @@ function upsertGamestages(db, skeleton) {
     INSERT INTO gamestages (
       stage_uuid, gameid, levelnumber, levelname, versions, submapid,
       translevel_13bf, tile_x, tile_y, requisites,
-      playable, rando, difficulty, mainexit, keyhole, credits,
+      playable, rando, difficulty, mainexit, keyhole, credits, water,
       ghouse, spalace, castle, boss, secret, troll, final, lock,
       playlevel_patch_code, excluded_patchcodes, extradescription, rhpakuuid
     )
     VALUES (
       @stage_uuid, @gameid, @levelnumber, @levelname, @versions, @submapid,
       @translevel_13bf, @tile_x, @tile_y, @requisites,
-      @playable, @rando, @difficulty, @mainexit, @keyhole, @credits,
+      @playable, @rando, @difficulty, @mainexit, @keyhole, @credits, @water,
       @ghouse, @spalace, @castle, @boss, @secret, @troll, @final, @lock,
       @playlevel_patch_code, @excluded_patchcodes, @extradescription, @rhpakuuid
     )
@@ -2930,6 +2930,7 @@ function upsertGamestages(db, skeleton) {
       mainexit: stage.mainexit ?? 1,
       keyhole: stage.keyhole ?? 0,
       credits: stage.credits ?? 0,
+      water: stage.water ?? 0,
       ghouse: stage.ghouse ?? 0,
       spalace: stage.spalace ?? 0,
       castle: stage.castle ?? 0,

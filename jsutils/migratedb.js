@@ -509,6 +509,38 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'rhdata_044_gamestages_rhpak_support',
+      description: 'Add rhpakuuid and extradescription columns to gamestages table for RHPAK support',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/044_rhdata_gamestages_rhpak_support.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'gamestages', 'rhpakuuid') && columnExists(db, 'gamestages', 'extradescription');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
+    {
+      id: 'rhdata_045_gamestages_water_flag',
+      description: 'Add water flag column to gamestages table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/045_rhdata_gamestages_water_flag.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'gamestages', 'water');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   clientdata: [
     {

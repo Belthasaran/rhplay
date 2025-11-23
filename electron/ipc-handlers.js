@@ -5661,28 +5661,6 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
-  
-  /**
-   * Get plan entries for a run
-   * Channel: db:runs:get-plan-entries
-   */
-  ipcMain.handle('db:runs:get-plan-entries', async (event, { runUuid }) => {
-    try {
-      const db = dbManager.getConnection('clientdata');
-      
-      const entries = db.prepare(`
-        SELECT *
-        FROM run_plan_entries
-        WHERE run_uuid = ?
-        ORDER BY sequence_number
-      `).all(runUuid);
-      
-      return entries;
-    } catch (error) {
-      console.error('Error getting plan entries:', error);
-      throw error;
-    }
-  });
 
   // ===========================================================================
   // DIALOG OPERATIONS

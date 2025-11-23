@@ -1073,9 +1073,6 @@
           <!-- Preparing state -->
           <template v-if="!isRunActive">
             <button @click="openPastRunsModal" class="btn-past-runs">📜 Past Runs</button>
-            <button @click="editGlobalConditions" class="btn-conditions-header" :title="`Global Patches: ${globalRunPatchCodes.length > 0 ? globalRunPatchCodes.join(', ') : 'None'}`">
-              {{ globalRunPatchCodes.length > 0 ? `✓ Global Patches (${globalRunPatchCodes.length})` : 'Set Global Conditions' }}
-            </button>
             <button @click="exportRunToFile" :disabled="!isRunSaved">📤 Export</button>
             <button @click="importRunFromFile">📥 Import</button>
             <button @click="stageRun('save')" :disabled="runEntries.length === 0">Stage and Save</button>
@@ -1117,6 +1114,9 @@
           <button @click="removeCheckedRun" :disabled="checkedRunCount === 0">Remove</button>
           <button @click="moveCheckedUp" :disabled="!canMoveCheckedUp">↑ Move Up</button>
           <button @click="moveCheckedDown" :disabled="!canMoveCheckedDown">↓ Move Down</button>
+          <button @click="editGlobalConditions" :title="`Global Patches: ${globalRunPatchCodes.length > 0 ? globalRunPatchCodes.join(', ') : 'None'}`">
+            {{ globalRunPatchCodes.length > 0 ? `✓ Global Patches (${globalRunPatchCodes.length})` : 'Set Global Conditions' }}
+          </button>
         </div>
         <div class="right add-random">
           <label>
@@ -6223,6 +6223,58 @@
   @select="handleStageSelected"
   @add-to-run="handleAddStageToRunFromDialog"
 />
+
+<!-- Global Conditions Dialog -->
+<div v-if="showGlobalConditionsDialog" class="modal-backdrop" @click.self="closeGlobalConditionsDialog">
+  <div class="modal global-conditions-modal">
+    <header class="modal-header">
+      <h3>Set Global Conditions</h3>
+      <button @click="closeGlobalConditionsDialog" class="close">✕</button>
+    </header>
+    
+    <div class="modal-body">
+      <div class="global-conditions-content">
+        <h4>Global Patch Codes</h4>
+        <p class="info-message">Select patch codes to apply to all games and stages in this run:</p>
+        
+        <div class="patches-list" v-if="availablePatchesForGlobal.length > 0">
+          <label 
+            v-for="patch in availablePatchesForGlobal" 
+            :key="patch.epuuid"
+            class="patch-checkbox-label"
+          >
+            <input 
+              type="checkbox" 
+              :checked="globalRunPatchCodes.includes(patch.patch_code)"
+              @change="toggleGlobalPatch(patch.patch_code)"
+            />
+            <span class="patch-name">{{ patch.name }}</span>
+            <span class="patch-code">({{ patch.patch_code }})</span>
+            <span v-if="patch.description" class="patch-description">{{ patch.description }}</span>
+          </label>
+        </div>
+        <div v-else class="info-message">No patches available.</div>
+        
+        <div v-if="globalRunPatchCodes.length > 0" class="selected-patches-summary">
+          <h5>Selected Patches:</h5>
+          <div class="selected-patches-list">
+            <span 
+              v-for="code in globalRunPatchCodes" 
+              :key="code"
+              class="selected-patch-tag"
+            >
+              {{ code }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <footer class="modal-footer">
+      <button @click="closeGlobalConditionsDialog" class="btn-primary">Done</button>
+    </footer>
+  </div>
+</div>
 
   <!-- Upload File Modal (standalone) -->
   <div v-if="uploadFileModalOpen" class="modal-backdrop" @click.self="closeUploadFileModal">
@@ -21115,13 +21167,13 @@ button:disabled {
 }
 
 .btn-run-status {
-  padding: 8px 16px;
-  border: 1px solid var(--border-color);
+  padding: var(--button-padding);
+  border: 1px solid var(--border-secondary);
   border-radius: 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--button-bg);
+  color: var(--button-text);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--base-font-size);
   white-space: nowrap;
 }
 
@@ -22639,17 +22691,17 @@ button:disabled {
 }
 
 .btn-past-runs {
-  padding: 6px 10px;
-  font-size: 12px;
-  background: #fef3c7;
-  border: 1px solid #fbbf24;
+  padding: var(--button-padding);
+  font-size: var(--base-font-size);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-secondary);
   border-radius: 4px;
   cursor: pointer;
 }
 
-.btn-past-runs:hover {
-  background: #fde68a;
-  border-color: #f59e0b;
+.btn-past-runs:hover:not(:disabled) {
+  background: var(--button-hover-bg);
 }
 
 /* Skill rating caption */
@@ -26180,6 +26232,105 @@ button:disabled {
 .nostr-relay-list li {
   font-family: var(--font-mono, monospace);
   word-break: break-all;
+}
+
+/* Global Conditions Dialog */
+.global-conditions-modal {
+  max-width: 600px;
+  width: 90vw;
+}
+
+.global-conditions-content {
+  padding: 16px;
+}
+
+.global-conditions-content h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.global-conditions-content h5 {
+  margin: 16px 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.patches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.patch-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.patch-checkbox-label:hover {
+  background: var(--bg-hover);
+}
+
+.patch-checkbox-label input[type="checkbox"] {
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.patch-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.patch-code {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.patch-description {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-style: italic;
+  margin-left: 8px;
+}
+
+.selected-patches-summary {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+}
+
+.selected-patches-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.selected-patch-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-primary);
 }
 
 </style>

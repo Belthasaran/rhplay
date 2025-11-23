@@ -247,6 +247,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAllRuns: () => ipcRenderer.invoke('db:runs:get-all'),
   
   /**
+   * Get a single run by UUID
+   * @param {Object} params - {runUuid: string}
+   * @returns {Promise<Object|null>} Run object or null
+   */
+  getRun: (params) => ipcRenderer.invoke('db:runs:get', params),
+  
+  /**
    * Get stage info from gamestages table
    * @param {Object} params - {gameid: string, levelnumber: string}
    * @returns {Promise<Object>} Stage info with difficulty and flags

@@ -5656,6 +5656,27 @@ function registerDatabaseHandlers(dbManager) {
       throw error;
     }
   });
+
+  /**
+   * Get a single run by UUID
+   * Channel: db:runs:get
+   */
+  ipcMain.handle('db:runs:get', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const run = db.prepare(`
+        SELECT * FROM runs
+        WHERE run_uuid = ?
+        LIMIT 1
+      `).get(runUuid);
+      
+      return run || null;
+    } catch (error) {
+      console.error('Error getting run:', error);
+      throw error;
+    }
+  });
   
   /**
    * Delete a run (cascade deletes results and plan entries)
@@ -5729,7 +5750,10 @@ function registerDatabaseHandlers(dbManager) {
     difficulty_feedback,
     comment,
     current_difficulty,
-    flag_values
+    flag_values,
+    global_conditions,
+    applied_patches,
+    playlevel_patchcode
   }) => {
     try {
       const db = dbManager.getConnection('clientdata');
@@ -5752,6 +5776,9 @@ function registerDatabaseHandlers(dbManager) {
               comment = ?,
               current_difficulty = ?,
               flag_values = ?,
+              global_conditions = ?,
+              applied_patches = ?,
+              playlevel_patchcode = ?,
               updated_at = strftime('%s', 'now')
           WHERE feedback_uuid = ?
         `).run(
@@ -5761,6 +5788,9 @@ function registerDatabaseHandlers(dbManager) {
           comment || null,
           current_difficulty !== null && current_difficulty !== undefined ? current_difficulty : null,
           flag_values || null,
+          global_conditions || null,
+          applied_patches || null,
+          playlevel_patchcode || null,
           feedbackUuid
         );
       } else {
@@ -5769,8 +5799,9 @@ function registerDatabaseHandlers(dbManager) {
           INSERT INTO stage_feedback
             (feedback_uuid, gameid, levelnumber, translevel, levelname,
              difficulty_feedback, comment, current_difficulty, flag_values,
+             global_conditions, applied_patches, playlevel_patchcode,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
         `).run(
           feedbackUuid,
           gameid,
@@ -5780,7 +5811,10 @@ function registerDatabaseHandlers(dbManager) {
           difficulty_feedback !== null && difficulty_feedback !== undefined ? difficulty_feedback : null,
           comment || null,
           current_difficulty !== null && current_difficulty !== undefined ? current_difficulty : null,
-          flag_values || null
+          flag_values || null,
+          global_conditions || null,
+          applied_patches || null,
+          playlevel_patchcode || null
         );
       }
       

@@ -928,6 +928,24 @@ const MIGRATIONS = {
         return tableExists(db, 'stage_feedback');
       },
     },
+    {
+      id: 'clientdata_043_stage_feedback_extend',
+      description: 'Extend stage_feedback table with patch and condition tracking',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/043_clientdata_stage_feedback_extend.sql'),
+      skipIf(db) {
+        // Check if columns already exist
+        try {
+          const info = db.prepare("PRAGMA table_info(stage_feedback)").all();
+          const hasGlobalConditions = info.some(col => col.name === 'global_conditions');
+          const hasAppliedPatches = info.some(col => col.name === 'applied_patches');
+          const hasPlaylevelPatchcode = info.some(col => col.name === 'playlevel_patchcode');
+          return hasGlobalConditions && hasAppliedPatches && hasPlaylevelPatchcode;
+        } catch (e) {
+          return false;
+        }
+      },
+    },
   ],
   patchbin: [
     {

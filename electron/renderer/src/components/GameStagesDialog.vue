@@ -182,6 +182,10 @@
                     <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ formatRequisites(stage.requisites) || '-' }}</span>
                     <span v-else>-</span>
                   </td>
+                  <td class="playlevel-patch-cell">
+                    <span v-if="stage.secret !== 1 || currentMode === 'edit'">{{ getActivePlaylevelPatch(stage) }}</span>
+                    <span v-else>-</span>
+                  </td>
                   <td>
                     <input 
                       v-if="isDevAdmin && currentMode === 'edit'"
@@ -414,6 +418,72 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Set Playlevel Patch Dialog -->
+  <Teleport to="body">
+    <div v-if="showSetPlaylevelPatchDialog" class="modal-backdrop" @click.self="closeSetPlaylevelPatchDialog" style="z-index: 25000;">
+      <div class="modal" style="max-width: 600px; width: 90%;">
+        <header class="modal-header">
+          <h3>Set Playlevel Patch</h3>
+          <button class="close" @click="closeSetPlaylevelPatchDialog">✕</button>
+        </header>
+        <section class="modal-body">
+          <div class="modal-field">
+            <label>Patch Code:</label>
+            <input 
+              v-model="newPlaylevelPatchCode" 
+              type="text"
+              class="modal-input"
+              placeholder="1lvno"
+              list="playlevel-patch-list"
+            />
+            <datalist id="playlevel-patch-list">
+              <option v-for="patch in playlevelPatches" :key="patch.epuuid" :value="patch.patch_code">
+                {{ patch.patch_code }} - {{ patch.name }}
+              </option>
+            </datalist>
+            <p class="field-hint">Enter the patch code to use for level selection/testing. Default is "1lvno".</p>
+          </div>
+
+          <div class="modal-field">
+            <label>Apply to:</label>
+            <div class="selection-controls">
+              <button @click="selectAllStagesForPlaylevelPatch" class="btn-small btn-secondary">Select All</button>
+              <button @click="deselectAllStagesForPlaylevelPatch" class="btn-small btn-secondary">Deselect All</button>
+            </div>
+            <div class="stages-selection-list">
+              <div 
+                v-for="stage in stages" 
+                :key="stage.stage_uuid || stage.levelname"
+                class="stage-selection-item"
+              >
+                <label>
+                  <input 
+                    type="checkbox"
+                    :checked="selectedStagesForPlaylevelPatch.has(stage.stage_uuid || '')"
+                    @change="toggleStageForPlaylevelPatch(stage.stage_uuid)"
+                  />
+                  <span class="stage-selection-label">
+                    {{ formatLevelNumberHex(stage.levelnumber) || '?' }} - {{ stage.levelname }}
+                    <span class="current-patch-hint">(current: {{ getActivePlaylevelPatch(stage) }})</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            <p class="field-hint">
+              Selected: {{ selectedStagesForPlaylevelPatch.size }} of {{ stages.length }} stages
+            </p>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button @click="applyPlaylevelPatch" class="btn-primary" :disabled="selectedStagesForPlaylevelPatch.size === 0 || !newPlaylevelPatchCode.trim()">
+            Apply
+          </button>
+          <button @click="closeSetPlaylevelPatchDialog" class="btn-secondary">Cancel</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -480,11 +550,15 @@ const testProgressMessage = ref('');
 const stages = ref<GameStage[]>([]);
 const selectedStageUuid = ref<string | null>(null);
 const isDevAdmin = ref(false);
-const availablePatches = ref<Array<{epuuid: string, patch_code: string, name: string}>>([]);
+const availablePatches = ref<Array<{epuuid: string, patch_code: string, name: string, is_playlevel?: number}>>([]);
+const playlevelPatches = ref<Array<{epuuid: string, patch_code: string, name: string}>>([]);
 const loadingPatches = ref(false);
 const editingRequisitesForStage = ref<string | null>(null); // stage_uuid being edited
 const newRequisiteTag = ref('');
 const showDetectedLevelsDialog = ref(false);
+const showSetPlaylevelPatchDialog = ref(false);
+const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage_uuid set
+const newPlaylevelPatchCode = ref('1lvno');
 
 // Get requisites as array of tags
 function getRequisiteTags(stage: GameStage): string[] {
@@ -520,10 +594,37 @@ function removeRequisiteTag(stage: GameStage, tag: string) {
   }
 }
 
+// Format requisites for display
 function formatRequisites(requisites: string | null | undefined): string {
   if (!requisites) return '';
   const tags = requisites.split(',').map(r => r.trim()).filter(r => r.length > 0);
   return tags.join(', ');
+}
+
+// Get active playlevel patch for a stage
+// Priority: 1) Playlevel patch in requisites, 2) playlevel_patch_code, 3) default '1lvno'
+function getActivePlaylevelPatch(stage: GameStage): string {
+  // First, check if any playlevel patch is in requisites
+  const requisiteTags = getRequisiteTags(stage);
+  for (const tag of requisiteTags) {
+    const playlevelPatch = playlevelPatches.value.find(p => p.patch_code === tag);
+    if (playlevelPatch) {
+      return tag; // Found a playlevel patch in requisites
+    }
+  }
+  
+  // Second, check playlevel_patch_code
+  if (stage.playlevel_patch_code && stage.playlevel_patch_code.trim()) {
+    return stage.playlevel_patch_code.trim();
+  }
+  
+  // Default to '1lvno'
+  return '1lvno';
+}
+
+// Get playlevel patch code for a stage (for use in testLevel)
+function getPlaylevelPatchCode(stage: GameStage): string {
+  return getActivePlaylevelPatch(stage);
 }
 
 // Validate integer input for tile_x and tile_y
@@ -731,14 +832,19 @@ async function loadAvailablePatches() {
     const result = await api.getAllExtraPatches();
     
     if (result?.success) {
-      availablePatches.value = (result.patches || []).map((patch: any) => ({
+      const allPatches = (result.patches || []).map((patch: any) => ({
         epuuid: patch.epuuid,
         patch_code: patch.patch_code,
         name: patch.name,
+        is_playlevel: patch.is_playlevel || 0,
       }));
+      availablePatches.value = allPatches;
+      // Filter playlevel patches
+      playlevelPatches.value = allPatches.filter((p: any) => p.is_playlevel === 1);
     } else {
       console.error('Failed to load patches:', result?.error);
       availablePatches.value = [];
+      playlevelPatches.value = [];
     }
   } catch (error) {
     console.error('Error loading patches:', error);
@@ -876,6 +982,7 @@ function addNewStage() {
     troll: 0,
     final: 0,
     lock: 0,
+    playlevel_patch_code: null, // null means use default '1lvno'
   };
   stages.value.push(newStage);
 }
@@ -911,18 +1018,26 @@ async function testLevel(stage: GameStage) {
     }
     
     const allPatches = patchesResult.patches || [];
-    const lvnoPatch = allPatches.find((p: any) => p.patch_code === '1lvno');
+    // Get the playlevel patch code for this stage
+    const playlevelPatchCode = getPlaylevelPatchCode(stage);
+    const playlevelPatch = allPatches.find((p: any) => p.patch_code === playlevelPatchCode);
     
-    if (!lvnoPatch) {
-      testProgressMessage.value = 'Error: 1lvno patch not found. Please ensure the patch is defined in the system.';
+    if (!playlevelPatch) {
+      testProgressMessage.value = `Error: Playlevel patch "${playlevelPatchCode}" not found. Please ensure the patch is defined in the system.`;
       return;
     }
     
     // Collect patches from requisites
-    const selectedPatchUuids: string[] = [lvnoPatch.epuuid]; // Always include 1lvno
+    const selectedPatchUuids: string[] = [];
+    
+    // Add playlevel patch if not already in requisites
+    const requisiteTags = getRequisiteTags(stage);
+    const playlevelInRequisites = requisiteTags.includes(playlevelPatchCode);
+    if (!playlevelInRequisites) {
+      selectedPatchUuids.push(playlevelPatch.epuuid);
+    }
     
     // Get requisite tags from stage and find matching patches
-    const requisiteTags = getRequisiteTags(stage);
     if (requisiteTags.length > 0) {
       for (const tag of requisiteTags) {
         // Find patch with matching patch_code
@@ -930,6 +1045,13 @@ async function testLevel(stage: GameStage) {
         if (matchingPatch && !selectedPatchUuids.includes(matchingPatch.epuuid)) {
           selectedPatchUuids.push(matchingPatch.epuuid);
         }
+      }
+    }
+    
+    // If playlevel patch was in requisites, make sure it's included
+    if (playlevelInRequisites) {
+      if (!selectedPatchUuids.includes(playlevelPatch.epuuid)) {
+        selectedPatchUuids.push(playlevelPatch.epuuid);
       }
     }
     
@@ -1221,6 +1343,7 @@ async function saveAll() {
         troll: stage.troll,
         final: stage.final,
         lock: stage.lock || 0,
+        playlevel_patch_code: stage.playlevel_patch_code || '1lvno',
       });
       
       if (!result?.success) {
@@ -1253,6 +1376,108 @@ function closeDetectedLevelsDialog() {
   showDetectedLevelsDialog.value = false;
 }
 
+function openSetPlaylevelPatchDialog() {
+  // Initialize with all stages selected
+  selectedStagesForPlaylevelPatch.value = new Set(stages.value.map(s => s.stage_uuid || '').filter(Boolean));
+  newPlaylevelPatchCode.value = '1lvno';
+  showSetPlaylevelPatchDialog.value = true;
+}
+
+function closeSetPlaylevelPatchDialog() {
+  showSetPlaylevelPatchDialog.value = false;
+  selectedStagesForPlaylevelPatch.value.clear();
+}
+
+function toggleStageForPlaylevelPatch(stageUuid: string | undefined) {
+  if (!stageUuid) return;
+  if (selectedStagesForPlaylevelPatch.value.has(stageUuid)) {
+    selectedStagesForPlaylevelPatch.value.delete(stageUuid);
+  } else {
+    selectedStagesForPlaylevelPatch.value.add(stageUuid);
+  }
+}
+
+function selectAllStagesForPlaylevelPatch() {
+  selectedStagesForPlaylevelPatch.value = new Set(stages.value.map(s => s.stage_uuid || '').filter(Boolean));
+}
+
+function deselectAllStagesForPlaylevelPatch() {
+  selectedStagesForPlaylevelPatch.value.clear();
+}
+
+async function applyPlaylevelPatch() {
+  const patchCode = newPlaylevelPatchCode.value.trim();
+  if (!patchCode) {
+    alert('Please enter a patch code');
+    return;
+  }
+  
+  // Verify it's a valid playlevel patch or allow '1lvno' as default
+  const isValidPlaylevel = playlevelPatches.value.some(p => p.patch_code === patchCode);
+  if (!isValidPlaylevel && patchCode !== '1lvno') {
+    // Allow '1lvno' as default even if not marked as playlevel
+    const exists = availablePatches.value.some(p => p.patch_code === patchCode);
+    if (!exists) {
+      alert(`Patch code "${patchCode}" not found. Please enter a valid patch code.`);
+      return;
+    }
+  }
+  
+  // Apply to selected stages
+  for (const stageUuid of selectedStagesForPlaylevelPatch.value) {
+    const stage = stages.value.find(s => s.stage_uuid === stageUuid);
+    if (stage) {
+      // Set to null if defaulting to '1lvno', otherwise set the patch code
+      stage.playlevel_patch_code = patchCode === '1lvno' ? null : patchCode;
+    }
+  }
+  
+  // Save all modified stages
+  try {
+    const api = (window as any)?.electronAPI;
+    if (api?.saveGameStage) {
+      for (const stageUuid of selectedStagesForPlaylevelPatch.value) {
+        const stage = stages.value.find(s => s.stage_uuid === stageUuid);
+        if (stage && stage.stage_uuid) {
+          await api.saveGameStage({
+            stage_uuid: stage.stage_uuid,
+            gameid: stage.gameid,
+            levelnumber: stage.levelnumber,
+            levelname: stage.levelname,
+            versions: stage.versions || '*',
+            submapid: stage.submapid,
+            translevel_13bf: stage.translevel_13bf,
+            tile_x: stage.tile_x || null,
+            tile_y: stage.tile_y || null,
+            tile_value: stage.tile_value || null,
+            requisites: stage.requisites || null,
+            playable: stage.playable,
+            rando: stage.rando,
+            difficulty: stage.difficulty,
+            mainexit: stage.mainexit,
+            keyhole: stage.keyhole,
+            credits: stage.credits,
+            ghouse: stage.ghouse,
+            spalace: stage.spalace,
+            castle: stage.castle,
+            boss: stage.boss,
+            secret: stage.secret,
+            troll: stage.troll,
+            final: stage.final,
+            lock: stage.lock || 0,
+            playlevel_patch_code: stage.playlevel_patch_code,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error saving playlevel patch codes:', error);
+    alert('Error saving playlevel patch codes. Some changes may not have been saved.');
+  }
+  
+  closeSetPlaylevelPatchDialog();
+}
+
 function handleDetectedLevelsSelected(selectedLevels: any[]) {
   // Add selected detected levels as new stages
   for (const level of selectedLevels) {
@@ -1278,11 +1503,12 @@ function handleDetectedLevelsSelected(selectedLevels: any[]) {
       spalace: 0,
       castle: 0,
       boss: 0,
-      secret: 0,
-      troll: 0,
-      final: 0,
-      lock: 0,
-    };
+    secret: 0,
+    troll: 0,
+    final: 0,
+    lock: 0,
+    playlevel_patch_code: null,
+  };
     stages.value.push(newStage);
   }
   showDetectedLevelsDialog.value = false;
@@ -1733,6 +1959,99 @@ watch(() => props.initialLevelNumber, () => {
   border-radius: 3px;
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+/* Playlevel patch cell */
+.playlevel-patch-cell {
+  font-family: monospace;
+  font-size: var(--small-font-size);
+  color: var(--text-primary);
+}
+
+/* Set Playlevel Patch Dialog Styles */
+.modal-field {
+  margin-bottom: 20px;
+}
+
+.modal-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+}
+
+.modal-input {
+  width: 100%;
+  padding: var(--input-padding);
+  font-size: var(--base-font-size);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--accent-primary, #4CAF50);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.field-hint {
+  margin-top: 6px;
+  font-size: var(--small-font-size);
+  color: var(--text-secondary);
+}
+
+.selection-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.stages-selection-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  padding: 8px;
+}
+
+.stage-selection-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.stage-selection-item:last-child {
+  border-bottom: none;
+}
+
+.stage-selection-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: normal;
+  margin: 0;
+}
+
+.stage-selection-item input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.stage-selection-label {
+  flex: 1;
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+}
+
+.current-patch-hint {
+  font-size: var(--small-font-size);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-left: 8px;
 }
 
 .requisites-selector {

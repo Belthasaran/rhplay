@@ -461,6 +461,38 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'rhdata_040_gamestages_playlevel_patch',
+      description: 'Add playlevel_patch_code column to gamestages table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/040_rhdata_gamestages_playlevel_patch.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'gamestages', 'playlevel_patch_code');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
+    {
+      id: 'rhdata_041_extrapatches_is_playlevel',
+      description: 'Add is_playlevel flag to extrapatches table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/041_rhdata_extrapatches_is_playlevel.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'extrapatches')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'extrapatches', 'is_playlevel');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   clientdata: [
     {

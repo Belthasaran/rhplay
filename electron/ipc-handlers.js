@@ -3040,7 +3040,8 @@ function registerDatabaseHandlers(dbManager) {
         secret,
         troll,
         final,
-        lock
+        lock,
+        playlevel_patch_code
       } = params;
 
       if (!gameid || !levelname) {
@@ -3151,6 +3152,7 @@ function registerDatabaseHandlers(dbManager) {
             troll = ?,
             final = ?,
             lock = ?,
+            playlevel_patch_code = ?,
             updated_at = CURRENT_TIMESTAMP
           WHERE stage_uuid = ?
         `);
@@ -3180,6 +3182,7 @@ function registerDatabaseHandlers(dbManager) {
           troll ? 1 : 0,
           final ? 1 : 0,
           lock ? 1 : 0,
+          playlevel_patch_code || null,
           stage_uuid
         );
       } else {
@@ -3189,8 +3192,8 @@ function registerDatabaseHandlers(dbManager) {
             gameid, levelnumber, levelname, versions, submapid, translevel_13bf,
             tile_x, tile_y, tile_value,
             requisites, playable, rando, difficulty,
-            mainexit, keyhole, credits, ghouse, spalace, castle, boss, secret, troll, final, lock
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            mainexit, keyhole, credits, ghouse, spalace, castle, boss, secret, troll, final, lock, playlevel_patch_code
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
@@ -3217,7 +3220,8 @@ function registerDatabaseHandlers(dbManager) {
           secret ? 1 : 0,
           troll ? 1 : 0,
           final ? 1 : 0,
-          lock ? 1 : 0
+          lock ? 1 : 0,
+          playlevel_patch_code || null
         );
       }
 

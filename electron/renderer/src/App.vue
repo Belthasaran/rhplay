@@ -17064,8 +17064,8 @@ const stageFlags = [
 ];
 
 const stageFilter = reactive({
-  minDifficulty: null as number | null,
-  maxDifficulty: null as number | null,
+  minDifficulty: 2 as number | null,  // Default: 2
+  maxDifficulty: 5 as number | null,    // Default: 5
   includeFlags: ['M', 'K', 'G', 'S', 'Ca', 'Bo'] as string[],  // Default: all flags included
   excludeFlags: [] as string[]
 });
@@ -21012,7 +21012,7 @@ button:disabled {
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: var(--base-font-size);
   color: var(--text-primary);
 }
 .match-count-indicator.insufficient {
@@ -21028,12 +21028,12 @@ button:disabled {
   display: inline-block;
 }
 .btn-stage-limits {
-  padding: 6px 12px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  padding: var(--button-padding);
+  background-color: var(--button-bg);
+  border: 1px solid var(--border-secondary);
   border-radius: 4px;
-  font-size: 13px;
-  color: var(--text-primary);
+  font-size: var(--base-font-size);
+  color: var(--button-text);
   cursor: pointer;
 }
 .btn-stage-limits:hover {
@@ -21064,7 +21064,7 @@ button:disabled {
 .stage-limits-section label {
   display: block;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: var(--base-font-size);
   color: var(--text-primary);
 }
 .stage-limits-section select {
@@ -21075,7 +21075,7 @@ button:disabled {
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--base-font-size);
 }
 .stage-flags-row {
   display: flex;
@@ -21105,7 +21105,7 @@ button:disabled {
 }
 .stage-flag-checkbox .flag-name {
   font-weight: normal;
-  font-size: 11px;
+  font-size: calc(var(--base-font-size) * 0.85);
   color: var(--text-secondary);
 }
 .modal-toolbar .count { width: 80px; padding: 6px 8px; }

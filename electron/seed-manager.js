@@ -392,6 +392,8 @@ function selectRandomStage(params) {
     INNER JOIN gameversions gv ON gs.gameid = gv.gameid
     WHERE gs.gameid IN (${placeholders})
       AND gs.playable = 1
+      AND gs.rando = 1
+      AND gs.difficulty <= 7
   `;
   const stageQueryParams = [...gameids];
   

@@ -1109,20 +1109,29 @@
       <!-- Current Challenge Info (only shown when run is active) -->
       <section v-if="isRunActive && currentChallenge" class="current-challenge-info">
         <div class="challenge-info-left">
-          <span class="challenge-sfc-path" v-if="currentChallengeSfcPath">{{ getBasename(currentChallengeSfcPath) }}</span>
-          <span class="challenge-game-name">{{ currentChallenge.name || currentChallenge.game_name || '' }}</span>
-          <span class="challenge-stage-name" v-if="currentChallenge.stageName || currentChallenge.levelname">
-            - {{ currentChallenge.stageName || currentChallenge.levelname }}
-          </span>
-          <span class="challenge-difficulty" v-if="currentChallenge.stageNumber || currentChallenge.levelnumber">
-            - 
-            <span v-if="currentStageDifficulty !== null">
-              {{ currentStageDifficulty }} {{ formatStageDifficulty(currentStageDifficulty) }}
+          <div class="challenge-info-line1">
+            <span class="challenge-sfc-path" v-if="currentChallengeSfcPath">{{ getBasename(currentChallengeSfcPath) }}</span>
+            <span class="challenge-game-id" v-if="currentChallenge.id || currentChallenge.gameid">
+              {{ currentChallenge.id || currentChallenge.gameid }}
             </span>
-            <span v-else-if="currentChallenge.difficulty">
-              {{ formatGameDifficulty(currentChallenge.difficulty) }}
+            <span class="challenge-game-name">{{ currentChallenge.name || currentChallenge.game_name || '' }}</span>
+          </div>
+          <div class="challenge-info-line2" v-if="currentChallenge.stageNumber || currentChallenge.levelnumber || currentStageDifficulty !== null || currentChallenge.difficulty">
+            <span class="challenge-level-info" v-if="currentChallenge.stageNumber || currentChallenge.levelnumber">
+              <span class="challenge-level-number">{{ currentChallenge.stageNumber || currentChallenge.levelnumber }}</span>
+              <span class="challenge-stage-name" v-if="currentChallenge.stageName || currentChallenge.levelname">
+                {{ currentChallenge.stageName || currentChallenge.levelname }}
+              </span>
             </span>
-          </span>
+            <span class="challenge-difficulty" v-if="currentStageDifficulty !== null || currentChallenge.difficulty">
+              <span v-if="currentStageDifficulty !== null">
+                {{ currentStageDifficulty }} {{ formatStageDifficulty(currentStageDifficulty) }}
+              </span>
+              <span v-else-if="currentChallenge.difficulty">
+                {{ formatGameDifficulty(currentChallenge.difficulty) }}
+              </span>
+            </span>
+          </div>
         </div>
         <div class="challenge-feedback-buttons" v-if="isCurrentChallengeRandomStage">
           <div class="difficulty-dropdown-wrapper">
@@ -26903,17 +26912,47 @@ button:disabled {
 
 .challenge-info-left {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
   font-size: var(--base-font-size);
   color: var(--text-primary);
+}
+
+.challenge-info-line1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.challenge-info-line2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .challenge-sfc-path {
   font-family: monospace;
   color: var(--text-secondary);
   font-size: calc(var(--base-font-size) * 0.9);
+}
+
+.challenge-game-id {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.challenge-level-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.challenge-level-number {
+  font-weight: 600;
+  font-family: monospace;
 }
 
 .challenge-game-name {

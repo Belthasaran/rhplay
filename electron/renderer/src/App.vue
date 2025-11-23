@@ -889,7 +889,7 @@
         <button @click="openRunModal">Prepare Run</button>
         <button @click="startSelected" :disabled="!canStartGames">Start</button>
         <button @click="openAdvancedPatchModal" :disabled="!exactlyOneSelected">+Patch</button>
-        <button @click="setMyRating" :disabled="!exactlyOneSelected">My rating</button>
+        <button @click="openStageNotesDialog">Stage Notes</button>
         
         <!-- SNES Contents Dropdown -->
         <div v-if="settings.usb2snesEnabled === 'yes'" class="snes-contents-dropdown-container">
@@ -1105,6 +1105,42 @@
           <button class="close" @click="closeRunModal">✕</button>
         </div>
       </header>
+
+      <!-- Current Challenge Info (only shown when run is active) -->
+      <section v-if="isRunActive && currentChallenge" class="current-challenge-info">
+        <div class="challenge-info-left">
+          <span class="challenge-sfc-path" v-if="currentChallengeSfcPath">{{ getBasename(currentChallengeSfcPath) }}</span>
+          <span class="challenge-game-name">{{ currentChallenge.name || currentChallenge.game_name || '' }}</span>
+          <span class="challenge-stage-name" v-if="currentChallenge.stageName || currentChallenge.levelname">
+            - {{ currentChallenge.stageName || currentChallenge.levelname }}
+          </span>
+          <span class="challenge-difficulty" v-if="currentChallenge.stageNumber || currentChallenge.levelnumber">
+            - 
+            <span v-if="currentStageDifficulty !== null">
+              {{ currentStageDifficulty }} {{ formatStageDifficulty(currentStageDifficulty) }}
+            </span>
+            <span v-else-if="currentChallenge.difficulty">
+              {{ formatGameDifficulty(currentChallenge.difficulty) }}
+            </span>
+          </span>
+        </div>
+        <div class="challenge-feedback-buttons" v-if="isCurrentChallengeRandomStage">
+          <div class="difficulty-buttons">
+            <button 
+              v-for="diff in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]" 
+              :key="diff"
+              @click="setStageDifficultyFeedback(diff)"
+              :class="['btn-difficulty', { 'active': currentStageFeedback?.difficulty_feedback === diff }]"
+              :title="formatStageDifficulty(diff)"
+            >
+              {{ diff }}
+            </button>
+          </div>
+          <button @click="openStageCommentDialog" class="btn-comment" :class="{ 'has-comment': currentStageFeedback?.comment }">
+            💬 Comment
+          </button>
+        </div>
+      </section>
 
       <!-- Toolbar only shown when preparing -->
       <section v-if="!isRunActive" class="modal-toolbar">
@@ -6295,6 +6331,89 @@
     
     <footer class="modal-footer">
       <button @click="closeGlobalConditionsDialog" class="btn-primary">Done</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Stage Notes Dialog -->
+<div v-if="stageNotesModalOpen" class="modal-backdrop" @click.self="stageNotesModalOpen = false">
+  <div class="modal stage-notes-modal">
+    <header class="modal-header">
+      <h3>Stage Notes</h3>
+      <button @click="stageNotesModalOpen = false" class="close">✕</button>
+    </header>
+    
+    <div class="modal-body">
+      <div class="stage-notes-content">
+        <div class="table-wrapper">
+          <table class="data-table stage-notes-table">
+            <thead>
+              <tr>
+                <th>Gameid</th>
+                <th>Gamename</th>
+                <th>Levelnumber</th>
+                <th>Trans</th>
+                <th>LevelName</th>
+                <th>Diff</th>
+                <th>Difficulty Feedback</th>
+                <th>Comment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="feedback in stageNotesList" :key="feedback.feedback_uuid">
+                <td>{{ feedback.gameid }}</td>
+                <td>{{ feedback.gamename || '-' }}</td>
+                <td>{{ feedback.levelnumber }}</td>
+                <td>{{ feedback.translevel || '-' }}</td>
+                <td>{{ feedback.levelname || '-' }}</td>
+                <td>{{ feedback.current_difficulty !== null ? feedback.current_difficulty : '-' }}</td>
+                <td>
+                  <span v-if="feedback.difficulty_feedback !== null">
+                    {{ feedback.difficulty_feedback }} {{ formatStageDifficulty(feedback.difficulty_feedback) }}
+                  </span>
+                  <span v-else>-</span>
+                </td>
+                <td>{{ feedback.comment || '-' }}</td>
+              </tr>
+              <tr v-if="stageNotesList.length === 0">
+                <td colspan="8" class="empty">No stage notes recorded yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <footer class="modal-footer">
+      <button @click="stageNotesModalOpen = false" class="btn-primary">Close</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Stage Comment Dialog -->
+<div v-if="stageCommentDialogOpen" class="modal-backdrop" @click.self="stageCommentDialogOpen = false">
+  <div class="modal stage-comment-modal">
+    <header class="modal-header">
+      <h3>Stage Comment</h3>
+      <button @click="stageCommentDialogOpen = false" class="close">✕</button>
+    </header>
+    
+    <div class="modal-body">
+      <div class="comment-content">
+        <label>
+          <textarea 
+            v-model="stageCommentText" 
+            class="comment-textarea"
+            placeholder="Enter your comment about this stage..."
+            rows="6"
+          ></textarea>
+        </label>
+      </div>
+    </div>
+    
+    <footer class="modal-footer">
+      <button @click="stageCommentDialogOpen = false" class="btn-secondary">Cancel</button>
+      <button @click="saveStageComment" class="btn-primary">Save</button>
     </footer>
   </div>
 </div>
@@ -16865,19 +16984,76 @@ const currentChallengeSfcPath = computed(() => {
   // Get sfcpath from the entry if it has been uploaded to USB2SNES
   return (currentChallenge.value as any).sfcpath || null;
 });
+
+// Stage feedback state
+const currentStageFeedback = ref<any>(null);
+const stageNotesModalOpen = ref(false);
+const stageNotesList = ref<any[]>([]);
+const stageCommentDialogOpen = ref(false);
+const stageCommentText = ref('');
+
+const isCurrentChallengeRandomStage = computed(() => {
+  if (!currentChallenge.value) return false;
+  const entryType = (currentChallenge.value as any).entryType || (currentChallenge.value as any).entry_type;
+  return entryType === 'random_stage';
+});
+
+const currentStageDifficulty = computed(() => {
+  if (!currentChallenge.value) return null;
+  const challenge = currentChallenge.value as any;
+  // Try to get stage difficulty from gamestages table if we have levelnumber
+  if (challenge.stageNumber || challenge.levelnumber) {
+    // This will need to be loaded from database - for now return null
+    // We'll load it when challenge changes
+    return challenge.stageDifficulty || null;
+  }
+  return null;
+});
+
 const canUndo = computed(() => undoStack.value.length > 0);
 
-// Watch for current challenge changes to reveal random challenges
+// Watch for current challenge changes to reveal random challenges and load stage feedback
 watch(currentChallengeIndex, async (newIndex, oldIndex) => {
   console.log('[watch:currentChallengeIndex] Changed from', oldIndex, 'to', newIndex);
   
   if (!isRunActive.value || newIndex >= runEntries.length) {
     console.log('[watch:currentChallengeIndex] Not active or out of bounds, returning');
+    currentStageFeedback.value = null;
     return;
   }
   
   const challenge = runEntries[newIndex];
   console.log('[watch:currentChallengeIndex] Challenge:', newIndex, 'id:', challenge.id, 'name:', challenge.name);
+  
+  // Load stage feedback and difficulty if this is a stage with levelnumber
+  if (challenge.stageNumber || challenge.levelnumber) {
+    const gameid = challenge.id || challenge.gameid;
+    const levelnumber = challenge.stageNumber || challenge.levelnumber;
+    if (gameid && levelnumber) {
+      try {
+        // Load stage info to get difficulty
+        const stageInfo = await (window as any).electronAPI.getStageInfo({
+          gameid,
+          levelnumber
+        });
+        if (stageInfo) {
+          (challenge as any).stageDifficulty = stageInfo.difficulty;
+        }
+        
+        // Load feedback
+        const feedback = await (window as any).electronAPI.getStageFeedback({
+          gameid,
+          levelnumber
+        });
+        currentStageFeedback.value = feedback || null;
+      } catch (error) {
+        console.error('Error loading stage info/feedback:', error);
+        currentStageFeedback.value = null;
+      }
+    }
+  } else {
+    currentStageFeedback.value = null;
+  }
   
   // Check if this is an unrevealed random challenge
   if (challenge.id === '(random)' && challenge.name === '???') {
@@ -19099,6 +19275,193 @@ function formatTime(seconds: number): string {
     return `${m}m ${s}s`;
   } else {
     return `${s}s`;
+  }
+}
+
+function formatStageDifficulty(difficulty: number | null): string {
+  if (difficulty === null || difficulty === undefined) return '';
+  const difficultyMap: { [key: number]: string } = {
+    0: 'Trivial',
+    1: 'Casual',
+    2: 'Ez',
+    3: 'Advanced',
+    4: 'Xpert',
+    5: 'Master',
+    6: 'GM',
+    7: 'GM+',
+    8: 'Unwinnable',
+    9: 'Broken/Need fix'
+  };
+  return difficultyMap[difficulty] || '';
+}
+
+function formatGameDifficulty(difficulty: string | number | null): string {
+  if (difficulty === null || difficulty === undefined) return '';
+  // Game difficulty is typically a string like "Kaizo: Expert" or a number
+  if (typeof difficulty === 'string') return difficulty;
+  return String(difficulty);
+}
+
+function getBasename(filepath: string | null): string {
+  if (!filepath) return '';
+  const parts = filepath.split('/');
+  return parts[parts.length - 1] || filepath;
+}
+
+async function setStageDifficultyFeedback(difficulty: number) {
+  if (!currentChallenge.value) return;
+  
+  const challenge = currentChallenge.value as any;
+  const gameid = challenge.id || challenge.gameid;
+  const levelnumber = challenge.stageNumber || challenge.levelnumber;
+  const translevel = challenge.transLevel || challenge.translevel;
+  const levelname = challenge.stageName || challenge.levelname;
+  
+  if (!gameid || !levelnumber) {
+    alert('Cannot save feedback: Missing game ID or level number');
+    return;
+  }
+  
+  try {
+    // Get current stage difficulty from gamestages table
+    const stageInfo = await (window as any).electronAPI.getStageInfo({
+      gameid,
+      levelnumber
+    });
+    
+    const currentDifficulty = stageInfo?.difficulty || null;
+    const flagValues = stageInfo ? JSON.stringify({
+      playable: stageInfo.playable,
+      rando: stageInfo.rando,
+      mainexit: stageInfo.mainexit,
+      keyhole: stageInfo.keyhole,
+      credits: stageInfo.credits,
+      ghouse: stageInfo.ghouse,
+      spalace: stageInfo.spalace,
+      castle: stageInfo.castle,
+      boss: stageInfo.boss,
+      secret: stageInfo.secret,
+      troll: stageInfo.troll,
+      final: stageInfo.final
+    }) : null;
+    
+    const result = await (window as any).electronAPI.saveStageFeedback({
+      gameid,
+      levelnumber,
+      translevel: translevel || null,
+      levelname: levelname || null,
+      difficulty_feedback: difficulty,
+      comment: currentStageFeedback.value?.comment || null,
+      current_difficulty: currentDifficulty,
+      flag_values: flagValues
+    });
+    
+    if (result.success) {
+      // Reload feedback
+      const feedback = await (window as any).electronAPI.getStageFeedback({
+        gameid,
+        levelnumber
+      });
+      currentStageFeedback.value = feedback || null;
+    } else {
+      alert('Error saving feedback: ' + (result.error || 'Unknown error'));
+    }
+  } catch (error: any) {
+    console.error('Error saving stage difficulty feedback:', error);
+    alert('Error saving feedback: ' + (error.message || 'Unknown error'));
+  }
+}
+
+function openStageCommentDialog() {
+  if (!currentChallenge.value) return;
+  
+  const challenge = currentChallenge.value as any;
+  stageCommentText.value = currentStageFeedback.value?.comment || '';
+  stageCommentDialogOpen.value = true;
+}
+
+async function saveStageComment() {
+  if (!currentChallenge.value) return;
+  
+  const challenge = currentChallenge.value as any;
+  const gameid = challenge.id || challenge.gameid;
+  const levelnumber = challenge.stageNumber || challenge.levelnumber;
+  const translevel = challenge.transLevel || challenge.translevel;
+  const levelname = challenge.stageName || challenge.levelname;
+  
+  if (!gameid || !levelnumber) {
+    alert('Cannot save comment: Missing game ID or level number');
+    return;
+  }
+  
+  try {
+    // Get current stage difficulty from gamestages table
+    const stageInfo = await (window as any).electronAPI.getStageInfo({
+      gameid,
+      levelnumber
+    });
+    
+    const currentDifficulty = stageInfo?.difficulty || null;
+    const flagValues = stageInfo ? JSON.stringify({
+      playable: stageInfo.playable,
+      rando: stageInfo.rando,
+      mainexit: stageInfo.mainexit,
+      keyhole: stageInfo.keyhole,
+      credits: stageInfo.credits,
+      ghouse: stageInfo.ghouse,
+      spalace: stageInfo.spalace,
+      castle: stageInfo.castle,
+      boss: stageInfo.boss,
+      secret: stageInfo.secret,
+      troll: stageInfo.troll,
+      final: stageInfo.final
+    }) : null;
+    
+    const result = await (window as any).electronAPI.saveStageFeedback({
+      gameid,
+      levelnumber,
+      translevel: translevel || null,
+      levelname: levelname || null,
+      difficulty_feedback: currentStageFeedback.value?.difficulty_feedback || null,
+      comment: stageCommentText.value.trim() || null,
+      current_difficulty: currentDifficulty,
+      flag_values: flagValues
+    });
+    
+    if (result.success) {
+      // Reload feedback
+      const feedback = await (window as any).electronAPI.getStageFeedback({
+        gameid,
+        levelnumber
+      });
+      currentStageFeedback.value = feedback || null;
+      stageCommentDialogOpen.value = false;
+    } else {
+      alert('Error saving comment: ' + (result.error || 'Unknown error'));
+    }
+  } catch (error: any) {
+    console.error('Error saving stage comment:', error);
+    alert('Error saving comment: ' + (error.message || 'Unknown error'));
+  }
+}
+
+async function openStageNotesDialog() {
+  stageNotesModalOpen.value = true;
+  await loadStageNotes();
+}
+
+async function loadStageNotes() {
+  try {
+    const result = await (window as any).electronAPI.getAllStageFeedback();
+    if (result.success) {
+      stageNotesList.value = result.feedback || [];
+    } else {
+      console.error('Error loading stage notes:', result.error);
+      stageNotesList.value = [];
+    }
+  } catch (error) {
+    console.error('Error loading stage notes:', error);
+    stageNotesList.value = [];
   }
 }
 
@@ -26386,6 +26749,153 @@ button:disabled {
   font-size: 12px;
   font-family: monospace;
   color: var(--text-primary);
+}
+
+/* Current Challenge Info Section */
+.current-challenge-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  gap: 16px;
+}
+
+.challenge-info-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+}
+
+.challenge-sfc-path {
+  font-family: monospace;
+  color: var(--text-secondary);
+  font-size: calc(var(--base-font-size) * 0.9);
+}
+
+.challenge-game-name {
+  font-weight: 600;
+}
+
+.challenge-stage-name {
+  color: var(--text-secondary);
+}
+
+.challenge-difficulty {
+  color: var(--text-secondary);
+}
+
+.challenge-feedback-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.difficulty-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.btn-difficulty {
+  padding: 4px 8px;
+  min-width: 32px;
+  font-size: var(--base-font-size);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-difficulty:hover:not(:disabled) {
+  background: var(--button-hover-bg);
+}
+
+.btn-difficulty.active {
+  background: var(--bg-hover);
+  border-color: var(--border-primary);
+  font-weight: 600;
+}
+
+.btn-comment {
+  padding: var(--button-padding);
+  font-size: var(--base-font-size);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-comment:hover:not(:disabled) {
+  background: var(--button-hover-bg);
+}
+
+.btn-comment.has-comment {
+  background: var(--bg-hover);
+  border-color: var(--border-primary);
+}
+
+/* Stage Notes Dialog */
+.stage-notes-modal {
+  max-width: 1200px;
+  width: 95vw;
+  max-height: 90vh;
+}
+
+.stage-notes-content {
+  padding: 16px;
+}
+
+.stage-notes-table {
+  width: 100%;
+}
+
+.stage-notes-table th {
+  font-size: var(--base-font-size);
+  font-weight: 600;
+  padding: 8px;
+  text-align: left;
+  border-bottom: 2px solid var(--border-primary);
+}
+
+.stage-notes-table td {
+  padding: 8px;
+  font-size: var(--base-font-size);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+/* Stage Comment Dialog */
+.stage-comment-modal {
+  max-width: 600px;
+  width: 90vw;
+}
+
+.comment-content {
+  padding: 16px;
+}
+
+.comment-textarea {
+  width: 100%;
+  padding: 8px;
+  font-size: var(--base-font-size);
+  font-family: inherit;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.comment-textarea:focus {
+  outline: none;
+  border-color: var(--border-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 </style>

@@ -919,6 +919,15 @@ const MIGRATIONS = {
           && columnExists(db, 'run_results', 'levelname');
       },
     },
+    {
+      id: 'clientdata_042_stage_feedback',
+      description: 'Create stage_feedback table for user difficulty feedback and comments on individual game stages',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/042_clientdata_stage_feedback.sql'),
+      skipIf(db) {
+        return tableExists(db, 'stage_feedback');
+      },
+    },
   ],
   patchbin: [
     {

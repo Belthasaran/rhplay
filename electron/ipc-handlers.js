@@ -5675,6 +5675,160 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Get stage info from gamestages table
+   * Channel: db:stage:get-info
+   */
+  ipcMain.handle('db:stage:get-info', async (event, { gameid, levelnumber }) => {
+    try {
+      const rhdataDb = dbManager.getConnection('rhdata');
+      
+      const stage = rhdataDb.prepare(`
+        SELECT * FROM gamestages
+        WHERE gameid = ? AND levelnumber = ?
+        LIMIT 1
+      `).get(gameid, levelnumber);
+      
+      return stage || null;
+    } catch (error) {
+      console.error('Error getting stage info:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Get stage feedback for a specific gameid and levelnumber
+   * Channel: db:stage:get-feedback
+   */
+  ipcMain.handle('db:stage:get-feedback', async (event, { gameid, levelnumber }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const feedback = db.prepare(`
+        SELECT * FROM stage_feedback
+        WHERE gameid = ? AND levelnumber = ?
+        LIMIT 1
+      `).get(gameid, levelnumber);
+      
+      return feedback || null;
+    } catch (error) {
+      console.error('Error getting stage feedback:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Save or update stage feedback
+   * Channel: db:stage:save-feedback
+   */
+  ipcMain.handle('db:stage:save-feedback', async (event, {
+    gameid,
+    levelnumber,
+    translevel,
+    levelname,
+    difficulty_feedback,
+    comment,
+    current_difficulty,
+    flag_values
+  }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Check if feedback already exists
+      const existing = db.prepare(`
+        SELECT feedback_uuid FROM stage_feedback
+        WHERE gameid = ? AND levelnumber = ?
+      `).get(gameid, levelnumber);
+      
+      const feedbackUuid = existing?.feedback_uuid || crypto.randomUUID();
+      
+      if (existing) {
+        // Update existing feedback
+        db.prepare(`
+          UPDATE stage_feedback
+          SET translevel = ?,
+              levelname = ?,
+              difficulty_feedback = ?,
+              comment = ?,
+              current_difficulty = ?,
+              flag_values = ?,
+              updated_at = strftime('%s', 'now')
+          WHERE feedback_uuid = ?
+        `).run(
+          translevel || null,
+          levelname || null,
+          difficulty_feedback !== null && difficulty_feedback !== undefined ? difficulty_feedback : null,
+          comment || null,
+          current_difficulty !== null && current_difficulty !== undefined ? current_difficulty : null,
+          flag_values || null,
+          feedbackUuid
+        );
+      } else {
+        // Insert new feedback
+        db.prepare(`
+          INSERT INTO stage_feedback
+            (feedback_uuid, gameid, levelnumber, translevel, levelname,
+             difficulty_feedback, comment, current_difficulty, flag_values,
+             created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
+        `).run(
+          feedbackUuid,
+          gameid,
+          levelnumber,
+          translevel || null,
+          levelname || null,
+          difficulty_feedback !== null && difficulty_feedback !== undefined ? difficulty_feedback : null,
+          comment || null,
+          current_difficulty !== null && current_difficulty !== undefined ? current_difficulty : null,
+          flag_values || null
+        );
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving stage feedback:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get all stage feedback entries
+   * Channel: db:stage:get-all-feedback
+   */
+  ipcMain.handle('db:stage:get-all-feedback', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const rhdataDb = dbManager.getConnection('rhdata');
+      
+      // Get all feedback entries
+      const feedbackList = db.prepare(`
+        SELECT * FROM stage_feedback
+        ORDER BY created_at DESC
+      `).all();
+      
+      // Enrich with game names from rhdata
+      const enriched = feedbackList.map(feedback => {
+        const game = rhdataDb.prepare(`
+          SELECT name FROM gameversions
+          WHERE gameid = ? AND version = (
+            SELECT MAX(version) FROM gameversions WHERE gameid = ?
+          )
+          LIMIT 1
+        `).get(feedback.gameid, feedback.gameid);
+        
+        return {
+          ...feedback,
+          gamename: game?.name || null
+        };
+      });
+      
+      return { success: true, feedback: enriched };
+    } catch (error) {
+      console.error('Error getting all stage feedback:', error);
+      return { success: false, error: error.message, feedback: [] };
+    }
+  });
+
   // ===========================================================================
   // DIALOG OPERATIONS
   // ===========================================================================

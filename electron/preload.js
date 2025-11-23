@@ -247,6 +247,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAllRuns: () => ipcRenderer.invoke('db:runs:get-all'),
   
   /**
+   * Get stage info from gamestages table
+   * @param {Object} params - {gameid: string, levelnumber: string}
+   * @returns {Promise<Object>} Stage info with difficulty and flags
+   */
+  getStageInfo: (params) => ipcRenderer.invoke('db:stage:get-info', params),
+  
+  /**
+   * Get stage feedback for a specific gameid and levelnumber
+   * @param {Object} params - {gameid: string, levelnumber: string}
+   * @returns {Promise<Object|null>} Stage feedback or null
+   */
+  getStageFeedback: (params) => ipcRenderer.invoke('db:stage:get-feedback', params),
+  
+  /**
+   * Save or update stage feedback
+   * @param {Object} params - {gameid, levelnumber, translevel, levelname, difficulty_feedback, comment, current_difficulty, flag_values}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  saveStageFeedback: (params) => ipcRenderer.invoke('db:stage:save-feedback', params),
+  
+  /**
+   * Get all stage feedback entries
+   * @returns {Promise<{success: boolean, feedback?: Array, error?: string}>}
+   */
+  getAllStageFeedback: () => ipcRenderer.invoke('db:stage:get-all-feedback'),
+  
+  /**
    * Delete a run
    * @param {Object} params - {runUuid}
    * @returns {Promise<{success: boolean}>}

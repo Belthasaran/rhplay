@@ -2367,6 +2367,126 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Count stages matching random filter criteria (both game filters and stage filters)
+   * Channel: db:count-random-stage-matches
+   */
+  ipcMain.handle('db:count-random-stage-matches', async (event, { 
+    filterType, 
+    filterDifficulty, 
+    filterPattern,
+    stageMinDifficulty,
+    stageMaxDifficulty,
+    stageIncludeFlags,
+    stageExcludeFlags
+  }) => {
+    try {
+      const rhdataDb = dbManager.getConnection('rhdata');
+      
+      // First, get all games matching game filters (same logic as countRandomMatches)
+      let gameQuery = `
+        SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated, gvs.rating_value
+        FROM gameversions gv
+        LEFT JOIN gameversion_stats gvs ON gv.gameid = gvs.gameid
+        WHERE gv.removed = 0 AND gv.obsoleted = 0
+      `;
+      const gameQueryParams = [];
+      
+      // Apply type filter (matches either gametype OR legacy_type)
+      if (filterType && filterType !== '' && filterType !== 'any') {
+        gameQuery += ` AND (gv.gametype = ? OR gv.legacy_type = ?)`;
+        gameQueryParams.push(filterType, filterType);
+      }
+      
+      // Apply difficulty filter
+      if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
+        gameQuery += ` AND gv.difficulty = ?`;
+        gameQueryParams.push(filterDifficulty);
+      }
+      
+      const games = rhdataDb.prepare(gameQuery).all(...gameQueryParams);
+      
+      // Apply advanced pattern filter using shared filter logic
+      const filteredGames = filterPattern && filterPattern !== '' 
+        ? games.filter(game => matchesFilter(game, filterPattern))
+        : games;
+      
+      if (filteredGames.length === 0) {
+        return { success: true, count: 0 };
+      }
+      
+      // Get all stages for matching games
+      const gameids = filteredGames.map(g => g.gameid);
+      const placeholders = gameids.map(() => '?').join(',');
+      
+      let stageQuery = `
+        SELECT gs.*, gv.version
+        FROM gamestages gs
+        INNER JOIN gameversions gv ON gs.gameid = gv.gameid
+        WHERE gs.gameid IN (${placeholders})
+          AND gs.playable = 1
+      `;
+      const stageQueryParams = [...gameids];
+      
+      // Apply stage difficulty filters
+      if (stageMinDifficulty !== null && stageMinDifficulty !== undefined) {
+        stageQuery += ` AND gs.difficulty >= ?`;
+        stageQueryParams.push(stageMinDifficulty);
+      }
+      
+      if (stageMaxDifficulty !== null && stageMaxDifficulty !== undefined) {
+        stageQuery += ` AND gs.difficulty <= ?`;
+        stageQueryParams.push(stageMaxDifficulty);
+      }
+      
+      const allStages = rhdataDb.prepare(stageQuery).all(...stageQueryParams);
+      
+      // Filter by include/exclude flags
+      let filteredStages = allStages;
+      
+      // Apply include flags (stages must have at least one of the included flags)
+      if (stageIncludeFlags && Array.isArray(stageIncludeFlags) && stageIncludeFlags.length > 0) {
+        filteredStages = filteredStages.filter(stage => {
+          // Check if stage has at least one of the included flags
+          return stageIncludeFlags.some(flag => {
+            switch (flag) {
+              case 'M': return stage.mainexit === 1;
+              case 'K': return stage.keyhole === 1;
+              case 'G': return stage.ghouse === 1;
+              case 'S': return stage.spalace === 1;
+              case 'Ca': return stage.castle === 1;
+              case 'Bo': return stage.boss === 1;
+              default: return false;
+            }
+          });
+        });
+      }
+      
+      // Apply exclude flags (stages must NOT have any of the excluded flags)
+      if (stageExcludeFlags && Array.isArray(stageExcludeFlags) && stageExcludeFlags.length > 0) {
+        filteredStages = filteredStages.filter(stage => {
+          // Check if stage has none of the excluded flags
+          return !stageExcludeFlags.some(flag => {
+            switch (flag) {
+              case 'M': return stage.mainexit === 1;
+              case 'K': return stage.keyhole === 1;
+              case 'G': return stage.ghouse === 1;
+              case 'S': return stage.spalace === 1;
+              case 'Ca': return stage.castle === 1;
+              case 'Bo': return stage.boss === 1;
+              default: return false;
+            }
+          });
+        });
+      }
+      
+      return { success: true, count: filteredStages.length };
+    } catch (error) {
+      console.error('Error counting random stage matches:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Expand run plan and prepare for staging (select & reveal all random games)
    * Channel: db:runs:expand-and-prepare
    */

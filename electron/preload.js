@@ -225,6 +225,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   countRandomMatches: (params) => ipcRenderer.invoke('db:count-random-matches', params),
   
   /**
+   * Count stages matching random filter criteria (both game and stage filters)
+   * @param {Object} params - {filterType: string, filterDifficulty: string, filterPattern: string, stageMinDifficulty: number, stageMaxDifficulty: number, stageIncludeFlags: string[], stageExcludeFlags: string[]}
+   * @returns {Promise<{success: boolean, count: number}>}
+   */
+  countRandomStageMatches: (params) => ipcRenderer.invoke('db:count-random-stage-matches', params),
+  
+  /**
    * Get active run (for startup check)
    * @returns {Promise<Object|null>} Active run with calculated elapsed time
    */

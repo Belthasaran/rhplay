@@ -879,6 +879,19 @@ const MIGRATIONS = {
         return tableExists(db, 'recentboots');
       },
     },
+    {
+      id: 'clientdata_011_run_plan_entries_stage_filters',
+      description: 'Add stage filter columns and trans_level to run_plan_entries table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/011_clientdata_run_plan_entries_stage_filters.sql'),
+      skipIf(db) {
+        return columnExists(db, 'run_plan_entries', 'trans_level')
+          && columnExists(db, 'run_plan_entries', 'stage_filter_min_difficulty')
+          && columnExists(db, 'run_plan_entries', 'stage_filter_max_difficulty')
+          && columnExists(db, 'run_plan_entries', 'stage_filter_include_flags')
+          && columnExists(db, 'run_plan_entries', 'stage_filter_exclude_flags');
+      },
+    },
   ],
   patchbin: [
     {

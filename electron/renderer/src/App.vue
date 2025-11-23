@@ -1175,12 +1175,14 @@
               </div>
             </div>
           </div>
-          <span v-if="randomMatchCount !== null" class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
-            {{ randomMatchCount }} games match
+          <span class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
+            <span v-if="randomMatchCount !== null">{{ randomMatchCount }}</span>
+            <span v-else>...</span> games
             <span v-if="randomMatchCountError" class="error-text"> (need {{ (randomFilter.count || 0) + 2 }}+)</span>
           </span>
-          <span v-if="randomStageMatchCount !== null" class="match-count-indicator" :class="{ 'insufficient': randomStageMatchCountError }">
-            {{ randomStageMatchCount }} stages match
+          <span class="match-count-indicator" :class="{ 'insufficient': randomStageMatchCountError }">
+            <span v-if="randomStageMatchCount !== null">{{ randomStageMatchCount }}</span>
+            <span v-else>...</span> stages
             <span v-if="randomStageMatchCountError" class="error-text"> (need {{ (randomFilter.count || 0) + 2 }}+)</span>
           </span>
         </div>
@@ -16980,36 +16982,69 @@ function toggleStageLimitsDropdown() {
   stageLimitsDropdownOpen.value = !stageLimitsDropdownOpen.value;
 }
 
-// Watch for random filter changes to update match count
-watch(() => [randomFilter.type, randomFilter.difficulty, randomFilter.pattern, randomFilter.count], async () => {
-  // Only update if we have filter values
-  if (randomFilter.type !== 'any' || randomFilter.difficulty !== 'any' || randomFilter.pattern) {
-    try {
-      const result = await (window as any).electronAPI.countRandomMatches({
-        filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
-        filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
-        filterPattern: randomFilter.pattern || ''
-      });
+// Watch for random filter changes to update match counts (always count both games and stages)
+watch(() => [
+  randomFilter.type, 
+  randomFilter.difficulty, 
+  randomFilter.pattern, 
+  randomFilter.count,
+  stageFilter.minDifficulty,
+  stageFilter.maxDifficulty,
+  stageFilter.includeFlags,
+  stageFilter.excludeFlags
+], async () => {
+  // Always count games (even with no filters, shows total count)
+  try {
+    const gameResult = await (window as any).electronAPI.countRandomMatches({
+      filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
+      filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
+      filterPattern: randomFilter.pattern || ''
+    });
+    
+    if (gameResult.success) {
+      randomMatchCount.value = gameResult.count;
+      const requiredCount = (randomFilter.count || 0) + 2;
       
-      if (result.success) {
-        randomMatchCount.value = result.count;
-        const requiredCount = (randomFilter.count || 0) + 2;
-        
-        if (result.count < requiredCount) {
-          randomMatchCountError.value = `Insufficient games: ${result.count} match filters, but need at least ${requiredCount} (count + 2)`;
-        } else {
-          randomMatchCountError.value = '';
-        }
+      if (gameResult.count < requiredCount) {
+        randomMatchCountError.value = `Insufficient games: ${gameResult.count} match filters, but need at least ${requiredCount} (count + 2)`;
+      } else {
+        randomMatchCountError.value = '';
       }
-    } catch (error) {
-      console.error('Error counting random matches:', error);
     }
-  } else {
-    // Reset if all filters are "any" and pattern is empty
+  } catch (error) {
+    console.error('Error counting random matches:', error);
     randomMatchCount.value = null;
-    randomMatchCountError.value = '';
+    randomMatchCountError.value = 'Failed to validate filters';
   }
-}, { deep: true });
+  
+  // Always count stages (even with no filters, shows total count)
+  try {
+    const stageResult = await (window as any).electronAPI.countRandomStageMatches({
+      filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
+      filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
+      filterPattern: randomFilter.pattern || '',
+      stageMinDifficulty: stageFilter.minDifficulty,
+      stageMaxDifficulty: stageFilter.maxDifficulty,
+      stageIncludeFlags: stageFilter.includeFlags,
+      stageExcludeFlags: stageFilter.excludeFlags
+    });
+    
+    if (stageResult.success) {
+      randomStageMatchCount.value = stageResult.count;
+      const requiredCount = (randomFilter.count || 0) + 2;
+      
+      if (stageResult.count < requiredCount) {
+        randomStageMatchCountError.value = `Insufficient stages: ${stageResult.count} match filters, but need at least ${requiredCount} (count + 2)`;
+      } else {
+        randomStageMatchCountError.value = '';
+      }
+    }
+  } catch (error) {
+    console.error('Error counting random stage matches:', error);
+    randomStageMatchCount.value = null;
+    randomStageMatchCountError.value = 'Failed to validate filters';
+  }
+}, { deep: true, immediate: true }); // Run immediately on mount to show initial counts
 
 async function loadRandomFilterValues() {
   if (!isElectronAvailable()) {

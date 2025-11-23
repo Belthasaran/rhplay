@@ -4125,13 +4125,19 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'No run results found' };
       }
       
-      // Get list of SFC files from staging folder to match by sequence
-      // We'll match by filename pattern: files are typically numbered sequentially
+      // Get current sfcpath values to check what's already set
+      const currentSfcPaths = db.prepare(`
+        SELECT result_uuid, sfcpath FROM run_results 
+        WHERE run_uuid = ?
+      `).all(runUuid);
+      
+      const currentSfcPathMap = new Map(currentSfcPaths.map((r) => [r.result_uuid, r.sfcpath]));
+      const usedPaths = new Set();
+      
       const updateStmt = db.prepare(`UPDATE run_results SET sfcpath = ? WHERE result_uuid = ?`);
       let updatedCount = 0;
       
       // Try to match files by sequence number (assuming files are named like 01.sfc, 02.sfc, etc.)
-      // Or match by exact filename if we have the staging folder info
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         const seqNum = i + 1;
@@ -4143,27 +4149,26 @@ function registerDatabaseHandlers(dbManager) {
           seqNum + '.sfc'
         ];
         
+        let matched = false;
         for (const pattern of seqPatterns) {
-          if (fileMappings[pattern]) {
+          if (fileMappings[pattern] && !usedPaths.has(fileMappings[pattern])) {
             updateStmt.run(fileMappings[pattern], result.result_uuid);
+            usedPaths.add(fileMappings[pattern]);
             updatedCount++;
+            matched = true;
             break;
           }
         }
         
-        // Also try to match by any filename if we haven't found a match yet
-        if (!results[i].sfcpath) {
-          // Get the first unmatched file from mappings
-          const unmatchedFiles = Object.keys(fileMappings).filter(f => {
-            // Check if this file is already assigned to another result
-            const alreadyUsed = results.some((r: any) => r.sfcpath === fileMappings[f]);
-            return !alreadyUsed;
-          });
-          
-          if (unmatchedFiles.length > 0) {
-            const filename = unmatchedFiles[0];
-            updateStmt.run(fileMappings[filename], result.result_uuid);
-            updatedCount++;
+        // If no match by sequence, try to match by any unmatched file
+        if (!matched) {
+          for (const [filename, path] of Object.entries(fileMappings)) {
+            if (!usedPaths.has(path)) {
+              updateStmt.run(path, result.result_uuid);
+              usedPaths.add(path);
+              updatedCount++;
+              break;
+            }
           }
         }
       }

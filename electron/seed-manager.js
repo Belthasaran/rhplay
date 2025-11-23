@@ -287,6 +287,198 @@ function selectRandomGame(params) {
 }
 
 /**
+ * Select a random stage deterministically based on seed and filters
+ * @param {Object} params
+ * @param {Object} params.dbManager - Database manager
+ * @param {string} params.seed - Full seed (MAPID-SUFFIX)
+ * @param {number} params.challengeIndex - Index of challenge (for uniqueness)
+ * @param {string} params.filterType - Game type filter (optional)
+ * @param {string} params.filterDifficulty - Game difficulty filter (optional)
+ * @param {string} params.filterPattern - Game pattern filter (optional)
+ * @param {number} params.stageMinDifficulty - Stage min difficulty (1-7, optional)
+ * @param {number} params.stageMaxDifficulty - Stage max difficulty (1-7, optional)
+ * @param {Array} params.stageIncludeFlags - Array of flag codes to include (optional)
+ * @param {Array} params.stageExcludeFlags - Array of flag codes to exclude (optional)
+ * @param {Array} params.excludeGameids - Already used gameids to exclude (optional)
+ * @param {Array} params.excludeStageUuids - Already used stage UUIDs to exclude (optional)
+ * @returns {Object} {stage_uuid, gameid, version, gameName, levelnumber, translevel_13bf, levelname}
+ */
+function selectRandomStage(params) {
+  const {
+    dbManager,
+    seed,
+    challengeIndex,
+    filterType,
+    filterDifficulty,
+    filterPattern,
+    stageMinDifficulty,
+    stageMaxDifficulty,
+    stageIncludeFlags,
+    stageExcludeFlags,
+    excludeGameids = [],
+    excludeStageUuids = []
+  } = params;
+  
+  // Parse seed
+  const { mapId, suffix } = parseSeed(seed);
+  if (!mapId || !suffix) {
+    throw new Error('Invalid seed format');
+  }
+  
+  // Get mapping
+  const mapping = getSeedMapping(dbManager, mapId);
+  if (!mapping) {
+    throw new Error(`Seed mapping '${mapId}' not found. Please regenerate seed.`);
+  }
+  
+  // First, get all games matching game filters (same logic as selectRandomGame)
+  const db = dbManager.getConnection('rhdata');
+  
+  // Get list of candidate gameids from mapping
+  const candidateGameids = Object.keys(mapping.mappingData);
+  
+  // Filter by exclude list
+  const availableGameids = candidateGameids.filter(gid => !excludeGameids.includes(gid));
+  
+  if (availableGameids.length === 0) {
+    throw new Error('No available games for random stage selection');
+  }
+  
+  // Get full game data from rhdata.db and apply basic filters
+  const basicFilteredGames = dbManager.withClientData('rhdata', (db) => {
+    let query = `
+      SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated, gvs.rating_value
+      FROM gameversions gv
+      LEFT JOIN gameversion_stats gvs ON gv.gameid = gvs.gameid
+      WHERE gv.gameid IN (${availableGameids.map(() => '?').join(',')})
+        AND gv.removed = 0
+        AND gv.obsoleted = 0
+    `;
+    
+    const queryParams = [...availableGameids];
+    
+    // Apply type filter - match either gametype OR legacy_type
+    if (filterType && filterType !== '' && filterType !== 'any') {
+      query += ` AND (gv.gametype = ? OR gv.legacy_type = ?)`;
+      queryParams.push(filterType, filterType);
+    }
+    
+    // Apply difficulty filter - exact match on difficulty field
+    if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
+      query += ` AND gv.difficulty = ?`;
+      queryParams.push(filterDifficulty);
+    }
+    
+    const results = db.prepare(query).all(...queryParams);
+    return results;
+  });
+  
+  // Apply advanced pattern filter using shared filter logic
+  const finalFilteredGames = filterPattern && filterPattern !== '' 
+    ? basicFilteredGames.filter(game => matchesFilter(game, filterPattern))
+    : basicFilteredGames;
+  
+  if (finalFilteredGames.length === 0) {
+    throw new Error('No games match the filter criteria');
+  }
+  
+  // Get all stages for matching games
+  const gameids = finalFilteredGames.map(g => g.gameid);
+  const placeholders = gameids.map(() => '?').join(',');
+  
+  let stageQuery = `
+    SELECT gs.*, gv.version, gv.name as game_name
+    FROM gamestages gs
+    INNER JOIN gameversions gv ON gs.gameid = gv.gameid
+    WHERE gs.gameid IN (${placeholders})
+      AND gs.playable = 1
+  `;
+  const stageQueryParams = [...gameids];
+  
+  // Filter out excluded stage UUIDs
+  if (excludeStageUuids && excludeStageUuids.length > 0) {
+    const excludePlaceholders = excludeStageUuids.map(() => '?').join(',');
+    stageQuery += ` AND gs.stage_uuid NOT IN (${excludePlaceholders})`;
+    stageQueryParams.push(...excludeStageUuids);
+  }
+  
+  // Apply stage difficulty filters
+  if (stageMinDifficulty !== null && stageMinDifficulty !== undefined) {
+    stageQuery += ` AND gs.difficulty >= ?`;
+    stageQueryParams.push(stageMinDifficulty);
+  }
+  
+  if (stageMaxDifficulty !== null && stageMaxDifficulty !== undefined) {
+    stageQuery += ` AND gs.difficulty <= ?`;
+    stageQueryParams.push(stageMaxDifficulty);
+  }
+  
+  const allStages = db.prepare(stageQuery).all(...stageQueryParams);
+  
+  // Filter by include/exclude flags
+  let filteredStages = allStages;
+  
+  // Apply include flags (stages must have at least one of the included flags)
+  if (stageIncludeFlags && Array.isArray(stageIncludeFlags) && stageIncludeFlags.length > 0) {
+    filteredStages = filteredStages.filter(stage => {
+      // Check if stage has at least one of the included flags
+      return stageIncludeFlags.some(flag => {
+        switch (flag) {
+          case 'M': return stage.mainexit === 1;
+          case 'K': return stage.keyhole === 1;
+          case 'G': return stage.ghouse === 1;
+          case 'S': return stage.spalace === 1;
+          case 'Ca': return stage.castle === 1;
+          case 'Bo': return stage.boss === 1;
+          default: return false;
+        }
+      });
+    });
+  }
+  
+  // Apply exclude flags (stages must NOT have any of the excluded flags)
+  if (stageExcludeFlags && Array.isArray(stageExcludeFlags) && stageExcludeFlags.length > 0) {
+    filteredStages = filteredStages.filter(stage => {
+      // Check if stage has none of the excluded flags
+      return !stageExcludeFlags.some(flag => {
+        switch (flag) {
+          case 'M': return stage.mainexit === 1;
+          case 'K': return stage.keyhole === 1;
+          case 'G': return stage.ghouse === 1;
+          case 'S': return stage.spalace === 1;
+          case 'Ca': return stage.castle === 1;
+          case 'Bo': return stage.boss === 1;
+          default: return false;
+        }
+      });
+    });
+  }
+  
+  if (filteredStages.length === 0) {
+    throw new Error('No stages match the filter criteria');
+  }
+  
+  // Use seed + challengeIndex for deterministic selection
+  const seedString = `${seed}-${challengeIndex}`;
+  const seedHash = crypto.createHash('sha256').update(seedString).digest();
+  const randomValue = seedHash.readUInt32BE(0);
+  
+  // Select stage deterministically
+  const selectedIndex = randomValue % filteredStages.length;
+  const selectedStage = filteredStages[selectedIndex];
+  
+  return {
+    stage_uuid: selectedStage.stage_uuid,
+    gameid: selectedStage.gameid,
+    version: selectedStage.version,
+    gameName: selectedStage.game_name,
+    levelnumber: selectedStage.levelnumber || '',
+    translevel_13bf: selectedStage.translevel_13bf || '',
+    levelname: selectedStage.levelname || ''
+  };
+}
+
+/**
  * Get all available seed mappings
  * @param {Object} dbManager - Database manager
  * @returns {Array} Array of mapping info
@@ -352,7 +544,10 @@ function exportRun(dbManager, runUuid) {
       was_random,
       plan_entry_uuid,
       conditions,
-      sfcpath
+      sfcpath,
+      levelnumber,
+      translevel,
+      levelname
     FROM run_results
     WHERE run_uuid = ?
     ORDER BY sequence_number
@@ -369,7 +564,10 @@ function exportRun(dbManager, runUuid) {
     // Generate filename (same logic as stageRunGames)
     let filename = null;
     if (result.gameid) {
-      if (result.exit_number) {
+      if (result.levelnumber) {
+        // Stage entry: use levelnumber in filename
+        filename = `smw${result.gameid}_gl${result.levelnumber}.sfc`;
+      } else if (result.exit_number) {
         filename = `smw${result.gameid}_exit${result.exit_number}.sfc`;
       } else {
         filename = `smw${result.gameid}.sfc`;
@@ -497,8 +695,10 @@ function importRun(dbManager, importData) {
       db.prepare(`
         INSERT INTO run_plan_entries
           (entry_uuid, run_uuid, sequence_number, entry_type, gameid, exit_number,
-           count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions, entry_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions, entry_notes,
+           trans_level, stage_filter_min_difficulty, stage_filter_max_difficulty,
+           stage_filter_include_flags, stage_filter_exclude_flags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         newEntryUuid,
         newRunUuid,
@@ -512,7 +712,12 @@ function importRun(dbManager, importData) {
         entry.filter_pattern,
         entry.filter_seed,
         entry.conditions,
-        entry.entry_notes
+        entry.entry_notes || null,
+        entry.trans_level || null,
+        entry.stage_filter_min_difficulty !== undefined ? entry.stage_filter_min_difficulty : null,
+        entry.stage_filter_max_difficulty !== undefined ? entry.stage_filter_max_difficulty : null,
+        entry.stage_filter_include_flags && Array.isArray(entry.stage_filter_include_flags) ? JSON.stringify(entry.stage_filter_include_flags) : null,
+        entry.stage_filter_exclude_flags && Array.isArray(entry.stage_filter_exclude_flags) ? JSON.stringify(entry.stage_filter_exclude_flags) : null
       );
     });
     
@@ -533,6 +738,7 @@ function importRun(dbManager, importData) {
 module.exports = {
   generateMapId,
   generateSeedWithMap,
+  selectRandomStage,
   generateRandomString,
   parseSeed,
   getCandidateGames,

@@ -381,15 +381,89 @@ async function stageRunGames(params) {
         continue;
       }
       
-      // Create patched SFC
-      const patchResult = await createPatchedSFC({
-        dbManager,
-        gameid: result.gameid,
-        version: result.version || 1,  // Use version from result or default to 1
-        vanillaRomPath,
-        flipsPath,
-        outputPath: sfcPath
-      });
+      // Check if this is a stage entry (has levelnumber)
+      const isStageEntry = result.levelnumber || result.translevel || result.levelname;
+      
+      let patchResult;
+      if (isStageEntry) {
+        // For stage entries, use buildPlusPatchedGame with stage-specific patches
+        // Get stage info and requisite patches
+        const rhdb = dbManager.getConnection('rhdata');
+        const stage = rhdb.prepare(`
+          SELECT requisites, playlevel_patch_code
+          FROM gamestages
+          WHERE gameid = ? AND levelnumber = ?
+        `).get(result.gameid, result.levelnumber);
+        
+        // Build list of patch codes to apply (requisites + playlevel patch)
+        const patchCodes = [];
+        if (stage && stage.requisites) {
+          // Parse requisites (comma-separated patch codes)
+          const requisites = stage.requisites.split(',').map(r => r.trim()).filter(r => r);
+          patchCodes.push(...requisites);
+        }
+        
+        // Add playlevel patch (default to '1lvno' if not specified)
+        const playlevelPatch = (stage && stage.playlevel_patch_code) ? stage.playlevel_patch_code : '1lvno';
+        if (!patchCodes.includes(playlevelPatch)) {
+          patchCodes.push(playlevelPatch);
+        }
+        
+        // Convert patch codes to epuuids
+        const selectedPatches = [];
+        if (patchCodes.length > 0) {
+          const patches = rhdb.prepare(`
+            SELECT epuuid FROM extrapatches WHERE patch_code IN (${patchCodes.map(() => '?').join(',')})
+          `).all(...patchCodes);
+          selectedPatches.push(...patches.map(p => p.epuuid));
+        }
+        
+        // Build global params with levelnumber
+        const globalParams = {
+          glevelnum: result.levelnumber || '',
+          gonoffv: []
+        };
+        
+        // Build plus-patched game
+        patchResult = await buildPlusPatchedGame({
+          dbManager,
+          gameId: result.gameid,
+          gameVersion: result.version || 1,
+          selectedPatches,
+          globalParams,
+          localParams: {},
+          action: 'build',
+          vanillaRomPath,
+          flipsPath,
+          asarPath: null,  // Will be found automatically
+          outputDir: path.dirname(sfcPath)
+        });
+        
+        // Move output file to final location if needed
+        if (patchResult.success && patchResult.outputPath && patchResult.outputPath !== sfcPath) {
+          if (fs.existsSync(patchResult.outputPath)) {
+            fs.copyFileSync(patchResult.outputPath, sfcPath);
+            // Clean up temp file if it's in a temp directory
+            if (patchResult.outputPath.includes('/tmp/') || patchResult.outputPath.includes('\\temp\\')) {
+              try {
+                fs.unlinkSync(patchResult.outputPath);
+              } catch (e) {
+                console.warn('Could not clean up temp file:', e);
+              }
+            }
+          }
+        }
+      } else {
+        // For regular game entries, use standard patching
+        patchResult = await createPatchedSFC({
+          dbManager,
+          gameid: result.gameid,
+          version: result.version || 1,  // Use version from result or default to 1
+          vanillaRomPath,
+          flipsPath,
+          outputPath: sfcPath
+        });
+      }
       
       if (patchResult.success) {
         successCount++;

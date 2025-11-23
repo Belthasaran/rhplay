@@ -892,6 +892,17 @@ const MIGRATIONS = {
           && columnExists(db, 'run_plan_entries', 'stage_filter_exclude_flags');
       },
     },
+    {
+      id: 'clientdata_012_run_results_stage_fields',
+      description: 'Add stage-specific columns (levelnumber, translevel, levelname) to run_results table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/012_clientdata_run_results_stage_fields.sql'),
+      skipIf(db) {
+        return columnExists(db, 'run_results', 'levelnumber')
+          && columnExists(db, 'run_results', 'translevel')
+          && columnExists(db, 'run_results', 'levelname');
+      },
+    },
   ],
   patchbin: [
     {

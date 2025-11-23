@@ -1923,8 +1923,10 @@ function registerDatabaseHandlers(dbManager) {
         const stmt = db.prepare(`
           INSERT INTO run_plan_entries
             (entry_uuid, run_uuid, sequence_number, entry_type, gameid, exit_number,
-             count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions,
+             trans_level, stage_filter_min_difficulty, stage_filter_max_difficulty,
+             stage_filter_include_flags, stage_filter_exclude_flags)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         entryList.forEach((entry, idx) => {
@@ -1941,7 +1943,12 @@ function registerDatabaseHandlers(dbManager) {
             entry.filterType || null,
             entry.filterPattern || null,
             entry.seed || null,
-            JSON.stringify(entry.conditions || [])
+            JSON.stringify(entry.conditions || []),
+            entry.transLevel || null,
+            entry.stageFilterMinDifficulty !== undefined ? entry.stageFilterMinDifficulty : null,
+            entry.stageFilterMaxDifficulty !== undefined ? entry.stageFilterMaxDifficulty : null,
+            entry.stageFilterIncludeFlags && Array.isArray(entry.stageFilterIncludeFlags) ? JSON.stringify(entry.stageFilterIncludeFlags) : null,
+            entry.stageFilterExcludeFlags && Array.isArray(entry.stageFilterExcludeFlags) ? JSON.stringify(entry.stageFilterExcludeFlags) : null
           );
         });
       });
@@ -2149,7 +2156,10 @@ function registerDatabaseHandlers(dbManager) {
           completed_at,
           duration_seconds,
           conditions,
-          sfcpath
+          sfcpath,
+          levelnumber,
+          translevel,
+          levelname
         FROM run_results
         WHERE run_uuid = ?
         ORDER BY sequence_number
@@ -2510,16 +2520,21 @@ function registerDatabaseHandlers(dbManager) {
           INSERT INTO run_results
             (result_uuid, run_uuid, plan_entry_uuid, sequence_number, 
              gameid, game_name, exit_number, stage_description,
-             was_random, revealed_early, status, conditions)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+             was_random, revealed_early, status, conditions,
+             levelnumber, translevel, levelname)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
         `);
         
         let resultSequence = 1;
         const usedGameids = [];
+        const usedStageUuids = [];
         
         planEntries.forEach((planEntry) => {
           const count = planEntry.count || 1;
-          const isRandom = planEntry.entry_type === 'random_game' || planEntry.entry_type === 'random_stage';
+          const isRandomGame = planEntry.entry_type === 'random_game';
+          const isRandomStage = planEntry.entry_type === 'random_stage';
+          const isStage = planEntry.entry_type === 'stage';
+          const isRandom = isRandomGame || isRandomStage;
           
           // Create multiple results if count > 1
           for (let i = 0; i < count; i++) {
@@ -2528,8 +2543,61 @@ function registerDatabaseHandlers(dbManager) {
             let gameid = null;
             let exitNumber = planEntry.exit_number;
             let stageDescription = null;
+            let levelnumber = null;
+            let translevel = null;
+            let levelname = null;
             
-            if (isRandom) {
+            if (isRandomStage) {
+              // Select random stage and REVEAL it immediately (for staging)
+              try {
+                // Parse stage filter flags from JSON
+                let stageIncludeFlags = null;
+                let stageExcludeFlags = null;
+                if (planEntry.stage_filter_include_flags) {
+                  try {
+                    stageIncludeFlags = JSON.parse(planEntry.stage_filter_include_flags);
+                  } catch (e) {
+                    console.warn('Error parsing stage_filter_include_flags:', e);
+                  }
+                }
+                if (planEntry.stage_filter_exclude_flags) {
+                  try {
+                    stageExcludeFlags = JSON.parse(planEntry.stage_filter_exclude_flags);
+                  } catch (e) {
+                    console.warn('Error parsing stage_filter_exclude_flags:', e);
+                  }
+                }
+                
+                const selected = seedManager.selectRandomStage({
+                  dbManager,
+                  seed: planEntry.filter_seed,
+                  challengeIndex: resultSequence,
+                  filterType: planEntry.filter_type,
+                  filterDifficulty: planEntry.filter_difficulty,
+                  filterPattern: planEntry.filter_pattern,
+                  stageMinDifficulty: planEntry.stage_filter_min_difficulty,
+                  stageMaxDifficulty: planEntry.stage_filter_max_difficulty,
+                  stageIncludeFlags: stageIncludeFlags,
+                  stageExcludeFlags: stageExcludeFlags,
+                  excludeGameids: usedGameids,
+                  excludeStageUuids: usedStageUuids
+                });
+                
+                // Store the ACTUAL stage data in database (UI will mask it based on was_random flag)
+                gameid = selected.gameid;
+                gameName = selected.gameName;
+                levelnumber = selected.levelnumber;
+                translevel = selected.translevel_13bf;
+                levelname = selected.levelname;
+                stageDescription = levelname;
+                usedGameids.push(selected.gameid);
+                usedStageUuids.push(selected.stage_uuid);
+                
+              } catch (error) {
+                console.error('Error selecting random stage:', error);
+                throw error;  // Fail staging if we can't select a stage
+              }
+            } else if (isRandomGame) {
               // Select random game and REVEAL it immediately (for staging)
               try {
                 const selected = seedManager.selectRandomGame({
@@ -2553,8 +2621,53 @@ function registerDatabaseHandlers(dbManager) {
                 console.error('Error selecting random game:', error);
                 throw error;  // Fail staging if we can't select a game
               }
+            } else if (isStage) {
+              // For specific stage entries, load stage info from gamestages table
+              gameid = planEntry.gameid;
+              exitNumber = planEntry.exit_number;
+              usedGameids.push(gameid);
+              
+              // Fetch game name
+              const rhdb = dbManager.getConnection('rhdata');
+              const game = rhdb.prepare(`
+                SELECT name FROM gameversions 
+                WHERE gameid = ? AND version = (
+                  SELECT MAX(version) FROM gameversions WHERE gameid = ?
+                )
+              `).get(gameid, gameid);
+              
+              gameName = game ? game.name : 'Unknown';
+              
+              // Fetch stage info from gamestages table
+              if (exitNumber) {
+                // Try to find stage by levelnumber (exit_number might be levelnumber for stage entries)
+                const stage = rhdb.prepare(`
+                  SELECT levelnumber, translevel_13bf, levelname
+                  FROM gamestages
+                  WHERE gameid = ? AND levelnumber = ?
+                `).get(gameid, exitNumber);
+                
+                if (stage) {
+                  levelnumber = stage.levelnumber;
+                  translevel = stage.translevel_13bf;
+                  levelname = stage.levelname;
+                  stageDescription = stage.levelname;
+                } else {
+                  // Fallback to exits table
+                  const exitInfo = rhdb.prepare(`
+                    SELECT description FROM exits 
+                    WHERE gameid = ? AND exit_number = ?
+                  `).get(gameid, exitNumber);
+                  stageDescription = exitInfo ? exitInfo.description : null;
+                }
+              }
+              
+              // Also check if trans_level is set in plan entry (for stage entries)
+              if (planEntry.trans_level) {
+                translevel = planEntry.trans_level;
+              }
             } else {
-              // For specific entries, use the gameid from plan
+              // For specific game entries, use the gameid from plan
               gameid = planEntry.gameid;
               exitNumber = planEntry.exit_number;
               usedGameids.push(gameid);
@@ -2592,7 +2705,10 @@ function registerDatabaseHandlers(dbManager) {
               stageDescription,
               isRandom ? 1 : 0,
               0,  // revealed_early: false (not revealed yet)
-              JSON.stringify(planEntry.conditions || [])
+              JSON.stringify(planEntry.conditions || []),
+              levelnumber,
+              translevel,
+              levelname
             );
             
             resultSequence++;

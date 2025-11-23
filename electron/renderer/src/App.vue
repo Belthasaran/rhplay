@@ -27088,6 +27088,7 @@ button:disabled {
   padding: 12px;
   overflow: visible;
   max-height: none;
+  width: auto;
 }
 
 .difficulty-grid {

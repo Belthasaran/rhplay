@@ -1028,267 +1028,33 @@
       </div>
 
       <aside class="sidebar">
-        <div class="panel" v-if="exactlyOneSelected && selectedItem">
-          <h3>Details</h3>
-          <div class="panel-body details">
-            <table class="kv-table">
-              <tbody>
-                <!-- Version Selector -->
-                <tr>
-                  <th>Version</th>
-                  <td>
-                    <select v-model="selectedVersion">
-                      <option v-for="v in availableVersions" :key="v" :value="v">
-                        Version {{ v }}{{ v === latestVersion ? ' (Latest)' : '' }}
-                      </option>
-                    </select>
-                  </td>
-                </tr>
-                
-                <!-- Official Fields (READ-ONLY) -->
-                <tr><th>Id</th><td class="readonly-field">{{ selectedItem.Id }}</td></tr>
-                <tr><th>Name</th><td class="readonly-field">{{ selectedItem.Name }}</td></tr>
-                <tr><th>Type</th><td class="readonly-field">{{ selectedItem.Type }}</td></tr>
-                <tr v-if="selectedItem.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ selectedItem.LegacyType }}</td></tr>
-                <tr><th>Author</th><td class="readonly-field">{{ selectedItem.Author }}</td></tr>
-                <tr><th>Length</th><td class="readonly-field">{{ selectedItem.Length }}</td></tr>
-                <tr><th>Public Difficulty</th><td class="readonly-field">{{ selectedItem.PublicDifficulty || '—' }}</td></tr>
-                <tr><th>Public Rating</th><td class="readonly-field">{{ selectedItem.Publicrating || '—' }}</td></tr>
-                <tr v-if="selectedItem.Demo && selectedItem.Demo.toLowerCase() === 'yes'"><th>Demo</th><td class="readonly-field">{{ selectedItem.Demo }}</td></tr>
-                <tr v-if="selectedItem.Contest"><th>Contest</th><td class="readonly-field">{{ selectedItem.Contest }}</td></tr>
-                <tr v-if="selectedItem.Racelevel"><th>Race Level</th><td class="readonly-field">{{ selectedItem.Racelevel }}</td></tr>
-                
-                <!-- Tags Row -->
-                <tr v-if="selectedItem.Tags && (Array.isArray(selectedItem.Tags) ? selectedItem.Tags.length > 0 : selectedItem.Tags)">
-                  <th>Tags</th>
-                  <td class="readonly-field">
-                    <div class="tags-container">
-                      <span 
-                        v-if="Array.isArray(selectedItem.Tags)"
-                        class="tags-display"
-                        @click="openTagsModal"
-                        @mouseenter="showTagsTooltip = true"
-                        @mouseleave="showTagsTooltip = false"
-                        :title="formatTagsForTooltip(selectedItem.Tags)"
-                      >
-                        {{ formatTagsShort(selectedItem.Tags) }}
-                      </span>
-                      <span 
-                        v-else
-                        class="tags-display"
-                        @click="openTagsModal"
-                        @mouseenter="showTagsTooltip = true"
-                        @mouseleave="showTagsTooltip = false"
-                        :title="selectedItem.Tags"
-                      >
-                        {{ truncateText(selectedItem.Tags, 60) }}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-                
-                <!-- Description Row -->
-                <tr v-if="selectedItem.Description">
-                  <th>Description</th>
-                  <td class="readonly-field">
-                    <div class="description-container">
-                      <span
-                        class="description-display"
-                        @click="openDescriptionModal"
-                        @mouseenter="showDescriptionTooltip = true"
-                        @mouseleave="showDescriptionTooltip = false"
-                        :title="selectedItem.Description"
-                      >
-                        {{ truncateText(selectedItem.Description, 60) }}
-                        <span v-if="selectedItem.Description && selectedItem.Description.length > 60" class="ellipsis-indicator clickable" @click.stop="openDescriptionModal" title="Click to view full description">...</span>
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-                
-                <!-- User-Editable Fields -->
-                <tr>
-                  <th>Status</th>
-                  <td>
-                    <select v-model="selectedItem.Status" @change="saveNonRatingFields">
-                      <option value="Default">Default</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Finished">Finished</option>
-                    </select>
-                  </td>
-                </tr>
-                
-                <!-- Dual Ratings with Star Picker (0-5 scale) -->
-                <tr>
-                  <th>My Difficulty</th>
-                  <td>
-                    <div class="star-rating clickable" @click="openRatingSheetModal">
-                      <span 
-                        v-for="n in 6" 
-                        :key="'diff-' + (n-1)"
-                        :class="{ filled: (n - 1) <= (selectedItem.MyDifficultyRating ?? -1) }"
-                        class="star"
-                      >★</span>
-                      <button @click.stop="selectedItem.MyDifficultyRating = null; openRatingSheetModal()" class="btn-clear-rating">✕</button>
-                      <span class="rating-label">{{ difficultyLabel(selectedItem.MyDifficultyRating) }}</span>
-                      <span class="click-hint">(Click to open rating sheet)</span>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <th>My Review</th>
-                  <td>
-                    <div class="star-rating clickable" @click="openRatingSheetModal">
-                      <span 
-                        v-for="n in 6" 
-                        :key="'rev-' + (n-1)"
-                        :class="{ filled: (n - 1) <= (selectedItem.MyReviewRating ?? -1) }"
-                        class="star"
-                      >★</span>
-                      <button @click.stop="selectedItem.MyReviewRating = null; openRatingSheetModal()" class="btn-clear-rating">✕</button>
-                      <span class="rating-label">{{ reviewLabel(selectedItem.MyReviewRating) }}</span>
-                      <span class="click-hint">(Click to open rating sheet)</span>
-                    </div>
-                  </td>
-                </tr>
-                
-                <tr>
-                  <th>Hidden</th>
-                  <td><input type="checkbox" v-model="selectedItem.Hidden" @change="saveNonRatingFields" /></td>
-                </tr>
-                <tr>
-                  <th>Exclude from Random</th>
-                  <td><input type="checkbox" v-model="selectedItem.ExcludeFromRandom" @change="saveNonRatingFields" /></td>
-                </tr>
-                <tr>
-                  <th>My notes</th>
-                  <td><textarea v-model="selectedItem.Mynotes" rows="4" @input="saveNonRatingFields" @blur="saveNonRatingFields"></textarea></td>
-                </tr>
-                
-                <!-- Action Buttons -->
-                <tr>
-                  <td colspan="2" style="padding-top: 12px;">
-                    <div class="detail-actions">
-                      <button @click="setVersionSpecificRating" :disabled="isVersionSpecific">
-                        {{ isVersionSpecific ? '✓ Version-Specific' : 'Set Version-Specific Rating' }}
-                      </button>
-                      <button @click="viewJsonDetails">View Details (JSON)</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-        <div v-if="ratingSummaryPanelVisible" class="ratings-summary-panel">
-          <header class="ratings-summary-header">
-            <h4>Community Ratings (Nostr)</h4>
-            <button
-              class="btn-refresh"
-              :disabled="ratingSummaryState.loading"
-              @click="refreshRatingSummaries"
-            >
-              {{ ratingSummaryState.loading ? 'Refreshing…' : 'Refresh' }}
-            </button>
-          </header>
-
-          <div v-if="ratingSummaryState.loading" class="ratings-summary-loading">
-            Fetching latest aggregated ratings…
-          </div>
-
-          <div v-else-if="ratingSummaryState.error" class="ratings-summary-error">
-            {{ ratingSummaryState.error }}
-          </div>
-
-          <div v-else-if="ratingSummaryDisplay" class="ratings-summary-content">
-            <p class="ratings-summary-meta">
-              <strong>{{ ratingSummaryDisplay.totalEvents }}</strong>
-              total rating{{ ratingSummaryDisplay.totalEvents === 1 ? '' : 's' }}
-              <span v-if="ratingSummaryDisplay.updatedAtLabel" class="meta-updated">
-                (updated {{ ratingSummaryDisplay.updatedAtLabel }})
-              </span>
-            </p>
-
-            <div v-if="ratingSummaryDisplay.tiers.length" class="ratings-summary-tiers">
-              <div class="tier" v-for="tier in ratingSummaryDisplay.tiers" :key="tier.key">
-                <span class="tier-label">{{ tier.label }}</span>
-                <span class="tier-count">{{ tier.count }}</span>
-              </div>
-            </div>
-
-            <div v-if="ratingSummaryDisplay.hasCategoryData" class="ratings-summary-categories">
-              <div class="category" v-for="category in ratingSummaryDisplay.categories" :key="category.field">
-                <h5>{{ category.label }}</h5>
-                <table class="category-table">
-                  <thead>
-                    <tr>
-                      <th>Tier</th>
-                      <th>Count</th>
-                      <th>Avg</th>
-                      <th>Median</th>
-                      <th>Std Dev</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="tier in category.tiers" :key="tier.key">
-                      <td>{{ tier.label }}</td>
-                      <td>{{ tier.count }}</td>
-                      <td>{{ formatRatingStat(tier.average) }}</td>
-                      <td>{{ formatRatingStat(tier.median) }}</td>
-                      <td>{{ formatRatingStat(tier.stddev) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <p v-else class="ratings-summary-empty">
-              No community ratings (kind 31001) available yet.
-            </p>
-          </div>
-        </div>
-          </div>
-        </div>
-
-        <div class="panel" v-if="exactlyOneSelected && selectedItem">
-          <h3>Stages</h3>
-          <div class="panel-actions">
-            <button @click="addStagesToRun" :disabled="selectedStageIds.size === 0">Add chosen stages to run</button>
-            <button @click="editStageNotes" :disabled="selectedStageIds.size === 0">Edit notes</button>
-            <button @click="setStageRating('difficulty')" :disabled="selectedStageIds.size === 0">Set Difficulty</button>
-            <button @click="setStageRating('review')" :disabled="selectedStageIds.size === 0">Set Review</button>
-          </div>
-          <div class="panel-body stages">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="col-check">
-                    <input type="checkbox" :checked="allStagesChecked" @change="toggleCheckAllStages($event)" />
-                  </th>
-                  <th>Parent ID</th>
-                  <th>Exit #</th>
-                  <th>Description</th>
-                  <th>Public</th>
-                  <th>My Ratings</th>
-                  <th>My notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="st in currentStages" :key="st.key">
-                  <td class="col-check"><input type="checkbox" :checked="selectedStageIds.has(st.key)" @change="toggleStageSelection(st.key, $event)" /></td>
-                  <td>{{ st.parentId }}</td>
-                  <td>{{ st.exitNumber }}</td>
-                  <td>{{ st.description }}</td>
-                  <td>{{ st.publicRating ?? '' }}</td>
-                  <td>{{ formatRatings(st.myDifficultyRating, st.myReviewRating) }}</td>
-                  <td>{{ st.myNotes ?? '' }}</td>
-                </tr>
-                <tr v-if="currentStages.length === 0">
-                  <td class="empty" colspan="7">No stages.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <GameDetailsInspector
+          v-if="exactlyOneSelected && selectedItem"
+          :game="selectedItem"
+          :selected-version="selectedVersion"
+          :available-versions="availableVersions"
+          :latest-version="latestVersion"
+          :is-version-specific="isVersionSpecific"
+          :rating-summary-panel-visible="ratingSummaryPanelVisible"
+          :rating-summary-state="ratingSummaryState"
+          :rating-summary-display="ratingSummaryDisplay"
+          @version-changed="handleVersionChanged"
+          @status-changed="handleStatusChanged"
+          @hidden-changed="handleHiddenChanged"
+          @exclude-changed="handleExcludeChanged"
+          @notes-changed="handleNotesChanged"
+          @save-non-rating-fields="saveNonRatingFields"
+          @open-rating-sheet="openRatingSheetModal"
+          @clear-difficulty="handleClearDifficulty"
+          @clear-review="handleClearReview"
+          @set-version-specific-rating="setVersionSpecificRating"
+          @view-json-details="viewJsonDetails"
+          @open-tags-modal="openTagsModal"
+          @open-description-modal="openDescriptionModal"
+          @open-stages-dialog="openGameStagesDialog"
+          @refresh-rating-summaries="refreshRatingSummaries"
+          @add-stage-to-run="handleAddStageToRun"
+        />
 
         <div class="panel" v-if="!exactlyOneSelected">
           <h3>Details</h3>
@@ -6384,6 +6150,17 @@
   @build="handleAdvancedPatchBuild"
 />
 
+<!-- Game Stages Dialog -->
+<GameStagesDialog
+  :is-open="showGameStagesDialog"
+  :game-id="selectedItem?.Id || ''"
+  :game-name="selectedItem?.Name || ''"
+  :game-version="selectedVersion"
+  mode="select"
+  @close="showGameStagesDialog = false"
+  @select="handleStageSelected"
+/>
+
   <!-- Upload File Modal (standalone) -->
   <div v-if="uploadFileModalOpen" class="modal-backdrop" @click.self="closeUploadFileModal">
     <div class="modal upload-file-modal">
@@ -6987,6 +6764,8 @@ import ProfilePublishingDashboard from './components/publish/ProfilePublishingDa
 import RatingsPublishingDashboard from './components/publish/RatingsPublishingDashboard.vue';
 import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard.vue';
 import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
+import GameDetailsInspector from './components/GameDetailsInspector.vue';
+import GameStagesDialog from './components/GameStagesDialog.vue';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -7153,6 +6932,7 @@ const advancedPatchModalOpen = ref(false);
 const advancedPatchGameId = ref('');
 const advancedPatchGameVersion = ref(0);
 const advancedPatchGameName = ref('');
+const showGameStagesDialog = ref(false);
 const usb2snesFxpPermissionResult = ref<any>(null);
 const grantingPermission = ref(false);
 const usbOptionsWizardOpen = ref(false);
@@ -15523,6 +15303,70 @@ function closeAdvancedPatchModal() {
   advancedPatchModalOpen.value = false;
 }
 
+// Game Details Inspector event handlers
+function handleVersionChanged(version: number) {
+  selectedVersion.value = version;
+  // Reload game data for the new version if needed
+}
+
+function handleStatusChanged(status: string) {
+  if (selectedItem.value) {
+    selectedItem.value.Status = status;
+    saveNonRatingFields();
+  }
+}
+
+function handleHiddenChanged(hidden: boolean) {
+  if (selectedItem.value) {
+    selectedItem.value.Hidden = hidden;
+    saveNonRatingFields();
+  }
+}
+
+function handleExcludeChanged(exclude: boolean) {
+  if (selectedItem.value) {
+    selectedItem.value.ExcludeFromRandom = exclude;
+    saveNonRatingFields();
+  }
+}
+
+function handleNotesChanged(notes: string) {
+  if (selectedItem.value) {
+    selectedItem.value.Mynotes = notes;
+  }
+}
+
+function handleClearDifficulty() {
+  if (selectedItem.value) {
+    selectedItem.value.MyDifficultyRating = null;
+    openRatingSheetModal();
+  }
+}
+
+function handleClearReview() {
+  if (selectedItem.value) {
+    selectedItem.value.MyReviewRating = null;
+    openRatingSheetModal();
+  }
+}
+
+function openGameStagesDialog() {
+  if (selectedItem.value?.Id) {
+    showGameStagesDialog.value = true;
+  }
+}
+
+function handleStageSelected(stage: any) {
+  // Handle stage selection (for now, just close the dialog)
+  // In the future, this could be used to populate fields or perform actions
+  showGameStagesDialog.value = false;
+}
+
+function handleAddStageToRun() {
+  // Open the game stages dialog to allow selecting stages to add to run
+  openGameStagesDialog();
+}
+
 async function handleAdvancedPatchBuild(options: {
   gameId: string;
   gameVersion: number;
@@ -19415,12 +19259,12 @@ function skillRatingHoverText(rating: number): string {
     'Apprentice - Vanilla is too easy for me, I look for more challenging things',  // 2
     'Advanced - Some Kaizo or Advanced hacks even, are too easy for me', // 3
     'Expert - I confidently beat expert level hacks (DRAM, Kaizo 1 Any%, POO World, etc)',                  // 4
-    'Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days like Glitchcat7, jaku, shovda, juzcook, MrMightymouse, Panga, Stew_, Calco, Noblet, MitchFlowerPower, GPB, Aurateur, Pmiller, Barb, ThaBeast, DaWildGrim, etc', // 5
-    'Master - That, and a rank above Expert+ now, or I got world record or top 3 once on  Master+ level hacks',  // 6
-    'I beat a long list of varied above Master-level hacks Perchance, Hacks Dream, or JUMP, Responsible World 1.0, Casio, and Fruit Dealer RTA', // 7
-    'I found Master hacks not enough challenge for me, and play several of these again regularly, back-to-back',  // 8
-    'I thought of tryiong to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these', // 9
-    'I speedran numerous above Master level hacks - and enjoy it'       // 10
+    'Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years', //5
+    'Master - I beat any of the above and harder unassisted without breaking a sweat. Maybe got world record or top 3 once on  Master+ level hacks',  // 6
+    'I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hacks Dream, or JUMP, Responsible World 1.0, Casio, and Fruit Dealer RTA.', // 7
+    'I could speedrun Master++ hacks like DRAM3 RTA: I dont find it difficult. I want longer levels with harder tricks; more trolls.',  // 8
+    'I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these', // 9
+    '???'       // 10
   ];
   return texts[rating] || '';
 }

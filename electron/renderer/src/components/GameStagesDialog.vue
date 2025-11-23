@@ -1061,15 +1061,23 @@ async function loadStages() {
       }
       
       // Restore scroll position after stages load
-      // Use multiple nextTick calls and a small delay to ensure DOM is fully updated
+      // Use multiple nextTick calls and requestAnimationFrame to ensure DOM is fully updated
       await nextTick();
       await nextTick();
-      // Small delay to ensure table is fully rendered
-      setTimeout(() => {
-        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
-          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
-        }
-      }, 50);
+      // Use requestAnimationFrame to wait for next paint, then restore scroll
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+            stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+          }
+          // Additional fallback after a short delay to handle alert dialogs
+          setTimeout(() => {
+            if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+              stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+            }
+          }, 100);
+        });
+      });
     } else {
       console.error('Failed to load stages:', result?.error);
       stages.value = [];
@@ -1554,9 +1562,34 @@ async function saveAll() {
     
     if (errors.length > 0) {
       alert(`Some stages failed to save:\n${errors.join('\n')}`);
+      // Restore scroll after alert is dismissed
+      await nextTick();
+      setTimeout(() => {
+        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+        }
+      }, 100);
     } else {
       emit('saved');
       await loadStages(); // This will restore scroll position
+      // Also restore scroll after a longer delay to handle alert dialog from parent
+      // The parent's handleStagesSaved will show an alert, so we wait for that
+      // Use multiple timeouts to catch scroll reset at different points
+      setTimeout(() => {
+        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+        }
+      }, 300);
+      setTimeout(() => {
+        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+        }
+      }, 600);
+      setTimeout(() => {
+        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+        }
+      }, 1000);
     }
   } catch (error: any) {
     alert(`Error saving stages: ${error?.message || String(error)}`);

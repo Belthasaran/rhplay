@@ -766,6 +766,8 @@ async function handleStagesSaved() {
     }
     
     // Auto-save draft to persist stages (but keep dialog open)
+    // Note: saveDraftToDb shows an alert which might reset scroll in the dialog
+    // The dialog's loadStages will handle scroll restoration after the alert
     await saveDraftToDb();
   } catch (e: any) {
     console.warn('Failed to load stages after save:', e);

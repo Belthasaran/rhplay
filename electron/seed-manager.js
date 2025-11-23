@@ -454,6 +454,68 @@ function selectRandomStage(params) {
     });
   }
   
+  // Filter out stages that exclude any global patch codes
+  // Get global patch codes from params (passed from expand-and-prepare)
+  const globalPatchCodes = params.globalPatchCodes || [];
+  if (globalPatchCodes.length > 0) {
+    // Get patch conflict information for declarative tag checking
+    const rhdb = dbManager.getConnection('rhdata');
+    const patchConflictMap = new Map(); // Map patch_code -> conflicts array
+    
+    for (const patchCode of globalPatchCodes) {
+      const patch = rhdb.prepare(`
+        SELECT conflicts FROM extrapatches WHERE patch_code = ?
+      `).get(patchCode);
+      
+      if (patch && patch.conflicts) {
+        try {
+          const conflicts = JSON.parse(patch.conflicts);
+          if (Array.isArray(conflicts)) {
+            patchConflictMap.set(patchCode, conflicts);
+          }
+        } catch (e) {
+          console.warn(`Error parsing conflicts for patch ${patchCode}:`, e);
+        }
+      }
+    }
+    
+    filteredStages = filteredStages.filter(stage => {
+      // Check if stage has excluded_patchcodes
+      if (!stage.excluded_patchcodes) {
+        return true; // No exclusions, stage is valid
+      }
+      
+      try {
+        const excluded = JSON.parse(stage.excluded_patchcodes);
+        if (!Array.isArray(excluded)) {
+          return true; // Invalid format, allow stage
+        }
+        
+        // Check if any global patch code conflicts with stage's excluded list
+        const hasConflict = globalPatchCodes.some(patchCode => {
+          // Check for exact patch code match in excluded list
+          if (excluded.includes(patchCode)) {
+            return true;
+          }
+          
+          // Check for declarative tag conflicts
+          // If patch has conflicts that include a tag in the stage's excluded list, exclude the stage
+          const patchConflicts = patchConflictMap.get(patchCode) || [];
+          const hasTagConflict = patchConflicts.some(conflictTag => {
+            return excluded.includes(conflictTag);
+          });
+          
+          return hasTagConflict;
+        });
+        
+        return !hasConflict; // Exclude stage if there's a conflict
+      } catch (e) {
+        console.warn('Error parsing excluded_patchcodes for stage:', e);
+        return true; // Invalid JSON, allow stage
+      }
+    });
+  }
+  
   if (filteredStages.length === 0) {
     throw new Error('No stages match the filter criteria');
   }

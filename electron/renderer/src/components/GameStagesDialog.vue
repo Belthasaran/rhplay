@@ -37,6 +37,7 @@
                   <th>Y</th>
                   <th>Req</th>
                   <th>LvlPat</th>
+                  <th>Excl</th>
                   <th>Diff</th>
                   <th class="col-playable" title="Playable level (Excludes cusscenes, Invalid, or Auto win/lose levels)">P</th>
                   <th class="col-rando" title="Rando level (Playable levels suitable for use in randomizers)">R</th>
@@ -184,6 +185,47 @@
                   </td>
                   <td class="playlevel-patch-cell">
                     <span v-if="stage.secret !== 1 || currentMode === 'edit'">{{ getActivePlaylevelPatch(stage) }}</span>
+                    <span v-else>-</span>
+                  </td>
+                  <td>
+                    <div v-if="isDevAdmin && currentMode === 'edit'" class="excluded-patchcodes-tag-selector">
+                      <div class="selected-tags" v-if="getExcludedPatchCodes(stage).length > 0">
+                        <span 
+                          v-for="code in getExcludedPatchCodes(stage)" 
+                          :key="code"
+                          class="tag-badge excluded-tag"
+                        >
+                          {{ code }}
+                          <button @click.stop="removeExcludedPatchCode(stage, code)" class="tag-remove">×</button>
+                        </span>
+                      </div>
+                      <input 
+                        v-model="newExcludedPatchCode"
+                        type="text"
+                        class="tag-input"
+                        placeholder="Type patch code or tag..."
+                        @keydown.enter.prevent="addExcludedPatchCode(stage)"
+                        @focus="editingExcludedForStage = stage.stage_uuid"
+                        @blur="setTimeout(() => editingExcludedForStage = null, 200)"
+                      />
+                      <select 
+                        v-if="availablePatches.length > 0"
+                        @change="if ($event.target.value) { newExcludedPatchCode = $event.target.value; addExcludedPatchCode(stage); $event.target.value = ''; }"
+                        class="tag-select"
+                      >
+                        <option value="">Add patch...</option>
+                        <option 
+                          v-for="patch in availablePatches" 
+                          :key="patch.epuuid"
+                          :value="patch.patch_code"
+                          :disabled="getExcludedPatchCodes(stage).includes(patch.patch_code)"
+                          :title="patch.patch_code + ' - ' + patch.name"
+                        >
+                          {{ abbreviatePatchName(patch.patch_code, patch.name) }}
+                        </option>
+                      </select>
+                    </div>
+                    <span v-else-if="stage.secret !== 1 || currentMode === 'edit'">{{ formatExcludedPatchCodes(stage.excluded_patchcodes) || '-' }}</span>
                     <span v-else>-</span>
                   </td>
                   <td>
@@ -525,6 +567,7 @@ interface GameStage {
   final: number;
   lock?: number; // Lock flag - level only accessible in Edit mode
   playlevel_patch_code?: string | null; // Playlevel patch code (defaults to '1lvno')
+  excluded_patchcodes?: string | null; // JSON array of patch codes or declarative tags to exclude
 }
 
 interface Props {
@@ -567,6 +610,8 @@ const playlevelPatches = ref<Array<{epuuid: string, patch_code: string, name: st
 const loadingPatches = ref(false);
 const editingRequisitesForStage = ref<string | null>(null); // stage_uuid being edited
 const newRequisiteTag = ref('');
+const editingExcludedForStage = ref<string | null>(null); // stage_uuid being edited
+const newExcludedPatchCode = ref('');
 const showDetectedLevelsDialog = ref(false);
 const showSetPlaylevelPatchDialog = ref(false);
 const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage_uuid set
@@ -611,6 +656,61 @@ function formatRequisites(requisites: string | null | undefined): string {
   if (!requisites) return '';
   const tags = requisites.split(',').map(r => r.trim()).filter(r => r.length > 0);
   return tags.join(', ');
+}
+
+// Get excluded patch codes as array
+function getExcludedPatchCodes(stage: GameStage): string[] {
+  if (!stage.excluded_patchcodes) return [];
+  try {
+    const excluded = JSON.parse(stage.excluded_patchcodes);
+    return Array.isArray(excluded) ? excluded : [];
+  } catch (e) {
+    console.warn('Error parsing excluded_patchcodes:', e);
+    return [];
+  }
+}
+
+// Set excluded patch codes from array
+function setExcludedPatchCodes(stage: GameStage, codes: string[]) {
+  if (codes.length === 0) {
+    stage.excluded_patchcodes = null;
+  } else {
+    stage.excluded_patchcodes = JSON.stringify(codes);
+  }
+}
+
+// Add a patch code or tag to excluded list
+function addExcludedPatchCode(stage: GameStage) {
+  const code = newExcludedPatchCode.value.trim();
+  if (!code) return;
+  
+  const currentCodes = getExcludedPatchCodes(stage);
+  if (!currentCodes.includes(code)) {
+    currentCodes.push(code);
+    setExcludedPatchCodes(stage, currentCodes);
+  }
+  newExcludedPatchCode.value = '';
+}
+
+// Remove a patch code or tag from excluded list
+function removeExcludedPatchCode(stage: GameStage, code: string) {
+  const currentCodes = getExcludedPatchCodes(stage);
+  const index = currentCodes.indexOf(code);
+  if (index >= 0) {
+    currentCodes.splice(index, 1);
+    setExcludedPatchCodes(stage, currentCodes);
+  }
+}
+
+// Format excluded patch codes for display
+function formatExcludedPatchCodes(excludedPatchcodes: string | null | undefined): string {
+  if (!excludedPatchcodes) return '';
+  try {
+    const codes = JSON.parse(excludedPatchcodes);
+    return Array.isArray(codes) ? codes.join(', ') : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 // Get active playlevel patch for a stage

@@ -1891,15 +1891,26 @@ function registerDatabaseHandlers(dbManager) {
    * Create a new run
    * Channel: db:runs:create
    */
-  ipcMain.handle('db:runs:create', async (event, { runName, runDescription, globalConditions }) => {
+  ipcMain.handle('db:runs:create', async (event, { runName, runDescription, globalConditions, globalPatchCodes }) => {
     try {
       const db = dbManager.getConnection('clientdata');
       const runUuid = crypto.randomUUID();
       
+      // Store global patch codes in config_json field
+      const configJson = {
+        globalPatchCodes: globalPatchCodes || []
+      };
+      
       db.prepare(`
-        INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions)
-        VALUES (?, ?, ?, 'preparing', ?)
-      `).run(runUuid, runName, runDescription, JSON.stringify(globalConditions || []));
+        INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json)
+        VALUES (?, ?, ?, 'preparing', ?, ?)
+      `).run(
+        runUuid, 
+        runName, 
+        runDescription, 
+        JSON.stringify(globalConditions || []),
+        JSON.stringify(configJson)
+      );
       
       return { success: true, runUuid };
     } catch (error) {
@@ -2504,6 +2515,21 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('clientdata');
       
+      // Get run to retrieve global patch codes for filtering
+      const run = db.prepare(`
+        SELECT config_json FROM runs WHERE run_uuid = ?
+      `).get(runUuid);
+      
+      let globalPatchCodes = [];
+      if (run && run.config_json) {
+        try {
+          const config = JSON.parse(run.config_json);
+          globalPatchCodes = config.globalPatchCodes || [];
+        } catch (e) {
+          console.warn('Error parsing run config_json:', e);
+        }
+      }
+      
       const transaction = db.transaction((runId) => {
         // Clean up any existing run_results (in case of re-staging)
         db.prepare(`DELETE FROM run_results WHERE run_uuid = ?`).run(runId);
@@ -2580,7 +2606,8 @@ function registerDatabaseHandlers(dbManager) {
                   stageIncludeFlags: stageIncludeFlags,
                   stageExcludeFlags: stageExcludeFlags,
                   excludeGameids: usedGameids,
-                  excludeStageUuids: usedStageUuids
+                  excludeStageUuids: usedStageUuids,
+                  globalPatchCodes: globalPatchCodes  // Pass global patch codes for filtering
                 });
                 
                 // Store the ACTUAL stage data in database (UI will mask it based on was_random flag)
@@ -2735,6 +2762,21 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       const userDataPath = app.getPath('userData');
       
+      // Get run to retrieve global patch codes
+      const run = db.prepare(`
+        SELECT config_json FROM runs WHERE run_uuid = ?
+      `).get(runUuid);
+      
+      let globalPatchCodes = [];
+      if (run && run.config_json) {
+        try {
+          const config = JSON.parse(run.config_json);
+          globalPatchCodes = config.globalPatchCodes || [];
+        } catch (e) {
+          console.warn('Error parsing run config_json:', e);
+        }
+      }
+      
       // Fetch run_results (already expanded with all games revealed)
       const expandedResults = db.prepare(`
         SELECT 
@@ -2748,11 +2790,27 @@ function registerDatabaseHandlers(dbManager) {
           stage_description,
           was_random,
           status,
-          conditions
+          conditions,
+          levelnumber,
+          translevel,
+          levelname
         FROM run_results
         WHERE run_uuid = ?
         ORDER BY sequence_number
       `).all(runUuid);
+      
+      // Add version field to each result (needed for staging)
+      const rhdb = dbManager.getConnection('rhdata');
+      for (const result of expandedResults) {
+        if (result.gameid) {
+          const gameVersion = rhdb.prepare(`
+            SELECT MAX(version) as version FROM gameversions WHERE gameid = ?
+          `).get(result.gameid);
+          result.version = gameVersion ? gameVersion.version : 1;
+        }
+        // Add global patch codes to each result
+        result.globalPatchCodes = globalPatchCodes;
+      }
       
       if (expandedResults.length === 0) {
         return { success: false, error: 'No games found in run results. Please expand run plan first.' };

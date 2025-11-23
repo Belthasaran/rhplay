@@ -1073,8 +1073,8 @@
           <!-- Preparing state -->
           <template v-if="!isRunActive">
             <button @click="openPastRunsModal" class="btn-past-runs">📜 Past Runs</button>
-            <button @click="editGlobalConditions" class="btn-conditions-header" :title="`Global Conditions: ${globalRunConditions.length > 0 ? globalRunConditions.join(', ') : 'None'}`">
-              {{ globalRunConditions.length > 0 ? `✓ Global Conditions (${globalRunConditions.length})` : 'Set Global Conditions' }}
+            <button @click="editGlobalConditions" class="btn-conditions-header" :title="`Global Patches: ${globalRunPatchCodes.length > 0 ? globalRunPatchCodes.join(', ') : 'None'}`">
+              {{ globalRunPatchCodes.length > 0 ? `✓ Global Patches (${globalRunPatchCodes.length})` : 'Set Global Conditions' }}
             </button>
             <button @click="exportRunToFile" :disabled="!isRunSaved">📤 Export</button>
             <button @click="importRunFromFile">📥 Import</button>
@@ -16637,7 +16637,10 @@ type RunEntry = {
 const runModalOpen = ref(false);
 const runEntries = reactive<RunEntry[]>([]);
 const checkedRun = ref<Set<string>>(new Set());
-const globalRunConditions = ref<ChallengeCondition[]>([]);  // Global conditions for entire run
+const globalRunConditions = ref<ChallengeCondition[]>([]);  // Global conditions for entire run (legacy - challenge conditions)
+const globalRunPatchCodes = ref<string[]>([]);  // Global patch codes to apply to all games/stages in run
+const showGlobalConditionsDialog = ref(false);  // Dialog for editing global conditions and patch codes
+const availablePatchesForGlobal = ref<any[]>([]);  // Available patches for selection in global conditions
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
@@ -17264,13 +17267,15 @@ async function saveRunToDatabase() {
     
     // Convert reactive objects to plain objects for IPC
     const plainGlobalConditions = JSON.parse(JSON.stringify(globalRunConditions.value));
+    const plainGlobalPatchCodes = JSON.parse(JSON.stringify(globalRunPatchCodes.value));
     const plainRunEntries = JSON.parse(JSON.stringify(runEntries));
     
-    // Create run in database
+    // Create run in database (include both legacy conditions and patch codes)
     const result = await (window as any).electronAPI.createRun(
       runName,
       '',  // runDescription
-      plainGlobalConditions
+      plainGlobalConditions,
+      plainGlobalPatchCodes  // Pass patch codes as separate parameter
     );
     
     if (!result.success) {
@@ -18752,6 +18757,35 @@ function formatConditions(conditionsJson: string | null | undefined): string {
     return conditions.join(', ');
   } catch {
     return '';
+  }
+}
+
+async function editGlobalConditions() {
+  showGlobalConditionsDialog.value = true;
+  
+  // Load available patches
+  try {
+    if (isElectronAvailable()) {
+      const result = await (window as any).electronAPI.getAllExtraPatches();
+      if (result.success) {
+        availablePatchesForGlobal.value = result.patches || [];
+      }
+    }
+  } catch (error) {
+    console.error('Error loading patches for global conditions:', error);
+  }
+}
+
+function closeGlobalConditionsDialog() {
+  showGlobalConditionsDialog.value = false;
+}
+
+function toggleGlobalPatch(patchCode: string) {
+  const index = globalRunPatchCodes.value.indexOf(patchCode);
+  if (index >= 0) {
+    globalRunPatchCodes.value.splice(index, 1);
+  } else {
+    globalRunPatchCodes.value.push(patchCode);
   }
 }
 

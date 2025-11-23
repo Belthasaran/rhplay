@@ -430,6 +430,22 @@ const MIGRATIONS = {
       },
     },
     {
+      id: 'rhdata_041_gamestages_excluded_patchcodes',
+      description: 'Add excluded_patchcodes column to gamestages table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/041_rhdata_gamestages_excluded_patchcodes.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'gamestages', 'excluded_patchcodes');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
+    {
       id: 'rhdata_040_gamestages_playlevel_patch',
       description: 'Add playlevel_patch_code column to gamestages table',
       type: 'sql',

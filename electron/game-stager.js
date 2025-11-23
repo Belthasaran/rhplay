@@ -395,7 +395,7 @@ async function stageRunGames(params) {
           WHERE gameid = ? AND levelnumber = ?
         `).get(result.gameid, result.levelnumber);
         
-        // Build list of patch codes to apply (requisites + playlevel patch)
+        // Build list of patch codes to apply (requisites + playlevel patch + global patch codes)
         const patchCodes = [];
         if (stage && stage.requisites) {
           // Parse requisites (comma-separated patch codes)
@@ -407,6 +407,15 @@ async function stageRunGames(params) {
         const playlevelPatch = (stage && stage.playlevel_patch_code) ? stage.playlevel_patch_code : '1lvno';
         if (!patchCodes.includes(playlevelPatch)) {
           patchCodes.push(playlevelPatch);
+        }
+        
+        // Add global patch codes (from run's global conditions)
+        if (result.globalPatchCodes && Array.isArray(result.globalPatchCodes)) {
+          for (const globalPatchCode of result.globalPatchCodes) {
+            if (!patchCodes.includes(globalPatchCode)) {
+              patchCodes.push(globalPatchCode);
+            }
+          }
         }
         
         // Convert patch codes to epuuids
@@ -454,15 +463,67 @@ async function stageRunGames(params) {
           }
         }
       } else {
-        // For regular game entries, use standard patching
-        patchResult = await createPatchedSFC({
-          dbManager,
-          gameid: result.gameid,
-          version: result.version || 1,  // Use version from result or default to 1
-          vanillaRomPath,
-          flipsPath,
-          outputPath: sfcPath
-        });
+        // For regular game entries, check if we have global patch codes
+        if (result.globalPatchCodes && Array.isArray(result.globalPatchCodes) && result.globalPatchCodes.length > 0) {
+          // Convert global patch codes to epuuids
+          const rhdb = dbManager.getConnection('rhdata');
+          const selectedPatches = [];
+          const patches = rhdb.prepare(`
+            SELECT epuuid FROM extrapatches WHERE patch_code IN (${result.globalPatchCodes.map(() => '?').join(',')})
+          `).all(...result.globalPatchCodes);
+          selectedPatches.push(...patches.map(p => p.epuuid));
+          
+          if (selectedPatches.length > 0) {
+            // Use buildPlusPatchedGame with global patch codes
+            patchResult = await buildPlusPatchedGame({
+              dbManager,
+              gameId: result.gameid,
+              gameVersion: result.version || 1,
+              selectedPatches,
+              globalParams: { glevelnum: '', gonoffv: [] },
+              localParams: {},
+              action: 'build',
+              vanillaRomPath,
+              flipsPath,
+              asarPath: null,
+              outputDir: path.dirname(sfcPath)
+            });
+            
+            // Move output file to final location if needed
+            if (patchResult.success && patchResult.outputPath && patchResult.outputPath !== sfcPath) {
+              if (fs.existsSync(patchResult.outputPath)) {
+                fs.copyFileSync(patchResult.outputPath, sfcPath);
+                if (patchResult.outputPath.includes('/tmp/') || patchResult.outputPath.includes('\\temp\\')) {
+                  try {
+                    fs.unlinkSync(patchResult.outputPath);
+                  } catch (e) {
+                    console.warn('Could not clean up temp file:', e);
+                  }
+                }
+              }
+            }
+          } else {
+            // No valid patches found, use standard patching
+            patchResult = await createPatchedSFC({
+              dbManager,
+              gameid: result.gameid,
+              version: result.version || 1,
+              vanillaRomPath,
+              flipsPath,
+              outputPath: sfcPath
+            });
+          }
+        } else {
+          // No global patch codes, use standard patching
+          patchResult = await createPatchedSFC({
+            dbManager,
+            gameid: result.gameid,
+            version: result.version || 1,  // Use version from result or default to 1
+            vanillaRomPath,
+            flipsPath,
+            outputPath: sfcPath
+          });
+        }
       }
       
       if (patchResult.success) {

@@ -1,3 +1,24 @@
+if read1($00FFD5) == $23
+    sa1rom
+    !addr = $6000
+    !bank = $000000
+    !FastMirror = $000000
+else
+    lorom
+    !addr = $0000
+    !bank = $000000
+    !FastMirror = $800000
+    !Hundreds = $0F31
+    !Tens = $0F32
+    !Ones = $0F33
+endif	
+!PowerupAddress = $19|!addr
+!OnYoshiAddr = $187A|!addr
+!OnYoshiOW = $0DC1|!addr
+!Hundreds = $0F31|!addr
+!Tens = $0F32|!addr
+!Ones = $0F33|!addr
+
 org $01AC80
 autoclean jsl Main3
 ;JSR $A4AE
@@ -21,5 +42,4 @@ Next:
     ;stz.w $14C8,X
 
     ;rts
-
 

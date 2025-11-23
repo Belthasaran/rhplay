@@ -196,6 +196,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Array>} Array of run results
    */
   getRunResults: (params) => ipcRenderer.invoke('db:runs:get-results', params),
+  getRunPlanEntries: (params) => ipcRenderer.invoke('db:runs:get-plan-entries', params),
+  getRunStagingInfo: (params) => ipcRenderer.invoke('db:runs:get-staging-info', params),
+  checkPathExists: (params) => ipcRenderer.invoke('fs:checkPathExists', params),
   
   /**
    * Reveal a random challenge (select game and update)

@@ -1079,13 +1079,14 @@
             <button @click="exportRunToFile" :disabled="!isRunSaved">📤 Export</button>
             <button @click="importRunFromFile">📥 Import</button>
             <button @click="stageRun('save')" :disabled="runEntries.length === 0">Stage and Save</button>
-            <div v-if="isRunSaved" class="run-status-button-wrapper" style="position: relative; display: inline-block;">
+              <div v-if="isRunSaved" class="run-status-button-wrapper" style="position: relative; display: inline-block;">
               <button @click="toggleRunStatusDropdown" class="btn-run-status" :class="{ 'ready': isRunReadyToStart, 'needs-upload': !isRunReadyToStart }">
                 {{ runStatusText }}
               </button>
               <div v-if="runStatusDropdownOpen" class="run-status-dropdown">
                 <button @click="reopenStagingWindow" class="dropdown-item">Reopen Staging Window</button>
                 <button @click="manualUploadSearch" class="dropdown-item">Manual Upload: Search USB2SNES For Files</button>
+                <button @click="regenerateStaging" class="dropdown-item" v-if="needsRegenerateStaging">Regenerate Staging</button>
                 <button @click="skipUploadAcknowledgment" class="dropdown-item">Skip Upload: I will manually start each game</button>
               </div>
             </div>
@@ -6566,6 +6567,14 @@
       </header>
       <section class="modal-body">
         <div class="past-runs-controls">
+          <button 
+            @click="loadRestoreRun" 
+            :disabled="!canLoadRestoreRun" 
+            class="btn-primary"
+            v-if="hasPreparingRuns"
+          >
+            Load/Restore Run
+          </button>
           <button @click="deleteCheckedPastRuns" :disabled="checkedPastRuns.length === 0" class="btn-danger">Delete Checked</button>
         </div>
         <div class="past-runs-content">
@@ -16727,6 +16736,7 @@ let runUploadCancelRequested = false;
 const runStatusDropdownOpen = ref(false);
 const skipUploadAcknowledged = ref(false);
 const expandedRunResults = ref<any[]>([]);  // Store expanded results to check sfcPath
+const needsRegenerateStaging = ref(false);  // Flag to indicate if staging needs regeneration
 
 // Quick launch progress modal
 const quickLaunchProgressModalOpen = ref(false);
@@ -17463,11 +17473,13 @@ function closeStagingSuccess() {
 }
 
 // Run status dropdown functions
-function toggleRunStatusDropdown() {
+async function toggleRunStatusDropdown() {
   runStatusDropdownOpen.value = !runStatusDropdownOpen.value;
   if (runStatusDropdownOpen.value) {
     // Load expanded results to check sfcPath
-    loadExpandedRunResults();
+    await loadExpandedRunResults();
+    // Check if staging needs regeneration
+    await checkNeedsRegenerateStaging();
   }
 }
 
@@ -17480,6 +17492,8 @@ async function loadExpandedRunResults() {
       runUuid: currentRunUuid.value
     });
     expandedRunResults.value = results || [];
+    // After loading results, check if staging needs regeneration
+    await checkNeedsRegenerateStaging();
   } catch (error) {
     console.error('Error loading expanded run results:', error);
     expandedRunResults.value = [];
@@ -17627,6 +17641,233 @@ function skipUploadAcknowledgment() {
   
   if (confirmed) {
     skipUploadAcknowledged.value = true;
+  }
+}
+
+// Check if staging needs to be regenerated (folder or files missing)
+async function checkNeedsRegenerateStaging() {
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    needsRegenerateStaging.value = false;
+    return;
+  }
+  
+  // Check if we have expanded results (run was staged)
+  if (expandedRunResults.value.length === 0) {
+    needsRegenerateStaging.value = false;
+    return;
+  }
+  
+  // Check if staging folder exists
+  if (!stagingFolderPath.value) {
+    needsRegenerateStaging.value = true;
+    return;
+  }
+  
+  // Check if folder exists and has SFC files
+  try {
+    const folderExists = await (window as any).electronAPI.checkPathExists({ path: stagingFolderPath.value });
+    if (!folderExists) {
+      needsRegenerateStaging.value = true;
+      return;
+    }
+    
+    // Check if folder has SFC files
+    const folderContents = await (window as any).electronAPI.readDirectory(stagingFolderPath.value);
+    const sfcFiles = folderContents.filter((f: string) => f.endsWith('.sfc'));
+    needsRegenerateStaging.value = sfcFiles.length === 0;
+  } catch (error) {
+    console.error('Error checking staging folder:', error);
+    needsRegenerateStaging.value = true;  // Assume needs regeneration if we can't check
+  }
+}
+
+// Check if any selected runs are in "preparing" status
+const hasPreparingRuns = computed(() => {
+  return checkedPastRuns.value.some(runUuid => {
+    const run = pastRuns.value.find(r => r.run_uuid === runUuid);
+    return run && run.status === 'preparing';
+  });
+});
+
+// Check if we can load/restore a run (exactly one preparing run selected)
+const canLoadRestoreRun = computed(() => {
+  const preparingRuns = checkedPastRuns.value.filter(runUuid => {
+    const run = pastRuns.value.find(r => r.run_uuid === runUuid);
+    return run && run.status === 'preparing';
+  });
+  return preparingRuns.length === 1;
+});
+
+// Load/Restore a saved but unstarted run
+async function loadRestoreRun() {
+  if (!canLoadRestoreRun.value || !isElectronAvailable()) {
+    return;
+  }
+  
+  const preparingRunUuid = checkedPastRuns.value.find(runUuid => {
+    const run = pastRuns.value.find(r => r.run_uuid === runUuid);
+    return run && run.status === 'preparing';
+  });
+  
+  if (!preparingRunUuid) {
+    alert('Please select a run in "preparing" status to restore');
+    return;
+  }
+  
+  const run = pastRuns.value.find(r => r.run_uuid === preparingRunUuid);
+  if (!run) {
+    alert('Run not found');
+    return;
+  }
+  
+  try {
+    // Confirm if there's a current run in progress
+    if (currentRunUuid.value && currentRunUuid.value !== preparingRunUuid) {
+      const confirmed = confirm(
+        `You have a current run "${currentRunName.value}" in progress.\n\n` +
+        `Loading this run will replace it. Continue?`
+      );
+      if (!confirmed) return;
+    }
+    
+    // Load run plan entries
+    const planEntries = await (window as any).electronAPI.getRunPlanEntries({
+      runUuid: preparingRunUuid
+    });
+    
+    if (!planEntries || planEntries.length === 0) {
+      alert('No plan entries found for this run');
+      return;
+    }
+    
+    // Load global conditions and patch codes from run config
+    const runConfig = run.config_json ? JSON.parse(run.config_json) : {};
+    const globalConditions = runConfig.globalConditions || run.global_conditions ? JSON.parse(run.global_conditions) : [];
+    const globalPatchCodes = runConfig.globalPatchCodes || [];
+    
+    // Convert plan entries to runEntries format
+    const restoredEntries: any[] = planEntries.map((entry: any) => ({
+      key: entry.entry_uuid,
+      id: entry.gameid || (entry.entry_type?.startsWith('random') ? '(random)' : ''),
+      entryType: entry.entry_type || 'game',
+      name: entry.entry_type?.startsWith('random') 
+        ? (entry.entry_type === 'random_stage' ? 'Random Stage' : 'Random Game')
+        : '',
+      stageNumber: entry.exit_number || entry.levelnumber || '',
+      transLevel: entry.trans_level || '',
+      stageName: '',
+      count: entry.count || 1,
+      filterDifficulty: entry.filter_difficulty || '',
+      filterType: entry.filter_type || '',
+      filterPattern: entry.filter_pattern || '',
+      stageFilterMinDifficulty: entry.stage_filter_min_difficulty,
+      stageFilterMaxDifficulty: entry.stage_filter_max_difficulty,
+      stageFilterIncludeFlags: entry.stage_filter_include_flags ? JSON.parse(entry.stage_filter_include_flags) : [],
+      stageFilterExcludeFlags: entry.stage_filter_exclude_flags ? JSON.parse(entry.stage_filter_exclude_flags) : [],
+      seed: entry.filter_seed || '',
+      matchCount: null,  // Will be recalculated if needed
+      isLocked: false,
+      conditions: []
+    }));
+    
+    // Load expanded results if run was staged
+    const expandedResults = await (window as any).electronAPI.getRunResults({
+      runUuid: preparingRunUuid
+    });
+    
+    let restoredStagingFolderPath: string | null = null;
+    let restoredStagingSfcCount = 0;
+    
+    if (expandedResults && expandedResults.length > 0) {
+      // Run was staged - check if staging folder exists
+      const stagingInfo = await (window as any).electronAPI.getRunStagingInfo({
+        runUuid: preparingRunUuid
+      });
+      
+      if (stagingInfo && stagingInfo.success && stagingInfo.folderPath) {
+        // Check if folder exists
+        const folderExists = await (window as any).electronAPI.checkPathExists({ path: stagingInfo.folderPath });
+        if (folderExists) {
+          restoredStagingFolderPath = stagingInfo.folderPath;
+          restoredStagingSfcCount = stagingInfo.sfcCount || expandedResults.length;
+        }
+      }
+      
+      // Note: We keep the plan entries as-is (not expanded results) because
+      // the user should see the plan, not the expanded results, when restoring
+      // Expanded results are only used to check staging status
+    }
+    
+    // Restore run state
+    currentRunUuid.value = preparingRunUuid;
+    currentRunName.value = run.run_name;
+    currentRunStatus.value = 'preparing';
+    runEntries.splice(0, runEntries.length, ...restoredEntries);
+    globalRunConditions.value = globalConditions;
+    globalRunPatchCodes.value = globalPatchCodes;
+    skipUploadAcknowledged.value = false;
+    
+    // Restore staging info if available
+    if (restoredStagingFolderPath) {
+      stagingFolderPath.value = restoredStagingFolderPath;
+      stagingSfcCount.value = restoredStagingSfcCount;
+      expandedRunResults.value = expandedResults || [];
+    } else {
+      stagingFolderPath.value = '';
+      stagingSfcCount.value = 0;
+      expandedRunResults.value = expandedResults || [];  // Still load results even if folder missing (for regenerate option)
+    }
+    
+    // Check if staging needs regeneration after restore
+    await checkNeedsRegenerateStaging();
+    
+    // Close past runs modal and open run modal
+    closePastRunsModal();
+    runModalOpen.value = true;
+    
+    console.log(`Restored run "${run.run_name}" with ${restoredEntries.length} entries`);
+  } catch (error) {
+    console.error('Error loading/restoring run:', error);
+    alert(`Error loading run: ${error.message || error}`);
+  }
+}
+
+// Regenerate staging for current run
+async function regenerateStaging() {
+  runStatusDropdownOpen.value = false;
+  
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    alert('No run selected');
+    return;
+  }
+  
+  const confirmed = confirm(
+    'Regenerate Staging\n\n' +
+    'This will recreate the staging folder and SFC files for this run.\n\n' +
+    'Any existing staging folder will be replaced.\n\n' +
+    'Continue?'
+  );
+  
+  if (!confirmed) return;
+  
+  try {
+    // Show progress modal
+    stagingProgressModalOpen.value = true;
+    stagingProgressCurrent.value = 0;
+    stagingProgressTotal.value = runEntries.length;
+    stagingProgressGameName.value = 'Regenerating staging...';
+    
+    // Re-run the staging process
+    await stageRunGames(currentRunUuid.value, currentRunName.value);
+    
+    // After staging completes, load expanded results
+    await loadExpandedRunResults();
+    
+    console.log('Staging regenerated successfully');
+  } catch (error) {
+    console.error('Error regenerating staging:', error);
+    alert(`Error regenerating staging: ${error.message || error}`);
+    stagingProgressModalOpen.value = false;
   }
 }
 
@@ -18870,7 +19111,7 @@ async function openPastRunsModal() {
     pastRunsModalOpen.value = true;
     // Fetch all runs from database
     const runs = await (window as any).electronAPI.getAllRuns();
-    // Filter out active runs (keep only past/finished runs)
+    // Include all runs except active ones (preparing, completed, cancelled)
     pastRuns.value = runs.filter((run: any) => run.status !== 'active');
   } catch (error) {
     console.error('Error loading past runs:', error);

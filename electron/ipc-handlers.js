@@ -2187,6 +2187,74 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get run plan entries
+   * Channel: db:runs:get-plan-entries
+   */
+  ipcMain.handle('db:runs:get-plan-entries', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const entries = db.prepare(`
+        SELECT * FROM run_plan_entries
+        WHERE run_uuid = ?
+        ORDER BY sequence_number
+      `).all(runUuid);
+      
+      return entries;
+    } catch (error) {
+      console.error('Error getting run plan entries:', error);
+      throw error;
+    }
+  });
+
+  /**
+   * Get run staging info (folder path and SFC count)
+   * Channel: db:runs:get-staging-info
+   */
+  ipcMain.handle('db:runs:get-staging-info', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const run = db.prepare(`SELECT staging_folder FROM runs WHERE run_uuid = ?`).get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+      
+      const folderPath = run.staging_folder || null;
+      let sfcCount = 0;
+      
+      if (folderPath) {
+        // Count results for this run
+        const countResult = db.prepare(`SELECT COUNT(*) as count FROM run_results WHERE run_uuid = ?`).get(runUuid);
+        sfcCount = countResult?.count || 0;
+      }
+      
+      return {
+        success: true,
+        folderPath: folderPath,
+        sfcCount: sfcCount
+      };
+    } catch (error) {
+      console.error('Error getting run staging info:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Check if a path exists
+   * Channel: fs:checkPathExists
+   */
+  ipcMain.handle('fs:checkPathExists', async (event, { path }) => {
+    try {
+      const fs = require('fs');
+      return fs.existsSync(path);
+    } catch (error) {
+      console.error('Error checking path existence:', error);
+      return false;
+    }
+  });
+
+  /**
    * Get active run (for startup check)
    * Channel: db:runs:get-active
    */

@@ -21044,13 +21044,27 @@ async function resumeRunFromStartup() {
         }
       }
       
+      // Determine entry type from database (preserves random_stage vs random_game)
+      let entryType: string;
+      if (res.entry_type) {
+        // Use entry_type from database if available
+        entryType = res.entry_type;
+      } else if (res.was_random) {
+        // Fallback: if was_random is true but no entry_type, check if it has stage info
+        entryType = (res.levelnumber) ? 'random_stage' : 'random_game';
+      } else {
+        // Not random, check if it's a stage or game
+        entryType = (res.levelnumber) ? 'stage' : 'game';
+      }
+      
       return {
         key: res.result_uuid,
         id: shouldReveal ? (res.gameid || '(random)') : '(random)',
-        entryType: res.was_random ? 'random_game' : 'game',
+        entryType: entryType,
         name: shouldReveal ? (res.game_name || '???') : '???',
-        stageNumber: res.exit_number,
-        stageName: shouldReveal ? res.stage_description : null,
+        stageNumber: res.levelnumber || res.exit_number || null,
+        stageName: shouldReveal ? (res.levelname || res.stage_description) : null,
+        transLevel: res.translevel || null,
         count: 1,
         isLocked: true,
         conditions: parsedConditions,

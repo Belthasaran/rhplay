@@ -325,6 +325,10 @@ async function createPatchedSFC(params) {
   }
 }
 
+function stripleadingzeros(strval) {
+        return strval.replace(/^0+/, '');
+}
+
 /**
  * Stage all games for a run
  * @param {Object} params
@@ -429,8 +433,12 @@ async function stageRunGames(params) {
         }
         
         // Build global params with levelnumber
+        // glevelnum is padded to 3 hex digits, glevelnum_s is the same without leading zeros
+        const levelnumHex = (result.levelnumber || '').toString().trim().toUpperCase();
+        const glevelnum = levelnumHex.padStart(3, '0').slice(0, 3);
         const globalParams = {
-          glevelnum: result.levelnumber || '',
+          glevelnum: glevelnum,
+          glevelnum_s: stripleadingzeros(glevelnum),
           gonoffv: []
         };
         
@@ -481,7 +489,7 @@ async function stageRunGames(params) {
               gameId: result.gameid,
               gameVersion: result.version || 1,
               selectedPatches,
-              globalParams: { glevelnum: '', gonoffv: [] },
+              globalParams: { glevelnum: '', glevelnum_s: '', gonoffv: [] },
               localParams: {},
               action: 'build',
               vanillaRomPath,
@@ -1240,6 +1248,25 @@ async function applyAsarPatch(params) {
   const { patch, inputSfcPath, outputSfcPath, globalParams, localParams, asarPath } = params;
   
   try {
+    // Normalize globalParams: ensure glevelnum is padded to 3 hex digits and glevelnum_s is derived
+    if (globalParams) {
+      if (globalParams.glevelnum !== undefined && globalParams.glevelnum !== null && globalParams.glevelnum !== '') {
+        // Normalize glevelnum: pad to 3 hex digits
+        const levelnumHex = globalParams.glevelnum.toString().trim().toUpperCase().replace(/[^0-9A-F]/g, '');
+        globalParams.glevelnum = levelnumHex.padStart(3, '0').slice(0, 3);
+        // Automatically derive glevelnum_s from glevelnum (strip leading zeros)
+        globalParams.glevelnum_s = stripleadingzeros(globalParams.glevelnum);
+      } else if (globalParams.glevelnum_s !== undefined && globalParams.glevelnum_s !== null && globalParams.glevelnum_s !== '') {
+        // If glevelnum_s is set but glevelnum is not, derive glevelnum from glevelnum_s
+        const levelnumHex = globalParams.glevelnum_s.toString().trim().toUpperCase().replace(/[^0-9A-F]/g, '');
+        globalParams.glevelnum = levelnumHex.padStart(3, '0').slice(0, 3);
+      } else {
+        // Both are empty, ensure they're both empty strings
+        globalParams.glevelnum = '';
+        globalParams.glevelnum_s = '';
+      }
+    }
+    
     // Find ASAR binary if not provided
     let asarBinary = asarPath;
     if (!asarBinary) {
@@ -1291,6 +1318,8 @@ async function applyAsarPatch(params) {
           // Fallback to specific known global params for backwards compatibility
           if (inputVar === 'glevelnum') {
             value = globalParams?.glevelnum;
+          } else if (inputVar == 'glevelnum_s') {
+	    value = globalParams?.glevelnum_s;
           } else if (inputVar === 'gonoffv') {
             // Convert bit array to value
             if (Array.isArray(globalParams?.gonoffv)) {
@@ -1728,6 +1757,8 @@ async function applyUberASMTreePatch(params) {
           // Fallback to specific known global params for backwards compatibility
           if (inputVar === 'glevelnum') {
             value = globalParams?.glevelnum;
+          } else if (inputVar == 'glevelnum_s') {
+            value = globalParams?.glevelnum_s;
           } else if (inputVar === 'gonoffv') {
             // Convert bit array to value
             if (Array.isArray(globalParams?.gonoffv)) {

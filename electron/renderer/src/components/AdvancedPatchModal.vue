@@ -635,7 +635,7 @@ const gameGenieCodesError = ref('');
 
 // Known valid input parameter names
 const VALID_INPUT_PARAMS = [
-  'glevelnum', 'gonoffv',
+  'glevelnum', 'glevelnum_s', 'gonoffv',
   'local1', 'local2', 'local3', 'local4',
   'local5', 'local6', 'local7', 'local8',
   'local9', 'local10',
@@ -701,7 +701,7 @@ function loadState() {
 // Reset to defaults
 function resetToDefaults() {
   selectedPatches.value = [];
-  globalParams.value = { glevelnum: '', gonoffv: [] };
+  globalParams.value = { glevelnum: '', glevelnum_s: '', gonoffv: [] };
   localParams.value = {};
   localStorage.removeItem(getStorageKey());
 }
@@ -1508,6 +1508,7 @@ function handleStageSelected(stage: any) {
     const hexStr = typeof stage.levelnumber === 'string' ? stage.levelnumber.trim().toUpperCase() : stage.levelnumber.toString(16).toUpperCase();
     // Ensure it's 3 digits, pad with zeros
     globalParams.value.glevelnum = hexStr.padStart(3, '0').slice(0, 3);
+    globalParams.value.glevelnum_s = hexStr.replace(/^0+/, '');
   }
   
   // Automatically select requisite patches if any

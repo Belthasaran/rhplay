@@ -344,6 +344,14 @@
             {{ saving ? 'Saving...' : 'Save All' }}
           </button>
           <button 
+            v-if="currentMode === 'select' && selectedStageUuid && props.showAddToRunButton" 
+            @click="addStageToRun" 
+            class="btn-primary"
+            :disabled="!selectedStageUuid"
+          >
+            Add Stage to Run
+          </button>
+          <button 
             v-if="currentMode === 'select' && selectedStageUuid" 
             @click="confirmSelection" 
             class="btn-primary"
@@ -522,15 +530,18 @@ interface GameStage {
 interface Props {
   isOpen: boolean;
   gameId: string;
+  gameName?: string;
   gameVersion?: number | null;
   mode?: 'select' | 'edit'; // 'select' for selecting a level, 'edit' for editing stages
-  initialLevelNumber?: number | null; // For selecting a specific level when opening
+  initialLevelNumber?: string | null; // For selecting a specific level when opening (hex string)
+  showAddToRunButton?: boolean;  // Show "Add Stage to Run" button in footer
 }
 
 const props = withDefaults(defineProps<Props>(), {
   gameVersion: null,
   mode: 'select',
   initialLevelNumber: null,
+  showAddToRunButton: false,
 });
 
 // Make mode reactive so we can switch it
@@ -540,6 +551,7 @@ const emit = defineEmits<{
   close: [];
   select: [stage: GameStage];
   saved: [];
+  'add-to-run': [stage: GameStage];
 }>();
 
 const loading = ref(false);
@@ -950,6 +962,16 @@ function confirmSelection() {
     const stage = stages.value.find(s => s.stage_uuid === selectedStageUuid.value);
     if (stage) {
       emit('select', stage);
+      close();
+    }
+  }
+}
+
+function addStageToRun() {
+  if (selectedStageUuid.value) {
+    const stage = stages.value.find(s => s.stage_uuid === selectedStageUuid.value);
+    if (stage) {
+      emit('add-to-run', stage);
       close();
     }
   }

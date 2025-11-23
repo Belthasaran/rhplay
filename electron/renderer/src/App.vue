@@ -1133,9 +1133,55 @@
           </label>
           <button @click="regenerateSeed" title="Generate new random seed">🎲</button>
           <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Game</button>
+          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stage</button>
+          <div class="stage-limits-wrapper">
+            <button @click="toggleStageLimitsDropdown" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
+              Stage Limits ▼
+            </button>
+            <div v-if="stageLimitsDropdownOpen" class="stage-limits-dropdown" @click.stop>
+              <div class="stage-limits-section">
+                <label>
+                  Min Difficulty (1-7)
+                  <select v-model="stageFilter.minDifficulty">
+                    <option :value="null">(any)</option>
+                    <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                  </select>
+                </label>
+                <label>
+                  Max Difficulty (1-7)
+                  <select v-model="stageFilter.maxDifficulty">
+                    <option :value="null">(any)</option>
+                    <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                  </select>
+                </label>
+              </div>
+              <div class="stage-limits-section">
+                <div class="stage-flags-row">
+                  <label class="stage-flags-label">Include flags:</label>
+                  <label v-for="flag in stageFlags" :key="flag.code" class="stage-flag-checkbox">
+                    <input type="checkbox" :value="flag.code" v-model="stageFilter.includeFlags" />
+                    <span>{{ flag.code }}</span>
+                    <span class="flag-name">{{ flag.name }}</span>
+                  </label>
+                </div>
+                <div class="stage-flags-row">
+                  <label class="stage-flags-label">Exclude flags:</label>
+                  <label v-for="flag in stageFlags" :key="flag.code" class="stage-flag-checkbox">
+                    <input type="checkbox" :value="flag.code" v-model="stageFilter.excludeFlags" />
+                    <span>{{ flag.code }}</span>
+                    <span class="flag-name">{{ flag.name }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
           <span v-if="randomMatchCount !== null" class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
             {{ randomMatchCount }} games match
             <span v-if="randomMatchCountError" class="error-text"> (need {{ (randomFilter.count || 0) + 2 }}+)</span>
+          </span>
+          <span v-if="randomStageMatchCount !== null" class="match-count-indicator" :class="{ 'insufficient': randomStageMatchCountError }">
+            {{ randomStageMatchCount }} stages match
+            <span v-if="randomStageMatchCountError" class="error-text"> (need {{ (randomFilter.count || 0) + 2 }}+)</span>
           </span>
         </div>
       </section>
@@ -1156,6 +1202,7 @@
                 <th>Entry Type</th>
                 <th>Name</th>
                 <th>Stage #</th>
+                <th>Trans Lvl</th>
                 <th>Stage name</th>
                 <th class="col-count">Count</th>
                 <th>Filter difficulty</th>
@@ -1205,6 +1252,7 @@
                 </td>
                 <td>{{ entry.name }}</td>
                 <td>{{ entry.stageNumber ?? '' }}</td>
+                <td>{{ entry.transLevel ?? '' }}</td>
                 <td>{{ entry.stageName ?? '' }}</td>
                 <td class="col-count">
                   <input 
@@ -6157,8 +6205,10 @@
   :game-name="selectedItem?.Name || ''"
   :game-version="selectedVersion"
   mode="select"
+  :show-add-to-run-button="true"
   @close="showGameStagesDialog = false"
   @select="handleStageSelected"
+  @add-to-run="handleAddStageToRunFromDialog"
 />
 
   <!-- Upload File Modal (standalone) -->
@@ -15367,6 +15417,33 @@ function handleAddStageToRun() {
   openGameStagesDialog();
 }
 
+function handleAddStageToRunFromDialog(stage: any) {
+  // Add the selected stage to the run
+  if (!selectedItem.value?.Id) {
+    alert('No game selected');
+    return;
+  }
+  
+  const key = `stage-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  runEntries.push({
+    key,
+    id: selectedItem.value.Id,
+    entryType: 'stage',
+    name: selectedItem.value.Name || 'Unknown Game',
+    stageNumber: stage.levelnumber || '',
+    stageName: stage.levelname || '',
+    transLevel: stage.translevel_13bf || '',
+    count: 1,
+    isLocked: true,  // Stage entries are locked (can't change entry type)
+    conditions: [],
+  });
+  
+  // Open run modal if not already open
+  if (!runModalOpen.value) {
+    runModalOpen.value = true;
+  }
+}
+
 async function handleAdvancedPatchBuild(options: {
   gameId: string;
   gameVersion: number;
@@ -16539,11 +16616,18 @@ type RunEntry = {
   name: string;
   stageNumber?: string;
   stageName?: string;
+  transLevel?: string;  // Translevel (13BF value) for stage entries
   count: number;
   filterDifficulty?: '' | 'beginner' | 'intermediate' | 'expert';
   filterType?: '' | 'standard' | 'kaizo' | 'traditional';
   filterPattern?: string;
+  // Stage-specific filters (for random_stage entries)
+  stageFilterMinDifficulty?: number | null;  // 1-7, null = no filter
+  stageFilterMaxDifficulty?: number | null;  // 1-7, null = no filter
+  stageFilterIncludeFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
+  stageFilterExcludeFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
   seed?: string;
+  matchCount?: number | null;  // Store match count for random entries
   isLocked?: boolean;  // If true, entry type cannot be changed
   conditions: ChallengeCondition[];  // Challenge conditions for this entry
 };
@@ -16851,6 +16935,27 @@ const randomFilter = reactive({ type: 'any', difficulty: 'any', pattern: '', cou
 const randomFilterValues = ref<{difficulties: string[], types: string[]}>({ difficulties: [], types: [] });
 const randomMatchCount = ref<number | null>(null);
 const randomMatchCountError = ref<string>('');
+const randomStageMatchCount = ref<number | null>(null);
+const randomStageMatchCountError = ref<string>('');
+const stageLimitsDropdownOpen = ref(false);
+
+// Stage filter configuration
+const stageFlags = [
+  { code: 'M', name: 'mainexit' },
+  { code: 'K', name: 'keyhole' },
+  { code: 'G', name: 'ghosthouse' },
+  { code: 'S', name: 'switchpalace' },
+  { code: 'Ca', name: 'castle' },
+  { code: 'Bo', name: 'boss' }
+];
+
+const stageFilter = reactive({
+  minDifficulty: null as number | null,
+  maxDifficulty: null as number | null,
+  includeFlags: ['M', 'K', 'G', 'S', 'Ca', 'Bo'] as string[],  // Default: all flags included
+  excludeFlags: [] as string[]
+});
+
 const isRandomAddValid = computed(() => {
   const validCount = typeof randomFilter.count === 'number' && randomFilter.count >= 1 && randomFilter.count <= 100;
   // If we have a match count, ensure it's sufficient (count + 2)
@@ -16860,6 +16965,20 @@ const isRandomAddValid = computed(() => {
   }
   return validCount;
 });
+
+const isRandomStageAddValid = computed(() => {
+  const validCount = typeof randomFilter.count === 'number' && randomFilter.count >= 1 && randomFilter.count <= 100;
+  // If we have a match count, ensure it's sufficient (count + 2)
+  if (randomStageMatchCount.value !== null) {
+    const requiredCount = (randomFilter.count || 0) + 2;
+    return validCount && randomStageMatchCount.value >= requiredCount;
+  }
+  return validCount;
+});
+
+function toggleStageLimitsDropdown() {
+  stageLimitsDropdownOpen.value = !stageLimitsDropdownOpen.value;
+}
 
 // Watch for random filter changes to update match count
 watch(() => [randomFilter.type, randomFilter.difficulty, randomFilter.pattern, randomFilter.count], async () => {
@@ -16986,6 +17105,79 @@ async function addRandomGameToRun() {
     matchCount: randomMatchCount.value,  // Store the match count for display
     isLocked: false,  // Can change between random_game and random_stage
     conditions: [],  // Challenge conditions
+  });
+  
+  // Generate new seed for next entry
+  regenerateSeed();
+}
+
+async function addRandomStageToRun() {
+  if (!isRandomStageAddValid.value) return;
+  
+  // Count matching stages (requires both game filters AND stage filters)
+  try {
+    // TODO: Implement IPC handler for counting random stages
+    // For now, we'll use a placeholder count
+    const result = await (window as any).electronAPI.countRandomStageMatches({
+      filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
+      filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
+      filterPattern: randomFilter.pattern || '',
+      stageMinDifficulty: stageFilter.minDifficulty,
+      stageMaxDifficulty: stageFilter.maxDifficulty,
+      stageIncludeFlags: stageFilter.includeFlags,
+      stageExcludeFlags: stageFilter.excludeFlags
+    });
+    
+    if (result.success) {
+      randomStageMatchCount.value = result.count;
+      const requiredCount = (randomFilter.count || 0) + 2;
+      
+      if (result.count < requiredCount) {
+        randomStageMatchCountError.value = `Insufficient stages: ${result.count} match filters, but need at least ${requiredCount} (count + 2)`;
+        alert(`Cannot add random stage:\n\n${randomStageMatchCountError.value}\n\nPlease adjust your filters to match more stages.`);
+        return;
+      }
+      
+      randomStageMatchCountError.value = '';
+    }
+  } catch (error) {
+    console.error('Error counting random stage matches:', error);
+    // If IPC handler doesn't exist yet, proceed with warning
+    console.warn('Random stage matching not yet implemented, proceeding without validation');
+    randomStageMatchCount.value = null;
+    randomStageMatchCountError.value = '';
+  }
+  
+  const key = `rand-stage-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const seed = (randomFilter.seed && randomFilter.seed.trim().length > 0)
+    ? randomFilter.seed.trim()
+    : '';
+  
+  if (!seed) {
+    alert('Seed is required for random challenges. Please wait for seed generation or enter manually.');
+    return;
+  }
+  
+  runEntries.push({
+    key,
+    id: '(random)',
+    entryType: 'random_stage',
+    name: 'Random Stage',
+    stageNumber: '',
+    stageName: '',
+    transLevel: '',
+    count: (randomFilter.count as number) || 1,
+    filterDifficulty: randomFilter.difficulty === 'any' ? '' : (randomFilter.difficulty as any),
+    filterType: randomFilter.type === 'any' ? '' : (randomFilter.type as any),
+    filterPattern: randomFilter.pattern || '',
+    stageFilterMinDifficulty: stageFilter.minDifficulty,
+    stageFilterMaxDifficulty: stageFilter.maxDifficulty,
+    stageFilterIncludeFlags: [...stageFilter.includeFlags],
+    stageFilterExcludeFlags: [...stageFilter.excludeFlags],
+    seed,
+    matchCount: randomStageMatchCount.value,
+    isLocked: false,
+    conditions: [],
   });
   
   // Generate new seed for next entry
@@ -20234,6 +20426,91 @@ button:disabled {
 }
 .match-count-indicator .error-text {
   font-weight: 600;
+}
+.stage-limits-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.btn-stage-limits {
+  padding: 6px 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.btn-stage-limits:hover {
+  background-color: var(--bg-tertiary);
+}
+.btn-stage-limits.active {
+  background-color: var(--bg-hover);
+}
+.stage-limits-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  padding: 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  min-width: 300px;
+}
+.stage-limits-section {
+  margin-bottom: 12px;
+}
+.stage-limits-section:last-child {
+  margin-bottom: 0;
+}
+.stage-limits-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.stage-limits-section select {
+  width: 100%;
+  padding: 4px 8px;
+  margin-top: 4px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.stage-flags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.stage-flags-label {
+  font-weight: bold;
+  min-width: 100px;
+  margin-bottom: 0 !important;
+}
+.stage-flag-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0 !important;
+  font-size: 12px;
+}
+.stage-flag-checkbox input[type="checkbox"] {
+  margin: 0;
+}
+.stage-flag-checkbox span {
+  font-weight: bold;
+  min-width: 24px;
+}
+.stage-flag-checkbox .flag-name {
+  font-weight: normal;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 .modal-toolbar .count { width: 80px; padding: 6px 8px; }
 .modal-toolbar .seed { min-width: 160px; padding: 6px 8px; }

@@ -52,6 +52,18 @@
     - `rhpakuuid` is set when stages are installed from an RHPAK
     - `extradescription` is optional and editable via GameStagesDialog notepad icon
     - Index created on `rhpakuuid` for efficient queries during RHPAK uninstall
+
+- 2025-01-XX: rhdata - Add `water` flag to `gamestages` table
+  - Description: Add `water` flag column to track water levels in gamestages
+  - Rationale: Support filtering and querying stages by water level status, similar to other boolean flags (castle, troll, boss, etc.)
+  - Tables/columns:
+    - `gamestages`:
+      - `water` INTEGER DEFAULT 0 (0 = not a water level, 1 = water level)
+  - Migration: `rhdata_045_gamestages_water_flag` via `jsutils/migratedb.js`
+  - Notes:
+    - Follows the same pattern as other boolean flags (playable, castle, troll, boss, secret, etc.)
+    - Defaults to 0 for existing stages
+    - Can be used for filtering stages in run planning and stage selection
 # Database Schema Changes Log
 
 ## Purpose

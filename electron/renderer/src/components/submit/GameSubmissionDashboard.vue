@@ -452,11 +452,23 @@
         </div>
       </div>
     </div>
+
+    <!-- Game Stages Dialog for submission editor -->
+    <GameStagesDialog
+      :is-open="showStagesDialog"
+      :game-id="current?.meta?.gameid || 'draft'"
+      :game-name="current?.meta?.name || 'Draft Submission'"
+      :game-version="current?.meta?.version || 1"
+      mode="edit"
+      @close="showStagesDialog = false"
+      @saved="handleStagesSaved"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import GameStagesDialog from '../GameStagesDialog.vue';
 // Predefined tags loaded from text file (one tag per line)
 // Vite raw import to get file contents as string
 // File: electron/renderer/src/components/submit/smwtags.txt

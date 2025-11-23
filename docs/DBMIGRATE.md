@@ -42,6 +42,24 @@
     - Safe to run multiple times; script skips applied migrations
     - Existing stages will have `rhpakuuid = NULL` (not installed via RHPAK)
     - `extradescription` is optional and can be edited via GameStagesDialog notepad icon
+
+- 2025-01-XX — Add water flag to rhdata gamestages
+  - Purpose: Add `water` flag column to `gamestages` table to track water levels
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_045_gamestages_water_flag`
+    - SQL: `electron/sql/migrations/045_rhdata_gamestages_water_flag.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome: `gamestages` table gains `water` column (INTEGER, defaults to 0); no data loss for existing stages
+  - Notes:
+    - Safe to run multiple times; script skips applied migrations
+    - Follows the same pattern as other boolean flags (castle, troll, boss, secret, etc.)
+    - Existing stages will have `water = 0` (not a water level)
+    - Can be used for filtering stages in run planning and stage selection
 # Database Migration Commands
 
 ## Purpose

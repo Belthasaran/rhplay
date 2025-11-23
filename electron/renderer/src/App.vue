@@ -18031,13 +18031,30 @@ async function startRun() {
           }
         }
         
+        // Use entry_type from results (includes random_stage, random_game, stage, game)
+        // Fallback to inferring from was_random for backwards compatibility
+        const entryType = res.entry_type || (res.was_random ? 'random_game' : 'game');
+        
+        // For stage entries, use levelnumber/translevel/levelname from results
+        const isStageEntry = entryType === 'stage' || entryType === 'random_stage';
+        const stageNumber = isStageEntry ? (res.levelnumber || res.exit_number || '') : (res.exit_number || '');
+        const transLevel = isStageEntry ? (res.translevel || '') : '';
+        const stageName = isStageEntry 
+          ? (shouldReveal ? (res.levelname || res.stage_description || null) : null)
+          : (shouldReveal ? res.stage_description : null);
+        
         return {
           key: res.result_uuid,
           id: shouldReveal ? (res.gameid || '(random)') : '(random)',
-          entryType: res.was_random ? 'random_game' : 'game',
+          entryType: entryType,
           name: shouldReveal ? (res.game_name || '???') : '???',
-          stageNumber: res.exit_number,
-          stageName: shouldReveal ? res.stage_description : null,
+          stageNumber: stageNumber,
+          transLevel: transLevel,
+          stageName: stageName,
+          // Also include levelnumber, translevel, levelname for compatibility
+          levelnumber: res.levelnumber || null,
+          translevel: res.translevel || null,
+          levelname: res.levelname || null,
           count: 1,  // Each result is now a single challenge
           isLocked: true,  // All entries locked during active run
           conditions: parsedConditions,
@@ -18436,13 +18453,19 @@ async function revealCurrentChallenge(revealedEarly: boolean = false) {
         console.log('[revealCurrentChallenge] Before update - entry.id:', challenge.id, 'entry.name:', challenge.name);
         
         // Create completely new object without spreading old challenge
+        // Preserve stage information for stage entries
         const updatedEntry = {
           key: challenge.key,
           id: result.gameid,
-          entryType: challenge.entryType,
+          entryType: challenge.entryType,  // Preserve entryType (random_stage, random_game, etc.)
           name: result.gameName,
-          stageNumber: challenge.stageNumber,
-          stageName: result.gameType || challenge.stageName,
+          stageNumber: challenge.stageNumber || (challenge as any).levelnumber || '',
+          transLevel: challenge.transLevel || (challenge as any).translevel || '',
+          stageName: result.gameType || challenge.stageName || (challenge as any).levelname || null,
+          // Also preserve levelnumber, translevel, levelname for compatibility
+          levelnumber: (challenge as any).levelnumber || null,
+          translevel: (challenge as any).translevel || null,
+          levelname: (challenge as any).levelname || null,
           count: challenge.count,
           isLocked: challenge.isLocked,
           conditions: challenge.conditions,

@@ -1119,8 +1119,8 @@
           <div class="challenge-info-line2" v-if="currentChallenge.stageNumber || currentChallenge.levelnumber || currentStageDifficulty !== null || currentChallenge.difficulty">
             <span class="challenge-level-info" v-if="currentChallenge.stageNumber || currentChallenge.levelnumber">
               <span class="challenge-level-number">{{ currentChallenge.stageNumber || currentChallenge.levelnumber }}</span>
-              <span class="challenge-stage-name" v-if="currentChallenge.stageName || currentChallenge.levelname">
-                {{ currentChallenge.stageName || currentChallenge.levelname }}
+              <span class="challenge-stage-name" v-if="currentStageInfo.levelname || currentChallenge.stageName || currentChallenge.levelname">
+                {{ currentStageInfo.levelname || currentChallenge.stageName || currentChallenge.levelname }}
               </span>
             </span>
             <span class="challenge-difficulty" v-if="currentStageDifficulty !== null || currentChallenge.difficulty">
@@ -1128,7 +1128,7 @@
                 {{ currentStageDifficulty }} {{ formatStageDifficulty(currentStageDifficulty) }}
               </span>
               <span v-else-if="currentChallenge.difficulty">
-                {{ formatGameDifficulty(currentChallenge.difficulty) }}
+                {{ currentChallenge.difficulty }} {{ formatGameDifficulty(currentChallenge.difficulty) }}
               </span>
             </span>
           </div>
@@ -1140,7 +1140,13 @@
               class="btn-difficulty-dropdown"
               :class="{ 'active': currentStageFeedback?.difficulty_feedback !== null && currentStageFeedback?.difficulty_feedback !== undefined }"
             >
-              Set Difficulty Feedback <span class="dropdown-arrow">▼</span>
+              <span v-if="currentStageDifficulty !== null">
+                Set Feedback on Difficulty Level ({{ currentStageDifficulty }} - {{ formatStageDifficulty(currentStageDifficulty) }})
+              </span>
+              <span v-else>
+                Set Difficulty Feedback
+              </span>
+              <span class="dropdown-arrow">▼</span>
             </button>
           </div>
           <button @click="openStageCommentDialog" class="btn-comment" :class="{ 'has-comment': currentStageFeedback?.comment }">
@@ -17017,6 +17023,7 @@ const stageNotesList = ref<any[]>([]);
 const stageCommentDialogOpen = ref(false);
 const stageCommentText = ref('');
 const difficultyDropdownOpen = ref(false);
+const currentStageInfo = ref<{ difficulty: number | null; levelname: string | null }>({ difficulty: null, levelname: null });
 
 const isCurrentChallengeRandomStage = computed(() => {
   if (!currentChallenge.value) return false;
@@ -17025,13 +17032,17 @@ const isCurrentChallengeRandomStage = computed(() => {
 });
 
 const currentStageDifficulty = computed(() => {
+  // Use the reactive ref first, then fall back to challenge object
+  if (currentStageInfo.value.difficulty !== null) {
+    return currentStageInfo.value.difficulty;
+  }
   if (!currentChallenge.value) return null;
   const challenge = currentChallenge.value as any;
   // Try to get stage difficulty from gamestages table if we have levelnumber
   if (challenge.stageNumber || challenge.levelnumber) {
-    // This will need to be loaded from database - for now return null
-    // We'll load it when challenge changes
-    return challenge.stageDifficulty || null;
+    // Return the stageDifficulty if it's been loaded, otherwise return null
+    // This will be loaded asynchronously when challenge changes
+    return challenge.stageDifficulty !== undefined ? challenge.stageDifficulty : null;
   }
   return null;
 });
@@ -17057,13 +17068,23 @@ watch(currentChallengeIndex, async (newIndex, oldIndex) => {
     const levelnumber = challenge.stageNumber || challenge.levelnumber;
     if (gameid && levelnumber) {
       try {
-        // Load stage info to get difficulty
+        // Load stage info to get difficulty and levelname
         const stageInfo = await (window as any).electronAPI.getStageInfo({
           gameid,
           levelnumber
         });
         if (stageInfo) {
+          currentStageInfo.value = {
+            difficulty: stageInfo.difficulty !== undefined ? stageInfo.difficulty : null,
+            levelname: stageInfo.levelname || null
+          };
+          // Also update challenge object for backwards compatibility
           (challenge as any).stageDifficulty = stageInfo.difficulty;
+          if (stageInfo.levelname) {
+            (challenge as any).levelname = stageInfo.levelname;
+          }
+        } else {
+          currentStageInfo.value = { difficulty: null, levelname: null };
         }
         
         // Load feedback
@@ -17075,10 +17096,12 @@ watch(currentChallengeIndex, async (newIndex, oldIndex) => {
       } catch (error) {
         console.error('Error loading stage info/feedback:', error);
         currentStageFeedback.value = null;
+        currentStageInfo.value = { difficulty: null, levelname: null };
       }
     }
   } else {
     currentStageFeedback.value = null;
+    currentStageInfo.value = { difficulty: null, levelname: null };
   }
   
   // Close difficulty dropdown when challenge changes

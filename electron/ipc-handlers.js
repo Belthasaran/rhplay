@@ -5718,6 +5718,28 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get stage info (difficulty, levelname) for a specific gameid and levelnumber
+   * Channel: db:stage:get-info
+   */
+  ipcMain.handle('db:stage:get-info', async (event, { gameid, levelnumber }) => {
+    try {
+      const db = dbManager.getConnection('rhdata');
+      
+      const stage = db.prepare(`
+        SELECT difficulty, levelname
+        FROM gamestages
+        WHERE gameid = ? AND levelnumber = ?
+        LIMIT 1
+      `).get(gameid, levelnumber);
+      
+      return stage || null;
+    } catch (error) {
+      console.error('Error getting stage info:', error);
+      return null;
+    }
+  });
+
+  /**
    * Get stage feedback for a specific gameid and levelnumber
    * Channel: db:stage:get-feedback
    */

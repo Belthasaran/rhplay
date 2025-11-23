@@ -25,6 +25,23 @@
   - Prerequisites: Ensure app is closed or DB not locked
   - Expected outcome: `game_submission_drafts` table and indexes exist; no data loss for existing tables
   - Notes: Safe to run multiple times; script skips applied migrations
+
+- 2025-01-XX — Extend rhdata gamestages for RHPAK support
+  - Purpose: Add `rhpakuuid` and `extradescription` columns to `gamestages` table to support installing/uninstalling gamestages from RHPAK files
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_044_gamestages_rhpak_support`
+    - SQL: `electron/sql/migrations/044_rhdata_gamestages_rhpak_support.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome: `gamestages` table gains `rhpakuuid` and `extradescription` columns; index created on `rhpakuuid`; no data loss for existing stages
+  - Notes:
+    - Safe to run multiple times; script skips applied migrations
+    - Existing stages will have `rhpakuuid = NULL` (not installed via RHPAK)
+    - `extradescription` is optional and can be edited via GameStagesDialog notepad icon
 # Database Migration Commands
 
 ## Purpose

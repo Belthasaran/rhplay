@@ -739,6 +739,37 @@ function registerDatabaseHandlers(dbManager) {
           attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
           resources: []
         };
+        // Include gamestages if present in draft
+        if (meta.gamestages && Array.isArray(meta.gamestages) && meta.gamestages.length > 0) {
+          skel.gamestages = meta.gamestages.map((stage) => ({
+            gameid: genId,
+            levelnumber: stage.levelnumber || null,
+            levelname: stage.levelname || 'New Stage',
+            versions: stage.versions || '*',
+            submapid: stage.submapid || null,
+            translevel_13bf: stage.translevel_13bf || null,
+            tile_x: stage.tile_x || null,
+            tile_y: stage.tile_y || null,
+            requisites: stage.requisites || null,
+            playable: stage.playable ?? 1,
+            rando: stage.rando ?? 1,
+            difficulty: stage.difficulty ?? 0,
+            mainexit: stage.mainexit ?? 1,
+            keyhole: stage.keyhole ?? 0,
+            credits: stage.credits ?? 0,
+            ghouse: stage.ghouse ?? 0,
+            spalace: stage.spalace ?? 0,
+            castle: stage.castle ?? 0,
+            boss: stage.boss ?? 0,
+            secret: stage.secret ?? 0,
+            troll: stage.troll ?? 0,
+            final: stage.final ?? 0,
+            lock: stage.lock ?? 0,
+            playlevel_patch_code: stage.playlevel_patch_code || null,
+            excluded_patchcodes: stage.excluded_patchcodes || null,
+            extradescription: stage.extradescription || null
+          }));
+        }
         // Save to temp path so newgame can load it
         const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
         fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
@@ -849,6 +880,37 @@ function registerDatabaseHandlers(dbManager) {
           attachment: { auuid: (typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : `${Date.now().toString(16)}${Math.random().toString(16).slice(2,10)}` },
           resources: []
         };
+        // Include gamestages if present in draft
+        if (meta.gamestages && Array.isArray(meta.gamestages) && meta.gamestages.length > 0) {
+          skel.gamestages = meta.gamestages.map((stage) => ({
+            gameid: genId,
+            levelnumber: stage.levelnumber || null,
+            levelname: stage.levelname || 'New Stage',
+            versions: stage.versions || '*',
+            submapid: stage.submapid || null,
+            translevel_13bf: stage.translevel_13bf || null,
+            tile_x: stage.tile_x || null,
+            tile_y: stage.tile_y || null,
+            requisites: stage.requisites || null,
+            playable: stage.playable ?? 1,
+            rando: stage.rando ?? 1,
+            difficulty: stage.difficulty ?? 0,
+            mainexit: stage.mainexit ?? 1,
+            keyhole: stage.keyhole ?? 0,
+            credits: stage.credits ?? 0,
+            ghouse: stage.ghouse ?? 0,
+            spalace: stage.spalace ?? 0,
+            castle: stage.castle ?? 0,
+            boss: stage.boss ?? 0,
+            secret: stage.secret ?? 0,
+            troll: stage.troll ?? 0,
+            final: stage.final ?? 0,
+            lock: stage.lock ?? 0,
+            playlevel_patch_code: stage.playlevel_patch_code || null,
+            excluded_patchcodes: stage.excluded_patchcodes || null,
+            extradescription: stage.extradescription || null
+          }));
+        }
         const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
         fs.writeFileSync(tmp, JSON.stringify(skel, null, 2), 'utf8');
         skeletonPath = tmp;

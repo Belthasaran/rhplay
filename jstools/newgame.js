@@ -2874,6 +2874,78 @@ function upsertAttachment(db, skeleton, artifact) {
   at.rhpakuuid = rhpakuuid;
 }
 
+function upsertGamestages(db, skeleton) {
+  const gv = skeleton.gameversion;
+  const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
+  if (!rhpakuuid) {
+    throw new Error('rhpakuuid metadata missing for gamestages upsert.');
+  }
+  if (!gv.gameid) {
+    throw new Error('gameid missing for gamestages upsert.');
+  }
+  
+  const stages = skeleton.gamestages || [];
+  if (stages.length === 0) {
+    return; // No stages to upsert
+  }
+  
+  // First, remove any existing stages for this gameid that belong to this rhpak
+  // (to handle updates where stages were removed)
+  db.prepare('DELETE FROM gamestages WHERE gameid = ? AND rhpakuuid = ?').run(gv.gameid, rhpakuuid);
+  
+  // Insert all stages from skeleton
+  const insertStmt = db.prepare(`
+    INSERT INTO gamestages (
+      stage_uuid, gameid, levelnumber, levelname, versions, submapid,
+      translevel_13bf, tile_x, tile_y, requisites,
+      playable, rando, difficulty, mainexit, keyhole, credits,
+      ghouse, spalace, castle, boss, secret, troll, final, lock,
+      playlevel_patch_code, excluded_patchcodes, extradescription, rhpakuuid
+    )
+    VALUES (
+      @stage_uuid, @gameid, @levelnumber, @levelname, @versions, @submapid,
+      @translevel_13bf, @tile_x, @tile_y, @requisites,
+      @playable, @rando, @difficulty, @mainexit, @keyhole, @credits,
+      @ghouse, @spalace, @castle, @boss, @secret, @troll, @final, @lock,
+      @playlevel_patch_code, @excluded_patchcodes, @extradescription, @rhpakuuid
+    )
+  `);
+  
+  for (const stage of stages) {
+    const stageUuid = stage.stage_uuid || generateUuid();
+    insertStmt.run({
+      stage_uuid: stageUuid,
+      gameid: gv.gameid,
+      levelnumber: stage.levelnumber || null,
+      levelname: stage.levelname || 'New Stage',
+      versions: stage.versions || '*',
+      submapid: stage.submapid || null,
+      translevel_13bf: stage.translevel_13bf || null,
+      tile_x: stage.tile_x || null,
+      tile_y: stage.tile_y || null,
+      requisites: stage.requisites || null,
+      playable: stage.playable ?? 1,
+      rando: stage.rando ?? 1,
+      difficulty: stage.difficulty ?? 0,
+      mainexit: stage.mainexit ?? 1,
+      keyhole: stage.keyhole ?? 0,
+      credits: stage.credits ?? 0,
+      ghouse: stage.ghouse ?? 0,
+      spalace: stage.spalace ?? 0,
+      castle: stage.castle ?? 0,
+      boss: stage.boss ?? 0,
+      secret: stage.secret ?? 0,
+      troll: stage.troll ?? 0,
+      final: stage.final ?? 0,
+      lock: stage.lock ?? 0,
+      playlevel_patch_code: stage.playlevel_patch_code || null,
+      excluded_patchcodes: stage.excluded_patchcodes || null,
+      extradescription: stage.extradescription || null,
+      rhpakuuid: rhpakuuid
+    });
+  }
+}
+
 function upsertPatchRecord(db, skeleton, artifact) {
   const gv = skeleton.gameversion;
   const rhpakuuid = (skeleton.metadata && skeleton.metadata.rhpakuuid) || gv.rhpakuuid;
@@ -3597,6 +3669,7 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
       upsertPatchblob(rhdataDb, skeleton, patchArtifact);
       upsertPatchblobExtended(rhdataDb, skeleton, patchArtifact);
       upsertPatchRecord(rhdataDb, skeleton, patchArtifact);
+      upsertGamestages(rhdataDb, skeleton);
       upsertRhpakRecord(rhdataDb, skeleton);
     });
     const transactionAttachment = patchbinDb.transaction(() => {

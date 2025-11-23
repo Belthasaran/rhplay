@@ -38,6 +38,20 @@
       - `state` TEXT NOT NULL DEFAULT 'draft'
   - Migration: `clientdata_032_game_submission_drafts` via `jsutils/migratedb.js`
   - Notes: Indexes added on submitter, state, and updated_at_utc
+
+- 2025-01-XX: rhdata - Extend `gamestages` table for RHPAK support
+  - Description: Add `rhpakuuid` and `extradescription` columns to support installing/uninstalling gamestages from RHPAK files
+  - Rationale: Allow gamestages to be packaged in RHPAKs and installed/uninstalled along with their parent gameversion, similar to how patchblobs and attachments work
+  - Tables/columns:
+    - `gamestages`:
+      - `rhpakuuid` TEXT (nullable, added via ALTER TABLE)
+      - `extradescription` TEXT (nullable, optional free-form description)
+  - Migration: `rhdata_044_gamestages_rhpak_support` via `jsutils/migratedb.js`
+  - Notes:
+    - `rhpakuuid` is NULL for existing stages (not installed via RHPAK)
+    - `rhpakuuid` is set when stages are installed from an RHPAK
+    - `extradescription` is optional and editable via GameStagesDialog notepad icon
+    - Index created on `rhpakuuid` for efficient queries during RHPAK uninstall
 # Database Schema Changes Log
 
 ## Purpose

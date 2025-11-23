@@ -33,6 +33,7 @@
         <button :class="['step', { active: step===3 }]" @click="step=3">3. Listing (More)</button>
         <button :class="['step', { active: step===4 }]" @click="step=4">4. Tags</button>
         <button :class="['step', { active: step===5 }]" @click="step=5">5. Description</button>
+        <button :class="['step', { active: step===5.5 }]" @click="step=5.5">5.5. Game Levels (Optional)</button>
         <button :class="['step', { active: step===6 }]" @click="step=6">6. Notes</button>
         <button :class="['step', { active: step===7 }]" @click="step=7">7. Developer Options</button>
         <button :class="['step', { active: step===8 }]" @click="step=8">8. Review &amp; Submit</button>
@@ -265,6 +266,26 @@
         </div>
       </div>
 
+      <div v-if="step===5.5" class="panel">
+        <h4>Optional Game Levels Details</h4>
+        <div class="grid">
+          <div class="field full">
+            <div class="hint" style="margin-bottom: 12px;">
+              You can optionally add detailed stage/level information for your game. This information will be included in the RHPAK and can help players understand the structure of your game.
+            </div>
+            <button class="btn" @click="openStagesEditor">Edit Game Stages</button>
+            <div v-if="current.meta.gamestages && current.meta.gamestages.length > 0" style="margin-top: 12px;">
+              <div class="hint">
+                <strong>{{ current.meta.gamestages.length }} stage(s) configured</strong>
+              </div>
+            </div>
+            <div v-else style="margin-top: 12px;">
+              <div class="hint">No stages configured yet. Click "Edit Game Stages" to add stage information.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="step===6" class="panel">
         <h4>Notes</h4>
         <div class="grid">
@@ -451,6 +472,9 @@ const overrideGameIdValue = ref<string>('');
 // RHPAK upload method selector
 const rhpakUploadMethod = ref<'ipfs' | 'ardrive' | 'url'>('ipfs');
 
+// Game Stages Dialog
+const showStagesDialog = ref(false);
+
 const MAX_SCREENSHOTS = 12;
 const REQUIRED_WIDTH = 256;
 const REQUIRED_HEIGHT = 224;
@@ -496,8 +520,40 @@ type Draft = {
     rhpak_ardrive_file_path?: string;
     rhpak_verified?: boolean;
     rhpak_verified_at?: number;
+    // Optional gamestages for RHPAK
+    gamestages?: GameStage[];
   };
 };
+
+interface GameStage {
+  stage_uuid?: string;
+  gameid: string;
+  levelnumber?: string | null;
+  levelname: string;
+  versions?: string;
+  submapid?: string | null;
+  translevel_13bf?: string | null;
+  tile_x?: string | null;
+  tile_y?: string | null;
+  requisites?: string | null;
+  playable: number;
+  rando: number;
+  difficulty: number;
+  mainexit: number;
+  keyhole: number;
+  credits: number;
+  ghouse: number;
+  spalace: number;
+  castle: number;
+  boss: number;
+  secret: number;
+  troll: number;
+  final: number;
+  lock?: number;
+  playlevel_patch_code?: string | null;
+  excluded_patchcodes?: string | null;
+  extradescription?: string | null;
+}
 
 const typeOptions = ['Standard', 'Kaizo', 'Troll', 'Puzzle', 'Tool-Assisted', 'Pit'];
 const warningsOptions = [
@@ -508,7 +564,7 @@ const warningsOptions = [
   'Mature'
 ];
 
-const step = ref<1|2|3|4|5|6|7|8|9>(1);
+const step = ref<1|2|3|4|5|5.5|6|7|8|9>(1);
 const current = ref<Draft | null>(null);
 const predefinedTags = ref<string[]>([]);
 const selectedTags = ref<string[]>([]);
@@ -578,10 +634,106 @@ const canSubmitVerified = computed(() => {
 });
 
 function newDraft() {
-  current.value = { files: { patch: null, screenshots: [] }, meta: { name: '', author: '', types: [], version: 1, demo: false, sa1: false, collab: false, warnings: [] } };
+  current.value = { files: { patch: null, screenshots: [] }, meta: { name: '', author: '', types: [], version: 1, demo: false, sa1: false, collab: false, warnings: [], gamestages: [] } };
   step.value = 1;
   // reset tag selection
   selectedTags.value = [];
+}
+
+async function openStagesEditor() {
+  if (!current.value || !current.value.meta.name) {
+    alert('Please provide a game name first before editing stages.');
+    return;
+  }
+  const api = (window as any)?.electronAPI;
+  if (!api) return;
+  
+  // Ensure gameid exists for the stages editor
+  if (!current.value.meta.gameid) {
+    // Save draft first to generate gameid
+    await saveDraftToDb();
+    if (!current.value.meta.gameid) {
+      alert('Failed to generate game ID. Please save the draft first.');
+      return;
+    }
+  }
+  
+  // If we have draft stages, temporarily save them to DB so the dialog can load them
+  if (current.value.meta.gamestages && current.value.meta.gamestages.length > 0) {
+    try {
+      for (const stage of current.value.meta.gamestages) {
+        // Save each stage to DB temporarily (they'll be cleaned up or kept based on submission approval)
+        // Note: saveGameStage expects individual fields, not a nested stage object
+        await api.saveGameStage({
+          gameid: current.value.meta.gameid,
+          levelnumber: stage.levelnumber || null,
+          levelname: stage.levelname || 'New Stage',
+          versions: stage.versions || '*',
+          submapid: stage.submapid || null,
+          translevel_13bf: stage.translevel_13bf || null,
+          tile_x: stage.tile_x || null,
+          tile_y: stage.tile_y || null,
+          requisites: stage.requisites || null,
+          playable: stage.playable ?? 1,
+          rando: stage.rando ?? 1,
+          difficulty: stage.difficulty ?? 0,
+          mainexit: stage.mainexit ?? 1,
+          keyhole: stage.keyhole ?? 0,
+          credits: stage.credits ?? 0,
+          ghouse: stage.ghouse ?? 0,
+          spalace: stage.spalace ?? 0,
+          castle: stage.castle ?? 0,
+          boss: stage.boss ?? 0,
+          secret: stage.secret ?? 0,
+          troll: stage.troll ?? 0,
+          final: stage.final ?? 0,
+          lock: stage.lock ?? 0,
+          playlevel_patch_code: stage.playlevel_patch_code || null,
+          excluded_patchcodes: stage.excluded_patchcodes || null,
+          extradescription: stage.extradescription || null
+        });
+      }
+    } catch (e: any) {
+      console.warn('Failed to sync draft stages to DB:', e);
+      // Continue anyway - dialog will start with empty stages
+    }
+  }
+  
+  showStagesDialog.value = true;
+}
+
+async function handleStagesSaved() {
+  // Load the stages from the database and store them in the draft
+  const api = (window as any)?.electronAPI;
+  if (!api || !current.value || !current.value.meta.gameid) {
+    showStagesDialog.value = false;
+    return;
+  }
+  
+  try {
+    // Get stages for this gameid from the database (after dialog saved them)
+    const result = await api.getGameStages({ 
+      gameid: current.value.meta.gameid,
+      version: current.value.meta.version || 1
+    });
+    
+    if (result?.success && result?.stages) {
+      // Store stages in draft (without stage_uuid since they're draft data)
+      // Also remove rhpakuuid as it will be set when the RHPAK is packaged
+      current.value.meta.gamestages = result.stages.map((s: any) => {
+        const { stage_uuid, rhpakuuid, ...stageData } = s;
+        return stageData;
+      });
+    } else {
+      // No stages found, clear draft stages
+      current.value.meta.gamestages = [];
+    }
+  } catch (e: any) {
+    console.warn('Failed to load stages after save:', e);
+  }
+  showStagesDialog.value = false;
+  // Auto-save draft to persist stages
+  await saveDraftToDb();
 }
 
 async function pickPatch() {

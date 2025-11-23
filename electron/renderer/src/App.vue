@@ -27077,9 +27077,10 @@ button:disabled {
 
 .difficulty-dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: 100%;
   left: calc(-1 * var(--challenge-info-padding, 16px));
   right: calc(-1 * var(--challenge-info-padding, 16px));
+  margin-top: 4px;
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: 6px;
@@ -27088,7 +27089,6 @@ button:disabled {
   padding: 12px;
   overflow: visible;
   max-height: none;
-  width: auto;
 }
 
 .difficulty-grid {

@@ -2469,7 +2469,9 @@ function registerDatabaseHandlers(dbManager) {
     stageMinDifficulty,
     stageMaxDifficulty,
     stageIncludeFlags,
-    stageExcludeFlags
+    stageExcludeFlags,
+    stageIncludeAnyOfFlags,
+    stageExcludeOnlyFlags
   }) => {
     try {
       console.log('[count-random-stage-matches] Called with params:', {
@@ -2542,39 +2544,48 @@ function registerDatabaseHandlers(dbManager) {
       // Filter by include/exclude flags
       let filteredStages = allStages;
       
-      // Apply include flags (stages must have at least one of the included flags)
+      // Helper function to check if a stage has a specific flag
+      const hasFlag = (stage, flag) => {
+        switch (flag) {
+          case 'M': return stage.mainexit === 1;
+          case 'K': return stage.keyhole === 1;
+          case 'G': return stage.ghouse === 1;
+          case 'S': return stage.spalace === 1;
+          case 'Ca': return stage.castle === 1;
+          case 'Bo': return stage.boss === 1;
+          default: return false;
+        }
+      };
+      
+      // Apply MustInclude flags (stages must have ALL of the included flags)
       if (stageIncludeFlags && Array.isArray(stageIncludeFlags) && stageIncludeFlags.length > 0) {
         filteredStages = filteredStages.filter(stage => {
-          // Check if stage has at least one of the included flags
-          return stageIncludeFlags.some(flag => {
-            switch (flag) {
-              case 'M': return stage.mainexit === 1;
-              case 'K': return stage.keyhole === 1;
-              case 'G': return stage.ghouse === 1;
-              case 'S': return stage.spalace === 1;
-              case 'Ca': return stage.castle === 1;
-              case 'Bo': return stage.boss === 1;
-              default: return false;
-            }
-          });
+          // Check if stage has ALL of the included flags
+          return stageIncludeFlags.every(flag => hasFlag(stage, flag));
         });
       }
       
-      // Apply exclude flags (stages must NOT have any of the excluded flags)
+      // Apply Exclude flags (stages must NOT have ANY of the excluded flags)
       if (stageExcludeFlags && Array.isArray(stageExcludeFlags) && stageExcludeFlags.length > 0) {
         filteredStages = filteredStages.filter(stage => {
           // Check if stage has none of the excluded flags
-          return !stageExcludeFlags.some(flag => {
-            switch (flag) {
-              case 'M': return stage.mainexit === 1;
-              case 'K': return stage.keyhole === 1;
-              case 'G': return stage.ghouse === 1;
-              case 'S': return stage.spalace === 1;
-              case 'Ca': return stage.castle === 1;
-              case 'Bo': return stage.boss === 1;
-              default: return false;
-            }
-          });
+          return !stageExcludeFlags.some(flag => hasFlag(stage, flag));
+        });
+      }
+      
+      // Apply IncludeAnyOf flags (stages must have at least ONE of the included flags)
+      if (stageIncludeAnyOfFlags && Array.isArray(stageIncludeAnyOfFlags) && stageIncludeAnyOfFlags.length > 0) {
+        filteredStages = filteredStages.filter(stage => {
+          // Check if stage has at least one of the included flags
+          return stageIncludeAnyOfFlags.some(flag => hasFlag(stage, flag));
+        });
+      }
+      
+      // Apply ExcludeOnly flags (stages must have ALL of the excluded flags to be excluded)
+      if (stageExcludeOnlyFlags && Array.isArray(stageExcludeOnlyFlags) && stageExcludeOnlyFlags.length > 0) {
+        filteredStages = filteredStages.filter(stage => {
+          // Check if stage has ALL of the excluded flags (if so, exclude it)
+          return !stageExcludeOnlyFlags.every(flag => hasFlag(stage, flag));
         });
       }
       

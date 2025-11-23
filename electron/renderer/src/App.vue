@@ -1181,7 +1181,7 @@
                   </thead>
                   <tbody>
                     <tr>
-                      <td class="flag-row-label">Include:</td>
+                      <td class="flag-row-label">MustInclude:</td>
                       <td v-for="flag in stageFlags" :key="'include-' + flag.code" class="flag-checkbox-cell">
                         <input type="checkbox" :value="flag.code" v-model="stageFilter.includeFlags" />
                       </td>
@@ -1190,6 +1190,18 @@
                       <td class="flag-row-label">Exclude:</td>
                       <td v-for="flag in stageFlags" :key="'exclude-' + flag.code" class="flag-checkbox-cell">
                         <input type="checkbox" :value="flag.code" v-model="stageFilter.excludeFlags" />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="flag-row-label">IncludeAnyOf:</td>
+                      <td v-for="flag in stageFlags" :key="'includeAnyOf-' + flag.code" class="flag-checkbox-cell">
+                        <input type="checkbox" :value="flag.code" v-model="stageFilter.includeAnyOfFlags" />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="flag-row-label">ExcludeOnly:</td>
+                      <td v-for="flag in stageFlags" :key="'excludeOnly-' + flag.code" class="flag-checkbox-cell">
+                        <input type="checkbox" :value="flag.code" v-model="stageFilter.excludeOnlyFlags" />
                       </td>
                     </tr>
                   </tbody>
@@ -17077,8 +17089,10 @@ const stageFlags = [
 const stageFilter = reactive({
   minDifficulty: 2 as number | null,  // Default: 2
   maxDifficulty: 5 as number | null,    // Default: 5
-  includeFlags: ['M', 'K', 'G', 'S', 'Ca', 'Bo'] as string[],  // Default: all flags included
-  excludeFlags: [] as string[]
+  includeFlags: [] as string[],  // MustInclude: stages must have ALL of these flags
+  excludeFlags: [] as string[],  // Exclude: stages with ANY of these flags are excluded
+  includeAnyOfFlags: ['M', 'K'] as string[],  // IncludeAnyOf: stages must have at least ONE of these flags (default: M or K)
+  excludeOnlyFlags: [] as string[]  // ExcludeOnly: stages with ALL of these flags are excluded
 });
 
 const isRandomAddValid = computed(() => {
@@ -17115,7 +17129,9 @@ watch(() => ({
   stageMinDifficulty: stageFilter.minDifficulty,
   stageMaxDifficulty: stageFilter.maxDifficulty,
   stageIncludeFlags: stageFilter.includeFlags?.slice(),  // Create copy for reactivity
-  stageExcludeFlags: stageFilter.excludeFlags?.slice()   // Create copy for reactivity
+  stageExcludeFlags: stageFilter.excludeFlags?.slice(),   // Create copy for reactivity
+  stageIncludeAnyOfFlags: stageFilter.includeAnyOfFlags?.slice(),  // Create copy for reactivity
+  stageExcludeOnlyFlags: stageFilter.excludeOnlyFlags?.slice()   // Create copy for reactivity
 }), async () => {
   // Always count games (even with no filters, shows total count)
   try {
@@ -17151,7 +17167,9 @@ watch(() => ({
       stageMinDifficulty: stageFilter.minDifficulty,
       stageMaxDifficulty: stageFilter.maxDifficulty,
       stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
-      stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || []))
+      stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || [])),
+      stageIncludeAnyOfFlags: JSON.parse(JSON.stringify(stageFilter.includeAnyOfFlags || [])),
+      stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || []))
     });
     
     console.log('[watch] countRandomStageMatches result:', stageResult);
@@ -17294,7 +17312,9 @@ async function addRandomStageToRun() {
       stageMinDifficulty: stageFilter.minDifficulty,
       stageMaxDifficulty: stageFilter.maxDifficulty,
       stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
-      stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || []))
+      stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || [])),
+      stageIncludeAnyOfFlags: JSON.parse(JSON.stringify(stageFilter.includeAnyOfFlags || [])),
+      stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || []))
     });
     
     if (result.success) {
@@ -17351,6 +17371,8 @@ async function addRandomStageToRun() {
     stageFilterMaxDifficulty: stageFilter.maxDifficulty,
     stageFilterIncludeFlags: [...stageFilter.includeFlags],
     stageFilterExcludeFlags: [...stageFilter.excludeFlags],
+    stageFilterIncludeAnyOfFlags: [...stageFilter.includeAnyOfFlags],
+    stageFilterExcludeOnlyFlags: [...stageFilter.excludeOnlyFlags],
     seed,
     matchCount: randomStageMatchCount.value,  // This should now always be set
     isLocked: false,
@@ -21130,16 +21152,16 @@ button:disabled {
   background-color: rgba(255, 152, 0, 0.2); /* Light orange */
 }
 .stage-flags-table th.col-ghouse {
-  background-color: rgba(156, 39, 176, 0.2); /* Light purple */
+  background-color: rgba(158, 158, 158, 0.2); /* Light gray */
 }
 .stage-flags-table th.col-spalace {
-  background-color: rgba(76, 175, 80, 0.2); /* Light green */
+  background-color: rgba(0, 188, 212, 0.2); /* Light cyan */
 }
 .stage-flags-table th.col-castle {
-  background-color: rgba(244, 67, 54, 0.2); /* Light red */
+  background-color: rgba(121, 85, 72, 0.2); /* Light brown */
 }
 .stage-flags-table th.col-boss {
-  background-color: rgba(121, 85, 72, 0.2); /* Light brown */
+  background-color: rgba(244, 67, 54, 0.2); /* Light red */
 }
 .modal-toolbar .count { width: 80px; padding: 6px 8px; }
 .modal-toolbar .seed { min-width: 160px; padding: 6px 8px; }

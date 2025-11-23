@@ -12,12 +12,10 @@ autoclean JML Check
 freecode
 
 Check:
-  ;LDA $74                                         ;check if climbing
+  ;LDA $74                                        
   ;BNE JumpTo01F914                              ;chase
   ;BEQ JumpTo01F914
 
    ; JumpTo01F914:
    JML $01F914|!bank
-
-
 

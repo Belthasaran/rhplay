@@ -2816,6 +2816,9 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'No games found in run results. Please expand run plan first.' };
       }
       
+      // Get ASAR path from settings
+      const asarPath = getClientSetting('asarPath') || null;
+      
       const result = await gameStager.stageRunGames({
         dbManager,
         runUuid,
@@ -2823,6 +2826,7 @@ function registerDatabaseHandlers(dbManager) {
         userDataPath,
         vanillaRomPath,
         flipsPath,
+        asarPath,
         onProgress: (current, total, gameName) => {
           // Send progress updates to renderer
           event.sender.send('staging-progress', { current, total, gameName });

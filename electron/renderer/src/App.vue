@@ -18601,35 +18601,6 @@ function editConditions(entry: RunEntry) {
   }
 }
 
-function editGlobalConditions() {
-  const current = globalRunConditions.value || [];
-  const message = 'Select global challenge conditions for entire run:\n\n' +
-    allConditions.map((c, i) => `${i + 1}. ${c} ${current.includes(c) ? '✓' : ''}`).join('\n') +
-    '\n\nEnter numbers to toggle (e.g., "1,3,5" or "all" or "none"):';
-  
-  const input = window.prompt(message, current.length === 0 ? '' : 'current');
-  if (input === null) return;
-  
-  const inputLower = input.toLowerCase().trim();
-  
-  if (inputLower === 'none' || inputLower === '') {
-    globalRunConditions.value = [];
-    return;
-  }
-  
-  if (inputLower === 'all') {
-    globalRunConditions.value = [...allConditions];
-    return;
-  }
-  
-  // Parse numbers
-  const numbers = inputLower.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n >= 1 && n <= allConditions.length);
-  if (numbers.length > 0) {
-    const newConditions = numbers.map(n => allConditions[n - 1]);
-    globalRunConditions.value = [...new Set(newConditions)];  // Remove duplicates
-  }
-}
-
 // Past Runs Modal Functions
 async function openPastRunsModal() {
   try {

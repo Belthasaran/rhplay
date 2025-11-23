@@ -338,7 +338,7 @@ async function createPatchedSFC(params) {
  * @returns {Promise<{success: boolean, folderPath?: string, gamesStaged?: number, error?: string}>}
  */
 async function stageRunGames(params) {
-  const { dbManager, runUuid, expandedResults, userDataPath, vanillaRomPath, flipsPath, onProgress } = params;
+  const { dbManager, runUuid, expandedResults, userDataPath, vanillaRomPath, flipsPath, asarPath, onProgress } = params;
   
   try {
     // Create staging base directory if it doesn't exist
@@ -444,7 +444,7 @@ async function stageRunGames(params) {
           action: 'build',
           vanillaRomPath,
           flipsPath,
-          asarPath: null,  // Will be found automatically
+          asarPath: asarPath || null,  // Use provided ASAR path or let it find automatically
           outputDir: path.dirname(sfcPath)
         });
         
@@ -485,7 +485,7 @@ async function stageRunGames(params) {
               action: 'build',
               vanillaRomPath,
               flipsPath,
-              asarPath: null,
+              asarPath: asarPath || null,  // Use provided ASAR path or let it find automatically
               outputDir: path.dirname(sfcPath)
             });
             

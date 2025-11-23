@@ -1079,7 +1079,17 @@
             <button @click="exportRunToFile" :disabled="!isRunSaved">📤 Export</button>
             <button @click="importRunFromFile">📥 Import</button>
             <button @click="stageRun('save')" :disabled="runEntries.length === 0">Stage and Save</button>
-            <button @click="startRun" :disabled="!isRunSaved" class="btn-start-run">▶ Start Run</button>
+            <div v-if="isRunSaved" class="run-status-button-wrapper" style="position: relative; display: inline-block;">
+              <button @click="toggleRunStatusDropdown" class="btn-run-status" :class="{ 'ready': isRunReadyToStart, 'needs-upload': !isRunReadyToStart }">
+                {{ runStatusText }}
+              </button>
+              <div v-if="runStatusDropdownOpen" class="run-status-dropdown">
+                <button @click="reopenStagingWindow" class="dropdown-item">Reopen Staging Window</button>
+                <button @click="manualUploadSearch" class="dropdown-item">Manual Upload: Search USB2SNES For Files</button>
+                <button @click="skipUploadAcknowledgment" class="dropdown-item">Skip Upload: I will manually start each game</button>
+              </div>
+            </div>
+            <button @click="startRun" :disabled="!canStartRun" class="btn-start-run">▶ Start Run</button>
           </template>
           <!-- Active state -->
           <template v-if="isRunActive">
@@ -15197,12 +15207,19 @@ function handleGlobalClick(e: MouseEvent) {
     clickedInsideAnyDropdown = true;
   }
   
+  // Check Run Status dropdown separately
+  const runStatusWrapper = document.querySelector('.run-status-button-wrapper');
+  if (runStatusWrapper && runStatusWrapper.contains(target)) {
+    clickedInsideAnyDropdown = true;
+  }
+  
   if (!clickedInsideAnyDropdown) {
     closeFilterDropdown();
     closeSelectDropdown();
     closeManageDropdown();
     closeSnesContentsDropdown();
     closeOnlineDropdown();
+    runStatusDropdownOpen.value = false;
     activeAdminKeypairDropdown.value = null;
     showAdminKeypairActionDropdown.value = false;
     showMasterKeypairActionDropdown.value = false;
@@ -16706,6 +16723,11 @@ const runUploadInProgress = ref(false);
 const runUploadStatusLogTextarea = ref(null as HTMLTextAreaElement | null);
 let runUploadCancelRequested = false;
 
+// Run status and upload readiness
+const runStatusDropdownOpen = ref(false);
+const skipUploadAcknowledged = ref(false);
+const expandedRunResults = ref<any[]>([]);  // Store expanded results to check sfcPath
+
 // Quick launch progress modal
 const quickLaunchProgressModalOpen = ref(false);
 const quickLaunchProgressCurrent = ref(0);
@@ -16724,6 +16746,31 @@ const allRunChecked = computed(() => runEntries.length > 0 && runEntries.every((
 const checkedRunCount = computed(() => checkedRun.value.size);
 const isRunSaved = computed(() => currentRunUuid.value !== null && currentRunStatus.value === 'preparing');
 const isRunActive = computed(() => currentRunStatus.value === 'active');
+
+// Check if all expanded run results have sfcPath
+const allResultsHaveSfcPath = computed(() => {
+  if (!isRunSaved.value || expandedRunResults.value.length === 0) return false;
+  return expandedRunResults.value.every((result: any) => result.sfcpath && result.sfcpath.trim() !== '');
+});
+
+// Check if run is ready to start (has sfcPath or skip acknowledged)
+const isRunReadyToStart = computed(() => {
+  return allResultsHaveSfcPath.value || skipUploadAcknowledged.value;
+});
+
+// Run status text
+const runStatusText = computed(() => {
+  if (isRunReadyToStart.value) {
+    return 'Run Status: Ready to Start';
+  } else {
+    return 'Run Status: Need Upload';
+  }
+});
+
+// Can start run (must be saved AND ready)
+const canStartRun = computed(() => {
+  return isRunSaved.value && isRunReadyToStart.value;
+});
 const currentChallenge = computed(() => {
   if (!isRunActive.value || currentChallengeIndex.value >= runEntries.length) return null;
   return runEntries[currentChallengeIndex.value];
@@ -17383,6 +17430,12 @@ async function stageRunGames(runUuid: string, runName: string) {
     stagingSfcCount.value = stagingResult.gamesStaged;
     stagingSuccessModalOpen.value = true;
     
+    // Reset skip upload acknowledgment when staging completes
+    skipUploadAcknowledged.value = false;
+    
+    // Load expanded results to check sfcPath status
+    await loadExpandedRunResults();
+    
   } catch (error) {
     console.error('Error staging run games:', error);
     stagingProgressModalOpen.value = false;
@@ -17407,6 +17460,174 @@ function cancelRunName() {
 function closeStagingSuccess() {
   stagingSuccessModalOpen.value = false;
   runStagingActionStatus.value = '';
+}
+
+// Run status dropdown functions
+function toggleRunStatusDropdown() {
+  runStatusDropdownOpen.value = !runStatusDropdownOpen.value;
+  if (runStatusDropdownOpen.value) {
+    // Load expanded results to check sfcPath
+    loadExpandedRunResults();
+  }
+}
+
+// Load expanded run results to check sfcPath status
+async function loadExpandedRunResults() {
+  if (!currentRunUuid.value || !isElectronAvailable()) return;
+  
+  try {
+    const results = await (window as any).electronAPI.getRunResults({
+      runUuid: currentRunUuid.value
+    });
+    expandedRunResults.value = results || [];
+  } catch (error) {
+    console.error('Error loading expanded run results:', error);
+    expandedRunResults.value = [];
+  }
+}
+
+// Reopen staging window
+function reopenStagingWindow() {
+  runStatusDropdownOpen.value = false;
+  if (stagingFolderPath.value) {
+    stagingSuccessModalOpen.value = true;
+  } else {
+    alert('No staging folder found. Please stage the run again.');
+  }
+}
+
+// Manual upload: Search USB2SNES for files
+async function manualUploadSearch() {
+  runStatusDropdownOpen.value = false;
+  
+  if (!isElectronAvailable()) {
+    alert('This feature requires Electron environment');
+    return;
+  }
+  
+  if (!currentRunUuid.value) {
+    alert('No run selected');
+    return;
+  }
+  
+  // Check USB2SNES connection
+  await refreshUsb2snesStatus();
+  if (!usb2snesStatus.connected) {
+    const connect = confirm('USB2SNES is not connected. Would you like to connect now?');
+    if (connect) {
+      try {
+        await connectUsb2snes();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (!usb2snesStatus.connected) {
+          alert('Failed to connect to USB2SNES');
+          return;
+        }
+      } catch (error) {
+        alert(`Failed to connect: ${error}`);
+        return;
+      }
+    } else {
+      return;
+    }
+  }
+  
+  try {
+    // Get expanded results to know what files to look for
+    await loadExpandedRunResults();
+    if (expandedRunResults.value.length === 0) {
+      alert('No run results found. Please stage the run first.');
+      return;
+    }
+    
+    // List files in /work and /work/run* directories
+    const workFiles = await (window as any).electronAPI.usb2snesListDir('/work');
+    if (!workFiles || !workFiles.files) {
+      alert('Failed to list files on USB2SNES');
+      return;
+    }
+    
+    // Get list of expected filenames from staging folder
+    const expectedFiles: string[] = [];
+    if (stagingFolderPath.value) {
+      try {
+        const folderContents = await (window as any).electronAPI.readDirectory(stagingFolderPath.value);
+        const sfcFiles = folderContents.filter((f: string) => f.endsWith('.sfc')).sort();
+        expectedFiles.push(...sfcFiles);
+      } catch (error) {
+        console.error('Error reading staging folder:', error);
+      }
+    }
+    
+    // Search for files in /work and subdirectories
+    const foundFiles: { [key: string]: string } = {};  // filename -> full path
+    
+    // Check /work directly
+    for (const file of workFiles.files) {
+      if (file.type === 0 && file.filename.toLowerCase().endsWith('.sfc')) {
+        const filename = file.filename;
+        if (expectedFiles.includes(filename) || expectedFiles.length === 0) {
+          foundFiles[filename] = `/work/${filename}`;
+        }
+      }
+    }
+    
+    // Check /work/run* subdirectories
+    for (const item of workFiles.files) {
+      if (item.type === 1 && item.filename.startsWith('run')) {
+        try {
+          const subDirFiles = await (window as any).electronAPI.usb2snesListDir(`/work/${item.filename}`);
+          if (subDirFiles && subDirFiles.files) {
+            for (const file of subDirFiles.files) {
+              if (file.type === 0 && file.filename.toLowerCase().endsWith('.sfc')) {
+                const filename = file.filename;
+                if (expectedFiles.includes(filename) || expectedFiles.length === 0) {
+                  foundFiles[filename] = `/work/${item.filename}/${filename}`;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Error listing subdirectory /work/${item.filename}:`, error);
+        }
+      }
+    }
+    
+    // Update sfcPath in database for matching files
+    if (Object.keys(foundFiles).length > 0) {
+      const updateResult = await (window as any).electronAPI.updateRunResultsSfcPath({
+        runUuid: currentRunUuid.value,
+        fileMappings: foundFiles
+      });
+      
+      if (updateResult && updateResult.success) {
+        alert(`Found and updated ${updateResult.updatedCount} file(s) on USB2SNES`);
+        // Reload expanded results
+        await loadExpandedRunResults();
+      } else {
+        alert(`Failed to update file paths: ${updateResult?.error || 'Unknown error'}`);
+      }
+    } else {
+      alert('No matching SFC files found on USB2SNES. Please upload the files first.');
+    }
+  } catch (error) {
+    console.error('Error searching USB2SNES for files:', error);
+    alert(`Error searching USB2SNES: ${error}`);
+  }
+}
+
+// Skip upload acknowledgment
+function skipUploadAcknowledgment() {
+  runStatusDropdownOpen.value = false;
+  const confirmed = confirm(
+    'Skip Upload Acknowledgment\n\n' +
+    'You are acknowledging that you will manually start each game on your SNES device.\n\n' +
+    'The Launch buttons will not appear during the run.\n\n' +
+    'Do you want to proceed?'
+  );
+  
+  if (confirmed) {
+    skipUploadAcknowledged.value = true;
+  }
 }
 
 function openStagingFolder() {
@@ -20646,6 +20867,78 @@ button:disabled {
 .btn-start-run { background: #10b981; color: white; font-weight: bold; }
 .btn-start-run:hover:not(:disabled) { background: #059669; }
 .btn-start-run:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+
+.run-status-button-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-run-status {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-run-status.ready {
+  background: #10b981;
+  color: white;
+  border-color: #059669;
+}
+
+.btn-run-status.needs-upload {
+  background: #f59e0b;
+  color: white;
+  border-color: #d97706;
+}
+
+.btn-run-status:hover {
+  opacity: 0.9;
+}
+
+.run-status-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.run-status-dropdown .dropdown-item {
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.run-status-dropdown .dropdown-item:hover {
+  background: var(--bg-secondary);
+}
+
+.run-status-dropdown .dropdown-item:first-child {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.run-status-dropdown .dropdown-item:last-child {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
 .btn-cancel-run { background: #ef4444; color: white; }
 .btn-cancel-run:hover { background: #dc2626; }
 .btn-back { background: #6b7280; color: white; }

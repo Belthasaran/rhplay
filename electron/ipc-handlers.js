@@ -4037,6 +4037,82 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Update sfcPath in run_results based on file mappings from USB2SNES
+   * Channel: db:runs:update-sfcpath
+   */
+  ipcMain.handle('db:runs:update-sfcpath', async (event, { runUuid, fileMappings }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get expanded results to match filenames
+      const results = db.prepare(`
+        SELECT result_uuid, sequence_number FROM run_results 
+        WHERE run_uuid = ? 
+        ORDER BY sequence_number
+      `).all(runUuid);
+      
+      if (results.length === 0) {
+        return { success: false, error: 'No run results found' };
+      }
+      
+      // Get list of SFC files from staging folder to match by sequence
+      // We'll match by filename pattern: files are typically numbered sequentially
+      const updateStmt = db.prepare(`UPDATE run_results SET sfcpath = ? WHERE result_uuid = ?`);
+      let updatedCount = 0;
+      
+      // Try to match files by sequence number (assuming files are named like 01.sfc, 02.sfc, etc.)
+      // Or match by exact filename if we have the staging folder info
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const seqNum = i + 1;
+        
+        // Try to find matching file by sequence number pattern
+        const seqPatterns = [
+          String(seqNum).padStart(2, '0') + '.sfc',
+          String(seqNum).padStart(3, '0') + '.sfc',
+          seqNum + '.sfc'
+        ];
+        
+        for (const pattern of seqPatterns) {
+          if (fileMappings[pattern]) {
+            updateStmt.run(fileMappings[pattern], result.result_uuid);
+            updatedCount++;
+            break;
+          }
+        }
+        
+        // Also try to match by any filename if we haven't found a match yet
+        if (!results[i].sfcpath) {
+          // Get the first unmatched file from mappings
+          const unmatchedFiles = Object.keys(fileMappings).filter(f => {
+            // Check if this file is already assigned to another result
+            const alreadyUsed = results.some((r: any) => r.sfcpath === fileMappings[f]);
+            return !alreadyUsed;
+          });
+          
+          if (unmatchedFiles.length > 0) {
+            const filename = unmatchedFiles[0];
+            updateStmt.run(fileMappings[filename], result.result_uuid);
+            updatedCount++;
+          }
+        }
+      }
+      
+      console.log(`[Update SfcPath] Updated ${updatedCount} of ${results.length} results`);
+      
+      return { 
+        success: true, 
+        updatedCount: updatedCount,
+        totalResults: results.length
+      };
+    } catch (error) {
+      console.error('[Update SfcPath] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   /**
    * Reveal a random challenge (select and update with actual game)
    * Channel: db:runs:reveal-challenge

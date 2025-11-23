@@ -1134,7 +1134,11 @@
               Set Difficulty Feedback <span class="dropdown-arrow">▼</span>
             </button>
           </div>
-          <div v-if="difficultyDropdownOpen" class="difficulty-dropdown" @click.stop>
+          <button @click="openStageCommentDialog" class="btn-comment" :class="{ 'has-comment': currentStageFeedback?.comment }">
+            💬 Comment
+          </button>
+        </div>
+        <div v-if="difficultyDropdownOpen && isCurrentChallengeRandomStage" class="difficulty-dropdown" @click.stop>
               <div class="difficulty-grid">
                 <div 
                   v-for="diff in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" 
@@ -1151,10 +1155,6 @@
                   <span class="difficulty-label">{{ getDifficultyLabel(diff) }}</span>
                 </div>
               </div>
-          </div>
-          <button @click="openStageCommentDialog" class="btn-comment" :class="{ 'has-comment': currentStageFeedback?.comment }">
-            💬 Comment
-          </button>
         </div>
       </section>
 

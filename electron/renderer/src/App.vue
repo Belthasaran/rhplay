@@ -1246,16 +1246,16 @@
                 <td>{{ entry.id }}</td>
                 <td>
                   <span class="readonly-text">
-                    {{ entry.entryType === 'game' ? 'Game' : 
-                       entry.entryType === 'stage' ? 'Stage' : 
-                       entry.entryType === 'random_game' ? 'Random Game' : 
-                       entry.entryType === 'random_stage' ? 'Random Stage' : entry.entryType }}
+                    {{ (entry.entryType || entry.entry_type) === 'game' ? 'Game' : 
+                       (entry.entryType || entry.entry_type) === 'stage' ? 'Stage' : 
+                       (entry.entryType || entry.entry_type) === 'random_game' ? 'Random Game' : 
+                       (entry.entryType || entry.entry_type) === 'random_stage' ? 'Random Stage' : (entry.entryType || entry.entry_type) }}
                   </span>
                 </td>
                 <td>{{ entry.name }}</td>
-                <td>{{ entry.stageNumber ?? '' }}</td>
-                <td>{{ entry.transLevel ?? '' }}</td>
-                <td>{{ entry.stageName ?? '' }}</td>
+                <td>{{ entry.stageNumber ?? entry.levelnumber ?? '' }}</td>
+                <td>{{ entry.transLevel ?? entry.translevel ?? '' }}</td>
+                <td>{{ entry.stageName ?? entry.levelname ?? '' }}</td>
                 <td class="col-count">
                   <input 
                     type="number" 

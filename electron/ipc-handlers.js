@@ -2150,30 +2150,33 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('clientdata');
       
+      // Join with run_plan_entries to get entry_type
       const results = db.prepare(`
         SELECT 
-          result_uuid,
-          run_uuid,
-          plan_entry_uuid,
-          sequence_number,
-          gameid,
-          game_name,
-          exit_number,
-          stage_description,
-          was_random,
-          revealed_early,
-          status,
-          started_at,
-          completed_at,
-          duration_seconds,
-          conditions,
-          sfcpath,
-          levelnumber,
-          translevel,
-          levelname
-        FROM run_results
-        WHERE run_uuid = ?
-        ORDER BY sequence_number
+          rr.result_uuid,
+          rr.run_uuid,
+          rr.plan_entry_uuid,
+          rr.sequence_number,
+          rr.gameid,
+          rr.game_name,
+          rr.exit_number,
+          rr.stage_description,
+          rr.was_random,
+          rr.revealed_early,
+          rr.status,
+          rr.started_at,
+          rr.completed_at,
+          rr.duration_seconds,
+          rr.conditions,
+          rr.sfcpath,
+          rr.levelnumber,
+          rr.translevel,
+          rr.levelname,
+          rpe.entry_type
+        FROM run_results rr
+        LEFT JOIN run_plan_entries rpe ON rr.plan_entry_uuid = rpe.entry_uuid
+        WHERE rr.run_uuid = ?
+        ORDER BY rr.sequence_number
       `).all(runUuid);
       
       return results;

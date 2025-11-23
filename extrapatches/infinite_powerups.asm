@@ -44,4 +44,3 @@ MarioFlash:
 ;        jml $00F606
 	RTL
 
-

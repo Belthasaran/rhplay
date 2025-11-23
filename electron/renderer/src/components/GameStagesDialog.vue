@@ -2137,7 +2137,8 @@ watch(() => props.initialLevelNumber, () => {
   border-radius: 3px;
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-width: 80px;
+  max-width: 200px;
+  min-width: 200px;
   margin-bottom: 4px;
 }
 

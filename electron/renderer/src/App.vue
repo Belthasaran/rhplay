@@ -1167,22 +1167,33 @@
                 </label>
               </div>
               <div class="stage-limits-section">
-                <div class="stage-flags-row">
-                  <label class="stage-flags-label">Include flags:</label>
-                  <label v-for="flag in stageFlags" :key="flag.code" class="stage-flag-checkbox">
-                    <input type="checkbox" :value="flag.code" v-model="stageFilter.includeFlags" />
-                    <span>{{ flag.code }}</span>
-                    <span class="flag-name">{{ flag.name }}</span>
-                  </label>
-                </div>
-                <div class="stage-flags-row">
-                  <label class="stage-flags-label">Exclude flags:</label>
-                  <label v-for="flag in stageFlags" :key="flag.code" class="stage-flag-checkbox">
-                    <input type="checkbox" :value="flag.code" v-model="stageFilter.excludeFlags" />
-                    <span>{{ flag.code }}</span>
-                    <span class="flag-name">{{ flag.name }}</span>
-                  </label>
-                </div>
+                <table class="stage-flags-table">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th class="col-mainexit" title="Levels with a main exit (Primary exit used in overworld)">M</th>
+                      <th class="col-keyhole" title="Levels with a keydoor exit used in overworld">K</th>
+                      <th class="col-ghouse" title="Ghost House Level">G</th>
+                      <th class="col-spalace" title="Switch Palace Level">S</th>
+                      <th class="col-castle" title="Castle Level">Ca</th>
+                      <th class="col-boss" title="Level goes straight to a boss">Bo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="flag-row-label">Include:</td>
+                      <td v-for="flag in stageFlags" :key="'include-' + flag.code" class="flag-checkbox-cell">
+                        <input type="checkbox" :value="flag.code" v-model="stageFilter.includeFlags" />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="flag-row-label">Exclude:</td>
+                      <td v-for="flag in stageFlags" :key="'exclude-' + flag.code" class="flag-checkbox-cell">
+                        <input type="checkbox" :value="flag.code" v-model="stageFilter.excludeFlags" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -20982,6 +20993,7 @@ button:disabled {
 .modal { 
   width: 1200px; 
   max-width: 98vw; 
+  min-height: 600px;
   max-height: 90vh; 
   background: var(--modal-bg); 
   border-radius: 8px; 
@@ -21077,36 +21089,57 @@ button:disabled {
   color: var(--text-primary);
   font-size: var(--base-font-size);
 }
-.stage-flags-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
+.stage-flags-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
 }
-.stage-flags-label {
-  font-weight: bold;
-  min-width: 100px;
-  margin-bottom: 0 !important;
+.stage-flags-table th {
+  padding: 6px 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-primary);
+  cursor: help;
 }
-.stage-flag-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 0 !important;
-  font-size: 12px;
+.stage-flags-table td {
+  padding: 6px 8px;
+  text-align: center;
 }
-.stage-flag-checkbox input[type="checkbox"] {
+.stage-flags-table .flag-row-label {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+  padding-right: 12px;
+}
+.stage-flags-table .flag-checkbox-cell {
+  text-align: center;
+}
+.stage-flags-table .flag-checkbox-cell input[type="checkbox"] {
   margin: 0;
+  cursor: pointer;
 }
-.stage-flag-checkbox span {
-  font-weight: bold;
-  min-width: 24px;
+
+/* Column header colors matching GameStagesDialog */
+.stage-flags-table th.col-mainexit {
+  background-color: rgba(33, 150, 243, 0.2); /* Light blue */
 }
-.stage-flag-checkbox .flag-name {
-  font-weight: normal;
-  font-size: calc(var(--base-font-size) * 0.85);
-  color: var(--text-secondary);
+.stage-flags-table th.col-keyhole {
+  background-color: rgba(255, 152, 0, 0.2); /* Light orange */
+}
+.stage-flags-table th.col-ghouse {
+  background-color: rgba(156, 39, 176, 0.2); /* Light purple */
+}
+.stage-flags-table th.col-spalace {
+  background-color: rgba(76, 175, 80, 0.2); /* Light green */
+}
+.stage-flags-table th.col-castle {
+  background-color: rgba(244, 67, 54, 0.2); /* Light red */
+}
+.stage-flags-table th.col-boss {
+  background-color: rgba(121, 85, 72, 0.2); /* Light brown */
 }
 .modal-toolbar .count { width: 80px; padding: 6px 8px; }
 .modal-toolbar .seed { min-width: 160px; padding: 6px 8px; }

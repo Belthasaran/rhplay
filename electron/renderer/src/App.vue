@@ -1240,6 +1240,7 @@
                       <th></th>
                       <th class="col-mainexit" title="Levels with a main exit (Primary exit used in overworld)">M</th>
                       <th class="col-keyhole" title="Levels with a keydoor exit used in overworld">K</th>
+                      <th class="col-water" title="Water Level">W</th>
                       <th class="col-ghouse" title="Ghost House Level">G</th>
                       <th class="col-spalace" title="Switch Palace Level">S</th>
                       <th class="col-castle" title="Castle Level">Ca</th>
@@ -17575,6 +17576,7 @@ const stageLimitsDropdownOpen = ref(false);
 const stageFlags = [
   { code: 'M', name: 'mainexit' },
   { code: 'K', name: 'keyhole' },
+  { code: 'W', name: 'water' },
   { code: 'G', name: 'ghosthouse' },
   { code: 'S', name: 'switchpalace' },
   { code: 'Ca', name: 'castle' },

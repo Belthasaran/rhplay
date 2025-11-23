@@ -2613,6 +2613,7 @@ function registerDatabaseHandlers(dbManager) {
         switch (flag) {
           case 'M': return stage.mainexit === 1;
           case 'K': return stage.keyhole === 1;
+          case 'W': return stage.water === 1;
           case 'G': return stage.ghouse === 1;
           case 'S': return stage.spalace === 1;
           case 'Ca': return stage.castle === 1;

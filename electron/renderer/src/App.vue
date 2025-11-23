@@ -16986,61 +16986,71 @@ function toggleStageLimitsDropdown() {
 }
 
 // Watch for random filter changes to update match counts (always count both games and stages)
-watch(() => [
-  randomFilter.type, 
-  randomFilter.difficulty, 
-  randomFilter.pattern, 
-  randomFilter.count,
-  stageFilter.minDifficulty,
-  stageFilter.maxDifficulty,
-  stageFilter.includeFlags,
-  stageFilter.excludeFlags
-], async () => {
+// Use object watch to properly detect array changes
+watch(() => ({
+  type: randomFilter.type,
+  difficulty: randomFilter.difficulty,
+  pattern: randomFilter.pattern,
+  count: randomFilter.count,
+  stageMinDifficulty: stageFilter.minDifficulty,
+  stageMaxDifficulty: stageFilter.maxDifficulty,
+  stageIncludeFlags: stageFilter.includeFlags?.slice(),  // Create copy for reactivity
+  stageExcludeFlags: stageFilter.excludeFlags?.slice()   // Create copy for reactivity
+}), async () => {
   // Always count games (even with no filters, shows total count)
   try {
     const gameResult = await (window as any).electronAPI.countRandomMatches({
-      filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
-      filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
-      filterPattern: randomFilter.pattern || ''
-    });
-    
+        filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
+        filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
+        filterPattern: randomFilter.pattern || ''
+      });
+      
     if (gameResult.success) {
       randomMatchCount.value = gameResult.count;
-      const requiredCount = (randomFilter.count || 0) + 2;
-      
+        const requiredCount = (randomFilter.count || 0) + 2;
+        
       if (gameResult.count < requiredCount) {
         randomMatchCountError.value = `Insufficient games: ${gameResult.count} match filters, but need at least ${requiredCount} (count + 2)`;
-      } else {
-        randomMatchCountError.value = '';
+        } else {
+          randomMatchCountError.value = '';
+        }
       }
-    }
-  } catch (error) {
-    console.error('Error counting random matches:', error);
+    } catch (error) {
+      console.error('Error counting random matches:', error);
     randomMatchCount.value = null;
     randomMatchCountError.value = 'Failed to validate filters';
   }
   
   // Always count stages (even with no filters, shows total count)
   try {
+    // Serialize arrays to plain arrays for IPC
     const stageResult = await (window as any).electronAPI.countRandomStageMatches({
       filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
       filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
       filterPattern: randomFilter.pattern || '',
       stageMinDifficulty: stageFilter.minDifficulty,
       stageMaxDifficulty: stageFilter.maxDifficulty,
-      stageIncludeFlags: stageFilter.includeFlags,
-      stageExcludeFlags: stageFilter.excludeFlags
+      stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
+      stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || []))
     });
     
-    if (stageResult.success) {
-      randomStageMatchCount.value = stageResult.count;
+    console.log('[watch] countRandomStageMatches result:', stageResult);
+    
+    if (stageResult && stageResult.success !== false) {
+      // Accept result even if success is undefined (some handlers might not set it explicitly)
+      const count = stageResult.count !== undefined ? stageResult.count : 0;
+      randomStageMatchCount.value = count;
       const requiredCount = (randomFilter.count || 0) + 2;
       
-      if (stageResult.count < requiredCount) {
-        randomStageMatchCountError.value = `Insufficient stages: ${stageResult.count} match filters, but need at least ${requiredCount} (count + 2)`;
-      } else {
+      if (count < requiredCount) {
+        randomStageMatchCountError.value = `Insufficient stages: ${count} match filters, but need at least ${requiredCount} (count + 2)`;
+  } else {
         randomStageMatchCountError.value = '';
       }
+    } else {
+      console.warn('[watch] countRandomStageMatches failed:', stageResult);
+      randomStageMatchCount.value = null;
+      randomStageMatchCountError.value = stageResult?.error || 'Failed to count stages';
     }
   } catch (error) {
     console.error('Error counting random stage matches:', error);
@@ -17156,14 +17166,15 @@ async function addRandomStageToRun() {
   try {
     // TODO: Implement IPC handler for counting random stages
     // For now, we'll use a placeholder count
+    // Serialize arrays to plain arrays for IPC
     const result = await (window as any).electronAPI.countRandomStageMatches({
       filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
       filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
       filterPattern: randomFilter.pattern || '',
       stageMinDifficulty: stageFilter.minDifficulty,
       stageMaxDifficulty: stageFilter.maxDifficulty,
-      stageIncludeFlags: stageFilter.includeFlags,
-      stageExcludeFlags: stageFilter.excludeFlags
+      stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
+      stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || []))
     });
     
     if (result.success) {
@@ -17177,13 +17188,21 @@ async function addRandomStageToRun() {
       }
       
       randomStageMatchCountError.value = '';
+    } else {
+      // Count failed - don't add entry
+      alert(`Cannot add random stage:\n\nFailed to count matching stages: ${result.error || 'Unknown error'}`);
+      return;
     }
   } catch (error) {
     console.error('Error counting random stage matches:', error);
-    // If IPC handler doesn't exist yet, proceed with warning
-    console.warn('Random stage matching not yet implemented, proceeding without validation');
-    randomStageMatchCount.value = null;
-    randomStageMatchCountError.value = '';
+    alert(`Cannot add random stage:\n\nError counting matching stages: ${error.message || 'Unknown error'}`);
+    return;
+  }
+  
+  // Ensure we have a valid match count before proceeding
+  if (randomStageMatchCount.value === null || randomStageMatchCount.value === undefined) {
+    alert('Cannot add random stage: Match count is not available. Please try again.');
+    return;
   }
   
   const key = `rand-stage-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -17213,7 +17232,7 @@ async function addRandomStageToRun() {
     stageFilterIncludeFlags: [...stageFilter.includeFlags],
     stageFilterExcludeFlags: [...stageFilter.excludeFlags],
     seed,
-    matchCount: randomStageMatchCount.value,
+    matchCount: randomStageMatchCount.value,  // This should now always be set
     isLocked: false,
     conditions: [],
   });

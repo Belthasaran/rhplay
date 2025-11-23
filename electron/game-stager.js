@@ -339,6 +339,7 @@ async function createPatchedSFC(params) {
  */
 async function stageRunGames(params) {
   const { dbManager, runUuid, expandedResults, userDataPath, vanillaRomPath, flipsPath, asarPath, onProgress } = params;
+  console.log('[stageRunGames] Received asarPath:', asarPath);
   
   try {
     // Create staging base directory if it doesn't exist

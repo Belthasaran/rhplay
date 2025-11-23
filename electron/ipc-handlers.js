@@ -2401,6 +2401,11 @@ function registerDatabaseHandlers(dbManager) {
     stageExcludeFlags
   }) => {
     try {
+      console.log('[count-random-stage-matches] Called with params:', {
+        filterType, filterDifficulty, filterPattern,
+        stageMinDifficulty, stageMaxDifficulty,
+        stageIncludeFlags, stageExcludeFlags
+      });
       const rhdataDb = dbManager.getConnection('rhdata');
       
       // First, get all games matching game filters (same logic as countRandomMatches)
@@ -2500,6 +2505,7 @@ function registerDatabaseHandlers(dbManager) {
         });
       }
       
+      console.log(`[count-random-stage-matches] Found ${filteredStages.length} matching stages`);
       return { success: true, count: filteredStages.length };
     } catch (error) {
       console.error('Error counting random stage matches:', error);
@@ -2818,6 +2824,7 @@ function registerDatabaseHandlers(dbManager) {
       
       // Get ASAR path from settings
       const asarPath = getClientSetting('asarPath') || null;
+      console.log('[stage-games] ASAR path from settings:', asarPath);
       
       const result = await gameStager.stageRunGames({
         dbManager,
@@ -3818,16 +3825,65 @@ function registerDatabaseHandlers(dbManager) {
       const snesPath = `/work/${subDirName}`;
       
       // Get USB2SNES wrapper
-      const wrapper = getSnesWrapper();
+      let wrapper = getSnesWrapper();
       
       console.log('[Upload Run] Wrapper:', !!wrapper);
       console.log('[Upload Run] isAttached:', wrapper ? wrapper.isAttached() : 'N/A');
       console.log('[Upload Run] getState:', wrapper ? wrapper.getState() : 'N/A');
       console.log('[Upload Run] hasImplementation:', wrapper ? wrapper.hasImplementation() : 'N/A');
       
-      // Check connection status
+      // Check connection status - attempt reconnect if not connected
       if (!wrapper || !wrapper.isAttached()) {
-        return { success: false, error: `USB2SNES not connected. State: ${wrapper ? wrapper.getState() : 'no wrapper'}, Attached: ${wrapper ? wrapper.isAttached() : 'N/A'}` };
+        console.log('[Upload Run] USB2SNES not connected, attempting to reconnect...');
+        
+        // Get USB2SNES settings
+        const usb2snesEnabled = getClientSetting('usb2snesEnabled') === '1';
+        if (!usb2snesEnabled) {
+          return { success: false, error: 'USB2SNES is disabled in settings' };
+        }
+        
+        const usb2snesLibrary = getClientSetting('usb2snesLibrary') || 'usb2snes_a';
+        const usb2snesAddress = getClientSetting('usb2snesAddress') || 'ws://localhost:64213';
+        const proxyMode = getClientSetting('usb2snesProxyMode') || 'none';
+        
+        // Build connection options
+        const connectOptions = {
+          library: usb2snesLibrary,
+          address: usb2snesAddress,
+          proxyMode: proxyMode !== 'none' ? proxyMode : undefined
+        };
+        
+        // Add proxy-specific options if needed
+        if (proxyMode === 'ssh') {
+          const sshRemotePort = getClientSetting('usb2snesSshRemotePort');
+          if (sshRemotePort) {
+            connectOptions.ssh = { remotePort: parseInt(sshRemotePort, 10) };
+          }
+        } else if (proxyMode === 'socks') {
+          const socksProxyUrl = getClientSetting('usb2snesSocksProxyUrl');
+          if (socksProxyUrl) {
+            connectOptions.socksProxyUrl = socksProxyUrl;
+          }
+        }
+        
+        try {
+          // Attempt to connect
+          await wrapper.fullConnect(usb2snesLibrary, connectOptions);
+          
+          // Wait a moment for connection to establish
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Re-check connection status
+          wrapper = getSnesWrapper();
+          if (!wrapper || !wrapper.isAttached()) {
+            return { success: false, error: `USB2SNES reconnection failed. State: ${wrapper ? wrapper.getState() : 'no wrapper'}, Attached: ${wrapper ? wrapper.isAttached() : 'N/A'}` };
+          }
+          
+          console.log('[Upload Run] USB2SNES reconnected successfully');
+        } catch (connectError) {
+          console.error('[Upload Run] Reconnection error:', connectError);
+          return { success: false, error: `USB2SNES reconnection failed: ${connectError.message}` };
+        }
       }
       
       // Create the run subdirectory ONCE before uploading files

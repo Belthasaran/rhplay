@@ -24,7 +24,7 @@
           </div>
 
           <!-- Stages Table -->
-          <div class="stages-table-wrapper">
+          <div class="stages-table-wrapper" ref="stagesTableWrapper">
             <table class="stages-table">
               <thead>
                 <tr>
@@ -655,6 +655,8 @@ const emit = defineEmits<{
 const loading = ref(false);
 const saving = ref(false);
 const testingLevel = ref(false);
+const stagesTableWrapper = ref<HTMLElement | null>(null);
+const savedScrollPosition = ref<number>(0);
 const testProgressDialogOpen = ref(false);
 const testProgressMessage = ref('');
 const stages = ref<GameStage[]>([]);
@@ -1057,6 +1059,17 @@ async function loadStages() {
           selectedStageUuid.value = matchingStage.stage_uuid || null;
         }
       }
+      
+      // Restore scroll position after stages load
+      // Use multiple nextTick calls and a small delay to ensure DOM is fully updated
+      await nextTick();
+      await nextTick();
+      // Small delay to ensure table is fully rendered
+      setTimeout(() => {
+        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+        }
+      }, 50);
     } else {
       console.error('Failed to load stages:', result?.error);
       stages.value = [];
@@ -1483,6 +1496,11 @@ async function deleteStage(stage: GameStage) {
 async function saveAll() {
   if (!isDevAdmin.value || currentMode.value !== 'edit') return;
   
+  // Save current scroll position before saving
+  if (stagesTableWrapper.value) {
+    savedScrollPosition.value = stagesTableWrapper.value.scrollTop;
+  }
+  
   saving.value = true;
   try {
     const api = (window as any)?.electronAPI;
@@ -1538,7 +1556,7 @@ async function saveAll() {
       alert(`Some stages failed to save:\n${errors.join('\n')}`);
     } else {
       emit('saved');
-      await loadStages();
+      await loadStages(); // This will restore scroll position
     }
   } catch (error: any) {
     alert(`Error saving stages: ${error?.message || String(error)}`);

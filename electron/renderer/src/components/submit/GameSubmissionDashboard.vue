@@ -670,6 +670,29 @@ async function openStagesEditor() {
     }
   }
   
+  // Clear existing stages in DB for this gameid to prevent duplicates
+  // (We'll sync draft stages fresh each time)
+  try {
+    const existingStages = await api.getGameStages({ 
+      gameid: current.value.meta.gameid,
+      version: current.value.meta.version || 1
+    });
+    if (existingStages?.success && existingStages?.stages && existingStages.stages.length > 0) {
+      // Delete all existing stages for this gameid
+      for (const stage of existingStages.stages) {
+        if (stage.stage_uuid && api.deleteGameStage) {
+          try {
+            await api.deleteGameStage({ stage_uuid: stage.stage_uuid });
+          } catch (e: any) {
+            console.warn('Failed to delete existing stage:', e);
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn('Failed to clear existing stages:', e);
+  }
+  
   // If we have draft stages, temporarily save them to DB so the dialog can load them
   if (current.value.meta.gamestages && current.value.meta.gamestages.length > 0) {
     try {
@@ -691,9 +714,9 @@ async function openStagesEditor() {
           difficulty: stage.difficulty ?? 0,
           mainexit: stage.mainexit ?? 1,
           keyhole: stage.keyhole ?? 0,
-            credits: stage.credits ?? 0,
-            water: stage.water ?? 0,
-            ghouse: stage.ghouse ?? 0,
+          credits: stage.credits ?? 0,
+          water: stage.water ?? 0,
+          ghouse: stage.ghouse ?? 0,
           spalace: stage.spalace ?? 0,
           castle: stage.castle ?? 0,
           boss: stage.boss ?? 0,
@@ -717,10 +740,10 @@ async function openStagesEditor() {
 
 async function handleStagesSaved() {
   // Load the stages from the database and store them in the draft
+  // Keep the dialog open so user can continue editing
   const api = (window as any)?.electronAPI;
   if (!api || !current.value || !current.value.meta.gameid) {
-    showStagesDialog.value = false;
-    return;
+    return; // Don't close dialog on error
   }
   
   try {
@@ -741,12 +764,13 @@ async function handleStagesSaved() {
       // No stages found, clear draft stages
       current.value.meta.gamestages = [];
     }
+    
+    // Auto-save draft to persist stages (but keep dialog open)
+    await saveDraftToDb();
   } catch (e: any) {
     console.warn('Failed to load stages after save:', e);
   }
-  showStagesDialog.value = false;
-  // Auto-save draft to persist stages
-  await saveDraftToDb();
+  // Don't close the dialog - let user continue editing
 }
 
 async function pickPatch() {

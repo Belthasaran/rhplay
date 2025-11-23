@@ -1123,8 +1123,8 @@
                 {{ currentStageInfo.levelname || currentChallenge.stageName || currentChallenge.levelname }}
               </span>
             </span>
-            <span class="challenge-difficulty" v-if="currentStageDifficulty !== null || currentChallenge.difficulty">
-              <span v-if="currentStageDifficulty !== null">
+            <span class="challenge-difficulty" v-if="currentStageDifficulty !== null && currentStageDifficulty !== undefined || currentChallenge.difficulty">
+              <span v-if="currentStageDifficulty !== null && currentStageDifficulty !== undefined">
                 {{ currentStageDifficulty }} {{ formatStageDifficulty(currentStageDifficulty) }}
               </span>
               <span v-else-if="currentChallenge.difficulty">
@@ -1140,7 +1140,7 @@
               class="btn-difficulty-dropdown"
               :class="{ 'active': currentStageFeedback?.difficulty_feedback !== null && currentStageFeedback?.difficulty_feedback !== undefined }"
             >
-              <span v-if="currentStageDifficulty !== null">
+              <span v-if="currentStageDifficulty !== null && currentStageDifficulty !== undefined">
                 Set Feedback on Difficulty Level ({{ currentStageDifficulty }} - {{ formatStageDifficulty(currentStageDifficulty) }})
               </span>
               <span v-else>
@@ -17032,19 +17032,13 @@ const isCurrentChallengeRandomStage = computed(() => {
 });
 
 const currentStageDifficulty = computed(() => {
-  // Use the reactive ref first, then fall back to challenge object
-  if (currentStageInfo.value.difficulty !== null) {
-    return currentStageInfo.value.difficulty;
+  // Directly return the difficulty from currentStageInfo - it can be 0, so check for null/undefined only
+  const difficulty = currentStageInfo.value.difficulty;
+  if (difficulty === null || difficulty === undefined) {
+    return null;
   }
-  if (!currentChallenge.value) return null;
-  const challenge = currentChallenge.value as any;
-  // Try to get stage difficulty from gamestages table if we have levelnumber
-  if (challenge.stageNumber || challenge.levelnumber) {
-    // Return the stageDifficulty if it's been loaded, otherwise return null
-    // This will be loaded asynchronously when challenge changes
-    return challenge.stageDifficulty !== undefined ? challenge.stageDifficulty : null;
-  }
-  return null;
+  // Return the number value (0 is valid)
+  return typeof difficulty === 'number' ? difficulty : null;
 });
 
 const canUndo = computed(() => undoStack.value.length > 0);
@@ -17073,17 +17067,33 @@ watch(currentChallengeIndex, async (newIndex, oldIndex) => {
           gameid,
           levelnumber
         });
+        console.log('[watch:currentChallengeIndex] Loaded stageInfo:', stageInfo);
         if (stageInfo) {
+          // Handle difficulty - it can be 0, so check for undefined/null explicitly
+          // Also convert to number if it's a string
+          let difficulty: number | null = null;
+          if (stageInfo.difficulty !== undefined && stageInfo.difficulty !== null) {
+            const parsed = typeof stageInfo.difficulty === 'string' 
+              ? parseInt(stageInfo.difficulty, 10) 
+              : Number(stageInfo.difficulty);
+            // Check if conversion resulted in NaN
+            if (!isNaN(parsed)) {
+              difficulty = parsed;
+            }
+          }
+          console.log('[watch:currentChallengeIndex] Parsed difficulty:', difficulty, 'type:', typeof difficulty);
           currentStageInfo.value = {
-            difficulty: stageInfo.difficulty !== undefined ? stageInfo.difficulty : null,
+            difficulty: difficulty,
             levelname: stageInfo.levelname || null
           };
+          console.log('[watch:currentChallengeIndex] Set currentStageInfo.value:', currentStageInfo.value);
           // Also update challenge object for backwards compatibility
-          (challenge as any).stageDifficulty = stageInfo.difficulty;
+          (challenge as any).stageDifficulty = difficulty;
           if (stageInfo.levelname) {
             (challenge as any).levelname = stageInfo.levelname;
           }
         } else {
+          console.log('[watch:currentChallengeIndex] No stageInfo found for', gameid, levelnumber);
           currentStageInfo.value = { difficulty: null, levelname: null };
         }
         
@@ -19514,6 +19524,40 @@ async function revealCurrentChallenge(revealedEarly: boolean = false) {
         runEntries.splice(idx, 1, updatedEntry);
         
         console.log('[revealCurrentChallenge] After splice - entry at idx', idx, 'id:', runEntries[idx].id, 'name:', runEntries[idx].name);
+        
+        // Reload stage info now that we have the real gameid
+        if (updatedEntry.stageNumber || updatedEntry.levelnumber) {
+          console.log('[revealCurrentChallenge] Reloading stage info with gameid:', result.gameid, 'levelnumber:', updatedEntry.stageNumber || updatedEntry.levelnumber);
+          try {
+            const stageInfo = await (window as any).electronAPI.getStageInfo({
+              gameid: result.gameid,
+              levelnumber: updatedEntry.stageNumber || updatedEntry.levelnumber
+            });
+            console.log('[revealCurrentChallenge] Loaded stageInfo after reveal:', stageInfo);
+            if (stageInfo) {
+              let difficulty: number | null = null;
+              if (stageInfo.difficulty !== undefined && stageInfo.difficulty !== null) {
+                const parsed = typeof stageInfo.difficulty === 'string' 
+                  ? parseInt(stageInfo.difficulty, 10) 
+                  : Number(stageInfo.difficulty);
+                if (!isNaN(parsed)) {
+                  difficulty = parsed;
+                }
+              }
+              console.log('[revealCurrentChallenge] Setting difficulty to:', difficulty);
+              currentStageInfo.value = {
+                difficulty: difficulty,
+                levelname: stageInfo.levelname || null
+              };
+            } else {
+              console.log('[revealCurrentChallenge] No stageInfo found after reveal');
+              currentStageInfo.value = { difficulty: null, levelname: null };
+            }
+          } catch (error) {
+            console.error('[revealCurrentChallenge] Error loading stage info after reveal:', error);
+            currentStageInfo.value = { difficulty: null, levelname: null };
+          }
+        }
       } else {
         console.error('[revealCurrentChallenge] Missing gameid or gameName in result!');
         console.error('[revealCurrentChallenge] result.gameid:', result.gameid);

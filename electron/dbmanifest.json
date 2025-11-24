@@ -61,7 +61,13 @@
         "type": "sql",
         "sha256": "6525c1516bc9db976eb5ed57ef959a595ff0bddeabb05ab7e25a37c729f25d6f",
         "ipfs_cidv1": "bafybeiddqd7voi54wg2h5vvbtmqbcw5oxlccmnsv5maybfrmw7vh7nigye",
-        "size": "1815408"
+        "size": "1815408",
+        "ardrive_file_name": "rhdata-update-20251124.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/rhdata-update-20251124.sql.xz",
+        "ardrive_file_id": "12164a23-a822-4699-8fed-757b7f892298",
+        "data_txid": "BKmfG7yfqVzlJp-oBZa0yQeeMvR26XK2GbWmLfEezxk",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
       }
     ]
   },

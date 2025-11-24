@@ -39,36 +39,15 @@
   },
   "rhdata.db": {
     "base": {
-      "file_name": "full_rhdata_2025_11_01.tar.xz",
+      "file_name": "full_rhdata_2025_11_24.tar.xz",
       "format": "tar+xz",
       "extract_file": "rhdata.db",
-      "sha256": "9aabf94d877c9f1e374719410f6bf62825cdcd97827898064bb21014d8d78682",
-      "ardrive_file_name": "full_rhdata_2025_11_01.tar.xz",
-      "ardrive_file_path": "/SMWRH/db/full_rhdata_2025_11_01.tar.xz",
-      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
-      "adrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
-      "ardrive_file_id": "448aa036-a776-40c4-a884-fa5f6d989286",
-      "data_txid": "t5hmi4FA6b3cAWoBSdQWbSGANdO4X3rIrg4mDOOARVc",
-      "metadata_txid": "t5hmi4FA6b3cAWoBSdQWbSGANdO4X3rIrg4mDOOARVc",
-      "ipfs_cidv1": "bafybeidhoun3b2wjksyqwj6xvrdqzi22akm5qjyflbevlkhq3v5bit73am",
-      "size": "36643676",
-      "extracted_sha256": "7bab2e567e79805ad432613ae14718c5c64a29e92a2be3ac26c605a58b26d64b"
+      "sha256": "92abd802b315235fa261a82ccf9b0cd455813a63026497ff8e204badb5a37cc2",
+      "ipfs_cidv1": "bafybeie3qmarxkrkxzi4hkzrfxsglzknxbtxbo3exxydg5qeq6plveixcq",
+      "size": "29759152",
+      "extracted_sha256": "e053d7c13dd63ac034575b104b18909a91821540c5836a6a406755377119d037"
     },
     "sqlpatches": [
-      {
-        "file_name": "rhdata-update-20251124.sql.xz",
-        "format": "xz",
-        "type": "sql",
-        "sha256": "6525c1516bc9db976eb5ed57ef959a595ff0bddeabb05ab7e25a37c729f25d6f",
-        "ipfs_cidv1": "bafybeiddqd7voi54wg2h5vvbtmqbcw5oxlccmnsv5maybfrmw7vh7nigye",
-        "size": "1815408",
-        "ardrive_file_name": "rhdata-update-20251124.sql.xz",
-        "ardrive_file_path": "/SMWRH/db/patch/rhdata-update-20251124.sql.xz",
-        "ardrive_file_id": "12164a23-a822-4699-8fed-757b7f892298",
-        "data_txid": "BKmfG7yfqVzlJp-oBZa0yQeeMvR26XK2GbWmLfEezxk",
-        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
-        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
-      }
     ]
   },
   "patchbin.db": {

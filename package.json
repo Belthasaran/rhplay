@@ -171,6 +171,14 @@
         "to": "db/clientdata.db.initial.xz"
       },
       {
+        "from": "electron/packed_db/resource.db.initial.xz",
+        "to": "db/resource.db.initial.xz"
+      },
+      {
+        "from": "electron/packed_db/screenshot.db.initial.xz",
+        "to": "db/screenshot.db.initial.xz"
+      },
+      {
         "from": "electron/installer/prepare_databases.js",
         "to": "db/prepare_databases.js"
       },

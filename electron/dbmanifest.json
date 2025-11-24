@@ -17,6 +17,26 @@
       "size": "36308"
     }
   },
+  "resource.db" : {
+	  "base": {
+		  "source_path" : "packed_db/resource.db.initial.xz",
+		  "file_name" : "resource.db.initial.xz",
+		  "format" : "xz",
+		  "sha256" : "355e388186d8f69da4b198eb6b897f2aa6455ec6b01ef93cfc2a6b14bdfd6286",
+		  "ipfs_cidv1" : "bafybeihovtzzey5jyxrlbbwr7fxr4sqm6wtnqyl254p6fnaek37ijl2b5y",
+		  "size" : "2214364"
+	  }
+  },
+  "screenshot.db" : {
+          "base": {
+                  "source_path" : "packed_db/screenshot.db.initial.xz",
+                  "file_name" : "screenshot.db.initial.xz",
+                  "format" : "xz",
+                  "sha256" : "9ee9f45f88656f840fa0fc8e30e24338459dff32d08de87046bfa76322a04fe7",
+                  "ipfs_cidv1" : "bafkreie65h2f7cdfn6ca7ih4ryyoeqzyiwo76mwqrxuharv7u5rsficp44",
+                  "size" : "138440"
+          }
+  },
   "rhdata.db": {
     "base": {
       "file_name": "full_rhdata_2025_11_01.tar.xz",

@@ -24,8 +24,15 @@
       "format": "xz",
       "sha256": "355e388186d8f69da4b198eb6b897f2aa6455ec6b01ef93cfc2a6b14bdfd6286",
       "ipfs_cidv1": "bafybeihovtzzey5jyxrlbbwr7fxr4sqm6wtnqyl254p6fnaek37ijl2b5y",
-      "size": "2214364"
-    }
+      "size": "2214364",
+      "ardrive_file_name": "resource.db.initial.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/resource.db.initial.xz",
+      "ardrive_file_id": "b1782d13-a883-4ff4-9584-3f2a28759d91",
+      "data_txid": "x5kMrsaoZohKfefIhdg6vqcElaIvqCeQKnX9Px1MnX4",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+    },
+    "sqlpatches": []
   },
   "screenshot.db": {
     "base": {
@@ -34,8 +41,15 @@
       "format": "xz",
       "sha256": "9ee9f45f88656f840fa0fc8e30e24338459dff32d08de87046bfa76322a04fe7",
       "ipfs_cidv1": "bafkreie65h2f7cdfn6ca7ih4ryyoeqzyiwo76mwqrxuharv7u5rsficp44",
-      "size": "138440"
-    }
+      "size": "138440",
+      "ardrive_file_name": "screenshot.db.initial.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/screenshot.db.initial.xz",
+      "ardrive_file_id": "a2751c02-5516-4993-9f4a-cfa3345a2f6d",
+      "data_txid": "_8XEVQUg7Snw7ybDxP27_1NxHnyi-S8vxCUNz-AfTQk",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+    },
+    "sqlpatches": []
   },
   "rhdata.db": {
     "base": {
@@ -45,7 +59,13 @@
       "sha256": "92abd802b315235fa261a82ccf9b0cd455813a63026497ff8e204badb5a37cc2",
       "ipfs_cidv1": "bafybeie3qmarxkrkxzi4hkzrfxsglzknxbtxbo3exxydg5qeq6plveixcq",
       "size": "29759152",
-      "extracted_sha256": "e053d7c13dd63ac034575b104b18909a91821540c5836a6a406755377119d037"
+      "extracted_sha256": "e053d7c13dd63ac034575b104b18909a91821540c5836a6a406755377119d037",
+      "ardrive_file_name": "full_rhdata_2025_11_24.tar.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/full_rhdata_2025_11_24.tar.xz",
+      "ardrive_file_id": "50011442-9c7d-4bf3-aa80-060b87cbdee4",
+      "data_txid": "4f9T7qk1cQ2EMAmF2Brg1uAmzAw5PyxIzZexjkFKQ5s",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
     },
     "sqlpatches": []
   },

@@ -238,7 +238,13 @@
         "type": "sql",
         "sha256": "2af10abcf694a3c8fde4e3f16e07eb2ceca6131eb70b22101f4f2e977d5d194c",
         "ipfs_cidv1": "bafybeihqk36h7bkng4zgic6fptkaqtnqxa3tqy6hi3jeok2o6amp5wsiie",
-        "size": "1528456"
+        "size": "1528456",
+        "ardrive_file_name": "patchbin-update_002-to-003.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/patchbin-update_002-to-003.sql.xz",
+        "ardrive_file_id": "489df88a-78d6-4777-957b-0c506f0fb8fc",
+        "data_txid": "YqOcxNUZzYcMltrUoqFgCjUUpIBuZn9kAB4QkcbTkPc",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
       }
     ]
   }

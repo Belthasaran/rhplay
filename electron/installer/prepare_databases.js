@@ -39,6 +39,8 @@ const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
   { name: 'rhdata.db', manifestKey: 'rhdata.db', embedded: false },
   { name: 'patchbin.db', manifestKey: 'patchbin.db', embedded: false },
+  { name: 'resource.db', manifestKey: 'resource.db', embedded: true },
+  { name: 'screenshot.db', manifestKey: 'screenshot.db', embedded: true},
 ];
 
 const HELP_TEXT = `

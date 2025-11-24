@@ -1525,13 +1525,29 @@ async function findUberASMTool(dbManager) {
     `).get();
     
     if (row && row.csetting_value) {
-      const exePath = path.join(row.csetting_value, 'UberASMTool.exe');
+      const settingValue = row.csetting_value.trim();
+      let exePath;
+      
+      // Check if setting is already a full path to the exe
+      if (settingValue.toLowerCase().endsWith('uberasmtool.exe')) {
+        exePath = settingValue;
+      } else {
+        // Treat as directory and append exe name
+        exePath = path.join(settingValue, 'UberASMTool.exe');
+      }
+      
+      // Normalize path (resolve relative paths, handle .., etc.)
+      exePath = path.resolve(exePath);
+      
       if (fs.existsSync(exePath) && validateUberASMTool(exePath)) {
         console.log(`  ✓ Found UberASMTool via database setting: ${exePath}`);
         return exePath;
+      } else {
+        console.log(`  ✗ Database setting path not valid: ${exePath} (exists: ${fs.existsSync(exePath)})`);
       }
     }
   } catch (e) {
+    console.error(`  ✗ Error checking database setting: ${e.message}`);
     // Continue to next check
   }
   
@@ -1561,6 +1577,16 @@ async function findUberASMTool(dbManager) {
     searchDirs.push(appData);
     searchDirs.push(path.join(appData, 'rhtools'));
     searchDirs.push(path.join(appData, 'rhplay'));
+    
+    // Also check directly in %APPDATA%\rhtools\ for UberASMTool.exe (not in a subdirectory)
+    const rhtoolsDir = path.join(appData, 'rhtools');
+    if (fs.existsSync(rhtoolsDir)) {
+      const directExePath = path.join(rhtoolsDir, 'UberASMTool.exe');
+      if (fs.existsSync(directExePath) && validateUberASMTool(directExePath)) {
+        console.log(`  ✓ Found UberASMTool directly in rhtools directory: ${directExePath}`);
+        return directExePath;
+      }
+    }
   } else {
     const homeDir = process.env.HOME || '/root';
     searchDirs.push('/usr/local');

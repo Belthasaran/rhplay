@@ -47,8 +47,7 @@
       "size": "29759152",
       "extracted_sha256": "e053d7c13dd63ac034575b104b18909a91821540c5836a6a406755377119d037"
     },
-    "sqlpatches": [
-    ]
+    "sqlpatches": []
   },
   "patchbin.db": {
     "base": {

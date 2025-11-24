@@ -294,21 +294,45 @@ async function updateFromArdrive(entry) {
   const index = await fetchArdriveFileIndex(DEFAULT_PATCH_FOLDER_ID);
   let updated = 0;
 
-  for (const patch of entry.sqlpatches) {
-    if (!needsArdriveMetadata(patch)) {
-      continue;
+  // Update base entry if it exists
+  if (entry.base) {
+    if (needsArdriveMetadata(entry.base)) {
+      const file = index.get(entry.base.file_name);
+      if (file) {
+        if (applyArdriveMetadata(entry.base, file)) {
+          updated += 1;
+          console.log(`[update_dbmanifest] Updated base entry for "${entry.base.file_name}"`);
+        } else {
+          console.log(`[update_dbmanifest] Base entry "${entry.base.file_name}" already has all ArDrive metadata`);
+        }
+      } else {
+        console.warn(
+          `[update_dbmanifest] ArDrive file not found for base "${entry.base.file_name}". Searched in folder ${DEFAULT_PATCH_FOLDER_ID}`
+        );
+      }
+    } else {
+      console.log(`[update_dbmanifest] Base entry "${entry.base.file_name}" already has all required ArDrive metadata`);
     }
+  }
 
-    const file = index.get(patch.file_name);
-    if (!file) {
-      console.warn(
-        `[update_dbmanifest] ArDrive file not found for "${patch.file_name}". Skipping metadata update.`
-      );
-      continue;
-    }
+  // Update sqlpatches entries
+  if (entry.sqlpatches && Array.isArray(entry.sqlpatches)) {
+    for (const patch of entry.sqlpatches) {
+      if (!needsArdriveMetadata(patch)) {
+        continue;
+      }
 
-    if (applyArdriveMetadata(patch, file)) {
-      updated += 1;
+      const file = index.get(patch.file_name);
+      if (!file) {
+        console.warn(
+          `[update_dbmanifest] ArDrive file not found for "${patch.file_name}". Skipping metadata update.`
+        );
+        continue;
+      }
+
+      if (applyArdriveMetadata(patch, file)) {
+        updated += 1;
+      }
     }
   }
 

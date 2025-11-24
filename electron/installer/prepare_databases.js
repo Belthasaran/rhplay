@@ -722,7 +722,11 @@ async function applySqlPatch(dbPath, sqlPath, originName) {
     db.exec(sql);
     //db.exec('COMMIT;');
   } catch (err) {
+    try { 
     db.exec('ROLLBACK;');
+    } catch (rberr) {
+	    //
+    }
     throw new Error(`Failed to apply ${originName}: ${err.message}`);
   } finally {
     db.close();

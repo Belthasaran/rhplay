@@ -12,7 +12,7 @@ const fernet = require('fernet');
 const sevenZip = require('7zip-min');
 const { path7za } = require('7zip-bin');
 
-const SKIP_CLEANUP_FOR_NOW = 1;
+const SKIP_CLEANUP_FOR_NOW = 0;
 const gameGenieDecoder = require('./utils/gamegenie-decoder');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path

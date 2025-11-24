@@ -22,7 +22,7 @@
  *   --write-plan <file>       Write JSON plan to file in addition to stdout
  *   --help                    Show usage information
  *
- * Databases handled: clientdata.db, rhdata.db, patchbin.db
+ * Databases handled: clientdata.db, rhdata.db, patchbin.db, screenshot.db, resource.db
  */
 
 const fs = require('fs');
@@ -414,30 +414,51 @@ function copyManifestToWorkingDir(manifestPath, workingDir) {
   return destPath;
 }
 
-function locateEmbeddedClientSeed() {
+/**
+ * Locate an embedded database seed file for a given database name.
+ * Searches for both .xz compressed and uncompressed versions.
+ * 
+ * @param {string} dbName - Database filename (e.g., 'clientdata.db', 'screenshot.db')
+ * @returns {string|null} - Path to the seed file, or null if not found
+ */
+function locateEmbeddedSeed(dbName) {
+  const baseName = path.basename(dbName, '.db');
   const candidates = [
-    path.resolve(__dirname, '..', 'packed_db', 'clientdata.db.initial.xz'),
-    path.resolve(__dirname, '..', 'db', 'clientdata.db'),
+    path.resolve(__dirname, '..', 'packed_db', `${dbName}.initial.xz`),
+    path.resolve(__dirname, '..', 'packed_db', `${baseName}.db.initial.xz`),
+    path.resolve(__dirname, '..', 'db', dbName),
   ];
 
   if (process.resourcesPath) {
-    candidates.push(path.join(process.resourcesPath, 'db', 'clientdata.db.initial.xz'));
-    candidates.push(path.join(process.resourcesPath, 'db', 'clientdata.db'));
+    candidates.push(path.join(process.resourcesPath, 'db', `${dbName}.initial.xz`));
+    candidates.push(path.join(process.resourcesPath, 'db', `${baseName}.db.initial.xz`));
+    candidates.push(path.join(process.resourcesPath, 'db', dbName));
+    candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'packed_db', `${dbName}.initial.xz`));
+    candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'packed_db', `${baseName}.db.initial.xz`));
   }
 
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
-async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
+/**
+ * Stage an embedded database seed file to the user data directory.
+ * Handles both compressed (.xz) and uncompressed database files.
+ * 
+ * @param {string} dbName - Database filename (e.g., 'clientdata.db', 'screenshot.db')
+ * @param {string} userDataDir - Target user data directory
+ * @param {boolean} overwrite - Whether to overwrite existing database
+ * @returns {Promise<string>} - Path to the staged database file
+ */
+async function stageEmbeddedDb(dbName, userDataDir, overwrite = true) {
   ensureDirectory(userDataDir);
 
-  const source = locateEmbeddedClientSeed();
+  const source = locateEmbeddedSeed(dbName);
 
   if (!source) {
-    throw new Error(`Embedded clientdata.db seed not found in expected locations.`);
+    throw new Error(`Embedded ${dbName} seed not found in expected locations.`);
   }
 
-  const destination = path.join(userDataDir, 'clientdata.db');
+  const destination = path.join(userDataDir, dbName);
   if (!overwrite && fs.existsSync(destination)) {
     return destination;
   }
@@ -461,6 +482,22 @@ async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
   }
 
   return destination;
+}
+
+/**
+ * @deprecated Use stageEmbeddedDb() instead
+ * Legacy function for backward compatibility.
+ */
+function locateEmbeddedClientSeed() {
+  return locateEmbeddedSeed('clientdata.db');
+}
+
+/**
+ * @deprecated Use stageEmbeddedDb() instead
+ * Legacy function for backward compatibility.
+ */
+async function stageEmbeddedClientDb(userDataDir, overwrite = true) {
+  return stageEmbeddedDb('clientdata.db', userDataDir, overwrite);
 }
 
 const IPFS_GATEWAYS = [
@@ -730,7 +767,7 @@ async function executeProvision(plan, manifest) {
     try {
       console.log(`[provision] ${db.name}: action=${db.action}`);
       if (db.action === 'copy-embedded') {
-        const dest = await stageEmbeddedClientDb(paths.finalDir, true);
+        const dest = await stageEmbeddedDb(db.name, paths.finalDir, true);
         result.executed.push({ name: db.name, action: 'copied-embedded', path: dest });
         console.log(`[provision] ${db.name}: embedded seed copied to ${dest}`);
       } else if (db.action === 'provision-from-manifest') {
@@ -782,19 +819,13 @@ async function run(argv) {
     if (opts.ensureDirs) {
       const manifestCopyPath = copyManifestToWorkingDir(opts.manifestPath, opts.workingDir);
       plan.workingManifestPath = manifestCopyPath;
-      const embeddedSeed = locateEmbeddedClientSeed();
-      if (embeddedSeed) {
-        plan.clientdataSeedSource = embeddedSeed;
-        if (opts.provision) {
-          try {
-            const stagedClientSeed = await stageEmbeddedClientDb(opts.userDataDir, false);
-            plan.clientdataSeedPath = stagedClientSeed;
-          } catch (err) {
-            plan.clientdataSeedError = err.message;
-          }
+      // Check for embedded seeds (for informational purposes in plan)
+      plan.embeddedSeeds = {};
+      for (const db of DATABASES.filter((d) => d.embedded)) {
+        const seedPath = locateEmbeddedSeed(db.name);
+        if (seedPath) {
+          plan.embeddedSeeds[db.name] = seedPath;
         }
-      } else {
-        plan.clientdataSeedError = 'Embedded clientdata seed not found.';
       }
     }
 

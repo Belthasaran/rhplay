@@ -56,12 +56,12 @@
     },
     "sqlpatches": [
       {
-        "file_name": "rhdata-update002-to-003.sql.xz",
+        "file_name": "rhdata-update-20251124.sql.xz",
         "format": "xz",
         "type": "sql",
-        "sha256": "31cc3213e009847f9b9e48917baf572b7fbfc35cd36bfa2c0eb27877dcceceb8",
-        "ipfs_cidv1": "bafkreibrzqzbhyajqr7zxhsisf526vzlp674gxgtnp5cydvspb35ztwoxa",
-        "size": "61684"
+        "sha256": "6525c1516bc9db976eb5ed57ef959a595ff0bddeabb05ab7e25a37c729f25d6f",
+        "ipfs_cidv1": "bafybeiddqd7voi54wg2h5vvbtmqbcw5oxlccmnsv5maybfrmw7vh7nigye",
+        "size": "1815408"
       }
     ]
   },

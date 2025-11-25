@@ -16,10 +16,14 @@ This program is incomplete and a work in progress.
    *  Please install the pre-requisites Including: Flips, Asar,
       and a Legally-acquired original SMW rom as discussed in the Section Pre-requisites.
  Download
-    Option to Download FLIPS and such from
-      https://github.com/Belthasaran/rhtools/releases
+    Option to Download FLIPS and such from:
+    Github release page:
 
-The release is being mirrored to ArDrive - an [arweave](https://arweave.org/) backed system which provides for data preservation.
+      https://github.com/Belthasaran/rhplay/releases
+
+The release and databases which record information about games, such as the list of stage names, descriptions, authors, tags, patch data, etc, is being mirrored to ArDrive - an [arweave](https://arweave.org/) backed system which provides for long-term data preservation.
+
+This contains everything you need to get up and running, EXCEPT we do not distribute any original Mario world ROM nor standaloen games, only cached patch data and metadata. See the Pre-requisites section for more information.
 
 A Manifest pointed to 0.1.9beta Source of this release and game description databases is mirrored to the Permaweb at:
   Data Tx Id: DK1pEOvS1Ztc18sEubvm4F7yPrql_OQU7G7GA7rs2hA

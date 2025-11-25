@@ -509,6 +509,11 @@ To create a temporary local id.
 
 The hope would be that in a future version Hack creators or users could submit their JSON Hack metadata to be added, and all users of the program would then have access to all games.
 
+-- NOTE That said Python scripts are not suitable anymore for the current databases.   A new GUI interface for RHPAK Submission preparation is being worked on within the Electron application's  Online section for Game Submissions tab.    The interface to create a submission RHPAK file is being made completely graphical,  And there will eventually be a section within that GUI allowing the game creator to define  gamestage records  to be included as an element of their game's RHPAK file.   So that RHPAK files can be submitted complete with game BPS (Patch data) and gamestage records.
+
+
+
+
 
 
 

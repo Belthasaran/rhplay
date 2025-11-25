@@ -78,6 +78,7 @@ time in order to use a Usb2snes server on a remote computer.
 
 B. You will currently need to install your  clientsettings.db  rhdata.db and patchbin.db  files in  %APPDATA%\rhtools\
 manually.      The database files are Not included with standalone binary.  You have to install them.
+The release Executable now has a built-in database provisioning assistant which will help you.   Run the RHplay program for instructions if necessary.
 
 C. You must install a clean base ROM for all patching.    Please place  your base  .sfc file  (Vanilla SMW)  to   %APPDATA%\rhtools\smw.sfc   
 The file data must match these specifications to be accepted:   Filename: smw.sfc

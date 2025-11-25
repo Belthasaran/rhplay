@@ -21,14 +21,10 @@ This program is incomplete and a work in progress.
 
 The release is being mirrored to ArDrive - an [arweave](https://arweave.org/) backed system which provides for data preservation.
 
-Release files for 0.1 beta should be in the devfiles folder 
-
-If a copy of asar,  flips, or any of the required programs are not available from SMWC, then check the ArDrive.
-
-        drive id 58677413-8a0c-4982-944d-4a1b40454039
-        devfiles folder id 270850dc-ac25-4550-a673-528016f9b457
-        https://app.ardrive.io/#/drives/58677413-8a0c-4982-944d-4a1b40454039?name=SMWRH
-       devfiles folder:  https://app.ardrive.io/#/file/7b83e178-c8f6-48f2-972b-f8b64c88821e/view
+A Manifest pointed to 0.1.9beta Source of this release and game description databases is mirrored to the Permaweb at:
+  Data Tx Id: DK1pEOvS1Ztc18sEubvm4F7yPrql_OQU7G7GA7rs2hA
+  Metadata Tx Id: MJDsk-3v8ATxOgRWDV7Fk35FcnFxwZjyqIKIDtQbjZk
+  ArNS Name: rhplay_smwresource
 
 ## NEW Initial Release
 

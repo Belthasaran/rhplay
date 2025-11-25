@@ -446,7 +446,9 @@ In any case..  Patch number 20 allows me to jump into the game and try out playi
 Of course after finishing the level it will not naturally proceed to the next level.  
 
 
-# JSON Format for specifying custom patches
+# JSON Format for specifying custom patches (Deprecated, No longer used)
+
+The replacement is CSV gamestages data.   Please see docs/GAMESTAGES.md
 
 This functionality is not yet checked in Lvlrand, but the expectation is to be able to Add JSON fields for indicating 
 the hack-specific level id patch number, or custom ASM template, Instead of log.txt:  when adding a hack to the database.

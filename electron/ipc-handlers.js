@@ -1212,6 +1212,20 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('fs:readFile', async (_event, { filePath } = {}) => {
+    try {
+      if (!filePath) {
+        return { success: false, error: 'filePath is required' };
+      }
+      const fs = require('fs');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return { success: true, content };
+    } catch (error) {
+      console.error('[fs:readFile] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('tags:map:get', async () => {
     try {
       const fs = require('fs');
@@ -6041,6 +6055,24 @@ function registerDatabaseHandlers(dbManager) {
         defaultPath: options.defaultPath
       });
       return result;
+    } catch (error) {
+      console.error('Error in file selection:', error);
+      return { canceled: true };
+    }
+  });
+
+  ipcMain.handle('dialog:selectFile', async (event, options) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: options.title || 'Select File',
+        filters: options.filters || [],
+        properties: ['openFile'],
+        defaultPath: options.defaultPath
+      });
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { canceled: true };
+      }
+      return { canceled: false, filePath: result.filePaths[0] };
     } catch (error) {
       console.error('Error in file selection:', error);
       return { canceled: true };

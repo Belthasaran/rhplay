@@ -638,6 +638,159 @@
     </div>
   </Teleport>
 
+  <!-- CSV Import Dialog -->
+  <Teleport to="body">
+    <div v-if="showCSVImportDialog" class="modal-backdrop csv-import-backdrop" @click.self="closeCSVImportDialog" style="z-index: 25000;">
+      <div class="modal large-modal csv-import-modal">
+        <header class="modal-header">
+          <h3>Import Stages from CSV - {{ gameId }}</h3>
+          <button class="close" @click="closeCSVImportDialog">✕</button>
+        </header>
+        <section class="modal-body">
+          <div v-if="csvImportLoading" class="loading-message">Loading CSV file...</div>
+          
+          <template v-else-if="csvImportStages.length > 0">
+            <!-- Import Options -->
+            <div class="csv-import-options">
+              <div class="option-group">
+                <label>
+                  <input 
+                    type="checkbox" 
+                    v-model="csvImportOptions.unselectExisting"
+                    @change="updateCSVImportSelection"
+                  />
+                  Unselect Stages whose stage id is already in use
+                </label>
+              </div>
+              
+              <div class="option-group">
+                <label><strong>Duplicates:</strong></label>
+                <div class="radio-group">
+                  <label>
+                    <input 
+                      type="radio" 
+                      v-model="csvImportOptions.duplicateMode" 
+                      value="update"
+                      @change="updateCSVImportSelection"
+                    />
+                    Option 1 (default): If stage levelnumber already exists for this gameid, update its data to match the row from the CSV
+                  </label>
+                  <label>
+                    <input 
+                      type="radio" 
+                      v-model="csvImportOptions.duplicateMode" 
+                      value="import"
+                      @change="updateCSVImportSelection"
+                    />
+                    Option 2: Import with Duplicates (may create temporary duplicates)
+                  </label>
+                </div>
+              </div>
+              
+              <div class="option-group">
+                <label>
+                  <input 
+                    type="checkbox" 
+                    v-model="csvImportOptions.includeUuid"
+                  />
+                  Include UUID: Process stage_uuid from CSV when updating a duplicate record
+                </label>
+                <label>
+                  <input 
+                    type="checkbox" 
+                    v-model="csvImportOptions.ignoreUuid"
+                  />
+                  Ignore UUID: Generate new UUIDs as required during import (keep existing UUID if updating)
+                </label>
+              </div>
+            </div>
+
+            <!-- CSV Stages Table -->
+            <div class="table-wrapper">
+              <table class="csv-import-table">
+                <thead>
+                  <tr>
+                    <th class="checkbox-cell">
+                      <input 
+                        type="checkbox" 
+                        :checked="allCSVStagesSelected"
+                        :indeterminate="someCSVStagesSelected"
+                        @change="toggleSelectAllCSVStages"
+                        title="Select/Deselect all visible stages"
+                      />
+                    </th>
+                    <th>Lev#</th>
+                    <th>L.Name</th>
+                    <th>Status</th>
+                    <th>Trans</th>
+                    <th>Sub</th>
+                    <th>X</th>
+                    <th>Y</th>
+                    <th>Diff</th>
+                    <th>P</th>
+                    <th>R</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr 
+                    v-for="stage in csvImportStages" 
+                    :key="stage._rowIndex"
+                    :class="{
+                      'locked': stage._isLocked,
+                      'exists': stage._exists && !stage._isLocked,
+                      'new': !stage._exists
+                    }"
+                    @click="!stage._isLocked && toggleCSVStageSelection(stage)"
+                  >
+                    <td class="checkbox-cell">
+                      <input 
+                        type="checkbox" 
+                        :checked="selectedCSVStages.has(stage._rowIndex)"
+                        :disabled="stage._isLocked"
+                        @change.stop="!stage._isLocked && toggleCSVStageSelection(stage)"
+                      />
+                    </td>
+                    <td class="monospace">{{ stage.levelnumber || '-' }}</td>
+                    <td>{{ stage.levelname || '-' }}</td>
+                    <td>
+                      <span v-if="stage._isLocked" class="status-badge locked-badge">Locked</span>
+                      <span v-else-if="stage._exists" class="status-badge exists-badge">Exists</span>
+                      <span v-else class="status-badge new-badge">New</span>
+                    </td>
+                    <td class="monospace">{{ stage.translevel_13bf || '-' }}</td>
+                    <td class="monospace">{{ stage.submapid || '-' }}</td>
+                    <td class="monospace">{{ stage.tile_x || '-' }}</td>
+                    <td class="monospace">{{ stage.tile_y || '-' }}</td>
+                    <td>{{ stage.difficulty ?? '-' }}</td>
+                    <td>{{ stage.playable ?? 0 }}</td>
+                    <td>{{ stage.rando ?? 0 }}</td>
+                  </tr>
+                  <tr v-if="csvImportStages.length === 0">
+                    <td :colspan="11" class="empty-message">No stages found in CSV</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+          
+          <div v-else-if="!csvImportLoading" class="empty-message">
+            No stages loaded. Please select a CSV file to import.
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button 
+            @click="addSelectedCSVStages" 
+            class="btn-primary"
+            :disabled="selectedCSVStages.size === 0"
+          >
+            Add Selected ({{ selectedCSVStages.size }})
+          </button>
+          <button @click="closeCSVImportDialog" class="btn-secondary">Cancel</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
+
   <!-- Toast Notification - Teleported outside modal, always rendered -->
   <Teleport to="body">
     <ToastNotification ref="toastNotificationRef" />
@@ -738,6 +891,18 @@ const editingExtraDescriptionText = ref<string>('');
 const showTagsDialog = ref(false);
 const editingTagsStage = ref<GameStage | null>(null);
 const editingTagsText = ref<string>('');
+
+// CSV Import state
+const showCSVImportDialog = ref(false);
+const csvImportLoading = ref(false);
+const csvImportStages = ref<any[]>([]);
+const selectedCSVStages = ref<Set<number>>(new Set());
+const csvImportOptions = ref({
+  unselectExisting: false,
+  duplicateMode: 'update' as 'update' | 'import',
+  includeUuid: false,
+  ignoreUuid: true
+});
 
 const toastNotificationRef = ref<InstanceType<typeof ToastNotification> | null>(null);
 
@@ -1914,10 +2079,334 @@ async function exportStagesToCSV() {
   }
 }
 
+// Computed properties for CSV import selection
+const allCSVStagesSelected = computed(() => {
+  const selectableStages = csvImportStages.value.filter(s => !s._isLocked);
+  if (selectableStages.length === 0) return false;
+  return selectableStages.every(stage => selectedCSVStages.value.has(stage._rowIndex));
+});
+
+const someCSVStagesSelected = computed(() => {
+  const selectableStages = csvImportStages.value.filter(s => !s._isLocked);
+  if (selectableStages.length === 0) return false;
+  const selectedCount = selectableStages.filter(stage => selectedCSVStages.value.has(stage._rowIndex)).length;
+  return selectedCount > 0 && selectedCount < selectableStages.length;
+});
+
 async function importStagesFromCSV() {
-  // TODO: Implement CSV import with selection dialog
-  // For now, just show a placeholder message
-  alert('CSV Import functionality will be implemented next. This will allow you to import stages from a CSV file with duplicate handling options.');
+  if (!props.gameId) {
+    alert('No game selected');
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.selectFile || !api?.readFile) {
+      alert('File selection functionality not available');
+      return;
+    }
+    
+    // Prompt for CSV file
+    const selectResult = await api.selectFile({
+      title: 'Import Stages from CSV',
+      filters: [
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (selectResult.canceled || !selectResult.filePath) {
+      return; // User cancelled
+    }
+    
+    // Read CSV file
+    csvImportLoading.value = true;
+    showCSVImportDialog.value = true;
+    
+    const readResult = await api.readFile({ filePath: selectResult.filePath });
+    
+    if (!readResult?.success) {
+      alert(`Error reading CSV file: ${readResult?.error || 'Unknown error'}`);
+      csvImportLoading.value = false;
+      return;
+    }
+    
+    // Parse CSV using papaparse
+    const parseResult = Papa.parse(readResult.content, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header: string) => header.trim()
+    });
+    
+    if (parseResult.errors && parseResult.errors.length > 0) {
+      console.warn('CSV parse errors:', parseResult.errors);
+    }
+    
+    // Get existing stages to check for duplicates and locked stages
+    const existingStages = await api.getGameStages({ gameid: props.gameId });
+    const existingLevelNumbers = new Set(existingStages?.stages?.map((s: GameStage) => s.levelnumber) || []);
+    const existingStagesByLevel = new Map<string, GameStage>();
+    (existingStages?.stages || []).forEach((s: GameStage) => {
+      if (s.levelnumber) {
+        existingStagesByLevel.set(s.levelnumber, s);
+      }
+    });
+    
+    // Process parsed CSV rows
+    const processedStages: any[] = [];
+    parseResult.data.forEach((row: any, index: number) => {
+      // Skip rows without levelnumber
+      if (!row.levelnumber) return;
+      
+      const levelnumber = String(row.levelnumber).trim();
+      const existingStage = existingStagesByLevel.get(levelnumber);
+      const exists = !!existingStage;
+      const isLocked = exists && existingStage.lock === 1;
+      
+      // Convert string values to appropriate types
+      const processedStage: any = {
+        _rowIndex: index,
+        _exists: exists,
+        _isLocked: isLocked,
+        _existingStage: existingStage || null,
+        stage_uuid: row.stage_uuid?.trim() || '',
+        gameid: row.gameid?.trim() || props.gameId,
+        levelnumber: levelnumber,
+        levelname: row.levelname?.trim() || '',
+        versions: row.versions?.trim() || '*',
+        submapid: row.submapid?.trim() || '',
+        translevel_13bf: row.translevel_13bf?.trim() || '',
+        tile_x: row.tile_x?.trim() || '',
+        tile_y: row.tile_y?.trim() || '',
+        tile_value: row.tile_value?.trim() || '',
+        requisites: row.requisites?.trim() || '',
+        playable: row.playable === '1' || row.playable === 1 ? 1 : 0,
+        rando: row.rando === '1' || row.rando === 1 ? 1 : 0,
+        difficulty: row.difficulty ? parseInt(String(row.difficulty), 10) : 0,
+        mainexit: row.mainexit === '1' || row.mainexit === 1 ? 1 : 0,
+        keyhole: row.keyhole === '1' || row.keyhole === 1 ? 1 : 0,
+        credits: row.credits === '1' || row.credits === 1 ? 1 : 0,
+        ghouse: row.ghouse === '1' || row.ghouse === 1 ? 1 : 0,
+        spalace: row.spalace === '1' || row.spalace === 1 ? 1 : 0,
+        castle: row.castle === '1' || row.castle === 1 ? 1 : 0,
+        water: row.water === '1' || row.water === 1 ? 1 : 0,
+        boss: row.boss === '1' || row.boss === 1 ? 1 : 0,
+        secret: row.secret === '1' || row.secret === 1 ? 1 : 0,
+        troll: row.troll === '1' || row.troll === 1 ? 1 : 0,
+        final: row.final === '1' || row.final === 1 ? 1 : 0,
+        lock: row.lock === '1' || row.lock === 1 ? 1 : 0,
+        playlevel_patch_code: row.playlevel_patch_code?.trim() || '',
+        excluded_patchcodes: row.excluded_patchcodes?.trim() || '',
+        stagetags: row.stagetags?.trim() || '',
+        rhpakuuid: row.rhpakuuid?.trim() || '',
+        extradescription: row.extradescription?.trim() || ''
+      };
+      
+      processedStages.push(processedStage);
+    });
+    
+    csvImportStages.value = processedStages;
+    selectedCSVStages.value.clear();
+    
+    // By default, select all stages for levelnumbers that don't exist
+    processedStages.forEach(stage => {
+      if (!stage._exists && !stage._isLocked) {
+        selectedCSVStages.value.add(stage._rowIndex);
+      }
+    });
+    
+    csvImportLoading.value = false;
+  } catch (error: any) {
+    console.error('Error importing CSV:', error);
+    alert(`Error importing CSV: ${error?.message || String(error)}`);
+    csvImportLoading.value = false;
+  }
+}
+
+function closeCSVImportDialog() {
+  showCSVImportDialog.value = false;
+  csvImportStages.value = [];
+  selectedCSVStages.value.clear();
+  csvImportOptions.value = {
+    unselectExisting: false,
+    duplicateMode: 'update',
+    includeUuid: false,
+    ignoreUuid: true
+  };
+}
+
+function updateCSVImportSelection() {
+  if (csvImportOptions.value.unselectExisting) {
+    // Unselect all stages that already exist
+    csvImportStages.value.forEach(stage => {
+      if (stage._exists) {
+        selectedCSVStages.value.delete(stage._rowIndex);
+      }
+    });
+  }
+}
+
+function toggleSelectAllCSVStages(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const selectableStages = csvImportStages.value.filter(s => !s._isLocked);
+  
+  if (target.checked) {
+    // Select all selectable stages
+    selectableStages.forEach(stage => {
+      selectedCSVStages.value.add(stage._rowIndex);
+    });
+  } else {
+    // Deselect all
+    selectableStages.forEach(stage => {
+      selectedCSVStages.value.delete(stage._rowIndex);
+    });
+  }
+}
+
+function toggleCSVStageSelection(stage: any) {
+  if (stage._isLocked) return;
+  
+  if (selectedCSVStages.value.has(stage._rowIndex)) {
+    selectedCSVStages.value.delete(stage._rowIndex);
+  } else {
+    selectedCSVStages.value.add(stage._rowIndex);
+  }
+}
+
+async function addSelectedCSVStages() {
+  if (selectedCSVStages.value.size === 0) {
+    alert('No stages selected');
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.saveGameStage) {
+      alert('Save functionality not available');
+      return;
+    }
+    
+    const selectedStages = csvImportStages.value.filter(s => selectedCSVStages.value.has(s._rowIndex));
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+    
+    for (const stage of selectedStages) {
+      try {
+        // Handle UUID based on options
+        let stageUuid: string | undefined = undefined;
+        
+        if (stage._exists) {
+          // Updating existing stage
+          if (csvImportOptions.value.ignoreUuid) {
+            // Ignore UUID from CSV - keep existing UUID from DB
+            stageUuid = stage._existingStage?.stage_uuid;
+          } else if (csvImportOptions.value.includeUuid && stage.stage_uuid) {
+            // Include UUID from CSV when updating
+            stageUuid = stage.stage_uuid;
+          } else {
+            // Default: keep existing UUID from DB (don't process CSV UUID)
+            stageUuid = stage._existingStage?.stage_uuid;
+          }
+        } else {
+          // New stage
+          if (csvImportOptions.value.ignoreUuid) {
+            // Ignore UUID from CSV - let backend generate new one
+            stageUuid = undefined;
+          } else if (stage.stage_uuid) {
+            // Use UUID from CSV if provided
+            stageUuid = stage.stage_uuid;
+          } else {
+            // No UUID in CSV - let backend generate new one
+            stageUuid = undefined;
+          }
+        }
+        
+        // Prepare stage data for save
+        const stageData: any = {
+          gameid: stage.gameid,
+          levelnumber: stage.levelnumber,
+          levelname: stage.levelname,
+          versions: stage.versions,
+          submapid: stage.submapid || null,
+          translevel_13bf: stage.translevel_13bf || null,
+          tile_x: stage.tile_x || null,
+          tile_y: stage.tile_y || null,
+          tile_value: stage.tile_value || null,
+          requisites: stage.requisites || null,
+          playable: stage.playable,
+          rando: stage.rando,
+          difficulty: stage.difficulty,
+          mainexit: stage.mainexit,
+          keyhole: stage.keyhole,
+          credits: stage.credits,
+          ghouse: stage.ghouse,
+          spalace: stage.spalace,
+          castle: stage.castle,
+          water: stage.water,
+          boss: stage.boss,
+          secret: stage.secret,
+          troll: stage.troll,
+          final: stage.final,
+          lock: stage.lock,
+          playlevel_patch_code: stage.playlevel_patch_code || null,
+          excluded_patchcodes: stage.excluded_patchcodes || null,
+          stagetags: stage.stagetags || null,
+          rhpakuuid: stage.rhpakuuid || null,
+          extradescription: stage.extradescription || null
+        };
+        
+        // Set UUID if we have one (undefined means backend will generate)
+        if (stageUuid) {
+          stageData.stage_uuid = stageUuid;
+        }
+        
+        const result = await api.saveGameStage(stageData);
+        
+        if (result?.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          errors.push(`${stage.levelnumber}: ${result?.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        errorCount++;
+        errors.push(`${stage.levelnumber}: ${error?.message || String(error)}`);
+      }
+    }
+    
+    // Show result
+    await nextTick();
+    await nextTick();
+    
+    if (toastNotificationRef.value && typeof toastNotificationRef.value.showToast === 'function') {
+      if (errorCount === 0) {
+        toastNotificationRef.value.showToast(
+          `Successfully imported ${successCount} stage(s)`,
+          'success'
+        );
+      } else {
+        toastNotificationRef.value.showToast(
+          `Imported ${successCount} stage(s), ${errorCount} error(s)`,
+          'warning'
+        );
+        console.error('Import errors:', errors);
+      }
+    } else {
+      if (errorCount === 0) {
+        alert(`Successfully imported ${successCount} stage(s)`);
+      } else {
+        alert(`Imported ${successCount} stage(s), ${errorCount} error(s)\n\nErrors:\n${errors.join('\n')}`);
+      }
+    }
+    
+    // Reload stages and close dialog
+    await loadStages();
+    closeCSVImportDialog();
+  } catch (error: any) {
+    console.error('Error adding CSV stages:', error);
+    alert(`Error importing stages: ${error?.message || String(error)}`);
+  }
 }
 
 function openSetPlaylevelPatchDialog() {
@@ -2722,5 +3211,132 @@ watch(() => props.initialLevelNumber, () => {
   color: var(--text-primary);
   cursor: pointer;
 }
+/* CSV Import Dialog Styles */
+.csv-import-backdrop {
+  z-index: 25000 !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+}
+
+.csv-import-modal {
+  width: 90vw;
+  max-width: 1200px;
+}
+
+.csv-import-options {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.option-group {
+  margin-bottom: 16px;
+}
+
+.option-group:last-child {
+  margin-bottom: 0;
+}
+
+.option-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: var(--small-font-size);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.option-group label strong {
+  font-weight: 600;
+}
+
+.radio-group {
+  margin-left: 20px;
+  margin-top: 8px;
+}
+
+.radio-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: var(--small-font-size);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.radio-group label:last-child {
+  margin-bottom: 0;
+}
+
+.csv-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--small-font-size);
+  background: var(--bg-primary);
+}
+
+.csv-import-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 10;
+}
+
+.csv-import-table th {
+  padding: 8px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--border-primary);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.csv-import-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-primary);
+  color: var(--text-primary);
+}
+
+.csv-import-table tr:hover:not(.locked) {
+  background: var(--bg-hover);
+  cursor: pointer;
+}
+
+.csv-import-table tr.locked {
+  opacity: 0.5;
+  background: var(--bg-secondary);
+  cursor: not-allowed;
+}
+
+.csv-import-table tr.exists:not(.locked) {
+  background: var(--bg-secondary);
+}
+
+.csv-import-table tr.new {
+  background: var(--bg-primary);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: var(--small-font-size);
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.locked-badge {
+  background: #f44336;
+  color: white;
+}
+
+.exists-badge {
+  background: #ff9800;
+  color: white;
+}
+
+.new-badge {
+  background: #4caf50;
+  color: white;
+}
+
 </style>
 

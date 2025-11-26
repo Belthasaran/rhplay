@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" class="modal-backdrop" @click.self="handleCancel">
+  <div v-if="visible" class="modal-backdrop">
     <div class="modal alert-dialog">
       <header class="modal-header">
         <h3>{{ title || 'Alert' }}</h3>

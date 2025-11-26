@@ -6963,6 +6963,22 @@
                 <label>Staging Folder:</label>
                 <button @click="openStagingFolderForPastRun" class="btn-link">📁 Open</button>
               </div>
+              <div class="detail-row">
+                <label>Challenges Done:</label>
+                <span>{{ selectedPastRun.completed_challenges || 0 }}/{{ selectedPastRun.total_challenges || 0 }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedPastRun.elapsed_seconds">
+                <label>Elapsed Time:</label>
+                <span>{{ formatTime(selectedPastRun.elapsed_seconds) }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedPastRun.pause_seconds">
+                <label>Pause Time:</label>
+                <span>{{ formatTime(selectedPastRun.pause_seconds) }}</span>
+              </div>
+              <div class="detail-row" v-if="getGlobalPatchCodes(selectedPastRun)">
+                <label>Global Conditions:</label>
+                <span>{{ getGlobalPatchCodes(selectedPastRun).join(', ') || 'None' }}</span>
+              </div>
               <div v-if="selectedPastRunResults && selectedPastRunResults.length > 0" class="results-section">
                 <h5>Results</h5>
                 <table class="results-table">
@@ -6971,7 +6987,10 @@
                       <th>#</th>
                       <th>Game ID</th>
                       <th>Game Name</th>
+                      <th>Stage Id</th>
+                      <th>Stage Name</th>
                       <th>Status</th>
+                      <th>Elapsed</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -6979,7 +6998,10 @@
                       <td>{{ result.sequence_number }}</td>
                       <td>{{ result.gameid }}</td>
                       <td>{{ result.game_name }}</td>
+                      <td>{{ result.levelnumber || '' }}</td>
+                      <td>{{ result.levelname || result.stage_description || '' }}</td>
                       <td>{{ result.status }}</td>
+                      <td>{{ result.elapsed_seconds ? formatTime(result.elapsed_seconds) : '' }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -6992,6 +7014,64 @@
           </div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Plan Entries Modal -->
+  <div v-if="planEntriesModalOpen" class="modal-backdrop" @click.self="planEntriesModalOpen = false">
+    <div class="modal plan-entries-modal">
+      <header class="modal-header">
+        <h3>📋 Plan Entries: {{ selectedPastRun?.run_name }}</h3>
+        <button class="close" @click="planEntriesModalOpen = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="plan-entries-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Sequence</th>
+                <th>Entry Type</th>
+                <th>Count</th>
+                <th>Game Id</th>
+                <th>Game Name</th>
+                <th>Stage Id</th>
+                <th>Stage Name</th>
+                <th>Filter Difficulty</th>
+                <th>Filter Type</th>
+                <th>Filter Pattern</th>
+                <th>Seed</th>
+                <th>Stage Min Diff</th>
+                <th>Stage Max Diff</th>
+                <th>Stage Flags</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in selectedPastRunPlanEntries" :key="entry.entry_uuid">
+                <td>{{ entry.sequence_number }}</td>
+                <td>{{ entry.entry_type }}</td>
+                <td>{{ entry.count || 1 }}</td>
+                <td>{{ entry.gameid || '' }}</td>
+                <td>{{ getGameNameForPlanEntry(entry) }}</td>
+                <td>{{ entry.levelnumber || entry.exit_number || '' }}</td>
+                <td>{{ entry.levelname || '' }}</td>
+                <td>{{ entry.filter_difficulty || '' }}</td>
+                <td>{{ entry.filter_type || '' }}</td>
+                <td>{{ entry.filter_pattern || '' }}</td>
+                <td>{{ entry.filter_seed || '' }}</td>
+                <td>{{ entry.stage_filter_min_difficulty ?? '' }}</td>
+                <td>{{ entry.stage_filter_max_difficulty ?? '' }}</td>
+                <td>{{ formatStageFlagsForPlanEntry(entry) }}</td>
+              </tr>
+              <tr v-if="selectedPastRunPlanEntries.length === 0">
+                <td colspan="14" class="empty">No plan entries found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="planEntriesModalOpen = false" class="btn-secondary">Close</button>
+      </footer>
     </div>
   </div>
 
@@ -7215,6 +7295,7 @@ import {
   handlePromptConfirm,
   handlePromptCancel,
   showAlert,
+  showConfirm,
   showPrompt
 } from './utils/dialogs';
 
@@ -18360,32 +18441,42 @@ async function manualUploadSearch() {
   runStatusDropdownOpen.value = false;
   
   if (!isElectronAvailable()) {
-    alert('This feature requires Electron environment');
+    await showAlert('This feature requires Electron environment', 'Error');
     return;
   }
   
   if (!currentRunUuid.value) {
-    alert('No run selected');
+    await showAlert('No run selected', 'Error');
     return;
   }
   
   // Check USB2SNES connection
   await refreshUsb2snesStatus();
   if (!usb2snesStatus.connected) {
-    const connect = confirm('USB2SNES is not connected. Would you like to connect now?');
-    if (connect) {
+    // Check if USB2SNES is enabled in settings
+    // Treat "yes" or "1" as true, only null/blank/0/no (case-insensitive) as false
+    const usbEnabled = settings.usb2snesEnabled;
+    const isUsbEnabled = usbEnabled && 
+      usbEnabled !== '0' && 
+      usbEnabled.toString().toLowerCase() !== 'no' && 
+      usbEnabled.toString().trim() !== '';
+    
+    if (isUsbEnabled) {
+      // Automatically attempt connection
       try {
         await connectUsb2snes();
         await new Promise(resolve => setTimeout(resolve, 500));
+        await refreshUsb2snesStatus();
         if (!usb2snesStatus.connected) {
-          alert('Failed to connect to USB2SNES');
+          await showAlert('Failed to connect to USB2SNES', 'Connection Error');
           return;
         }
       } catch (error) {
-        alert(`Failed to connect: ${error}`);
+        await showAlert(`Failed to connect: ${(error as any).message || error}`, 'Connection Error');
         return;
       }
     } else {
+      await showAlert('USB2SNES is not enabled. Please enable it in settings first.', 'USB2SNES Disabled');
       return;
     }
   }
@@ -18394,14 +18485,14 @@ async function manualUploadSearch() {
     // Get expanded results to know what files to look for
     await loadExpandedRunResults();
     if (expandedRunResults.value.length === 0) {
-      alert('No run results found. Please stage the run first.');
+      await showAlert('No run results found. Please stage the run first.', 'Error');
       return;
     }
     
     // List files in /work and /work/run* directories
     const workFiles = await (window as any).electronAPI.usb2snesListDir('/work');
     if (!workFiles || !workFiles.files) {
-      alert('Failed to list files on USB2SNES');
+      await showAlert('Failed to list files on USB2SNES', 'Error');
       return;
     }
     
@@ -18459,29 +18550,35 @@ async function manualUploadSearch() {
       });
       
       if (updateResult && updateResult.success) {
-        alert(`Found and updated ${updateResult.updatedCount} file(s) on USB2SNES`);
+        if (toastNotificationRef.value) {
+          toastNotificationRef.value.showToast(
+            `Found and updated ${updateResult.updatedCount} file(s) on USB2SNES`,
+            'success'
+          );
+        }
         // Reload expanded results
         await loadExpandedRunResults();
       } else {
-        alert(`Failed to update file paths: ${updateResult?.error || 'Unknown error'}`);
+        await showAlert(`Failed to update file paths: ${updateResult?.error || 'Unknown error'}`, 'Error');
       }
     } else {
-      alert('No matching SFC files found on USB2SNES. Please upload the files first.');
+      await showAlert('No matching SFC files found on USB2SNES. Please upload the files first.', 'No Files Found');
     }
   } catch (error) {
     console.error('Error searching USB2SNES for files:', error);
-    alert(`Error searching USB2SNES: ${error}`);
+    await showAlert(`Error searching USB2SNES: ${(error as any).message || error}`, 'Error');
   }
 }
 
 // Skip upload acknowledgment
-function skipUploadAcknowledgment() {
+async function skipUploadAcknowledgment() {
   runStatusDropdownOpen.value = false;
-  const confirmed = confirm(
+  const confirmed = await showConfirm(
     'Skip Upload Acknowledgment\n\n' +
     'You are acknowledging that you will manually start each game on your SNES device.\n\n' +
     'The Launch buttons will not appear during the run.\n\n' +
-    'Do you want to proceed?'
+    'Do you want to proceed?',
+    'Skip Upload Acknowledgment'
   );
   
   if (confirmed) {
@@ -18682,15 +18779,16 @@ async function regenerateStaging() {
   runStatusDropdownOpen.value = false;
   
   if (!currentRunUuid.value || !isElectronAvailable()) {
-    alert('No run selected');
+    await showAlert('No run selected', 'Error');
     return;
   }
   
-  const confirmed = confirm(
+  const confirmed = await showConfirm(
     'Regenerate Staging\n\n' +
     'This will recreate the staging folder and SFC files for this run.\n\n' +
     'Any existing staging folder will be replaced.\n\n' +
-    'Continue?'
+    'Continue?',
+    'Regenerate Staging'
   );
   
   if (!confirmed) return;
@@ -18711,7 +18809,7 @@ async function regenerateStaging() {
     console.log('Staging regenerated successfully');
   } catch (error) {
     console.error('Error regenerating staging:', error);
-    alert(`Error regenerating staging: ${error.message || error}`);
+    await showAlert(`Error regenerating staging: ${(error as any).message || error}`, 'Error');
     stagingProgressModalOpen.value = false;
   }
 }
@@ -19277,20 +19375,21 @@ function manuallyUploadedConfirm() {
 
 async function startRun() {
   if (!currentRunUuid.value) {
-    alert('No run saved. Please save the run first.');
+    await showAlert('No run saved. Please save the run first.', 'Validation Error');
     return;
   }
   
   if (!isElectronAvailable()) {
-    alert('Run execution requires Electron environment');
+    await showAlert('Run execution requires Electron environment', 'Error');
     return;
   }
   
-  const confirmed = confirm(
+  const confirmed = await showConfirm(
     `Start run "${currentRunName.value}"?\n\n` +
     `${runEntries.length} plan entries\n` +
     `Global conditions: ${globalRunConditions.value.length > 0 ? globalRunConditions.value.join(', ') : 'None'}\n\n` +
-    `Once started, the run cannot be edited.`
+    `Once started, the run cannot be edited.`,
+    'Start Run'
   );
   
   if (!confirmed) return;
@@ -19540,9 +19639,10 @@ async function unpauseRun() {
 }
 
 async function cancelRun() {
-  const confirmed = confirm(
+  const confirmed = await showConfirm(
     `Cancel run "${currentRunName.value}"?\n\n` +
-    `This will mark the run as cancelled. You can view it later but cannot continue it.`
+    `This will mark the run as cancelled. You can view it later but cannot continue it.`,
+    'Cancel Run'
   );
   
   if (!confirmed) return;
@@ -19562,7 +19662,9 @@ async function cancelRun() {
     
     currentRunStatus.value = 'cancelled';
     console.log('Run cancelled');
-    alert('Run cancelled');
+    if (toastNotificationRef.value) {
+      toastNotificationRef.value.showToast('Run cancelled', 'info');
+    }
     closeRunModal();
   } catch (error) {
     console.error('Error cancelling run:', error);
@@ -19609,6 +19711,36 @@ async function nextChallenge() {
         challengeResults.value[idx + 1].durationSeconds = 0;
       }
     } else {
+      // This is the last challenge - show final confirmation with undo option
+      const finalConfirmed = await showConfirm(
+        `Run will be completed. Are you sure you want to finish?\n\n` +
+        `Click Cancel to undo the completion action.`,
+        'Complete Run',
+        'Complete',
+        'Undo'
+      );
+      
+      if (!finalConfirmed) {
+        // Undo the completion - restore previous state
+        if (undoStack.value.length > 0) {
+          const undoState = undoStack.value.pop();
+          if (undoState) {
+            result.status = undoState.status;
+            result.durationSeconds = undoState.durationSeconds;
+            result.revealedEarly = undoState.revealedEarly;
+            // Also undo in database
+            if (isElectronAvailable()) {
+              await (window as any).electronAPI.recordChallengeResult({
+                runUuid: currentRunUuid.value,
+                challengeIndex: idx,
+                status: 'pending'
+              });
+            }
+          }
+        }
+        return;
+      }
+      
       // Run completed
       completeRun();
     }
@@ -19628,9 +19760,6 @@ async function skipChallenge() {
   if ((entry.entryType === 'random_game' || entry.entryType === 'random_stage') && entry.name === '???') {
     await revealCurrentChallenge(false);  // Normal reveal (not early)
   }
-  
-  const confirmed = confirm(`Skip challenge ${idx + 1}: ${entry.name}?`);
-  if (!confirmed) return;
   
   const result = challengeResults.value[idx];
   
@@ -19664,6 +19793,36 @@ async function skipChallenge() {
         challengeResults.value[idx + 1].durationSeconds = 0;
       }
     } else {
+      // This is the last challenge - show final confirmation with undo option
+      const finalConfirmed = await showConfirm(
+        `Run will be completed. Are you sure you want to finish?\n\n` +
+        `Click Cancel to undo the skip action.`,
+        'Complete Run',
+        'Complete',
+        'Undo Skip'
+      );
+      
+      if (!finalConfirmed) {
+        // Undo the skip - restore previous state
+        if (undoStack.value.length > 0) {
+          const undoState = undoStack.value.pop();
+          if (undoState) {
+            result.status = undoState.status;
+            result.durationSeconds = undoState.durationSeconds;
+            result.revealedEarly = undoState.revealedEarly;
+            // Also undo in database
+            if (isElectronAvailable()) {
+              await (window as any).electronAPI.recordChallengeResult({
+                runUuid: currentRunUuid.value,
+                challengeIndex: idx,
+                status: 'pending'
+              });
+            }
+          }
+        }
+        return;
+      }
+      
       // Run completed
       completeRun();
     }
@@ -19873,16 +20032,28 @@ async function completeRun() {
     
     currentRunStatus.value = 'completed';
     
-    alert(
-      `Run "${currentRunName.value}" completed!\n\n` +
-      `Total time: ${formatTime(runElapsedSeconds.value)}\n` +
-      `Challenges: ${runEntries.length}`
-    );
+    // Show toast notification
+    if (toastNotificationRef.value) {
+      toastNotificationRef.value.showToast(
+        `Run "${currentRunName.value}" completed! Total time: ${formatTime(runElapsedSeconds.value)}`,
+        'success'
+      );
+    }
+    
+    // Open Past Runs dialog with this run selected
+    const completedRunUuid = currentRunUuid.value;
     
     // Clear run state to prepare for new run
     clearRunState();
     
     closeRunModal();
+    
+    // Open Past Runs dialog and select the completed run
+    await openPastRunsModal();
+    if (completedRunUuid) {
+      selectedPastRunUuid.value = completedRunUuid;
+      await selectPastRun(completedRunUuid);
+    }
   } catch (error) {
     console.error('Error completing run:', error);
     alert('Error completing run: ' + error.message);
@@ -20079,9 +20250,14 @@ async function selectPastRun(runUuid: string) {
 async function deleteCheckedPastRuns() {
   if (checkedPastRuns.value.length === 0) return;
   
-  if (!confirm(`Delete ${checkedPastRuns.value.length} run(s)? This action cannot be undone.`)) {
-    return;
-  }
+  const confirmed = await showConfirm(
+    `Delete ${checkedPastRuns.value.length} run(s)? This action cannot be undone.`,
+    'Delete Runs',
+    'Delete',
+    'Cancel'
+  );
+  
+  if (!confirmed) return;
   
   try {
     for (const runUuid of checkedPastRuns.value) {
@@ -20114,13 +20290,70 @@ function openStagingFolderForPastRun() {
   }
 }
 
+function getGlobalPatchCodes(run: any): string[] {
+  if (!run) return [];
+  try {
+    if (run.config_json) {
+      const config = typeof run.config_json === 'string' ? JSON.parse(run.config_json) : run.config_json;
+      return config.globalPatchCodes || [];
+    }
+  } catch (e) {
+    console.warn('Error parsing config_json:', e);
+  }
+  return [];
+}
+
+function getGameNameForPlanEntry(entry: any): string {
+  // For specific game/stage entries, we'd need to look up the game name
+  // For now, return empty string - this could be enhanced to fetch from database
+  return '';
+}
+
+function formatStageFlagsForPlanEntry(entry: any): string {
+  const flags: string[] = [];
+  try {
+    if (entry.stage_filter_include_flags) {
+      const includeFlags = typeof entry.stage_filter_include_flags === 'string' 
+        ? JSON.parse(entry.stage_filter_include_flags) 
+        : entry.stage_filter_include_flags;
+      if (Array.isArray(includeFlags) && includeFlags.length > 0) {
+        flags.push(`Include: ${includeFlags.join(', ')}`);
+      }
+    }
+    if (entry.stage_filter_exclude_flags) {
+      const excludeFlags = typeof entry.stage_filter_exclude_flags === 'string'
+        ? JSON.parse(entry.stage_filter_exclude_flags)
+        : entry.stage_filter_exclude_flags;
+      if (Array.isArray(excludeFlags) && excludeFlags.length > 0) {
+        flags.push(`Exclude: ${excludeFlags.join(', ')}`);
+      }
+    }
+    if (entry.stage_filter_include_any_of_flags) {
+      const includeAnyOf = typeof entry.stage_filter_include_any_of_flags === 'string'
+        ? JSON.parse(entry.stage_filter_include_any_of_flags)
+        : entry.stage_filter_include_any_of_flags;
+      if (Array.isArray(includeAnyOf) && includeAnyOf.length > 0) {
+        flags.push(`IncludeAnyOf: ${includeAnyOf.join(', ')}`);
+      }
+    }
+    if (entry.stage_filter_exclude_only_flags) {
+      const excludeOnly = typeof entry.stage_filter_exclude_only_flags === 'string'
+        ? JSON.parse(entry.stage_filter_exclude_only_flags)
+        : entry.stage_filter_exclude_only_flags;
+      if (Array.isArray(excludeOnly) && excludeOnly.length > 0) {
+        flags.push(`ExcludeOnly: ${excludeOnly.join(', ')}`);
+      }
+    }
+  } catch (e) {
+    console.warn('Error parsing stage flags:', e);
+  }
+  return flags.join('; ') || '';
+}
+
+const planEntriesModalOpen = ref(false);
+
 function viewPastRunPlanEntries() {
-  // Show plan entries in an alert (simple implementation)
-  const planText = selectedPastRunPlanEntries.value.map(entry => {
-    return `#${entry.sequence_number}: ${entry.entry_type} (${entry.count}x)`;
-  }).join('\n');
-  
-  alert(`Plan Entries:\n\n${planText}`);
+  planEntriesModalOpen.value = true;
 }
 
 function formatShortDateTime(dateStr: string | null | undefined): string {
@@ -21536,7 +21769,11 @@ async function pauseRunFromStartup() {
 async function cancelRunFromStartup() {
   if (!resumeRunData.value) return;
   
-  const confirmed = confirm(`Cancel run "${resumeRunData.value.run_name}"?`);
+  const confirmed = await showConfirm(
+    `Cancel run "${resumeRunData.value.run_name}"?`,
+    'Cancel Run'
+  );
+  
   if (!confirmed) {
     resumeRunModalOpen.value = false;
     return;
@@ -22923,8 +23160,22 @@ button:disabled {
 
 /* Past Runs Modal */
 .past-runs-modal { 
-  width: 1200px; 
-  max-width: 95vw; 
+  width: 100vw; 
+  max-width: 100vw;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* Plan Entries Modal */
+.plan-entries-modal {
+  width: 90vw;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.plan-entries-table-wrapper {
+  max-height: 70vh;
+  overflow-y: auto; 
   max-height: 90vh;
 }
 

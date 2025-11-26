@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" class="modal-backdrop" @click.self="handleCancel">
+  <div v-if="visible" class="modal-backdrop">
     <div class="modal prompt-dialog">
       <header class="modal-header">
         <h3>{{ title || 'Input' }}</h3>

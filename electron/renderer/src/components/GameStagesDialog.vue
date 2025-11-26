@@ -371,6 +371,13 @@
                       📝
                     </button>
                     <button 
+                      @click.stop="openTagsDialog(stage)" 
+                      class="btn-icon btn-tags"
+                      title="Edit/View Stage Tags"
+                    >
+                      🏷️
+                    </button>
+                    <button 
                       v-if="isDevAdmin && currentMode === 'edit'"
                       @click.stop="deleteStage(stage)" 
                       class="btn-icon btn-delete"
@@ -587,6 +594,47 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Tags Dialog -->
+  <Teleport to="body">
+    <div v-if="showTagsDialog" class="modal-backdrop" @click.self="closeTagsDialog" style="z-index: 25000;">
+      <div class="modal" style="max-width: 600px; width: 90%;">
+        <header class="modal-header">
+          <h3>Stage Tags - {{ editingTagsStage?.levelname || 'Stage' }}</h3>
+          <button class="close" @click="closeTagsDialog">✕</button>
+        </header>
+        <section class="modal-body">
+          <div class="field">
+            <label>Tags (comma-separated)</label>
+            <input 
+              v-model="editingTagsText" 
+              type="text"
+              class="input" 
+              placeholder="e.g., cape, autoscroller"
+              :readonly="!(isDevAdmin && currentMode === 'edit')"
+            />
+            <div class="hint">
+              Enter comma-separated tags for this stage (e.g., "cape", "autoscroller", "cape,autoscroller").
+              Tags are case-sensitive and should be lowercase for consistency.
+            </div>
+            <div class="hint" v-if="!(isDevAdmin && currentMode === 'edit')" style="color: var(--text-secondary); margin-top: 8px;">
+              This field is read-only in view mode. Switch to edit mode to modify.
+            </div>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button 
+            v-if="isDevAdmin && currentMode === 'edit'"
+            @click="saveTags" 
+            class="btn-primary"
+          >
+            Save
+          </button>
+          <button @click="closeTagsDialog" class="btn-secondary">Close</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -623,6 +671,7 @@ interface GameStage {
   playlevel_patch_code?: string | null; // Playlevel patch code (defaults to '1lvno')
   excluded_patchcodes?: string | null; // JSON array of patch codes or declarative tags to exclude
   extradescription?: string | null; // Optional free-form description
+  stagetags?: string | null; // Comma-separated list of arbitrary tags (e.g., "cape", "autoscroller")
 }
 
 interface Props {
@@ -676,6 +725,10 @@ const newPlaylevelPatchCode = ref('1lvno');
 const showExtraDescriptionDialog = ref(false);
 const editingExtraDescriptionStage = ref<GameStage | null>(null);
 const editingExtraDescriptionText = ref<string>('');
+
+const showTagsDialog = ref(false);
+const editingTagsStage = ref<GameStage | null>(null);
+const editingTagsText = ref<string>('');
 
 // Get requisites as array of tags
 function getRequisiteTags(stage: GameStage): string[] {
@@ -1553,6 +1606,7 @@ async function saveAll() {
         lock: stage.lock || 0,
         playlevel_patch_code: stage.playlevel_patch_code || '1lvno',
         extradescription: stage.extradescription || null,
+        stagetags: stage.stagetags || null,
       });
       
       if (!result?.success) {
@@ -1626,6 +1680,26 @@ function saveExtraDescription() {
   if (!editingExtraDescriptionStage.value) return;
   editingExtraDescriptionStage.value.extradescription = editingExtraDescriptionText.value.trim() || null;
   closeExtraDescriptionDialog();
+}
+
+function openTagsDialog(stage: GameStage) {
+  editingTagsStage.value = stage;
+  editingTagsText.value = stage.stagetags || '';
+  showTagsDialog.value = true;
+}
+
+function closeTagsDialog() {
+  showTagsDialog.value = false;
+  editingTagsStage.value = null;
+  editingTagsText.value = '';
+}
+
+function saveTags() {
+  if (!editingTagsStage.value) return;
+  // Trim and normalize: remove extra spaces, but keep tags as-is
+  const tags = editingTagsText.value.trim();
+  editingTagsStage.value.stagetags = tags || null;
+  closeTagsDialog();
 }
 
 function openSetPlaylevelPatchDialog() {

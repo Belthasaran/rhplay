@@ -2113,9 +2113,9 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('clientdata');
       
-      // Get the result at this index
+      // Get the result at this index, including current status
       const result = db.prepare(`
-        SELECT result_uuid FROM run_results 
+        SELECT result_uuid, status as old_status FROM run_results 
         WHERE run_uuid = ? 
         ORDER BY sequence_number 
         LIMIT 1 OFFSET ?
@@ -2124,6 +2124,8 @@ function registerDatabaseHandlers(dbManager) {
       if (!result) {
         throw new Error('Challenge not found');
       }
+      
+      const oldStatus = result.old_status || 'pending';
       
       // Update result
       db.prepare(`
@@ -2134,21 +2136,42 @@ function registerDatabaseHandlers(dbManager) {
         WHERE result_uuid = ?
       `).run(status, result.result_uuid);
       
-      // Update run counts
-      if (status === 'success' || status === 'ok') {
-        db.prepare(`
-          UPDATE runs 
-          SET completed_challenges = completed_challenges + 1,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE run_uuid = ?
-        `).run(runUuid);
-      } else if (status === 'skipped') {
-        db.prepare(`
-          UPDATE runs 
-          SET skipped_challenges = skipped_challenges + 1,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE run_uuid = ?
-        `).run(runUuid);
+      // Update run counts based on status change
+      // Only update if the status actually changed
+      if (oldStatus !== status) {
+        // Decrement old status counts if they were completed/skipped
+        if (oldStatus === 'success' || oldStatus === 'ok') {
+          db.prepare(`
+            UPDATE runs 
+            SET completed_challenges = MAX(0, completed_challenges - 1),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_uuid = ?
+          `).run(runUuid);
+        } else if (oldStatus === 'skipped') {
+          db.prepare(`
+            UPDATE runs 
+            SET skipped_challenges = MAX(0, skipped_challenges - 1),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_uuid = ?
+          `).run(runUuid);
+        }
+        
+        // Increment new status counts if they are completed/skipped
+        if (status === 'success' || status === 'ok') {
+          db.prepare(`
+            UPDATE runs 
+            SET completed_challenges = completed_challenges + 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_uuid = ?
+          `).run(runUuid);
+        } else if (status === 'skipped') {
+          db.prepare(`
+            UPDATE runs 
+            SET skipped_challenges = skipped_challenges + 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_uuid = ?
+          `).run(runUuid);
+        }
       }
       
       return { success: true };

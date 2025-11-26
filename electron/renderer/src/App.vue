@@ -6896,42 +6896,45 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="col-check"></th>
+                  <th class="col-check" @click.stop="handleHeaderCheckboxClick($event)">
+                    <input 
+                      type="checkbox" 
+                      :checked="allPastRunsChecked"
+                      @change.stop="toggleAllPastRuns"
+                      @click.stop
+                      :indeterminate="somePastRunsChecked && !allPastRunsChecked"
+                    />
+                  </th>
                   <th>Run Name</th>
                   <th>Status</th>
                   <th>Created</th>
                   <th>Started</th>
                   <th>Completed</th>
-                  <th># Challenges</th>
                   <th># Finished</th>
-                  <th># Skipped</th>
-                  <th>Conditions</th>
-                  <th>Pause</th>
+                  <th>Elapsed</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="run in pastRuns" :key="run.run_uuid" @click="selectPastRun(run.run_uuid)" :class="{ 'selected': selectedPastRunUuid === run.run_uuid }">
-                  <td class="col-check" @click.stop>
+                  <td class="col-check" @click.stop="handlePastRunCheckboxClick(run.run_uuid, $event)">
                     <input 
                       type="checkbox" 
                       :checked="checkedPastRuns.includes(run.run_uuid)" 
-                      @change="togglePastRunCheck(run.run_uuid)"
+                      @change.stop="togglePastRunCheck(run.run_uuid, true)"
+                      @click.stop
                       :disabled="run.status === 'active'"
                     />
                   </td>
                   <td>{{ run.run_name }}</td>
                   <td>{{ run.status }}</td>
                   <td>{{ formatShortDateTime(run.created_at) }}</td>
-                  <td>{{ formatShortDateTime(run.started_at) }}</td>
-                  <td>{{ formatShortDateTime(run.completed_at) }}</td>
-                  <td>{{ run.total_challenges }}</td>
-                  <td>{{ run.completed_challenges }}</td>
-                  <td>{{ run.skipped_challenges }}</td>
-                  <td>{{ formatConditions(run.global_conditions) }}</td>
-                  <td>{{ formatTime(run.pause_seconds || 0) }}</td>
+                  <td>{{ run.started_at ? formatTimeDelta(run.created_at, run.started_at) : '' }}</td>
+                  <td>{{ run.completed_at && run.started_at ? formatTimeDelta(run.started_at, run.completed_at) : '' }}</td>
+                  <td>{{ (run.completed_challenges || 0) }}/{{ run.total_challenges || 0 }}</td>
+                  <td>{{ run.elapsed_seconds ? formatTime(run.elapsed_seconds) : '' }}</td>
                 </tr>
                 <tr v-if="pastRuns.length === 0">
-                  <td colspan="11" class="empty">No past runs found.</td>
+                  <td colspan="8" class="empty">No past runs found.</td>
                 </tr>
               </tbody>
             </table>
@@ -6967,17 +6970,25 @@
                 <label>Challenges Done:</label>
                 <span>{{ selectedPastRun.completed_challenges || 0 }}/{{ selectedPastRun.total_challenges || 0 }}</span>
               </div>
+              <div class="detail-row" v-if="selectedPastRun.skipped_challenges !== undefined">
+                <label># Skipped:</label>
+                <span>{{ selectedPastRun.skipped_challenges || 0 }}</span>
+              </div>
               <div class="detail-row" v-if="selectedPastRun.elapsed_seconds">
                 <label>Elapsed Time:</label>
                 <span>{{ formatTime(selectedPastRun.elapsed_seconds) }}</span>
               </div>
-              <div class="detail-row" v-if="selectedPastRun.pause_seconds">
-                <label>Pause Time:</label>
-                <span>{{ formatTime(selectedPastRun.pause_seconds) }}</span>
-              </div>
               <div class="detail-row" v-if="getGlobalPatchCodes(selectedPastRun)">
                 <label>Global Conditions:</label>
                 <span>{{ getGlobalPatchCodes(selectedPastRun).join(', ') || 'None' }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedPastRun.started_at">
+                <label>Started:</label>
+                <span>{{ formatDateYYYYMMDD(selectedPastRun.started_at) }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedPastRun.pause_seconds">
+                <label>Pause Time:</label>
+                <span>{{ formatTime(selectedPastRun.pause_seconds) }}</span>
               </div>
               <div v-if="selectedPastRunResults && selectedPastRunResults.length > 0" class="results-section">
                 <h5>Results</h5>
@@ -20218,12 +20229,66 @@ function closePastRunsModal() {
   selectedPastRunPlanEntries.value = [];
 }
 
-function togglePastRunCheck(runUuid: string) {
+async function togglePastRunCheck(runUuid: string, shouldSelect: boolean = false) {
   const index = checkedPastRuns.value.indexOf(runUuid);
   if (index === -1) {
     checkedPastRuns.value.push(runUuid);
+    // If checking a single box, also select and view that row
+    if (shouldSelect) {
+      await selectPastRun(runUuid);
+    }
   } else {
     checkedPastRuns.value.splice(index, 1);
+  }
+}
+
+async function handlePastRunCheckboxClick(runUuid: string, event: MouseEvent) {
+  // Make the entire cell clickable - if clicking on the cell but not the checkbox itself, toggle it
+  const target = event.target as HTMLElement;
+  if (target.tagName !== 'INPUT') {
+    const checkbox = target.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (checkbox && !checkbox.disabled) {
+      checkbox.checked = !checkbox.checked;
+      await togglePastRunCheck(runUuid, true);
+    }
+  }
+}
+
+// Computed property for select-all checkbox state
+const allPastRunsChecked = computed(() => {
+  const checkableRuns = pastRuns.value.filter(r => r.status !== 'active');
+  return checkableRuns.length > 0 && checkableRuns.every(r => checkedPastRuns.value.includes(r.run_uuid));
+});
+
+const somePastRunsChecked = computed(() => {
+  const checkableRuns = pastRuns.value.filter(r => r.status !== 'active');
+  return checkableRuns.some(r => checkedPastRuns.value.includes(r.run_uuid));
+});
+
+function toggleAllPastRuns() {
+  const checkableRuns = pastRuns.value.filter(r => r.status !== 'active');
+  if (allPastRunsChecked.value) {
+    // Uncheck all
+    checkedPastRuns.value = checkedPastRuns.value.filter(uuid => 
+      !checkableRuns.some(r => r.run_uuid === uuid)
+    );
+  } else {
+    // Check all checkable runs
+    const checkableUuids = checkableRuns.map(r => r.run_uuid);
+    const newChecked = [...new Set([...checkedPastRuns.value, ...checkableUuids])];
+    checkedPastRuns.value = newChecked;
+  }
+}
+
+function handleHeaderCheckboxClick(event: MouseEvent) {
+  // Make the entire header cell clickable
+  const target = event.target as HTMLElement;
+  if (target.tagName !== 'INPUT') {
+    const checkbox = target.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (checkbox) {
+      checkbox.checked = !checkbox.checked;
+      toggleAllPastRuns();
+    }
   }
 }
 
@@ -20375,6 +20440,43 @@ function formatDateTime(dateStr: string | null | undefined): string {
     });
   } catch {
     return dateStr || 'N/A';
+  }
+}
+
+// Format date as YYYYMMDD HH:MM PM/AM
+function formatDateYYYYMMDD(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  try {
+    const date = new Date(dateStr);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${year}${month}${day} ${displayHours}:${minutes} ${ampm}`;
+  } catch {
+    return dateStr || '';
+  }
+}
+
+// Calculate time delta in +HH.MM.seconds format
+function formatTimeDelta(startDateStr: string | null | undefined, endDateStr: string | null | undefined): string {
+  if (!startDateStr || !endDateStr) return '';
+  try {
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    const diffSeconds = Math.floor((end.getTime() - start.getTime()) / 1000);
+    if (diffSeconds < 0) return '';
+    
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+    
+    return `+${String(hours).padStart(2, '0')}.${String(minutes).padStart(2, '0')}.${String(seconds).padStart(2, '0')}`;
+  } catch {
+    return '';
   }
 }
 
@@ -23197,8 +23299,35 @@ button:disabled {
   min-width: 800px;
 }
 
+.past-runs-table-wrapper .col-check {
+  width: 50px !important;
+  text-align: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  position: relative;
+}
+
+.past-runs-table-wrapper .col-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin: 0;
+  flex-shrink: 0;
+  transform: scale(1.3);
+}
+
+.past-runs-table-wrapper thead .col-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  transform: scale(1.2);
+}
+
+.past-runs-table-wrapper .col-check:hover {
+  background-color: var(--bg-secondary);
+}
+
 .past-runs-inspector {
-  width: 350px;
+  width: 700px;
   border-left: 2px solid var(--border-primary);
   padding-left: 20px;
   overflow-y: auto;

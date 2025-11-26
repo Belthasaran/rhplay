@@ -156,8 +156,52 @@ function getProvisionerScriptPath() {
 }
 
 function getMissingDatabases() {
-    const userDataDir = getUserDataDir();
-    return DATABASE_FILES.filter((name) => !fs.existsSync(path.join(userDataDir, name)));
+    const isDev = process.env.ELECTRON_START_URL || process.env.NODE_ENV === 'development';
+    const isPackaged = process.env.ELECTRON_IS_PACKAGED || process.env.APPIMAGE;
+    
+    // Use same path resolution logic as database-manager.js
+    let basePath;
+    try {
+        if (isDev || !app || !app.getPath) {
+            // Development or testing: Use electron/ directory
+            basePath = __dirname;
+        } else {
+            // Production: Use app user data directory
+            basePath = app.getPath('userData');
+            ensureDirectory(basePath);
+        }
+    } catch (error) {
+        // Fallback for testing
+        basePath = __dirname;
+    }
+    
+    // Check each database, respecting environment variable overrides
+    const missing = [];
+    for (const dbName of DATABASE_FILES) {
+        let dbPath;
+        
+        // Check for environment variable override
+        if (dbName === 'rhdata.db' && process.env.RHDATA_DB_PATH) {
+            dbPath = process.env.RHDATA_DB_PATH;
+        } else if (dbName === 'patchbin.db' && process.env.PATCHBIN_DB_PATH) {
+            dbPath = process.env.PATCHBIN_DB_PATH;
+        } else if (dbName === 'clientdata.db' && process.env.CLIENTDATA_DB_PATH) {
+            dbPath = process.env.CLIENTDATA_DB_PATH;
+        } else if (dbName === 'resource.db' && process.env.RESOURCE_DB_PATH) {
+            dbPath = process.env.RESOURCE_DB_PATH;
+        } else if (dbName === 'screenshot.db' && process.env.SCREENSHOT_DB_PATH) {
+            dbPath = process.env.SCREENSHOT_DB_PATH;
+        } else {
+            // Use default path
+            dbPath = path.join(basePath, dbName);
+        }
+        
+        if (!fs.existsSync(dbPath)) {
+            missing.push(dbName);
+        }
+    }
+    
+    return missing;
 }
 
 function ensureHandlersRegistered() {

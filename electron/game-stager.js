@@ -445,7 +445,6 @@ async function stageRunGames(params) {
         // Build plus-patched game
         // Generate filename: (Sequence)_(Timestamp)_(patchcodes).sfc
         // Get patch codes for code string generation
-        const rhdb = dbManager.getConnection('rhdata');
         const patchObjects = rhdb.prepare(`
           SELECT * FROM extrapatches WHERE epuuid IN (${selectedPatches.map(() => '?').join(',')})
         `).all(...selectedPatches);

@@ -2344,7 +2344,6 @@ function addSelectedCSVStages() {
         
         stages.value[existingStageIndex] = updatedStage;
         updatedCount++;
-      }
     } else {
       // Add as new stage (either doesn't exist, or duplicate mode is 'import')
       // Handle UUID for new stages
@@ -2531,9 +2530,9 @@ function handleDetectedLevelsSelected(selectedLevels: any[]) {
       tile_y: level.tile_y || null,
       tile_value: level.tile_value || null,
       requisites: null,
-      playable: 1,
-      rando: 1,
-      difficulty: 0,
+      playable: 0,
+      rando: 0,
+      difficulty: 2,
       mainexit: 1,
       keyhole: 0,
       credits: 0,

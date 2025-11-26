@@ -541,6 +541,22 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'rhdata_046_gamestages_stagetags',
+      description: 'Add stagetags column to gamestages table for arbitrary tags',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/046_rhdata_gamestages_stagetags.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'gamestages')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'gamestages', 'stagetags');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   clientdata: [
     {
@@ -975,6 +991,24 @@ const MIGRATIONS = {
           return hasGlobalConditions && hasAppliedPatches && hasPlaylevelPatchcode;
         } catch (e) {
           return false;
+        }
+      },
+    },
+    {
+      id: 'clientdata_044_snes_contents_stage_fields',
+      description: 'Add stage_uuid, patchcodes, and patch_parameters columns to snes_contents table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/044_clientdata_snes_contents_stage_fields.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'snes_contents')) {
+            return true; // Table doesn't exist, skip
+          }
+          return columnExists(db, 'snes_contents', 'stage_uuid')
+            && columnExists(db, 'snes_contents', 'patchcodes')
+            && columnExists(db, 'snes_contents', 'patch_parameters');
+        } catch (e) {
+          return false; // Error checking, run migration
         }
       },
     },

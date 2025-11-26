@@ -443,6 +443,18 @@ async function stageRunGames(params) {
         };
         
         // Build plus-patched game
+        // Generate filename: (Sequence)_(Timestamp)_(patchcodes).sfc
+        // Get patch codes for code string generation
+        const rhdb = dbManager.getConnection('rhdata');
+        const patchObjects = rhdb.prepare(`
+          SELECT * FROM extrapatches WHERE epuuid IN (${selectedPatches.map(() => '?').join(',')})
+        `).all(...selectedPatches);
+        
+        // Generate code string from patches
+        const codeString = generatePatchCodeString(patchObjects, globalParams, {});
+        const finalFilename = `${sequenceNum}_${tmnows}${codeString ? '_' + codeString : ''}.sfc`;
+        const finalSfcPath = path.join(runFolder, finalFilename);
+        
         patchResult = await buildPlusPatchedGame({
           dbManager,
           gameId: result.gameid,
@@ -454,22 +466,48 @@ async function stageRunGames(params) {
           vanillaRomPath,
           flipsPath,
           asarPath: asarPath || null,  // Use provided ASAR path or let it find automatically
-          outputDir: path.dirname(sfcPath)
+          outputDir: runFolder,
+          finalFilename: finalFilename  // Pass desired filename
         });
         
-        // Move output file to final location if needed
-        if (patchResult.success && patchResult.outputPath && patchResult.outputPath !== sfcPath) {
-          if (fs.existsSync(patchResult.outputPath)) {
-            fs.copyFileSync(patchResult.outputPath, sfcPath);
-            // Clean up temp file if it's in a temp directory
-            if (patchResult.outputPath.includes('/tmp/') || patchResult.outputPath.includes('\\temp\\')) {
-              try {
-                fs.unlinkSync(patchResult.outputPath);
-              } catch (e) {
-                console.warn('Could not clean up temp file:', e);
+        // Clean up any intermediate files in the output directory (unless skip cleanup)
+        const clientDb = dbManager.getConnection('clientdata');
+        const skipCleanup = clientDb.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = 'SkipCleanup'
+        `).get();
+        const shouldSkipCleanup = SKIP_CLEANUP_FOR_NOW == 1 || 
+          (skipCleanup && skipCleanup.csetting_value && 
+           skipCleanup.csetting_value.toString().toLowerCase() !== '0' &&
+           skipCleanup.csetting_value.toString().toLowerCase() !== 'no');
+        
+        if (!shouldSkipCleanup && patchResult.success) {
+          // Clean up intermediate files and old-format files in the output directory
+          // Keep only files matching the pattern: (Sequence)_(Timestamp)_(patchcodes).sfc
+          try {
+            const files = fs.readdirSync(runFolder);
+            const finalFilenamePattern = /^\d{2}_\d+(_[a-zA-Z0-9]+)?\.sfc$/;
+            const oldFilePattern = /^sm\d/;
+
+            for (const file of files) {
+              if (oldFilePattern.test(file) && file.endsWith('.sfc') && file !== finalFilename && !finalFilenamePattern.test(file)) {
+                // This is an intermediate file or old-format file, clean it up
+                const filePath = path.join(runFolder, file);
+                try {
+                  fs.unlinkSync(filePath);
+                  console.log(`Cleaned up intermediate/old-format file: ${file}`);
+                } catch (e) {
+                  console.warn(`Could not clean up file ${file}:`, e);
+                }
               }
             }
+          } catch (e) {
+            console.warn('Could not list files for cleanup:', e);
           }
+        }
+        
+        // Update sfcPath to point to final location
+        if (patchResult.success && patchResult.outputPath) {
+          sfcPath = patchResult.outputPath;
         }
       } else {
         // For regular game entries, check if we have global patch codes
@@ -483,6 +521,17 @@ async function stageRunGames(params) {
           selectedPatches.push(...patches.map(p => p.epuuid));
           
           if (selectedPatches.length > 0) {
+            // Generate filename: (Sequence)_(Timestamp)_(patchcodes).sfc
+            const rhdb = dbManager.getConnection('rhdata');
+            const patchObjects = rhdb.prepare(`
+              SELECT * FROM extrapatches WHERE epuuid IN (${selectedPatches.map(() => '?').join(',')})
+            `).all(...selectedPatches);
+            
+            // Generate code string from patches
+            const codeString = generatePatchCodeString(patchObjects, { glevelnum: '', glevelnum_s: '', gonoffv: [] }, {});
+            const finalFilename = `${sequenceNum}_${tmnows}${codeString ? '_' + codeString : ''}.sfc`;
+            const finalSfcPath = path.join(runFolder, finalFilename);
+            
             // Use buildPlusPatchedGame with global patch codes
             patchResult = await buildPlusPatchedGame({
               dbManager,
@@ -495,21 +544,48 @@ async function stageRunGames(params) {
               vanillaRomPath,
               flipsPath,
               asarPath: asarPath || null,  // Use provided ASAR path or let it find automatically
-              outputDir: path.dirname(sfcPath)
+              outputDir: runFolder,
+              finalFilename: finalFilename  // Pass desired filename
             });
             
-            // Move output file to final location if needed
-            if (patchResult.success && patchResult.outputPath && patchResult.outputPath !== sfcPath) {
-              if (fs.existsSync(patchResult.outputPath)) {
-                fs.copyFileSync(patchResult.outputPath, sfcPath);
-                if (patchResult.outputPath.includes('/tmp/') || patchResult.outputPath.includes('\\temp\\')) {
-                  try {
-                    fs.unlinkSync(patchResult.outputPath);
-                  } catch (e) {
-                    console.warn('Could not clean up temp file:', e);
+            // Clean up any intermediate files in the output directory (unless skip cleanup)
+            const clientDb = dbManager.getConnection('clientdata');
+            const skipCleanup = clientDb.prepare(`
+              SELECT csetting_value FROM csettings WHERE csetting_name = 'SkipCleanup'
+            `).get();
+            const shouldSkipCleanup = SKIP_CLEANUP_FOR_NOW == 1 || 
+              (skipCleanup && skipCleanup.csetting_value && 
+               skipCleanup.csetting_value.toString().toLowerCase() !== '0' &&
+               skipCleanup.csetting_value.toString().toLowerCase() !== 'no');
+            
+            if (!shouldSkipCleanup && patchResult.success) {
+              // Clean up intermediate files and old-format files in the output directory
+              // Keep only files matching the pattern: (Sequence)_(Timestamp)_(patchcodes).sfc
+              try {
+                const files = fs.readdirSync(runFolder);
+                const finalFilenamePattern = /^\d{2}_\d+(_[a-zA-Z0-9]+)?\.sfc$/;
+                const oldFilePattern = /^sm\d/;
+
+                for (const file of files) {
+                  if (oldFilePattern.test(file) && file.endsWith('.sfc') && file !== finalFilename && !finalFilenamePattern.test(file)) {
+                    // This is an intermediate file or old-format file, clean it up
+                    const filePath = path.join(runFolder, file);
+                    try {
+                      fs.unlinkSync(filePath);
+                      console.log(`Cleaned up intermediate/old-format file: ${file}`);
+                    } catch (e) {
+                      console.warn(`Could not clean up file ${file}:`, e);
+                    }
                   }
                 }
+              } catch (e) {
+                console.warn('Could not list files for cleanup:', e);
               }
+            }
+            
+            // Update sfcPath to point to final location
+            if (patchResult.success && patchResult.outputPath) {
+              sfcPath = patchResult.outputPath;
             }
           } else {
             // No valid patches found, use standard patching
@@ -967,7 +1043,8 @@ async function buildPlusPatchedGame(params) {
     vanillaRomPath,
     flipsPath,
     asarPath,
-    outputDir
+    outputDir,
+    finalFilename
   } = params;
   
   try {
@@ -1103,26 +1180,32 @@ async function buildPlusPatchedGame(params) {
     }
     
     // Step 6: Generate final filename
-    const codeString = generatePatchCodeString(sortedPatches, globalParams, localParams);
-    
-    // Include level number in filename if set
-    let levelSuffix = '';
-    if (globalParams && globalParams.glevelnum && globalParams.glevelnum.trim()) {
-      // glevelnum is expected to be a hex string (e.g., "11", "001", "13C")
-      // Format it as _gl<LEVELNUMBER> in uppercase hex
-      const levelHex = globalParams.glevelnum.trim().toUpperCase();
-      levelSuffix = `_gl${levelHex}`;
+    // If finalFilename is provided, use it; otherwise generate default
+    let finalFilenameToUse;
+    if (finalFilename) {
+      finalFilenameToUse = finalFilename;
+    } else {
+      const codeString = generatePatchCodeString(sortedPatches, globalParams, localParams);
+      
+      // Include level number in filename if set
+      let levelSuffix = '';
+      if (globalParams && globalParams.glevelnum && globalParams.glevelnum.trim()) {
+        // glevelnum is expected to be a hex string (e.g., "11", "001", "13C")
+        // Format it as _gl<LEVELNUMBER> in uppercase hex
+        const levelHex = globalParams.glevelnum.trim().toUpperCase();
+        levelSuffix = `_gl${levelHex}`;
+      }
+      
+      finalFilenameToUse = `sm${gameId}_${codeString}${levelSuffix}.sfc`;
     }
-    
-    const finalFilename = `sm${gameId}_${codeString}${levelSuffix}.sfc`;
     
     // Step 7: Determine output path
     let finalOutputPath;
     if (outputDir) {
-      finalOutputPath = path.join(outputDir, finalFilename);
+      finalOutputPath = path.join(outputDir, finalFilenameToUse);
     } else {
       const basePath = getQuickLaunchBasePath(params.tempDirOverride);
-      finalOutputPath = path.join(basePath, finalFilename);
+      finalOutputPath = path.join(basePath, finalFilenameToUse);
     }
     
     // Ensure output directory exists
@@ -1149,7 +1232,7 @@ async function buildPlusPatchedGame(params) {
     return {
       success: true,
       outputPath: finalOutputPath,
-      filename: finalFilename
+      filename: finalFilenameToUse
     };
     
   } catch (error) {

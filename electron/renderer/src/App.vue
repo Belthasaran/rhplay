@@ -1354,10 +1354,20 @@
                        (entry.entryType || entry.entry_type) === 'random_stage' ? 'Random Stage' : (entry.entryType || entry.entry_type) }}
                   </span>
                 </td>
-                <td>{{ entry.name }}</td>
+                <td>
+                  <span v-if="(entry.entryType || entry.entry_type) === 'random_stage' && entry.id === '(random)'">
+                    ???
+                  </span>
+                  <span v-else>{{ entry.name }}</span>
+                </td>
                 <td>{{ entry.stageNumber ?? entry.levelnumber ?? '' }}</td>
                 <td>{{ entry.transLevel ?? entry.translevel ?? '' }}</td>
-                <td>{{ entry.stageName ?? entry.levelname ?? '' }}</td>
+                <td>
+                  <span v-if="(entry.entryType || entry.entry_type) === 'random_stage' && entry.id === '(random)'">
+                    ???
+                  </span>
+                  <span v-else>{{ entry.stageName ?? entry.levelname ?? '' }}</span>
+                </td>
                 <td class="col-count">
                   <input 
                     type="number" 
@@ -18544,7 +18554,14 @@ async function uploadRunToSnes() {
     addToLog('USB2SNES not connected');
     
     // Check if USB2SNES is enabled in settings
-    if (settings.usb2snesEnabled) {
+    // Treat "yes" or "1" as true, only null/blank/0/no (case-insensitive) as false
+    const usbEnabled = settings.usb2snesEnabled;
+    const isUsbEnabled = usbEnabled && 
+      usbEnabled !== '0' && 
+      usbEnabled.toString().toLowerCase() !== 'no' && 
+      usbEnabled.toString().trim() !== '';
+    
+    if (isUsbEnabled) {
       addToLog('USB2SNES is enabled in settings, attempting to connect...');
       
       try {

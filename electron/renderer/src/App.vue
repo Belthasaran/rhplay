@@ -7213,7 +7213,9 @@ import {
   promptDialogConfirmText,
   promptDialogCancelText,
   handlePromptConfirm,
-  handlePromptCancel
+  handlePromptCancel,
+  showAlert,
+  showPrompt
 } from './utils/dialogs';
 
 // Debounce utility
@@ -18126,17 +18128,32 @@ async function addRandomStageToRun() {
   regenerateSeed();
 }
 
-function stageRun(mode: 'save' | 'upload') {
+async function stageRun(mode: 'save' | 'upload') {
   console.log('Stage run', mode, runEntries);
   
-  // If no name yet, open name input modal
+  // If no name yet, use custom prompt dialog
   if (!currentRunName.value) {
-    runNameInput.value = 'My Challenge Run';
-    runNameModalOpen.value = true;
-  } else {
-    // Already have name, just save
-    saveRunToDatabase();
+    const runName = await showPrompt(
+      'Enter a name for this run:',
+      'My Challenge Run',
+      'Run Name',
+      'My Challenge Run',
+      'text',
+      true,
+      'Save Run',
+      'Cancel'
+    );
+    
+    if (!runName || runName.trim() === '') {
+      // User cancelled or entered empty name
+      return;
+    }
+    
+    currentRunName.value = runName.trim();
   }
+  
+  // Now save the run
+  saveRunToDatabase();
 }
 
 async function saveRunToDatabase() {
@@ -18281,9 +18298,9 @@ async function stageRunGames(runUuid: string, runName: string) {
   }
 }
 
-function confirmRunName() {
+async function confirmRunName() {
   if (!runNameInput.value || runNameInput.value.trim() === '') {
-    alert('Please enter a run name');
+    await showAlert('Please enter a run name', 'Run Name Required');
     return;
   }
   currentRunName.value = runNameInput.value;

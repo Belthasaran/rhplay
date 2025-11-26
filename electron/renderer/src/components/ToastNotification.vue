@@ -14,9 +14,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref } from 'vue';
 
-export interface Toast {
+interface Toast {
   id: number;
   message: string;
   type: 'success' | 'error' | 'info' | 'warning';
@@ -36,8 +36,9 @@ function getToastIcon(type: Toast['type']): string {
   }
 }
 
-export function showToast(message: string, type: Toast['type'] = 'info', duration: number = 3000) {
+function showToast(message: string, type: Toast['type'] = 'info', duration: number = 3000) {
   const id = nextId++;
+  console.log(`[Toast Notification] [${type.toUpperCase()}] ${message} (duration: ${duration}ms)`);
   toasts.value.push({ id, message, type, duration });
   
   if (duration > 0) {

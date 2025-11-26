@@ -646,6 +646,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick, Teleport } from 'vue';
+import Papa from 'papaparse';
 import DetectedLevelsDialog from './DetectedLevelsDialog.vue';
 import ToastNotification from './ToastNotification.vue';
 
@@ -1721,17 +1722,6 @@ const CSV_COLUMNS = [
   'stagetags', 'rhpakuuid', 'extradescription'
 ];
 
-// Escape CSV field - handles quotes and commas
-function escapeCSVField(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  // If contains comma, quote, or newline, wrap in quotes and escape quotes
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
 async function exportStagesToCSV() {
   if (!props.gameId || stages.value.length === 0) {
     alert('No stages to export');
@@ -1762,15 +1752,12 @@ async function exportStagesToCSV() {
       return; // User cancelled
     }
     
-    // Build CSV content
-    const lines: string[] = [];
-    
-    // Add header row
-    lines.push(CSV_COLUMNS.join(','));
+    // Build data array for papaparse
+    const csvData: any[] = [];
     
     // Add data rows
     for (const stage of stages.value) {
-      const row: string[] = [];
+      const row: any = {};
       for (const col of CSV_COLUMNS) {
         let value: string | number | null | undefined;
         
@@ -1872,12 +1859,26 @@ async function exportStagesToCSV() {
             value = '';
         }
         
-        row.push(escapeCSVField(value));
+        // Convert to string, handling null/undefined
+        row[col] = value === null || value === undefined ? '' : String(value);
       }
-      lines.push(row.join(','));
+      csvData.push(row);
     }
     
-    const csvContent = lines.join('\n');
+    // Generate CSV using papaparse with proper formatting for Excel compatibility
+    const csvContent = Papa.unparse(csvData, {
+      columns: CSV_COLUMNS,
+      header: true,
+      quotes: true, // Quote all fields
+      quoteChar: '"',
+      escapeChar: '"',
+      delimiter: ',',
+      newline: '\n',
+      skipEmptyLines: false
+    });
+    
+    // Ensure file ends with a newline
+    const csvContentWithNewline = csvContent.endsWith('\n') ? csvContent : csvContent + '\n';
     
     // Write file directly (chooseSavePath already showed the dialog)
     if (!api.writeFile) {
@@ -1887,7 +1888,7 @@ async function exportStagesToCSV() {
     
     const writeResult = await api.writeFile({
       filePath: saveResult.filePath,
-      content: csvContent
+      content: csvContentWithNewline
     });
     
     if (!writeResult?.success) {

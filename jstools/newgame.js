@@ -1661,7 +1661,9 @@ function parseArgs(argv) {
     force: false,
     purgeFiles: false,
     uninstallUuid: null,
-    trustPatches: false
+    trustPatches: false,
+    forceGameids: false,
+    forceExtrapatches: false
   };
 
   for (const arg of args) {
@@ -4055,7 +4057,7 @@ async function handleImportPackage(config) {
       (versionParts[0] > 0 || (versionParts[0] === 0 && versionParts[1] > 1) || 
        (versionParts[0] === 0 && versionParts[1] === 1 && (versionParts[2] || 0) >= 1));
     
-    if (isVersion111OrHigher && !config.force) {
+    if (isVersion111OrHigher && !config.force && !config.forceGameids) {
       // Collect all gameids from the skeleton
       const foundGameids = new Set();
       const gv = skeleton.gameversion || {};
@@ -4102,16 +4104,30 @@ async function handleImportPackage(config) {
         if (extra.length > 0) {
           errors.push(`Declared gameids not found in skeleton: ${extra.join(', ')}`);
         }
-        throw new Error(`RHPAK gameid validation failed:\n${errors.join('\n')}\n\nRerun with --force to import anyway.`);
+        const err = new Error(`RHPAK gameid validation failed:\n${errors.join('\n')}\n\nRerun with --force-gameids to import anyway.`);
+        err.validationType = 'gameids';
+        err.missingGameids = missing;
+        err.extraGameids = extra;
+        err.foundGameids = foundList;
+        err.declaredGameids = declaredList;
+        // Check for extrapatches too - if both issues exist, combine them
+        if (metadata.has_extrapatches && !config.trustPatches && !config.forceExtrapatches) {
+          err.validationType = 'both';
+          err.hasExtrapatches = true;
+        }
+        throw err;
       }
     }
     
     // Check for extrapatches and require trusted signature or --trust-patches
-    if (metadata.has_extrapatches && !config.trustPatches) {
+    if (metadata.has_extrapatches && !config.trustPatches && !config.forceExtrapatches) {
       // Check if skeleton is signed by a trusted admin
       // For now, we'll require --trust-patches flag
       // TODO: Implement trusted signature verification
-      throw new Error('This RHPAK contains extrapatches, but skeleton is not signed by a trusted authorized admin. Rerun with --import --trust-patches option to permit.');
+      const err = new Error('This RHPAK contains extrapatches, but skeleton is not signed by a trusted authorized admin. Rerun with --import --trust-patches option to permit.');
+      err.validationType = 'extrapatches';
+      err.hasExtrapatches = true;
+      throw err;
     }
     metadata.prepared = true;
     metadata.prepared_at = metadata.prepared_at || new Date().toISOString();

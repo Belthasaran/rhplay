@@ -1450,6 +1450,84 @@
     </div>
   </div>
 
+  <!-- Security Warning Modal -->
+  <div v-if="securityWarningModalOpen" class="modal-backdrop" @click.self.prevent>
+    <div class="modal security-warning-modal" style="max-width: 600px;">
+      <header class="modal-header" style="background: #d32f2f; color: white;">
+        <h3>⚠️ Security Warning</h3>
+        <!-- No close button - user must click Cancel or proceed -->
+      </header>
+      <section class="modal-body" style="padding: 24px;">
+        <div v-if="securityWarningState.validationType === 'gameids' || securityWarningState.validationType === 'both'">
+          <h4 style="color: #d32f2f; margin-top: 0;">GameID Validation Failed</h4>
+          <p style="margin: 12px 0;">
+            This RHPAK contains game IDs that don't match the declared list in the package metadata.
+            Installing it could cause conflicts with other resources in your database.
+          </p>
+          <div v-if="securityWarningState.gameidsIssue" style="background: #fff3cd; padding: 12px; border-radius: 4px; margin: 12px 0;">
+            <strong>Details:</strong>
+            <ul style="margin: 8px 0; padding-left: 24px;">
+              <li v-if="securityWarningState.gameidsIssue.missing.length > 0">
+                <strong>Undeclared game IDs found:</strong> {{ securityWarningState.gameidsIssue.missing.join(', ') }}
+              </li>
+              <li v-if="securityWarningState.gameidsIssue.extra.length > 0">
+                <strong>Declared but not found:</strong> {{ securityWarningState.gameidsIssue.extra.join(', ') }}
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div v-if="securityWarningState.validationType === 'extrapatches' || securityWarningState.validationType === 'both'" style="margin-top: 24px;">
+          <h4 style="color: #d32f2f; margin-top: 0;">Untrusted Patches Detected</h4>
+          <p style="margin: 12px 0;">
+            This RHPAK contains patches that have not been verified as safe. Unsafe patches could potentially run dangerous commands or modify your system in unexpected ways.
+          </p>
+        </div>
+        <div style="margin-top: 24px; padding: 16px; background: #f5f5f5; border-radius: 4px;">
+          <label style="display: flex; align-items: flex-start; cursor: pointer;">
+            <input 
+              type="checkbox" 
+              v-model="securityWarningState.acknowledged"
+              style="margin-right: 8px; margin-top: 2px;"
+            />
+            <span>I understand the risks and want to proceed anyway</span>
+          </label>
+        </div>
+      </section>
+      <footer class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+        <button 
+          @click="cancelSecurityWarning"
+          style="background: #6c757d; color: white;"
+        >
+          Cancel
+        </button>
+        <button 
+          v-if="securityWarningState.validationType === 'gameids' || securityWarningState.validationType === 'both'"
+          @click="proceedWithForceGameids"
+          :disabled="!securityWarningState.acknowledged"
+          style="background: #ff9800; color: white;"
+        >
+          Load RHPAK Anyway (GameIDs)
+        </button>
+        <button 
+          v-if="securityWarningState.validationType === 'extrapatches' || securityWarningState.validationType === 'both'"
+          @click="proceedWithForceExtrapatches"
+          :disabled="!securityWarningState.acknowledged"
+          style="background: #ff9800; color: white;"
+        >
+          Load RHPAK Anyway (Patches)
+        </button>
+        <button 
+          v-if="securityWarningState.validationType === 'both'"
+          @click="proceedWithBothForces"
+          :disabled="!securityWarningState.acknowledged"
+          style="background: #d32f2f; color: white;"
+        >
+          Load RHPAK Anyway (Both)
+        </button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Installed RHPAKs Modal -->
   <div v-if="installedRhpaksModalOpen" class="modal-backdrop" @click.self="closeInstalledRhpaksModal">
     <div class="modal installed-rhpak-modal">
@@ -7177,6 +7255,27 @@ const installRhpakState = reactive<{
   output: ''
 });
 const installRhpakBusy = computed(() => installRhpakState.status === 'installing');
+
+// Security warning modal state
+const securityWarningModalOpen = ref(false);
+const securityWarningState = reactive<{
+  validationType: 'gameids' | 'extrapatches' | 'both' | null;
+  gameidsIssue: {
+    missing: string[];
+    extra: string[];
+    found: string[];
+    declared: string[];
+  } | null;
+  hasExtrapatches: boolean;
+  filePath: string;
+  acknowledged: boolean;
+}>({
+  validationType: null,
+  gameidsIssue: null,
+  hasExtrapatches: false,
+  filePath: '',
+  acknowledged: false
+});
 const installedRhpaksModalOpen = ref(false);
 const installedRhpaks = ref<InstalledRhpak[]>([]);
 const installedRhpaksLoading = ref(false);
@@ -7539,13 +7638,13 @@ async function chooseRhpakFile() {
   }
 }
 
-async function installRhpakFromPath(filePath: string) {
+async function installRhpakFromPath(filePath: string, options: { forceGameids?: boolean; forceExtrapatches?: boolean; trustPatches?: boolean } = {}) {
   try {
     installRhpakState.status = 'installing';
     installRhpakState.message = 'Verifying package…';
     installRhpakState.output = '';
 
-    const response = await (window as any).electronAPI.rhpakImport(filePath);
+    const response = await (window as any).electronAPI.rhpakImport(filePath, options);
     if (response?.success) {
       installRhpakState.status = 'success';
       installRhpakState.message = 'Package installed successfully.';
@@ -7553,6 +7652,38 @@ async function installRhpakFromPath(filePath: string) {
       await refreshInstalledRhpaks();
       await loadGames();
     } else {
+      // Check if this is a validation error that requires user confirmation
+      // We need to check for both issues - if the error mentions gameids, check for extrapatches too
+      if (response?.validationType) {
+        // Determine if we have both issues
+        const hasGameidsIssue = response.validationType === 'gameids' || (response.missingGameids && response.missingGameids.length > 0) || (response.extraGameids && response.extraGameids.length > 0);
+        const hasExtrapatchesIssue = response.validationType === 'extrapatches' || response.hasExtrapatches;
+        
+        // Show security warning modal
+        if (hasGameidsIssue && hasExtrapatchesIssue) {
+          securityWarningState.validationType = 'both';
+        } else if (hasGameidsIssue) {
+          securityWarningState.validationType = 'gameids';
+        } else if (hasExtrapatchesIssue) {
+          securityWarningState.validationType = 'extrapatches';
+        } else {
+          securityWarningState.validationType = response.validationType as 'gameids' | 'extrapatches';
+        }
+        
+        securityWarningState.gameidsIssue = (response.missingGameids && response.missingGameids.length > 0) || (response.extraGameids && response.extraGameids.length > 0) ? {
+          missing: response.missingGameids || [],
+          extra: response.extraGameids || [],
+          found: response.foundGameids || [],
+          declared: response.declaredGameids || []
+        } : null;
+        securityWarningState.hasExtrapatches = response.hasExtrapatches || false;
+        securityWarningState.filePath = filePath;
+        securityWarningState.acknowledged = false;
+        securityWarningModalOpen.value = true;
+        installRhpakState.status = 'idle';
+        return;
+      }
+      
       installRhpakState.status = 'error';
       installRhpakState.message = response?.error || 'Failed to install package.';
       installRhpakState.output = (response?.output || '').trim();
@@ -7562,6 +7693,36 @@ async function installRhpakFromPath(filePath: string) {
     installRhpakState.status = 'error';
     installRhpakState.message = (error as any)?.message || 'Failed to install package.';
   }
+}
+
+function cancelSecurityWarning() {
+  securityWarningModalOpen.value = false;
+  securityWarningState.acknowledged = false;
+  securityWarningState.validationType = null;
+  securityWarningState.gameidsIssue = null;
+  securityWarningState.hasExtrapatches = false;
+  securityWarningState.filePath = '';
+}
+
+async function proceedWithForceGameids() {
+  securityWarningModalOpen.value = false;
+  const filePath = securityWarningState.filePath;
+  cancelSecurityWarning();
+  await installRhpakFromPath(filePath, { forceGameids: true });
+}
+
+async function proceedWithForceExtrapatches() {
+  securityWarningModalOpen.value = false;
+  const filePath = securityWarningState.filePath;
+  cancelSecurityWarning();
+  await installRhpakFromPath(filePath, { forceExtrapatches: true, trustPatches: true });
+}
+
+async function proceedWithBothForces() {
+  securityWarningModalOpen.value = false;
+  const filePath = securityWarningState.filePath;
+  cancelSecurityWarning();
+  await installRhpakFromPath(filePath, { forceGameids: true, forceExtrapatches: true, trustPatches: true });
 }
 
 async function promptInstallRhpakFromOS(filePath: string) {

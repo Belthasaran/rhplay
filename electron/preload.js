@@ -306,7 +306,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {string} filePath - Absolute path to .rhpak file
    * @returns {Promise<{success: boolean, output?: string, error?: string}>}
    */
-  rhpakImport: (filePath) => ipcRenderer.invoke('rhpak:import', { filePath }),
+  rhpakImport: (filePath, options) => ipcRenderer.invoke('rhpak:import', { filePath, ...options }),
   
   /**
    * List installed RHPAK packages

@@ -6361,7 +6361,7 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Import a RHPAK package via newgame.js
    */
-  ipcMain.handle('rhpak:import', async (_event, { filePath } = {}) => {
+  ipcMain.handle('rhpak:import', async (_event, { filePath, forceGameids, forceExtrapatches, trustPatches } = {}) => {
     try {
       if (!filePath) {
         return { success: false, error: 'filePath is required' };
@@ -6369,11 +6369,27 @@ function registerDatabaseHandlers(dbManager) {
       const config = buildNewgameConfig({
         packageInput: filePath,
         packageBaseDir: path.dirname(path.resolve(filePath)),
+        forceGameids: !!forceGameids,
+        forceExtrapatches: !!forceExtrapatches,
+        trustPatches: !!trustPatches
       });
       await newgameHandleImportPackage(config);
       return { success: true };
     } catch (error) {
       console.error('[rhpak:import] Failed:', error);
+      // Return structured error info for validation failures
+      if (error.validationType) {
+        return {
+          success: false,
+          error: error.message,
+          validationType: error.validationType,
+          missingGameids: error.missingGameids,
+          extraGameids: error.extraGameids,
+          foundGameids: error.foundGameids,
+          declaredGameids: error.declaredGameids,
+          hasExtrapatches: error.hasExtrapatches
+        };
+      }
       return { success: false, error: error.message };
     }
   });

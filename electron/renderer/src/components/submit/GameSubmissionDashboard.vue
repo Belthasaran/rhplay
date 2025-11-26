@@ -1401,16 +1401,48 @@ async function runPackage() {
       }
 
       // If overriding, mutate the prepared skeleton's gameid before packaging
+      // Apply override to ALL gameid references: gameversion, screenshots, resources, gamestages
       let preparedForPackage = prep.skeleton;
       if (overrideGameId) {
         try {
+          // Override gameversion gameid
           if (preparedForPackage.gameversion) {
             preparedForPackage.gameversion.gameid = overrideGameId;
           }
+          // Override metadata gameid
           if (preparedForPackage.metadata) {
             preparedForPackage.metadata.gameid = overrideGameId;
           }
-        } catch {}
+          // Override all screenshots gameid
+          if (Array.isArray(preparedForPackage.screenshots)) {
+            preparedForPackage.screenshots = preparedForPackage.screenshots.map((shot: any) => {
+              if (shot && typeof shot === 'object') {
+                return { ...shot, gameid: overrideGameId };
+              }
+              return shot;
+            });
+          }
+          // Override all resources gameid
+          if (Array.isArray(preparedForPackage.resources)) {
+            preparedForPackage.resources = preparedForPackage.resources.map((res: any) => {
+              if (res && typeof res === 'object') {
+                return { ...res, gameid: overrideGameId };
+              }
+              return res;
+            });
+          }
+          // Override all gamestages gameid
+          if (Array.isArray(preparedForPackage.gamestages)) {
+            preparedForPackage.gamestages = preparedForPackage.gamestages.map((stage: any) => {
+              if (stage && typeof stage === 'object') {
+                return { ...stage, gameid: overrideGameId };
+              }
+              return stage;
+            });
+          }
+        } catch (e) {
+          console.warn('Error applying gameid override:', e);
+        }
       }
 
       // Write prepared skeleton to a temp file for packaging

@@ -112,7 +112,7 @@ function configure7zipPath() {
 // Configure 7zip-min on module load
 configure7zipPath();
 
-const SCRIPT_VERSION = '0.1.0';
+const SCRIPT_VERSION = '0.1.1';
 const DEFAULT_PBKDF2_ITERATIONS = 390000;
 const DEFAULT_BLOCKED_ROM_SHA1 = new Set([
   '6b47bb75d16514b6a476aa0c73a683a2a4c18765',
@@ -186,6 +186,56 @@ function ensureRhpakMetadata(skeleton) {
     const gv = skeleton.gameversion || {};
     skeleton.metadata.rhpakname = buildDefaultRhpakName(gv);
   }
+  // Set metadata version
+  if (!skeleton.metadata.version) {
+    skeleton.metadata.version = SCRIPT_VERSION;
+  }
+  
+  // Collect all gameids from the skeleton
+  const gameids = new Set();
+  const gv = skeleton.gameversion || {};
+  if (gv.gameid) {
+    gameids.add(gv.gameid);
+  }
+  
+  // Collect gameids from screenshots
+  if (Array.isArray(skeleton.screenshots)) {
+    for (const shot of skeleton.screenshots) {
+      if (shot && typeof shot === 'object' && shot.gameid) {
+        gameids.add(shot.gameid);
+      }
+    }
+  }
+  
+  // Collect gameids from resources
+  if (Array.isArray(skeleton.resources)) {
+    for (const res of skeleton.resources) {
+      if (res && typeof res === 'object' && res.gameid) {
+        gameids.add(res.gameid);
+      }
+    }
+  }
+  
+  // Collect gameids from gamestages
+  if (Array.isArray(skeleton.gamestages)) {
+    for (const stage of skeleton.gamestages) {
+      if (stage && typeof stage === 'object' && stage.gameid) {
+        gameids.add(stage.gameid);
+      }
+    }
+  }
+  
+  const gameidsList = Array.from(gameids).sort();
+  const isSingleGame = gameidsList.length === 1;
+  const hasDetachedResources = !isSingleGame && gameidsList.length > 0;
+  const hasExtrapatches = Array.isArray(skeleton.extrapatches) && skeleton.extrapatches.length > 0;
+  
+  // Set RHPAK metadata flags
+  skeleton.metadata.rhpak_type = isSingleGame ? 'single' : (gameidsList.length > 1 ? 'multiple' : 'unknown');
+  skeleton.metadata.gameids = gameidsList;
+  skeleton.metadata.has_detached_resources = hasDetachedResources;
+  skeleton.metadata.has_extrapatches = hasExtrapatches;
+  
   return skeleton.metadata;
 }
 
@@ -1610,7 +1660,8 @@ function parseArgs(argv) {
     baseDir: null,
     force: false,
     purgeFiles: false,
-    uninstallUuid: null
+    uninstallUuid: null,
+    trustPatches: false
   };
 
   for (const arg of args) {
@@ -1687,6 +1738,10 @@ function parseArgs(argv) {
       config.purgeFiles = true;
       continue;
     }
+    if (arg === '--trust-patches') {
+      config.trustPatches = true;
+      continue;
+    }
     if (arg === '--help') {
       config.mode = 'help';
       continue;
@@ -1754,7 +1809,8 @@ function printHelp() {
     '  --resourcedb=PATH   Override resource.db location',
     '  --screenshotdb=PATH Override screenshot.db location',
     '  --output-json=PATH  (--extract-package only) Path to write the extracted JSON skeleton',
-    '  --force             Required for --remove (deprecated workflow)',
+    '  --force             Required for --remove (deprecated workflow); also bypasses gameid validation on import',
+    '  --trust-patches     Allow importing RHPAKs with extrapatches (requires trusted signature or this flag)',
     '  --purge-files       Delete staged patch/blob resources when removing/uninstalling from JSON',
     '  --help              Show this message',
     '',
@@ -3991,6 +4047,72 @@ async function handleImportPackage(config) {
     }
 
     const metadata = ensureRhpakMetadata(skeleton);
+    
+    // Validate gameids for 0.1.1+ RHPAKs
+    const rhpakVersion = metadata.version || '0.1.0';
+    const versionParts = rhpakVersion.split('.').map(Number);
+    const isVersion111OrHigher = versionParts.length >= 2 && 
+      (versionParts[0] > 0 || (versionParts[0] === 0 && versionParts[1] > 1) || 
+       (versionParts[0] === 0 && versionParts[1] === 1 && (versionParts[2] || 0) >= 1));
+    
+    if (isVersion111OrHigher && !config.force) {
+      // Collect all gameids from the skeleton
+      const foundGameids = new Set();
+      const gv = skeleton.gameversion || {};
+      if (gv.gameid) {
+        foundGameids.add(gv.gameid);
+      }
+      
+      if (Array.isArray(skeleton.screenshots)) {
+        for (const shot of skeleton.screenshots) {
+          if (shot && typeof shot === 'object' && shot.gameid) {
+            foundGameids.add(shot.gameid);
+          }
+        }
+      }
+      
+      if (Array.isArray(skeleton.resources)) {
+        for (const res of skeleton.resources) {
+          if (res && typeof res === 'object' && res.gameid) {
+            foundGameids.add(res.gameid);
+          }
+        }
+      }
+      
+      if (Array.isArray(skeleton.gamestages)) {
+        for (const stage of skeleton.gamestages) {
+          if (stage && typeof stage === 'object' && stage.gameid) {
+            foundGameids.add(stage.gameid);
+          }
+        }
+      }
+      
+      const foundList = Array.from(foundGameids).sort();
+      const declaredList = Array.isArray(metadata.gameids) ? metadata.gameids.sort() : [];
+      
+      // Check if all found gameids are in the declared list
+      const missing = foundList.filter(gid => !declaredList.includes(gid));
+      const extra = declaredList.filter(gid => !foundList.includes(gid));
+      
+      if (missing.length > 0 || extra.length > 0) {
+        const errors = [];
+        if (missing.length > 0) {
+          errors.push(`Found gameids not declared in metadata: ${missing.join(', ')}`);
+        }
+        if (extra.length > 0) {
+          errors.push(`Declared gameids not found in skeleton: ${extra.join(', ')}`);
+        }
+        throw new Error(`RHPAK gameid validation failed:\n${errors.join('\n')}\n\nRerun with --force to import anyway.`);
+      }
+    }
+    
+    // Check for extrapatches and require trusted signature or --trust-patches
+    if (metadata.has_extrapatches && !config.trustPatches) {
+      // Check if skeleton is signed by a trusted admin
+      // For now, we'll require --trust-patches flag
+      // TODO: Implement trusted signature verification
+      throw new Error('This RHPAK contains extrapatches, but skeleton is not signed by a trusted authorized admin. Rerun with --import --trust-patches option to permit.');
+    }
     metadata.prepared = true;
     metadata.prepared_at = metadata.prepared_at || new Date().toISOString();
     metadata.imported_from = {

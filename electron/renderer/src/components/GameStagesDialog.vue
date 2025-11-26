@@ -360,7 +360,7 @@
                       v-if="isDevAdmin && currentMode === 'edit' || (currentMode === 'select' && canTestStage(stage))"
                       @click.stop="testLevel(stage)" 
                       class="btn-icon btn-test"
-                      title="Test level - Build and Boot with 1lvno patch"
+                      title="Test level - Build and Boot with 2lvno patch"
                       :disabled="testingLevel || !stage.levelnumber || !canTestStage(stage)"
                     >
                       🧪
@@ -509,7 +509,7 @@
               v-model="newPlaylevelPatchCode" 
               type="text"
               class="modal-input"
-              placeholder="1lvno"
+              placeholder="2lvno"
               list="playlevel-patch-list"
             />
             <datalist id="playlevel-patch-list">
@@ -517,7 +517,7 @@
                 {{ patch.patch_code }} - {{ patch.name }}
               </option>
             </datalist>
-            <p class="field-hint">Enter the patch code to use for level selection/testing. Default is "1lvno".</p>
+            <p class="field-hint">Enter the patch code to use for level selection/testing. Default is "2lvno".</p>
           </div>
 
           <div class="modal-field">
@@ -830,7 +830,7 @@ interface GameStage {
   troll: number;
   final: number;
   lock?: number; // Lock flag - level only accessible in Edit mode
-  playlevel_patch_code?: string | null; // Playlevel patch code (defaults to '1lvno')
+  playlevel_patch_code?: string | null; // Playlevel patch code (defaults to '2lvno')
   excluded_patchcodes?: string | null; // JSON array of patch codes or declarative tags to exclude
   extradescription?: string | null; // Optional free-form description
   stagetags?: string | null; // Comma-separated list of arbitrary tags (e.g., "cape", "autoscroller")
@@ -883,7 +883,7 @@ const newExcludedPatchCode = ref('');
 const showDetectedLevelsDialog = ref(false);
 const showSetPlaylevelPatchDialog = ref(false);
 const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage_uuid set
-const newPlaylevelPatchCode = ref('1lvno');
+const newPlaylevelPatchCode = ref('2lvno');
 const showExtraDescriptionDialog = ref(false);
 const editingExtraDescriptionStage = ref<GameStage | null>(null);
 const editingExtraDescriptionText = ref<string>('');
@@ -1003,7 +1003,7 @@ function formatExcludedPatchCodes(excludedPatchcodes: string | null | undefined)
 }
 
 // Get active playlevel patch for a stage
-// Priority: 1) Playlevel patch in requisites, 2) playlevel_patch_code, 3) default '1lvno'
+// Priority: 1) Playlevel patch in requisites, 2) playlevel_patch_code, 3) default '2lvno'
 function getActivePlaylevelPatch(stage: GameStage): string {
   // First, check if any playlevel patch is in requisites
   const requisiteTags = getRequisiteTags(stage);
@@ -1019,8 +1019,8 @@ function getActivePlaylevelPatch(stage: GameStage): string {
     return stage.playlevel_patch_code.trim();
   }
   
-  // Default to '1lvno'
-  return '1lvno';
+  // Default to '2lvno'
+  return '2lvno';
 }
 
 // Get playlevel patch code for a stage (for use in testLevel)
@@ -1413,7 +1413,7 @@ function addNewStage() {
     troll: 0,
     final: 0,
     lock: 0,
-    playlevel_patch_code: null, // null means use default '1lvno'
+    playlevel_patch_code: null, // null means use default '2lvno'
   };
   stages.value.push(newStage);
 }
@@ -1439,8 +1439,8 @@ async function testLevel(stage: GameStage) {
       return;
     }
     
-    // Get all patches to find the "1lvno" patch
-    testProgressMessage.value = 'Finding 1lvno patch...';
+    // Get all patches to find the "2lvno" patch
+    testProgressMessage.value = 'Finding 2lvno patch...';
     const patchesResult = await api.getAllExtraPatches();
     
     if (!patchesResult?.success) {
@@ -1780,7 +1780,7 @@ async function saveAll() {
         troll: stage.troll,
         final: stage.final,
         lock: stage.lock || 0,
-        playlevel_patch_code: stage.playlevel_patch_code || '1lvno',
+        playlevel_patch_code: stage.playlevel_patch_code || '2lvno',
         extradescription: stage.extradescription || null,
         stagetags: stage.stagetags || null,
       });
@@ -2273,146 +2273,151 @@ function toggleCSVStageSelection(stage: any) {
   }
 }
 
-async function addSelectedCSVStages() {
+function addSelectedCSVStages() {
   if (selectedCSVStages.value.size === 0) {
     alert('No stages selected');
     return;
   }
   
-  try {
-    const api = (window as any)?.electronAPI;
-    if (!api?.saveGameStage) {
-      alert('Save functionality not available');
-      return;
-    }
+  const selectedStages = csvImportStages.value.filter(s => selectedCSVStages.value.has(s._rowIndex));
+  let addedCount = 0;
+  let updatedCount = 0;
+  
+  for (const csvStage of selectedStages) {
+    // Check if stage already exists in the current stages array
+    const existingStageIndex = stages.value.findIndex(s => 
+      s.levelnumber === csvStage.levelnumber && s.gameid === props.gameId
+    );
     
-    const selectedStages = csvImportStages.value.filter(s => selectedCSVStages.value.has(s._rowIndex));
-    let successCount = 0;
-    let errorCount = 0;
-    const errors: string[] = [];
+    // Handle UUID based on options
+    let stageUuid: string | undefined = undefined;
     
-    for (const stage of selectedStages) {
-      try {
-        // Handle UUID based on options
-        let stageUuid: string | undefined = undefined;
+    if (existingStageIndex >= 0 && csvImportOptions.value.duplicateMode === 'update') {
+      // Update existing stage in the array
+        const existingStage = stages.value[existingStageIndex];
         
-        if (stage._exists) {
-          // Updating existing stage
-          if (csvImportOptions.value.ignoreUuid) {
-            // Ignore UUID from CSV - keep existing UUID from DB
-            stageUuid = stage._existingStage?.stage_uuid;
-          } else if (csvImportOptions.value.includeUuid && stage.stage_uuid) {
-            // Include UUID from CSV when updating
-            stageUuid = stage.stage_uuid;
-          } else {
-            // Default: keep existing UUID from DB (don't process CSV UUID)
-            stageUuid = stage._existingStage?.stage_uuid;
-          }
+        // Handle UUID based on options
+        if (csvImportOptions.value.ignoreUuid) {
+          // Keep existing UUID
+          stageUuid = existingStage.stage_uuid;
+        } else if (csvImportOptions.value.includeUuid && csvStage.stage_uuid) {
+          // Use UUID from CSV
+          stageUuid = csvStage.stage_uuid;
         } else {
-          // New stage
-          if (csvImportOptions.value.ignoreUuid) {
-            // Ignore UUID from CSV - let backend generate new one
-            stageUuid = undefined;
-          } else if (stage.stage_uuid) {
-            // Use UUID from CSV if provided
-            stageUuid = stage.stage_uuid;
-          } else {
-            // No UUID in CSV - let backend generate new one
-            stageUuid = undefined;
-          }
+          // Default: keep existing UUID
+          stageUuid = existingStage.stage_uuid;
         }
         
-        // Prepare stage data for save
-        const stageData: any = {
-          gameid: stage.gameid,
-          levelnumber: stage.levelnumber,
-          levelname: stage.levelname,
-          versions: stage.versions,
-          submapid: stage.submapid || null,
-          translevel_13bf: stage.translevel_13bf || null,
-          tile_x: stage.tile_x || null,
-          tile_y: stage.tile_y || null,
-          tile_value: stage.tile_value || null,
-          requisites: stage.requisites || null,
-          playable: stage.playable,
-          rando: stage.rando,
-          difficulty: stage.difficulty,
-          mainexit: stage.mainexit,
-          keyhole: stage.keyhole,
-          credits: stage.credits,
-          ghouse: stage.ghouse,
-          spalace: stage.spalace,
-          castle: stage.castle,
-          water: stage.water,
-          boss: stage.boss,
-          secret: stage.secret,
-          troll: stage.troll,
-          final: stage.final,
-          lock: stage.lock,
-          playlevel_patch_code: stage.playlevel_patch_code || null,
-          excluded_patchcodes: stage.excluded_patchcodes || null,
-          stagetags: stage.stagetags || null,
-          rhpakuuid: stage.rhpakuuid || null,
-          extradescription: stage.extradescription || null
+        // Update the existing stage with CSV data
+        const updatedStage: GameStage = {
+          ...existingStage,
+          stage_uuid: stageUuid,
+          levelname: csvStage.levelname || existingStage.levelname,
+          versions: csvStage.versions || existingStage.versions || '*',
+          submapid: csvStage.submapid || existingStage.submapid || null,
+          translevel_13bf: csvStage.translevel_13bf || existingStage.translevel_13bf || null,
+          tile_x: csvStage.tile_x || existingStage.tile_x || null,
+          tile_y: csvStage.tile_y || existingStage.tile_y || null,
+          tile_value: csvStage.tile_value || existingStage.tile_value || null,
+          requisites: csvStage.requisites || existingStage.requisites || null,
+          playable: csvStage.playable,
+          rando: csvStage.rando,
+          difficulty: csvStage.difficulty,
+          mainexit: csvStage.mainexit,
+          keyhole: csvStage.keyhole,
+          credits: csvStage.credits,
+          ghouse: csvStage.ghouse,
+          spalace: csvStage.spalace,
+          castle: csvStage.castle,
+          water: csvStage.water,
+          boss: csvStage.boss,
+          secret: csvStage.secret,
+          troll: csvStage.troll,
+          final: csvStage.final,
+          lock: csvStage.lock,
+          playlevel_patch_code: csvStage.playlevel_patch_code || existingStage.playlevel_patch_code || null,
+          excluded_patchcodes: csvStage.excluded_patchcodes || existingStage.excluded_patchcodes || null,
+          stagetags: csvStage.stagetags || existingStage.stagetags || null,
+          rhpakuuid: csvStage.rhpakuuid || existingStage.rhpakuuid || null,
+          extradescription: csvStage.extradescription || existingStage.extradescription || null
         };
         
-        // Set UUID if we have one (undefined means backend will generate)
-        if (stageUuid) {
-          stageData.stage_uuid = stageUuid;
-        }
-        
-        const result = await api.saveGameStage(stageData);
-        
-        if (result?.success) {
-          successCount++;
-        } else {
-          errorCount++;
-          errors.push(`${stage.levelnumber}: ${result?.error || 'Unknown error'}`);
-        }
-      } catch (error: any) {
-        errorCount++;
-        errors.push(`${stage.levelnumber}: ${error?.message || String(error)}`);
-      }
-    }
-    
-    // Show result
-    await nextTick();
-    await nextTick();
-    
-    if (toastNotificationRef.value && typeof toastNotificationRef.value.showToast === 'function') {
-      if (errorCount === 0) {
-        toastNotificationRef.value.showToast(
-          `Successfully imported ${successCount} stage(s)`,
-          'success'
-        );
-      } else {
-        toastNotificationRef.value.showToast(
-          `Imported ${successCount} stage(s), ${errorCount} error(s)`,
-          'warning'
-        );
-        console.error('Import errors:', errors);
+        stages.value[existingStageIndex] = updatedStage;
+        updatedCount++;
       }
     } else {
-      if (errorCount === 0) {
-        alert(`Successfully imported ${successCount} stage(s)`);
+      // Add as new stage (either doesn't exist, or duplicate mode is 'import')
+      // Handle UUID for new stages
+      if (csvImportOptions.value.ignoreUuid) {
+        // Ignore UUID from CSV - will be generated on save
+        stageUuid = undefined;
+      } else if (csvStage.stage_uuid) {
+        // Use UUID from CSV if provided
+        stageUuid = csvStage.stage_uuid;
       } else {
-        alert(`Imported ${successCount} stage(s), ${errorCount} error(s)\n\nErrors:\n${errors.join('\n')}`);
+        // No UUID in CSV - will be generated on save
+        stageUuid = undefined;
       }
+      
+      const newStage: GameStage = {
+        stage_uuid: stageUuid,
+        gameid: props.gameId,
+        levelnumber: csvStage.levelnumber || null,
+        levelname: csvStage.levelname || 'New Stage',
+        versions: csvStage.versions || '*',
+        submapid: csvStage.submapid || null,
+        translevel_13bf: csvStage.translevel_13bf || null,
+        tile_x: csvStage.tile_x || null,
+        tile_y: csvStage.tile_y || null,
+        tile_value: csvStage.tile_value || null,
+        requisites: csvStage.requisites || null,
+        playable: csvStage.playable,
+        rando: csvStage.rando,
+        difficulty: csvStage.difficulty,
+        mainexit: csvStage.mainexit,
+        keyhole: csvStage.keyhole,
+        credits: csvStage.credits,
+        ghouse: csvStage.ghouse,
+        spalace: csvStage.spalace,
+        castle: csvStage.castle,
+        water: csvStage.water,
+        boss: csvStage.boss,
+        secret: csvStage.secret,
+        troll: csvStage.troll,
+        final: csvStage.final,
+        lock: csvStage.lock,
+        playlevel_patch_code: csvStage.playlevel_patch_code || null,
+        excluded_patchcodes: csvStage.excluded_patchcodes || null,
+        stagetags: csvStage.stagetags || null,
+        rhpakuuid: csvStage.rhpakuuid || null,
+        extradescription: csvStage.extradescription || null
+      };
+      
+      stages.value.push(newStage);
+      addedCount++;
     }
-    
-    // Reload stages and close dialog
-    await loadStages();
-    closeCSVImportDialog();
-  } catch (error: any) {
-    console.error('Error adding CSV stages:', error);
-    alert(`Error importing stages: ${error?.message || String(error)}`);
   }
+  
+  // Show result and close dialog
+  closeCSVImportDialog();
+  
+  // Show toast notification
+  nextTick().then(() => {
+    nextTick().then(() => {
+      if (toastNotificationRef.value && typeof toastNotificationRef.value.showToast === 'function') {
+        const message = updatedCount > 0 
+          ? `Added ${addedCount} stage(s), updated ${updatedCount} stage(s)`
+          : `Added ${addedCount} stage(s)`;
+        toastNotificationRef.value.showToast(message, 'success');
+      }
+    });
+  });
 }
 
 function openSetPlaylevelPatchDialog() {
   // Initialize with all stages selected
   selectedStagesForPlaylevelPatch.value = new Set(stages.value.map(s => s.stage_uuid || '').filter(Boolean));
-  newPlaylevelPatchCode.value = '1lvno';
+  newPlaylevelPatchCode.value = '2lvno';
   showSetPlaylevelPatchDialog.value = true;
 }
 
@@ -2445,10 +2450,10 @@ async function applyPlaylevelPatch() {
     return;
   }
   
-  // Verify it's a valid playlevel patch or allow '1lvno' as default
+  // Verify it's a valid playlevel patch or allow '2lvno' as default
   const isValidPlaylevel = playlevelPatches.value.some(p => p.patch_code === patchCode);
-  if (!isValidPlaylevel && patchCode !== '1lvno') {
-    // Allow '1lvno' as default even if not marked as playlevel
+  if (!isValidPlaylevel && patchCode !== '2lvno') {
+    // Allow '2lvno' as default even if not marked as playlevel
     const exists = availablePatches.value.some(p => p.patch_code === patchCode);
     if (!exists) {
       alert(`Patch code "${patchCode}" not found. Please enter a valid patch code.`);
@@ -2460,8 +2465,8 @@ async function applyPlaylevelPatch() {
   for (const stageUuid of selectedStagesForPlaylevelPatch.value) {
     const stage = stages.value.find(s => s.stage_uuid === stageUuid);
     if (stage) {
-      // Set to null if defaulting to '1lvno', otherwise set the patch code
-      stage.playlevel_patch_code = patchCode === '1lvno' ? null : patchCode;
+      // Set to null if defaulting to '2lvno', otherwise set the patch code
+      stage.playlevel_patch_code = patchCode === '2lvno' ? null : patchCode;
     }
   }
   

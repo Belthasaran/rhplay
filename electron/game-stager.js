@@ -408,8 +408,8 @@ async function stageRunGames(params) {
           patchCodes.push(...requisites);
         }
         
-        // Add playlevel patch (default to '1lvno' if not specified)
-        const playlevelPatch = (stage && stage.playlevel_patch_code) ? stage.playlevel_patch_code : '1lvno';
+        // Add playlevel patch (default to '2lvno' if not specified)
+        const playlevelPatch = (stage && stage.playlevel_patch_code) ? stage.playlevel_patch_code : '2lvno';
         if (!patchCodes.includes(playlevelPatch)) {
           patchCodes.push(playlevelPatch);
         }

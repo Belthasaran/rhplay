@@ -23410,12 +23410,8 @@ button:disabled {
   color: white;
 }
 
-.past-runs-table-wrapper tbody tr:hover {
+.past-runs-table-wrapper tbody tr:not(.selected):hover {
   background: var(--bg-secondary);
-}
-
-.past-runs-table-wrapper tbody tr.selected:hover {
-  background: var(--accent-secondary);
 }
 
 .col-check input[type="checkbox"]:disabled {

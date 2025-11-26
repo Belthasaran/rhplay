@@ -2685,6 +2685,10 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // Capture globalPatchCodes in a const for use in transaction callback
+      // This ensures it's accessible and not accidentally reassigned
+      const capturedGlobalPatchCodes = globalPatchCodes;
+      
       const transaction = db.transaction((runId) => {
         // Clean up any existing run_results (in case of re-staging)
         db.prepare(`DELETE FROM run_results WHERE run_uuid = ?`).run(runId);
@@ -2718,6 +2722,9 @@ function registerDatabaseHandlers(dbManager) {
           const isRandom = isRandomGame || isRandomStage;
           
           // Create multiple results if count > 1
+          // Get rhdata connection once per plan entry (used in multiple branches)
+          const rhdb = dbManager.getConnection('rhdata');
+          
           for (let i = 0; i < count; i++) {
             const resultUuid = crypto.randomUUID();
             let gameName = '???';
@@ -2749,7 +2756,7 @@ function registerDatabaseHandlers(dbManager) {
                   }
                 }
                 
-                const selected = seedManager.selectRandomStage({
+                const selectedStage = seedManager.selectRandomStage({
                   dbManager,
                   seed: planEntry.filter_seed,
                   challengeIndex: resultSequence,
@@ -2762,18 +2769,18 @@ function registerDatabaseHandlers(dbManager) {
                   stageExcludeFlags: stageExcludeFlags,
                   excludeGameids: usedGameids,
                   excludeStageUuids: usedStageUuids,
-                  globalPatchCodes: globalPatchCodes  // Pass global patch codes for filtering
+                  globalPatchCodes: capturedGlobalPatchCodes  // Pass global patch codes for filtering
                 });
                 
                 // Store the ACTUAL stage data in database (UI will mask it based on was_random flag)
-                gameid = selected.gameid;
-                gameName = selected.gameName;
-                levelnumber = selected.levelnumber;
-                translevel = selected.translevel_13bf;
-                levelname = selected.levelname;
+                gameid = selectedStage.gameid;
+                gameName = selectedStage.gameName;
+                levelnumber = selectedStage.levelnumber;
+                translevel = selectedStage.translevel_13bf;
+                levelname = selectedStage.levelname;
                 stageDescription = levelname;
-                usedGameids.push(selected.gameid);
-                usedStageUuids.push(selected.stage_uuid);
+                usedGameids.push(selectedStage.gameid);
+                usedStageUuids.push(selectedStage.stage_uuid);
                 
               } catch (error) {
                 console.error('Error selecting random stage:', error);
@@ -2782,7 +2789,7 @@ function registerDatabaseHandlers(dbManager) {
             } else if (isRandomGame) {
               // Select random game and REVEAL it immediately (for staging)
               try {
-                const selected = seedManager.selectRandomGame({
+                const selectedGame = seedManager.selectRandomGame({
                   dbManager,
                   seed: planEntry.filter_seed,
                   challengeIndex: resultSequence,
@@ -2793,11 +2800,11 @@ function registerDatabaseHandlers(dbManager) {
                 });
                 
                 // Store the ACTUAL game data in database (UI will mask it based on was_random flag)
-                gameid = selected.gameid;
-                gameName = selected.name;  // Store actual name, UI will mask it
-                exitNumber = selected.exit_number;
-                stageDescription = selected.stageName || null;
-                usedGameids.push(selected.gameid);
+                gameid = selectedGame.gameid;
+                gameName = selectedGame.name;  // Store actual name, UI will mask it
+                exitNumber = selectedGame.exit_number;
+                stageDescription = selectedGame.stageName || null;
+                usedGameids.push(selectedGame.gameid);
                 
               } catch (error) {
                 console.error('Error selecting random game:', error);
@@ -2809,8 +2816,7 @@ function registerDatabaseHandlers(dbManager) {
               exitNumber = planEntry.exit_number;
               usedGameids.push(gameid);
               
-              // Fetch game name
-              const rhdb = dbManager.getConnection('rhdata');
+              // Fetch game name (rhdb already declared above)
               const game = rhdb.prepare(`
                 SELECT name FROM gameversions 
                 WHERE gameid = ? AND version = (
@@ -2854,8 +2860,7 @@ function registerDatabaseHandlers(dbManager) {
               exitNumber = planEntry.exit_number;
               usedGameids.push(gameid);
               
-              // Fetch game name
-              const rhdb = dbManager.getConnection('rhdata');
+              // Fetch game name (rhdb already declared above)
               const game = rhdb.prepare(`
                 SELECT name FROM gameversions 
                 WHERE gameid = ? AND version = (
@@ -2900,11 +2905,26 @@ function registerDatabaseHandlers(dbManager) {
         console.log(`Expanded ${planEntries.length} plan entries to ${resultSequence - 1} results`);
       });
       
-      transaction(runUuid);
+      try {
+        transaction(runUuid);
+      } catch (transactionError) {
+        console.error('Transaction error:', transactionError);
+        console.error('Transaction error stack:', transactionError.stack);
+        throw transactionError; // Re-throw to be caught by outer catch
+      }
       
       return { success: true };
     } catch (error) {
       console.error('Error expanding run plan:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      // Check if it's a const assignment error and provide more context
+      if (error.message && (error.message.includes('constant') || error.message.includes('Assignment to constant'))) {
+        console.error('Const assignment error detected. This may be due to variable shadowing or reassignment in a nested scope.');
+        console.error('Run UUID:', runUuid);
+        console.error('Global patch codes:', globalPatchCodes);
+      }
       return { success: false, error: error.message };
     }
   });
@@ -2991,7 +3011,14 @@ function registerDatabaseHandlers(dbManager) {
       
       return result;
     } catch (error) {
-      console.error('Error staging games:', error);
+      console.error('[db:runs:stage-games] Error:', error);
+      console.error('[db:runs:stage-games] Error name:', error.name);
+      console.error('[db:runs:stage-games] Error message:', error.message);
+      console.error('[db:runs:stage-games] Error stack:', error.stack);
+      if (error.message && (error.message.includes('constant') || error.message.includes('Assignment to constant'))) {
+        console.error('[db:runs:stage-games] Const assignment error detected!');
+        console.error('[db:runs:stage-games] Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      }
       return { success: false, error: error.message };
     }
   });

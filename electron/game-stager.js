@@ -374,7 +374,7 @@ async function stageRunGames(params) {
       const result = expandedResults[i];
       const sequenceNum = (i + 1).toString().padStart(2, '0');
       const tmnows = Math.floor(Date.now()/1000);
-      const sfcPath = path.join(runFolder, `${sequenceNum}_${tmnows}.sfc`);
+      let sfcPath = path.join(runFolder, `${sequenceNum}_${tmnows}.sfc`);
       
       if (onProgress) {
         onProgress(i + 1, expandedResults.length, result.game_name);
@@ -521,7 +521,7 @@ async function stageRunGames(params) {
           
           if (selectedPatches.length > 0) {
             // Generate filename: (Sequence)_(Timestamp)_(patchcodes).sfc
-            const rhdb = dbManager.getConnection('rhdata');
+            // rhdb already declared above
             const patchObjects = rhdb.prepare(`
               SELECT * FROM extrapatches WHERE epuuid IN (${selectedPatches.map(() => '?').join(',')})
             `).all(...selectedPatches);
@@ -650,6 +650,15 @@ async function stageRunGames(params) {
     };
     
   } catch (error) {
+    console.error('[stageRunGames] Error:', error);
+    console.error('[stageRunGames] Error name:', error.name);
+    console.error('[stageRunGames] Error message:', error.message);
+    console.error('[stageRunGames] Error stack:', error.stack);
+    if (error.message && (error.message.includes('constant') || error.message.includes('Assignment to constant'))) {
+      console.error('[stageRunGames] Const assignment error detected!');
+      console.error('[stageRunGames] This usually means a const variable is being reassigned.');
+      console.error('[stageRunGames] Check for duplicate const declarations or reassignments in the staging code.');
+    }
     return {
       success: false,
       error: error.message

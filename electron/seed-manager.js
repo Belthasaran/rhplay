@@ -470,13 +470,15 @@ function selectRandomStage(params) {
   
   // Filter out stages that exclude any global patch codes
   // Get global patch codes from params (passed from expand-and-prepare)
-  const globalPatchCodes = params.globalPatchCodes || [];
-  if (globalPatchCodes.length > 0) {
+  // Note: globalPatchCodes is not destructured above, so we access it from params
+  // Create a copy to avoid any const assignment issues
+  const activeGlobalPatchCodes = Array.isArray(params.globalPatchCodes) ? [...params.globalPatchCodes] : [];
+  if (activeGlobalPatchCodes.length > 0) {
     // Get patch conflict information for declarative tag checking
     const rhdb = dbManager.getConnection('rhdata');
     const patchConflictMap = new Map(); // Map patch_code -> conflicts array
     
-    for (const patchCode of globalPatchCodes) {
+    for (const patchCode of activeGlobalPatchCodes) {
       const patch = rhdb.prepare(`
         SELECT conflicts FROM extrapatches WHERE patch_code = ?
       `).get(patchCode);
@@ -506,7 +508,7 @@ function selectRandomStage(params) {
         }
         
         // Check if any global patch code conflicts with stage's excluded list
-        const hasConflict = globalPatchCodes.some(patchCode => {
+        const hasConflict = activeGlobalPatchCodes.some(patchCode => {
           // Check for exact patch code match in excluded list
           if (excluded.includes(patchCode)) {
             return true;

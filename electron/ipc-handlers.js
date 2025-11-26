@@ -768,7 +768,8 @@ function registerDatabaseHandlers(dbManager) {
             lock: stage.lock ?? 0,
             playlevel_patch_code: stage.playlevel_patch_code || null,
             excluded_patchcodes: stage.excluded_patchcodes || null,
-            extradescription: stage.extradescription || null
+            extradescription: stage.extradescription || null,
+	    stagetags: stage.stagetags || null
           }));
         }
         // Save to temp path so newgame can load it
@@ -910,7 +911,8 @@ function registerDatabaseHandlers(dbManager) {
             lock: stage.lock ?? 0,
             playlevel_patch_code: stage.playlevel_patch_code || null,
             excluded_patchcodes: stage.excluded_patchcodes || null,
-            extradescription: stage.extradescription || null
+            extradescription: stage.extradescription || null,
+	    stagetags: stage.stagetags || null
           }));
         }
         const tmp = path.join(os.tmpdir(), `submission_skeleton_${Date.now()}_${Math.random().toString(36).slice(2,8)}.json`);
@@ -1192,6 +1194,20 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true, filePath };
     } catch (error) {
       console.error('[fs:writeTempText] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:writeFile', async (_event, { filePath, content } = {}) => {
+    try {
+      if (!filePath) {
+        return { success: false, error: 'filePath is required' };
+      }
+      const fs = require('fs');
+      fs.writeFileSync(filePath, String(content ?? ''), 'utf-8');
+      return { success: true, filePath };
+    } catch (error) {
+      console.error('[fs:writeFile] Failed:', error);
       return { success: false, error: error.message };
     }
   });
@@ -3547,7 +3563,8 @@ function registerDatabaseHandlers(dbManager) {
         final,
         lock,
         playlevel_patch_code,
-        extradescription
+        extradescription,
+        stagetags
       } = params;
 
       if (!gameid || !levelname) {
@@ -3661,6 +3678,7 @@ function registerDatabaseHandlers(dbManager) {
             lock = ?,
             playlevel_patch_code = ?,
             extradescription = ?,
+	    stagetags = ?,
             updated_at = CURRENT_TIMESTAMP
           WHERE stage_uuid = ?
         `);
@@ -3693,6 +3711,7 @@ function registerDatabaseHandlers(dbManager) {
           lock ? 1 : 0,
           playlevel_patch_code || null,
           extradescription || null,
+          stagetags || null,
           stage_uuid
         );
       } else {
@@ -3702,8 +3721,8 @@ function registerDatabaseHandlers(dbManager) {
             gameid, levelnumber, levelname, versions, submapid, translevel_13bf,
             tile_x, tile_y, tile_value,
             requisites, playable, rando, difficulty,
-            mainexit, keyhole, credits, water, ghouse, spalace, castle, boss, secret, troll, final, lock, playlevel_patch_code, extradescription
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            mainexit, keyhole, credits, water, ghouse, spalace, castle, boss, secret, troll, final, lock, playlevel_patch_code, extradescription, stagetags
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
@@ -3733,7 +3752,8 @@ function registerDatabaseHandlers(dbManager) {
           final ? 1 : 0,
           lock ? 1 : 0,
           playlevel_patch_code || null,
-          extradescription || null
+          extradescription || null,
+	  stagetags || null
         );
       }
 

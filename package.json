@@ -81,6 +81,7 @@
     "@nostr/gadgets": "npm:@jsr/nostr__gadgets@^0.0.39",
     "@nostrify/nostrify": "^0.47.1",
     "@poeticode/js-lzma": "^1.0.0",
+    "7zip-min": "^2.1.0",
     "adm-zip": "^0.5.10",
     "ardrive-cli": "^3.0.3",
     "ardrive-core-js": "^3.0.3",
@@ -97,6 +98,7 @@
     "node-jose": "^2.2.0",
     "node-machine-id": "^1.1.12",
     "nostr-tools": "^2.4.0",
+    "papaparse": "^5.5.3",
     "serialport": "^13.0.0",
     "socks": "^2.8.7",
     "socks-proxy-agent": "^8.0.3",
@@ -104,8 +106,7 @@
     "urlsafe-base64": "^1.0.0",
     "usb": "^2.11.0",
     "winreg": "^1.2.5",
-    "ws": "^8.18.3",
-    "7zip-min": "^2.1.0"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
@@ -183,8 +184,8 @@
         "to": "db/prepare_databases.js"
       },
       {
-	      "from" : "node_modules/7zip-mini",
-	      "to" : "app.asar.unpacked/node_modules/7zip-mini"
+        "from": "node_modules/7zip-mini",
+        "to": "app.asar.unpacked/node_modules/7zip-mini"
       },
       {
         "from": "node_modules/readable-stream",

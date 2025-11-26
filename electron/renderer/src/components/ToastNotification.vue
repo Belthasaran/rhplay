@@ -36,7 +36,7 @@ function getToastIcon(type: Toast['type']): string {
   }
 }
 
-function showToast(message: string, type: Toast['type'] = 'info', duration: number = 3000) {
+function showToast(message: string, type: Toast['type'] = 'info', duration: number = 10000) {
   const id = nextId++;
   console.log(`[Toast Notification] [${type.toUpperCase()}] ${message} (duration: ${duration}ms)`);
   toasts.value.push({ id, message, type, duration });
@@ -64,7 +64,7 @@ defineExpose({ showToast, removeToast });
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 10000;
+  z-index: 99999;
   display: flex;
   flex-direction: column;
   gap: 8px;

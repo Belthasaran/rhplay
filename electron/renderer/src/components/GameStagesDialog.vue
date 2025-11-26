@@ -21,6 +21,8 @@
             <button @click="addNewStage" class="btn-primary btn-small">+ New Stage</button>
             <button @click="openDetectedLevelsDialog" class="btn-secondary btn-small">Detected Levels</button>
             <button @click="openSetPlaylevelPatchDialog" class="btn-secondary btn-small">Set Playlevel Patch</button>
+            <button @click="exportStagesToCSV" class="btn-secondary btn-small">CSV: Export</button>
+            <button @click="importStagesFromCSV" class="btn-secondary btn-small">CSV: Import</button>
           </div>
 
           <!-- Stages Table -->
@@ -635,11 +637,17 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Toast Notification - Teleported outside modal, always rendered -->
+  <Teleport to="body">
+    <ToastNotification ref="toastNotificationRef" />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick, Teleport } from 'vue';
 import DetectedLevelsDialog from './DetectedLevelsDialog.vue';
+import ToastNotification from './ToastNotification.vue';
 
 interface GameStage {
   stage_uuid?: string;
@@ -729,6 +737,8 @@ const editingExtraDescriptionText = ref<string>('');
 const showTagsDialog = ref(false);
 const editingTagsStage = ref<GameStage | null>(null);
 const editingTagsText = ref<string>('');
+
+const toastNotificationRef = ref<InstanceType<typeof ToastNotification> | null>(null);
 
 // Get requisites as array of tags
 function getRequisiteTags(stage: GameStage): string[] {
@@ -1700,6 +1710,213 @@ function saveTags() {
   const tags = editingTagsText.value.trim();
   editingTagsStage.value.stagetags = tags || null;
   closeTagsDialog();
+}
+
+// CSV column headers as defined in GAMESTAGES.md
+const CSV_COLUMNS = [
+  'stage_uuid', 'gameid', 'levelnumber', 'levelname', 'versions', 'submapid', 'translevel_13bf',
+  'tile_x', 'tile_y', 'tile_value', 'requisites', 'playable', 'rando', 'difficulty',
+  'mainexit', 'keyhole', 'credits', 'ghouse', 'spalace', 'castle', 'water', 'boss',
+  'secret', 'troll', 'final', 'lock', 'playlevel_patch_code', 'excluded_patchcodes',
+  'stagetags', 'rhpakuuid', 'extradescription'
+];
+
+// Escape CSV field - handles quotes and commas
+function escapeCSVField(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  // If contains comma, quote, or newline, wrap in quotes and escape quotes
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+async function exportStagesToCSV() {
+  if (!props.gameId || stages.value.length === 0) {
+    alert('No stages to export');
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.chooseSavePath) {
+      alert('File save functionality not available');
+      return;
+    }
+    
+    // Default filename: (gameid)_stages.csv
+    const defaultFilename = `${props.gameId}_stages.csv`;
+    
+    // Prompt for save location
+    const saveResult = await api.chooseSavePath({
+      title: 'Export Stages to CSV',
+      defaultPath: defaultFilename,
+      filters: [
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (!saveResult || saveResult.canceled || !saveResult.filePath) {
+      return; // User cancelled
+    }
+    
+    // Build CSV content
+    const lines: string[] = [];
+    
+    // Add header row
+    lines.push(CSV_COLUMNS.join(','));
+    
+    // Add data rows
+    for (const stage of stages.value) {
+      const row: string[] = [];
+      for (const col of CSV_COLUMNS) {
+        let value: string | number | null | undefined;
+        
+        switch (col) {
+          case 'stage_uuid':
+            value = stage.stage_uuid || '';
+            break;
+          case 'gameid':
+            value = stage.gameid || props.gameId;
+            break;
+          case 'levelnumber':
+            value = stage.levelnumber || '';
+            break;
+          case 'levelname':
+            value = stage.levelname || '';
+            break;
+          case 'versions':
+            value = stage.versions || '*';
+            break;
+          case 'submapid':
+            value = stage.submapid || '';
+            break;
+          case 'translevel_13bf':
+            value = stage.translevel_13bf || calculateTranslevel(stage) || '';
+            break;
+          case 'tile_x':
+            value = stage.tile_x || '';
+            break;
+          case 'tile_y':
+            value = stage.tile_y || '';
+            break;
+          case 'tile_value':
+            value = stage.tile_value || '';
+            break;
+          case 'requisites':
+            value = stage.requisites || '';
+            break;
+          case 'playable':
+            value = stage.playable ?? 0;
+            break;
+          case 'rando':
+            value = stage.rando ?? 0;
+            break;
+          case 'difficulty':
+            value = stage.difficulty ?? 0;
+            break;
+          case 'mainexit':
+            value = stage.mainexit ?? 0;
+            break;
+          case 'keyhole':
+            value = stage.keyhole ?? 0;
+            break;
+          case 'credits':
+            value = stage.credits ?? 0;
+            break;
+          case 'ghouse':
+            value = stage.ghouse ?? 0;
+            break;
+          case 'spalace':
+            value = stage.spalace ?? 0;
+            break;
+          case 'castle':
+            value = stage.castle ?? 0;
+            break;
+          case 'water':
+            value = stage.water ?? 0;
+            break;
+          case 'boss':
+            value = stage.boss ?? 0;
+            break;
+          case 'secret':
+            value = stage.secret ?? 0;
+            break;
+          case 'troll':
+            value = stage.troll ?? 0;
+            break;
+          case 'final':
+            value = stage.final ?? 0;
+            break;
+          case 'lock':
+            value = stage.lock ?? 0;
+            break;
+          case 'playlevel_patch_code':
+            value = stage.playlevel_patch_code || '';
+            break;
+          case 'excluded_patchcodes':
+            value = stage.excluded_patchcodes || '';
+            break;
+          case 'stagetags':
+            value = stage.stagetags || '';
+            break;
+          case 'rhpakuuid':
+            value = stage.rhpakuuid || '';
+            break;
+          case 'extradescription':
+            value = stage.extradescription || '';
+            break;
+          default:
+            value = '';
+        }
+        
+        row.push(escapeCSVField(value));
+      }
+      lines.push(row.join(','));
+    }
+    
+    const csvContent = lines.join('\n');
+    
+    // Write file directly (chooseSavePath already showed the dialog)
+    if (!api.writeFile) {
+      alert('File write functionality not available');
+      return;
+    }
+    
+    const writeResult = await api.writeFile({
+      filePath: saveResult.filePath,
+      content: csvContent
+    });
+    
+    if (!writeResult?.success) {
+      alert(`Error writing file: ${writeResult?.error || 'Unknown error'}`);
+      return;
+    }
+    
+    // Show toast notification
+    await nextTick();
+    await nextTick(); // Double nextTick for Teleport
+    
+    if (toastNotificationRef.value && typeof toastNotificationRef.value.showToast === 'function') {
+      toastNotificationRef.value.showToast(
+        `Successfully exported ${stages.value.length} stage(s) to CSV`,
+        'success'
+      );
+    } else {
+      // Fallback to alert if toast not available
+      alert(`Successfully exported ${stages.value.length} stage(s) to CSV`);
+    }
+  } catch (error: any) {
+    alert(`Error exporting CSV: ${error?.message || String(error)}`);
+  }
+}
+
+async function importStagesFromCSV() {
+  // TODO: Implement CSV import with selection dialog
+  // For now, just show a placeholder message
+  alert('CSV Import functionality will be implemented next. This will allow you to import stages from a CSV file with duplicate handling options.');
 }
 
 function openSetPlaylevelPatchDialog() {

@@ -7122,6 +7122,41 @@
     </div>
   </div>
   
+  <!-- Dialog Components (Alert, Confirm, Prompt, Toast) -->
+  <AlertDialog
+    :visible="alertDialogVisible"
+    :title="alertDialogTitle"
+    :message="alertDialogMessage"
+    @confirm="handleAlertConfirm"
+    @cancel="handleAlertCancel"
+  />
+  
+  <ConfirmDialog
+    :visible="confirmDialogVisible"
+    :title="confirmDialogTitle"
+    :message="confirmDialogMessage"
+    :confirm-text="confirmDialogConfirmText"
+    :cancel-text="confirmDialogCancelText"
+    @confirm="handleConfirmConfirm"
+    @cancel="handleConfirmCancel"
+  />
+  
+  <PromptDialog
+    :visible="promptDialogVisible"
+    :title="promptDialogTitle"
+    :message="promptDialogMessage"
+    :placeholder="promptDialogPlaceholder"
+    :default-value="promptDialogDefaultValue"
+    :input-type="promptDialogInputType"
+    :required="promptDialogRequired"
+    :confirm-text="promptDialogConfirmText"
+    :cancel-text="promptDialogCancelText"
+    @confirm="handlePromptConfirm"
+    @cancel="handlePromptCancel"
+  />
+  
+  <ToastNotification ref="toastNotificationRef" />
+  
 </template>
 
 <script setup lang="ts">
@@ -7151,6 +7186,35 @@ import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard
 import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
 import GameDetailsInspector from './components/GameDetailsInspector.vue';
 import GameStagesDialog from './components/GameStagesDialog.vue';
+import AlertDialog from './components/AlertDialog.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
+import PromptDialog from './components/PromptDialog.vue';
+import ToastNotification from './components/ToastNotification.vue';
+import {
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+  confirmDialogVisible,
+  confirmDialogTitle,
+  confirmDialogMessage,
+  confirmDialogConfirmText,
+  confirmDialogCancelText,
+  handleConfirmConfirm,
+  handleConfirmCancel,
+  promptDialogVisible,
+  promptDialogTitle,
+  promptDialogMessage,
+  promptDialogPlaceholder,
+  promptDialogDefaultValue,
+  promptDialogInputType,
+  promptDialogRequired,
+  promptDialogConfirmText,
+  promptDialogCancelText,
+  handlePromptConfirm,
+  handlePromptCancel
+} from './utils/dialogs';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -7211,6 +7275,17 @@ type InstallRhpakStatus = 'idle' | 'installing' | 'success' | 'error';
 // Loading and error states
 const isLoading = ref(false);
 const loadError = ref<string | null>(null);
+
+// Toast notification ref
+const toastNotificationRef = ref<InstanceType<typeof ToastNotification> | null>(null);
+
+// Helper function to show toast notifications
+// Usage: showToastNotification('Message', 'success')
+function showToastNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info', duration: number = 3000) {
+  if (toastNotificationRef.value) {
+    toastNotificationRef.value.showToast(message, type, duration);
+  }
+}
 
 // Main data (will be loaded from database)
 const items = reactive<Item[]>([]);

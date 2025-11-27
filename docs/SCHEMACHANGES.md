@@ -1,3 +1,34 @@
+- 2025-01-XX: clientdata - Run Timing Millisecond Precision and Network Time Verification
+  - Description: Add millisecond precision to all timing fields, network time verification, and run validity status
+  - Rationale: Ensure precise timing calculations for run times and run segment times, support network time validation, and track run validity
+  - Tables/columns:
+    - `runs`:
+      - `created_at_ms INTEGER NULL` - Milliseconds since epoch (1970-01-01)
+      - `started_at_ms INTEGER NULL` - Milliseconds since epoch
+      - `completed_at_ms INTEGER NULL` - Milliseconds since epoch
+      - `updated_at_ms INTEGER NULL` - Milliseconds since epoch
+      - `pause_start_ms INTEGER NULL` - Milliseconds since epoch
+      - `pause_end_ms INTEGER NULL` - Milliseconds since epoch
+      - `pause_milliseconds INTEGER DEFAULT 0` - Total paused time in milliseconds (replaces pause_seconds)
+      - `clock_offset_ms INTEGER NULL` - Difference between system time and network time in milliseconds (positive = system ahead, negative = system behind)
+      - `clock_validated BOOLEAN DEFAULT 0` - Whether clock was validated against network time
+      - `network_time_ms INTEGER NULL` - Network time snapshot in milliseconds since epoch (taken at run start)
+      - `run_validity_status VARCHAR(20) DEFAULT 'unverified'` - 'valid', 'invalid', 'unverified', 'suspicious'
+    - `run_results`:
+      - `started_at_ms INTEGER NULL` - Milliseconds since epoch
+      - `completed_at_ms INTEGER NULL` - Milliseconds since epoch
+      - `pause_start_ms INTEGER NULL` - Milliseconds since epoch
+      - `pause_end_ms INTEGER NULL` - Milliseconds since epoch
+      - `pause_milliseconds INTEGER DEFAULT 0` - Per-challenge pause time in milliseconds (replaces pause_seconds)
+      - `duration_milliseconds INTEGER NULL` - Duration in milliseconds for internal precision (complements duration_seconds)
+  - Migration: `clientdata_047_run_timing_millisecond_precision` via `jsutils/migratedb.js`
+  - Notes:
+    - Old TIMESTAMP and pause_seconds columns are preserved for backwards compatibility
+    - Existing data is migrated: TIMESTAMP columns converted to milliseconds, pause_seconds multiplied by 1000
+    - Views `v_runs_timing_compat` and `v_run_results_timing_compat` provide backwards-compatible seconds-based columns
+    - Timestamps represent exact wall-clock time and are NEVER adjusted (pause time is subtracted during calculation)
+    - Index created on `run_validity_status` for querying valid/invalid runs
+
 - 2025-01-XX: rhdata - Add `extrapatches` table
   - Description: Store extra patch templates that can be applied after initial game patching
   - Rationale: Support custom modifications (IPS, BPS, ASAR, UberASMTree) with parameter mappings, filtering, and dependency management

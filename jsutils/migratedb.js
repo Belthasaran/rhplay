@@ -1012,6 +1012,26 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_047_run_timing_millisecond_precision',
+      description: 'Add millisecond precision to run timing fields, network time verification, and run validity status',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/047_clientdata_run_timing_millisecond_precision.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'runs')) {
+            return true; // Table doesn't exist, skip
+          }
+          // Check if millisecond columns exist
+          return columnExists(db, 'runs', 'started_at_ms')
+            && columnExists(db, 'runs', 'pause_milliseconds')
+            && columnExists(db, 'runs', 'clock_offset_ms')
+            && columnExists(db, 'runs', 'run_validity_status');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   patchbin: [
     {

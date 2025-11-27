@@ -1,3 +1,29 @@
+- 2025-01-XX — Run Timing Millisecond Precision and Network Time Verification
+  - Purpose: Add millisecond precision to all timing fields, network time verification, and run validity status for accurate run timing calculations
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_047_run_timing_millisecond_precision`
+    - SQL: `electron/sql/migrations/047_clientdata_run_timing_millisecond_precision.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `runs` and `run_results` tables gain millisecond precision columns (_ms suffixes)
+    - `pause_milliseconds` columns added (replacing pause_seconds with millisecond precision)
+    - Network time verification columns added: `clock_offset_ms`, `clock_validated`, `network_time_ms`
+    - Run validity status column added: `run_validity_status`
+    - Existing TIMESTAMP data converted to milliseconds
+    - Existing pause_seconds data converted to pause_milliseconds (multiplied by 1000)
+    - Backwards-compatible views created: `v_runs_timing_compat`, `v_run_results_timing_compat`
+    - No data loss; old columns preserved for backwards compatibility
+  - Notes:
+    - Safe to run multiple times; script skips applied migrations
+    - Old TIMESTAMP and pause_seconds columns remain for backwards compatibility
+    - Application code should be updated to use millisecond columns for new writes
+    - Timestamps represent exact wall-clock time and are NEVER adjusted (pause time is subtracted during calculation)
+
 - 2025-01-XX — Add rhdata extrapatches table
   - Purpose: Create `extrapatches` table to store extra patch templates (IPS, BPS, ASAR, UberASMTree) that can be applied after initial game patching
   - Command:

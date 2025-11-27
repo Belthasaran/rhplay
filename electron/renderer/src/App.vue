@@ -1133,7 +1133,7 @@
             </span>
           </div>
         </div>
-        <div class="challenge-feedback-buttons" v-if="isCurrentChallengeRandomStage">
+        <div class="challenge-feedback-buttons" v-if="isCurrentChallengeAnyStage">
           <div class="difficulty-dropdown-wrapper">
             <button 
               @click="difficultyDropdownOpen = !difficultyDropdownOpen" 
@@ -1153,7 +1153,7 @@
             💬 Comment
           </button>
         </div>
-        <div v-if="difficultyDropdownOpen && isCurrentChallengeRandomStage" class="difficulty-dropdown" @click.stop>
+        <div v-if="difficultyDropdownOpen && isCurrentChallengeAnyStage" class="difficulty-dropdown" @click.stop>
               <div class="difficulty-grid">
                 <div 
                   v-for="diff in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" 
@@ -17366,6 +17366,13 @@ const stageCommentText = ref('');
 const difficultyDropdownOpen = ref(false);
 const currentStageInfo = ref<{ difficulty: number | null; levelname: string | null }>({ difficulty: null, levelname: null });
 
+const isCurrentChallengeAnyStage = computed(() => {
+  if (!currentChallenge.value) return false;
+  const entryType = (currentChallenge.value as any).entryType || (currentChallenge.value as any).entry_type;
+  return entryType === 'random_stage' || entryType == 'stage';
+});
+
+
 const isCurrentChallengeRandomStage = computed(() => {
   if (!currentChallenge.value) return false;
   const entryType = (currentChallenge.value as any).entryType || (currentChallenge.value as any).entry_type;
@@ -22491,8 +22498,8 @@ button:disabled {
 .run-timer { font-weight: bold; color: #059669; font-size: 16px; padding: 0 8px; }
 .pause-time { font-weight: bold; color: #ef4444; font-size: 16px; padding: 0 8px; }
 .run-progress { color: #6b7280; padding: 0 8px; }
-.data-table tbody tr.current-challenge { background: #dbeafe !important; border-left: 4px solid #3b82f6; font-weight: 600; }
-.data-table tbody tr.current-challenge td { background: #dbeafe; }
+.data-table tbody tr.current-challenge { background: var(--accent-primary) !important; color: var(--button-text); border-left: 4px solid var(--accent-primary); font-weight: 600; }
+.data-table tbody tr.current-challenge td { background: var(--accent-primary); color: var(--button-text); }
 
 /* Challenge status */
 .col-status { width: 50px; text-align: center; font-size: 20px; }

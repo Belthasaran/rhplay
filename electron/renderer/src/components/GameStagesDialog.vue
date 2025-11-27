@@ -30,7 +30,15 @@
             <table class="stages-table">
               <thead>
                 <tr>
-                  <th v-if="currentMode === 'select'"></th>
+                  <th v-if="currentMode === 'select'" class="checkbox-cell">
+                    <input 
+                      type="checkbox" 
+                      :checked="allStagesSelected"
+                      :indeterminate="someStagesSelected && !allStagesSelected"
+                      @change="toggleSelectAllStages"
+                      title="Select/Deselect all stages"
+                    />
+                  </th>
                   <th>Lev#</th>
                   <th>L.Name</th>
                   <th>Trans</th>
@@ -69,12 +77,13 @@
                   }"
                   @click="selectStage(stage)"
                 >
-                  <td v-if="currentMode === 'select'" class="checkbox-cell">
+                  <td v-if="currentMode === 'select'" class="checkbox-cell" @click.stop>
                     <input 
                       type="checkbox" 
-                      :checked="selectedStageUuid === stage.stage_uuid"
+                      :checked="selectedStageUuids.has(stage.stage_uuid || '')"
                       :disabled="stage.lock === 1 && currentMode !== 'edit'"
-                      @change.stop="selectStage(stage)"
+                      @change.stop="toggleStageSelection(stage)"
+                      @click.stop
                     />
                   </td>
                   <td>
@@ -411,12 +420,12 @@
             {{ saving ? 'Saving...' : 'Save All' }}
           </button>
           <button 
-            v-if="currentMode === 'select' && selectedStageUuid && props.showAddToRunButton" 
-            @click="addStageToRun" 
+            v-if="currentMode === 'select' && props.showAddToRunButton" 
+            @click="addStagesToRun" 
             class="btn-primary"
-            :disabled="!selectedStageUuid"
+            :disabled="selectedStageUuids.size === 0"
           >
-            Add Stage to Run
+            {{ selectedStageUuids.size === 1 ? 'Add Stage to Run' : `Add Stages to Run (${selectedStageUuids.size})` }}
           </button>
           <button 
             v-if="currentMode === 'select' && selectedStageUuid" 
@@ -872,6 +881,7 @@ const testProgressDialogOpen = ref(false);
 const testProgressMessage = ref('');
 const stages = ref<GameStage[]>([]);
 const selectedStageUuid = ref<string | null>(null);
+const selectedStageUuids = ref<Set<string>>(new Set()); // Multiple selected stages for "Add to Run"
 const isDevAdmin = ref(false);
 const availablePatches = ref<Array<{epuuid: string, patch_code: string, name: string, is_playlevel?: number}>>([]);
 const playlevelPatches = ref<Array<{epuuid: string, patch_code: string, name: string}>>([]);
@@ -1361,7 +1371,68 @@ function selectStage(stage: GameStage) {
     if (stage.lock === 1 && !isDevAdmin.value) {
       return;
     }
+    // Toggle selection in the set (for "Add Stages to Run" button)
+    const stageUuid = stage.stage_uuid || '';
+    if (selectedStageUuids.value.has(stageUuid)) {
+      selectedStageUuids.value.delete(stageUuid);
+    } else {
+      selectedStageUuids.value.add(stageUuid);
+    }
+    // Set highlighted stage (for "Select" button)
     selectedStageUuid.value = stage.stage_uuid || null;
+  }
+}
+
+function toggleStageSelection(stage: GameStage) {
+  if (currentMode.value === 'select') {
+    // Don't allow selection of locked stages in view-only mode
+    if (stage.lock === 1 && !isDevAdmin.value) {
+      return;
+    }
+    const stageUuid = stage.stage_uuid || '';
+    if (selectedStageUuids.value.has(stageUuid)) {
+      selectedStageUuids.value.delete(stageUuid);
+    } else {
+      selectedStageUuids.value.add(stageUuid);
+    }
+    // Also update highlighted stage
+    selectedStageUuid.value = stage.stage_uuid || null;
+  }
+}
+
+// Get filtered stages (used in template)
+// Computed properties for select all checkbox
+const allStagesSelected = computed(() => {
+  const selectableStages = filteredStages.value.filter(s => !(s.lock === 1 && !isDevAdmin.value));
+  if (selectableStages.length === 0) return false;
+  return selectableStages.every(stage => selectedStageUuids.value.has(stage.stage_uuid || ''));
+});
+
+const someStagesSelected = computed(() => {
+  const selectableStages = filteredStages.value.filter(s => !(s.lock === 1 && !isDevAdmin.value));
+  if (selectableStages.length === 0) return false;
+  const selectedCount = selectableStages.filter(stage => selectedStageUuids.value.has(stage.stage_uuid || '')).length;
+  return selectedCount > 0 && selectedCount < selectableStages.length;
+});
+
+function toggleSelectAllStages(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const selectableStages = filteredStages.value.filter(s => !(s.lock === 1 && !isDevAdmin.value));
+  
+  if (target.checked) {
+    // Select all selectable stages
+    selectableStages.forEach(stage => {
+      if (stage.stage_uuid) {
+        selectedStageUuids.value.add(stage.stage_uuid);
+      }
+    });
+  } else {
+    // Deselect all
+    selectableStages.forEach(stage => {
+      if (stage.stage_uuid) {
+        selectedStageUuids.value.delete(stage.stage_uuid);
+      }
+    });
   }
 }
 
@@ -1383,6 +1454,19 @@ function addStageToRun() {
       close();
     }
   }
+}
+
+function addStagesToRun() {
+  if (selectedStageUuids.value.size === 0) {
+    return;
+  }
+  
+  // Emit all selected stages
+  const selectedStages = stages.value.filter(s => s.stage_uuid && selectedStageUuids.value.has(s.stage_uuid));
+  for (const stage of selectedStages) {
+    emit('add-to-run', stage);
+  }
+  close();
 }
 
 function addNewStage() {

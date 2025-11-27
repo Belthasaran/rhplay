@@ -17239,9 +17239,10 @@ const currentRunUuid = ref<string | null>(null);
 const currentRunStatus = ref<'preparing' | 'active' | 'completed' | 'cancelled'>('preparing');
 const currentRunName = ref<string>('');
 const currentChallengeIndex = ref<number>(0);
-const runStartTime = ref<number | null>(null);
+const runStartTime = ref<number | null>(null);  // Original start timestamp in milliseconds (NEVER adjusted)
 const runElapsedSeconds = ref<number>(0);
-const runPauseSeconds = ref<number>(0);
+const runPauseSeconds = ref<number>(0);  // Total pause time in seconds (tallied)
+const runPauseStartTime = ref<number | null>(null);  // When current pause started (milliseconds)
 const isRunPaused = ref<boolean>(false);
 const runTimerInterval = ref<number | null>(null);
 
@@ -19499,9 +19500,65 @@ async function startRun() {
       console.log('[startRun] Setting run status to active, entries:', runEntries.length);
       currentRunStatus.value = 'active';
       currentChallengeIndex.value = 0;
-      runStartTime.value = Date.now();
-      runElapsedSeconds.value = 0;
+      
+      // Get run data from database to get the actual started_at timestamp
+      // IMPORTANT: Use the original started_at timestamp from database, NEVER use Date.now()
+      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+      if (run) {
+        // Use millisecond precision if available, otherwise convert from timestamp
+        if (run.started_at_ms) {
+          runStartTime.value = run.started_at_ms;
+        } else if (run.started_at) {
+          runStartTime.value = new Date(run.started_at).getTime();
+        } else {
+          // Fallback: should not happen, but use current time if somehow started_at is missing
+          console.warn('[startRun] No started_at found in database, using current time');
+          runStartTime.value = Date.now();
+        }
+        
+        // Initialize pause time from database
+        if (run.pause_milliseconds) {
+          runPauseSeconds.value = Math.floor(run.pause_milliseconds / 1000);
+        } else if (run.pause_seconds) {
+          runPauseSeconds.value = run.pause_seconds;
+        } else {
+          runPauseSeconds.value = 0;
+        }
+        
+        // Check if currently paused
+        if (run.pause_start || run.pause_start_ms) {
+          isRunPaused.value = true;
+          if (run.pause_start_ms) {
+            runPauseStartTime.value = run.pause_start_ms;
+          } else if (run.pause_start) {
+            runPauseStartTime.value = new Date(run.pause_start).getTime();
+          }
+        } else {
+          isRunPaused.value = false;
+          runPauseStartTime.value = null;
+        }
+        
+        // Calculate initial elapsed time
+        const now = Date.now();
+        const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
+        if (isRunPaused.value && runPauseStartTime.value) {
+          const pendingPauseSeconds = Math.floor((now - runPauseStartTime.value) / 1000);
+          runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
+        } else {
+          runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value);
+        }
+      } else {
+        // Fallback if run not found (should not happen)
+        console.error('[startRun] Run not found in database');
+        runStartTime.value = Date.now();
+        runElapsedSeconds.value = 0;
+        runPauseSeconds.value = 0;
+        isRunPaused.value = false;
+        runPauseStartTime.value = null;
+      }
+      
       console.log('[startRun] Run status set. isRunActive should now be true');
+      console.log('[startRun] Start time:', runStartTime.value, 'Elapsed:', runElapsedSeconds.value, 'Pause:', runPauseSeconds.value);
       
       // Initialize challenge results tracking
       challengeResults.value = runEntries.map((_, idx) => ({
@@ -19520,7 +19577,21 @@ async function startRun() {
       // Start timer
       runTimerInterval.value = window.setInterval(() => {
         if (runStartTime.value) {
-          runElapsedSeconds.value = Math.floor((Date.now() - runStartTime.value) / 1000);
+          // Calculate elapsed time: (current time - start time - pause time)
+          // IMPORTANT: runStartTime.value is the original start timestamp, NEVER adjusted
+          // If currently paused, include pending pause time
+          const now = Date.now();
+          const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
+          
+          // Calculate pending pause time if currently paused
+          let pendingPauseSeconds = 0;
+          if (isRunPaused.value && runPauseStartTime.value) {
+            pendingPauseSeconds = Math.floor((now - runPauseStartTime.value) / 1000);
+          }
+          
+          // Final elapsed time: base elapsed minus tallied pause time minus pending pause time
+          runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
+          
           // Update current challenge duration
           if (currentChallengeIndex.value < challengeResults.value.length) {
             const current = challengeResults.value[currentChallengeIndex.value];
@@ -19617,12 +19688,15 @@ async function pauseRun() {
   if (!currentRunUuid.value || isRunPaused.value) return;
   
   try {
+    // Record pause start time
+    runPauseStartTime.value = Date.now();
+    
     if (isElectronAvailable()) {
       await (window as any).electronAPI.pauseRun(currentRunUuid.value);
     }
     
     isRunPaused.value = true;
-    console.log('Run paused');
+    console.log('Run paused at', runPauseStartTime.value);
   } catch (error) {
     console.error('Error pausing run:', error);
     alert('Error pausing run');
@@ -19638,9 +19712,15 @@ async function unpauseRun() {
       console.log('Unpause result:', result);
       
       if (result && result.success) {
-        // Update pause time with the returned value
+        // Update pause time with the returned value (includes the pause that just ended)
         runPauseSeconds.value = result.pauseSeconds || 0;
         isRunPaused.value = false;
+        runPauseStartTime.value = null; // Clear pause start time
+        
+        // IMPORTANT: Do NOT adjust runStartTime.value
+        // The elapsed time calculation will automatically account for
+        // the updated runPauseSeconds.value
+        
         console.log('Run unpaused, total pause time:', runPauseSeconds.value);
       } else {
         console.error('Unpause failed:', result);
@@ -19649,6 +19729,7 @@ async function unpauseRun() {
     } else {
       // If not in Electron, just update state
       isRunPaused.value = false;
+      runPauseStartTime.value = null;
     }
   } catch (error) {
     console.error('Error unpausing run:', error);
@@ -21666,12 +21747,68 @@ async function resumeRunFromStartup() {
     // Close resume modal first
     resumeRunModalOpen.value = false;
     
-    // Load the run
-    currentRunUuid.value = resumeRunData.value.run_uuid;
-    currentRunName.value = resumeRunData.value.run_name;
+    // Load the run from database to get accurate timestamps
+    const run = await (window as any).electronAPI.getRun({ runUuid: resumeRunData.value.run_uuid });
+    if (!run) {
+      await showAlert('Run not found in database', 'Error');
+      return;
+    }
+    
+    // Load the run state
+    currentRunUuid.value = run.run_uuid;
+    currentRunName.value = run.run_name;
     currentRunStatus.value = 'active';
-    runPauseSeconds.value = resumeRunData.value.pause_seconds || 0;
-    isRunPaused.value = resumeRunData.value.isPaused;
+    
+    // IMPORTANT: Use the original started_at timestamp from database, NEVER modify it
+    // Use millisecond precision if available, otherwise convert from timestamp
+    if (run.started_at_ms) {
+      runStartTime.value = run.started_at_ms;
+    } else if (run.started_at) {
+      runStartTime.value = new Date(run.started_at).getTime();
+    } else {
+      console.error('[resumeRunFromStartup] No started_at found in database');
+      await showAlert('Run has no start time. Cannot resume.', 'Error');
+      return;
+    }
+    
+    // Get pause information from database
+    if (run.pause_milliseconds) {
+      runPauseSeconds.value = Math.floor(run.pause_milliseconds / 1000);
+    } else if (run.pause_seconds) {
+      runPauseSeconds.value = run.pause_seconds;
+    } else {
+      runPauseSeconds.value = 0;
+    }
+    
+    // Check if currently paused
+    if (run.pause_start || run.pause_start_ms) {
+      isRunPaused.value = true;
+      if (run.pause_start_ms) {
+        runPauseStartTime.value = run.pause_start_ms;
+      } else if (run.pause_start) {
+        runPauseStartTime.value = new Date(run.pause_start).getTime();
+      }
+    } else {
+      isRunPaused.value = false;
+      runPauseStartTime.value = null;
+    }
+    
+    // Calculate initial elapsed time using the formula from the review
+    const now = Date.now();
+    const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
+    if (isRunPaused.value && runPauseStartTime.value) {
+      const pendingPauseSeconds = Math.floor((now - runPauseStartTime.value) / 1000);
+      runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
+    } else {
+      runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value);
+    }
+    
+    console.log('[resumeRunFromStartup] Restored run state:', {
+      startTime: runStartTime.value,
+      elapsed: runElapsedSeconds.value,
+      pauseSeconds: runPauseSeconds.value,
+      isPaused: isRunPaused.value
+    });
     
     console.log('Loading run results for:', currentRunUuid.value);
     
@@ -21795,42 +21932,34 @@ async function resumeRunFromStartup() {
     
     console.log('Initialized undo stack with', undoStack.value.length, 'completed challenges');
     
-    // Use the original started_at timestamp from database
-    const startedAtString = resumeRunData.value.started_at;
-    console.log('DEBUG: started_at from DB:', startedAtString);
-    console.log('DEBUG: type:', typeof startedAtString);
+    // Start timer interval (will use corrected calculation that accounts for pause time)
+    if (runTimerInterval.value) {
+      clearInterval(runTimerInterval.value);
+      runTimerInterval.value = null;
+    }
     
-    // Parse the timestamp (SQLite returns UTC strings, need to handle properly)
-    const originalStartTime = new Date(startedAtString + 'Z').getTime(); // Add 'Z' to treat as UTC
-    const now = Date.now();
-    
-    console.log('DEBUG: originalStartTime (ms):', originalStartTime);
-    console.log('DEBUG: now (ms):', now);
-    console.log('DEBUG: difference (ms):', now - originalStartTime);
-    
-    runStartTime.value = originalStartTime;
-    
-    // Calculate current elapsed time (don't use pre-calculated value from backend)
-    const totalElapsed = Math.floor((now - originalStartTime) / 1000);
-    runElapsedSeconds.value = totalElapsed - runPauseSeconds.value;
-    
-    console.log('Resuming run. Started at:', startedAtString, 
-                'Total elapsed:', totalElapsed, 'Pause seconds:', runPauseSeconds.value, 
-                'Net active:', runElapsedSeconds.value, 'Is paused:', isRunPaused.value);
-    
-    // Start timer (will not update if paused)
-    console.log('Starting timer');
     runTimerInterval.value = window.setInterval(() => {
-      if (runStartTime.value && !isRunPaused.value) {
-        // Calculate from original start time
+      if (runStartTime.value) {
+        // Calculate elapsed time: (current time - start time - pause time)
+        // IMPORTANT: runStartTime.value is the original start timestamp, NEVER adjusted
+        // If currently paused, include pending pause time
         const now = Date.now();
-        const totalElapsed = Math.floor((now - runStartTime.value) / 1000);
-        runElapsedSeconds.value = totalElapsed - runPauseSeconds.value;
+        const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
+        
+        // Calculate pending pause time if currently paused
+        let pendingPauseSeconds = 0;
+        if (isRunPaused.value && runPauseStartTime.value) {
+          pendingPauseSeconds = Math.floor((now - runPauseStartTime.value) / 1000);
+        }
+        
+        // Final elapsed time: base elapsed minus tallied pause time minus pending pause time
+        runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
         
         // Update current challenge duration
         if (currentChallengeIndex.value < challengeResults.value.length) {
           const current = challengeResults.value[currentChallengeIndex.value];
           if (current.status === 'pending') {
+            // Calculate duration since this challenge started
             const prevDuration = challengeResults.value
               .slice(0, currentChallengeIndex.value)
               .reduce((sum, r) => sum + r.durationSeconds, 0);
@@ -21839,6 +21968,10 @@ async function resumeRunFromStartup() {
         }
       }
     }, 1000);
+    
+    console.log('Resuming run. Started at:', runStartTime.value, 
+                'Elapsed:', runElapsedSeconds.value, 'Pause seconds:', runPauseSeconds.value, 
+                'Is paused:', isRunPaused.value);
     
     // Reveal current challenge if it's random and masked
     if (currentChallengeIndex.value >= 0 && currentChallengeIndex.value < runEntries.length) {

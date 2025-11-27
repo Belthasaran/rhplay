@@ -2090,20 +2090,28 @@ function registerDatabaseHandlers(dbManager) {
         `).run(runId);
         
         // Update run status to active (run_results already exist from staging)
+        // IMPORTANT: Only set started_at if it's NULL (first start)
+        // If resuming, preserve the original started_at timestamp
+        // started_at represents the exact wall-clock time the run started and must NEVER be modified
         db.prepare(`
           UPDATE runs 
           SET status = 'active', 
-              started_at = CURRENT_TIMESTAMP,
-              updated_at = CURRENT_TIMESTAMP
+              started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+              started_at_ms = COALESCE(started_at_ms, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)),
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
           WHERE run_uuid = ?
         `).run(runId);
         
         // run_results were already created during staging, just update their timestamps
+        // Use millisecond precision
+        const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
         db.prepare(`
           UPDATE run_results
-          SET started_at = CURRENT_TIMESTAMP
+          SET started_at = CURRENT_TIMESTAMP,
+              started_at_ms = ?
           WHERE run_uuid = ? AND status = 'pending'
-        `).run(runId);
+        `).run(nowMs, runId);
         
         // Update total challenges count (should already be set, but update to be sure)
         const total = db.prepare(`SELECT COUNT(*) as count FROM run_results WHERE run_uuid = ?`).get(runId);
@@ -2157,14 +2165,50 @@ function registerDatabaseHandlers(dbManager) {
       
       const oldStatus = result.old_status || 'pending';
       
+      // Get pause information for this challenge
+      const challenge = db.prepare(`
+        SELECT pause_seconds, pause_milliseconds, started_at, started_at_ms FROM run_results WHERE result_uuid = ?
+      `).get(result.result_uuid);
+      
+      // Use pause_milliseconds if available, otherwise fall back to pause_seconds * 1000
+      const pauseMilliseconds = challenge?.pause_milliseconds ?? ((challenge?.pause_seconds || 0) * 1000);
+      const pauseSeconds = Math.floor(pauseMilliseconds / 1000);
+      
+      // Calculate duration: (completed_at - started_at - pause_milliseconds)
+      // Use millisecond precision if available
+      let durationSeconds;
+      let durationMilliseconds;
+      const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
+      
+      if (challenge?.started_at_ms) {
+        // Use millisecond precision
+        durationMilliseconds = nowMs - challenge.started_at_ms - pauseMilliseconds;
+        durationSeconds = Math.floor(durationMilliseconds / 1000);
+      } else if (challenge?.started_at) {
+        // Fall back to second precision
+        const startedAtMs = Math.floor((julianday(challenge.started_at) - 2440587.5) * 86400000);
+        durationMilliseconds = nowMs - startedAtMs - pauseMilliseconds;
+        durationSeconds = Math.floor(durationMilliseconds / 1000);
+      } else {
+        // No start time - should not happen, but set to 0
+        durationSeconds = 0;
+        durationMilliseconds = 0;
+      }
+      
+      // Ensure non-negative duration
+      durationMilliseconds = Math.max(0, durationMilliseconds);
+      durationSeconds = Math.max(0, durationSeconds);
+      
       // Update result
       db.prepare(`
         UPDATE run_results
         SET status = ?,
             completed_at = CURRENT_TIMESTAMP,
-            duration_seconds = CAST((julianday('now') - julianday(started_at)) * 86400 AS INTEGER)
+            completed_at_ms = ?,
+            duration_seconds = ?,
+            duration_milliseconds = ?
         WHERE result_uuid = ?
-      `).run(status, result.result_uuid);
+      `).run(status, nowMs, durationSeconds, durationMilliseconds, result.result_uuid);
       
       // Update run counts based on status change
       // Only update if the status actually changed
@@ -2268,6 +2312,7 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       
       // Join with run_plan_entries to get entry_type
+      // Include millisecond precision columns
       const results = db.prepare(`
         SELECT 
           rr.result_uuid,
@@ -2282,8 +2327,13 @@ function registerDatabaseHandlers(dbManager) {
           rr.revealed_early,
           rr.status,
           rr.started_at,
+          rr.started_at_ms,
           rr.completed_at,
+          rr.completed_at_ms,
           rr.duration_seconds,
+          rr.duration_milliseconds,
+          rr.pause_seconds,
+          rr.pause_milliseconds,
           rr.conditions,
           rr.sfcpath,
           rr.levelnumber,
@@ -2406,14 +2456,18 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('clientdata');
       
-      // Set pause_start for run
+      // Set pause_start for run (with millisecond precision)
+      const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
       db.prepare(`
         UPDATE runs
         SET pause_start = CURRENT_TIMESTAMP,
+            pause_start_ms = ?,
             pause_end = NULL,
-            updated_at = CURRENT_TIMESTAMP
+            pause_end_ms = NULL,
+            updated_at = CURRENT_TIMESTAMP,
+            updated_at_ms = ?
         WHERE run_uuid = ? AND status = 'active'
-      `).run(runUuid);
+      `).run(nowMs, nowMs, runUuid);
       
       // Get current challenge index and set pause_start for it
       const currentResult = db.prepare(`
@@ -2427,9 +2481,11 @@ function registerDatabaseHandlers(dbManager) {
         db.prepare(`
           UPDATE run_results
           SET pause_start = CURRENT_TIMESTAMP,
-              pause_end = NULL
+              pause_start_ms = ?,
+              pause_end = NULL,
+              pause_end_ms = NULL
           WHERE result_uuid = ?
-        `).run(currentResult.result_uuid);
+        `).run(nowMs, currentResult.result_uuid);
       }
       
       return { success: true };
@@ -2446,52 +2502,90 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const db = dbManager.getConnection('clientdata');
       
-      // Calculate pause duration for run
-      const run = db.prepare(`SELECT pause_start, pause_seconds FROM runs WHERE run_uuid = ?`).get(runUuid);
+      // Calculate pause duration for run (using millisecond precision)
+      const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
+      const run = db.prepare(`
+        SELECT pause_start, pause_start_ms, pause_seconds, pause_milliseconds 
+        FROM runs WHERE run_uuid = ?
+      `).get(runUuid);
       
-      if (run && run.pause_start) {
-        const pauseStart = new Date(run.pause_start).getTime();
-        const pauseDuration = Math.floor((Date.now() - pauseStart) / 1000);
-        const totalPaused = (run.pause_seconds || 0) + pauseDuration;
+      if (run && (run.pause_start || run.pause_start_ms)) {
+        // Use millisecond precision if available, otherwise fall back to timestamp
+        let pauseStartMs;
+        if (run.pause_start_ms) {
+          pauseStartMs = run.pause_start_ms;
+        } else if (run.pause_start) {
+          pauseStartMs = Math.floor((julianday(run.pause_start) - 2440587.5) * 86400000);
+        } else {
+          pauseStartMs = nowMs; // Fallback
+        }
         
-        // Update run
+        const pauseDurationMs = nowMs - pauseStartMs;
+        const existingPauseMs = run.pause_milliseconds || ((run.pause_seconds || 0) * 1000);
+        const totalPausedMs = existingPauseMs + pauseDurationMs;
+        const totalPausedSeconds = Math.floor(totalPausedMs / 1000);
+        
+        // Update run with millisecond precision
         db.prepare(`
           UPDATE runs
-          SET pause_seconds = ?,
+          SET pause_milliseconds = ?,
+              pause_seconds = ?,
               pause_start = NULL,
+              pause_start_ms = NULL,
               pause_end = CURRENT_TIMESTAMP,
-              updated_at = CURRENT_TIMESTAMP
+              pause_end_ms = ?,
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = ?
           WHERE run_uuid = ?
-        `).run(totalPaused, runUuid);
+        `).run(totalPausedMs, totalPausedSeconds, nowMs, nowMs, runUuid);
       }
       
       // Calculate pause duration for current challenge
       const currentResult = db.prepare(`
-        SELECT result_uuid, pause_start, pause_seconds 
+        SELECT result_uuid, pause_start, pause_start_ms, pause_seconds, pause_milliseconds 
         FROM run_results
         WHERE run_uuid = ? AND status = 'pending'
         ORDER BY sequence_number
         LIMIT 1
       `).get(runUuid);
       
-      if (currentResult && currentResult.pause_start) {
-        const pauseStart = new Date(currentResult.pause_start).getTime();
-        const pauseDuration = Math.floor((Date.now() - pauseStart) / 1000);
-        const totalPaused = (currentResult.pause_seconds || 0) + pauseDuration;
+      if (currentResult && (currentResult.pause_start || currentResult.pause_start_ms)) {
+        // Use millisecond precision if available
+        let pauseStartMs;
+        if (currentResult.pause_start_ms) {
+          pauseStartMs = currentResult.pause_start_ms;
+        } else if (currentResult.pause_start) {
+          pauseStartMs = Math.floor((julianday(currentResult.pause_start) - 2440587.5) * 86400000);
+        } else {
+          pauseStartMs = nowMs; // Fallback
+        }
+        
+        const pauseDurationMs = nowMs - pauseStartMs;
+        const existingPauseMs = currentResult.pause_milliseconds || ((currentResult.pause_seconds || 0) * 1000);
+        const totalPausedMs = existingPauseMs + pauseDurationMs;
+        const totalPausedSeconds = Math.floor(totalPausedMs / 1000);
         
         db.prepare(`
           UPDATE run_results
-          SET pause_seconds = ?,
+          SET pause_milliseconds = ?,
+              pause_seconds = ?,
               pause_start = NULL,
-              pause_end = CURRENT_TIMESTAMP
+              pause_start_ms = NULL,
+              pause_end = CURRENT_TIMESTAMP,
+              pause_end_ms = ?
           WHERE result_uuid = ?
-        `).run(totalPaused, currentResult.result_uuid);
+        `).run(totalPausedMs, totalPausedSeconds, nowMs, currentResult.result_uuid);
       }
       
-      // Get updated pause_seconds to return
-      const updatedRun = db.prepare(`SELECT pause_seconds FROM runs WHERE run_uuid = ?`).get(runUuid);
+      // Get updated pause_seconds to return (for backwards compatibility)
+      const updatedRun = db.prepare(`
+        SELECT pause_seconds, pause_milliseconds FROM runs WHERE run_uuid = ?
+      `).get(runUuid);
       
-      return { success: true, pauseSeconds: updatedRun ? updatedRun.pause_seconds : 0 };
+      return { 
+        success: true, 
+        pauseSeconds: updatedRun ? (updatedRun.pause_seconds || Math.floor((updatedRun.pause_milliseconds || 0) / 1000)) : 0 
+      };
     } catch (error) {
       console.error('Error unpausing run:', error);
       return { success: false, error: error.message };
@@ -5823,7 +5917,17 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       
       const run = db.prepare(`
-        SELECT * FROM runs
+        SELECT 
+          *,
+          started_at_ms,
+          pause_milliseconds,
+          pause_start_ms,
+          pause_end_ms,
+          clock_offset_ms,
+          clock_validated,
+          network_time_ms,
+          run_validity_status
+        FROM runs
         WHERE run_uuid = ?
         LIMIT 1
       `).get(runUuid);

@@ -695,27 +695,48 @@ function isRunPaused(run) {
 
 /**
  * Calculate elapsed time for run (excluding paused time)
+ * Uses millisecond precision if available
  * @param {Object} run - Run object
  * @returns {number} Elapsed seconds
  */
 function calculateRunElapsed(run) {
-  if (!run.started_at) return 0;
+  // Use millisecond precision if available
+  let startTime;
+  if (run.started_at_ms) {
+    startTime = run.started_at_ms;
+  } else if (run.started_at) {
+    startTime = new Date(run.started_at).getTime();
+  } else {
+    return 0; // No start time
+  }
   
-  const startTime = new Date(run.started_at).getTime();
   const now = Date.now();
   const totalElapsed = Math.floor((now - startTime) / 1000);
   
-  // Subtract paused time
-  let pausedTime = run.pause_seconds || 0;
+  // Get paused time (use millisecond precision if available)
+  let pausedTimeSeconds = 0;
+  if (run.pause_milliseconds) {
+    pausedTimeSeconds = Math.floor(run.pause_milliseconds / 1000);
+  } else if (run.pause_seconds) {
+    pausedTimeSeconds = run.pause_seconds;
+  }
   
   // If currently paused, add current pause duration
   if (isRunPaused(run)) {
-    const pauseStart = new Date(run.pause_start).getTime();
+    let pauseStart;
+    if (run.pause_start_ms) {
+      pauseStart = run.pause_start_ms;
+    } else if (run.pause_start) {
+      pauseStart = new Date(run.pause_start).getTime();
+    } else {
+      pauseStart = now; // Fallback
+    }
+    
     const currentPause = Math.floor((now - pauseStart) / 1000);
-    pausedTime += currentPause;
+    pausedTimeSeconds += currentPause;
   }
   
-  return Math.max(0, totalElapsed - pausedTime);
+  return Math.max(0, totalElapsed - pausedTimeSeconds);
 }
 
 /**

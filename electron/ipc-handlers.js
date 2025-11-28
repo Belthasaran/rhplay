@@ -2941,15 +2941,18 @@ function registerDatabaseHandlers(dbManager) {
         WHERE gs.gameid IN (${placeholders})
           AND gs.playable = 1
           AND gs.rando = 1
+          AND gs.difficulty >= 0
           AND gs.difficulty <= 7
       `;
       const stageQueryParams = [...gameids];
       
       // Apply stage difficulty filters
+      // Note: When minDifficulty is null, difficulty 0 is allowed (user explicitly set to "Any")
       if (stageMinDifficulty !== null && stageMinDifficulty !== undefined) {
         stageQuery += ` AND gs.difficulty >= ?`;
         stageQueryParams.push(stageMinDifficulty);
       }
+      // If minDifficulty is null, we don't add a filter, so difficulty 0 is allowed
       
       if (stageMaxDifficulty !== null && stageMaxDifficulty !== undefined) {
         stageQuery += ` AND gs.difficulty <= ?`;

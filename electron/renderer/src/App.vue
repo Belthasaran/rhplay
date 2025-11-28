@@ -1243,17 +1243,17 @@
                 <div class="stage-limits-left-column">
                   <div class="stage-limits-section">
                     <label>
-                      Min Difficulty (1-7)
+                      Min Difficulty (0-7)
                       <select v-model="stageFilter.minDifficulty">
                         <option :value="null">(any)</option>
-                        <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
                       </select>
                     </label>
                     <label>
-                      Max Difficulty (1-7)
+                      Max Difficulty (0-7)
                       <select v-model="stageFilter.maxDifficulty">
                         <option :value="null">(any)</option>
-                        <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
                       </select>
                     </label>
                   </div>

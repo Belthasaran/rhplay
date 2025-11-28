@@ -1217,24 +1217,54 @@
               Stage Limits ▼
             </button>
             <div v-if="stageLimitsDropdownOpen" class="stage-limits-dropdown" @click.stop>
-              <div class="stage-limits-section">
-                <label>
-                  Min Difficulty (1-7)
-                  <select v-model="stageFilter.minDifficulty">
-                    <option :value="null">(any)</option>
-                    <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
-                  </select>
-                </label>
-                <label>
-                  Max Difficulty (1-7)
-                  <select v-model="stageFilter.maxDifficulty">
-                    <option :value="null">(any)</option>
-                    <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
-                  </select>
-                </label>
-              </div>
-              <div class="stage-limits-section">
-                <table class="stage-flags-table">
+              <div class="stage-limits-columns">
+                <div class="stage-limits-left-column">
+                  <div class="stage-limits-section">
+                    <label>
+                      Min Difficulty (1-7)
+                      <select v-model="stageFilter.minDifficulty">
+                        <option :value="null">(any)</option>
+                        <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                      </select>
+                    </label>
+                    <label>
+                      Max Difficulty (1-7)
+                      <select v-model="stageFilter.maxDifficulty">
+                        <option :value="null">(any)</option>
+                        <option v-for="d in [1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="stage-limits-section">
+                    <label>
+                      Has Tags (comma-separated):
+                      <input 
+                        type="text" 
+                        v-model="stageFilterHasTagsInput" 
+                        placeholder="e.g., cape, autoscroller"
+                        @input="updateHasTags"
+                      />
+                      <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
+                        Stage must have ALL selected tags
+                      </small>
+                    </label>
+                    <label style="margin-top: 12px;">
+                      Exclude Tags (comma-separated):
+                      <input 
+                        type="text" 
+                        v-model="stageFilterExcludeTagsInput" 
+                        placeholder="e.g., cape, autoscroller"
+                        @input="updateExcludeTags"
+                      />
+                      <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
+                        Stage with ANY of these tags will be excluded
+                      </small>
+                    </label>
+                  </div>
+                </div>
+                <div class="stage-limits-right-column">
+                  <div class="stage-limits-section">
+                    <table class="stage-flags-table">
                   <thead>
                     <tr>
                       <th></th>
@@ -1272,35 +1302,11 @@
                         <input type="checkbox" :value="flag.code" v-model="stageFilter.excludeOnlyFlags" />
                       </td>
                     </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div class="stage-limits-section">
-                <label>
-                  Has Tags (comma-separated):
-                  <input 
-                    type="text" 
-                    v-model="stageFilterHasTagsInput" 
-                    placeholder="e.g., cape, autoscroller"
-                    @input="updateHasTags"
-                  />
-                  <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
-                    Stage must have ALL selected tags
-                  </small>
-                </label>
-                <label style="margin-top: 12px;">
-                  Exclude Tags (comma-separated):
-                  <input 
-                    type="text" 
-                    v-model="stageFilterExcludeTagsInput" 
-                    placeholder="e.g., cape, autoscroller"
-                    @input="updateExcludeTags"
-                  />
-                  <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
-                    Stage with ANY of these tags will be excluded
-                  </small>
-                </label>
-              </div>
+            </div>
             </div>
           </div>
           <span class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
@@ -22579,7 +22585,7 @@ button:disabled {
 .stage-limits-dropdown {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0;
   margin-top: 4px;
   padding: 12px;
   background-color: var(--bg-primary);
@@ -22587,7 +22593,20 @@ button:disabled {
   border-radius: 4px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   z-index: 1000;
-  min-width: 300px;
+  min-width: 600px;
+  max-width: 800px;
+}
+.stage-limits-columns {
+  display: flex;
+  gap: 20px;
+}
+.stage-limits-left-column {
+  flex: 1;
+  min-width: 0;
+}
+.stage-limits-right-column {
+  flex: 1;
+  min-width: 0;
 }
 .stage-limits-section {
   margin-bottom: 12px;

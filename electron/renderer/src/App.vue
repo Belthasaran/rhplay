@@ -1213,7 +1213,7 @@
           <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Game</button>
           <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stage</button>
           <div class="stage-limits-wrapper">
-            <button @click="toggleStageLimitsDropdown" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
+            <button @click="toggleStageLimitsDropdown($event)" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
               Stage Limits ▼
             </button>
             <div v-if="stageLimitsDropdownOpen" class="stage-limits-dropdown" :style="stageLimitsDropdownStyle" @click.stop ref="stageLimitsDropdownRef">

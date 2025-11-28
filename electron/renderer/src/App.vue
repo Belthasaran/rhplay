@@ -18194,10 +18194,10 @@ function toggleGameLimitsDropdown(event?: Event) {
       const button = event.currentTarget as HTMLElement;
       if (button) {
         const rect = button.getBoundingClientRect();
-        // Position dropdown to the left of the button, 500px to the left
+        // Position dropdown with left border aligned with the button's left border
         gameLimitsDropdownStyle.value = {
           top: `${rect.bottom + 4}px`,
-          left: `${rect.left - 500}px`
+          left: `${rect.left}px`
         };
       }
     });

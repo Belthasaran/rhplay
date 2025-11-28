@@ -1188,7 +1188,7 @@
         <div class="right add-random">
           <label>
             Count
-            <input class="count" v-model.number="randomFilter.count" type="number" min="1" max="100" />
+            <input class="count" v-model.number="randomFilter.count" type="number" min="1" max="100" @input="enforceCountMax" />
           </label>
           <label>
             Seed
@@ -1234,7 +1234,6 @@
             </div>
           </div>
           <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Game</button>
-          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stage</button>
           <div class="stage-limits-wrapper">
             <button @click="toggleStageLimitsDropdown($event)" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
               Stage Limits ▼
@@ -1332,6 +1331,7 @@
             </div>
             </div>
           </div>
+          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stage</button>
           <span class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
             <span v-if="randomMatchCount !== null">{{ randomMatchCount }}</span>
             <span v-else>...</span> games
@@ -17796,6 +17796,13 @@ onMounted(() => {
   });
 });
 
+// Enforce max count of 100
+function enforceCountMax() {
+  if (randomFilter.count && randomFilter.count > 100) {
+    randomFilter.count = 100;
+  }
+}
+
 async function openRunModal() {
   if (!randomFilter.count) randomFilter.count = 1;
   
@@ -22651,8 +22658,8 @@ button:disabled {
 .modal-toolbar .add-random label { font-size: var(--base-font-size); }
 .modal-toolbar .add-random select { font-size: var(--base-font-size); }
 .modal-toolbar .add-random input { font-size: var(--base-font-size); }
-.modal-toolbar .add-random .count { font-size: var(--base-font-size); }
-.modal-toolbar .add-random .seed { font-size: var(--base-font-size); }
+.modal-toolbar .add-random .count { font-size: var(--base-font-size); width: 3ch; }
+.modal-toolbar .add-random .seed { font-size: var(--base-font-size); width: 11ch; }
 .match-count-indicator {
   padding: 6px 12px;
   background-color: var(--bg-tertiary);

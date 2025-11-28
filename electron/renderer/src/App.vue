@@ -22566,6 +22566,7 @@ button:disabled {
 .stage-limits-wrapper {
   position: relative;
   display: inline-block;
+  overflow: visible;
 }
 .btn-stage-limits {
   padding: var(--button-padding);
@@ -22585,14 +22586,14 @@ button:disabled {
 .stage-limits-dropdown {
   position: absolute;
   top: 100%;
-  left: 0;
+  left: -400px;
   margin-top: 4px;
   padding: 12px;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
+  z-index: 10000;
   min-width: 600px;
   max-width: 800px;
 }

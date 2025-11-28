@@ -19938,12 +19938,13 @@ async function undoChallenge() {
   const idx = previousState.index;
   
   // Before going back, mark any challenges AFTER this point as revealed_early
-  // because the user has already seen them
+  // because the user has already seen them (permanent indicator that user revealed early)
   for (let i = idx + 1; i < challengeResults.value.length; i++) {
     const result = challengeResults.value[i];
     const entry = runEntries[i];
     
     // If it's a random challenge that's been revealed, mark it as revealed early
+    // This is a permanent indicator shown as a warning badge instead of green check
     if ((entry.entryType === 'random_game' || entry.entryType === 'random_stage') && 
         entry.name !== '???' && 
         result.status !== 'pending') {
@@ -19965,26 +19966,59 @@ async function undoChallenge() {
     }
   }
   
-  // Restore previous state
-  challengeResults.value[idx] = { ...previousState };
-  
-  // Go back to that challenge
-  currentChallengeIndex.value = idx;
-  
   try {
     if (isElectronAvailable()) {
-      // Undo the database record
-      await (window as any).electronAPI.recordChallengeResult({
+      // Call the undo handler which will:
+      // - Transfer pause time from undone challenge to previous challenge
+      // - Reset timestamps on undone challenge (started_at, completed_at)
+      // - Clear duration and pause time on undone challenge
+      // - Keep revealed_early flag (already handled above)
+      const result = await (window as any).electronAPI.undoChallenge({
         runUuid: currentRunUuid.value,
-        challengeIndex: idx,
-        status: 'pending'  // Reset to pending
+        challengeIndex: idx
       });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to undo challenge');
+      }
+      
+      // Get the undone challenge's pause time that was transferred
+      const transferredPauseSeconds = result.transferredPauseSeconds || 0;
+      if (transferredPauseSeconds > 0 && result.previousChallengeIndex !== null) {
+        console.log(`[undoChallenge] Transferred ${transferredPauseSeconds}s pause time to challenge ${result.previousChallengeIndex + 1}`);
+      }
+      
+      // Reload challenge results from database to get updated state
+      const updatedResults = await (window as any).electronAPI.getRunResults({
+        runUuid: currentRunUuid.value
+      });
+      
+      // Update challenge results with refreshed data from database
+      challengeResults.value = updatedResults.map((res: any, index: number) => ({
+        index: index,
+        status: res.status || 'pending',
+        durationSeconds: res.duration_seconds || 0,
+        revealedEarly: res.revealed_early || false
+      }));
+      
+      // Update run pause time if it was affected (should be reflected in database)
+      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+      if (run) {
+        if (run.pause_milliseconds) {
+          runPauseSeconds.value = Math.floor(run.pause_milliseconds / 1000);
+        } else if (run.pause_seconds) {
+          runPauseSeconds.value = run.pause_seconds;
+        }
+      }
     }
     
-    console.log(`Undone: Challenge ${idx + 1} back to pending`);
+    // Go back to that challenge (status should already be 'pending' from database)
+    currentChallengeIndex.value = idx;
+    
+    console.log(`[undoChallenge] Undone: Challenge ${idx + 1} back to pending`);
   } catch (error) {
     console.error('Error undoing challenge:', error);
-    alert('Error undoing challenge');
+    alert('Error undoing challenge: ' + (error instanceof Error ? error.message : String(error)));
   }
 }
 

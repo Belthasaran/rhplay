@@ -2195,20 +2195,35 @@ function registerDatabaseHandlers(dbManager) {
         durationMilliseconds = 0;
       }
       
-      // Ensure non-negative duration
-      durationMilliseconds = Math.max(0, durationMilliseconds);
-      durationSeconds = Math.max(0, durationSeconds);
-      
-      // Update result
-      db.prepare(`
-        UPDATE run_results
-        SET status = ?,
-            completed_at = CURRENT_TIMESTAMP,
-            completed_at_ms = ?,
-            duration_seconds = ?,
-            duration_milliseconds = ?
-        WHERE result_uuid = ?
-      `).run(status, nowMs, durationSeconds, durationMilliseconds, result.result_uuid);
+      // If resetting to 'pending', clear timestamps and duration (but don't calculate duration)
+      // Otherwise, calculate and set completion timestamp and duration
+      if (status === 'pending') {
+        // Reset to pending: clear completion data but keep started_at if it exists
+        db.prepare(`
+          UPDATE run_results
+          SET status = ?,
+              completed_at = NULL,
+              completed_at_ms = NULL,
+              duration_seconds = NULL,
+              duration_milliseconds = NULL
+          WHERE result_uuid = ?
+        `).run(status, result.result_uuid);
+      } else {
+        // Ensure non-negative duration
+        durationMilliseconds = Math.max(0, durationMilliseconds);
+        durationSeconds = Math.max(0, durationSeconds);
+        
+        // Update result with completion timestamp and duration
+        db.prepare(`
+          UPDATE run_results
+          SET status = ?,
+              completed_at = CURRENT_TIMESTAMP,
+              completed_at_ms = ?,
+              duration_seconds = ?,
+              duration_milliseconds = ?
+          WHERE result_uuid = ?
+        `).run(status, nowMs, durationSeconds, durationMilliseconds, result.result_uuid);
+      }
       
       // Update run counts based on status change
       // Only update if the status actually changed
@@ -2251,6 +2266,113 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('Error recording challenge result:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Undo a challenge (transfer time to previous challenge and reset timestamps)
+   * Channel: db:runs:undo-challenge
+   */
+  ipcMain.handle('db:runs:undo-challenge', async (event, { runUuid, challengeIndex }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get all results for this run, ordered by sequence
+      const allResults = db.prepare(`
+        SELECT result_uuid, sequence_number, status, 
+               pause_seconds, pause_milliseconds,
+               started_at, started_at_ms, completed_at, completed_at_ms,
+               duration_seconds, duration_milliseconds
+        FROM run_results 
+        WHERE run_uuid = ? 
+        ORDER BY sequence_number
+      `).all(runUuid);
+      
+      if (challengeIndex >= allResults.length || challengeIndex < 0) {
+        throw new Error('Challenge index out of range');
+      }
+      
+      const undoneChallenge = allResults[challengeIndex];
+      if (!undoneChallenge) {
+        throw new Error('Challenge not found');
+      }
+      
+      // Get pause time from undone challenge (in milliseconds)
+      const undonePauseMs = undoneChallenge.pause_milliseconds ?? ((undoneChallenge.pause_seconds || 0) * 1000);
+      const undonePauseSeconds = Math.floor(undonePauseMs / 1000);
+      
+      // Find the previous challenge (closest one before this with sequence_number < current)
+      let previousChallenge = null;
+      for (let i = challengeIndex - 1; i >= 0; i--) {
+        if (allResults[i]) {
+          previousChallenge = allResults[i];
+          break;
+        }
+      }
+      
+      // Transfer pause time to previous challenge if it exists
+      if (previousChallenge && undonePauseMs > 0) {
+        const prevPauseMs = previousChallenge.pause_milliseconds ?? ((previousChallenge.pause_seconds || 0) * 1000);
+        const newPauseMs = prevPauseMs + undonePauseMs;
+        const newPauseSeconds = Math.floor(newPauseMs / 1000);
+        
+        // Update previous challenge with transferred pause time
+        db.prepare(`
+          UPDATE run_results
+          SET pause_milliseconds = ?,
+              pause_seconds = ?
+          WHERE result_uuid = ?
+        `).run(newPauseMs, newPauseSeconds, previousChallenge.result_uuid);
+      }
+      
+      // Reset undone challenge: clear timestamps, duration, and pause time
+      // Keep revealed_early flag (it's stored separately in the database if needed)
+      db.prepare(`
+        UPDATE run_results
+        SET status = 'pending',
+            started_at = NULL,
+            started_at_ms = NULL,
+            completed_at = NULL,
+            completed_at_ms = NULL,
+            duration_seconds = NULL,
+            duration_milliseconds = NULL,
+            pause_seconds = 0,
+            pause_milliseconds = 0,
+            pause_start = NULL,
+            pause_start_ms = NULL,
+            pause_end = NULL,
+            pause_end_ms = NULL
+        WHERE result_uuid = ?
+      `).run(undoneChallenge.result_uuid);
+      
+      // Update run counts (decrement completed/skipped counts if applicable)
+      const oldStatus = undoneChallenge.status;
+      if (oldStatus === 'success' || oldStatus === 'ok') {
+        db.prepare(`
+          UPDATE runs 
+          SET completed_challenges = MAX(0, completed_challenges - 1),
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+          WHERE run_uuid = ?
+        `).run(runUuid);
+      } else if (oldStatus === 'skipped') {
+        db.prepare(`
+          UPDATE runs 
+          SET skipped_challenges = MAX(0, skipped_challenges - 1),
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+          WHERE run_uuid = ?
+        `).run(runUuid);
+      }
+      
+      return { 
+        success: true,
+        transferredPauseSeconds: undonePauseSeconds,
+        previousChallengeIndex: previousChallenge ? challengeIndex - 1 : null
+      };
+    } catch (error) {
+      console.error('Error undoing challenge:', error);
       return { success: false, error: error.message };
     }
   });

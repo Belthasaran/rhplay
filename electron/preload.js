@@ -175,6 +175,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean}>}
    */
   recordChallengeResult: (params) => ipcRenderer.invoke('db:runs:record-result', params),
+  undoChallenge: (params) => ipcRenderer.invoke('db:runs:undo-challenge', params),
   
   /**
    * Cancel a run

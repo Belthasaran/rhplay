@@ -2106,7 +2106,7 @@ function registerDatabaseHandlers(dbManager) {
         
         // run_results were already created during staging, just update their timestamps
         // Use millisecond precision
-        const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
+        const nowMs = Date.now();
         db.prepare(`
           UPDATE run_results
           SET started_at = CURRENT_TIMESTAMP,
@@ -2225,15 +2225,15 @@ function registerDatabaseHandlers(dbManager) {
       // Use millisecond precision if available
       let durationSeconds;
       let durationMilliseconds;
-      const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
+      const nowMs = Date.now();
       
       if (challenge?.started_at_ms) {
         // Use millisecond precision
         durationMilliseconds = nowMs - challenge.started_at_ms - pauseMilliseconds;
         durationSeconds = Math.floor(durationMilliseconds / 1000);
       } else if (challenge?.started_at) {
-        // Fall back to second precision
-        const startedAtMs = Math.floor((julianday(challenge.started_at) - 2440587.5) * 86400000);
+        // Fall back to second precision - convert SQLite timestamp to milliseconds
+        const startedAtMs = new Date(challenge.started_at).getTime();
         durationMilliseconds = nowMs - startedAtMs - pauseMilliseconds;
         durationSeconds = Math.floor(durationMilliseconds / 1000);
       } else {
@@ -2626,7 +2626,7 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       
       // Set pause_start for run (with millisecond precision)
-      const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
+      const nowMs = Date.now();
       db.prepare(`
         UPDATE runs
         SET pause_start = CURRENT_TIMESTAMP,
@@ -2672,7 +2672,7 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       
       // Calculate pause duration for run (using millisecond precision)
-      const nowMs = Math.floor((julianday('now') - 2440587.5) * 86400000);
+      const nowMs = Date.now();
       const run = db.prepare(`
         SELECT pause_start, pause_start_ms, pause_seconds, pause_milliseconds 
         FROM runs WHERE run_uuid = ?
@@ -2684,7 +2684,7 @@ function registerDatabaseHandlers(dbManager) {
         if (run.pause_start_ms) {
           pauseStartMs = run.pause_start_ms;
         } else if (run.pause_start) {
-          pauseStartMs = Math.floor((julianday(run.pause_start) - 2440587.5) * 86400000);
+          pauseStartMs = new Date(run.pause_start).getTime();
         } else {
           pauseStartMs = nowMs; // Fallback
         }
@@ -2724,7 +2724,7 @@ function registerDatabaseHandlers(dbManager) {
         if (currentResult.pause_start_ms) {
           pauseStartMs = currentResult.pause_start_ms;
         } else if (currentResult.pause_start) {
-          pauseStartMs = Math.floor((julianday(currentResult.pause_start) - 2440587.5) * 86400000);
+          pauseStartMs = new Date(currentResult.pause_start).getTime();
         } else {
           pauseStartMs = nowMs; // Fallback
         }

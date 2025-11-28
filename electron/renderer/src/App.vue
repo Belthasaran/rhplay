@@ -6931,7 +6931,7 @@
                   <td>{{ run.started_at ? formatTimeDelta(run.created_at, run.started_at) : '' }}</td>
                   <td>{{ run.completed_at && run.started_at ? formatTimeDelta(run.started_at, run.completed_at) : '' }}</td>
                   <td>{{ (run.completed_challenges || 0) }}/{{ run.total_challenges || 0 }}</td>
-                  <td>{{ run.elapsed_seconds ? formatTime(run.elapsed_seconds) : '' }}</td>
+                  <td>{{ run.elapsed_milliseconds !== undefined ? formatTimeWithCentiseconds(run.elapsed_milliseconds || 0) : '' }}</td>
                 </tr>
                 <tr v-if="pastRuns.length === 0">
                   <td colspan="8" class="empty">No past runs found.</td>
@@ -6974,9 +6974,9 @@
                 <label># Skipped:</label>
                 <span>{{ selectedPastRun.skipped_challenges || 0 }}</span>
               </div>
-              <div class="detail-row" v-if="selectedPastRun.elapsed_seconds">
+              <div class="detail-row" v-if="selectedPastRun.elapsed_milliseconds !== undefined || selectedPastRun.elapsed_seconds">
                 <label>Elapsed Time:</label>
-                <span>{{ formatTime(selectedPastRun.elapsed_seconds) }}</span>
+                <span>{{ selectedPastRun.elapsed_milliseconds !== undefined ? formatTimeWithCentiseconds(selectedPastRun.elapsed_milliseconds || 0) : (selectedPastRun.elapsed_seconds ? formatTimeWithCentiseconds((selectedPastRun.elapsed_seconds || 0) * 1000) : '') }}</span>
               </div>
               <div class="detail-row" v-if="getGlobalPatchCodes(selectedPastRun)">
                 <label>Global Conditions:</label>
@@ -6986,9 +6986,9 @@
                 <label>Started:</label>
                 <span>{{ formatDateYYYYMMDD(selectedPastRun.started_at) }}</span>
               </div>
-              <div class="detail-row" v-if="selectedPastRun.pause_seconds">
+              <div class="detail-row" v-if="selectedPastRun.pause_seconds || selectedPastRun.pause_milliseconds">
                 <label>Pause Time:</label>
-                <span>{{ formatTime(selectedPastRun.pause_seconds) }}</span>
+                <span>{{ selectedPastRun.pause_milliseconds !== undefined ? formatTimeWithCentiseconds(selectedPastRun.pause_milliseconds || 0) : (selectedPastRun.pause_seconds ? formatTimeWithCentiseconds((selectedPastRun.pause_seconds || 0) * 1000) : '') }}</span>
               </div>
               <div v-if="selectedPastRunResults && selectedPastRunResults.length > 0" class="results-section">
                 <h5>Results</h5>
@@ -7002,6 +7002,7 @@
                       <th>Stage Name</th>
                       <th>Status</th>
                       <th>Elapsed</th>
+                      <th>Pause</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -7012,7 +7013,8 @@
                       <td>{{ result.levelnumber || '' }}</td>
                       <td>{{ result.levelname || result.stage_description || '' }}</td>
                       <td>{{ result.status }}</td>
-                      <td>{{ result.elapsed_seconds ? formatTime(result.elapsed_seconds) : '' }}</td>
+                      <td>{{ result.duration_milliseconds !== undefined ? formatTimeWithCentiseconds(result.duration_milliseconds || 0) : (result.duration_seconds ? formatTimeWithCentiseconds((result.duration_seconds || 0) * 1000) : '') }}</td>
+                      <td>{{ result.pause_milliseconds !== undefined ? formatTimeWithCentiseconds(result.pause_milliseconds || 0) : (result.pause_seconds ? formatTimeWithCentiseconds((result.pause_seconds || 0) * 1000) : '') }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -20204,6 +20206,32 @@ function formatTime(seconds: number): string {
     return `${m}m ${s}s`;
   } else {
     return `${s}s`;
+  }
+}
+
+/**
+ * Format time with centisecond precision in stopwatch format: [HH:]MM:SS.frac
+ * @param milliseconds - Time in milliseconds
+ * @returns Formatted string like "1:23.45" or "01:23:45.67"
+ */
+function formatTimeWithCentiseconds(milliseconds: number): string {
+  const totalCentiseconds = Math.floor(milliseconds / 10);
+  const centiseconds = totalCentiseconds % 100;
+  const totalSeconds = Math.floor(totalCentiseconds / 100);
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  
+  const frac = centiseconds.toString().padStart(2, '0');
+  const sec = seconds.toString().padStart(2, '0');
+  const min = minutes.toString().padStart(2, '0');
+  
+  if (hours > 0) {
+    const hr = hours.toString().padStart(2, '0');
+    return `${hr}:${min}:${sec}.${frac}`;
+  } else {
+    return `${min}:${sec}.${frac}`;
   }
 }
 

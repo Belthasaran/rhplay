@@ -6057,20 +6057,64 @@ function registerDatabaseHandlers(dbManager) {
           run_description,
           status,
           created_at,
+          created_at_ms,
           started_at,
+          started_at_ms,
           completed_at,
+          completed_at_ms,
           updated_at,
+          updated_at_ms,
           total_challenges,
           completed_challenges,
           skipped_challenges,
           global_conditions,
           pause_seconds,
+          pause_milliseconds,
           staging_folder
         FROM runs
         ORDER BY created_at DESC
       `).all();
       
-      return runs;
+      // Calculate elapsed time for each run
+      const nowMs = Date.now();
+      return runs.map(run => {
+        let elapsedMilliseconds = 0;
+        
+        // Get pause time in milliseconds
+        let pauseMilliseconds = 0;
+        if (run.pause_milliseconds) {
+          pauseMilliseconds = run.pause_milliseconds;
+        } else if (run.pause_seconds) {
+          pauseMilliseconds = run.pause_seconds * 1000;
+        }
+        
+        // Calculate elapsed time based on status
+        if (run.status === 'completed' && run.completed_at_ms && run.started_at_ms) {
+          // Completed run: elapsed = (completed_at - started_at - pause_time)
+          elapsedMilliseconds = run.completed_at_ms - run.started_at_ms - pauseMilliseconds;
+        } else if (run.status === 'active' && run.started_at_ms) {
+          // Active run: elapsed = (now - started_at - pause_time - pending_pause_time)
+          elapsedMilliseconds = nowMs - run.started_at_ms - pauseMilliseconds;
+          
+          // If currently paused, subtract pending pause time
+          if (run.pause_start_ms) {
+            const pendingPauseMs = nowMs - run.pause_start_ms;
+            elapsedMilliseconds -= pendingPauseMs;
+          }
+        } else if (run.started_at_ms && run.completed_at_ms) {
+          // Fallback: use completed_at - started_at - pause_time
+          elapsedMilliseconds = run.completed_at_ms - run.started_at_ms - pauseMilliseconds;
+        }
+        
+        // Ensure non-negative
+        elapsedMilliseconds = Math.max(0, elapsedMilliseconds);
+        
+        return {
+          ...run,
+          elapsed_milliseconds: elapsedMilliseconds,
+          elapsed_seconds: Math.floor(elapsedMilliseconds / 1000)
+        };
+      });
     } catch (error) {
       console.error('Error getting all runs:', error);
       throw error;
@@ -6089,6 +6133,7 @@ function registerDatabaseHandlers(dbManager) {
         SELECT 
           *,
           started_at_ms,
+          completed_at_ms,
           pause_milliseconds,
           pause_start_ms,
           pause_end_ms,
@@ -6101,7 +6146,48 @@ function registerDatabaseHandlers(dbManager) {
         LIMIT 1
       `).get(runUuid);
       
-      return run || null;
+      if (!run) {
+        return null;
+      }
+      
+      // Calculate elapsed time
+      const nowMs = Date.now();
+      let elapsedMilliseconds = 0;
+      
+      // Get pause time in milliseconds
+      let pauseMilliseconds = 0;
+      if (run.pause_milliseconds) {
+        pauseMilliseconds = run.pause_milliseconds;
+      } else if (run.pause_seconds) {
+        pauseMilliseconds = run.pause_seconds * 1000;
+      }
+      
+      // Calculate elapsed time based on status
+      if (run.status === 'completed' && run.completed_at_ms && run.started_at_ms) {
+        // Completed run: elapsed = (completed_at - started_at - pause_time)
+        elapsedMilliseconds = run.completed_at_ms - run.started_at_ms - pauseMilliseconds;
+      } else if (run.status === 'active' && run.started_at_ms) {
+        // Active run: elapsed = (now - started_at - pause_time - pending_pause_time)
+        elapsedMilliseconds = nowMs - run.started_at_ms - pauseMilliseconds;
+        
+        // If currently paused, subtract pending pause time
+        if (run.pause_start_ms) {
+          const pendingPauseMs = nowMs - run.pause_start_ms;
+          elapsedMilliseconds -= pendingPauseMs;
+        }
+      } else if (run.started_at_ms && run.completed_at_ms) {
+        // Fallback: use completed_at - started_at - pause_time
+        elapsedMilliseconds = run.completed_at_ms - run.started_at_ms - pauseMilliseconds;
+      }
+      
+      // Ensure non-negative
+      elapsedMilliseconds = Math.max(0, elapsedMilliseconds);
+      
+      return {
+        ...run,
+        elapsed_milliseconds: elapsedMilliseconds,
+        elapsed_seconds: Math.floor(elapsedMilliseconds / 1000)
+      };
     } catch (error) {
       console.error('Error getting run:', error);
       throw error;

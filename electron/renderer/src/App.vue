@@ -7660,14 +7660,14 @@ function isInRun(gameId: string): boolean {
   return runEntries.some(entry => entry.entryType === 'game' && entry.id === gameId);
 }
 
-function addSelectedToRun() {
+async function addSelectedToRun() {
   const selectedGames = items.filter(item => selectedIds.value.has(item.Id));
   
   // Filter out games that are already in the run
   const gamesToAdd = selectedGames.filter(game => !isInRun(game.Id));
   
   if (gamesToAdd.length === 0) {
-    alert('No new games to add. All selected games are already in the run.');
+    await showAlert('No new games to add. All selected games are already in the run.', 'No Games to Add');
     return;
   }
   
@@ -7678,10 +7678,10 @@ function addSelectedToRun() {
   if (newEntryCount > 30) {
     const maxCanAdd = 30 - currentEntryCount;
     if (maxCanAdd <= 0) {
-      alert(`Cannot add games: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`);
+      await showAlert(`Cannot add games: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`, 'Entry Limit Exceeded');
       return;
     } else {
-      alert(`Cannot add ${gamesToAdd.length} games: Run plan has ${currentEntryCount} entries. Only ${maxCanAdd} more can be added (maximum 30 total).`);
+      await showAlert(`Cannot add ${gamesToAdd.length} games: Run plan has ${currentEntryCount} entries. Only ${maxCanAdd} more can be added (maximum 30 total).`, 'Entry Limit Exceeded');
       return;
     }
   }
@@ -7693,10 +7693,10 @@ function addSelectedToRun() {
   if (newCumulativeCount > 100) {
     const maxCanAdd = 100 - currentCumulativeCount;
     if (maxCanAdd <= 0) {
-      alert(`Cannot add games: Run plan already has a cumulative count of ${currentCumulativeCount}, which is the maximum of 100.`);
+      await showAlert(`Cannot add games: Run plan already has a cumulative count of ${currentCumulativeCount}, which is the maximum of 100.`, 'Count Limit Exceeded');
       return;
     } else {
-      alert(`Cannot add ${gamesToAdd.length} games: Run plan has a cumulative count of ${currentCumulativeCount}. Only ${maxCanAdd} more can be added (maximum 100 total).`);
+      await showAlert(`Cannot add ${gamesToAdd.length} games: Run plan has a cumulative count of ${currentCumulativeCount}. Only ${maxCanAdd} more can be added (maximum 100 total).`, 'Count Limit Exceeded');
       return;
     }
   }
@@ -16104,17 +16104,17 @@ function handleAddStageToRun() {
   openGameStagesDialog();
 }
 
-function handleAddStageToRunFromDialog(stage: any) {
+async function handleAddStageToRunFromDialog(stage: any) {
   // Add the selected stage to the run
   if (!selectedItem.value?.Id) {
-    alert('No game selected');
+    await showAlert('No game selected', 'Error');
     return;
   }
   
   // Check if adding this stage would exceed the 30 entry limit
   const currentEntryCount = runEntries.length;
   if (currentEntryCount >= 30) {
-    alert(`Cannot add stage: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`);
+    await showAlert(`Cannot add stage: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`, 'Entry Limit Exceeded');
     return;
   }
   
@@ -17240,7 +17240,7 @@ function toggleStageSelection(key: string, e: Event) {
   else selectedStageIds.value.delete(key);
 }
 
-function addStagesToRun() {
+async function addStagesToRun() {
   const ids = Array.from(selectedStageIds.value.values());
   if (ids.length === 0) return;
   
@@ -17251,10 +17251,10 @@ function addStagesToRun() {
   if (newEntryCount > 30) {
     const maxCanAdd = 30 - currentEntryCount;
     if (maxCanAdd <= 0) {
-      alert(`Cannot add stages: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`);
+      await showAlert(`Cannot add stages: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`, 'Entry Limit Exceeded');
       return;
     } else {
-      alert(`Cannot add ${ids.length} stages: Run plan has ${currentEntryCount} entries. Only ${maxCanAdd} more can be added (maximum 30 total).`);
+      await showAlert(`Cannot add ${ids.length} stages: Run plan has ${currentEntryCount} entries. Only ${maxCanAdd} more can be added (maximum 30 total).`, 'Entry Limit Exceeded');
       return;
     }
   }
@@ -18339,11 +18339,11 @@ async function regenerateSeed() {
       randomFilter.seed = result.seed;
       console.log(`Generated seed: ${result.seed} (${result.gameCount} games)`);
     } else {
-      alert('Failed to generate seed: ' + result.error);
+      await showAlert('Failed to generate seed: ' + result.error, 'Seed Generation Error');
     }
   } catch (error) {
     console.error('Error generating seed:', error);
-    alert('Error generating seed');
+    await showAlert('Error generating seed', 'Seed Generation Error');
   }
 }
 
@@ -18366,7 +18366,7 @@ async function addRandomGameToRun() {
       
       if (result.count < requiredCount) {
         randomMatchCountError.value = `Insufficient games: ${result.count} match filters, but need at least ${requiredCount} (count + 2)`;
-        alert(`Cannot add random game:\n\n${randomMatchCountError.value}\n\nPlease adjust your filters to match more games.`);
+        await showAlert(`${randomMatchCountError.value}\n\nPlease adjust your filters to match more games.`, 'Cannot Add Random Game');
         return;
       }
       
@@ -18384,7 +18384,7 @@ async function addRandomGameToRun() {
     : '';
   
   if (!seed) {
-    alert('Seed is required for random challenges. Please wait for seed generation or enter manually.');
+    await showAlert('Seed is required for random challenges. Please wait for seed generation or enter manually.', 'Seed Required');
     return;
   }
   
@@ -18437,25 +18437,25 @@ async function addRandomStageToRun() {
       
       if (result.count < requiredCount) {
         randomStageMatchCountError.value = `Insufficient stages: ${result.count} match filters, but need at least ${requiredCount} (count + 2)`;
-        alert(`Cannot add random stage:\n\n${randomStageMatchCountError.value}\n\nPlease adjust your filters to match more stages.`);
+        await showAlert(`${randomStageMatchCountError.value}\n\nPlease adjust your filters to match more stages.`, 'Cannot Add Random Stage');
         return;
       }
       
       randomStageMatchCountError.value = '';
     } else {
       // Count failed - don't add entry
-      alert(`Cannot add random stage:\n\nFailed to count matching stages: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to count matching stages: ${result.error || 'Unknown error'}`, 'Cannot Add Random Stage');
       return;
     }
   } catch (error) {
     console.error('Error counting random stage matches:', error);
-    alert(`Cannot add random stage:\n\nError counting matching stages: ${error.message || 'Unknown error'}`);
+    await showAlert(`Error counting matching stages: ${(error as any).message || 'Unknown error'}`, 'Cannot Add Random Stage');
     return;
   }
   
   // Ensure we have a valid match count before proceeding
   if (randomStageMatchCount.value === null || randomStageMatchCount.value === undefined) {
-    alert('Cannot add random stage: Match count is not available. Please try again.');
+    await showAlert('Match count is not available. Please try again.', 'Cannot Add Random Stage');
     return;
   }
   
@@ -18465,7 +18465,7 @@ async function addRandomStageToRun() {
     : '';
   
   if (!seed) {
-    alert('Seed is required for random challenges. Please wait for seed generation or enter manually.');
+    await showAlert('Seed is required for random challenges. Please wait for seed generation or enter manually.', 'Seed Required');
     return;
   }
   
@@ -18507,12 +18507,12 @@ async function stageRun(mode: 'save' | 'upload') {
   const cumulativeCount = getCumulativeCount();
   
   if (entryCount > 30) {
-    alert(`Cannot save run: Run plan contains ${entryCount} entries, but the maximum is 30.`);
+    await showAlert(`Cannot save run: Run plan contains ${entryCount} entries, but the maximum is 30.`, 'Entry Limit Exceeded');
     return;
   }
   
   if (cumulativeCount > 100) {
-    alert(`Cannot save run: Run plan has a cumulative count of ${cumulativeCount}, but the maximum is 100.`);
+    await showAlert(`Cannot save run: Run plan has a cumulative count of ${cumulativeCount}, but the maximum is 100.`, 'Count Limit Exceeded');
     return;
   }
   
@@ -22700,6 +22700,22 @@ html, body, #app {
 }
 .data-table tbody tr:hover { background: var(--bg-hover); }
 .data-table .col-check { width: 36px; text-align: center; }
+.data-table .col-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  cursor: pointer;
+  margin: 0;
+  flex-shrink: 0;
+  transform: scale(1.3);
+  accent-color: var(--accent-primary, #4CAF50);
+}
+.data-table thead .col-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  transform: scale(1.2);
+}
 .data-table .action { width: 40px; text-align: center; font-weight: bold; }
 .data-table .name { font-weight: 600; color: var(--text-primary); }
 .data-table .name.in-run { font-weight: 700; }
@@ -22769,8 +22785,8 @@ button:disabled {
 .modal-toolbar .add-random label { font-size: var(--base-font-size); }
 .modal-toolbar .add-random select { font-size: var(--base-font-size); }
 .modal-toolbar .add-random input { font-size: var(--base-font-size); }
-.modal-toolbar .add-random .count { font-size: var(--base-font-size); width: 3ch; }
-.modal-toolbar .add-random .seed { font-size: var(--base-font-size); width: 11ch; }
+.modal-toolbar .add-random .count { font-size: var(--base-font-size); width: 4ch; }
+.modal-toolbar .add-random .seed { font-size: var(--base-font-size); width: 10ch; }
 .match-count-indicator {
   padding: 6px 12px;
   background-color: var(--bg-tertiary);
@@ -22978,7 +22994,7 @@ button:disabled {
   background-color: rgba(244, 67, 54, 0.2); /* Light red */
 }
 .modal-toolbar .count { width: 80px; padding: 6px 8px; }
-.modal-toolbar .seed { min-width: 160px; padding: 6px 8px; }
+.modal-toolbar .seed { min-width: 80px; padding: 6px 8px; }
 .modal-body { padding: 0; overflow: auto; }
 
 /* Column sizing in modal table */

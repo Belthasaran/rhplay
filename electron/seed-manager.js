@@ -204,7 +204,7 @@ function getSeedMapping(dbManager, mapId) {
  * @returns {Object} {gameid, version, name}
  */
 function selectRandomGame(params) {
-  const { dbManager, seed, challengeIndex, filterType, filterDifficulty, filterPattern, excludeGameids = [] } = params;
+  const { dbManager, seed, challengeIndex, filterType, filterDifficulty, filterPattern, minDifficulty, maxDifficulty, excludeGameids = [] } = params;
   
   // Parse seed
   const { mapId, suffix } = parseSeed(seed);
@@ -249,20 +249,32 @@ function selectRandomGame(params) {
       queryParams.push(filterType, filterType);
     }
     
-    // Apply difficulty filter - exact match on difficulty field
-    if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
-      query += ` AND gv.difficulty = ?`;
-      queryParams.push(filterDifficulty);
-    }
+    // Note: Legacy filterDifficulty is kept for backwards compatibility but ignored if minDifficulty/maxDifficulty are provided
     
     const results = db.prepare(query).all(...queryParams);
     return results;
   });
   
+  // Apply difficulty filter using numeric difficulty mapping
+  let filteredGames = basicFilteredGames;
+  
+  // If minDifficulty or maxDifficulty are provided, use numeric filtering
+  if (minDifficulty !== null && minDifficulty !== undefined || maxDifficulty !== null && maxDifficulty !== undefined) {
+    const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
+    filteredGames = filteredGames.filter(game => 
+      matchesDifficultyFilter(game, minDifficulty, maxDifficulty)
+    );
+  } else if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
+    // Legacy behavior: exact match on difficulty string
+    filteredGames = filteredGames.filter(game => 
+      game.difficulty === filterDifficulty
+    );
+  }
+  
   // Apply advanced pattern filter using shared filter logic
   const finalFilteredGames = filterPattern && filterPattern !== '' 
-    ? basicFilteredGames.filter(game => matchesFilter(game, filterPattern))
-    : basicFilteredGames;
+    ? filteredGames.filter(game => matchesFilter(game, filterPattern))
+    : filteredGames;
   
   if (finalFilteredGames.length === 0) {
     throw new Error('No games match the filter criteria');

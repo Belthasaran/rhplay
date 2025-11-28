@@ -1,0 +1,47 @@
+"Legacy_Type_String","Difficulty_Level"
+"Standard: Easy" , 0 
+"Intermediate Intermediate Kaizo" , 4
+"Test Type" , 0
+"Hard" , 3
+"Standard: Normal" , 2
+"Intermediate Advanced Kaizo" , 4
+"Standard: Hard" , 3
+"Standard: Very Hard" , 4
+"Kaizo: Intermediate" , 4
+"Tool-Assisted: Pit" , 8
+"Tool-Assisted: Kaizo" , 8
+"Kaizo: Expert" , 5
+"Kaizo: Beginner" , 3
+"Misc.: Troll" , 4
+"Standard: Very Hard, Kaizo: Expert" , 5
+"Kaizo: Intermediate, Standard: Very Hard" , 4
+"Standard: Hard, Kaizo: Intermediate" , 4
+"Standard: Hard, Misc.: Troll" ,  4
+"Standard: Hard, Kaizo: Beginner" , 3
+"Standard: Very Hard, Kaizo: Beginner" , 4
+"Standard: Easy, Kaizo: Intermediate" , 4
+"Standard: Hard, Standard: Very Hard" , 4
+"Standard: Normal, Kaizo: Intermediate" , 4
+"Standard: Very Hard, Kaizo: Intermediate" , 4
+"Kaizo: Intermediate, Misc.: Troll" , 4
+"Standard: Normal, Misc.: Troll" , 3
+"Standard: Normal, Misc.: Puzzle" , 4
+"Intermediate Intro Kaizo" , 3
+"Intermediate" , 3
+"Joke" , 2
+"Standard, Kaizo: Advanced (diff_4) (standard, kaizo)" , 4
+"Standard: Casual (diff_2) (standard)" , 2
+"Kaizo: Expert (diff_5) (kaizo)" , 5
+"Kaizo: Advanced (diff_4) (kaizo)" , 4
+"Standard: Advanced (diff_4) (standard)" , 4
+"Standard: Newcomer (diff_1) (standard)" , 1
+"Kaizo: Master (diff_6) (kaizo)" , 6
+"Kaizo, Puzzle, Tool-Assisted: Master (diff_6) (kaizo, puzzle, tool_assisted)" , 8
+"Kaizo, Tool-Assisted: Advanced (diff_4) (kaizo, tool_assisted)" , 8
+"Competition Winner 2024" , 2
+"Standard: Skilled (diff_3) (standard)" , 3
+"Kaizo: Grandmaster (diff_7) (kaizo)" , 7
+"Classic Example - Historical" , 2
+"Tutorial Example - Keep This!" , 2
+
+

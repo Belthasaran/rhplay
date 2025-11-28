@@ -20,6 +20,7 @@ const {
 const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
+const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
 const { matchesFilter } = require('./shared-filter-utils');
 const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
 const sshManager = require('./main/usb2snes/sshManager');
@@ -2033,8 +2034,9 @@ function registerDatabaseHandlers(dbManager) {
              trans_level, stage_filter_min_difficulty, stage_filter_max_difficulty,
              stage_filter_include_flags, stage_filter_exclude_flags,
              stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
-             stage_filter_has_tags, stage_filter_exclude_tags)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             stage_filter_has_tags, stage_filter_exclude_tags,
+             game_filter_min_difficulty, game_filter_max_difficulty)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         entryList.forEach((entry, idx) => {
@@ -2060,7 +2062,9 @@ function registerDatabaseHandlers(dbManager) {
             entry.stageFilterIncludeAnyOfFlags && Array.isArray(entry.stageFilterIncludeAnyOfFlags) ? JSON.stringify(entry.stageFilterIncludeAnyOfFlags) : null,
             entry.stageFilterExcludeOnlyFlags && Array.isArray(entry.stageFilterExcludeOnlyFlags) ? JSON.stringify(entry.stageFilterExcludeOnlyFlags) : null,
             entry.stageFilterHasTags && Array.isArray(entry.stageFilterHasTags) ? JSON.stringify(entry.stageFilterHasTags) : null,
-            entry.stageFilterExcludeTags && Array.isArray(entry.stageFilterExcludeTags) ? JSON.stringify(entry.stageFilterExcludeTags) : null
+            entry.stageFilterExcludeTags && Array.isArray(entry.stageFilterExcludeTags) ? JSON.stringify(entry.stageFilterExcludeTags) : null,
+            entry.gameFilterMinDifficulty !== undefined ? entry.gameFilterMinDifficulty : null,
+            entry.gameFilterMaxDifficulty !== undefined ? entry.gameFilterMaxDifficulty : null
           );
         });
       });
@@ -2805,11 +2809,11 @@ function registerDatabaseHandlers(dbManager) {
    * Count games matching random filter criteria
    * Channel: db:count-random-matches
    */
-  ipcMain.handle('db:count-random-matches', async (event, { filterType, filterDifficulty, filterPattern }) => {
+  ipcMain.handle('db:count-random-matches', async (event, { filterType, filterDifficulty, filterPattern, minDifficulty, maxDifficulty }) => {
     try {
       const db = dbManager.getConnection('rhdata');
       
-      // First get all games with basic filters (type and difficulty)
+      // First get all games with basic filters (type only, difficulty filtering happens after)
       let query = `
         SELECT gv.gameid, gv.version, gv.name, gv.combinedtype, gv.difficulty, gv.gametype, gv.legacy_type, gv.author, gv.length, gv.description, gv.demo, gv.featured, gv.obsoleted, gv.removed, gv.moderated, gvs.rating_value
         FROM gameversions gv
@@ -2824,18 +2828,30 @@ function registerDatabaseHandlers(dbManager) {
         queryParams.push(filterType, filterType);
       }
       
-      // Apply difficulty filter
-      if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
-        query += ` AND gv.difficulty = ?`;
-        queryParams.push(filterDifficulty);
-      }
+      // Note: Legacy filterDifficulty is kept for backwards compatibility but ignored if minDifficulty/maxDifficulty are provided
+      // If only filterDifficulty is provided (old behavior), we'll handle it below
       
       const games = db.prepare(query).all(...queryParams);
       
+      // Apply difficulty filter using numeric difficulty mapping
+      let filteredGames = games;
+      
+      // If minDifficulty or maxDifficulty are provided, use numeric filtering
+      if (minDifficulty !== null && minDifficulty !== undefined || maxDifficulty !== null && maxDifficulty !== undefined) {
+        filteredGames = filteredGames.filter(game => 
+          matchesDifficultyFilter(game, minDifficulty, maxDifficulty)
+        );
+      } else if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
+        // Legacy behavior: exact match on difficulty string
+        filteredGames = filteredGames.filter(game => 
+          game.difficulty === filterDifficulty
+        );
+      }
+      
       // Apply advanced pattern filter using shared filter logic
-      const filteredGames = filterPattern && filterPattern !== '' 
-        ? games.filter(game => matchesFilter(game, filterPattern))
-        : games;
+      if (filterPattern && filterPattern !== '') {
+        filteredGames = filteredGames.filter(game => matchesFilter(game, filterPattern));
+      }
       
       return { success: true, count: filteredGames.length };
     } catch (error) {
@@ -2852,6 +2868,8 @@ function registerDatabaseHandlers(dbManager) {
     filterType, 
     filterDifficulty, 
     filterPattern,
+    minDifficulty,
+    maxDifficulty,
     stageMinDifficulty,
     stageMaxDifficulty,
     stageIncludeFlags,
@@ -2884,18 +2902,29 @@ function registerDatabaseHandlers(dbManager) {
         gameQueryParams.push(filterType, filterType);
       }
       
-      // Apply difficulty filter
-      if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
-        gameQuery += ` AND gv.difficulty = ?`;
-        gameQueryParams.push(filterDifficulty);
-      }
+      // Note: Legacy filterDifficulty is kept for backwards compatibility but ignored if minDifficulty/maxDifficulty are provided
       
       const games = rhdataDb.prepare(gameQuery).all(...gameQueryParams);
       
+      // Apply difficulty filter using numeric difficulty mapping
+      let filteredGames = games;
+      
+      // If minDifficulty or maxDifficulty are provided, use numeric filtering
+      if (minDifficulty !== null && minDifficulty !== undefined || maxDifficulty !== null && maxDifficulty !== undefined) {
+        filteredGames = filteredGames.filter(game => 
+          matchesDifficultyFilter(game, minDifficulty, maxDifficulty)
+        );
+      } else if (filterDifficulty && filterDifficulty !== '' && filterDifficulty !== 'any') {
+        // Legacy behavior: exact match on difficulty string
+        filteredGames = filteredGames.filter(game => 
+          game.difficulty === filterDifficulty
+        );
+      }
+      
       // Apply advanced pattern filter using shared filter logic
-      const filteredGames = filterPattern && filterPattern !== '' 
-        ? games.filter(game => matchesFilter(game, filterPattern))
-        : games;
+      if (filterPattern && filterPattern !== '') {
+        filteredGames = filteredGames.filter(game => matchesFilter(game, filterPattern));
+      }
       
       if (filteredGames.length === 0) {
         return { success: true, count: 0 };
@@ -3176,13 +3205,28 @@ function registerDatabaseHandlers(dbManager) {
             } else if (isRandomGame) {
               // Select random game and REVEAL it immediately (for staging)
               try {
+                // Parse game filter difficulty from plan entry
+                // For backwards compatibility, if game_filter_min_difficulty/game_filter_max_difficulty exist, use those
+                // Otherwise, fall back to filter_difficulty for exact match
+                let gameMinDifficulty = null;
+                let gameMaxDifficulty = null;
+                
+                if (planEntry.game_filter_min_difficulty !== null && planEntry.game_filter_min_difficulty !== undefined) {
+                  gameMinDifficulty = planEntry.game_filter_min_difficulty;
+                }
+                if (planEntry.game_filter_max_difficulty !== null && planEntry.game_filter_max_difficulty !== undefined) {
+                  gameMaxDifficulty = planEntry.game_filter_max_difficulty;
+                }
+                
                 const selectedGame = seedManager.selectRandomGame({
                   dbManager,
                   seed: planEntry.filter_seed,
                   challengeIndex: resultSequence,
                   filterType: planEntry.filter_type,
-                  filterDifficulty: planEntry.filter_difficulty,
+                  filterDifficulty: planEntry.filter_difficulty, // Legacy, kept for backwards compatibility
                   filterPattern: planEntry.filter_pattern,
+                  minDifficulty: gameMinDifficulty,
+                  maxDifficulty: gameMaxDifficulty,
                   excludeGameids: usedGameids
                 });
                 
@@ -4736,13 +4780,37 @@ function registerDatabaseHandlers(dbManager) {
       `).all(runUuid).map(r => r.gameid);
       
       // Select random game
+      // Parse game filter difficulty from plan entry
+      // For backwards compatibility, if game_filter_min_difficulty/game_filter_max_difficulty exist, use those
+      // Otherwise, fall back to filter_difficulty for exact match
+      let gameMinDifficulty = null;
+      let gameMaxDifficulty = null;
+      
+      // Get plan entry to check for game filter values
+      const planEntry = db.prepare(`
+        SELECT game_filter_min_difficulty, game_filter_max_difficulty, filter_difficulty
+        FROM run_plan_entries
+        WHERE run_uuid = ? AND sequence_number = ?
+      `).get(runUuid, result.sequence_number);
+      
+      if (planEntry) {
+        if (planEntry.game_filter_min_difficulty !== null && planEntry.game_filter_min_difficulty !== undefined) {
+          gameMinDifficulty = planEntry.game_filter_min_difficulty;
+        }
+        if (planEntry.game_filter_max_difficulty !== null && planEntry.game_filter_max_difficulty !== undefined) {
+          gameMaxDifficulty = planEntry.game_filter_max_difficulty;
+        }
+      }
+      
       const selected = seedManager.selectRandomGame({
         dbManager,
         seed: result.filter_seed,
         challengeIndex: result.sequence_number,
         filterType: result.filter_type,
-        filterDifficulty: result.filter_difficulty,
+        filterDifficulty: result.filter_difficulty, // Legacy, kept for backwards compatibility
         filterPattern: result.filter_pattern,
+        minDifficulty: gameMinDifficulty,
+        maxDifficulty: gameMaxDifficulty,
         excludeGameids: usedGames
       });
       

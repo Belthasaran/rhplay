@@ -1050,6 +1050,24 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_049_run_plan_entries_game_filters',
+      description: 'Add game filter columns to run_plan_entries table for numeric difficulty filtering',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/049_clientdata_run_plan_entries_game_filters.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'run_plan_entries')) {
+            return true; // Table doesn't exist, skip
+          }
+          // Check if game filter columns exist
+          return columnExists(db, 'run_plan_entries', 'game_filter_min_difficulty')
+            && columnExists(db, 'run_plan_entries', 'game_filter_max_difficulty');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   patchbin: [
     {

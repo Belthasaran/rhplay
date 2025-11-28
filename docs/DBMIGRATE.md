@@ -1,3 +1,23 @@
+- 2025-01-XX — Run Plan Entries Game Filters
+  - Purpose: Add game filter columns to run_plan_entries table for numeric difficulty filtering
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_049_run_plan_entries_game_filters`
+    - SQL: `electron/sql/migrations/049_clientdata_run_plan_entries_game_filters.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `run_plan_entries` table gains `game_filter_min_difficulty` and `game_filter_max_difficulty` columns
+    - Columns are NULL for non-random_game entries
+    - No data loss; existing entries remain unchanged
+  - Notes:
+    - Difficulty levels map to numbers: Newcomer=0, Casual=1, Intermediate=2, Skilled/Advanced/Hard=3, Expert=4, Master=5, Grandmaster=6, Grandmaster Plus=7, Tool-Assisted=8
+    - Games with unknown difficulty default to Intermediate (2), unless difficulty can be imputed from legacy_type
+    - Legacy_type strings are mapped using DIFFICULTY_MAPPINGS.csv
+
 - 2025-01-XX — Run Plan Entries Stage Tag Filters
   - Purpose: Add stage tag filter columns to run_plan_entries table for filtering random stages by stagetags
   - Command:

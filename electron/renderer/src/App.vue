@@ -1187,21 +1187,6 @@
         </div>
         <div class="right add-random">
           <label>
-            Filter Type
-            <select v-model="randomFilter.type">
-              <option value="any">Any</option>
-              <option v-for="type in randomFilterValues.types" :key="type" :value="type">{{ type }}</option>
-            </select>
-          </label>
-          <label>
-            Difficulty
-            <select v-model="randomFilter.difficulty">
-              <option value="any">Any</option>
-              <option v-for="diff in randomFilterValues.difficulties" :key="diff" :value="diff">{{ diff }}</option>
-            </select>
-          </label>
-          <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="Advanced filter (try: rating:>3, -demo:Yes, author:Panga)" />
-          <label>
             Count
             <input class="count" v-model.number="randomFilter.count" type="number" min="1" max="100" />
           </label>
@@ -1210,6 +1195,44 @@
             <input class="seed" v-model="randomFilter.seed" type="text" placeholder="Auto-generated" />
           </label>
           <button @click="regenerateSeed" title="Generate new random seed">🎲</button>
+          <div class="game-limits-wrapper">
+            <button @click="toggleGameLimitsDropdown($event)" class="btn-game-limits" :class="{ 'active': gameLimitsDropdownOpen }">
+              Game Limits ▼
+            </button>
+            <div v-if="gameLimitsDropdownOpen" class="game-limits-dropdown" :style="gameLimitsDropdownStyle" @click.stop ref="gameLimitsDropdownRef">
+              <div class="game-limits-columns">
+                <div class="game-limits-left-column">
+                  <div class="game-limits-section">
+                    <label>
+                      Filter Type
+                      <select v-model="randomFilter.type">
+                        <option value="any">Any</option>
+                        <option v-for="type in randomFilterValues.types" :key="type" :value="type">{{ type }}</option>
+                      </select>
+                    </label>
+                    <label>
+                      Min Difficulty (0-8)
+                      <select v-model="gameFilter.minDifficulty">
+                        <option :value="null">(any)</option>
+                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="d" :value="d">{{ getGameDifficultyLabel(d) }}</option>
+                      </select>
+                    </label>
+                    <label>
+                      Max Difficulty (0-8)
+                      <select v-model="gameFilter.maxDifficulty">
+                        <option :value="null">(any)</option>
+                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="d" :value="d">{{ getGameDifficultyLabel(d) }}</option>
+                      </select>
+                    </label>
+                    <label>
+                      Advanced Filter
+                      <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="rating:>3, -demo:Yes, author:Panga" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Game</button>
           <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stage</button>
           <div class="stage-limits-wrapper">
@@ -17246,9 +17269,12 @@ type RunEntry = {
   stageName?: string;
   transLevel?: string;  // Translevel (13BF value) for stage entries
   count: number;
-  filterDifficulty?: '' | 'beginner' | 'intermediate' | 'expert';
+  filterDifficulty?: '' | 'beginner' | 'intermediate' | 'expert';  // Legacy, kept for backwards compatibility
   filterType?: '' | 'standard' | 'kaizo' | 'traditional';
   filterPattern?: string;
+  // Game-specific filters (for random_game entries)
+  gameFilterMinDifficulty?: number | null;  // 0-8, null = no filter
+  gameFilterMaxDifficulty?: number | null;  // 0-8, null = no filter
   // Stage-specific filters (for random_stage entries)
   stageFilterMinDifficulty?: number | null;  // 1-7, null = no filter
   stageFilterMaxDifficulty?: number | null;  // 1-7, null = no filter
@@ -17960,6 +17986,16 @@ const stageLimitsDropdownOpen = ref(false);
 const stageLimitsDropdownStyle = ref({ top: '0px', left: '0px' });
 const stageLimitsDropdownRef = ref<HTMLElement | null>(null);
 
+const gameLimitsDropdownOpen = ref(false);
+const gameLimitsDropdownStyle = ref({ top: '0px', left: '0px' });
+const gameLimitsDropdownRef = ref<HTMLElement | null>(null);
+
+// Game filter configuration
+const gameFilter = reactive({
+  minDifficulty: null as number | null,
+  maxDifficulty: null as number | null
+});
+
 // Tag input fields (comma-separated strings)
 const stageFilterHasTagsInput = ref('');
 const stageFilterExcludeTagsInput = ref('');
@@ -18044,13 +18080,50 @@ function toggleStageLimitsDropdown(event?: Event) {
   }
 }
 
+function toggleGameLimitsDropdown(event?: Event) {
+  const wasOpen = gameLimitsDropdownOpen.value;
+  gameLimitsDropdownOpen.value = !wasOpen;
+  
+  if (!wasOpen && event) {
+    // Calculate position when opening
+    nextTick(() => {
+      const button = event.currentTarget as HTMLElement;
+      if (button) {
+        const rect = button.getBoundingClientRect();
+        // Position dropdown to the left of the button, 500px to the left
+        gameLimitsDropdownStyle.value = {
+          top: `${rect.bottom + 4}px`,
+          left: `${rect.left - 500}px`
+        };
+      }
+    });
+  }
+}
+
+// Game difficulty label mapping (for game filtering)
+function getGameDifficultyLabel(level: number): string {
+  const labels: { [key: number]: string } = {
+    0: 'Newcomer',
+    1: 'Casual',
+    2: 'Intermediate',
+    3: 'Skilled/Advanced/Hard',
+    4: 'Expert',
+    5: 'Master',
+    6: 'Grandmaster',
+    7: 'Grandmaster Plus',
+    8: 'Tool-Assisted'
+  };
+  return labels[level] || `Level ${level}`;
+}
+
 // Watch for random filter changes to update match counts (always count both games and stages)
 // Use object watch to properly detect array changes
 watch(() => ({
   type: randomFilter.type,
-  difficulty: randomFilter.difficulty,
   pattern: randomFilter.pattern,
   count: randomFilter.count,
+  gameMinDifficulty: gameFilter.minDifficulty,
+  gameMaxDifficulty: gameFilter.maxDifficulty,
   stageMinDifficulty: stageFilter.minDifficulty,
   stageMaxDifficulty: stageFilter.maxDifficulty,
   stageIncludeFlags: stageFilter.includeFlags?.slice(),  // Create copy for reactivity
@@ -18064,8 +18137,10 @@ watch(() => ({
   try {
     const gameResult = await (window as any).electronAPI.countRandomMatches({
         filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
-        filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
-        filterPattern: randomFilter.pattern || ''
+        filterDifficulty: '', // Legacy field, kept for compatibility but not used when min/max are provided
+        filterPattern: randomFilter.pattern || '',
+        minDifficulty: gameFilter.minDifficulty,
+        maxDifficulty: gameFilter.maxDifficulty
       });
       
     if (gameResult.success) {
@@ -18089,8 +18164,10 @@ watch(() => ({
     // Serialize arrays to plain arrays for IPC
     const stageResult = await (window as any).electronAPI.countRandomStageMatches({
       filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
-      filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
+      filterDifficulty: '', // Legacy field, kept for compatibility but not used when min/max are provided
       filterPattern: randomFilter.pattern || '',
+      minDifficulty: gameFilter.minDifficulty,
+      maxDifficulty: gameFilter.maxDifficulty,
       stageMinDifficulty: stageFilter.minDifficulty,
       stageMaxDifficulty: stageFilter.maxDifficulty,
       stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
@@ -18173,8 +18250,10 @@ async function addRandomGameToRun() {
   try {
     const result = await (window as any).electronAPI.countRandomMatches({
       filterType: randomFilter.type === 'any' ? '' : randomFilter.type,
-      filterDifficulty: randomFilter.difficulty === 'any' ? '' : randomFilter.difficulty,
-      filterPattern: randomFilter.pattern || ''
+      filterDifficulty: '', // Legacy field, kept for compatibility but not used when min/max are provided
+      filterPattern: randomFilter.pattern || '',
+      minDifficulty: gameFilter.minDifficulty,
+      maxDifficulty: gameFilter.maxDifficulty
     });
     
     if (result.success) {
@@ -18213,9 +18292,11 @@ async function addRandomGameToRun() {
     stageNumber: '',
     stageName: '',
     count: (randomFilter.count as number) || 1,
-    filterDifficulty: randomFilter.difficulty === 'any' ? '' : (randomFilter.difficulty as any),
+    filterDifficulty: '', // Legacy field, kept for backwards compatibility
     filterType: randomFilter.type === 'any' ? '' : (randomFilter.type as any),
     filterPattern: randomFilter.pattern || '',
+    gameFilterMinDifficulty: gameFilter.minDifficulty,
+    gameFilterMaxDifficulty: gameFilter.maxDifficulty,
     seed,
     matchCount: randomMatchCount.value,  // Store the match count for display
     isLocked: false,  // Can change between random_game and random_stage
@@ -18807,6 +18888,8 @@ async function loadRestoreRun() {
       filterDifficulty: entry.filter_difficulty || '',
       filterType: entry.filter_type || '',
       filterPattern: entry.filter_pattern || '',
+      gameFilterMinDifficulty: entry.game_filter_min_difficulty !== null && entry.game_filter_min_difficulty !== undefined ? entry.game_filter_min_difficulty : null,
+      gameFilterMaxDifficulty: entry.game_filter_max_difficulty !== null && entry.game_filter_max_difficulty !== undefined ? entry.game_filter_max_difficulty : null,
       stageFilterMinDifficulty: entry.stage_filter_min_difficulty,
       stageFilterMaxDifficulty: entry.stage_filter_max_difficulty,
       stageFilterIncludeFlags: entry.stage_filter_include_flags ? JSON.parse(entry.stage_filter_include_flags) : [],
@@ -22564,7 +22647,12 @@ button:disabled {
 .modal-toolbar .add-random { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .modal-toolbar .add-random > * { flex: 0 0 auto; }
 .modal-toolbar label { display: inline-flex; align-items: center; gap: 6px; }
-.modal-toolbar .pattern { min-width: 220px; padding: 6px 8px; }
+.modal-toolbar .pattern { min-width: 220px; padding: 6px 8px; font-size: var(--base-font-size); }
+.modal-toolbar .add-random label { font-size: var(--base-font-size); }
+.modal-toolbar .add-random select { font-size: var(--base-font-size); }
+.modal-toolbar .add-random input { font-size: var(--base-font-size); }
+.modal-toolbar .add-random .count { font-size: var(--base-font-size); }
+.modal-toolbar .add-random .seed { font-size: var(--base-font-size); }
 .match-count-indicator {
   padding: 6px 12px;
   background-color: var(--bg-tertiary);
@@ -22597,6 +22685,78 @@ button:disabled {
 }
 .btn-stage-limits:hover {
   background-color: var(--bg-tertiary);
+}
+.game-limits-wrapper {
+  position: relative;
+  display: inline-block;
+  overflow: visible;
+}
+.btn-game-limits {
+  padding: var(--button-padding);
+  background-color: var(--button-bg);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  font-size: var(--base-font-size);
+  color: var(--button-text);
+  cursor: pointer;
+}
+.btn-game-limits:hover {
+  background-color: var(--bg-tertiary);
+}
+.btn-game-limits.active {
+  background-color: var(--bg-hover);
+}
+.game-limits-dropdown {
+  position: fixed;
+  margin-top: 4px;
+  padding: 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 50000;
+  min-width: 400px;
+  max-width: 600px;
+}
+.game-limits-columns {
+  display: flex;
+  gap: 20px;
+}
+.game-limits-left-column {
+  flex: 1;
+  min-width: 0;
+}
+.game-limits-section {
+  margin-bottom: 12px;
+}
+.game-limits-section:last-child {
+  margin-bottom: 0;
+}
+.game-limits-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: var(--base-font-size);
+  color: var(--text-primary);
+}
+.game-limits-section select {
+  width: 100%;
+  padding: 4px 8px;
+  margin-top: 4px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: var(--base-font-size);
+}
+.game-limits-section input {
+  width: 100%;
+  padding: 4px 8px;
+  margin-top: 4px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: var(--base-font-size);
 }
 .btn-stage-limits.active {
   background-color: var(--bg-hover);

@@ -1,3 +1,19 @@
+- 2025-01-XX: clientdata - Run Plan Entries Game Filters
+  - Description: Add game filter columns to run_plan_entries table for numeric difficulty filtering
+  - Rationale: Allow users to filter random game selection by numeric difficulty range (min/max) instead of exact string match
+  - Tables/columns:
+    - `run_plan_entries`:
+      - `game_filter_min_difficulty INTEGER` - Minimum difficulty level (0-8) or NULL
+      - `game_filter_max_difficulty INTEGER` - Maximum difficulty level (0-8) or NULL
+  - Migration: `clientdata_049_run_plan_entries_game_filters` via `jsutils/migratedb.js`
+  - Notes:
+    - These columns are NULL for non-random_game entries
+    - Difficulty levels map to numbers: Newcomer=0, Casual=1, Intermediate=2, Skilled/Advanced/Hard=3, Expert=4, Master=5, Grandmaster=6, Grandmaster Plus=7, Tool-Assisted=8
+    - If maxDifficulty is specified, minDifficulty acts as the minimum of the range
+    - If maxDifficulty is not specified, minDifficulty acts as exact difficulty match
+    - Games with unknown difficulty default to Intermediate (2), unless difficulty can be imputed from legacy_type
+    - Legacy_type strings are mapped to numeric difficulty using mappings from DIFFICULTY_MAPPINGS.csv
+
 - 2025-01-XX: clientdata - Run Plan Entries Stage Tag Filters
   - Description: Add stage tag filter columns to run_plan_entries table for filtering random stages by stagetags
   - Rationale: Allow users to filter random stage selection based on comma-separated tags stored in the gamestages.stagetags column

@@ -557,6 +557,15 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'rhdata_050_game_difficulty_map',
+      description: 'Create game_difficulty_map table for mapping difficulty strings and legacy_type strings to numeric difficulty levels',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/050_rhdata_game_difficulty_map.sql'),
+      skipIf(db) {
+        return tableExists(db, 'game_difficulty_map');
+      },
+    },
   ],
   clientdata: [
     {
@@ -1063,6 +1072,24 @@ const MIGRATIONS = {
           // Check if game filter columns exist
           return columnExists(db, 'run_plan_entries', 'game_filter_min_difficulty')
             && columnExists(db, 'run_plan_entries', 'game_filter_max_difficulty');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
+    {
+      id: 'clientdata_050_run_plan_entries_stage_filter_flags_extended',
+      description: 'Add extended stage filter flag columns (include_any_of_flags, exclude_only_flags) to run_plan_entries table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/050_clientdata_run_plan_entries_stage_filter_flags_extended.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'run_plan_entries')) {
+            return true; // Table doesn't exist, skip
+          }
+          // Check if extended flag filter columns exist
+          return columnExists(db, 'run_plan_entries', 'stage_filter_include_any_of_flags')
+            && columnExists(db, 'run_plan_entries', 'stage_filter_exclude_only_flags');
         } catch (e) {
           return false; // Error checking, run migration
         }

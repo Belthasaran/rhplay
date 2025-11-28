@@ -1,3 +1,39 @@
+- 2025-01-XX: rhdata - Game Difficulty Map Table
+  - Description: Create game_difficulty_map table for mapping difficulty strings and legacy_type strings to numeric difficulty levels
+  - Rationale: Centralize difficulty mapping logic in database for filtering games by numeric difficulty ranges in random game selection
+  - Tables/columns:
+    - `game_difficulty_map` (new table):
+      - `map_id INTEGER PRIMARY KEY AUTOINCREMENT` - Unique identifier
+      - `map_type TEXT NOT NULL CHECK(map_type IN ('difficulty', 'legacytype'))` - Type of mapping (difficulty attribute or legacy_type)
+      - `map_string TEXT NOT NULL` - The string value to map (difficulty string or legacy_type string)
+      - `difficulty_number INTEGER NOT NULL CHECK(difficulty_number >= 0 AND difficulty_number <= 10)` - Numeric difficulty level (0-10, currently 0-8 used)
+      - `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - Creation timestamp
+      - `UNIQUE(map_type, map_string)` - Ensures no duplicate strings within each type
+  - Migration: `rhdata_050_game_difficulty_map` via `jsutils/migratedb.js`
+  - Notes:
+    - Prepopulated with mappings from `electron/utils/difficulty-mapper.js`
+    - Difficulty strings: Maps game difficulty attribute values (e.g., "Newcomer", "Casual", "Intermediate") to numbers 0-8
+    - Legacytype strings: Maps game legacy_type values (e.g., "Standard: Easy", "Kaizo: Intermediate") to numbers 0-8
+    - Unique constraint on (map_type, map_string) ensures no duplicate difficulty strings and no duplicate legacytype strings
+    - Multiple strings can map to the same difficulty number
+    - Supports case-sensitive and case-insensitive variants (e.g., "Newcomer" and "newcomer" both map to 0)
+    - Indexes created for efficient lookups by (map_type, map_string) and by difficulty_number
+
+- 2025-01-XX: clientdata - Run Plan Entries Extended Stage Filter Flags
+  - Description: Add extended stage filter flag columns (include_any_of_flags, exclude_only_flags) to run_plan_entries table
+  - Rationale: Support additional flag filtering options for random stage selection (IncludeAnyOf and ExcludeOnly filters)
+  - Tables/columns:
+    - `run_plan_entries`:
+      - `stage_filter_include_any_of_flags TEXT` - JSON array of flag codes that stage must have at least ONE of (e.g., '["M","K"]')
+      - `stage_filter_exclude_only_flags TEXT` - JSON array of flag codes that stage must NOT have ALL of (e.g., '["Se"]')
+  - Migration: `clientdata_050_run_plan_entries_stage_filter_flags_extended` via `jsutils/migratedb.js`
+  - Notes:
+    - These columns are NULL for non-random_stage entries
+    - Complements existing flag filters: stage_filter_include_flags (MustInclude) and stage_filter_exclude_flags (Exclude)
+    - IncludeAnyOf: Stage must have at least ONE of the specified flags
+    - ExcludeOnly: Stage with ALL of the specified flags is excluded
+    - Flag codes: 'M' (mainexit), 'K' (keyhole), 'W' (water), 'G' (ghosthouse), 'S' (switchpalace), 'Ca' (castle), 'Bo' (boss)
+
 - 2025-01-XX: clientdata - Run Plan Entries Game Filters
   - Description: Add game filter columns to run_plan_entries table for numeric difficulty filtering
   - Rationale: Allow users to filter random game selection by numeric difficulty range (min/max) instead of exact string match

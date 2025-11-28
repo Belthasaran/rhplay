@@ -1,3 +1,48 @@
+- 2025-01-XX — Game Difficulty Map Table (rhdata)
+  - Purpose: Create game_difficulty_map table for mapping difficulty strings and legacy_type strings to numeric difficulty levels
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_050_game_difficulty_map`
+    - SQL: `electron/sql/migrations/050_rhdata_game_difficulty_map.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `game_difficulty_map` table created in rhdata database
+    - Table populated with difficulty string mappings (23 entries)
+    - Table populated with legacytype string mappings (42 entries)
+    - Unique constraint ensures no duplicate difficulty strings and no duplicate legacytype strings
+    - Indexes created for efficient lookups
+  - Notes:
+    - Mappings are pre-populated from `electron/utils/difficulty-mapper.js`
+    - Difficulty numbers range from 0-10, currently only 0-8 are used
+    - Multiple strings can map to the same difficulty number
+    - Safe to run multiple times; script skips applied migrations
+
+- 2025-01-XX — Run Plan Entries Extended Stage Filter Flags
+  - Purpose: Add extended stage filter flag columns (include_any_of_flags, exclude_only_flags) to run_plan_entries table
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_050_run_plan_entries_stage_filter_flags_extended`
+    - SQL: `electron/sql/migrations/050_clientdata_run_plan_entries_stage_filter_flags_extended.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `run_plan_entries` table gains `stage_filter_include_any_of_flags` and `stage_filter_exclude_only_flags` columns
+    - Columns are NULL for non-random_stage entries
+    - No data loss; existing entries remain unchanged
+  - Notes:
+    - Complements existing flag filters: stage_filter_include_flags (MustInclude) and stage_filter_exclude_flags (Exclude)
+    - IncludeAnyOf: Stage must have at least ONE of the specified flags
+    - ExcludeOnly: Stage with ALL of the specified flags is excluded
+    - Flag codes: 'M' (mainexit), 'K' (keyhole), 'W' (water), 'G' (ghosthouse), 'S' (switchpalace), 'Ca' (castle), 'Bo' (boss)
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX — Run Plan Entries Game Filters
   - Purpose: Add game filter columns to run_plan_entries table for numeric difficulty filtering
   - Command:

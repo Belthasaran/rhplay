@@ -1192,7 +1192,7 @@
           </label>
           <label>
             Seed
-            <input class="seed" v-model="randomFilter.seed" type="text" placeholder="Auto-generated" />
+            <input class="seed" maxlength="11" v-model="randomFilter.seed" type="text" placeholder="Auto-generated" />
           </label>
           <button @click="regenerateSeed" title="Generate new random seed">🎲</button>
           <div class="game-limits-wrapper">
@@ -1233,7 +1233,7 @@
               </div>
             </div>
           </div>
-          <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Game</button>
+          <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Games</button>
           <div class="stage-limits-wrapper">
             <button @click="toggleStageLimitsDropdown($event)" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
               Stage Limits ▼
@@ -1331,7 +1331,7 @@
             </div>
             </div>
           </div>
-          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stage</button>
+          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stages</button>
           <span class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
             <span v-if="randomMatchCount !== null">{{ randomMatchCount }}</span>
             <span v-else>...</span> games
@@ -1427,7 +1427,7 @@
                   <input 
                     type="number" 
                     min="1" 
-                    :max="isRandomEntry(entry) && entry.matchCount ? entry.matchCount - 2 : undefined"
+                    :max="isRandomEntry(entry) && entry.matchCount ? Math.min(100,entry.matchCount - 2) : undefined"
                     v-model.number="entry.count" 
                     :disabled="isRunActive" 
                     :title="isRandomEntry(entry) && entry.matchCount ? `Max: ${entry.matchCount - 2} (${entry.matchCount} matches - 2)` : ''"

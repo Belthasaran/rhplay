@@ -1203,31 +1203,31 @@
               <div class="game-limits-columns">
                 <div class="game-limits-left-column">
                   <div class="game-limits-section">
-                    <label>
-                      Filter Type
-                      <select v-model="randomFilter.type">
-                        <option value="any">Any</option>
-                        <option v-for="type in randomFilterValues.types" :key="type" :value="type">{{ type }}</option>
-                      </select>
-                    </label>
-                    <label>
+          <label>
+            Filter Type
+            <select v-model="randomFilter.type">
+              <option value="any">Any</option>
+              <option v-for="type in randomFilterValues.types" :key="type" :value="type">{{ type }}</option>
+            </select>
+          </label>
+          <label>
                       Min Difficulty (0-8)
                       <select v-model="gameFilter.minDifficulty">
                         <option :value="null">(any)</option>
                         <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="d" :value="d">{{ getGameDifficultyLabel(d) }}</option>
-                      </select>
-                    </label>
-                    <label>
+            </select>
+          </label>
+          <label>
                       Max Difficulty (0-8)
                       <select v-model="gameFilter.maxDifficulty">
                         <option :value="null">(any)</option>
                         <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7, 8]" :key="d" :value="d">{{ getGameDifficultyLabel(d) }}</option>
                       </select>
-                    </label>
-                    <label>
+          </label>
+          <label>
                       Advanced Filter
                       <input class="pattern" v-model="randomFilter.pattern" type="text" placeholder="rating:>3, -demo:Yes, author:Panga" />
-                    </label>
+          </label>
                   </div>
                 </div>
               </div>
@@ -7662,12 +7662,48 @@ function isInRun(gameId: string): boolean {
 
 function addSelectedToRun() {
   const selectedGames = items.filter(item => selectedIds.value.has(item.Id));
+  
+  // Filter out games that are already in the run
+  const gamesToAdd = selectedGames.filter(game => !isInRun(game.Id));
+  
+  if (gamesToAdd.length === 0) {
+    alert('No new games to add. All selected games are already in the run.');
+    return;
+  }
+  
+  // Check if adding these games would exceed the 30 entry limit
+  const currentEntryCount = runEntries.length;
+  const newEntryCount = currentEntryCount + gamesToAdd.length;
+  
+  if (newEntryCount > 30) {
+    const maxCanAdd = 30 - currentEntryCount;
+    if (maxCanAdd <= 0) {
+      alert(`Cannot add games: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`);
+      return;
+    } else {
+      alert(`Cannot add ${gamesToAdd.length} games: Run plan has ${currentEntryCount} entries. Only ${maxCanAdd} more can be added (maximum 30 total).`);
+      return;
+    }
+  }
+  
+  // Check cumulative count limit (each game counts as 1)
+  const currentCumulativeCount = getCumulativeCount();
+  const newCumulativeCount = currentCumulativeCount + gamesToAdd.length;
+  
+  if (newCumulativeCount > 100) {
+    const maxCanAdd = 100 - currentCumulativeCount;
+    if (maxCanAdd <= 0) {
+      alert(`Cannot add games: Run plan already has a cumulative count of ${currentCumulativeCount}, which is the maximum of 100.`);
+      return;
+    } else {
+      alert(`Cannot add ${gamesToAdd.length} games: Run plan has a cumulative count of ${currentCumulativeCount}. Only ${maxCanAdd} more can be added (maximum 100 total).`);
+      return;
+    }
+  }
+  
   let addedCount = 0;
   
-  for (const game of selectedGames) {
-    // Skip if already in run
-    if (isInRun(game.Id)) continue;
-    
+  for (const game of gamesToAdd) {
     const key = `game-${game.Id}-${Date.now()}-${addedCount}`;
     runEntries.push({
       key,
@@ -16075,6 +16111,13 @@ function handleAddStageToRunFromDialog(stage: any) {
     return;
   }
   
+  // Check if adding this stage would exceed the 30 entry limit
+  const currentEntryCount = runEntries.length;
+  if (currentEntryCount >= 30) {
+    alert(`Cannot add stage: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`);
+    return;
+  }
+  
   const key = `stage-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   runEntries.push({
     key,
@@ -17201,6 +17244,21 @@ function addStagesToRun() {
   const ids = Array.from(selectedStageIds.value.values());
   if (ids.length === 0) return;
   
+  // Check if adding these stages would exceed the 30 entry limit
+  const currentEntryCount = runEntries.length;
+  const newEntryCount = currentEntryCount + ids.length;
+  
+  if (newEntryCount > 30) {
+    const maxCanAdd = 30 - currentEntryCount;
+    if (maxCanAdd <= 0) {
+      alert(`Cannot add stages: Run plan already has ${currentEntryCount} entries, which is the maximum of 30.`);
+      return;
+    } else {
+      alert(`Cannot add ${ids.length} stages: Run plan has ${currentEntryCount} entries. Only ${maxCanAdd} more can be added (maximum 30 total).`);
+      return;
+    }
+  }
+  
   let addedCount = 0;
   for (const stageKey of ids) {
     const stage = currentStages.value.find(s => s.key === stageKey);
@@ -18047,13 +18105,44 @@ const stageFilter = reactive({
   excludeTags: [] as string[]  // Exclude tags: stages with ANY of these tags are excluded
 });
 
+// Helper function to calculate cumulative count (each entry counts at least 1)
+function getCumulativeCount(): number {
+  return runEntries.reduce((sum, entry) => sum + (entry.count || 1), 0);
+}
+
+// Helper function to check if adding a new entry would exceed limits
+function canAddEntry(newCount: number = 1): boolean {
+  const currentEntryCount = runEntries.length;
+  const currentCumulativeCount = getCumulativeCount();
+  
+  // Check entry count limit (30)
+  if (currentEntryCount >= 30) {
+    return false;
+  }
+  
+  // Check cumulative count limit (99 for adding, 100 for final validation)
+  if (currentCumulativeCount + newCount > 99) {
+    return false;
+  }
+  
+  return true;
+}
+
 const isRandomAddValid = computed(() => {
   const validCount = typeof randomFilter.count === 'number' && randomFilter.count >= 1 && randomFilter.count <= 100;
   // If we have a match count, ensure it's sufficient (count + 2)
   if (randomMatchCount.value !== null) {
     const requiredCount = (randomFilter.count || 0) + 2;
-    return validCount && randomMatchCount.value >= requiredCount;
+    if (!validCount || randomMatchCount.value < requiredCount) {
+      return false;
+    }
   }
+  
+  // Check run plan limits: less than 30 entries and cumulative count less than 99
+  if (!canAddEntry(randomFilter.count || 1)) {
+    return false;
+  }
+  
   return validCount;
 });
 
@@ -18062,8 +18151,16 @@ const isRandomStageAddValid = computed(() => {
   // If we have a match count, ensure it's sufficient (count + 2)
   if (randomStageMatchCount.value !== null) {
     const requiredCount = (randomFilter.count || 0) + 2;
-    return validCount && randomStageMatchCount.value >= requiredCount;
+    if (!validCount || randomStageMatchCount.value < requiredCount) {
+      return false;
+    }
   }
+  
+  // Check run plan limits: less than 30 entries and cumulative count less than 99
+  if (!canAddEntry(randomFilter.count || 1)) {
+    return false;
+  }
+  
   return validCount;
 });
 
@@ -18404,6 +18501,20 @@ async function addRandomStageToRun() {
 
 async function stageRun(mode: 'save' | 'upload') {
   console.log('Stage run', mode, runEntries);
+  
+  // Validate run plan limits before saving/staging
+  const entryCount = runEntries.length;
+  const cumulativeCount = getCumulativeCount();
+  
+  if (entryCount > 30) {
+    alert(`Cannot save run: Run plan contains ${entryCount} entries, but the maximum is 30.`);
+    return;
+  }
+  
+  if (cumulativeCount > 100) {
+    alert(`Cannot save run: Run plan has a cumulative count of ${cumulativeCount}, but the maximum is 100.`);
+    return;
+  }
   
   // If no name yet, use custom prompt dialog
   if (!currentRunName.value) {

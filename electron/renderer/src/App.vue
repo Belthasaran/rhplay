@@ -20443,6 +20443,14 @@ function handleHeaderCheckboxClick(event: MouseEvent) {
 }
 
 async function selectPastRun(runUuid: string) {
+  // Toggle selection: if already selected, unselect
+  if (selectedPastRunUuid.value === runUuid) {
+    selectedPastRunUuid.value = null;
+    selectedPastRunResults.value = [];
+    selectedPastRunPlanEntries.value = [];
+    return;
+  }
+  
   selectedPastRunUuid.value = runUuid;
   
   // Load results for this run
@@ -20525,44 +20533,82 @@ function getGameNameForPlanEntry(entry: any): string {
 }
 
 function formatStageFlagsForPlanEntry(entry: any): string {
-  const flags: string[] = [];
+  const flagOrder = ['M', 'K', 'W', 'G', 'S', 'Ca', 'Bo'];
+  const parts: string[] = [];
+  
   try {
-    if (entry.stage_filter_include_flags) {
-      const includeFlags = typeof entry.stage_filter_include_flags === 'string' 
-        ? JSON.parse(entry.stage_filter_include_flags) 
-        : entry.stage_filter_include_flags;
-      if (Array.isArray(includeFlags) && includeFlags.length > 0) {
-        flags.push(`Include: ${includeFlags.join(', ')}`);
+    // Parse all flag arrays
+    const includeFlags = entry.stage_filter_include_flags 
+      ? (typeof entry.stage_filter_include_flags === 'string' 
+          ? JSON.parse(entry.stage_filter_include_flags) 
+          : entry.stage_filter_include_flags)
+      : [];
+    
+    const excludeFlags = entry.stage_filter_exclude_flags
+      ? (typeof entry.stage_filter_exclude_flags === 'string'
+          ? JSON.parse(entry.stage_filter_exclude_flags)
+          : entry.stage_filter_exclude_flags)
+      : [];
+    
+    const includeAnyOfFlags = entry.stage_filter_include_any_of_flags
+      ? (typeof entry.stage_filter_include_any_of_flags === 'string'
+          ? JSON.parse(entry.stage_filter_include_any_of_flags)
+          : entry.stage_filter_include_any_of_flags)
+      : [];
+    
+    const excludeOnlyFlags = entry.stage_filter_exclude_only_flags
+      ? (typeof entry.stage_filter_exclude_only_flags === 'string'
+          ? JSON.parse(entry.stage_filter_exclude_only_flags)
+          : entry.stage_filter_exclude_only_flags)
+      : [];
+    
+    // Format: Show all 7 flags with their status indicators
+    // MustInclude: flags that must ALL be present
+    // Exclude: flags that exclude if ANY present
+    // IncludeAny: flags where at least ONE must be present
+    // ExcludeOnly: flags that exclude only if ALL present
+    
+    if (Array.isArray(includeFlags) && includeFlags.length > 0) {
+      const sorted = includeFlags.filter((f: string) => flagOrder.includes(f)).sort((a: string, b: string) => 
+        flagOrder.indexOf(a) - flagOrder.indexOf(b)
+      );
+      if (sorted.length > 0) {
+        parts.push(`MustInclude: ${sorted.join(',')}`);
       }
     }
-    if (entry.stage_filter_exclude_flags) {
-      const excludeFlags = typeof entry.stage_filter_exclude_flags === 'string'
-        ? JSON.parse(entry.stage_filter_exclude_flags)
-        : entry.stage_filter_exclude_flags;
-      if (Array.isArray(excludeFlags) && excludeFlags.length > 0) {
-        flags.push(`Exclude: ${excludeFlags.join(', ')}`);
+    
+    if (Array.isArray(excludeFlags) && excludeFlags.length > 0) {
+      const sorted = excludeFlags.filter((f: string) => flagOrder.includes(f)).sort((a: string, b: string) => 
+        flagOrder.indexOf(a) - flagOrder.indexOf(b)
+      );
+      if (sorted.length > 0) {
+        parts.push(`Exclude: ${sorted.join(',')}`);
       }
     }
-    if (entry.stage_filter_include_any_of_flags) {
-      const includeAnyOf = typeof entry.stage_filter_include_any_of_flags === 'string'
-        ? JSON.parse(entry.stage_filter_include_any_of_flags)
-        : entry.stage_filter_include_any_of_flags;
-      if (Array.isArray(includeAnyOf) && includeAnyOf.length > 0) {
-        flags.push(`IncludeAnyOf: ${includeAnyOf.join(', ')}`);
+    
+    if (Array.isArray(includeAnyOfFlags) && includeAnyOfFlags.length > 0) {
+      const sorted = includeAnyOfFlags.filter((f: string) => flagOrder.includes(f)).sort((a: string, b: string) => 
+        flagOrder.indexOf(a) - flagOrder.indexOf(b)
+      );
+      if (sorted.length > 0) {
+        parts.push(`IncludeAny: ${sorted.join(',')}`);
       }
     }
-    if (entry.stage_filter_exclude_only_flags) {
-      const excludeOnly = typeof entry.stage_filter_exclude_only_flags === 'string'
-        ? JSON.parse(entry.stage_filter_exclude_only_flags)
-        : entry.stage_filter_exclude_only_flags;
-      if (Array.isArray(excludeOnly) && excludeOnly.length > 0) {
-        flags.push(`ExcludeOnly: ${excludeOnly.join(', ')}`);
+    
+    if (Array.isArray(excludeOnlyFlags) && excludeOnlyFlags.length > 0) {
+      const sorted = excludeOnlyFlags.filter((f: string) => flagOrder.includes(f)).sort((a: string, b: string) => 
+        flagOrder.indexOf(a) - flagOrder.indexOf(b)
+      );
+      if (sorted.length > 0) {
+        parts.push(`ExcludeOnly: ${sorted.join(',')}`);
       }
     }
   } catch (e) {
     console.warn('Error parsing stage flags:', e);
+    return '';
   }
-  return flags.join('; ') || '';
+  
+  return parts.length > 0 ? parts.join(' | ') : '';
 }
 
 const planEntriesModalOpen = ref(false);
@@ -23496,9 +23542,9 @@ button:disabled {
 }
 
 .past-runs-table-wrapper {
-  flex: 1;
+  flex: 0 0 25%;
   overflow-y: auto;
-  min-width: 800px;
+  min-width: 300px;
 }
 
 .past-runs-table-wrapper .col-check {
@@ -23529,10 +23575,31 @@ button:disabled {
 }
 
 .past-runs-inspector {
-  width: 700px;
+  flex: 0 0 75%;
   border-left: 2px solid var(--border-primary);
   padding-left: 20px;
   overflow-y: auto;
+  max-height: 100%;
+}
+
+/* Make scrollbar more visible */
+.past-runs-inspector::-webkit-scrollbar {
+  width: 12px;
+}
+
+.past-runs-inspector::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.past-runs-inspector::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: 6px;
+  border: 2px solid var(--bg-secondary);
+}
+
+.past-runs-inspector::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-secondary);
 }
 
 .past-runs-inspector h4 {
@@ -23575,7 +23642,7 @@ button:disabled {
 
 .results-table {
   width: 100%;
-  font-size: 12px;
+  font-size: inherit;
 }
 
 .results-table th,

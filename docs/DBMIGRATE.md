@@ -1,3 +1,24 @@
+- 2025-01-XX — Run Plan Entries Stage Tag Filters
+  - Purpose: Add stage tag filter columns to run_plan_entries table for filtering random stages by stagetags
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_048_run_plan_entries_stage_tag_filters`
+    - SQL: `electron/sql/migrations/048_clientdata_run_plan_entries_stage_tag_filters.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `run_plan_entries` table gains `stage_filter_has_tags` and `stage_filter_exclude_tags` columns
+    - Columns are NULL for non-random_stage entries
+    - No data loss; existing entries remain unchanged
+  - Notes:
+    - Safe to run multiple times; script skips applied migrations
+    - Tags are matched against the comma-separated `stagetags` column in the `gamestages` table
+    - Has Tags filter requires stages to have ALL selected tags
+    - Exclude Tags filter excludes stages with ANY of the selected tags
+
 - 2025-01-XX — Run Timing Millisecond Precision and Network Time Verification
   - Purpose: Add millisecond precision to all timing fields, network time verification, and run validity status for accurate run timing calculations
   - Command:

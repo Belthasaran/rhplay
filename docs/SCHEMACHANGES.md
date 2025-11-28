@@ -1,3 +1,18 @@
+- 2025-01-XX: clientdata - Run Plan Entries Stage Tag Filters
+  - Description: Add stage tag filter columns to run_plan_entries table for filtering random stages by stagetags
+  - Rationale: Allow users to filter random stage selection based on comma-separated tags stored in the gamestages.stagetags column
+  - Tables/columns:
+    - `run_plan_entries`:
+      - `stage_filter_has_tags TEXT` - JSON array of tag names that stage must have ALL of (e.g., '["cape","autoscroller"]')
+      - `stage_filter_exclude_tags TEXT` - JSON array of tag names that stage must NOT have ANY of (e.g., '["cape"]')
+  - Migration: `clientdata_048_run_plan_entries_stage_tag_filters` via `jsutils/migratedb.js`
+  - Notes:
+    - These columns are NULL for non-random_stage entries
+    - Tags are matched against the comma-separated `stagetags` column in the `gamestages` table
+    - Has Tags filter requires stages to have ALL selected tags
+    - Exclude Tags filter excludes stages with ANY of the selected tags
+    - Tags are case-sensitive and should match exactly (typically lowercase)
+
 - 2025-01-XX: clientdata - Run Timing Millisecond Precision and Network Time Verification
   - Description: Add millisecond precision to all timing fields, network time verification, and run validity status
   - Rationale: Ensure precise timing calculations for run times and run segment times, support network time validation, and track run validity

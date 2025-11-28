@@ -1032,6 +1032,24 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_048_run_plan_entries_stage_tag_filters',
+      description: 'Add stage tag filter columns to run_plan_entries table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/048_clientdata_run_plan_entries_stage_tag_filters.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'run_plan_entries')) {
+            return true; // Table doesn't exist, skip
+          }
+          // Check if tag filter columns exist
+          return columnExists(db, 'run_plan_entries', 'stage_filter_has_tags')
+            && columnExists(db, 'run_plan_entries', 'stage_filter_exclude_tags');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   patchbin: [
     {

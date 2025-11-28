@@ -317,6 +317,8 @@ function selectRandomStage(params) {
     stageExcludeFlags,
     stageIncludeAnyOfFlags,
     stageExcludeOnlyFlags,
+    stageHasTags,
+    stageExcludeTags,
     excludeGameids = [],
     excludeStageUuids = []
   } = params;
@@ -465,6 +467,32 @@ function selectRandomStage(params) {
     filteredStages = filteredStages.filter(stage => {
       // Check if stage has ALL of the excluded flags (if so, exclude it)
       return !stageExcludeOnlyFlags.every(flag => hasFlag(stage, flag));
+    });
+  }
+  
+  // Helper function to parse comma-separated tags
+  const parseStageTags = (stagetags) => {
+    if (!stagetags || typeof stagetags !== 'string') return [];
+    return stagetags.split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0);
+  };
+  
+  // Apply Has Tags filter (stages must have ALL of the selected tags)
+  if (stageHasTags && Array.isArray(stageHasTags) && stageHasTags.length > 0) {
+    filteredStages = filteredStages.filter(stage => {
+      const stageTags = parseStageTags(stage.stagetags);
+      // Check if stage has ALL of the required tags
+      return stageHasTags.every(requiredTag => stageTags.includes(requiredTag));
+    });
+  }
+  
+  // Apply Exclude Tags filter (stages with ANY of the excluded tags are excluded)
+  if (stageExcludeTags && Array.isArray(stageExcludeTags) && stageExcludeTags.length > 0) {
+    filteredStages = filteredStages.filter(stage => {
+      const stageTags = parseStageTags(stage.stagetags);
+      // Check if stage has none of the excluded tags
+      return !stageExcludeTags.some(excludedTag => stageTags.includes(excludedTag));
     });
   }
   

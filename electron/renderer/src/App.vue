@@ -1275,6 +1275,32 @@
                   </tbody>
                 </table>
               </div>
+              <div class="stage-limits-section">
+                <label>
+                  Has Tags (comma-separated):
+                  <input 
+                    type="text" 
+                    v-model="stageFilterHasTagsInput" 
+                    placeholder="e.g., cape, autoscroller"
+                    @input="updateHasTags"
+                  />
+                  <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
+                    Stage must have ALL selected tags
+                  </small>
+                </label>
+                <label style="margin-top: 12px;">
+                  Exclude Tags (comma-separated):
+                  <input 
+                    type="text" 
+                    v-model="stageFilterExcludeTagsInput" 
+                    placeholder="e.g., cape, autoscroller"
+                    @input="updateExcludeTags"
+                  />
+                  <small style="display: block; margin-top: 4px; color: var(--text-secondary);">
+                    Stage with ANY of these tags will be excluded
+                  </small>
+                </label>
+              </div>
             </div>
           </div>
           <span class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
@@ -17222,6 +17248,10 @@ type RunEntry = {
   stageFilterMaxDifficulty?: number | null;  // 1-7, null = no filter
   stageFilterIncludeFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
   stageFilterExcludeFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
+  stageFilterIncludeAnyOfFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
+  stageFilterExcludeOnlyFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
+  stageFilterHasTags?: string[];  // Array of tags: stage must have ALL of these tags
+  stageFilterExcludeTags?: string[];  // Array of tags: stage with ANY of these tags is excluded
   seed?: string;
   matchCount?: number | null;  // Store match count for random entries
   isLocked?: boolean;  // If true, entry type cannot be changed
@@ -17922,6 +17952,28 @@ const randomStageMatchCount = ref<number | null>(null);
 const randomStageMatchCountError = ref<string>('');
 const stageLimitsDropdownOpen = ref(false);
 
+// Tag input fields (comma-separated strings)
+const stageFilterHasTagsInput = ref('');
+const stageFilterExcludeTagsInput = ref('');
+
+// Parse comma-separated tags into array
+function parseTags(tagString: string): string[] {
+  if (!tagString || !tagString.trim()) return [];
+  return tagString.split(',')
+    .map(tag => tag.trim())
+    .filter(tag => tag.length > 0);
+}
+
+// Update hasTags from input
+function updateHasTags() {
+  stageFilter.hasTags = parseTags(stageFilterHasTagsInput.value);
+}
+
+// Update excludeTags from input
+function updateExcludeTags() {
+  stageFilter.excludeTags = parseTags(stageFilterExcludeTagsInput.value);
+}
+
 // Stage filter configuration
 const stageFlags = [
   { code: 'M', name: 'mainexit' },
@@ -17939,7 +17991,9 @@ const stageFilter = reactive({
   includeFlags: [] as string[],  // MustInclude: stages must have ALL of these flags
   excludeFlags: [] as string[],  // Exclude: stages with ANY of these flags are excluded
   includeAnyOfFlags: ['M', 'K'] as string[],  // IncludeAnyOf: stages must have at least ONE of these flags (default: M or K)
-  excludeOnlyFlags: [] as string[]  // ExcludeOnly: stages with ALL of these flags are excluded
+  excludeOnlyFlags: [] as string[],  // ExcludeOnly: stages with ALL of these flags are excluded
+  hasTags: [] as string[],  // Has tags: stages must have ALL of these tags
+  excludeTags: [] as string[]  // Exclude tags: stages with ANY of these tags are excluded
 });
 
 const isRandomAddValid = computed(() => {
@@ -17978,7 +18032,9 @@ watch(() => ({
   stageIncludeFlags: stageFilter.includeFlags?.slice(),  // Create copy for reactivity
   stageExcludeFlags: stageFilter.excludeFlags?.slice(),   // Create copy for reactivity
   stageIncludeAnyOfFlags: stageFilter.includeAnyOfFlags?.slice(),  // Create copy for reactivity
-  stageExcludeOnlyFlags: stageFilter.excludeOnlyFlags?.slice()   // Create copy for reactivity
+  stageExcludeOnlyFlags: stageFilter.excludeOnlyFlags?.slice(),   // Create copy for reactivity
+  stageHasTags: stageFilter.hasTags?.slice(),  // Create copy for reactivity
+  stageExcludeTags: stageFilter.excludeTags?.slice()   // Create copy for reactivity
 }), async () => {
   // Always count games (even with no filters, shows total count)
   try {
@@ -18016,7 +18072,9 @@ watch(() => ({
       stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
       stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || [])),
       stageIncludeAnyOfFlags: JSON.parse(JSON.stringify(stageFilter.includeAnyOfFlags || [])),
-      stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || []))
+      stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || [])),
+      stageHasTags: JSON.parse(JSON.stringify(stageFilter.hasTags || [])),
+      stageExcludeTags: JSON.parse(JSON.stringify(stageFilter.excludeTags || []))
     });
     
     console.log('[watch] countRandomStageMatches result:', stageResult);
@@ -18220,6 +18278,8 @@ async function addRandomStageToRun() {
     stageFilterExcludeFlags: [...stageFilter.excludeFlags],
     stageFilterIncludeAnyOfFlags: [...stageFilter.includeAnyOfFlags],
     stageFilterExcludeOnlyFlags: [...stageFilter.excludeOnlyFlags],
+    stageFilterHasTags: [...stageFilter.hasTags],
+    stageFilterExcludeTags: [...stageFilter.excludeTags],
     seed,
     matchCount: randomStageMatchCount.value,  // This should now always be set
     isLocked: false,
@@ -18727,6 +18787,10 @@ async function loadRestoreRun() {
       stageFilterMaxDifficulty: entry.stage_filter_max_difficulty,
       stageFilterIncludeFlags: entry.stage_filter_include_flags ? JSON.parse(entry.stage_filter_include_flags) : [],
       stageFilterExcludeFlags: entry.stage_filter_exclude_flags ? JSON.parse(entry.stage_filter_exclude_flags) : [],
+      stageFilterIncludeAnyOfFlags: entry.stage_filter_include_any_of_flags ? JSON.parse(entry.stage_filter_include_any_of_flags) : [],
+      stageFilterExcludeOnlyFlags: entry.stage_filter_exclude_only_flags ? JSON.parse(entry.stage_filter_exclude_only_flags) : [],
+      stageFilterHasTags: entry.stage_filter_has_tags ? JSON.parse(entry.stage_filter_has_tags) : [],
+      stageFilterExcludeTags: entry.stage_filter_exclude_tags ? JSON.parse(entry.stage_filter_exclude_tags) : [],
       seed: entry.filter_seed || '',
       matchCount: null,  // Will be recalculated if needed
       isLocked: false,

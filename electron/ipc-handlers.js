@@ -2031,8 +2031,10 @@ function registerDatabaseHandlers(dbManager) {
             (entry_uuid, run_uuid, sequence_number, entry_type, gameid, exit_number,
              count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions,
              trans_level, stage_filter_min_difficulty, stage_filter_max_difficulty,
-             stage_filter_include_flags, stage_filter_exclude_flags)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             stage_filter_include_flags, stage_filter_exclude_flags,
+             stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
+             stage_filter_has_tags, stage_filter_exclude_tags)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         entryList.forEach((entry, idx) => {
@@ -2054,7 +2056,11 @@ function registerDatabaseHandlers(dbManager) {
             entry.stageFilterMinDifficulty !== undefined ? entry.stageFilterMinDifficulty : null,
             entry.stageFilterMaxDifficulty !== undefined ? entry.stageFilterMaxDifficulty : null,
             entry.stageFilterIncludeFlags && Array.isArray(entry.stageFilterIncludeFlags) ? JSON.stringify(entry.stageFilterIncludeFlags) : null,
-            entry.stageFilterExcludeFlags && Array.isArray(entry.stageFilterExcludeFlags) ? JSON.stringify(entry.stageFilterExcludeFlags) : null
+            entry.stageFilterExcludeFlags && Array.isArray(entry.stageFilterExcludeFlags) ? JSON.stringify(entry.stageFilterExcludeFlags) : null,
+            entry.stageFilterIncludeAnyOfFlags && Array.isArray(entry.stageFilterIncludeAnyOfFlags) ? JSON.stringify(entry.stageFilterIncludeAnyOfFlags) : null,
+            entry.stageFilterExcludeOnlyFlags && Array.isArray(entry.stageFilterExcludeOnlyFlags) ? JSON.stringify(entry.stageFilterExcludeOnlyFlags) : null,
+            entry.stageFilterHasTags && Array.isArray(entry.stageFilterHasTags) ? JSON.stringify(entry.stageFilterHasTags) : null,
+            entry.stageFilterExcludeTags && Array.isArray(entry.stageFilterExcludeTags) ? JSON.stringify(entry.stageFilterExcludeTags) : null
           );
         });
       });
@@ -2851,7 +2857,9 @@ function registerDatabaseHandlers(dbManager) {
     stageIncludeFlags,
     stageExcludeFlags,
     stageIncludeAnyOfFlags,
-    stageExcludeOnlyFlags
+    stageExcludeOnlyFlags,
+    stageHasTags,
+    stageExcludeTags
   }) => {
     try {
       console.log('[count-random-stage-matches] Called with params:', {
@@ -2970,6 +2978,32 @@ function registerDatabaseHandlers(dbManager) {
         });
       }
       
+      // Helper function to parse comma-separated tags
+      const parseStageTags = (stagetags) => {
+        if (!stagetags || typeof stagetags !== 'string') return [];
+        return stagetags.split(',')
+          .map(tag => tag.trim())
+          .filter(tag => tag.length > 0);
+      };
+      
+      // Apply Has Tags filter (stages must have ALL of the selected tags)
+      if (stageHasTags && Array.isArray(stageHasTags) && stageHasTags.length > 0) {
+        filteredStages = filteredStages.filter(stage => {
+          const stageTags = parseStageTags(stage.stagetags);
+          // Check if stage has ALL of the required tags
+          return stageHasTags.every(requiredTag => stageTags.includes(requiredTag));
+        });
+      }
+      
+      // Apply Exclude Tags filter (stages with ANY of the excluded tags are excluded)
+      if (stageExcludeTags && Array.isArray(stageExcludeTags) && stageExcludeTags.length > 0) {
+        filteredStages = filteredStages.filter(stage => {
+          const stageTags = parseStageTags(stage.stagetags);
+          // Check if stage has none of the excluded tags
+          return !stageExcludeTags.some(excludedTag => stageTags.includes(excludedTag));
+        });
+      }
+      
       console.log(`[count-random-stage-matches] Found ${filteredStages.length} matching stages`);
       return { success: true, count: filteredStages.length };
     } catch (error) {
@@ -3057,6 +3091,11 @@ function registerDatabaseHandlers(dbManager) {
                 // Parse stage filter flags from JSON
                 let stageIncludeFlags = null;
                 let stageExcludeFlags = null;
+                let stageIncludeAnyOfFlags = null;
+                let stageExcludeOnlyFlags = null;
+                let stageHasTags = null;
+                let stageExcludeTags = null;
+                
                 if (planEntry.stage_filter_include_flags) {
                   try {
                     stageIncludeFlags = JSON.parse(planEntry.stage_filter_include_flags);
@@ -3071,6 +3110,34 @@ function registerDatabaseHandlers(dbManager) {
                     console.warn('Error parsing stage_filter_exclude_flags:', e);
                   }
                 }
+                if (planEntry.stage_filter_include_any_of_flags) {
+                  try {
+                    stageIncludeAnyOfFlags = JSON.parse(planEntry.stage_filter_include_any_of_flags);
+                  } catch (e) {
+                    console.warn('Error parsing stage_filter_include_any_of_flags:', e);
+                  }
+                }
+                if (planEntry.stage_filter_exclude_only_flags) {
+                  try {
+                    stageExcludeOnlyFlags = JSON.parse(planEntry.stage_filter_exclude_only_flags);
+                  } catch (e) {
+                    console.warn('Error parsing stage_filter_exclude_only_flags:', e);
+                  }
+                }
+                if (planEntry.stage_filter_has_tags) {
+                  try {
+                    stageHasTags = JSON.parse(planEntry.stage_filter_has_tags);
+                  } catch (e) {
+                    console.warn('Error parsing stage_filter_has_tags:', e);
+                  }
+                }
+                if (planEntry.stage_filter_exclude_tags) {
+                  try {
+                    stageExcludeTags = JSON.parse(planEntry.stage_filter_exclude_tags);
+                  } catch (e) {
+                    console.warn('Error parsing stage_filter_exclude_tags:', e);
+                  }
+                }
                 
                 const selectedStage = seedManager.selectRandomStage({
                   dbManager,
@@ -3083,6 +3150,10 @@ function registerDatabaseHandlers(dbManager) {
                   stageMaxDifficulty: planEntry.stage_filter_max_difficulty,
                   stageIncludeFlags: stageIncludeFlags,
                   stageExcludeFlags: stageExcludeFlags,
+                  stageIncludeAnyOfFlags: stageIncludeAnyOfFlags,
+                  stageExcludeOnlyFlags: stageExcludeOnlyFlags,
+                  stageHasTags: stageHasTags,
+                  stageExcludeTags: stageExcludeTags,
                   excludeGameids: usedGameids,
                   excludeStageUuids: usedStageUuids,
                   globalPatchCodes: capturedGlobalPatchCodes  // Pass global patch codes for filtering

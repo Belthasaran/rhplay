@@ -21,6 +21,7 @@ const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
 const { matchesFilter } = require('./shared-filter-utils');
+const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
 const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
 const { HostFP } = require('./main/HostFP');
@@ -2135,6 +2136,52 @@ function registerDatabaseHandlers(dbManager) {
       if (verifyCount.count === 0) {
         throw new Error('Failed to create run results - no entries inserted');
       }
+      
+      // Asynchronously validate clock accuracy (non-blocking, doesn't delay run start)
+      // This runs in the background and updates the run record when complete
+      fetchNetworkTime().then((timeResult) => {
+        try {
+          if (timeResult.success) {
+            const validityStatus = determineRunValidity(timeResult.offsetMs);
+            const networkTimeMs = Math.floor(timeResult.networkTime);
+            
+            console.log(`[Network Time] Clock offset: ${timeResult.offsetMs}ms (${(timeResult.offsetMs / 1000).toFixed(1)}s), Status: ${validityStatus}`);
+            
+            // Update run with network time validation results
+            db.prepare(`
+              UPDATE runs
+              SET clock_offset_ms = ?,
+                  clock_validated = 1,
+                  network_time_ms = ?,
+                  run_validity_status = ?,
+                  updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+              WHERE run_uuid = ?
+            `).run(
+              Math.round(timeResult.offsetMs),
+              networkTimeMs,
+              validityStatus,
+              runUuid
+            );
+          } else {
+            console.warn(`[Network Time] Failed to validate clock: ${timeResult.error}`);
+            
+            // Mark as unverified if network time fetch failed
+            db.prepare(`
+              UPDATE runs
+              SET clock_validated = 0,
+                  run_validity_status = 'unverified',
+                  updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+              WHERE run_uuid = ?
+            `).run(runUuid);
+          }
+        } catch (updateError) {
+          console.error('[Network Time] Error updating run with clock validation:', updateError);
+          // Non-fatal error, continue
+        }
+      }).catch((error) => {
+        console.error('[Network Time] Error in clock validation promise:', error);
+        // Non-fatal error, continue
+      });
       
       return { success: true };
     } catch (error) {

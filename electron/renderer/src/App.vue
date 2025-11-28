@@ -1216,7 +1216,7 @@
             <button @click="toggleStageLimitsDropdown" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
               Stage Limits ▼
             </button>
-            <div v-if="stageLimitsDropdownOpen" class="stage-limits-dropdown" @click.stop>
+            <div v-if="stageLimitsDropdownOpen" class="stage-limits-dropdown" :style="stageLimitsDropdownStyle" @click.stop ref="stageLimitsDropdownRef">
               <div class="stage-limits-columns">
                 <div class="stage-limits-left-column">
                   <div class="stage-limits-section">
@@ -17957,6 +17957,8 @@ const randomMatchCountError = ref<string>('');
 const randomStageMatchCount = ref<number | null>(null);
 const randomStageMatchCountError = ref<string>('');
 const stageLimitsDropdownOpen = ref(false);
+const stageLimitsDropdownStyle = ref({ top: '0px', left: '0px' });
+const stageLimitsDropdownRef = ref<HTMLElement | null>(null);
 
 // Tag input fields (comma-separated strings)
 const stageFilterHasTagsInput = ref('');
@@ -18022,8 +18024,24 @@ const isRandomStageAddValid = computed(() => {
   return validCount;
 });
 
-function toggleStageLimitsDropdown() {
-  stageLimitsDropdownOpen.value = !stageLimitsDropdownOpen.value;
+function toggleStageLimitsDropdown(event?: Event) {
+  const wasOpen = stageLimitsDropdownOpen.value;
+  stageLimitsDropdownOpen.value = !wasOpen;
+  
+  if (!wasOpen && event) {
+    // Calculate position when opening
+    nextTick(() => {
+      const button = event.currentTarget as HTMLElement;
+      if (button) {
+        const rect = button.getBoundingClientRect();
+        // Position dropdown to the left of the button, 500px to the left
+        stageLimitsDropdownStyle.value = {
+          top: `${rect.bottom + 4}px`,
+          left: `${rect.left - 500}px`
+        };
+      }
+    });
+  }
 }
 
 // Watch for random filter changes to update match counts (always count both games and stages)
@@ -22584,16 +22602,14 @@ button:disabled {
   background-color: var(--bg-hover);
 }
 .stage-limits-dropdown {
-  position: absolute;
-  top: 100%;
-  left: -500px;
+  position: fixed;
   margin-top: 4px;
   padding: 12px;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  z-index: 30000;
+  z-index: 50000;
   min-width: 600px;
   max-width: 800px;
 }

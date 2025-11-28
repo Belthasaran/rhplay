@@ -6892,7 +6892,7 @@
           <button @click="deleteCheckedPastRuns" :disabled="checkedPastRuns.length === 0" class="btn-danger">Delete Checked</button>
         </div>
         <div class="past-runs-content">
-          <div class="past-runs-table-wrapper">
+          <div class="past-runs-table-wrapper" :class="{ 'has-selection': selectedPastRunUuid && selectedPastRun }">
             <table class="data-table">
               <thead>
                 <tr>
@@ -19552,8 +19552,8 @@ async function startRun() {
       } else {
         // Fallback if run not found (should not happen)
         console.error('[startRun] Run not found in database');
-        runStartTime.value = Date.now();
-        runElapsedSeconds.value = 0;
+      runStartTime.value = Date.now();
+      runElapsedSeconds.value = 0;
         runPauseSeconds.value = 0;
         isRunPaused.value = false;
         runPauseStartTime.value = null;
@@ -22051,7 +22051,7 @@ async function resumeRunFromStartup() {
         // Calculate elapsed time: (current time - start time - pause time)
         // IMPORTANT: runStartTime.value is the original start timestamp, NEVER adjusted
         // If currently paused, include pending pause time
-        const now = Date.now();
+    const now = Date.now();
         const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
         
         // Calculate pending pause time if currently paused
@@ -23542,9 +23542,13 @@ button:disabled {
 }
 
 .past-runs-table-wrapper {
-  flex: 0 0 25%;
+  flex: 1;
   overflow-y: auto;
   min-width: 300px;
+}
+
+.past-runs-table-wrapper.has-selection {
+  flex: 0 0 25%;
 }
 
 .past-runs-table-wrapper .col-check {

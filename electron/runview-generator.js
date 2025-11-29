@@ -115,9 +115,13 @@ function getGameMnemonics(combinedtype, tags) {
   if (searchText.includes('troll')) mnemonics.add('troll');
   if (searchText.includes('cape')) mnemonics.add('cape');
   if (searchText.includes('maze')) mnemonics.add('maze');
+  // Check for "hard" before "expert" to avoid duplicates
+  // "Hard" maps to "expert", but if "expert" is already in text, use that
+  if (searchText.includes('hard') && !searchText.includes('expert')) {
+    mnemonics.add('expert');
+  }
   if (searchText.includes('expert')) mnemonics.add('expert');
   if (searchText.includes('master')) mnemonics.add('master');
-  if (searchText.includes('hard')) mnemonics.add('expert');
   if (searchText.includes('easy')) mnemonics.add('ez');
   if (searchText.includes('beginner')) mnemonics.add('ez');
   if (searchText.includes('casual')) mnemonics.add('ez');
@@ -364,7 +368,7 @@ async function generateRunview(params) {
               : '';
             const stageMnemonics = getStageMnemonics(stageRow);
             stageInfo.set(key, {
-              difficulty: stageRow.difficulty !== null && stageRow.difficulty !== undefined ? stageRow.difficulty : '',
+              difficulty: stageRow.difficulty !== null && stageRow.difficulty !== undefined ? stageRow.difficulty : 0,
               difficultyMnemonic: difficultyMnemonic,
               tags: stageRow.stagetags || '',
               stageMnemonics: stageMnemonics
@@ -683,7 +687,7 @@ async function generateRunview(params) {
       <div class="stage-line">
         <span class="stage-info">${escapeHtml(currentStageId)}</span>
         ${currentStageName ? ` <span class="stage-info">${escapeHtml(abbreviateText(currentStageName))}</span>` : ''}
-        ${currentStageDifficulty !== '' ? `<span class="author">(${escapeHtml(String(currentStageDifficulty))}${currentStageDifficultyMnemonic ? ' ' + escapeHtml(currentStageDifficultyMnemonic) : ''}${currentStageMnemonics.length > 0 ? ' ' + escapeHtml(currentStageMnemonics.join('')) : ''})</span>` : ''}
+        ${(currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic || currentStageMnemonics.length > 0 ? `<span class="author">(${currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? escapeHtml(String(currentStageDifficulty)) : ''}${currentStageDifficultyMnemonic ? (currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? ' ' : '') + escapeHtml(currentStageDifficultyMnemonic) : ''}${currentStageMnemonics.length > 0 ? ((currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic ? ' ' : '') + escapeHtml(currentStageMnemonics.join('')) : ''})</span>` : ''}
       </div>
       ` : ''}
       ${currentStageTags ? `

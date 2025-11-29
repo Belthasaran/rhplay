@@ -46,6 +46,156 @@ function formatDuration(milliseconds) {
 }
 
 /**
+ * Abbreviate text according to rules
+ * @param {string} text - Text to abbreviate
+ * @param {number} maxLength - Maximum length (default 15)
+ * @returns {string} Abbreviated text
+ */
+function abbreviateText(text, maxLength = 15) {
+  if (!text) return '';
+  
+  let result = text;
+  
+  // Handle "Super Mario World" -> "SMW.."
+  if (result.startsWith('Super Mario World')) {
+    result = 'SMW..' + result.substring('Super Mario World'.length);
+  }
+  // Handle "Super Mario" -> "SM.."
+  else if (result.startsWith('Super Mario')) {
+    result = 'SM..' + result.substring('Super Mario'.length);
+  }
+  // Handle "Super" at start (if there are other words)
+  else if (result.startsWith('Super ') && result.length > 6) {
+    result = result.substring(6); // Remove "Super "
+  }
+  
+  // Truncate if longer than maxLength
+  if (result.length > maxLength) {
+    result = result.substring(0, maxLength - 2) + '..';
+  }
+  
+  return result;
+}
+
+/**
+ * Get difficulty mnemonic from numeric difficulty (0-7)
+ * @param {number} difficulty - Numeric difficulty
+ * @returns {string} Mnemonic
+ */
+function getDifficultyMnemonic(difficulty) {
+  if (difficulty === null || difficulty === undefined) return '';
+  const map = {
+    0: 'Ne',
+    1: 'Casual',
+    2: 'Med',
+    3: 'Adv',
+    4: 'Exp',
+    5: 'Master',
+    6: 'GM',
+    7: 'GM+'
+  };
+  return map[difficulty] || '';
+}
+
+/**
+ * Get game mnemonics from combinedtype and tags
+ * @param {string} combinedtype - Combined type string
+ * @param {string} tags - Tags string (comma-separated)
+ * @returns {Array<string>} Array of unique mnemonics
+ */
+function getGameMnemonics(combinedtype, tags) {
+  const mnemonics = new Set();
+  const searchText = ((combinedtype || '') + ' ' + (tags || '')).toLowerCase();
+  
+  // Check for keywords (order matters - more specific first)
+  if (searchText.includes('tool-assisted')) mnemonics.add('tas-only');
+  if (searchText.includes('very hard')) mnemonics.add('master');
+  if (searchText.includes('kaizo')) mnemonics.add('kaizo');
+  if (searchText.includes('puzzle')) mnemonics.add('puzzle');
+  if (searchText.includes('troll')) mnemonics.add('troll');
+  if (searchText.includes('cape')) mnemonics.add('cape');
+  if (searchText.includes('maze')) mnemonics.add('maze');
+  if (searchText.includes('expert')) mnemonics.add('expert');
+  if (searchText.includes('master')) mnemonics.add('master');
+  if (searchText.includes('hard')) mnemonics.add('expert');
+  if (searchText.includes('easy')) mnemonics.add('ez');
+  if (searchText.includes('beginner')) mnemonics.add('ez');
+  if (searchText.includes('casual')) mnemonics.add('ez');
+  
+  return Array.from(mnemonics);
+}
+
+/**
+ * Get stage mnemonics from flags and tags
+ * @param {Object} stage - Stage object with flags and tags
+ * @returns {Array<string>} Array of mnemonics (with - prefix)
+ */
+function getStageMnemonics(stage) {
+  const mnemonics = [];
+  
+  if (stage.boss === 1) mnemonics.push('-boss');
+  if (stage.ghouse === 1) mnemonics.push('-ghost');
+  if (stage.water === 1) mnemonics.push('-water');
+  if (stage.castle === 1) mnemonics.push('-castle');
+  if (stage.spalace === 1) mnemonics.push('-switch');
+  
+  // Check stagetags
+  if (stage.stagetags) {
+    const tags = stage.stagetags.toLowerCase();
+    if (tags.includes('kaizo')) mnemonics.push('-kaizo');
+    if (tags.includes('cape')) mnemonics.push('-cape');
+    if (tags.includes('autoscroller') || tags.includes('scroller')) {
+      mnemonics.push('-scroller');
+    }
+  }
+  
+  return mnemonics;
+}
+
+/**
+ * Map difficulty string to numeric value (0-7)
+ * @param {string} difficulty - Difficulty string
+ * @returns {number|null} Numeric difficulty or null
+ */
+function mapDifficultyToNumber(difficulty) {
+  if (!difficulty) return null;
+  const lower = difficulty.toLowerCase();
+  const map = {
+    'newcomer': 0,
+    'casual': 1,
+    'intermediate': 2,
+    'skilled': 2,
+    'advanced': 3,
+    'hard': 3,
+    'expert': 4,
+    'master': 5,
+    'grandmaster': 6,
+    'grandmaster plus': 7,
+    'tool-assisted': 8
+  };
+  return map[lower] ?? null;
+}
+
+/**
+ * Abbreviate stage tags (comma-separated list)
+ * @param {string} tags - Comma-separated tags
+ * @returns {string} Abbreviated tags
+ */
+function abbreviateStageTags(tags) {
+  if (!tags) return '';
+  const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
+  if (tagList.length === 0) return '';
+  
+  // Abbreviate each tag to 3 characters max
+  const abbreviated = tagList.map(tag => {
+    if (tag.length <= 3) return tag;
+    return tag.substring(0, 3);
+  });
+  
+  return abbreviated.join(',');
+}
+
+/**
  * Determine which challenges to display based on priority
  * @param {Array} results - All run results
  * @param {number} currentIndex - Index of current challenge
@@ -165,21 +315,62 @@ async function generateRunview(params) {
       ORDER BY rr.sequence_number
     `).all(runUuid);
     
-    // Get author information for each game
-    const gameAuthors = new Map();
+    // Get author information, game difficulty, combinedtype, tags for each game
+    const gameInfo = new Map();
     if (results.length > 0) {
       const gameids = [...new Set(results.map(r => r.gameid).filter(Boolean))];
       if (gameids.length > 0) {
         const placeholders = gameids.map(() => '?').join(',');
-        const authorRows = rhdataDb.prepare(`
-          SELECT gameid, author
+        const gameRows = rhdataDb.prepare(`
+          SELECT gameid, author, difficulty, combinedtype, tags
           FROM gameversions
           WHERE gameid IN (${placeholders})
             AND version = (SELECT MAX(version) FROM gameversions gv2 WHERE gv2.gameid = gameversions.gameid)
         `).all(...gameids);
-        authorRows.forEach(row => {
-          gameAuthors.set(row.gameid, row.author || '');
+        gameRows.forEach(row => {
+          const numDifficulty = mapDifficultyToNumber(row.difficulty);
+          const difficultyMnemonic = numDifficulty !== null ? getDifficultyMnemonic(numDifficulty) : '';
+          const gameMnemonics = getGameMnemonics(row.combinedtype || '', row.tags || '');
+          gameInfo.set(row.gameid, {
+            author: row.author || '',
+            difficulty: row.difficulty || '',
+            difficultyMnemonic: difficultyMnemonic,
+            gameMnemonics: gameMnemonics
+          });
         });
+      }
+    }
+    
+    // Get stage information (difficulty, tags, flags) for each stage
+    const stageInfo = new Map();
+    if (results.length > 0) {
+      const stageKeys = results
+        .filter(r => r.gameid && (r.levelnumber || r.exit_number))
+        .map(r => ({ gameid: r.gameid, levelnumber: r.levelnumber || r.exit_number }));
+      
+      if (stageKeys.length > 0) {
+        for (const stageKey of stageKeys) {
+          const stageRow = rhdataDb.prepare(`
+            SELECT difficulty, stagetags, boss, ghouse, water, castle, spalace
+            FROM gamestages
+            WHERE gameid = ? AND levelnumber = ?
+            LIMIT 1
+          `).get(stageKey.gameid, stageKey.levelnumber);
+          
+          if (stageRow) {
+            const key = `${stageKey.gameid}-${stageKey.levelnumber}`;
+            const difficultyMnemonic = stageRow.difficulty !== null && stageRow.difficulty !== undefined
+              ? getDifficultyMnemonic(stageRow.difficulty)
+              : '';
+            const stageMnemonics = getStageMnemonics(stageRow);
+            stageInfo.set(key, {
+              difficulty: stageRow.difficulty !== null && stageRow.difficulty !== undefined ? stageRow.difficulty : '',
+              difficultyMnemonic: difficultyMnemonic,
+              tags: stageRow.stagetags || '',
+              stageMnemonics: stageMnemonics
+            });
+          }
+        }
       }
     }
     
@@ -262,6 +453,13 @@ async function generateRunview(params) {
     // Select which challenges to display
     const displayIndices = selectChallengesToDisplay(results, currentIndex, runviewcount);
     
+    // Get current challenge details
+    const currentGameInfo = currentChallenge.gameid ? gameInfo.get(currentChallenge.gameid) : null;
+    const currentStageKey = currentChallenge.gameid && (currentChallenge.levelnumber || currentChallenge.exit_number)
+      ? `${currentChallenge.gameid}-${currentChallenge.levelnumber || currentChallenge.exit_number}`
+      : null;
+    const currentStageInfo = currentStageKey ? stageInfo.get(currentStageKey) : null;
+    
     // Calculate current running time
     const now = Date.now();
     let runElapsedMs = 0;
@@ -289,13 +487,31 @@ async function generateRunview(params) {
     // Calculate minimum height (300px base + ~40px per challenge)
     const minHeight = Math.max(300, 300 + (displayIndices.length * 40));
     
+    // Format current challenge details
+    const entryType = currentChallenge.entry_type === 'random_game' ? 'Random Game' :
+                      currentChallenge.entry_type === 'random_stage' ? 'Random Stage' :
+                      currentChallenge.entry_type === 'stage' ? 'Stage' : 'Game';
+    
+    const currentGameName = currentChallenge.game_name || currentChallenge.gameid || '???';
+    const currentAuthor = currentGameInfo ? (currentGameInfo.author || '') : '';
+    const currentGameDifficulty = currentGameInfo ? (currentGameInfo.difficulty || '') : '';
+    const currentGameDifficultyMnemonic = currentGameInfo ? (currentGameInfo.difficultyMnemonic || '') : '';
+    const currentGameMnemonics = currentGameInfo ? (currentGameInfo.gameMnemonics || []) : [];
+    
+    const currentStageId = currentChallenge.levelnumber || currentChallenge.exit_number || '';
+    const currentStageName = currentChallenge.levelname || currentChallenge.stage_description || '';
+    const currentStageDifficulty = currentStageInfo ? (currentStageInfo.difficulty || '') : '';
+    const currentStageDifficultyMnemonic = currentStageInfo ? (currentStageInfo.difficultyMnemonic || '') : '';
+    const currentStageTags = currentStageInfo ? (currentStageInfo.tags || '') : '';
+    const currentStageMnemonics = currentStageInfo ? (currentStageInfo.stageMnemonics || []) : [];
+    
     // Generate HTML
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Run View - ${run.run_name}</title>
+  <title>Run View - ${escapeHtml(run.run_name)}</title>
   <style>
     * {
       margin: 0;
@@ -316,59 +532,80 @@ async function generateRunview(params) {
       background: #2a2a2a;
       border: 2px solid #444;
       border-radius: 8px;
-      padding: 15px;
+      padding: 12px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     .run-header {
       text-align: center;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
       border-bottom: 1px solid #444;
     }
     .run-name {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       color: #fff;
-      margin-bottom: 5px;
     }
-    .run-progress {
-      font-size: 14px;
-      color: #aaa;
-    }
-    .timer-section {
-      text-align: center;
-      margin: 15px 0;
-      padding: 10px;
+    .timer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 10px 0;
+      padding: 8px;
       background: #1e1e1e;
       border-radius: 6px;
     }
-    .timer-label {
-      font-size: 12px;
-      color: #888;
-      margin-bottom: 5px;
-    }
-    .timer-value {
-      font-size: 24px;
+    .run-timer {
+      font-size: 32px;
       font-weight: bold;
       color: #4CAF50;
       font-family: 'Courier New', monospace;
     }
+    .challenge-timer {
+      font-size: 20px;
+      font-weight: bold;
+      color: #4CAF50;
+      font-family: 'Courier New', monospace;
+    }
+    .current-challenge-details {
+      background: #1e1e1e;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .current-challenge-details .entry-type {
+      font-weight: bold;
+      color: #4CAF50;
+    }
+    .current-challenge-details .game-line {
+      margin-bottom: 4px;
+    }
+    .current-challenge-details .stage-line {
+      margin-bottom: 4px;
+    }
+    .current-challenge-details .tags-line {
+      color: #888;
+      font-size: 11px;
+    }
     .challenges-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 15px;
+      margin-top: 10px;
+      font-size: 11px;
     }
     .challenges-table th {
       background: #333;
       color: #fff;
-      padding: 8px 4px;
+      padding: 6px 4px;
       text-align: left;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
       border-bottom: 2px solid #555;
     }
     .challenges-table td {
-      padding: 6px 4px;
+      padding: 5px 4px;
       font-size: 11px;
       border-bottom: 1px solid #333;
     }
@@ -426,18 +663,34 @@ async function generateRunview(params) {
 <body>
   <div class="runview-container">
     <div class="run-header">
-      <div class="run-name">${escapeHtml(run.run_name)}</div>
-      <div class="run-progress">Challenge ${currentChallengeNum} of ${totalChallenges}</div>
+      <div class="run-name">${escapeHtml(run.run_name)} (${currentChallengeNum}/${totalChallenges})</div>
     </div>
     
-    <div class="timer-section">
-      <div class="timer-label">Running Time</div>
-      <div class="timer-value" id="run-timer">00:00:00</div>
+    <div class="timer-row">
+      <div class="run-timer" id="run-timer">00:00:00</div>
+      <div class="challenge-timer" id="challenge-timer">00:00:00</div>
     </div>
     
-    <div class="timer-section">
-      <div class="timer-label">Current Challenge Time</div>
-      <div class="timer-value" id="challenge-timer">00:00:00</div>
+    <div class="current-challenge-details">
+      <div class="game-line">
+        <span class="entry-type">${escapeHtml(entryType)}</span> 
+        <span class="game-id">${escapeHtml(currentChallenge.gameid || '—')}</span> - 
+        <span class="game-name">${escapeHtml(abbreviateText(currentGameName))}</span>
+        ${currentAuthor ? `<span class="author">${escapeHtml(abbreviateText(currentAuthor))}</span>` : ''}
+        ${currentGameDifficulty ? `<span class="author">(${escapeHtml(currentGameDifficulty)}${currentGameDifficultyMnemonic ? ' ' + escapeHtml(currentGameDifficultyMnemonic) : ''}${currentGameMnemonics.length > 0 ? ' ' + escapeHtml(currentGameMnemonics.join(' ')) : ''})</span>` : ''}
+      </div>
+      ${currentStageId ? `
+      <div class="stage-line">
+        <span class="stage-info">${escapeHtml(currentStageId)}</span>
+        ${currentStageName ? ` <span class="stage-info">${escapeHtml(abbreviateText(currentStageName))}</span>` : ''}
+        ${currentStageDifficulty !== '' ? `<span class="author">(${escapeHtml(String(currentStageDifficulty))}${currentStageDifficultyMnemonic ? ' ' + escapeHtml(currentStageDifficultyMnemonic) : ''}${currentStageMnemonics.length > 0 ? ' ' + escapeHtml(currentStageMnemonics.join('')) : ''})</span>` : ''}
+      </div>
+      ` : ''}
+      ${currentStageTags ? `
+      <div class="tags-line">
+        ${escapeHtml(abbreviateStageTags(currentStageTags))}
+      </div>
+      ` : ''}
     </div>
     
     <table class="challenges-table">
@@ -479,7 +732,8 @@ ${displayIndices.map(idx => {
     : '';
   
   // Get author from gameversions
-  const author = result.gameid ? (gameAuthors.get(result.gameid) || '') : '';
+  const gameInfoForResult = result.gameid ? gameInfo.get(result.gameid) : null;
+  const author = gameInfoForResult ? (gameInfoForResult.author || '') : '';
   
   let statusText = '';
   let statusClass = '';
@@ -513,10 +767,10 @@ ${displayIndices.map(idx => {
           <td><span class="entry-type">${escapeHtml(entryType)}</span></td>
           <td>
             <span class="game-id">${escapeHtml(result.gameid || '—')}</span><br>
-            <span class="game-name">${escapeHtml(gameName)}</span>
+            <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>
           </td>
-          <td><span class="stage-info">${escapeHtml(stageInfo || '—')}</span></td>
-          <td><span class="author">${escapeHtml(author || '—')}</span></td>
+          <td><span class="stage-info">${escapeHtml(abbreviateText(stageInfo || '—'))}</span></td>
+          <td><span class="author">${escapeHtml(abbreviateText(author || '—'))}</span></td>
           <td><span class="status ${statusClass}">${escapeHtml(statusText)}</span></td>
           <td>${timeText}</td>
         </tr>`;
@@ -620,4 +874,3 @@ module.exports = {
   generateRunview,
   getRunviewSettings
 };
-

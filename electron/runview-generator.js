@@ -307,6 +307,7 @@ async function generateRunview(params) {
         rr.duration_milliseconds, 
         rr.pause_milliseconds,
         rr.was_random,
+        rr.revealed_early,
         COALESCE(rpe.entry_type, 
           CASE 
             WHEN rr.exit_number IS NOT NULL OR rr.levelnumber IS NOT NULL THEN 'stage'
@@ -392,8 +393,10 @@ async function generateRunview(params) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a1a;
-      color: #e0e0e0;
+      /* background: #1a1a1a;  */
+      background: transparent;
+      /* color: #e0e0e0; */
+      color: black;
       padding: 10px;
       display: flex;
       justify-content: center;
@@ -401,8 +404,9 @@ async function generateRunview(params) {
     .runview-container {
       width: ${runviewwidth}px;
       min-height: 200px;
-      background: #2a2a2a;
-      border: 2px solid #444;
+      /* background: #2a2a2a; */
+      background: transparent;
+      border: none; /* 2px solid #444; */
       border-radius: 8px;
       padding: 15px;
       text-align: center;
@@ -545,7 +549,8 @@ async function generateRunview(params) {
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: #1a1a1a;
+      /* background: #1a1a1a; */
+      background: transparent;
       color: #e0e0e0;
       padding: 10px;
       display: flex;
@@ -554,16 +559,18 @@ async function generateRunview(params) {
     .runview-container {
       width: ${runviewwidth}px;
       min-height: ${minHeight}px;
-      background: #2a2a2a;
-      border: 2px solid #444;
+      /* background: #2a2a2a; */
+      background: transparent;
+      /* border: 2px solid #444; */
+      border: none;
       border-radius: 8px;
-      padding: 12px;
+      padding: 4px; /* 12px; -> 4px */
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     .run-header {
       text-align: center;
-      margin-bottom: 10px;
-      padding-bottom: 8px;
+      margin-bottom: 2px;
+      padding-bottom: 1px;
       border-bottom: 1px solid #444;
     }
     .run-name {
@@ -575,13 +582,14 @@ async function generateRunview(params) {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin: 10px 0;
-      padding: 8px;
-      background: #1e1e1e;
+      margin: 6px /* 10px */  0;
+      padding: 4px; /* 8px; */
+      /* background: #1e1e1e; */
+      background: transparent;
       border-radius: 6px;
     }
     .run-timer {
-      font-size: 32px;
+      font-size: 64px;
       font-weight: bold;
       color: #4CAF50;
       font-family: 'Courier New', monospace;
@@ -590,7 +598,7 @@ async function generateRunview(params) {
       color: #FFD700;
     }
     .challenge-timer {
-      font-size: 20px;
+      font-size: 28px;
       font-weight: bold;
       color: #4CAF50;
       font-family: 'Courier New', monospace;
@@ -610,14 +618,20 @@ async function generateRunview(params) {
       padding: 10px;
     }
     .current-challenge-details {
-      background: #1e1e1e;
+      /* background: #1e1e1e; */
+      background: transparent;
       border-radius: 6px;
-      padding: 10px;
-      margin: 10px 0;
-      font-size: 12px;
+      padding: 3px;
+      margin: 1px 0;
+      font-size: 15px;
       line-height: 1.6;
     }
+    .challenge-entry-time {
+      color: #4CAF50;
+      font-size: 18px;
+    }
     .current-challenge-details .entry-type {
+      font-size: 18px;
       font-weight: bold;
       color: #4CAF50;
     }
@@ -634,21 +648,27 @@ async function generateRunview(params) {
     .challenges-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
-      font-size: 11px;
+      margin-top: 1px;
+      font-size: 14px;
+    }
+    .challenges-table thead {
+      display: none;
     }
     .challenges-table th {
-      background: #333;
+      /* background: #333; */
+      background: transparent;
       color: #fff;
-      padding: 6px 4px;
+      /* padding: 6px 4px; */
+      padding: 3px 2px; 
       text-align: left;
       font-size: 10px;
       font-weight: bold;
       border-bottom: 2px solid #555;
     }
     .challenges-table td {
-      padding: 5px 4px;
-      font-size: 11px;
+      padding: 3px 2px; 
+      /* padding: 6px 4px; */
+      font-size: 13px;
       border-bottom: 1px solid #333;
     }
     .challenges-table tr.current {
@@ -669,36 +689,63 @@ async function generateRunview(params) {
     .game-id {
       font-family: monospace;
       color: #888;
-      font-size: 10px;
+      font-size: 11px;
     }
     .game-name {
-      color: #fff;
+      color: white;
       font-weight: 500;
+      font-size: 13px;
     }
     .stage-info {
-      color: #aaa;
-      font-size: 10px;
+      color: white;
+      font-size: 12px;
     }
     .author {
       color: #888;
       font-size: 10px;
     }
-    .status {
-      font-weight: bold;
+
+    .current-challenge-details .game-id {
+       font-size: 16px;
+       color: lightred;
     }
-    .status.done {
+    .current-challenge-details .game-name {
+       font-size: 18px;
+       color: white;
+    }
+    .current-challenge-details .stage-info {
+       font-size: 18px;
+       color: white;
+    }
+    .current-challenge-details .author {
+       font-size: 18px;
+       color: lightgray;
+    }
+    .current-challenge-details .author-line {
+        font-size: 18px;
+	color: lightgray;
+    }
+
+
+    .status-icon {
+      font-size: 18px;
+      display: inline-block;
+      width: 20px;
+      text-align: center;
+    }
+    .status-icon.done {
       color: #4CAF50;
     }
-    .status.skip {
-      color: #ff9800;
+    .status-icon.skip {
+      color: #ff0000;
     }
-    .status.pending {
-      color: #2196F3;
+    .status-icon.early {
+      color: #ffaa00;
     }
     .time {
       font-family: 'Courier New', monospace;
-      color: #aaa;
-      font-size: 10px;
+      color: #4CAF50;
+      font-size: 16px;
     }
   </style>
 </head>
@@ -727,7 +774,6 @@ async function generateRunview(params) {
         <span class="entry-type">${escapeHtml(entryType)}</span> 
         <span class="game-id">${escapeHtml(currentChallenge.gameid || '—')}</span> - 
         <span class="game-name">${escapeHtml(abbreviateText(currentGameName))}</span>
-        ${currentAuthor ? `<span class="author">${escapeHtml(abbreviateText(currentAuthor))}</span>` : ''}
         ${currentGameDifficulty ? `<span class="author">(${escapeHtml(currentGameDifficulty)}${currentGameDifficultyMnemonic ? ' ' + escapeHtml(currentGameDifficultyMnemonic) : ''}${currentGameMnemonics.length > 0 ? ' ' + escapeHtml(currentGameMnemonics.join(' ')) : ''})</span>` : ''}
       </div>
       ${currentStageId ? `
@@ -735,6 +781,11 @@ async function generateRunview(params) {
         <span class="stage-info">${escapeHtml(currentStageId)}</span>
         ${currentStageName ? ` <span class="stage-info">${escapeHtml(abbreviateText(currentStageName))}</span>` : ''}
         ${(currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic || currentStageMnemonics.length > 0 ? `<span class="author">(${currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? escapeHtml(String(currentStageDifficulty)) : ''}${currentStageDifficultyMnemonic ? (currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? ' ' : '') + escapeHtml(currentStageDifficultyMnemonic) : ''}${currentStageMnemonics.length > 0 ? ((currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic ? ' ' : '') + escapeHtml(currentStageMnemonics.join('')) : ''})</span>` : ''}
+      </div>
+      ` : ''}
+      ${currentAuthor ? `
+      <div class="author-line">
+        <span class="author">Author: ${escapeHtml(abbreviateText(currentAuthor))}</span>
       </div>
       ` : ''}
       ${currentStageTags ? `
@@ -745,13 +796,19 @@ async function generateRunview(params) {
     </div>
     
     <table class="challenges-table">
-      <thead>
+      <!-- Column headers (hidden from display but documented):
+           Column 1: Status (icon) - Green checkmark for done, Red X for skipped, Yellow ! for early reveal
+           Column 2: Type - Abbreviated entry type (RNG-S, RNG-G, Stage, Game)
+           Column 3: Game - Game ID and Game Name
+           Column 4: Stage - Stage ID and Stage Name
+           Column 5: Time - Duration or current timer
+      -->
+      <thead style="display: none;">
         <tr>
+          <th>Status</th>
           <th>Type</th>
           <th>Game</th>
           <th>Stage</th>
-          <th>Author</th>
-          <th>Status</th>
           <th>Time</th>
         </tr>
       </thead>
@@ -764,9 +821,17 @@ ${displayIndices.map(idx => {
   
   const rowClass = isCurrent ? 'current' : (isCompleted ? 'completed' : (isSkipped ? 'skipped' : ''));
   
-  const entryType = result.entry_type === 'random_game' ? 'Random Game' :
-                    result.entry_type === 'random_stage' ? 'Random Stage' :
-                    result.entry_type === 'stage' ? 'Stage' : 'Game';
+  // Abbreviate entry type
+  let entryTypeAbbrev = '';
+  if (result.entry_type === 'random_game') {
+    entryTypeAbbrev = 'RNG-G';
+  } else if (result.entry_type === 'random_stage') {
+    entryTypeAbbrev = 'RNG-S';
+  } else if (result.entry_type === 'stage') {
+    entryTypeAbbrev = 'Stage';
+  } else {
+    entryTypeAbbrev = 'Game';
+  }
   
   const gameName = result.game_name || result.gameid || '???';
   // Use levelnumber/levelname if available, otherwise use exit_number/stage_description
@@ -786,20 +851,17 @@ ${displayIndices.map(idx => {
   const gameInfoForResult = result.gameid ? gameInfo.get(result.gameid) : null;
   const author = gameInfoForResult ? (gameInfoForResult.author || '') : '';
   
-  let statusText = '';
-  let statusClass = '';
-  if (isCurrent && !result.completed_at_ms) {
-    statusText = 'Running';
-    statusClass = 'pending';
-  } else if (isCompleted) {
-    statusText = 'Done';
-    statusClass = 'done';
+  // Status icon - only show for done, skipped, or early reveal
+  let statusIcon = '';
+  if (isCompleted) {
+    statusIcon = '<span class="status-icon done">✓</span>';
   } else if (isSkipped) {
-    statusText = 'Skip';
-    statusClass = 'skip';
+    statusIcon = '<span class="status-icon skip">✗</span>';
+  } else if (result.revealed_early) {
+    statusIcon = '<span class="status-icon early">!</span>';
   } else {
-    statusText = 'Pending';
-    statusClass = 'pending';
+    // Pending or Running - no icon displayed
+    statusIcon = '<span class="status-icon"></span>';
   }
   
   let timeText = '';
@@ -815,15 +877,14 @@ ${displayIndices.map(idx => {
   }
   
   return `        <tr class="${rowClass}">
-          <td><span class="entry-type">${escapeHtml(entryType)}</span></td>
+          <td>${statusIcon}</td>
+          <td><span class="entry-type">${escapeHtml(entryTypeAbbrev)}</span></td>
           <td>
             <span class="game-id">${escapeHtml(result.gameid || '—')}</span><br>
             <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>
           </td>
           <td><span class="stage-info">${escapeHtml(abbreviateText(stageInfo || '—'))}</span></td>
-          <td><span class="author">${escapeHtml(abbreviateText(author || '—'))}</span></td>
-          <td><span class="status ${statusClass}">${escapeHtml(statusText)}</span></td>
-          <td>${timeText}</td>
+          <td><span class="challenge-entry-time">${timeText}</span></td>
         </tr>`;
 }).join('\n')}
       </tbody>

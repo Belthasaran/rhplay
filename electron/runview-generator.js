@@ -393,6 +393,8 @@ async function generateRunview(params) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      text-shadow: 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000, -1px 0 0 #000;
+
       /* background: #1a1a1a;  */
       background: transparent;
       /* color: #e0e0e0; */
@@ -549,6 +551,8 @@ async function generateRunview(params) {
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      text-shadow: 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000, -1px 0 0 #000;
+
       /* background: #1a1a1a; */
       background: transparent;
       color: #e0e0e0;

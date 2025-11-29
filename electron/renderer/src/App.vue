@@ -19073,6 +19073,13 @@ async function loadRestoreRun() {
     // Check if staging needs regeneration after restore
     await checkNeedsRegenerateStaging();
     
+    // Generate runview.html after restoring
+    try {
+      await (window as any).electronAPI.generateRunview({ runUuid: preparingRunUuid });
+    } catch (error) {
+      console.warn('[loadRestoreRun] Failed to generate runview:', error);
+    }
+    
     // Close past runs modal and open run modal
     closePastRunsModal();
     runModalOpen.value = true;
@@ -22220,6 +22227,13 @@ async function resumeRunFromStartup() {
     });
     
     console.log('Fetched run results:', expandedResults);
+    
+    // Generate runview.html after resuming
+    try {
+      await (window as any).electronAPI.generateRunview({ runUuid: currentRunUuid.value });
+    } catch (error) {
+      console.warn('[resumeRunFromStartup] Failed to generate runview:', error);
+    }
     
     if (!expandedResults || expandedResults.length === 0) {
       // The run is marked as active but has no results - this is a corrupted run

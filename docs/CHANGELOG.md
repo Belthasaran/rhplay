@@ -6,6 +6,8 @@
 
 - SMW Headless Automated Testing Tool (smw_headless_test.py): Created comprehensive headless testing tool for SMW ROM patches. Supports BizHawk, RetroArch, and Mesen-S emulators. Features include: automatic input simulation (Start button, menu navigation, level entry), RAM sampling at execution points (game mode, level IDs, submap, flags), optional screenshot capture, and JSON results export. Includes standalone Lua script (luatools/smw_headless_test.lua) for direct BizHawk use. Documented in devdocs/SMW_HEADLESS_TESTING.md and added to docs/PROGRAMS.MD.
 
+- Test5.asm Comprehensive Analysis (devdocs/TEST5_PATCH_COMPREHENSIVE_ANALYSIS.md): Created extensive documentation covering the test5.asm patch implementation, known issues (midway entrance problem), level data structure analysis, and future research directions. Documents all ROM addresses, file offsets, and bit positions for level metadata including secondary headers, midway entrances, secondary entrances, overworld data, and Lunar Magic table relocations. Provides roadmap for creating getlevelinfo CLI tool and preserving midway entrance functionality.
+
 - Cross-platform provisioner for portable apps - avoid needing installer:
 
 - Added cross-platform **Provisioner** startup flow: when `clientdata.db`, `rhdata.db`, or `patchbin.db` are missing the Electron app now launches a dedicated provisioning UI (`Provisioner.vue`) that orchestrates the existing `prepare_databases.js` helper, streams real-time download/apply progress, and after success reloads the full app without requiring a separate installer.

@@ -20,6 +20,7 @@ const {
 const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
+const { generateRunview } = require('./runview-generator');
 const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
 const { matchesFilter } = require('./shared-filter-utils');
 const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
@@ -45,6 +46,28 @@ function getKeyguardKey(event) {
  * @param {DatabaseManager} dbManager - Database manager instance
  */
 function registerDatabaseHandlers(dbManager) {
+  // Initialize default runview settings if not set
+  try {
+    const db = dbManager.getConnection('clientdata');
+    const runviewcount = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('runviewcount');
+    if (!runviewcount) {
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO NOTHING
+      `).run(crypto.randomUUID(), 'runviewcount', '4');
+    }
+    const runviewwidth = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('runviewwidth');
+    if (!runviewwidth) {
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO NOTHING
+      `).run(crypto.randomUUID(), 'runviewwidth', '500');
+    }
+  } catch (error) {
+    console.warn('[runview] Failed to initialize default settings:', error);
+  }
   // Import OnlineProfileManager for profile management
   const OnlineProfileManager = require('./utils/OnlineProfileManager');
   const trustManager = new TrustManager(dbManager, { logger: console });
@@ -2071,6 +2094,14 @@ function registerDatabaseHandlers(dbManager) {
       
       transaction(runUuid, entries);
       
+      // Generate runview.html
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after save-plan:', error);
+      }
+      
       return { success: true };
     } catch (error) {
       console.error('Error saving run plan:', error);
@@ -2192,6 +2223,14 @@ function registerDatabaseHandlers(dbManager) {
         console.error('[Network Time] Error in clock validation promise:', error);
         // Non-fatal error, continue
       });
+      
+      // Generate runview.html
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after start:', error);
+      }
       
       return { success: true };
     } catch (error) {
@@ -2320,9 +2359,32 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // Generate runview.html
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after record-result:', error);
+      }
+      
       return { success: true };
     } catch (error) {
       console.error('Error recording challenge result:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Generate runview.html file
+   * Channel: db:runs:generate-runview
+   */
+  ipcMain.handle('db:runs:generate-runview', async (event, { runUuid }) => {
+    try {
+      const userDataPath = app.getPath('userData');
+      const result = await generateRunview({ dbManager, runUuid, userDataPath });
+      return result;
+    } catch (error) {
+      console.error('[generate-runview] Error:', error);
       return { success: false, error: error.message };
     }
   });
@@ -2421,6 +2483,14 @@ function registerDatabaseHandlers(dbManager) {
               updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
           WHERE run_uuid = ?
         `).run(runUuid);
+      }
+      
+      // Generate runview.html
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after undo-challenge:', error);
       }
       
       return { 
@@ -3347,6 +3417,14 @@ function registerDatabaseHandlers(dbManager) {
         throw transactionError; // Re-throw to be caught by outer catch
       }
       
+      // Generate runview.html after expansion
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after expand-and-prepare:', error);
+      }
+      
       return { success: true };
     } catch (error) {
       console.error('Error expanding run plan:', error);
@@ -3442,6 +3520,15 @@ function registerDatabaseHandlers(dbManager) {
           event.sender.send('staging-progress', { current, total, gameName });
         }
       });
+      
+      // Generate runview.html after staging
+      if (result.success) {
+        try {
+          await generateRunview({ dbManager, runUuid, userDataPath });
+        } catch (error) {
+          console.warn('[runview] Failed to generate after staging:', error);
+        }
+      }
       
       return result;
     } catch (error) {

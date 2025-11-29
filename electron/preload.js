@@ -255,6 +255,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRun: (params) => ipcRenderer.invoke('db:runs:get', params),
   
   /**
+   * Generate runview.html file
+   * @param {Object} params - {runUuid: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  generateRunview: (params) => ipcRenderer.invoke('db:runs:generate-runview', params),
+  
+  /**
    * Get stage info from gamestages table
    * @param {Object} params - {gameid: string, levelnumber: string}
    * @returns {Promise<Object>} Stage info with difficulty and flags

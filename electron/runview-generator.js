@@ -642,7 +642,7 @@ async function generateRunview(params) {
       margin-bottom: 4px;
     }
     .current-challenge-details .tags-line {
-      color: #888;
+      color: /*#888*/ white;
       font-size: 11px;
     }
     .challenges-table {
@@ -688,7 +688,7 @@ async function generateRunview(params) {
     }
     .game-id {
       font-family: monospace;
-      color: #888;
+      color: /*#888*/ lightgray;
       font-size: 11px;
     }
     .game-name {

@@ -12,10 +12,10 @@ This document reviews the current implementation of elapsed time tracking during
 
 ## Critical Principle: Timestamps Are Never Adjusted
 
-**IMPORTANT**: Run start timestamps (`started_at`) and completion timestamps (`completed_at`) represent the **exact wall-clock time** when events occurred. These timestamps are **NEVER modified or adjusted**, even when pausing, unpausing, or resuming runs.
+**IMPORTANT**: Run start timestamps (`started_at`), started_at_ms, etc, and completion timestamps (`completed_at`), completed_at_ms, represent the **exact wall-clock time** when events occurred. These timestamps are **NEVER modified or adjusted** to cause a deviation from the time those events actually occurred at, not even when pausing, unpausing, or resuming runs.
 
-- `started_at` = The exact time the run started (set once, never changed)
-- `completed_at` = The exact time a challenge/run completed (set when event occurs)
+- `started_at`, `started_at_ms` = The exact time the run started (set once, never changed - it may be cleared by undo)
+- `completed_at`, `completed_at_ms` = The exact time a challenge/run completed (set when event occurs)
 - Pause time is tracked separately in `pause_seconds` and subtracted during calculation
 - The elapsed time formula is: `(current_time - started_at) - pause_seconds - pending_pause_time`
 

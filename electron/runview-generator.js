@@ -508,10 +508,34 @@ async function generateRunview(params) {
       }
     }
     
-    if (!isRunNotStarted && !isRunFinished && currentChallenge.started_at_ms) {
-      currentChallengeElapsedMs = now - currentChallenge.started_at_ms;
-      if (currentChallenge.pause_milliseconds) {
-        currentChallengeElapsedMs -= currentChallenge.pause_milliseconds;
+    // Calculate current challenge elapsed time
+    // Challenge start time should be when the previous challenge was completed (or run start for first challenge)
+    let actualChallengeStartMs = null;
+    if (!isRunNotStarted && !isRunFinished) {
+      if (currentIndex > 0) {
+        // Use previous challenge's completion time as this challenge's start time
+        const previousChallenge = results[currentIndex - 1];
+        actualChallengeStartMs = previousChallenge.completed_at_ms;
+      } else {
+        // First challenge starts when the run starts
+        actualChallengeStartMs = run.started_at_ms;
+      }
+      
+      // Only use challenge's started_at_ms if it's significantly different from run start
+      // (meaning it was explicitly set when the challenge became current)
+      if (currentChallenge.started_at_ms && run.started_at_ms) {
+        const timeDiff = Math.abs(currentChallenge.started_at_ms - run.started_at_ms);
+        // If challenge start is more than 1 second different from run start, use it
+        if (timeDiff > 1000) {
+          actualChallengeStartMs = currentChallenge.started_at_ms;
+        }
+      }
+      
+      if (actualChallengeStartMs) {
+        currentChallengeElapsedMs = now - actualChallengeStartMs;
+        if (currentChallenge.pause_milliseconds) {
+          currentChallengeElapsedMs -= currentChallenge.pause_milliseconds;
+        }
       }
     }
     
@@ -913,7 +937,8 @@ ${displayIndices.map(idx => {
     const runPauseStartMs = ${run.pause_start_ms || 0};
     
     // Current challenge timer data
-    const challengeStartMs = ${currentChallenge.started_at_ms || 0};
+    // Use the actual challenge start time calculated on the server
+    const challengeStartMs = ${actualChallengeStartMs || 0};
     const challengePauseMs = ${currentChallenge.pause_milliseconds || 0};
     
     function formatTime(milliseconds) {
@@ -946,8 +971,14 @@ ${displayIndices.map(idx => {
       }
       
       // Update current challenge timer
+      // Challenge time = (now - challenge start) - accumulated pause time - current pause time (if paused)
       if (challengeStartMs) {
         let challengeElapsed = now - challengeStartMs - challengePauseMs;
+        // If run is currently paused, subtract the current pause time from challenge timer too
+        if (runPauseStartMs) {
+          const currentPauseMs = now - runPauseStartMs;
+          challengeElapsed -= currentPauseMs;
+        }
         if (challengeElapsed < 0) challengeElapsed = 0;
         const challengeTimerEl = document.getElementById('challenge-timer');
         if (challengeTimerEl) {
@@ -955,12 +986,17 @@ ${displayIndices.map(idx => {
         }
       }
       
-      // Update challenge row timers
+      // Update challenge row timers (for current challenge in table)
       document.querySelectorAll('.time[data-start-ms]').forEach(el => {
         const startMs = parseInt(el.getAttribute('data-start-ms'), 10);
         const pauseMs = parseInt(el.getAttribute('data-pause-ms'), 10) || 0;
         if (startMs) {
-          const elapsed = now - startMs - pauseMs;
+          let elapsed = now - startMs - pauseMs;
+          // If run is currently paused, subtract the current pause time
+          if (runPauseStartMs) {
+            const currentPauseMs = now - runPauseStartMs;
+            elapsed -= currentPauseMs;
+          }
           if (elapsed >= 0) {
             el.textContent = formatTime(elapsed);
           }

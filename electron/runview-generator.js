@@ -675,9 +675,14 @@ async function generateRunview(params) {
       font-size: 13px;
       border-bottom: 1px solid #333;
     }
-    .challenges-table tr.current {
+    /* .challenges-table tr.current {
       background: #3a4a3a;
       border-left: 3px solid #4CAF50;
+    }*/
+    .challenges-table tr.current {
+      /*background: #3a4a3a;*/
+            background: #283233; /* #3a494a; */
+      border-left: 3px solid #4ca8af; /* #4CAF50;*/
     }
     .challenges-table tr.completed {
       opacity: 0.7;
@@ -749,7 +754,9 @@ async function generateRunview(params) {
     .time {
       font-family: 'Courier New', monospace;
       color: #4CAF50;
+      background: black;
       font-size: 16px;
+      font-weight: bold;
     }
   </style>
 </head>

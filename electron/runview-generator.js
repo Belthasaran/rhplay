@@ -279,7 +279,7 @@ async function generateRunview(params) {
     // Get run information
     const run = clientdataDb.prepare(`
       SELECT run_uuid, run_name, status, started_at_ms, pause_milliseconds, pause_start_ms,
-             total_challenges, completed_challenges
+             completed_at_ms, total_challenges, completed_challenges
       FROM runs
       WHERE run_uuid = ?
     `).get(runUuid);
@@ -464,12 +464,33 @@ async function generateRunview(params) {
       : null;
     const currentStageInfo = currentStageKey ? stageInfo.get(currentStageKey) : null;
     
+    // Check if run is finished (completed status or all challenges done)
+    const allChallengesDone = results.length > 0 && results.every(r => r.status === 'success' || r.status === 'ok' || r.status === 'skipped');
+    const isRunFinished = run.status === 'completed' || allChallengesDone;
+    
+    // Check if run hasn't started yet
+    const isRunNotStarted = run.status === 'preparing' || !run.started_at_ms;
+    
     // Calculate current running time
     const now = Date.now();
     let runElapsedMs = 0;
     let currentChallengeElapsedMs = 0;
+    let finalRunTimeMs = null;
     
-    if (run.started_at_ms) {
+    if (isRunFinished && run.started_at_ms) {
+      // Run is finished - calculate final time from completed_at or use last challenge's completed_at
+      const completedAt = run.completed_at_ms || 
+        (results.length > 0 && results[results.length - 1].completed_at_ms) || 
+        null;
+      
+      if (completedAt) {
+        finalRunTimeMs = completedAt - run.started_at_ms;
+        if (run.pause_milliseconds) {
+          finalRunTimeMs -= run.pause_milliseconds;
+        }
+        if (finalRunTimeMs < 0) finalRunTimeMs = 0;
+      }
+    } else if (!isRunNotStarted && run.started_at_ms) {
       runElapsedMs = now - run.started_at_ms;
       if (run.pause_milliseconds) {
         runElapsedMs -= run.pause_milliseconds;
@@ -481,7 +502,7 @@ async function generateRunview(params) {
       }
     }
     
-    if (currentChallenge.started_at_ms) {
+    if (!isRunNotStarted && !isRunFinished && currentChallenge.started_at_ms) {
       currentChallengeElapsedMs = now - currentChallenge.started_at_ms;
       if (currentChallenge.pause_milliseconds) {
         currentChallengeElapsedMs -= currentChallenge.pause_milliseconds;
@@ -565,11 +586,28 @@ async function generateRunview(params) {
       color: #4CAF50;
       font-family: 'Courier New', monospace;
     }
+    .run-timer.finished {
+      color: #FFD700;
+    }
     .challenge-timer {
       font-size: 20px;
       font-weight: bold;
       color: #4CAF50;
       font-family: 'Courier New', monospace;
+    }
+    .finished-label {
+      font-size: 24px;
+      font-weight: bold;
+      color: #FFD700;
+      text-align: center;
+      padding: 10px;
+    }
+    .not-started-label {
+      font-size: 18px;
+      font-weight: bold;
+      color: #888;
+      text-align: center;
+      padding: 10px;
     }
     .current-challenge-details {
       background: #1e1e1e;
@@ -670,10 +708,19 @@ async function generateRunview(params) {
       <div class="run-name">${escapeHtml(run.run_name)} (${currentChallengeNum}/${totalChallenges})</div>
     </div>
     
+    ${isRunNotStarted ? `
+    <div class="not-started-label">Challenge not started yet</div>
+    ` : isRunFinished ? `
+    <div class="timer-row">
+      <div class="run-timer finished" id="run-timer">${finalRunTimeMs !== null ? escapeHtml(formatDuration(finalRunTimeMs)) : '00:00:00'}</div>
+      <div class="finished-label">Finished</div>
+    </div>
+    ` : `
     <div class="timer-row">
       <div class="run-timer" id="run-timer">00:00:00</div>
       <div class="challenge-timer" id="challenge-timer">00:00:00</div>
     </div>
+    `}
     
     <div class="current-challenge-details">
       <div class="game-line">
@@ -784,6 +831,10 @@ ${displayIndices.map(idx => {
   </div>
   
   <script>
+    const isRunFinished = ${isRunFinished};
+    const isRunNotStarted = ${isRunNotStarted};
+    const finalRunTimeMs = ${finalRunTimeMs !== null ? finalRunTimeMs : 'null'};
+    
     // Run timer data
     const runStartMs = ${run.started_at_ms || 0};
     const runPauseMs = ${run.pause_milliseconds || 0};
@@ -793,7 +844,20 @@ ${displayIndices.map(idx => {
     const challengeStartMs = ${currentChallenge.started_at_ms || 0};
     const challengePauseMs = ${currentChallenge.pause_milliseconds || 0};
     
+    function formatTime(milliseconds) {
+      const totalSeconds = Math.floor(milliseconds / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return \`\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}\`;
+    }
+    
     function updateTimers() {
+      // Don't update timers if run is finished or not started
+      if (isRunFinished || isRunNotStarted) {
+        return;
+      }
+      
       const now = Date.now();
       
       // Update run timer
@@ -803,14 +867,20 @@ ${displayIndices.map(idx => {
           runElapsed -= (now - runPauseStartMs);
         }
         if (runElapsed < 0) runElapsed = 0;
-        document.getElementById('run-timer').textContent = formatTime(runElapsed);
+        const runTimerEl = document.getElementById('run-timer');
+        if (runTimerEl) {
+          runTimerEl.textContent = formatTime(runElapsed);
+        }
       }
       
       // Update current challenge timer
       if (challengeStartMs) {
         let challengeElapsed = now - challengeStartMs - challengePauseMs;
         if (challengeElapsed < 0) challengeElapsed = 0;
-        document.getElementById('challenge-timer').textContent = formatTime(challengeElapsed);
+        const challengeTimerEl = document.getElementById('challenge-timer');
+        if (challengeTimerEl) {
+          challengeTimerEl.textContent = formatTime(challengeElapsed);
+        }
       }
       
       // Update challenge row timers
@@ -826,17 +896,11 @@ ${displayIndices.map(idx => {
       });
     }
     
-    function formatTime(milliseconds) {
-      const totalSeconds = Math.floor(milliseconds / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      return \`\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}\`;
+    // Update timers immediately and then every second (only if run is active)
+    if (!isRunFinished && !isRunNotStarted) {
+      updateTimers();
+      setInterval(updateTimers, 1000);
     }
-    
-    // Update timers immediately and then every second
-    updateTimers();
-    setInterval(updateTimers, 1000);
     
     // Auto-refresh page every 10 seconds to get updates
     setTimeout(() => {

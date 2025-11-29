@@ -2536,13 +2536,24 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       
       // Update run status to completed
+      const nowMs = Date.now();
       db.prepare(`
         UPDATE runs 
         SET status = 'completed',
             completed_at = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
+            completed_at_ms = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            updated_at_ms = ?
         WHERE run_uuid = ?
-      `).run(runUuid);
+      `).run(nowMs, nowMs, runUuid);
+      
+      // Generate runview.html for finished run
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after completion:', error);
+      }
       
       console.log(`Run ${runUuid} marked as completed`);
       return { success: true };

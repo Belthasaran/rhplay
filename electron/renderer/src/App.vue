@@ -1099,7 +1099,7 @@
             <button @click="undoChallenge" :disabled="!canUndo || isRunPaused" class="btn-back">↶ Back</button>
             <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused || isDoneButtonDisabled || isSkipDoneOnCooldown" class="btn-next">✓ Done</button>
             <button @click="launchCurrentChallenge" v-if="currentChallenge && currentChallengeSfcPath" :disabled="isRunPaused" class="btn-launch" :title="`Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} on USB2SNES`">🚀 Launch {{ String(currentChallengeIndex + 1).padStart(2, '0') }}</button>
-            <button @click="skipChallenge" :disabled="!currentChallenge || isRunPaused" class="btn-skip">⏭ Skip</button>
+            <button @click="skipChallenge" :disabled="!currentChallenge || isRunPaused || isSkipDoneOnCooldown" class="btn-skip">⏭ Skip</button>
             <button @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
           </template>
           <button class="close" @click="closeRunModal">✕</button>
@@ -17655,9 +17655,19 @@ const canUndo = computed(() => {
 });
 
 // Check if Skip/Done buttons are on cooldown
+// Depend on runElapsedSeconds to trigger recalculation every second
 const isSkipDoneOnCooldown = computed(() => {
+  // Depend on runElapsedSeconds to trigger recalculation every second
+  const _ = runElapsedSeconds.value;
+  
   if (!skipDoneCooldownUntil.value) return false;
-  return Date.now() < skipDoneCooldownUntil.value;
+  const now = Date.now();
+  if (now >= skipDoneCooldownUntil.value) {
+    // Cooldown expired, clear it
+    skipDoneCooldownUntil.value = null;
+    return false;
+  }
+  return true;
 });
 
 // Watch for current challenge changes to reveal random challenges and load stage feedback
@@ -20462,6 +20472,8 @@ async function skipChallenge() {
           result.status = 'pending';
           result.durationSeconds = 0;
         }
+        // Clear cooldown since action was cancelled
+        skipDoneCooldownUntil.value = null;
         return;
       }
       
@@ -20471,6 +20483,8 @@ async function skipChallenge() {
   } catch (error) {
     console.error('Error recording skip:', error);
     alert('Error recording skip');
+    // Clear cooldown on error
+    skipDoneCooldownUntil.value = null;
   }
 }
 

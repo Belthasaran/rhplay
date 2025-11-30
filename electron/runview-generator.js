@@ -917,8 +917,8 @@ async function generateRunview(params) {
       <div class="challenge-timer" id="challenge-timer">00:00:00</div>
     </div>
     <div class="timer-row">
-      ${runTimeLeftMs !== null ? `<div class="win-rule-timer ${runTimeLeftMs < 30000 ? 'time-critical' : (runTimeLeftMs < 60000 ? 'time-warning' : '')}" id="run-time-left">⏳ Run: <span id="run-time-left-value">00:00:00</span></div>` : ''}
-      ${itemTimeLeftMs !== null ? `<div class="win-rule-timer ${itemTimeLeftMs < 30000 ? 'time-critical' : (itemTimeLeftMs < 60000 ? 'time-warning' : '')}" id="item-time-left">⏱️ Item: <span id="item-time-left-value">00:00:00</span></div>` : ''}
+      ${itemTimeLeftMs !== null ? `<div class="win-rule-timer ${itemTimeLeftMs < 30000 ? 'time-critical' : (itemTimeLeftMs < 60000 ? 'time-warning' : '')}" id="item-time-left">⏳ <span id="item-time-left-value">00:00:00</span></div>` : ''}
+      ${runTimeLeftMs !== null ? `<div class="win-rule-timer ${runTimeLeftMs < 30000 ? 'time-critical' : (runTimeLeftMs < 60000 ? 'time-warning' : '')}" id="run-time-left">🏁 <span id="run-time-left-value">00:00:00</span></div>` : ''}
     </div>
     `}
     

@@ -17378,7 +17378,7 @@ type ChallengeResult = {
   pauseMilliseconds: number;  // Total pause time for this challenge (milliseconds)
 };
 const challengeResults = ref<ChallengeResult[]>([]);
-const undoStack = ref<ChallengeResult[]>([]);
+// No undo stack needed - active challenge is always the highest sequence number with no completed time
 
 // Run name input modal
 const runNameModalOpen = ref(false);
@@ -17514,7 +17514,20 @@ const currentStageDifficulty = computed(() => {
   return typeof difficulty === 'number' ? difficulty : null;
 });
 
-const canUndo = computed(() => undoStack.value.length > 0);
+// canUndo: true if there's an active challenge (highest sequence number with no completed time)
+const canUndo = computed(() => {
+  if (!isRunActive.value || challengeResults.value.length === 0) return false;
+  
+  // Find active challenge: highest sequence number with no completed time
+  for (let i = challengeResults.value.length - 1; i >= 0; i--) {
+    const result = challengeResults.value[i];
+    // Active challenge has no completed_at_ms and is pending
+    if (!result.status || result.status === 'pending') {
+      return true;  // Found an active challenge - can undo
+    }
+  }
+  return false;  // No active challenge found - all completed
+});
 
 // Watch for current challenge changes to reveal random challenges and load stage feedback
 watch(currentChallengeIndex, async (newIndex, oldIndex) => {
@@ -17909,8 +17922,7 @@ function clearRunState() {
   // Clear challenge results
   challengeResults.value = [];
   
-  // Clear undo stack
-  undoStack.value = [];
+  // No undo stack needed
   
   // Clear checked items
   checkedRun.value.clear();
@@ -19871,7 +19883,7 @@ async function startRun() {
         startedAtMs: idx === 0 ? runStartTime.value : null,  // First challenge starts when run starts
         pauseMilliseconds: 0
       }));
-      undoStack.value = [];
+      // No undo stack needed
       
       // Start timer for first challenge
       if (challengeResults.value.length > 0) {
@@ -20097,14 +20109,6 @@ async function nextChallenge() {
   // Determine status: 'success' if not revealed early, 'ok' if revealed early
   const finalStatus = result.revealedEarly ? 'ok' : 'success';
   
-  // Save current state to undo stack
-  undoStack.value.push({
-    index: idx,
-    status: result.status,
-    durationSeconds: result.durationSeconds,
-    revealedEarly: result.revealedEarly
-  });
-  
   // Mark as success or ok
   result.status = finalStatus;
   
@@ -20140,22 +20144,16 @@ async function nextChallenge() {
       );
       
       if (!finalConfirmed) {
-        // Undo the completion - restore previous state
-        if (undoStack.value.length > 0) {
-          const undoState = undoStack.value.pop();
-          if (undoState) {
-            result.status = undoState.status;
-            result.durationSeconds = undoState.durationSeconds;
-            result.revealedEarly = undoState.revealedEarly;
-            // Also undo in database
-            if (isElectronAvailable()) {
-              await (window as any).electronAPI.recordChallengeResult({
-                runUuid: currentRunUuid.value,
-                challengeIndex: idx,
-                status: 'pending'
-              });
-            }
-          }
+        // User cancelled - undo the completion in database
+        if (isElectronAvailable()) {
+          await (window as any).electronAPI.recordChallengeResult({
+            runUuid: currentRunUuid.value,
+            challengeIndex: idx,
+            status: 'pending'
+          });
+          // Restore local state
+          result.status = 'pending';
+          result.durationSeconds = 0;
         }
         return;
       }
@@ -20181,14 +20179,6 @@ async function skipChallenge() {
   }
   
   const result = challengeResults.value[idx];
-  
-  // Save current state to undo stack
-  undoStack.value.push({
-    index: idx,
-    status: result.status,
-    durationSeconds: result.durationSeconds,
-    revealedEarly: result.revealedEarly
-  });
   
   // Mark as skipped
   result.status = 'skipped';
@@ -20225,22 +20215,16 @@ async function skipChallenge() {
       );
       
       if (!finalConfirmed) {
-        // Undo the skip - restore previous state
-        if (undoStack.value.length > 0) {
-          const undoState = undoStack.value.pop();
-          if (undoState) {
-            result.status = undoState.status;
-            result.durationSeconds = undoState.durationSeconds;
-            result.revealedEarly = undoState.revealedEarly;
-            // Also undo in database
-            if (isElectronAvailable()) {
-              await (window as any).electronAPI.recordChallengeResult({
-                runUuid: currentRunUuid.value,
-                challengeIndex: idx,
-                status: 'pending'
-              });
-            }
-          }
+        // User cancelled - undo the skip in database
+        if (isElectronAvailable()) {
+          await (window as any).electronAPI.recordChallengeResult({
+            runUuid: currentRunUuid.value,
+            challengeIndex: idx,
+            status: 'pending'
+          });
+          // Restore local state
+          result.status = 'pending';
+          result.durationSeconds = 0;
         }
         return;
       }
@@ -20255,19 +20239,43 @@ async function skipChallenge() {
 }
 
 async function undoChallenge() {
-  if (undoStack.value.length === 0) return;
+  if (!isElectronAvailable()) return;
   
-  const previousState = undoStack.value.pop()!;
-  const idx = previousState.index;
+  try {
+    // Get all challenge results to find the last completed challenge to undo
+    // We undo the last COMPLETED challenge (highest sequence number WITH completed time)
+    // NOT the active challenge (which has no completed time yet)
+    const allResults = await (window as any).electronAPI.getRunResults({
+      runUuid: currentRunUuid.value
+    });
+    
+    // Find the last completed challenge (highest sequence number WITH completed_at_ms)
+    let challengeToUndoIndex = -1;
+    for (let i = allResults.length - 1; i >= 0; i--) {
+      const result = allResults[i];
+      // Find the highest sequence number that has been completed
+      if (result.completed_at_ms && result.completed_at_ms !== null) {
+        challengeToUndoIndex = i;
+        break;
+      }
+    }
+    
+    if (challengeToUndoIndex < 0) {
+      // No completed challenge found - nothing to undo
+      console.warn('[undoChallenge] No completed challenge found to undo');
+      return;
+    }
+    
+    // The last completed challenge is the one we undo
+    const idx = challengeToUndoIndex;
   
   // Before going back, mark any challenges AFTER this point as revealed_early
-  // because the user has already seen them (permanent indicator that user revealed early)
+    // because the user has already seen them (permanent indicator that user revealed early)
   for (let i = idx + 1; i < challengeResults.value.length; i++) {
     const result = challengeResults.value[i];
     const entry = runEntries[i];
     
     // If it's a random challenge that's been revealed, mark it as revealed early
-    // This is a permanent indicator shown as a warning badge instead of green check
     if ((entry.entryType === 'random_game' || entry.entryType === 'random_stage') && 
         entry.name !== '???' && 
         result.status !== 'pending') {
@@ -20276,148 +20284,87 @@ async function undoChallenge() {
       
       // Update in database
       try {
-        if (isElectronAvailable()) {
           await (window as any).electronAPI.markChallengeRevealedEarly({
             runUuid: currentRunUuid.value,
             challengeIndex: i,
             revealedEarly: true
           });
-        }
       } catch (error) {
         console.error('Error marking challenge as revealed early:', error);
       }
     }
   }
   
-  try {
-    if (isElectronAvailable()) {
-      // Call the undo handler which will:
-      // - Transfer pause time from undone challenge to previous challenge
-      // - Reset timestamps on undone challenge (started_at, completed_at)
-      // - Clear duration and pause time on undone challenge
-      // - Keep revealed_early flag (already handled above)
-      const result = await (window as any).electronAPI.undoChallenge({
-        runUuid: currentRunUuid.value,
-        challengeIndex: idx
-      });
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to undo challenge');
-      }
-      
-      // Get the undone challenge's pause time that was transferred
-      const transferredPauseSeconds = result.transferredPauseSeconds || 0;
-      if (transferredPauseSeconds > 0 && result.previousChallengeIndex !== null) {
-        console.log(`[undoChallenge] Transferred ${transferredPauseSeconds}s pause time to challenge ${result.previousChallengeIndex + 1}`);
-      }
-      
-      // Reload challenge results from database to get updated state
-      const updatedResults = await (window as any).electronAPI.getRunResults({
-        runUuid: currentRunUuid.value
-      });
-      
-      // Update challenge results with refreshed data from database
-      // Include startedAtMs and pauseMilliseconds for proper timer calculation
-      // For pending challenges with started_at_ms, calculate duration dynamically from current time
-      const now = Date.now();
-      challengeResults.value = updatedResults.map((res: any, index: number) => {
-        let durationSeconds = res.duration_seconds || 0;
-        
-        // If challenge is pending and has a started_at_ms, calculate elapsed time dynamically
-        // This is important for the previous challenge that becomes current again after undo
-        if ((res.status === 'pending' || !res.status) && res.started_at_ms) {
-          const elapsedMs = now - res.started_at_ms;
-          const pauseMs = res.pause_milliseconds || 0;
-          durationSeconds = Math.max(0, Math.floor((elapsedMs - pauseMs) / 1000));
-        }
-        
-        return {
-          index: index,
-          status: res.status || 'pending',
-          durationSeconds: durationSeconds,
-          revealedEarly: res.revealed_early || false,
-          startedAtMs: res.started_at_ms || null,
-          pauseMilliseconds: res.pause_milliseconds || 0
-        };
-      });
-      
-      // Update run pause time if it was affected (should be reflected in database)
-      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
-      if (run) {
-        if (run.pause_milliseconds) {
-          runPauseSeconds.value = Math.floor(run.pause_milliseconds / 1000);
-        } else if (run.pause_seconds) {
-          runPauseSeconds.value = run.pause_seconds;
-        }
-      }
-      
-      // When undoing Challenge N (at index idx):
-      // - Challenge N gets cleared/reset (becomes pending, NO started_at_ms)
-      // - Challenge N-1 (previous) becomes active again and continues timing
-      // - Challenge N-1 should keep its original started_at_ms (NOT reset)
-      // - Challenge N-1's elapsed time should INCREASE (all time counts toward it)
-      // - We go back by 1 challenge: from the current position to the PREVIOUS challenge (N-1), not the undone one (N)
-      // CRITICAL: The previous challenge (N-1) becomes the active challenge, NOT the undone challenge (N)
-      // Set currentChallengeIndex IMMEDIATELY after reload so timer interval knows which challenge is current
-      if (idx > 0) {
-        // Go back to the PREVIOUS challenge (N-1), which becomes active again
-        currentChallengeIndex.value = idx - 1;
-        
-        // The previous challenge (now active) should continue timing from its original started_at_ms
-        // Its elapsed time should INCREASE, not reset, because all time (including time from challenge N)
-        // is now attributed to it
-        const previousChallenge = challengeResults.value[idx - 1];
-        if (previousChallenge && previousChallenge.status === 'pending' && previousChallenge.startedAtMs) {
-          // Calculate elapsed time dynamically from started_at_ms (it should continue, not reset)
-          const now = Date.now();
-          let elapsedMs = now - previousChallenge.startedAtMs;
-          elapsedMs -= (previousChallenge.pauseMilliseconds || 0);
-          previousChallenge.durationSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
-        }
-      } else {
-        // Edge case: If undoing the first challenge (idx === 0), there is no previous challenge
-        // This shouldn't normally happen, but if it does, stay at index 0
-        currentChallengeIndex.value = 0;
-      }
+    // Call the undo handler which will:
+    // - Transfer pause time from undone challenge to previous challenge (if previous exists)
+    // - Reset timestamps on undone challenge (started_at, completed_at)
+    // - Clear duration and pause time on undone challenge
+    const result = await (window as any).electronAPI.undoChallenge({
+      runUuid: currentRunUuid.value,
+      challengeIndex: idx
+    });
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to undo challenge');
     }
     
-    // When undoing Challenge N (at index idx):
-    // - Challenge N gets cleared/reset (becomes pending, NO started_at_ms)
-    // - Challenge N-1 (previous) becomes active again and continues timing
-    // - Challenge N-1 should keep its original started_at_ms (NOT reset)
-    // - Challenge N-1's elapsed time should INCREASE (all time counts toward it)
-    // - We go back by 1 challenge: from the current position to the PREVIOUS challenge (N-1), not the undone one (N)
-    // CRITICAL: The previous challenge (N-1) becomes the active challenge, NOT the undone challenge (N)
-    // If backend wasn't available, set currentChallengeIndex here
-    if (!isElectronAvailable()) {
-      if (idx > 0) {
-        currentChallengeIndex.value = idx - 1;
-      } else {
-        currentChallengeIndex.value = 0;
+    // Reload challenge results from database to get updated state
+    const updatedResults = await (window as any).electronAPI.getRunResults({
+      runUuid: currentRunUuid.value
+    });
+    
+    // Update challenge results with refreshed data from database
+    // Include startedAtMs and pauseMilliseconds for proper timer calculation
+    const now = Date.now();
+    challengeResults.value = updatedResults.map((res: any, index: number) => {
+      let durationSeconds = res.duration_seconds || 0;
+      
+      // If challenge is pending and has a started_at_ms, calculate elapsed time dynamically
+      if ((res.status === 'pending' || !res.status) && res.started_at_ms) {
+        const elapsedMs = now - res.started_at_ms;
+        const pauseMs = res.pause_milliseconds || 0;
+        durationSeconds = Math.max(0, Math.floor((elapsedMs - pauseMs) / 1000));
+      }
+      
+      return {
+        index: index,
+        status: res.status || 'pending',
+        durationSeconds: durationSeconds,
+        revealedEarly: res.revealed_early || false,
+        startedAtMs: res.started_at_ms || null,
+        pauseMilliseconds: res.pause_milliseconds || 0
+      };
+    });
+    
+    // Ensure the undone challenge has no timing (cleared started_at_ms should mean no duration)
+    const undoneChallengeResult = challengeResults.value[idx];
+    if (undoneChallengeResult && !undoneChallengeResult.startedAtMs) {
+      undoneChallengeResult.durationSeconds = 0;
+      undoneChallengeResult.pauseMilliseconds = 0;
+    }
+    
+    // After undo, the previous challenge (idx - 1) becomes active again
+    // The backend makes it pending and preserves its started_at_ms
+    // Set currentChallengeIndex AFTER reloading results so it uses the updated data
+    if (idx > 0 && idx - 1 < challengeResults.value.length) {
+      // Go back to the previous challenge (it became active again)
+      currentChallengeIndex.value = idx - 1;
+      console.log(`[undoChallenge] Undone completed challenge ${idx + 1}, challenge ${idx} (index ${idx - 1}) is now active`);
+    } else {
+      // If undoing the first challenge (idx === 0) or invalid index, set to 0
+      currentChallengeIndex.value = 0;
+      console.log(`[undoChallenge] Undone challenge ${idx + 1}, challenge 1 (index 0) is now active`);
+    }
+    
+    // Update run pause time if it was affected
+    const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    if (run) {
+      if (run.pause_milliseconds) {
+        runPauseSeconds.value = Math.floor(run.pause_milliseconds / 1000);
+      } else if (run.pause_seconds) {
+        runPauseSeconds.value = run.pause_seconds;
       }
     }
-    
-    // The undone challenge (N) is reset - cleared timestamps, becomes pending, NO start time
-    const undoneChallenge = challengeResults.value[idx];
-    if (undoneChallenge) {
-      undoneChallenge.durationSeconds = 0;
-      undoneChallenge.pauseMilliseconds = 0;  // Pause time was transferred to previous challenge
-      undoneChallenge.startedAtMs = null;  // Undone challenge has NO start time - it hasn't been reached yet
-      undoneChallenge.status = 'pending';  // Make sure it's pending
-    }
-    
-    // Also clear the next challenge's start time locally (if it exists and is pending)
-    // This matches what the backend did - the next challenge should not have a start time
-    // until the current challenge is completed
-    if (idx + 1 < challengeResults.value.length) {
-      const nextChallenge = challengeResults.value[idx + 1];
-      if (nextChallenge && nextChallenge.status === 'pending') {
-        nextChallenge.startedAtMs = null;
-        nextChallenge.durationSeconds = 0;
-      }
-    }
-    
-    console.log(`[undoChallenge] Undone: Challenge ${idx + 1} back to pending, now on Challenge ${currentChallengeIndex.value + 1}`);
   } catch (error) {
     console.error('Error undoing challenge:', error);
     alert('Error undoing challenge: ' + (error instanceof Error ? error.message : String(error)));
@@ -22438,16 +22385,7 @@ async function resumeRunFromStartup() {
     }));
     
     // Populate undo stack with completed challenges (for Back button)
-    undoStack.value = challengeResults.value
-      .filter(r => r.status === 'success' || r.status === 'skipped' || r.status === 'ok')
-      .map(r => ({
-        index: r.index,
-        status: r.status,
-        durationSeconds: r.durationSeconds,
-        revealedEarly: r.revealedEarly
-      }));
-    
-    console.log('Initialized undo stack with', undoStack.value.length, 'completed challenges');
+    // No undo stack needed - active challenge is determined by highest sequence number with no completed time
     
     // Start timer interval (will use corrected calculation that accounts for pause time)
     if (runTimerInterval.value) {

@@ -6,11 +6,13 @@
       - `win_rules_json TEXT` - JSON blob storing win rules configuration
     - `run_results`:
       - `win_rules_met BOOLEAN` - NULL = not applicable, TRUE = met, FALSE = not met
-      - `rollover_time_at_start_ms INTEGER` - Rollover time available when challenge started (milliseconds)
-      - `rollover_time_at_end_ms INTEGER` - Rollover time remaining when challenge ended (milliseconds)
+      - `rollover_time_remaining_start_ms INTEGER` - Rollover time remaining when challenge started (milliseconds)
+      - `rollover_time_remaining_end_ms INTEGER` - Rollover time remaining when challenge ended (milliseconds)
       - `allocated_time_ms INTEGER` - Total time available for challenge (base + rollover) in milliseconds
       - `grace_time_ms INTEGER` - Grace period allowed for challenge in milliseconds
-  - Migration: `clientdata_051_win_rules` via `jsutils/migratedb.js`
+  - Migrations: 
+    - `clientdata_051_win_rules` via `jsutils/migratedb.js` - Initial win rules support
+    - `clientdata_052_win_rules_rename_columns` via `jsutils/migratedb.js` - Renamed rollover columns to match code expectations
   - Notes:
     - Win rule types: Challenge Time Cap, Challenge Time with Rollover, Run Time Limit, No Game Overs, No Hits
     - Time limits support grace periods (1% of limit, min 2s, max 60s)

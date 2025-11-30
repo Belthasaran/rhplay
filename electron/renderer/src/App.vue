@@ -1103,12 +1103,35 @@
             <button @click="pauseRun" v-if="!isRunPaused" class="btn-pause">⏸ Pause</button>
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
             <button @click="undoChallenge" :disabled="!canUndo || isRunPaused" class="btn-back">↶ Back</button>
-            <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused" class="btn-next">✓ Done</button>
+            <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused || isDoneButtonDisabled" class="btn-next">✓ Done</button>
             <button @click="launchCurrentChallenge" v-if="currentChallenge && currentChallengeSfcPath" :disabled="isRunPaused" class="btn-launch" :title="`Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} on USB2SNES`">🚀 Launch {{ String(currentChallengeIndex + 1).padStart(2, '0') }}</button>
             <button @click="skipChallenge" :disabled="!currentChallenge || isRunPaused" class="btn-skip">⏭ Skip</button>
             <button @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
           </template>
           <button class="close" @click="closeRunModal">✕</button>
+        </div>
+        
+        <!-- Win Rules Status Row (only shown when run is active and win rules are enabled) -->
+        <div v-if="isRunActive && hasWinRules && (parsedWinRules?.challengeTime?.enabled || parsedWinRules?.runTimeLimit?.enabled)" class="win-rules-status-row">
+          <div class="win-rules-info">
+            <span v-if="parsedWinRules?.challengeTime?.enabled" class="win-rule-label">
+              Challenge Time: {{ parsedWinRules.challengeTime.minutes || 10 }} min
+              <span v-if="parsedWinRules.challengeTime.rolloverMaxMinutes > 0">
+                (Rollover: {{ parsedWinRules.challengeTime.rolloverMaxMinutes }} min max)
+              </span>
+            </span>
+            <span v-if="parsedWinRules?.runTimeLimit?.enabled" class="win-rule-label">
+              Run Time Limit: {{ parsedWinRules.runTimeLimit.minutes || 60 }} min
+            </span>
+          </div>
+          <div class="win-rules-timers">
+            <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
+              ⏱️ Time Left: {{ formatTime(itemTimeLeftSeconds) }}
+            </span>
+            <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
+              Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -17454,11 +17477,12 @@ const runTimerInterval = ref<number | null>(null);
 // Challenge results tracking
 type ChallengeResult = {
   index: number;
-  status: 'pending' | 'success' | 'skipped' | 'ok';
+  status: 'pending' | 'success' | 'skipped' | 'ok' | 'failed';
   durationSeconds: number;
   revealedEarly: boolean;
   startedAtMs: number | null;  // When this challenge started (milliseconds since epoch)
   pauseMilliseconds: number;  // Total pause time for this challenge (milliseconds)
+  rolloverTimeRemainingStartMs: number | null;  // Rollover time remaining at start of challenge
 };
 const challengeResults = ref<ChallengeResult[]>([]);
 // No undo stack needed - active challenge is always the highest sequence number with no completed time
@@ -19974,7 +19998,8 @@ async function startRun() {
         durationSeconds: 0,
         revealedEarly: false,
         startedAtMs: idx === 0 ? runStartTime.value : null,  // First challenge starts when run starts
-        pauseMilliseconds: 0
+        pauseMilliseconds: 0,
+        rolloverTimeRemainingStartMs: null  // Will be loaded from database when results are fetched
       }));
       // No undo stack needed
       
@@ -20472,7 +20497,8 @@ async function undoChallenge() {
         durationSeconds: durationSeconds,
         revealedEarly: res.revealed_early || false,
         startedAtMs: res.started_at_ms || null,
-        pauseMilliseconds: res.pause_milliseconds || 0
+        pauseMilliseconds: res.pause_milliseconds || 0,
+        rolloverTimeRemainingStartMs: res.rollover_time_remaining_start_ms || null
       };
     });
     
@@ -21256,6 +21282,38 @@ const runTimeLeftSeconds = computed(() => {
   return Math.max(0, left);
 });
 
+// Rollover time remaining (for current challenge)
+const rolloverTimeRemainingSeconds = computed(() => {
+  if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
+    return null;
+  }
+  
+  const currentResult = challengeResults.value[currentChallengeIndex.value];
+  if (!currentResult || currentResult.rolloverTimeRemainingStartMs === null || currentResult.rolloverTimeRemainingStartMs === undefined) {
+    return null;
+  }
+  
+  // Calculate current rollover remaining based on elapsed time
+  const challengeTime = parsedWinRules.value.challengeTime;
+  const limitMinutes = challengeTime.minutes || 10;
+  const limitMs = limitMinutes * 60 * 1000;
+  
+  const now = Date.now();
+  const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  
+  // If we're past the limit, rollover is being used
+  const timeOverLimit = elapsedMs - limitMs;
+  if (timeOverLimit <= 0) {
+    // Still within limit, rollover unchanged
+    return Math.floor((currentResult.rolloverTimeRemainingStartMs || 0) / 1000);
+  } else {
+    // Past limit, rollover is being deducted
+    const rolloverUsed = timeOverLimit;
+    const remaining = Math.max(0, (currentResult.rolloverTimeRemainingStartMs || 0) - rolloverUsed);
+    return Math.floor(remaining / 1000);
+  }
+});
+
 // Item Time Left (for challenge time limit win rule, includes rollover)
 const itemTimeLeftSeconds = computed(() => {
   if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
@@ -21276,14 +21334,50 @@ const itemTimeLeftSeconds = computed(() => {
   const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   
-  // Get rollover time (this would need to be tracked per challenge, for now assume 0)
-  // TODO: Track rollover time per challenge from database
-  const rolloverSeconds = 0; // This should come from the challenge's rollover_time_remaining_start_ms
+  // Get rollover time from database
+  const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
+  const rolloverSeconds = Math.floor(rolloverMs / 1000);
   
   const availableTime = limitSeconds + rolloverSeconds;
   const left = availableTime - elapsedSeconds;
   
   return Math.max(0, left);
+});
+
+// Check if Done button should be disabled (time left + grace period <= 0)
+const isDoneButtonDisabled = computed(() => {
+  if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
+    return false; // No time limit, Done is always enabled
+  }
+  
+  const currentResult = challengeResults.value[currentChallengeIndex.value];
+  if (!currentResult || !currentResult.startedAtMs) {
+    return false; // Challenge not started, Done is enabled
+  }
+  
+  const challengeTime = parsedWinRules.value.challengeTime;
+  const limitMinutes = challengeTime.minutes || 10;
+  const limitMs = limitMinutes * 60 * 1000;
+  
+  // Calculate grace time
+  const gracePercent = challengeTime.gracePeriodPercent || 1.0;
+  const graceMinSeconds = challengeTime.gracePeriodMinSeconds || 2;
+  const graceMaxSeconds = challengeTime.gracePeriodMaxSeconds || 60;
+  const graceSeconds = Math.max(graceMinSeconds, Math.min(graceMaxSeconds, limitMinutes * 60 * gracePercent / 100));
+  const graceMs = graceSeconds * 1000;
+  
+  // Calculate elapsed time
+  const now = Date.now();
+  const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  
+  // Get rollover time
+  const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
+  
+  // Available time = limit + rollover + grace
+  const availableTime = limitMs + rolloverMs + graceMs;
+  
+  // If elapsed time exceeds available time (including grace), disable Done
+  return elapsedMs > availableTime;
 });
 
 async function openWinRulesDropdown(event: MouseEvent) {
@@ -22804,7 +22898,8 @@ async function resumeRunFromStartup() {
       durationSeconds: res.duration_seconds || 0,
       revealedEarly: res.revealed_early || false,
       startedAtMs: res.started_at_ms || null,
-      pauseMilliseconds: res.pause_milliseconds || 0
+      pauseMilliseconds: res.pause_milliseconds || 0,
+      rolloverTimeRemainingStartMs: res.rollover_time_remaining_start_ms || null
     }));
     
     // CRITICAL: Validate that ONLY the active challenge has a started_at_ms
@@ -23725,6 +23820,49 @@ button:disabled {
 .run-timer { font-weight: bold; color: #059669; font-size: 16px; padding: 0 8px; }
 .pause-time { font-weight: bold; color: #ef4444; font-size: 16px; padding: 0 8px; }
 .run-progress { color: #6b7280; padding: 0 8px; }
+.win-rules-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  gap: 12px;
+}
+.win-rules-info {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex: 1;
+}
+.win-rule-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.win-rules-timers {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.item-time-left-display {
+  font-weight: bold;
+  font-size: 14px;
+  color: #059669;
+  font-family: 'Courier New', monospace;
+}
+.item-time-left-display.time-warning {
+  color: #ffaa00;
+}
+.item-time-left-display.time-critical {
+  color: #ff0000;
+}
+.rollover-display {
+  font-weight: bold;
+  font-size: 14px;
+  color: #6b7280;
+  font-family: 'Courier New', monospace;
+}
 .data-table tbody tr.current-challenge { background: var(--accent-primary) !important; color: var(--button-text); border-left: 4px solid var(--accent-primary); font-weight: 600; }
 .data-table tbody tr.current-challenge td { background: var(--accent-primary); color: var(--button-text); }
 

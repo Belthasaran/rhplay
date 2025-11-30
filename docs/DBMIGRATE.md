@@ -13,8 +13,8 @@
     - `runs` table gains `win_rules_json` column for storing win rules configuration
     - `run_results` table gains columns for tracking win rule compliance:
       - `win_rules_met` (boolean, NULL/TRUE/FALSE)
-      - `rollover_time_at_start_ms` (integer, milliseconds)
-      - `rollover_time_at_end_ms` (integer, milliseconds)
+      - `rollover_time_remaining_start_ms` (integer, milliseconds) - Note: Initially created as `rollover_time_at_start_ms`, renamed in migration 052
+      - `rollover_time_remaining_end_ms` (integer, milliseconds) - Note: Initially created as `rollover_time_at_end_ms`, renamed in migration 052
       - `allocated_time_ms` (integer, milliseconds)
       - `grace_time_ms` (integer, milliseconds)
     - Index created on `win_rules_met` for efficient queries
@@ -23,6 +23,25 @@
     - Supports: Challenge Time Cap, Challenge Time with Rollover, Run Time Limit, No Game Overs, No Hits
     - Grace periods: 1% of time limit, minimum 2 seconds, maximum 60 seconds
     - Rollover time can be saved from early completions and used on later challenges
+    - Safe to run multiple times; script skips applied migrations
+
+- 2025-01-XX — Win Rules Column Rename (clientdata)
+  - Purpose: Rename rollover columns in run_results to match code expectations
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_052_win_rules_rename_columns`
+    - SQL: `electron/sql/migrations/052_clientdata_win_rules_rename_columns.sql`
+  - Prerequisites: Migration 051 must be applied first
+  - Expected outcome:
+    - `rollover_time_at_start_ms` renamed to `rollover_time_remaining_start_ms`
+    - `rollover_time_at_end_ms` renamed to `rollover_time_remaining_end_ms`
+    - Views `v_run_progress` and `v_run_results_timing_compat` are dropped and recreated
+  - Notes:
+    - This migration fixes a naming mismatch between the database schema and the code
     - Safe to run multiple times; script skips applied migrations
 
 - 2025-01-XX — Game Difficulty Map Table (rhdata)

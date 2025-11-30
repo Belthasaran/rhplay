@@ -308,6 +308,10 @@ async function generateRunview(params) {
         rr.pause_milliseconds,
         rr.was_random,
         rr.revealed_early,
+        rr.rollover_time_remaining_start_ms,
+        rr.rollover_time_remaining_end_ms,
+        rr.allocated_time_ms,
+        rr.grace_time_ms,
         COALESCE(rpe.entry_type, 
           CASE 
             WHEN rr.exit_number IS NOT NULL OR rr.levelnumber IS NOT NULL THEN 'stage'
@@ -571,9 +575,8 @@ async function generateRunview(params) {
         // Calculate elapsed time for current challenge
         const challengeElapsedMs = currentChallengeElapsedMs;
         
-        // TODO: Get rollover time from database (rollover_time_remaining_start_ms)
-        // For now, assume 0 rollover
-        const rolloverMs = 0;
+        // Get rollover time from database (rollover_time_remaining_start_ms)
+        const rolloverMs = currentChallenge.rollover_time_remaining_start_ms || 0;
         
         const availableTimeMs = limitMs + rolloverMs;
         itemTimeLeftMs = Math.max(0, availableTimeMs - challengeElapsedMs);
@@ -1075,7 +1078,7 @@ ${displayIndices.map(idx => {
     const winRules = ${winRules ? JSON.stringify(winRules) : 'null'};
     const runTimeLimitMs = ${winRules && winRules.runTimeLimit && winRules.runTimeLimit.enabled ? (winRules.runTimeLimit.minutes || 60) * 60 * 1000 : 'null'};
     const challengeTimeLimitMs = ${winRules && winRules.challengeTime && winRules.challengeTime.enabled ? (winRules.challengeTime.minutes || 10) * 60 * 1000 : 'null'};
-    const rolloverMs = 0; // TODO: Get from database rollover_time_remaining_start_ms
+    const rolloverMs = ${currentChallenge.rollover_time_remaining_start_ms || 0};
     
     function formatTime(milliseconds) {
       const totalSeconds = Math.floor(milliseconds / 1000);
@@ -1149,6 +1152,7 @@ ${displayIndices.map(idx => {
           challengeElapsed -= currentPauseMs;
         }
         if (challengeElapsed < 0) challengeElapsed = 0;
+        // rolloverMs is set from database value in the script initialization
         const availableTime = challengeTimeLimitMs + rolloverMs;
         const itemTimeLeft = Math.max(0, availableTime - challengeElapsed);
         const itemTimeLeftEl = document.getElementById('item-time-left-value');

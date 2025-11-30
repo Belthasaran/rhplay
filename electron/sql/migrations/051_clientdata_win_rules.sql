@@ -50,8 +50,8 @@ ALTER TABLE runs ADD COLUMN win_rules_json TEXT NULL;  -- JSON blob for win rule
 ALTER TABLE run_results ADD COLUMN win_rules_met BOOLEAN DEFAULT NULL;  -- NULL = not applicable, TRUE = met, FALSE = not met
 
 -- Rollover time tracking
-ALTER TABLE run_results ADD COLUMN rollover_time_at_start_ms INTEGER NULL;  -- Rollover time available when challenge started (milliseconds)
-ALTER TABLE run_results ADD COLUMN rollover_time_at_end_ms INTEGER NULL;  -- Rollover time remaining when challenge ended (milliseconds)
+ALTER TABLE run_results ADD COLUMN rollover_time_remaining_start_ms INTEGER NULL;  -- Rollover time remaining when challenge started (milliseconds)
+ALTER TABLE run_results ADD COLUMN rollover_time_remaining_end_ms INTEGER NULL;  -- Rollover time remaining when challenge ended (milliseconds)
 
 -- Time allocation tracking
 ALTER TABLE run_results ADD COLUMN allocated_time_ms INTEGER NULL;  -- Total time available for this challenge (base time + rollover time) in milliseconds

@@ -1108,13 +1108,33 @@ const MIGRATIONS = {
           if (!tableExists(db, 'run_results')) {
             return true; // Table doesn't exist, skip
           }
-          // Check if win rules columns exist
+          // Check if win rules columns exist (check for old OR new column names)
           return columnExists(db, 'runs', 'win_rules_json')
             && columnExists(db, 'run_results', 'win_rules_met')
-            && columnExists(db, 'run_results', 'rollover_time_at_start_ms')
-            && columnExists(db, 'run_results', 'rollover_time_at_end_ms')
+            && (columnExists(db, 'run_results', 'rollover_time_at_start_ms') || columnExists(db, 'run_results', 'rollover_time_remaining_start_ms'))
+            && (columnExists(db, 'run_results', 'rollover_time_at_end_ms') || columnExists(db, 'run_results', 'rollover_time_remaining_end_ms'))
             && columnExists(db, 'run_results', 'allocated_time_ms')
             && columnExists(db, 'run_results', 'grace_time_ms');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
+    {
+      id: 'clientdata_052_win_rules_rename_columns',
+      description: 'Rename win rules rollover columns to match code expectations',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/052_clientdata_win_rules_rename_columns.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'run_results')) {
+            return true; // Table doesn't exist, skip
+          }
+          // Check if new column names exist (migration already applied)
+          return columnExists(db, 'run_results', 'rollover_time_remaining_start_ms')
+            && columnExists(db, 'run_results', 'rollover_time_remaining_end_ms')
+            && !columnExists(db, 'run_results', 'rollover_time_at_start_ms')
+            && !columnExists(db, 'run_results', 'rollover_time_at_end_ms');
         } catch (e) {
           return false; // Error checking, run migration
         }

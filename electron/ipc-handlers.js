@@ -2151,6 +2151,21 @@ function registerDatabaseHandlers(dbManager) {
         // Use millisecond precision
         const nowMs = Date.now();
         
+        // Get win rules to set initial rollover for first challenge
+        const runData = db.prepare(`SELECT win_rules_json FROM runs WHERE run_uuid = ?`).get(runId);
+        let winRules = null;
+        let initialRolloverMs = null;
+        if (runData && runData.win_rules_json) {
+          try {
+            winRules = JSON.parse(runData.win_rules_json);
+            if (winRules && winRules.challengeTime && winRules.challengeTime.enabled) {
+              initialRolloverMs = (winRules.challengeTime.rolloverStartMinutes || 0) * 60 * 1000;
+            }
+          } catch (e) {
+            console.warn('[start-run] Failed to parse win rules:', e);
+          }
+        }
+        
         // Get the first pending challenge (lowest sequence_number)
         const firstPending = db.prepare(`
           SELECT result_uuid FROM run_results
@@ -2162,12 +2177,14 @@ function registerDatabaseHandlers(dbManager) {
         if (firstPending) {
           // Only set started_at and started_at_ms for the first pending challenge
           // All other challenges remain NULL until they actually start
+          // Also set initial rollover time if win rules are enabled
           db.prepare(`
             UPDATE run_results
             SET started_at = CURRENT_TIMESTAMP,
-                started_at_ms = ?
+                started_at_ms = ?,
+                rollover_time_remaining_start_ms = ?
             WHERE result_uuid = ?
-          `).run(nowMs, firstPending.result_uuid);
+          `).run(nowMs, initialRolloverMs, firstPending.result_uuid);
         }
         
         // Update total challenges count (should already be set, but update to be sure)
@@ -2264,7 +2281,7 @@ function registerDatabaseHandlers(dbManager) {
       
       // Get the result at this index, including current status
       const result = db.prepare(`
-        SELECT result_uuid, status as old_status FROM run_results 
+        SELECT result_uuid, status as old_status, sequence_number FROM run_results 
         WHERE run_uuid = ? 
         ORDER BY sequence_number 
         LIMIT 1 OFFSET ?
@@ -2306,6 +2323,88 @@ function registerDatabaseHandlers(dbManager) {
         durationMilliseconds = 0;
       }
       
+      // Get win rules from run
+      const run = db.prepare(`SELECT win_rules_json FROM runs WHERE run_uuid = ?`).get(runUuid);
+      let winRules = null;
+      if (run && run.win_rules_json) {
+        try {
+          winRules = JSON.parse(run.win_rules_json);
+        } catch (e) {
+          console.warn('[record-result] Failed to parse win rules:', e);
+        }
+      }
+      
+      // Calculate win rule tracking values (rollover, allocated time, grace time)
+      let rolloverTimeRemainingStartMs = null;
+      let rolloverTimeRemainingEndMs = null;
+      let allocatedTimeMs = null;
+      let graceTimeMs = null;
+      
+      if (winRules && winRules.challengeTime && winRules.challengeTime.enabled) {
+        const challengeTime = winRules.challengeTime;
+        const limitMinutes = challengeTime.minutes || 10;
+        const limitMs = limitMinutes * 60 * 1000;
+        
+        // Calculate grace time (1% of limit, min 2s, max 60s)
+        const gracePercent = challengeTime.gracePeriodPercent || 1.0;
+        const graceMinSeconds = challengeTime.gracePeriodMinSeconds || 2;
+        const graceMaxSeconds = challengeTime.gracePeriodMaxSeconds || 60;
+        const graceSeconds = Math.max(graceMinSeconds, Math.min(graceMaxSeconds, limitMinutes * 60 * gracePercent / 100));
+        graceTimeMs = graceSeconds * 1000;
+        
+        // Get rollover time remaining at start of this challenge
+        // For first challenge, use starting rollover; for subsequent challenges, use previous challenge's end rollover
+        let rolloverAtStart = 0;
+        if (result.sequence_number === 1) {
+          // First challenge: use starting rollover
+          rolloverAtStart = (challengeTime.rolloverStartMinutes || 0) * 60 * 1000;
+        } else {
+          // Get previous challenge's rollover_time_remaining_end_ms
+          const previousChallenge = db.prepare(`
+            SELECT rollover_time_remaining_end_ms FROM run_results
+            WHERE run_uuid = ? AND sequence_number = ?
+          `).get(runUuid, result.sequence_number - 1);
+          
+          if (previousChallenge && previousChallenge.rollover_time_remaining_end_ms !== null) {
+            rolloverAtStart = previousChallenge.rollover_time_remaining_end_ms;
+          } else {
+            // Previous challenge didn't have rollover tracking, use starting rollover
+            rolloverAtStart = (challengeTime.rolloverStartMinutes || 0) * 60 * 1000;
+          }
+        }
+        
+        rolloverTimeRemainingStartMs = rolloverAtStart;
+        
+        // Calculate allocated time (limit + rollover at start)
+        allocatedTimeMs = limitMs + rolloverAtStart;
+        
+        // If challenge is being completed (not reset to pending), calculate rollover at end
+        if (status !== 'pending' && challenge?.started_at_ms) {
+          // Calculate if challenge was completed early or late
+          const timeSpent = durationMilliseconds;
+          const timeOverLimit = timeSpent - limitMs;
+          
+          // Calculate rollover at end
+          let rolloverAtEnd = rolloverAtStart;
+          
+          if (timeOverLimit <= graceTimeMs) {
+            // Within grace period - no change to rollover (grace time doesn't add to rollover)
+            rolloverAtEnd = rolloverAtStart;
+          } else if (timeOverLimit < 0) {
+            // Completed early - add to rollover (up to max)
+            const earlyBy = -timeOverLimit;
+            const maxRolloverMs = (challengeTime.rolloverMaxMinutes || 0) * 60 * 1000;
+            rolloverAtEnd = Math.min(maxRolloverMs, rolloverAtStart + earlyBy);
+          } else {
+            // Completed late (beyond grace) - deduct from rollover
+            const lateBy = timeOverLimit - graceTimeMs; // Grace period doesn't count against rollover
+            rolloverAtEnd = Math.max(0, rolloverAtStart - lateBy);
+          }
+          
+          rolloverTimeRemainingEndMs = rolloverAtEnd;
+        }
+      }
+      
       // If resetting to 'pending', clear timestamps and duration (but don't calculate duration)
       // Otherwise, calculate and set completion timestamp and duration
       if (status === 'pending') {
@@ -2316,7 +2415,11 @@ function registerDatabaseHandlers(dbManager) {
               completed_at = NULL,
               completed_at_ms = NULL,
               duration_seconds = NULL,
-              duration_milliseconds = NULL
+              duration_milliseconds = NULL,
+              rollover_time_remaining_start_ms = NULL,
+              rollover_time_remaining_end_ms = NULL,
+              allocated_time_ms = NULL,
+              grace_time_ms = NULL
           WHERE result_uuid = ?
         `).run(status, result.result_uuid);
       } else {
@@ -2324,24 +2427,38 @@ function registerDatabaseHandlers(dbManager) {
         durationMilliseconds = Math.max(0, durationMilliseconds);
         durationSeconds = Math.max(0, durationSeconds);
         
-        // Update result with completion timestamp and duration
+        // Update result with completion timestamp, duration, and win rule tracking
         db.prepare(`
           UPDATE run_results
           SET status = ?,
               completed_at = CURRENT_TIMESTAMP,
               completed_at_ms = ?,
               duration_seconds = ?,
-              duration_milliseconds = ?
+              duration_milliseconds = ?,
+              rollover_time_remaining_start_ms = ?,
+              rollover_time_remaining_end_ms = ?,
+              allocated_time_ms = ?,
+              grace_time_ms = ?
           WHERE result_uuid = ?
-        `).run(status, nowMs, durationSeconds, durationMilliseconds, result.result_uuid);
+        `).run(
+          status, 
+          nowMs, 
+          durationSeconds, 
+          durationMilliseconds,
+          rolloverTimeRemainingStartMs,
+          rolloverTimeRemainingEndMs,
+          allocatedTimeMs,
+          graceTimeMs,
+          result.result_uuid
+        );
         
-        // When a challenge completes (status changes to success/ok/skipped),
+        // When a challenge completes (status changes to success/ok/skipped/failed),
         // the NEXT pending challenge should start.
         // Set its started_at_ms to NOW (when this challenge completed).
         // This ensures each challenge's timer starts when it actually begins.
         // According to RUN_TIMING_REVIEW.md, each challenge's started_at_ms should be
         // the exact time when that challenge actually started.
-        if ((status === 'success' || status === 'ok' || status === 'skipped') && 
+        if ((status === 'success' || status === 'ok' || status === 'skipped' || status === 'failed') && 
             oldStatus !== status) {
           const nextChallenge = db.prepare(`
             SELECT result_uuid, sequence_number FROM run_results
@@ -2356,12 +2473,19 @@ function registerDatabaseHandlers(dbManager) {
           
           if (nextChallenge) {
             // Set the next challenge's start time to now (when previous challenge completed)
+            // Also set initial rollover time for the next challenge
+            let nextRolloverStart = null;
+            if (winRules && winRules.challengeTime && winRules.challengeTime.enabled && rolloverTimeRemainingEndMs !== null) {
+              nextRolloverStart = rolloverTimeRemainingEndMs;
+            }
+            
             db.prepare(`
               UPDATE run_results
               SET started_at = CURRENT_TIMESTAMP,
-                  started_at_ms = ?
+                  started_at_ms = ?,
+                  rollover_time_remaining_start_ms = ?
               WHERE result_uuid = ?
-            `).run(nowMs, nextChallenge.result_uuid);
+            `).run(nowMs, nextRolloverStart, nextChallenge.result_uuid);
           }
         }
       }

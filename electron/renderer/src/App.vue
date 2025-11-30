@@ -21194,8 +21194,9 @@ const hasWinRules = computed(() => {
   if (!currentWinRulesJson.value) return false;
   try {
     const rules = JSON.parse(currentWinRulesJson.value);
-    return rules.challengeTimeCap?.enabled ||
-           rules.challengeTimeWithRollover?.enabled ||
+    return rules.challengeTime?.enabled ||
+           rules.challengeTimeCap?.enabled || // Support old format
+           rules.challengeTimeWithRollover?.enabled || // Support old format
            rules.runTimeLimit?.enabled ||
            rules.noGameOvers?.enabled ||
            rules.noHits?.enabled;

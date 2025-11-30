@@ -20399,6 +20399,52 @@ async function pauseRun() {
   }
 }
 
+async function refreshChallengeResults() {
+  if (!currentRunUuid.value || !isElectronAvailable()) return;
+  
+  try {
+    // Get win rules to determine if challengeTime is enabled
+    const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    let winRules = null;
+    if (run && run.win_rules_json) {
+      try {
+        winRules = JSON.parse(run.win_rules_json);
+      } catch (e) {
+        console.warn('[refreshChallengeResults] Failed to parse win rules:', e);
+      }
+    }
+    const challengeTimeEnabled = winRules && winRules.challengeTime && winRules.challengeTime.enabled;
+    
+    const expandedResults = await (window as any).electronAPI.getRunResults({
+      runUuid: currentRunUuid.value
+    });
+    
+    if (!expandedResults || expandedResults.length === 0) {
+      return;
+    }
+    
+    // Update challenge results with fresh data from database (especially rollover values)
+    challengeResults.value = expandedResults.map((res: any, idx: number) => ({
+      index: idx,
+      status: res.status || 'pending',
+      durationSeconds: res.duration_seconds || 0,
+      revealedEarly: res.revealed_early || false,
+      startedAtMs: res.started_at_ms || null,
+      pauseMilliseconds: res.pause_milliseconds || 0,
+      rolloverTimeRemainingStartMs: challengeTimeEnabled
+        ? (res.rollover_time_remaining_start_ms !== null && res.rollover_time_remaining_start_ms !== undefined
+           ? res.rollover_time_remaining_start_ms
+           : 0)  // Default to 0 when challengeTime is enabled and value is null
+        : null   // null when challengeTime is disabled
+    }));
+    
+    console.log('[refreshChallengeResults] Refreshed challenge results with updated rollover values', 
+      challengeResults.value.map((r, i) => `[${i}] rollover=${r.rolloverTimeRemainingStartMs || 0}ms`).join(', '));
+  } catch (error) {
+    console.error('[refreshChallengeResults] Error refreshing challenge results:', error);
+  }
+}
+
 async function unpauseRun() {
   if (!currentRunUuid.value || !isRunPaused.value) return;
   
@@ -20506,6 +20552,9 @@ async function nextChallenge() {
     
     console.log(`Challenge ${idx + 1} completed (${finalStatus})`);
     
+    // Refresh challenge results to get updated rollover values from database
+    await refreshChallengeResults();
+    
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
@@ -20595,6 +20644,9 @@ async function skipChallenge() {
     }
     
     console.log(`Challenge ${idx + 1} ${hasWinRules.value ? 'failed (skipped)' : 'skipped'}`);
+    
+    // Refresh challenge results to get updated rollover values from database
+    await refreshChallengeResults();
     
     // Move to next challenge
     if (idx < runEntries.length - 1) {
@@ -21649,23 +21701,23 @@ const rolloverTimeRemainingSeconds = computed(() => {
   
   const challengeTime = parsedWinRules.value.challengeTime;
   const currentResult = challengeResults.value[currentChallengeIndex.value];
-  if (!currentResult || !currentResult.startedAtMs) {
-    // If challenge hasn't started yet, return starting rollover or 0
-    const startRollover = currentResult?.rolloverTimeRemainingStartMs;
-    if (startRollover !== null && startRollover !== undefined) {
-      return Math.floor(startRollover / 1000);
-    }
+  if (!currentResult) {
     return 0;
+  }
+  
+  // Get starting rollover - use the value from database, default to 0 if null/undefined
+  const rolloverStart = currentResult.rolloverTimeRemainingStartMs !== null && currentResult.rolloverTimeRemainingStartMs !== undefined
+    ? currentResult.rolloverTimeRemainingStartMs
+    : 0;
+  
+  // If challenge hasn't started yet, return starting rollover
+  if (!currentResult.startedAtMs) {
+    return Math.floor(rolloverStart / 1000);
   }
   
   // Calculate current rollover remaining based on elapsed time
   const limitMinutes = challengeTime.minutes || 10;
   const limitMs = limitMinutes * 60 * 1000;
-  
-  // Get starting rollover (default to 0 if not set)
-  const rolloverStart = currentResult.rolloverTimeRemainingStartMs !== null && currentResult.rolloverTimeRemainingStartMs !== undefined
-    ? currentResult.rolloverTimeRemainingStartMs
-    : 0;
   
   const now = Date.now();
   let elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
@@ -21676,13 +21728,15 @@ const rolloverTimeRemainingSeconds = computed(() => {
     elapsedMs -= currentPauseMs;
   }
   
-  // If we're past the limit, rollover is being used
+  // Rollover is only deducted when time exceeds the limit (not before)
+  // Rollover increases when challenge completes early (handled in backend)
   const timeOverLimit = elapsedMs - limitMs;
   if (timeOverLimit <= 0) {
-    // Still within limit, rollover unchanged (for now - will be updated when challenge completes)
+    // Still within limit, rollover unchanged
     return Math.floor(rolloverStart / 1000);
   } else {
     // Past limit, rollover is being deducted
+    // Only deduct the amount that exceeds the limit
     const rolloverUsed = timeOverLimit;
     const remaining = Math.max(0, rolloverStart - rolloverUsed);
     return Math.floor(remaining / 1000);
@@ -21721,13 +21775,29 @@ const itemTimeLeftSeconds = computed(() => {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   
   // Get rollover time from database
-  const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
+  // Rollover is only used when time exceeds the limit
+  const rolloverMs = currentResult.rolloverTimeRemainingStartMs !== null && currentResult.rolloverTimeRemainingStartMs !== undefined
+    ? currentResult.rolloverTimeRemainingStartMs
+    : 0;
   const rolloverSeconds = Math.floor(rolloverMs / 1000);
   
-  const availableTime = limitSeconds + rolloverSeconds;
-  const left = availableTime - elapsedSeconds;
+  // Calculate how much time is over the limit
+  const timeOverLimit = elapsedSeconds - limitSeconds;
   
-  return Math.max(0, left);
+  // If within limit, rollover is still available
+  // If over limit, rollover is being used
+  if (timeOverLimit <= 0) {
+    // Still within limit - available time is limit + rollover
+    const availableTime = limitSeconds + rolloverSeconds;
+    const left = availableTime - elapsedSeconds;
+    return Math.max(0, left);
+  } else {
+    // Over limit - rollover is being used
+    // Available time = limit + rollover, elapsed = limit + timeOverLimit
+    // Left = (limit + rollover) - (limit + timeOverLimit) = rollover - timeOverLimit
+    const rolloverRemaining = rolloverSeconds - timeOverLimit;
+    return Math.max(0, rolloverRemaining);
+  }
 });
 
 // Grace time remaining (shown when item time hits zero)
@@ -21771,15 +21841,31 @@ const itemGraceTimeLeftSeconds = computed(() => {
     elapsedMs -= currentPauseMs;
   }
   
-  const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
-  const availableTime = limitMs + rolloverMs;
-  const timeOverLimit = elapsedMs - availableTime;
+  // Rollover must be exhausted before grace period starts
+  const rolloverMs = currentResult.rolloverTimeRemainingStartMs !== null && currentResult.rolloverTimeRemainingStartMs !== undefined
+    ? currentResult.rolloverTimeRemainingStartMs
+    : 0;
   
-  if (timeOverLimit <= 0) {
-    return null; // Still within limit
+  // Calculate time over the base limit
+  const timeOverBaseLimit = elapsedMs - limitMs;
+  
+  // If within base limit, no grace time yet
+  if (timeOverBaseLimit <= 0) {
+    return null;
   }
   
-  const graceLeft = graceMs - timeOverLimit;
+  // If over base limit, check if rollover is exhausted
+  const rolloverUsed = timeOverBaseLimit;
+  const rolloverRemaining = rolloverMs - rolloverUsed;
+  
+  // Grace period only starts after rollover is exhausted
+  if (rolloverRemaining > 0) {
+    return null; // Still using rollover, no grace time yet
+  }
+  
+  // Rollover exhausted, now in grace period
+  const timeOverLimitAndRollover = timeOverBaseLimit - rolloverMs; // How much over limit+rollover
+  const graceLeft = graceMs - timeOverLimitAndRollover;
   const graceLeftSeconds = Math.floor(graceLeft / 1000);
   
   return Math.max(0, graceLeftSeconds);
@@ -21822,9 +21908,12 @@ const isDoneButtonDisabled = computed(() => {
   }
   
   // Get rollover time
-  const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
+  const rolloverMs = currentResult.rolloverTimeRemainingStartMs !== null && currentResult.rolloverTimeRemainingStartMs !== undefined
+    ? currentResult.rolloverTimeRemainingStartMs
+    : 0;
   
   // Available time = limit + rollover + grace
+  // Rollover is only used when time exceeds limit
   const availableTime = limitMs + rolloverMs + graceMs;
   
   // If elapsed time exceeds available time (including grace), disable Done
@@ -23366,6 +23455,18 @@ async function resumeRunFromStartup() {
     console.log('Current challenge index:', currentChallengeIndex.value);
     
     // Initialize challenge results
+    // Check if win rules are enabled to determine rollover default
+    const runData = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    let winRules = null;
+    if (runData && runData.win_rules_json) {
+      try {
+        winRules = JSON.parse(runData.win_rules_json);
+      } catch (e) {
+        console.warn('[resumeRunFromStartup] Failed to parse win rules:', e);
+      }
+    }
+    const challengeTimeEnabled = winRules && winRules.challengeTime && winRules.challengeTime.enabled;
+    
     challengeResults.value = expandedResults.map((res: any, idx: number) => ({
       index: idx,
       status: res.status || 'pending',
@@ -23373,7 +23474,11 @@ async function resumeRunFromStartup() {
       revealedEarly: res.revealed_early || false,
       startedAtMs: res.started_at_ms || null,
       pauseMilliseconds: res.pause_milliseconds || 0,
-      rolloverTimeRemainingStartMs: res.rollover_time_remaining_start_ms || null
+      rolloverTimeRemainingStartMs: challengeTimeEnabled
+        ? (res.rollover_time_remaining_start_ms !== null && res.rollover_time_remaining_start_ms !== undefined
+           ? res.rollover_time_remaining_start_ms
+           : 0)  // Default to 0 when challengeTime is enabled
+        : null   // null when challengeTime is disabled
     }));
     
     // CRITICAL: Validate that ONLY the active challenge has a started_at_ms

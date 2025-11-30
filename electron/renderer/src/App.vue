@@ -1097,7 +1097,7 @@
             <button @click="pauseRun" v-if="!isRunPaused" class="btn-pause">⏸ Pause</button>
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
             <button @click="undoChallenge" :disabled="!canUndo || isRunPaused" class="btn-back">↶ Back</button>
-            <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused || isDoneButtonDisabled" class="btn-next">✓ Done</button>
+            <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused || isDoneButtonDisabled || isSkipDoneOnCooldown" class="btn-next">✓ Done</button>
             <button @click="launchCurrentChallenge" v-if="currentChallenge && currentChallengeSfcPath" :disabled="isRunPaused" class="btn-launch" :title="`Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} on USB2SNES`">🚀 Launch {{ String(currentChallengeIndex + 1).padStart(2, '0') }}</button>
             <button @click="skipChallenge" :disabled="!currentChallenge || isRunPaused" class="btn-skip">⏭ Skip</button>
             <button @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
@@ -20301,6 +20301,10 @@ async function cancelRun() {
 
 async function nextChallenge() {
   if (!currentChallenge.value) return;
+  if (isSkipDoneOnCooldown.value) return; // Prevent double-clicks during cooldown
+  
+  // Set 3-second cooldown
+  skipDoneCooldownUntil.value = Date.now() + 3000;
   
   const idx = currentChallengeIndex.value;
   const result = challengeResults.value[idx];
@@ -20368,6 +20372,8 @@ async function nextChallenge() {
           result.status = 'pending';
           result.durationSeconds = 0;
         }
+        // Clear cooldown since action was cancelled
+        skipDoneCooldownUntil.value = null;
         return;
       }
       
@@ -20377,11 +20383,17 @@ async function nextChallenge() {
   } catch (error) {
     console.error('Error recording challenge result:', error);
     alert('Error recording result');
+    // Clear cooldown on error
+    skipDoneCooldownUntil.value = null;
   }
 }
 
 async function skipChallenge() {
   if (!currentChallenge.value) return;
+  if (isSkipDoneOnCooldown.value) return; // Prevent double-clicks during cooldown
+  
+  // Set 3-second cooldown
+  skipDoneCooldownUntil.value = Date.now() + 3000;
   
   const idx = currentChallengeIndex.value;
   const entry = runEntries[idx];

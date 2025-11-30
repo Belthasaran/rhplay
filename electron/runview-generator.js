@@ -886,16 +886,14 @@ async function generateRunview(params) {
       <!-- Column headers (hidden from display but documented):
            Column 1: Status (icon) - Green checkmark for done, Red X for skipped, Yellow ! for early reveal
            Column 2: Type - Abbreviated entry type (RNG-S, RNG-G, Stage, Game)
-           Column 3: Game - Game ID and Game Name
-           Column 4: Stage - Stage ID and Stage Name
-           Column 5: Time - Duration or current timer
+           Column 3: Game - Game ID, Game Name, and Stage ID (if applicable)
+           Column 4: Time - Duration or current timer
       -->
       <thead style="display: none;">
         <tr>
           <th>Status</th>
           <th>Type</th>
           <th>Game</th>
-          <th>Stage</th>
           <th>Time</th>
         </tr>
       </thead>
@@ -938,24 +936,13 @@ ${displayIndices.map(idx => {
   const stageInfoForResult = stageKeyForResult ? stageInfo.get(stageKeyForResult) : null;
   const stageNumDifficulty = stageInfoForResult ? (stageInfoForResult.difficulty !== null && stageInfoForResult.difficulty !== undefined ? stageInfoForResult.difficulty : null) : null;
   
-  // Format stage info with larger font for stage ID
-  let stageInfoHtml = '';
-  if (result.levelnumber && result.levelname) {
-    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.levelnumber)}</span> - <span class="stage-info">${escapeHtml(abbreviateText(result.levelname))}</span>`;
-  } else if (result.levelnumber) {
-    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.levelnumber)}</span>`;
-  } else if (result.exit_number && result.stage_description) {
-    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.exit_number)}</span> - <span class="stage-info">${escapeHtml(abbreviateText(result.stage_description))}</span>`;
+  // Format stage ID only (no stage name in table)
+  let stageIdHtml = '';
+  if (result.levelnumber) {
+    stageIdHtml = ` <span class="stage-info stage-id">${escapeHtml(result.levelnumber)}</span>`;
   } else if (result.exit_number) {
-    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.exit_number)}</span>`;
-  } else if (result.stage_description) {
-    stageInfoHtml = `<span class="stage-info">${escapeHtml(abbreviateText(result.stage_description))}</span>`;
-  } else {
-    stageInfoHtml = '—';
+    stageIdHtml = ` <span class="stage-info stage-id">${escapeHtml(result.exit_number)}</span>`;
   }
-  
-  // Get author from gameversions
-  const author = gameInfoForResult ? (gameInfoForResult.author || '') : '';
   
   // Status icon - only show for done, skipped, or early reveal
   let statusIcon = '';
@@ -992,12 +979,10 @@ ${displayIndices.map(idx => {
           <td>${statusIcon}</td>
           <td><span class="entry-type ${entryTypeClassForTable}">${escapeHtml(entryTypeAbbrev)}</span></td>
           <td>
-            <span class="game-id">${escapeHtml(result.gameid || '—')}</span><br>
-            <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>
-            ${author ? `<br><span class="author">${escapeHtml(abbreviateText(author))}</span>` : ''}
-            ${difficultyClass && (difficultyText || difficultyMnemonicText) ? `<br><span class="${difficultyClass}">${difficultyText}${difficultyMnemonicText}</span>` : ''}
+            <span class="game-id">${escapeHtml(result.gameid || '—')}</span> - 
+            <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>${stageIdHtml}
+            ${difficultyClass && (difficultyText || difficultyMnemonicText) ? ` <span class="${difficultyClass}">(${difficultyText}${difficultyMnemonicText})</span>` : ''}
           </td>
-          <td>${stageInfoHtml}</td>
           <td><span class="challenge-entry-time">${timeText}</span></td>
         </tr>`;
 }).join('\n')}

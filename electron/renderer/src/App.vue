@@ -1093,12 +1093,6 @@
           <template v-if="isRunActive">
             <span class="run-timer">⏱ {{ formatTime(runElapsedSeconds) }}</span>
             <span class="pause-time" v-if="runPauseSeconds > 0">⏸ {{ formatTime(runPauseSeconds) }}</span>
-            <span v-if="runTimeLeftSeconds !== null" class="run-time-left" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
-              ⏳ Run Time Left: {{ formatTime(runTimeLeftSeconds) }}
-            </span>
-            <span v-if="itemTimeLeftSeconds !== null" class="item-time-left" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
-              ⏱️ Item Time Left: {{ formatTime(itemTimeLeftSeconds) }}
-            </span>
             <span class="run-progress">Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
             <button @click="pauseRun" v-if="!isRunPaused" class="btn-pause">⏸ Pause</button>
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
@@ -1109,29 +1103,6 @@
             <button @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
           </template>
           <button class="close" @click="closeRunModal">✕</button>
-        </div>
-        
-        <!-- Win Rules Status Row (only shown when run is active and win rules are enabled) -->
-        <div v-if="isRunActive && hasWinRules && (parsedWinRules?.challengeTime?.enabled || parsedWinRules?.runTimeLimit?.enabled)" class="win-rules-status-row">
-          <div class="win-rules-info">
-            <span v-if="parsedWinRules?.challengeTime?.enabled" class="win-rule-label">
-              Challenge Time: {{ parsedWinRules.challengeTime.minutes || 10 }} min
-              <span v-if="parsedWinRules.challengeTime.rolloverMaxMinutes > 0">
-                (Rollover: {{ parsedWinRules.challengeTime.rolloverMaxMinutes }} min max)
-              </span>
-            </span>
-            <span v-if="parsedWinRules?.runTimeLimit?.enabled" class="win-rule-label">
-              Run Time Limit: {{ parsedWinRules.runTimeLimit.minutes || 60 }} min
-            </span>
-          </div>
-          <div class="win-rules-timers">
-            <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
-              ⏱️ Time Left: {{ formatTime(itemTimeLeftSeconds) }}
-            </span>
-            <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
-              Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
-            </span>
-          </div>
         </div>
       </header>
 
@@ -1201,6 +1172,22 @@
               </div>
         </div>
       </section>
+
+      <!-- Win Rules Status Row (only shown when run is active and win rules are enabled) -->
+      <!-- This row appears below the challenge name and timer -->
+      <div v-if="isRunActive && hasWinRules && (parsedWinRules?.challengeTime?.enabled || parsedWinRules?.runTimeLimit?.enabled)" class="win-rules-status-row">
+        <div class="win-rules-timers">
+          <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
+            ⏱️ Item Time Left: {{ formatTime(itemTimeLeftSeconds) }}
+          </span>
+          <span v-if="runTimeLeftSeconds !== null" class="run-time-left-display" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
+            ⏳ Run Time Left: {{ formatTime(runTimeLeftSeconds) }}
+          </span>
+          <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
+            Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
+          </span>
+        </div>
+      </div>
 
       <!-- Toolbar only shown when preparing -->
       <section v-if="!isRunActive" class="modal-toolbar">
@@ -18729,12 +18716,34 @@ async function saveRunToDatabase() {
       return;
     }
     
-    // Save run plan (include win rules if set)
-    console.log('[saveRun] Saving run plan with win rules:', currentWinRulesJson.value);
+    // CRITICAL: Load win rules from database before saving run plan
+    // This ensures we always have the latest win rules, even if currentWinRulesJson.value is null
+    let winRulesToSave = currentWinRulesJson.value;
+    if (result.runUuid) {
+      try {
+        const run = await (window as any).electronAPI.getRun({ runUuid: result.runUuid });
+        if (run && run.win_rules_json) {
+          winRulesToSave = run.win_rules_json;
+          currentWinRulesJson.value = run.win_rules_json;
+          console.log('[saveRun] Loaded win rules from database:', winRulesToSave);
+        } else if (currentWinRulesJson.value) {
+          console.log('[saveRun] Using win rules from currentWinRulesJson.value:', currentWinRulesJson.value);
+        } else {
+          console.log('[saveRun] No win rules found in database or currentWinRulesJson.value');
+        }
+      } catch (error) {
+        console.error('[saveRun] Error loading win rules from database:', error);
+        // Fall back to currentWinRulesJson.value if database load fails
+        winRulesToSave = currentWinRulesJson.value;
+      }
+    }
+    
+    // Save run plan (ALWAYS include win rules - either from DB or from currentWinRulesJson)
+    console.log('[saveRun] Saving run plan with win rules:', winRulesToSave);
     const planResult = await (window as any).electronAPI.saveRunPlan(
       result.runUuid,
       plainRunEntries,
-      currentWinRulesJson.value || null  // Include win rules if set
+      winRulesToSave || null  // Include win rules if set
     );
     
     if (!planResult.success) {
@@ -19945,12 +19954,23 @@ async function startRun() {
       // IMPORTANT: Use the original started_at timestamp from database, NEVER use Date.now()
       const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
       if (run) {
-        // Load win rules from run data
+        // CRITICAL: Load win rules from run data - this MUST happen
         if (run.win_rules_json) {
           currentWinRulesJson.value = run.win_rules_json;
-          console.log('[startRun] Loaded win rules:', currentWinRulesJson.value);
+          console.log('[startRun] Loaded win rules from database:', currentWinRulesJson.value);
         } else {
           currentWinRulesJson.value = null;
+          console.warn('[startRun] WARNING: No win_rules_json found in run data for run:', currentRunUuid.value);
+          // Try to load from database one more time as a fallback
+          try {
+            const verifyRun = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+            if (verifyRun && verifyRun.win_rules_json) {
+              currentWinRulesJson.value = verifyRun.win_rules_json;
+              console.log('[startRun] Fallback: Loaded win rules on second attempt:', currentWinRulesJson.value);
+            }
+          } catch (error) {
+            console.error('[startRun] Error in fallback win rules load:', error);
+          }
         }
         
         // Use millisecond precision if available, otherwise convert from timestamp
@@ -21459,6 +21479,9 @@ async function handleSaveWinRules(winRulesJson: string) {
   
   if (!currentRunUuid.value) {
     console.warn('[handleSaveWinRules] No current run UUID, cannot save win rules');
+    console.warn('[handleSaveWinRules] Win rules will be saved when the run is created/saved');
+    // Store win rules temporarily - they'll be saved when the run is created
+    currentWinRulesJson.value = winRulesJson;
     return;
   }
   
@@ -21478,7 +21501,17 @@ async function handleSaveWinRules(winRulesJson: string) {
         
         // Verify the save by querying the database
         const verifyRun = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
-        console.log('[handleSaveWinRules] Verification - win_rules_json in DB after save:', verifyRun?.win_rules_json);
+        if (verifyRun && verifyRun.win_rules_json) {
+          console.log('[handleSaveWinRules] ✓ Verification SUCCESS - win_rules_json confirmed in DB');
+          try {
+            const parsed = JSON.parse(verifyRun.win_rules_json);
+            console.log('[handleSaveWinRules] Parsed win rules - challengeTime enabled:', parsed?.challengeTime?.enabled, 'runTimeLimit enabled:', parsed?.runTimeLimit?.enabled);
+          } catch (e) {
+            console.warn('[handleSaveWinRules] Could not parse win_rules_json for verification');
+          }
+        } else {
+          console.error('[handleSaveWinRules] ✗ Verification FAILED - win_rules_json NOT found in DB after save!');
+        }
       } else {
         console.error('[handleSaveWinRules] Failed to save win rules. Result:', result);
         if (result && result.error) {
@@ -23868,12 +23901,13 @@ button:disabled {
 .run-progress { color: #6b7280; padding: 0 8px; }
 .win-rules-status-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding: 8px 10px;
   background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
   border-bottom: 1px solid var(--border-primary);
-  gap: 12px;
+  gap: 15px;
 }
 .win-rules-info {
   display: flex;
@@ -23887,6 +23921,9 @@ button:disabled {
   font-weight: 500;
 }
 .win-rules-timers {
+  display: flex;
+  gap: 15px;
+  align-items: center;
   display: flex;
   gap: 16px;
   align-items: center;

@@ -2046,8 +2046,9 @@ function registerDatabaseHandlers(dbManager) {
       console.log(`[db:runs:save-plan] Called with runUuid: ${runUuid}, entries: ${entries?.length || 0}, winRulesJson: ${winRulesJson ? 'present' : 'null'}`);
       const db = dbManager.getConnection('clientdata');
       
-      // If winRulesJson is provided, save it to the run
-      if (winRulesJson !== undefined && winRulesJson !== null) {
+      // CRITICAL: ALWAYS save winRulesJson if provided, even if it's an empty string or "null"
+      // This ensures win rules are persisted when saving the run plan
+      if (winRulesJson !== undefined && winRulesJson !== null && winRulesJson !== '') {
         const nowMs = Date.now();
         const updateStmt = db.prepare(`
           UPDATE runs 
@@ -2059,9 +2060,21 @@ function registerDatabaseHandlers(dbManager) {
         const updateResult = updateStmt.run(winRulesJson, nowMs, runUuid);
         console.log(`[db:runs:save-plan] Updated win_rules_json for run ${runUuid}, changes: ${updateResult.changes}`);
         
-        // Verify the update
+        // Verify the update worked
         const verify = db.prepare('SELECT win_rules_json FROM runs WHERE run_uuid = ?').get(runUuid);
-        console.log(`[db:runs:save-plan] Verification - win_rules_json in DB:`, verify?.win_rules_json ? 'present' : 'null');
+        if (verify && verify.win_rules_json) {
+          console.log(`[db:runs:save-plan] ✓ Verification SUCCESS - win_rules_json saved to DB`);
+          try {
+            const parsed = JSON.parse(verify.win_rules_json);
+            console.log(`[db:runs:save-plan] Parsed win rules - challengeTime enabled: ${parsed?.challengeTime?.enabled}, runTimeLimit enabled: ${parsed?.runTimeLimit?.enabled}`);
+          } catch (e) {
+            console.warn(`[db:runs:save-plan] Could not parse win_rules_json for verification`);
+          }
+        } else {
+          console.error(`[db:runs:save-plan] ✗ Verification FAILED - win_rules_json NOT found in DB after update!`);
+        }
+      } else {
+        console.log(`[db:runs:save-plan] No winRulesJson provided, skipping win rules update`);
       }
       
       const transaction = db.transaction((runId, entryList) => {

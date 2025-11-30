@@ -24518,6 +24518,7 @@ button:disabled {
 .status-success .status-icon { color: #10b981; }  /* Green checkmark */
 .status-ok .status-icon { color: #f59e0b; }  /* Orange warning - revealed early */
 .status-skipped .status-icon { color: #ef4444; }  /* Red X */
+.status-failed .status-icon { color: #ef4444; font-weight: bold; }  /* Bold Red X - Failed (when win rules are active) */
 
 /* Settings Modal */
 .settings-modal { width: 800px; max-width: 95vw; }

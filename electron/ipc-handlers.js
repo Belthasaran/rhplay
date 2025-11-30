@@ -2972,7 +2972,7 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       
       // Join with run_plan_entries to get entry_type
-      // Include millisecond precision columns
+      // Include millisecond precision columns and rollover time tracking
       const results = db.prepare(`
         SELECT 
           rr.result_uuid,
@@ -2994,6 +2994,10 @@ function registerDatabaseHandlers(dbManager) {
           rr.duration_milliseconds,
           rr.pause_seconds,
           rr.pause_milliseconds,
+          rr.rollover_time_remaining_start_ms,
+          rr.rollover_time_remaining_end_ms,
+          rr.allocated_time_ms,
+          rr.grace_time_ms,
           rr.conditions,
           rr.sfcpath,
           rr.levelnumber,

@@ -1093,6 +1093,12 @@
           <template v-if="isRunActive">
             <span class="run-timer">⏱ {{ formatTime(runElapsedSeconds) }}</span>
             <span class="pause-time" v-if="runPauseSeconds > 0">⏸ {{ formatTime(runPauseSeconds) }}</span>
+            <span v-if="runTimeLeftSeconds !== null" class="run-time-left" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
+              ⏳ Run Time Left: {{ formatTime(runTimeLeftSeconds) }}
+            </span>
+            <span v-if="itemTimeLeftSeconds !== null" class="item-time-left" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
+              ⏱️ Item Time Left: {{ formatTime(itemTimeLeftSeconds) }}
+            </span>
             <span class="run-progress">Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
             <button @click="pauseRun" v-if="!isRunPaused" class="btn-pause">⏸ Pause</button>
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
@@ -20193,10 +20199,22 @@ async function nextChallenge() {
   const idx = currentChallengeIndex.value;
   const result = challengeResults.value[idx];
   
-  // Determine status: 'success' if not revealed early, 'ok' if revealed early
-  const finalStatus = result.revealedEarly ? 'ok' : 'success';
+  // Check win rules
+  const winRulesCheck = checkWinRulesForChallenge(idx, false);
+  let finalStatus: string;
   
-  // Mark as success or ok
+  if (!winRulesCheck.passed) {
+    // Win rules failed - mark as failed
+    finalStatus = 'failed';
+    if (winRulesCheck.reason) {
+      console.warn(`Challenge ${idx + 1} failed win rules: ${winRulesCheck.reason}`);
+    }
+  } else {
+    // Determine status: 'success' if not revealed early, 'ok' if revealed early
+    finalStatus = result.revealedEarly ? 'ok' : 'success';
+  }
+  
+  // Mark status
   result.status = finalStatus;
   
   try {
@@ -20269,19 +20287,28 @@ async function skipChallenge() {
   
   const result = challengeResults.value[idx];
   
-  // Mark as skipped
-  result.status = 'skipped';
+  // When win rules are active, skip = failed
+  // Otherwise, skip = skipped
+  let finalStatus: string;
+  if (hasWinRules.value) {
+    finalStatus = 'failed';
+  } else {
+    finalStatus = 'skipped';
+  }
+  
+  // Mark status
+  result.status = finalStatus;
   
   try {
     if (isElectronAvailable()) {
       await (window as any).electronAPI.recordChallengeResult({
         runUuid: currentRunUuid.value,
         challengeIndex: idx,
-        status: 'skipped'
+        status: finalStatus
       });
     }
     
-    console.log(`Challenge ${idx + 1} skipped`);
+    console.log(`Challenge ${idx + 1} ${hasWinRules.value ? 'failed (skipped)' : 'skipped'}`);
     
     // Move to next challenge
     if (idx < runEntries.length - 1) {
@@ -21205,6 +21232,60 @@ const hasWinRules = computed(() => {
   }
 });
 
+// Parsed win rules
+const parsedWinRules = computed(() => {
+  if (!currentWinRulesJson.value) return null;
+  try {
+    return JSON.parse(currentWinRulesJson.value);
+  } catch (e) {
+    return null;
+  }
+});
+
+// Run Time Left (for run time limit win rule)
+const runTimeLeftSeconds = computed(() => {
+  if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.runTimeLimit?.enabled) {
+    return null;
+  }
+  
+  const limitMinutes = parsedWinRules.value.runTimeLimit.minutes || 60;
+  const limitSeconds = limitMinutes * 60;
+  const elapsedSeconds = runElapsedSeconds.value;
+  const left = limitSeconds - elapsedSeconds;
+  
+  return Math.max(0, left);
+});
+
+// Item Time Left (for challenge time limit win rule, includes rollover)
+const itemTimeLeftSeconds = computed(() => {
+  if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
+    return null;
+  }
+  
+  const currentResult = challengeResults.value[currentChallengeIndex.value];
+  if (!currentResult || !currentResult.startedAtMs) {
+    return null;
+  }
+  
+  const challengeTime = parsedWinRules.value.challengeTime;
+  const limitMinutes = challengeTime.minutes || 10;
+  const limitSeconds = limitMinutes * 60;
+  
+  // Calculate current challenge elapsed time
+  const now = Date.now();
+  const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  
+  // Get rollover time (this would need to be tracked per challenge, for now assume 0)
+  // TODO: Track rollover time per challenge from database
+  const rolloverSeconds = 0; // This should come from the challenge's rollover_time_remaining_start_ms
+  
+  const availableTime = limitSeconds + rolloverSeconds;
+  const left = availableTime - elapsedSeconds;
+  
+  return Math.max(0, left);
+});
+
 async function openWinRulesDropdown(event: MouseEvent) {
   // Get button position for dropdown placement
   const button = event.currentTarget as HTMLElement;
@@ -21274,6 +21355,91 @@ async function handleSaveWinRules(winRulesJson: string) {
       toastNotificationRef.value.show('Error saving win rules: ' + (error instanceof Error ? error.message : String(error)), 'error');
     }
   }
+}
+
+// Load win rules for current run
+async function loadWinRules() {
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    currentWinRulesJson.value = null;
+    return;
+  }
+  
+  try {
+    const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    if (run && run.win_rules_json) {
+      currentWinRulesJson.value = run.win_rules_json;
+    } else {
+      currentWinRulesJson.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading win rules:', error);
+    currentWinRulesJson.value = null;
+  }
+}
+
+// Watch for run changes and load win rules
+watch([currentRunUuid, isRunActive], async ([newUuid, newActive]) => {
+  if (newUuid && newActive) {
+    await loadWinRules();
+  } else if (!newUuid) {
+    currentWinRulesJson.value = null;
+  }
+}, { immediate: true });
+
+// Win Rules Validation
+function checkWinRulesForChallenge(challengeIndex: number, isSkip: boolean = false): { passed: boolean; reason?: string } {
+  if (!parsedWinRules.value) {
+    return { passed: true }; // No win rules = always pass
+  }
+  
+  const rules = parsedWinRules.value;
+  const result = challengeResults.value[challengeIndex];
+  
+  // Skip always fails when win rules are active
+  if (isSkip && hasWinRules.value) {
+    return { passed: false, reason: 'Challenge was skipped' };
+  }
+  
+  // Check challenge time limit
+  if (rules.challengeTime?.enabled && result && result.startedAtMs) {
+    const challengeTime = rules.challengeTime;
+    const limitMinutes = challengeTime.minutes || 10;
+    const limitSeconds = limitMinutes * 60;
+    
+    // Calculate elapsed time
+    const now = Date.now();
+    const elapsedMs = now - result.startedAtMs - (result.pauseMilliseconds || 0);
+    const elapsedSeconds = elapsedMs / 1000;
+    
+    // Calculate grace period
+    const gracePercent = challengeTime.gracePeriodPercent || 1.0;
+    const graceMinSeconds = challengeTime.gracePeriodMinSeconds || 2;
+    const graceMaxSeconds = challengeTime.gracePeriodMaxSeconds || 60;
+    const graceSeconds = Math.max(graceMinSeconds, Math.min(graceMaxSeconds, limitSeconds * gracePercent / 100));
+    
+    const allowedTime = limitSeconds + graceSeconds;
+    
+    // TODO: Factor in rollover time when implemented
+    // For now, if elapsed time exceeds allowed time (with grace), it fails
+    if (elapsedSeconds > allowedTime) {
+      return { passed: false, reason: `Challenge time limit exceeded (${formatTime(Math.floor(elapsedSeconds))} > ${formatTime(Math.floor(allowedTime))})` };
+    }
+  }
+  
+  // Check run time limit
+  if (rules.runTimeLimit?.enabled) {
+    const limitMinutes = rules.runTimeLimit.minutes || 60;
+    const limitSeconds = limitMinutes * 60;
+    
+    if (runElapsedSeconds.value > limitSeconds) {
+      return { passed: false, reason: `Run time limit exceeded (${formatTime(runElapsedSeconds.value)} > ${formatTime(limitSeconds)})` };
+    }
+  }
+  
+  // No Game Overs and No Hits are honor-based, so they don't need validation here
+  // They're just recorded when Skip is pressed
+  
+  return { passed: true };
 }
 
 function toggleGlobalPatch(patchCode: string) {

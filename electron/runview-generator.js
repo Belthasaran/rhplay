@@ -276,10 +276,10 @@ async function generateRunview(params) {
   try {
     const clientdataDb = dbManager.getConnection('clientdata');
     
-    // Get run information
+    // Get run information (including win rules)
     const run = clientdataDb.prepare(`
       SELECT run_uuid, run_name, status, started_at_ms, pause_milliseconds, pause_start_ms,
-             completed_at_ms, total_challenges, completed_challenges
+             completed_at_ms, total_challenges, completed_challenges, win_rules_json
       FROM runs
       WHERE run_uuid = ?
     `).get(runUuid);
@@ -470,8 +470,18 @@ async function generateRunview(params) {
       : null;
     const currentStageInfo = currentStageKey ? stageInfo.get(currentStageKey) : null;
     
+    // Parse win rules if present
+    let winRules = null;
+    if (run.win_rules_json) {
+      try {
+        winRules = JSON.parse(run.win_rules_json);
+      } catch (e) {
+        console.warn('[runview] Failed to parse win rules JSON:', e);
+      }
+    }
+    
     // Check if run is finished (completed status or all challenges done)
-    const allChallengesDone = results.length > 0 && results.every(r => r.status === 'success' || r.status === 'ok' || r.status === 'skipped');
+    const allChallengesDone = results.length > 0 && results.every(r => r.status === 'success' || r.status === 'ok' || r.status === 'skipped' || r.status === 'failed');
     const isRunFinished = run.status === 'completed' || allChallengesDone;
     
     // Check if run hasn't started yet
@@ -536,6 +546,37 @@ async function generateRunview(params) {
         if (currentChallenge.pause_milliseconds) {
           currentChallengeElapsedMs -= currentChallenge.pause_milliseconds;
         }
+      }
+    }
+    
+    // Calculate win rule timers
+    let runTimeLeftMs = null;
+    let itemTimeLeftMs = null;
+    
+    if (winRules && !isRunFinished && !isRunNotStarted) {
+      // Run Time Left
+      if (winRules.runTimeLimit && winRules.runTimeLimit.enabled) {
+        const limitMinutes = winRules.runTimeLimit.minutes || 60;
+        const limitMs = limitMinutes * 60 * 1000;
+        const elapsedMs = runElapsedMs;
+        runTimeLeftMs = Math.max(0, limitMs - elapsedMs);
+      }
+      
+      // Item Time Left (challenge time limit + rollover)
+      if (winRules.challengeTime && winRules.challengeTime.enabled && actualChallengeStartMs) {
+        const challengeTime = winRules.challengeTime;
+        const limitMinutes = challengeTime.minutes || 10;
+        const limitMs = limitMinutes * 60 * 1000;
+        
+        // Calculate elapsed time for current challenge
+        const challengeElapsedMs = currentChallengeElapsedMs;
+        
+        // TODO: Get rollover time from database (rollover_time_remaining_start_ms)
+        // For now, assume 0 rollover
+        const rolloverMs = 0;
+        
+        const availableTimeMs = limitMs + rolloverMs;
+        itemTimeLeftMs = Math.max(0, availableTimeMs - challengeElapsedMs);
       }
     }
     
@@ -825,12 +866,32 @@ async function generateRunview(params) {
     .status-icon.early {
       color: #ffaa00;
     }
+    .status-icon.failed {
+      color: #ff0000;
+    }
     .time {
       font-family: 'Courier New', monospace;
       color: #4CAF50;
       background: black;
       font-size: 16px;
       font-weight: bold;
+    }
+    .win-rule-timer {
+      font-size: 20px;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+      color: #4CAF50;
+      margin-left: 10px;
+    }
+    .win-rule-timer.time-warning {
+      color: #ffaa00;
+    }
+    .win-rule-timer.time-critical {
+      color: #ff0000;
+    }
+    .challenges-table tr.failed {
+      opacity: 0.6;
+      color: #ff6666;
     }
   </style>
 </head>
@@ -851,6 +912,8 @@ async function generateRunview(params) {
     <div class="timer-row">
       <div class="run-timer" id="run-timer">00:00:00</div>
       <div class="challenge-timer" id="challenge-timer">00:00:00</div>
+      ${runTimeLeftMs !== null ? `<div class="win-rule-timer ${runTimeLeftMs < 30000 ? 'time-critical' : (runTimeLeftMs < 60000 ? 'time-warning' : '')}" id="run-time-left">⏳ Run Time Left: <span id="run-time-left-value">00:00:00</span></div>` : ''}
+      ${itemTimeLeftMs !== null ? `<div class="win-rule-timer ${itemTimeLeftMs < 30000 ? 'time-critical' : (itemTimeLeftMs < 60000 ? 'time-warning' : '')}" id="item-time-left">⏱️ Item Time Left: <span id="item-time-left-value">00:00:00</span></div>` : ''}
     </div>
     `}
     
@@ -903,8 +966,9 @@ ${displayIndices.map(idx => {
   const isCurrent = idx === currentIndex;
   const isCompleted = result.status === 'success' || result.status === 'ok';
   const isSkipped = result.status === 'skipped';
+  const isFailed = result.status === 'failed';
   
-  const rowClass = isCurrent ? 'current' : (isCompleted ? 'completed' : (isSkipped ? 'skipped' : ''));
+  const rowClass = isCurrent ? 'current' : (isCompleted ? 'completed' : (isSkipped ? 'skipped' : (isFailed ? 'failed' : '')));
   
   // Abbreviate entry type and determine class for color
   let entryTypeAbbrev = '';
@@ -944,10 +1008,12 @@ ${displayIndices.map(idx => {
     stageIdHtml = ` <span class="stage-info stage-id">${escapeHtml(result.exit_number)}</span>`;
   }
   
-  // Status icon - only show for done, skipped, or early reveal
+  // Status icon - only show for done, skipped, failed, or early reveal
   let statusIcon = '';
   if (isCompleted) {
     statusIcon = '<span class="status-icon done">✓</span>';
+  } else if (isFailed) {
+    statusIcon = '<span class="status-icon failed">✗</span>';
   } else if (isSkipped) {
     statusIcon = '<span class="status-icon skip">✗</span>';
   } else if (result.revealed_early) {
@@ -1005,6 +1071,12 @@ ${displayIndices.map(idx => {
     const challengeStartMs = ${actualChallengeStartMs || 0};
     const challengePauseMs = ${currentChallenge.pause_milliseconds || 0};
     
+    // Win rule timer data
+    const winRules = ${winRules ? JSON.stringify(winRules) : 'null'};
+    const runTimeLimitMs = ${winRules && winRules.runTimeLimit && winRules.runTimeLimit.enabled ? (winRules.runTimeLimit.minutes || 60) * 60 * 1000 : 'null'};
+    const challengeTimeLimitMs = ${winRules && winRules.challengeTime && winRules.challengeTime.enabled ? (winRules.challengeTime.minutes || 10) * 60 * 1000 : 'null'};
+    const rolloverMs = 0; // TODO: Get from database rollover_time_remaining_start_ms
+    
     function formatTime(milliseconds) {
       const totalSeconds = Math.floor(milliseconds / 1000);
       const hours = Math.floor(totalSeconds / 3600);
@@ -1047,6 +1119,47 @@ ${displayIndices.map(idx => {
         const challengeTimerEl = document.getElementById('challenge-timer');
         if (challengeTimerEl) {
           challengeTimerEl.textContent = formatTime(challengeElapsed);
+        }
+      }
+      
+      // Update win rule timers
+      if (runTimeLimitMs !== null) {
+        let runElapsed = now - runStartMs - runPauseMs;
+        if (runPauseStartMs) {
+          runElapsed -= (now - runPauseStartMs);
+        }
+        if (runElapsed < 0) runElapsed = 0;
+        const runTimeLeft = Math.max(0, runTimeLimitMs - runElapsed);
+        const runTimeLeftEl = document.getElementById('run-time-left-value');
+        if (runTimeLeftEl) {
+          runTimeLeftEl.textContent = formatTime(runTimeLeft);
+          // Update warning/critical classes
+          const parentEl = document.getElementById('run-time-left');
+          if (parentEl) {
+            parentEl.className = 'win-rule-timer' + 
+              (runTimeLeft < 30000 ? ' time-critical' : (runTimeLeft < 60000 ? ' time-warning' : ''));
+          }
+        }
+      }
+      
+      if (challengeTimeLimitMs !== null && challengeStartMs) {
+        let challengeElapsed = now - challengeStartMs - challengePauseMs;
+        if (runPauseStartMs) {
+          const currentPauseMs = now - runPauseStartMs;
+          challengeElapsed -= currentPauseMs;
+        }
+        if (challengeElapsed < 0) challengeElapsed = 0;
+        const availableTime = challengeTimeLimitMs + rolloverMs;
+        const itemTimeLeft = Math.max(0, availableTime - challengeElapsed);
+        const itemTimeLeftEl = document.getElementById('item-time-left-value');
+        if (itemTimeLeftEl) {
+          itemTimeLeftEl.textContent = formatTime(itemTimeLeft);
+          // Update warning/critical classes
+          const parentEl = document.getElementById('item-time-left');
+          if (parentEl) {
+            parentEl.className = 'win-rule-timer' + 
+              (itemTimeLeft < 30000 ? ' time-critical' : (itemTimeLeft < 60000 ? ' time-warning' : ''));
+          }
         }
       }
       

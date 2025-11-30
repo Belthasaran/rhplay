@@ -17,6 +17,8 @@
               <label>
                 Time Limit (minutes):
                 <select v-model.number="winRules.challengeTime.minutes">
+                  <option :value="2">2</option>
+                  <option :value="3">3</option>
                   <option :value="5">5</option>
                   <option :value="10">10</option>
                   <option :value="15">15</option>
@@ -29,6 +31,9 @@
                 Allow Rollover Minutes:
                 <select v-model.number="winRules.challengeTime.rolloverMaxMinutes">
                   <option :value="0">No Rollover</option>
+                  <option :value="1">1</option>
+                  <option :value="2">2</option>
+                  <option :value="3">3</option>
                   <option :value="5">5</option>
                   <option :value="10">10</option>
                   <option :value="20">20</option>

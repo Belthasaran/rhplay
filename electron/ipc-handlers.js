@@ -2462,89 +2462,50 @@ function registerDatabaseHandlers(dbManager) {
         throw new Error('Challenge not found');
       }
       
-      // Get pause time from undone challenge (in milliseconds)
-      const undonePauseMs = undoneChallenge.pause_milliseconds ?? ((undoneChallenge.pause_seconds || 0) * 1000);
-      const undonePauseSeconds = Math.floor(undonePauseMs / 1000);
+      // CRITICAL RULES - MUST NEVER VIOLATE:
+      // 1. ONLY undo the ending time (completed_at) of the immediate preceding challenge (challengeIndex)
+      // 2. Make that immediate preceding challenge active again (status = 'pending')
+      // 3. UNDO THE START TIME (started_at_ms) OF THE ACTIVE CHALLENGE (challengeIndex + 1)
+      // 4. NEVER touch the start time of ANY challenge before the active challenge (challengeIndex - 1 or earlier)
       
-      // Find the previous challenge (closest one before this with sequence_number < current)
-      let previousChallenge = null;
-      for (let i = challengeIndex - 1; i >= 0; i--) {
-        if (allResults[i]) {
-          previousChallenge = allResults[i];
-          break;
-        }
-      }
+      // challengeIndex = the immediate preceding challenge (N-1) - the one we're undoing
+      // challengeIndex + 1 = the active challenge (N) - we clear its started_at_ms
+      // challengeIndex - 1 or earlier = NEVER TOUCH these
       
-      // When a challenge is undone, the previous challenge becomes current again
-      // According to RUN_TIMING_REVIEW.md: "Time that was spent on that challenge counts towards earlier challenge instead"
-      // The previous challenge should continue timing from its original start time
-      // All elapsed time (including time spent on the undone challenge) is attributed to the previous challenge
-      if (previousChallenge) {
-        // Transfer pause time from undone challenge to previous challenge
-        const prevPauseMs = previousChallenge.pause_milliseconds ?? ((previousChallenge.pause_seconds || 0) * 1000);
-        const newPauseMs = prevPauseMs + undonePauseMs;
-        const newPauseSeconds = Math.floor(newPauseMs / 1000);
-        
-        // Make the previous challenge pending again (it becomes the current challenge)
-        // According to RUN_TIMING_REVIEW.md: "Time that was spent on that challenge counts towards earlier challenge instead"
-        // Clear its completed_at timestamp so it can continue timing
-        // Keep its started_at_ms - it should continue from where it was (DON'T reset it!)
-        // Clear duration_seconds - it will be calculated dynamically from started_at_ms
-        // The elapsed time for the previous challenge should be: (current_time - started_at_ms) - pause_time
-        // This means the previous challenge's elapsed time will INCREASE, not decrease
-        // because all time (including time spent on the undone challenge) is attributed to it
-        db.prepare(`
-          UPDATE run_results
-          SET status = 'pending',
-              completed_at = NULL,
-              completed_at_ms = NULL,
-              duration_seconds = NULL,
-              duration_milliseconds = NULL,
-              pause_milliseconds = ?,
-              pause_seconds = ?
-          WHERE result_uuid = ?
-        `).run(newPauseMs, newPauseSeconds, previousChallenge.result_uuid);
-      }
+      const oldStatus = undoneChallenge.status;
       
-      // Reset undone challenge: clear all timestamps and duration
-      // The undone challenge should NOT have a started_at_ms - it hasn't been reached yet
-      // Keep revealed_early flag (it's stored separately in the database if needed)
+      // Step 1: Clear the completed time of the immediate preceding challenge (challengeIndex) and make it active
+      // Clear completed_at and completed_at_ms, but KEEP started_at_ms (never undo start times before active)
+      // Clear duration so it will be recalculated dynamically
       db.prepare(`
         UPDATE run_results
         SET status = 'pending',
-            started_at = NULL,
-            started_at_ms = NULL,
             completed_at = NULL,
             completed_at_ms = NULL,
             duration_seconds = NULL,
-            duration_milliseconds = NULL,
-            pause_seconds = 0,
-            pause_milliseconds = 0,
-            pause_start = NULL,
-            pause_start_ms = NULL,
-            pause_end = NULL,
-            pause_end_ms = NULL
+            duration_milliseconds = NULL
         WHERE result_uuid = ?
       `).run(undoneChallenge.result_uuid);
       
-      // Also clear started_at_ms on the NEXT challenge (if it exists and is pending)
-      // When a challenge is undone, the next challenge should lose its started_at_ms
-      // because it's no longer the active challenge - it will get one when this challenge completes
-      const nextChallengeIndex = challengeIndex + 1;
-      if (nextChallengeIndex < allResults.length) {
-        const nextChallenge = allResults[nextChallengeIndex];
-        if (nextChallenge && nextChallenge.status === 'pending') {
+      // Step 2: Clear the start time of the ACTIVE challenge (challengeIndex + 1)
+      // This is the challenge that becomes inactive when we undo
+      const activeChallengeIndex = challengeIndex + 1;
+      if (activeChallengeIndex < allResults.length) {
+        const activeChallenge = allResults[activeChallengeIndex];
+        if (activeChallenge) {
           db.prepare(`
             UPDATE run_results
             SET started_at = NULL,
                 started_at_ms = NULL
             WHERE result_uuid = ?
-          `).run(nextChallenge.result_uuid);
+          `).run(activeChallenge.result_uuid);
         }
       }
       
+      // Step 3: NEVER touch challengeIndex - 1 or any earlier challenges
+      // Their started_at_ms, completed_at, etc. remain completely unchanged
+      
       // Update run counts (decrement completed/skipped counts if applicable)
-      const oldStatus = undoneChallenge.status;
       if (oldStatus === 'success' || oldStatus === 'ok') {
         db.prepare(`
           UPDATE runs 
@@ -2572,9 +2533,7 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       return { 
-        success: true,
-        transferredPauseSeconds: undonePauseSeconds,
-        previousChallengeIndex: previousChallenge ? challengeIndex - 1 : null
+        success: true
       };
     } catch (error) {
       console.error('Error undoing challenge:', error);

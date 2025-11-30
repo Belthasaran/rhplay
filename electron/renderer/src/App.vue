@@ -20242,36 +20242,44 @@ async function undoChallenge() {
   if (!isElectronAvailable()) return;
   
   try {
-    // Get all challenge results to find the last completed challenge to undo
-    // We undo the last COMPLETED challenge (highest sequence number WITH completed time)
+    // Get the current active challenge index BEFORE undo
+    // The active challenge is the one we're currently on
+    const currentActiveIndex = currentChallengeIndex.value;
+    
+    // We can only undo if we're not on the first challenge
+    if (currentActiveIndex <= 0) {
+      console.warn('[undoChallenge] Already at first challenge, nothing to undo');
+      return;
+    }
+    
+    // CRITICAL: We undo ONLY the challenge immediately before the active challenge
+    // This is currentActiveIndex - 1 (the one that was completed to get to the current active challenge)
+    // We MUST NEVER undo or touch any challenge before this one
+    const idx = currentActiveIndex - 1;
+    
+    // Verify this challenge exists and is completed
     const allResults = await (window as any).electronAPI.getRunResults({
       runUuid: currentRunUuid.value
     });
     
-    // Find the last completed challenge (highest sequence number WITH completed_at_ms)
-    let challengeToUndoIndex = -1;
-    for (let i = allResults.length - 1; i >= 0; i--) {
-      const result = allResults[i];
-      // Find the highest sequence number that has been completed
-      if (result.completed_at_ms && result.completed_at_ms !== null) {
-        challengeToUndoIndex = i;
-        break;
-      }
-    }
-    
-    if (challengeToUndoIndex < 0) {
-      // No completed challenge found - nothing to undo
-      console.warn('[undoChallenge] No completed challenge found to undo');
+    if (idx >= allResults.length || idx < 0) {
+      console.warn(`[undoChallenge] Invalid challenge index ${idx} to undo`);
       return;
     }
     
-    // The last completed challenge is the one we undo
-    const idx = challengeToUndoIndex;
+    const challengeToUndo = allResults[idx];
+    if (!challengeToUndo) {
+      console.warn(`[undoChallenge] Challenge ${idx + 1} not found`);
+      return;
+    }
     
-    // Get the current active challenge index before undo
-    const currentActiveIndex = currentChallengeIndex.value;
+    // The challenge must be completed (have completed_at_ms) to be undoable
+    if (!challengeToUndo.completed_at_ms) {
+      console.warn(`[undoChallenge] Challenge ${idx + 1} is not completed, cannot undo`);
+      return;
+    }
     
-    console.log(`[undoChallenge] Current active: ${currentActiveIndex}, undoing completed challenge: ${idx}`);
+    console.log(`[undoChallenge] Current active: ${currentActiveIndex}, undoing challenge ${idx + 1} (index ${idx}), will go back by one to ${idx}`);
   
   // Before going back, mark any challenges AFTER this point as revealed_early
     // because the user has already seen them (permanent indicator that user revealed early)
@@ -20300,9 +20308,9 @@ async function undoChallenge() {
   }
   
     // Call the undo handler which will:
-    // - Transfer pause time from undone challenge to previous challenge (if previous exists)
-    // - Reset timestamps on undone challenge (started_at, completed_at)
-    // - Clear duration and pause time on undone challenge
+    // - Clear completed_at of the immediate preceding challenge (idx) and make it active
+    // - Clear started_at_ms of the active challenge (currentActiveIndex)
+    // - NEVER touch any challenge before idx (their started_at_ms remains unchanged)
     const result = await (window as any).electronAPI.undoChallenge({
       runUuid: currentRunUuid.value,
       challengeIndex: idx
@@ -20340,25 +20348,20 @@ async function undoChallenge() {
       };
     });
     
-    // Ensure the undone challenge has no timing (cleared started_at_ms should mean no duration)
-    const undoneChallengeResult = challengeResults.value[idx];
-    if (undoneChallengeResult && !undoneChallengeResult.startedAtMs) {
-      undoneChallengeResult.durationSeconds = 0;
-      undoneChallengeResult.pauseMilliseconds = 0;
+    // The undone challenge (idx) should still have its started_at_ms (we never clear it)
+    // It will continue timing from when it originally started
+    // The active challenge (currentActiveIndex) had its started_at_ms cleared and should not be timing
+    const activeChallengeResult = challengeResults.value[currentActiveIndex];
+    if (activeChallengeResult && !activeChallengeResult.startedAtMs) {
+      activeChallengeResult.durationSeconds = 0;
+      activeChallengeResult.pauseMilliseconds = 0;
     }
     
     // After undo, we go back by ONE challenge from where we were
-    // If we were on currentActiveIndex and we undo challenge idx,
-    // we should go to currentActiveIndex - 1 (back by one)
-    // This ensures we only go back by ONE, not by the difference between currentActiveIndex and idx
-    if (currentActiveIndex > 0) {
-      currentChallengeIndex.value = currentActiveIndex - 1;
-      console.log(`[undoChallenge] Undone challenge ${idx + 1}, went back by one from ${currentActiveIndex} to ${currentActiveIndex - 1}`);
-    } else {
-      // Already at first challenge, can't go back further
-      currentChallengeIndex.value = 0;
-      console.log(`[undoChallenge] Undone challenge ${idx + 1}, already at first challenge`);
-    }
+    // We were on currentActiveIndex, so we go to idx (which is currentActiveIndex - 1)
+    // This goes back by exactly ONE challenge
+    currentChallengeIndex.value = idx;
+    console.log(`[undoChallenge] Undone challenge ${idx + 1}, went back by one from ${currentActiveIndex} to ${idx}`);
     
     // Update run pause time if it was affected
     const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });

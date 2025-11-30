@@ -1109,12 +1109,15 @@
       <!-- Win Rules Status Row (only shown when run is active and win rules are enabled) -->
       <!-- This row appears first below the header, before the challenge name -->
       <div v-if="isRunActive && hasWinRules && (parsedWinRules?.challengeTime?.enabled || parsedWinRules?.runTimeLimit?.enabled)" class="win-rules-status-row">
+        <div class="win-rules-label">
+          Rules: {{ getWinRulesDisplayName() }}
+        </div>
         <div class="win-rules-timers">
           <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
-            ⏱️ Item Time Left: {{ formatTime(itemTimeLeftSeconds) }}
+            Item: {{ formatTime(itemTimeLeftSeconds) }}
           </span>
           <span v-if="runTimeLeftSeconds !== null" class="run-time-left-display" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
-            ⏳ Run Time Left: {{ formatTime(runTimeLeftSeconds) }}
+            Run: {{ formatTime(runTimeLeftSeconds) }}
           </span>
           <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
             Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
@@ -21286,6 +21289,28 @@ function closeGlobalConditionsDialog() {
   showGlobalConditionsDialog.value = false;
 }
 
+// Get display name for win rules
+function getWinRulesDisplayName(): string {
+  if (!parsedWinRules.value) return '';
+  
+  const rules: string[] = [];
+  
+  if (parsedWinRules.value.challengeTime?.enabled || parsedWinRules.value.challengeTimeCap?.enabled || parsedWinRules.value.challengeTimeWithRollover?.enabled) {
+    rules.push('Time Limit');
+  }
+  if (parsedWinRules.value.runTimeLimit?.enabled) {
+    // Run time limit is included in the display, but we don't add it to the name since it's shown separately
+  }
+  if (parsedWinRules.value.noHits?.enabled) {
+    rules.push('No Hit');
+  }
+  if (parsedWinRules.value.noGameOvers?.enabled) {
+    rules.push('No Gameover');
+  }
+  
+  return rules.join(',');
+}
+
 // Win Rules helpers
 const hasWinRules = computed(() => {
   if (!currentWinRulesJson.value) {
@@ -23901,13 +23926,19 @@ button:disabled {
 .run-progress { color: #6b7280; padding: 0 8px; }
 .win-rules-status-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
   border-bottom: 1px solid var(--border-primary);
   gap: 15px;
+}
+.win-rules-label {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 600;
+  flex-shrink: 0;
 }
 .win-rules-info {
   display: flex;
@@ -23924,9 +23955,8 @@ button:disabled {
   display: flex;
   gap: 15px;
   align-items: center;
-  display: flex;
-  gap: 16px;
-  align-items: center;
+  justify-content: flex-start;
+  flex: 1;
 }
 .item-time-left-display {
   font-weight: bold;

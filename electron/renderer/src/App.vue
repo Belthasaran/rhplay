@@ -16718,6 +16718,21 @@ async function saveSettings() {
           settings.rhpakFileAssociationEnabled = rhpakAssociationEnabledAtLoad;
         }
       }
+      
+      // Handle overlay web server lifecycle
+      if (isElectronAvailable()) {
+        try {
+          // Stop server if it's running
+          await (window as any).electronAPI.overlayWebServerStop();
+          
+          // Start server if enabled
+          if (settings.overlayWebServerEnabled === 'On') {
+            await (window as any).electronAPI.overlayWebServerStart();
+          }
+        } catch (error) {
+          console.warn('[Overlay Web Server] Error managing server:', error);
+        }
+      }
     } else {
       console.error('Failed to save settings:', result.error);
       alert(`Error saving settings: ${result.error}`);

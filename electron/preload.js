@@ -269,6 +269,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRun: (params) => ipcRenderer.invoke('db:runs:get', params),
   
   /**
+   * Update win rules for a run
+   * @param {Object} params - {runUuid: string, winRulesJson: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  updateRunWinRules: (params) => ipcRenderer.invoke('db:runs:update-win-rules', params),
+  
+  /**
    * Generate runview.html file
    * @param {Object} params - {runUuid: string}
    * @returns {Promise<{success: boolean, error?: string}>}

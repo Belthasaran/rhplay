@@ -859,7 +859,7 @@ async function generateRunview(params) {
         <span class="entry-type ${entryTypeClass}">${escapeHtml(entryType)}</span> 
         <span class="game-id">${escapeHtml(currentChallenge.gameid || '—')}</span> - 
         <span class="game-name">${escapeHtml(abbreviateText(currentGameName))}</span>
-        ${currentAuthor ? `<span class="author-line">${escapeHtml(abbreviateText(currentAuthor))}</span>` : ''}
+        <!-- ${currentAuthor ? `<span class="author-line">${escapeHtml(abbreviateText(currentAuthor))}</span>` : ''} -->
         ${currentGameNumDifficulty !== null ? `<span class="difficulty-${currentGameNumDifficulty}">(${currentGameDifficulty !== '' ? escapeHtml(currentGameDifficulty) : ''}${currentGameDifficultyMnemonic ? (currentGameDifficulty !== '' ? ' ' : '') + escapeHtml(currentGameDifficultyMnemonic) : ''}${combinedMnemonics.length > 0 ? ((currentGameDifficulty !== '' || currentGameDifficultyMnemonic) ? ' ' : '') + escapeHtml(combinedMnemonics.join(' ')) : ''})</span>` : (currentGameDifficulty || currentGameDifficultyMnemonic || combinedMnemonics.length > 0 ? `<span>(${currentGameDifficulty !== '' ? escapeHtml(currentGameDifficulty) : ''}${currentGameDifficultyMnemonic ? (currentGameDifficulty !== '' ? ' ' : '') + escapeHtml(currentGameDifficultyMnemonic) : ''}${combinedMnemonics.length > 0 ? ((currentGameDifficulty !== '' || currentGameDifficultyMnemonic) ? ' ' : '') + escapeHtml(combinedMnemonics.join(' ')) : ''})</span>` : '')}
       </div>
       ${currentStageId ? `

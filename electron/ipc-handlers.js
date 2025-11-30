@@ -2733,6 +2733,38 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Update win rules for a run
+   * Channel: db:runs:update-win-rules
+   */
+  ipcMain.handle('db:runs:update-win-rules', async (event, { runUuid, winRulesJson }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Verify run exists
+      const run = db.prepare('SELECT run_uuid FROM runs WHERE run_uuid = ?').get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+      
+      // Update win rules JSON
+      const nowMs = Date.now();
+      db.prepare(`
+        UPDATE runs 
+        SET win_rules_json = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            updated_at_ms = ?
+        WHERE run_uuid = ?
+      `).run(winRulesJson, nowMs, runUuid);
+      
+      console.log(`Updated win rules for run ${runUuid}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating win rules:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Get run results (expanded challenges)
    * Channel: db:runs:get-results
    */

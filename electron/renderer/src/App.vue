@@ -1184,6 +1184,9 @@
           <button @click="editGlobalConditions" :title="`Global Patches: ${globalRunPatchCodes.length > 0 ? globalRunPatchCodes.join(', ') : 'None'}`">
             {{ globalRunPatchCodes.length > 0 ? `✓ Global Patches (${globalRunPatchCodes.length})` : 'Set Global Conditions' }}
           </button>
+          <button @click="openWinRulesDropdown($event)" :title="`Win Rules: ${hasWinRules ? 'Configured' : 'Not set'}`">
+            {{ hasWinRules ? '✓ Win Rules' : 'Set Win Rules' }} ▼
+          </button>
         </div>
         <div class="right add-random">
           <label>
@@ -7305,6 +7308,16 @@
   
   <ToastNotification ref="toastNotificationRef" />
   
+  <!-- Win Rules Dropdown -->
+  <WinRulesDropdown
+    :visible="showWinRulesDropdown"
+    :position="winRulesDropdownPosition"
+    :currentWinRules="currentWinRulesJson"
+    :globalConditions="globalRunPatchCodes"
+    @save="handleSaveWinRules"
+    @close="handleCloseWinRulesDropdown"
+  />
+  
 </template>
 
 <script setup lang="ts">
@@ -7338,6 +7351,7 @@ import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import ToastNotification from './components/ToastNotification.vue';
+import WinRulesDropdown from './components/WinRulesDropdown.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -17356,6 +17370,11 @@ const globalRunPatchCodes = ref<string[]>([]);  // Global patch codes to apply t
 const showGlobalConditionsDialog = ref(false);  // Dialog for editing global conditions and patch codes
 const availablePatchesForGlobal = ref<any[]>([]);  // Available patches for selection in global conditions
 
+// Win Rules state
+const showWinRulesDropdown = ref(false);  // Win rules dropdown visibility
+const winRulesDropdownPosition = ref<{ x: number; y: number } | null>(null);  // Position for win rules dropdown
+const currentWinRulesJson = ref<string | null>(null);  // Current win rules JSON from run
+
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
 const currentRunStatus = ref<'preparing' | 'active' | 'completed' | 'cancelled'>('preparing');
@@ -21168,6 +21187,91 @@ async function editGlobalConditions() {
 
 function closeGlobalConditionsDialog() {
   showGlobalConditionsDialog.value = false;
+}
+
+// Win Rules helpers
+const hasWinRules = computed(() => {
+  if (!currentWinRulesJson.value) return false;
+  try {
+    const rules = JSON.parse(currentWinRulesJson.value);
+    return rules.challengeTimeCap?.enabled ||
+           rules.challengeTimeWithRollover?.enabled ||
+           rules.runTimeLimit?.enabled ||
+           rules.noGameOvers?.enabled ||
+           rules.noHits?.enabled;
+  } catch (e) {
+    return false;
+  }
+});
+
+async function openWinRulesDropdown(event: MouseEvent) {
+  // Get button position for dropdown placement
+  const button = event.currentTarget as HTMLElement;
+  const rect = button.getBoundingClientRect();
+  
+  // Position dropdown to the right of the button, aligned with top
+  winRulesDropdownPosition.value = {
+    x: rect.right + 10,
+    y: rect.top
+  };
+  
+  // Load win rules from current run if available
+  if (currentRunUuid.value && isElectronAvailable()) {
+    try {
+      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+      if (run && run.win_rules_json) {
+        currentWinRulesJson.value = run.win_rules_json;
+      } else {
+        currentWinRulesJson.value = null;
+      }
+    } catch (error) {
+      console.error('Error loading win rules:', error);
+      currentWinRulesJson.value = null;
+    }
+  } else {
+    currentWinRulesJson.value = null;
+  }
+  
+  showWinRulesDropdown.value = true;
+}
+
+function handleCloseWinRulesDropdown() {
+  showWinRulesDropdown.value = false;
+  winRulesDropdownPosition.value = null;
+}
+
+async function handleSaveWinRules(winRulesJson: string) {
+  if (!currentRunUuid.value) {
+    console.warn('No current run UUID, cannot save win rules');
+    return;
+  }
+  
+  try {
+    if (isElectronAvailable()) {
+      const result = await (window as any).electronAPI.updateRunWinRules({
+        runUuid: currentRunUuid.value,
+        winRulesJson: winRulesJson
+      });
+      
+      if (result.success) {
+        currentWinRulesJson.value = winRulesJson;
+        // Show success toast
+        if (toastNotificationRef.value) {
+          toastNotificationRef.value.show('Win rules saved successfully', 'success');
+        }
+      } else {
+        console.error('Failed to save win rules:', result.error);
+        if (toastNotificationRef.value) {
+          toastNotificationRef.value.show('Failed to save win rules: ' + (result.error || 'Unknown error'), 'error');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error saving win rules:', error);
+    if (toastNotificationRef.value) {
+      toastNotificationRef.value.show('Error saving win rules: ' + (error instanceof Error ? error.message : String(error)), 'error');
+    }
+  }
 }
 
 function toggleGlobalPatch(patchCode: string) {

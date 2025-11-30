@@ -1133,4 +1133,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('provisioner:status', handler);
     },
   },
+  
+  // Overlay Web Server
+  overlayWebServerStart: () => ipcRenderer.invoke('overlay-web-server:start'),
+  overlayWebServerStop: () => ipcRenderer.invoke('overlay-web-server:stop'),
+  overlayWebServerStatus: () => ipcRenderer.invoke('overlay-web-server:status'),
 });

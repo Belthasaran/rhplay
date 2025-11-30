@@ -20315,11 +20315,14 @@ async function undoChallenge() {
       });
       
       // Update challenge results with refreshed data from database
+      // Include startedAtMs and pauseMilliseconds for proper timer calculation
       challengeResults.value = updatedResults.map((res: any, index: number) => ({
         index: index,
         status: res.status || 'pending',
         durationSeconds: res.duration_seconds || 0,
-        revealedEarly: res.revealed_early || false
+        revealedEarly: res.revealed_early || false,
+        startedAtMs: res.started_at_ms || null,
+        pauseMilliseconds: res.pause_milliseconds || 0
       }));
       
       // Update run pause time if it was affected (should be reflected in database)
@@ -20335,6 +20338,30 @@ async function undoChallenge() {
     
     // Go back to that challenge (status should already be 'pending' from database)
     currentChallengeIndex.value = idx;
+    
+    // The backend has already cleared the undone challenge's timestamps in the database
+    // and cleared the next challenge's started_at_ms
+    // We need to sync local state and set the start time for the undone challenge
+    // since it's now the current challenge and should start timing immediately
+    const undoneChallenge = challengeResults.value[idx];
+    if (undoneChallenge) {
+      undoneChallenge.durationSeconds = 0;
+      undoneChallenge.pauseMilliseconds = 0;  // Pause time was transferred to previous challenge
+      // Set started_at_ms to now since this challenge is now current and should start timing
+      // We'll update the database when Done is pressed, but for now set it locally
+      undoneChallenge.startedAtMs = Date.now();
+    }
+    
+    // Also clear the next challenge's start time locally (if it exists and is pending)
+    // This matches what the backend did - the next challenge should not have a start time
+    // until the current challenge is completed
+    if (idx + 1 < challengeResults.value.length) {
+      const nextChallenge = challengeResults.value[idx + 1];
+      if (nextChallenge && nextChallenge.status === 'pending') {
+        nextChallenge.startedAtMs = null;
+        nextChallenge.durationSeconds = 0;
+      }
+    }
     
     console.log(`[undoChallenge] Undone: Challenge ${idx + 1} back to pending`);
   } catch (error) {
@@ -22396,21 +22423,26 @@ async function resumeRunFromStartup() {
         // This matches the approach in RUN_TIMING_REVIEW.md and ensures accuracy
         if (currentChallengeIndex.value < challengeResults.value.length) {
           const current = challengeResults.value[currentChallengeIndex.value];
-          if (current.status === 'pending' && current.startedAtMs) {
-            // Calculate duration: (now - started_at_ms) - pause_milliseconds - current_pause_time
-            let challengeElapsedMs = now - current.startedAtMs;
-            
-            // Subtract accumulated pause time for this challenge
-            challengeElapsedMs -= current.pauseMilliseconds;
-            
-            // If run is currently paused, subtract current pause time from challenge timer too
-            if (isRunPaused.value && runPauseStartTime.value) {
-              const currentPauseMs = now - runPauseStartTime.value;
-              challengeElapsedMs -= currentPauseMs;
+          if (current.status === 'pending') {
+            if (current.startedAtMs) {
+              // Calculate duration: (now - started_at_ms) - pause_milliseconds - current_pause_time
+              let challengeElapsedMs = now - current.startedAtMs;
+              
+              // Subtract accumulated pause time for this challenge
+              challengeElapsedMs -= (current.pauseMilliseconds || 0);
+              
+              // If run is currently paused, subtract current pause time from challenge timer too
+              if (isRunPaused.value && runPauseStartTime.value) {
+                const currentPauseMs = now - runPauseStartTime.value;
+                challengeElapsedMs -= currentPauseMs;
+              }
+              
+              // Convert to seconds and ensure non-negative
+              current.durationSeconds = Math.max(0, Math.floor(challengeElapsedMs / 1000));
+            } else {
+              // Challenge hasn't started yet (started_at_ms is null) - duration should be 0
+              current.durationSeconds = 0;
             }
-            
-            // Convert to seconds and ensure non-negative
-            current.durationSeconds = Math.max(0, Math.floor(challengeElapsedMs / 1000));
           }
         }
       }

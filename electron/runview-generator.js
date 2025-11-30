@@ -820,7 +820,7 @@ async function generateRunview(params) {
       ` : ''}
       ${currentAuthor ? `
       <div class="author-line">
-        <span class="author">Author: ${escapeHtml(abbreviateText(currentAuthor))}</span>
+        <span class="author">Author: ${escapeHtml(abbreviateText(currentAuthor,20))}</span>
       </div>
       ` : ''}
       ${currentStageTags ? `
@@ -915,10 +915,9 @@ ${displayIndices.map(idx => {
           <td>${statusIcon}</td>
           <td><span class="entry-type">${escapeHtml(entryTypeAbbrev)}</span></td>
           <td>
-            <span class="game-id">${escapeHtml(result.gameid || '—')}</span><br>
+            <span class="game-id">${escapeHtml(result.gameid || '—')}</span>
             <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>
-          </td>
-          <td><span class="stage-info">${escapeHtml(abbreviateText(stageInfo || '—'))}</span></td>
+            <span class="stage-info">${escapeHtml(abbreviateText(stageInfo || '—'))}</span></td>
           <td><span class="challenge-entry-time">${timeText}</span></td>
         </tr>`;
 }).join('\n')}

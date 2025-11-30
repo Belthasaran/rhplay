@@ -1345,8 +1345,8 @@
         </div>
       </section>
 
-      <section class="modal-body">
-        <div class="table-wrapper">
+      <section class="modal-body" ref="runModalBodyRef">
+        <div class="table-wrapper" ref="runEntriesTableWrapperRef">
           <table class="data-table">
             <thead>
               <tr>
@@ -17364,6 +17364,64 @@ const currentChallengeIndex = ref<number>(0);
 const runStartTime = ref<number | null>(null);  // Original start timestamp in milliseconds (NEVER adjusted)
 const runElapsedSeconds = ref<number>(0);
 const runPauseSeconds = ref<number>(0);  // Total pause time in seconds (tallied)
+
+// Refs for scrolling to active challenge
+const runModalBodyRef = ref<HTMLElement | null>(null);
+const runEntriesTableWrapperRef = ref<HTMLElement | null>(null);
+
+// Scroll to challenge just above the active one
+function scrollToActiveChallenge() {
+  // Use nextTick to ensure DOM is updated after challenge index change
+  nextTick(() => {
+    if (!runEntriesTableWrapperRef.value || currentChallengeIndex.value < 0) {
+      return;
+    }
+    
+    // Find the row for the challenge just above the active one
+    // If active is at index 0, scroll to index 0. Otherwise scroll to activeIndex - 1
+    const scrollToIndex = currentChallengeIndex.value > 0 ? currentChallengeIndex.value - 1 : 0;
+    
+    // Find all table rows in the tbody
+    const tbody = runEntriesTableWrapperRef.value.querySelector('tbody');
+    if (!tbody) return;
+    
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    if (scrollToIndex >= rows.length) return;
+    
+    const targetRow = rows[scrollToIndex] as HTMLElement;
+    if (!targetRow) return;
+    
+    // Get the scrollable container (modal-body or table-wrapper)
+    const scrollContainer = runModalBodyRef.value || runEntriesTableWrapperRef.value;
+    if (!scrollContainer) return;
+    
+    // Check if the row is already visible
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const rowRect = targetRow.getBoundingClientRect();
+    
+    // If row is not visible or only partially visible, scroll to it
+    if (rowRect.top < containerRect.top || rowRect.bottom > containerRect.bottom) {
+      // Use scrollIntoView to scroll the row into view at the top with some padding
+      // Find the nearest scrollable parent (could be modal-body or table-wrapper)
+      let scrollableParent = scrollContainer;
+      while (scrollableParent && scrollableParent !== document.body) {
+        const style = window.getComputedStyle(scrollableParent);
+        if (style.overflowY === 'auto' || style.overflowY === 'scroll' || 
+            style.overflow === 'auto' || style.overflow === 'scroll') {
+          break;
+        }
+        scrollableParent = scrollableParent.parentElement;
+      }
+      
+      // Scroll the target row into view, positioning it near the top
+      targetRow.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest'
+      });
+    }
+  });
+}
 const runPauseStartTime = ref<number | null>(null);  // When current pause started (milliseconds)
 const isRunPaused = ref<boolean>(false);
 const runTimerInterval = ref<number | null>(null);
@@ -20133,6 +20191,8 @@ async function nextChallenge() {
         nextChallenge.durationSeconds = 0;
         nextChallenge.startedAtMs = Date.now();  // Next challenge starts now
       }
+      // Scroll to the challenge just above the new active challenge (not on last challenge)
+      scrollToActiveChallenge();
     } else {
       // This is the last challenge - show final confirmation with undo option
       const finalConfirmed = await showConfirm(
@@ -20204,6 +20264,8 @@ async function skipChallenge() {
         nextChallenge.durationSeconds = 0;
         nextChallenge.startedAtMs = Date.now();  // Next challenge starts now
       }
+      // Scroll to the challenge just above the new active challenge (not on last challenge)
+      scrollToActiveChallenge();
     } else {
       // This is the last challenge - show final confirmation with undo option
       const finalConfirmed = await showConfirm(
@@ -20397,6 +20459,9 @@ async function undoChallenge() {
     // This goes back by exactly ONE challenge
     currentChallengeIndex.value = idx;
     console.log(`[undoChallenge] Undone challenge ${idx + 1}, went back by one from ${currentActiveIndex} to ${idx}`);
+    
+    // Scroll to the challenge just above the new active challenge
+    scrollToActiveChallenge();
     
     // Update run pause time if it was affected
     const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
@@ -22408,21 +22473,42 @@ async function resumeRunFromStartup() {
     
     console.log('Loaded run entries:', runEntries.length);
     
-    // Find current challenge index: highest sequence_number with no completed time
-    // This should be the active challenge
+    // Find current challenge index: the FIRST challenge after the last completed challenge
+    // The active challenge is the one that comes immediately after all completed challenges
     let activeChallengeIndex = -1;
+    
+    // First, find the last completed challenge
+    let lastCompletedIndex = -1;
     for (let i = expandedResults.length - 1; i >= 0; i--) {
       const res = expandedResults[i];
-      // Active challenge has no completed_at_ms and is pending
-      if ((!res.status || res.status === 'pending') && !res.completed_at_ms) {
-        activeChallengeIndex = i;
+      if (res.completed_at_ms) {
+        lastCompletedIndex = i;
         break;
       }
     }
     
-    // If no active challenge found, default to last one
+    // The active challenge is the one immediately after the last completed challenge
+    // If no challenges are completed yet, the active challenge is the first one (index 0)
+    if (lastCompletedIndex >= 0) {
+      // There is a completed challenge - active is the next one
+      activeChallengeIndex = lastCompletedIndex + 1;
+      
+      // Make sure it exists and is not completed
+      if (activeChallengeIndex >= expandedResults.length) {
+        // All challenges are completed
+        activeChallengeIndex = expandedResults.length - 1;
+      } else if (expandedResults[activeChallengeIndex].completed_at_ms) {
+        // This challenge is also completed (shouldn't happen but handle it)
+        activeChallengeIndex = -1;
+      }
+    } else {
+      // No challenges completed yet - first challenge is active
+      activeChallengeIndex = 0;
+    }
+    
+    // If no active challenge found, default to first one
     if (activeChallengeIndex === -1) {
-      activeChallengeIndex = expandedResults.length - 1;
+      activeChallengeIndex = 0;
     }
     
     currentChallengeIndex.value = activeChallengeIndex;
@@ -22503,16 +22589,33 @@ async function resumeRunFromStartup() {
       }
     }
     
-    // Verify that challenges AFTER the active challenge do NOT have started_at_ms
-    // They should be pending but not started yet
+    // CRITICAL: Clear incorrect started_at_ms on challenges AFTER the active challenge
+    // These challenges haven't been reached yet and should not have start times
     for (let i = activeChallengeIndex + 1; i < expandedResults.length; i++) {
       const laterResult = expandedResults[i];
-      const laterChallenge = challengeResults.value[i];
       
       // Challenges after the active one should NOT have started_at_ms
-      if (laterResult.started_at_ms || laterChallenge.startedAtMs) {
-        console.warn(`[resumeRunFromStartup] WARNING: Challenge ${i + 1} (sequence ${laterResult.sequence_number}) comes AFTER active challenge but has started_at_ms! This should not happen.`);
-        // Don't clear it here - let the user know something is wrong
+      if (laterResult.started_at_ms) {
+        console.warn(`[resumeRunFromStartup] Challenge ${i + 1} (sequence ${laterResult.sequence_number}) comes AFTER active challenge but has started_at_ms! Clearing it...`);
+        
+        try {
+          // Clear the incorrect started_at_ms in database
+          await (window as any).electronAPI.clearChallengeStartTime({
+            runUuid: currentRunUuid.value,
+            resultUuid: laterResult.result_uuid
+          });
+          
+          // Update local state
+          const laterChallenge = challengeResults.value[i];
+          if (laterChallenge) {
+            laterChallenge.startedAtMs = null;
+            challengeResults.value[i] = { ...laterChallenge };
+          }
+          
+          console.log(`[resumeRunFromStartup] Cleared started_at_ms for challenge ${i + 1} (sequence ${laterResult.sequence_number})`);
+        } catch (error) {
+          console.error(`[resumeRunFromStartup] Failed to clear started_at_ms for challenge ${i + 1}:`, error);
+        }
       }
     }
     
@@ -22530,7 +22633,7 @@ async function resumeRunFromStartup() {
         // Calculate elapsed time: (current time - start time - pause time)
         // IMPORTANT: runStartTime.value is the original start timestamp, NEVER adjusted
         // If currently paused, include pending pause time
-    const now = Date.now();
+        const now = Date.now();
         const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
         
         // Calculate pending pause time if currently paused
@@ -22586,6 +22689,9 @@ async function resumeRunFromStartup() {
     
     // Open run modal
     runModalOpen.value = true;
+    
+    // Scroll to the challenge just above the active challenge after resuming
+    scrollToActiveChallenge();
     
     console.log('Run modal opened, resume complete');
   } catch (error) {

@@ -1126,16 +1126,16 @@
               EXPIRED
             </div>
           </div>
-          <div v-if="runTimeLeftSeconds !== null" class="run-time-column">
-            <div class="time-label">Run:</div>
-            <div class="time-value" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
-              {{ formatTime(runTimeLeftSeconds) }}
-            </div>
-          </div>
           <div v-if="rolloverTimeRemainingSeconds !== null" class="rollover-column">
             <div class="time-label">Rollover:</div>
             <div class="time-value rollover-value">
               {{ formatTime(rolloverTimeRemainingSeconds) }}
+            </div>
+          </div>
+          <div v-if="runTimeLeftSeconds !== null" class="run-time-column">
+            <div class="time-label">Run:</div>
+            <div class="time-value" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
+              {{ formatTime(runTimeLeftSeconds) }}
             </div>
           </div>
         </div>
@@ -21427,7 +21427,11 @@ const runTimeLeftSeconds = computed(() => {
 });
 
 // Rollover time remaining (for current challenge)
+// Depend on runElapsedSeconds to trigger recalculation every second
 const rolloverTimeRemainingSeconds = computed(() => {
+  // Depend on runElapsedSeconds to trigger recalculation every second
+  const _ = runElapsedSeconds.value;
+  
   if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
     return null;
   }
@@ -21443,7 +21447,13 @@ const rolloverTimeRemainingSeconds = computed(() => {
   const limitMs = limitMinutes * 60 * 1000;
   
   const now = Date.now();
-  const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  let elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  
+  // Subtract current pause time if run is paused
+  if (isRunPaused.value && runPauseStartTime.value) {
+    const currentPauseMs = now - runPauseStartTime.value;
+    elapsedMs -= currentPauseMs;
+  }
   
   // If we're past the limit, rollover is being used
   const timeOverLimit = elapsedMs - limitMs;

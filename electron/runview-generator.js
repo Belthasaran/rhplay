@@ -556,6 +556,7 @@ async function generateRunview(params) {
     // Calculate win rule timers
     let runTimeLeftMs = null;
     let itemTimeLeftMs = null;
+    let rolloverTimeRemainingMs = null;
     
     if (winRules && !isRunFinished && !isRunNotStarted) {
       // Run Time Left
@@ -576,9 +577,20 @@ async function generateRunview(params) {
         const challengeElapsedMs = currentChallengeElapsedMs;
         
         // Get rollover time from database (rollover_time_remaining_start_ms)
-        const rolloverMs = currentChallenge.rollover_time_remaining_start_ms || 0;
+        const rolloverStartMs = currentChallenge.rollover_time_remaining_start_ms || 0;
         
-        const availableTimeMs = limitMs + rolloverMs;
+        // Calculate current rollover remaining
+        const timeOverLimit = challengeElapsedMs - limitMs;
+        if (timeOverLimit <= 0) {
+          // Still within limit, rollover unchanged
+          rolloverTimeRemainingMs = rolloverStartMs;
+        } else {
+          // Past limit, rollover is being deducted
+          const rolloverUsed = timeOverLimit;
+          rolloverTimeRemainingMs = Math.max(0, rolloverStartMs - rolloverUsed);
+        }
+        
+        const availableTimeMs = limitMs + rolloverStartMs;
         itemTimeLeftMs = Math.max(0, availableTimeMs - challengeElapsedMs);
       }
     }
@@ -896,11 +908,17 @@ async function generateRunview(params) {
       font-size: 16px;
       font-weight: bold;
     }
+    #rollover-time-left {
+    color: lightgray;
+    }
+    #rollover-time-left-value {
+      color: lightgray;
+    }
     .win-rule-timer {
       font-size: 20px;
       font-weight: bold;
       font-family: 'Courier New', monospace;
-      color: #4CAF50;
+      color: #4CAF50;  
       margin-left: 10px;
     }
     .win-rule-timer.time-warning {
@@ -935,8 +953,7 @@ async function generateRunview(params) {
     </div>
     <div class="timer-row">
       ${itemTimeLeftMs !== null ? `<div class="win-rule-timer ${itemTimeLeftMs < 30000 ? 'time-critical' : (itemTimeLeftMs < 60000 ? 'time-warning' : '')}" id="item-time-left">⏳ <span id="item-time-left-value">00:00:00</span></div>` : ''}
-      <!-- Current rollove pool time left should be displayed on this row in-between item-time-left and run-time-left -->
-
+      ${winRules && winRules.challengeTime && winRules.challengeTime.enabled && winRules.challengeTime.rolloverMaxMinutes > 0 ? `<div class="win-rule-timer" id="rollover-time-left">Spare <span id="rollover-time-left-value">00:00:00</span></div>` : ''}
       ${runTimeLeftMs !== null ? `<div class="win-rule-timer ${runTimeLeftMs < 30000 ? 'time-critical' : (runTimeLeftMs < 60000 ? 'time-warning' : '')}" id="run-time-left">🏁 <span id="run-time-left-value">00:00:00</span></div>` : ''}
     </div>
     `}
@@ -1099,7 +1116,7 @@ ${displayIndices.map(idx => {
     const winRules = ${winRules ? JSON.stringify(winRules) : 'null'};
     const runTimeLimitMs = ${winRules && winRules.runTimeLimit && winRules.runTimeLimit.enabled ? (winRules.runTimeLimit.minutes || 60) * 60 * 1000 : 'null'};
     const challengeTimeLimitMs = ${winRules && winRules.challengeTime && winRules.challengeTime.enabled ? (winRules.challengeTime.minutes || 10) * 60 * 1000 : 'null'};
-    const rolloverMs = ${currentChallenge.rollover_time_remaining_start_ms || 0};
+    const rolloverStartMs = ${currentChallenge.rollover_time_remaining_start_ms || 0};
     
     function formatTime(milliseconds) {
       const totalSeconds = Math.floor(milliseconds / 1000);
@@ -1159,7 +1176,7 @@ ${displayIndices.map(idx => {
           
           // Apply color based on item time left (if challenge time limit win rule is active)
           if (challengeTimeLimitMs !== null) {
-            const availableTime = challengeTimeLimitMs + rolloverMs;
+            const availableTime = challengeTimeLimitMs + rolloverStartMs;
             const itemTimeLeft = Math.max(0, availableTime - challengeElapsed);
             // Remove existing color classes
             challengeTimerEl.classList.remove('time-warning', 'time-critical');
@@ -1200,8 +1217,8 @@ ${displayIndices.map(idx => {
           challengeElapsed -= currentPauseMs;
         }
         if (challengeElapsed < 0) challengeElapsed = 0;
-        // rolloverMs is set from database value in the script initialization
-        const availableTime = challengeTimeLimitMs + rolloverMs;
+        // rolloverStartMs is set from database value in the script initialization
+        const availableTime = challengeTimeLimitMs + rolloverStartMs;
         const itemTimeLeft = Math.max(0, availableTime - challengeElapsed);
         const itemTimeLeftEl = document.getElementById('item-time-left-value');
         if (itemTimeLeftEl) {
@@ -1212,6 +1229,22 @@ ${displayIndices.map(idx => {
             parentEl.className = 'win-rule-timer' + 
               (itemTimeLeft < 30000 ? ' time-critical' : (itemTimeLeft < 60000 ? ' time-warning' : ''));
           }
+        }
+        
+        // Update rollover time remaining display (if rollover is enabled)
+        const rolloverTimeLeftEl = document.getElementById('rollover-time-left-value');
+        if (rolloverTimeLeftEl && winRules && winRules.challengeTime && winRules.challengeTime.rolloverMaxMinutes > 0) {
+          const timeOverLimit = challengeElapsed - challengeTimeLimitMs;
+          let rolloverRemaining;
+          if (timeOverLimit <= 0) {
+            // Still within limit, rollover unchanged
+            rolloverRemaining = rolloverStartMs;
+          } else {
+            // Past limit, rollover is being deducted
+            const rolloverUsed = timeOverLimit;
+            rolloverRemaining = Math.max(0, rolloverStartMs - rolloverUsed);
+          }
+          rolloverTimeLeftEl.textContent = formatTime(rolloverRemaining);
         }
       }
       

@@ -20252,9 +20252,15 @@ async function undoChallenge() {
       return;
     }
     
-    // CRITICAL: We undo ONLY the challenge immediately before the active challenge
-    // This is currentActiveIndex - 1 (the one that was completed to get to the current active challenge)
-    // We MUST NEVER undo or touch any challenge before this one
+    // CRITICAL: Undo operation flow:
+    // - Current active challenge is at index currentActiveIndex (N)
+    // - We undo challenge at idx = currentActiveIndex - 1 (N-1)
+    // - Backend will:
+    //   1. Clear completed_at of challenge N-1 and make it pending (preserves its started_at_ms)
+    //   2. Clear started_at_ms of challenge N (the active challenge)
+    //   3. Clear started_at_ms of any pending challenges after N
+    //   4. NEVER touch challenges before N-1
+    // - After undo, challenge N-1 becomes the active challenge (highest sequence with no completed time)
     const idx = currentActiveIndex - 1;
     
     // Verify this challenge exists and is completed
@@ -20332,10 +20338,14 @@ async function undoChallenge() {
       let durationSeconds = res.duration_seconds || 0;
       
       // If challenge is pending and has a started_at_ms, calculate elapsed time dynamically
+      // This applies to ALL pending challenges, including the undone one (idx)
       if ((res.status === 'pending' || !res.status) && res.started_at_ms) {
         const elapsedMs = now - res.started_at_ms;
         const pauseMs = res.pause_milliseconds || 0;
         durationSeconds = Math.max(0, Math.floor((elapsedMs - pauseMs) / 1000));
+      } else if ((res.status === 'pending' || !res.status) && !res.started_at_ms) {
+        // Challenge is pending but has no started_at_ms - duration should be 0
+        durationSeconds = 0;
       }
       
       return {
@@ -20348,13 +20358,38 @@ async function undoChallenge() {
       };
     });
     
-    // The undone challenge (idx) should still have its started_at_ms (we never clear it)
-    // It will continue timing from when it originally started
-    // The active challenge (currentActiveIndex) had its started_at_ms cleared and should not be timing
+    // Verify the undone challenge (idx) has its started_at_ms preserved
+    const undoneChallengeResult = challengeResults.value[idx];
+    if (undoneChallengeResult) {
+      if (undoneChallengeResult.startedAtMs) {
+        // Good - it has started_at_ms, timer will continue from original start time
+        console.log(`[undoChallenge] Undone challenge ${idx + 1} has started_at_ms: ${undoneChallengeResult.startedAtMs}, will continue timing`);
+      } else {
+        // This should not happen - the undone challenge should have started_at_ms
+        console.warn(`[undoChallenge] WARNING: Undone challenge ${idx + 1} has no started_at_ms! This should not happen.`);
+      }
+    }
+    
+    // The previously active challenge (currentActiveIndex) had its started_at_ms cleared and should not be timing
     const activeChallengeResult = challengeResults.value[currentActiveIndex];
     if (activeChallengeResult && !activeChallengeResult.startedAtMs) {
       activeChallengeResult.durationSeconds = 0;
       activeChallengeResult.pauseMilliseconds = 0;
+    }
+    
+    // CRITICAL: Verify that challenges before idx (idx - 1, idx - 2, etc.) still have their started_at_ms
+    // They should NEVER be touched by undo
+    for (let i = 0; i < idx; i++) {
+      const prevChallenge = challengeResults.value[i];
+      if (prevChallenge && prevChallenge.startedAtMs) {
+        // Good - previous challenges still have their started_at_ms
+        console.log(`[undoChallenge] Previous challenge ${i + 1} still has started_at_ms: ${prevChallenge.startedAtMs}`);
+      } else if (prevChallenge && prevChallenge.status !== 'pending') {
+        // Completed challenges might not need started_at_ms, that's okay
+      } else if (prevChallenge && prevChallenge.status === 'pending' && !prevChallenge.startedAtMs) {
+        // This is a problem - a pending challenge before the undone one lost its started_at_ms
+        console.error(`[undoChallenge] ERROR: Previous challenge ${i + 1} is pending but has no started_at_ms! This violates the undo rules!`);
+      }
     }
     
     // After undo, we go back by ONE challenge from where we were

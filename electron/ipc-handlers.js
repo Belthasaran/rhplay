@@ -2463,20 +2463,17 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // CRITICAL RULES - MUST NEVER VIOLATE:
-      // 1. ONLY undo the ending time (completed_at) of the immediate preceding challenge (challengeIndex)
-      // 2. Make that immediate preceding challenge active again (status = 'pending')
-      // 3. UNDO THE START TIME (started_at_ms) OF THE ACTIVE CHALLENGE (challengeIndex + 1)
-      // 4. NEVER touch the start time of ANY challenge before the active challenge (challengeIndex - 1 or earlier)
+      // challengeIndex = the challenge BEFORE the active one (N-1) - we clear its completed_at
+      // challengeIndex + 1 = the ACTIVE challenge (N) - we MUST clear its started_at_ms
+      // The highest sequence_number with no completed time shall ALWAYS be the active challenge
       
-      // challengeIndex = the immediate preceding challenge (N-1) - the one we're undoing
-      // challengeIndex + 1 = the active challenge (N) - we clear its started_at_ms
-      // challengeIndex - 1 or earlier = NEVER TOUCH these
-      
+      // Step 1: Clear the completed time of challengeIndex (N-1) and make it active
+      // CRITICAL: We MUST preserve started_at and started_at_ms of challengeIndex (N-1)
+      // It will continue timing from its original start time
+      // Clear completed_at and completed_at_ms, but KEEP started_at_ms
+      // Clear duration so it will be recalculated dynamically from started_at_ms
       const oldStatus = undoneChallenge.status;
       
-      // Step 1: Clear the completed time of the immediate preceding challenge (challengeIndex) and make it active
-      // Clear completed_at and completed_at_ms, but KEEP started_at_ms (never undo start times before active)
-      // Clear duration so it will be recalculated dynamically
       db.prepare(`
         UPDATE run_results
         SET status = 'pending',
@@ -2484,11 +2481,13 @@ function registerDatabaseHandlers(dbManager) {
             completed_at_ms = NULL,
             duration_seconds = NULL,
             duration_milliseconds = NULL
+            -- started_at and started_at_ms are NOT in the SET clause - they remain unchanged
+            -- pause_milliseconds and pause_seconds are NOT in the SET clause - they remain unchanged
         WHERE result_uuid = ?
       `).run(undoneChallenge.result_uuid);
       
       // Step 2: Clear the start time of the ACTIVE challenge (challengeIndex + 1)
-      // This is the challenge that becomes inactive when we undo
+      // The challenge that was active when Undo was pressed MUST have its started_at_ms cleared
       const activeChallengeIndex = challengeIndex + 1;
       if (activeChallengeIndex < allResults.length) {
         const activeChallenge = allResults[activeChallengeIndex];
@@ -2502,7 +2501,23 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
-      // Step 3: NEVER touch challengeIndex - 1 or any earlier challenges
+      // Step 3: Clear started_at_ms of ALL pending challenges AFTER the active one
+      // The highest sequence_number with no completed time shall ALWAYS be the active challenge
+      // So any challenges after challengeIndex + 1 that are pending should have no started_at_ms
+      for (let i = activeChallengeIndex + 1; i < allResults.length; i++) {
+        const laterChallenge = allResults[i];
+        if (laterChallenge && !laterChallenge.completed_at_ms && laterChallenge.started_at_ms) {
+          // This challenge is pending but has a started_at_ms - clear it
+          db.prepare(`
+            UPDATE run_results
+            SET started_at = NULL,
+                started_at_ms = NULL
+            WHERE result_uuid = ?
+          `).run(laterChallenge.result_uuid);
+        }
+      }
+      
+      // Step 4: NEVER touch challenges before challengeIndex (challengeIndex - 1 or earlier)
       // Their started_at_ms, completed_at, etc. remain completely unchanged
       
       // Update run counts (decrement completed/skipped counts if applicable)

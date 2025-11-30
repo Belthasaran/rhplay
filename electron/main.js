@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -787,6 +787,8 @@ app.whenReady().then(async () => {
         } else {
             await initializeDatabaseLayer();
             await loadRendererMode('app');
+            // Start overlay web server if enabled
+            await startOverlayWebServer();
         }
     } catch (err) {
         console.error('Failed to load renderer:', err);
@@ -816,6 +818,8 @@ app.whenReady().then(async () => {
             } else {
                 await initializeDatabaseLayer();
                 await loadRendererMode('app');
+                // Start overlay web server if enabled
+                await startOverlayWebServer();
             }
         } catch (err) {
             console.error('Failed to activate renderer:', err);
@@ -835,7 +839,135 @@ app.on('window-all-closed', () => {
     }
 });
 
-app.on('before-quit', () => {
+// Overlay web server management
+let overlayWebServerProcess = null;
+
+async function startOverlayWebServer() {
+  if (overlayWebServerProcess) {
+    console.log('[Overlay Web Server] Already running');
+    return;
+  }
+  
+  try {
+    if (!dbManager) {
+      console.warn('[Overlay Web Server] Database manager not initialized');
+      return;
+    }
+    
+    const db = dbManager.getConnection('clientdata');
+    const enabled = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('overlayWebServerEnabled');
+    if (!enabled || enabled.csetting_value !== 'On') {
+      console.log('[Overlay Web Server] Not enabled in settings');
+      return;
+    }
+    
+    const portRow = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('overlayWebServerPort');
+    const port = portRow ? parseInt(portRow.csetting_value, 10) || 2599 : 2599;
+    
+    const remoteRow = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('overlayRemoteConnectionsEnabled');
+    const allowRemote = remoteRow && remoteRow.csetting_value === 'On';
+    
+    const userDataPath = app.getPath('userData');
+    const serverScriptPath = path.join(__dirname, 'overlay-web-server.js');
+    
+    if (!fs.existsSync(serverScriptPath)) {
+      console.error('[Overlay Web Server] Server script not found:', serverScriptPath);
+      return;
+    }
+    
+    overlayWebServerProcess = utilityProcess.fork(serverScriptPath);
+    
+    overlayWebServerProcess.on('message', (message) => {
+      if (message.type === 'ready') {
+        console.log('[Overlay Web Server] Process ready, starting server...');
+        overlayWebServerProcess.postMessage({
+          type: 'start',
+          options: {
+            userDataPath,
+            port,
+            allowRemote
+          }
+        });
+      } else if (message.type === 'start-result') {
+        if (message.result.success) {
+          console.log(`[Overlay Web Server] Started successfully on port ${message.result.port}`);
+        } else {
+          console.error('[Overlay Web Server] Failed to start:', message.result.error);
+          overlayWebServerProcess = null;
+        }
+      } else if (message.type === 'error') {
+        console.error('[Overlay Web Server] Error:', message.error);
+      }
+    });
+    
+    overlayWebServerProcess.on('exit', (code) => {
+      console.log(`[Overlay Web Server] Process exited with code ${code}`);
+      overlayWebServerProcess = null;
+    });
+    
+  } catch (error) {
+    console.error('[Overlay Web Server] Error starting server:', error);
+    overlayWebServerProcess = null;
+  }
+}
+
+async function stopOverlayWebServer() {
+  if (!overlayWebServerProcess) {
+    return;
+  }
+  
+  try {
+    overlayWebServerProcess.postMessage({ type: 'stop' });
+    // Wait for stop confirmation or timeout
+    await new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        if (overlayWebServerProcess) {
+          overlayWebServerProcess.kill();
+        }
+        resolve();
+      }, 2000);
+      
+      const handler = (message) => {
+        if (message.type === 'stop-result') {
+          clearTimeout(timeout);
+          overlayWebServerProcess.removeListener('message', handler);
+          overlayWebServerProcess = null;
+          resolve();
+        }
+      };
+      
+      overlayWebServerProcess.on('message', handler);
+    });
+  } catch (error) {
+    console.error('[Overlay Web Server] Error stopping server:', error);
+    if (overlayWebServerProcess) {
+      overlayWebServerProcess.kill();
+      overlayWebServerProcess = null;
+    }
+  }
+}
+
+// IPC handlers for overlay web server
+ipcMain.handle('overlay-web-server:start', async () => {
+  await startOverlayWebServer();
+  return { success: true };
+});
+
+ipcMain.handle('overlay-web-server:stop', async () => {
+  await stopOverlayWebServer();
+  return { success: true };
+});
+
+ipcMain.handle('overlay-web-server:status', async () => {
+  return {
+    running: overlayWebServerProcess !== null
+  };
+});
+
+app.on('before-quit', async () => {
+    // Stop overlay web server
+    await stopOverlayWebServer();
+    
     // Ensure databases are closed
     if (dbManager) {
         dbManager.closeAll();

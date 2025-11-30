@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, utilityProcess } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { utilityProcess } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -878,32 +879,61 @@ async function startOverlayWebServer() {
     overlayWebServerProcess = utilityProcess.fork(serverScriptPath);
     
     overlayWebServerProcess.on('message', (message) => {
+      if (!message || typeof message !== 'object' || !message.type) {
+        console.log('[Overlay Web Server] Received invalid message:', message);
+        return;
+      }
+      
+      console.log(`[Overlay Web Server] Received message type: ${message.type}`);
+      
       if (message.type === 'ready') {
         console.log('[Overlay Web Server] Process ready, starting server...');
-        overlayWebServerProcess.postMessage({
+        const startMessage = {
           type: 'start',
           options: {
             userDataPath,
             port,
             allowRemote
           }
-        });
+        };
+        console.log('[Overlay Web Server] Sending start message:', JSON.stringify(startMessage));
+        try {
+          overlayWebServerProcess.postMessage(startMessage);
+          console.log('[Overlay Web Server] Start message sent successfully');
+        } catch (error) {
+          console.error('[Overlay Web Server] Error sending start message:', error);
+        }
+      } else if (message.type === 'start-ack') {
+        console.log('[Overlay Web Server] Start command acknowledged');
       } else if (message.type === 'start-result') {
-        if (message.result.success) {
+        if (message.result && message.result.success) {
           console.log(`[Overlay Web Server] Started successfully on port ${message.result.port}`);
         } else {
-          console.error('[Overlay Web Server] Failed to start:', message.result.error);
+          console.error('[Overlay Web Server] Failed to start:', message.result ? message.result.error : 'Unknown error');
           overlayWebServerProcess = null;
         }
       } else if (message.type === 'error') {
-        console.error('[Overlay Web Server] Error:', message.error);
+        console.error('[Overlay Web Server] Error from process:', message.error);
+      } else if (message.type === 'log') {
+        console.log(`[Overlay Web Server Utility] ${message.message}`);
       }
     });
     
-    overlayWebServerProcess.on('exit', (code) => {
-      console.log(`[Overlay Web Server] Process exited with code ${code}`);
+    overlayWebServerProcess.on('exit', (code, signal) => {
+      console.log(`[Overlay Web Server] Process exited with code ${code}, signal ${signal}`);
       overlayWebServerProcess = null;
     });
+    
+    overlayWebServerProcess.on('spawn', () => {
+      console.log('[Overlay Web Server] Utility process spawned');
+    });
+    
+    overlayWebServerProcess.on('error', (error) => {
+      console.error('[Overlay Web Server] Utility process error:', error);
+    });
+    
+    // Note: UtilityProcess doesn't expose stdout/stderr streams like regular child processes
+    // All communication must go through postMessage/on('message')
     
   } catch (error) {
     console.error('[Overlay Web Server] Error starting server:', error);

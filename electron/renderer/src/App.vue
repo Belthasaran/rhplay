@@ -16490,12 +16490,74 @@ const settings = reactive({
   tempDirOverride: '',
   tempDirValid: true,
   rhpakFileAssociationEnabled: true,
+  overlayWebServerEnabled: 'Off' as 'Off' | 'On',
+  overlayWebServerPort: 2599,
+  overlayRemoteConnectionsEnabled: 'Off' as 'Off' | 'On',
 });
 let rhpakAssociationEnabledAtLoad = true;
 let rhpakOsListenerCleanup: (() => void) | null = null;
 
-function openSettings() {
+async function openSettings() {
   settingsModalOpen.value = true;
+  
+  // Load settings from database when opening the modal
+  if (isElectronAvailable()) {
+    try {
+      const savedSettings = await (window as any).electronAPI.getSettings();
+      
+      // Load overlay web server settings
+      if (savedSettings.overlayWebServerEnabled) {
+        settings.overlayWebServerEnabled = savedSettings.overlayWebServerEnabled as 'Off' | 'On';
+      }
+      if (savedSettings.overlayWebServerPort) {
+        settings.overlayWebServerPort = parseInt(savedSettings.overlayWebServerPort, 10) || 2599;
+      }
+      if (savedSettings.overlayRemoteConnectionsEnabled) {
+        settings.overlayRemoteConnectionsEnabled = savedSettings.overlayRemoteConnectionsEnabled as 'Off' | 'On';
+      }
+      
+      // Load all other settings
+      if (savedSettings.theme) settings.theme = savedSettings.theme as ThemeName;
+      if (savedSettings.textSize) settings.textSize = savedSettings.textSize as TextSize;
+      if (savedSettings.vanillaRomPath) settings.vanillaRomPath = savedSettings.vanillaRomPath;
+      if (savedSettings.vanillaRomValid !== undefined) settings.vanillaRomValid = savedSettings.vanillaRomValid === 'true';
+      if (savedSettings.flipsPath) settings.flipsPath = savedSettings.flipsPath;
+      if (savedSettings.flipsValid !== undefined) settings.flipsValid = savedSettings.flipsValid === 'true';
+      if (savedSettings.asarPath) settings.asarPath = savedSettings.asarPath;
+      if (savedSettings.asarValid !== undefined) settings.asarValid = savedSettings.asarValid === 'true';
+      if (savedSettings.uberAsmPath) settings.uberAsmPath = savedSettings.uberAsmPath;
+      if (savedSettings.uberAsmValid !== undefined) settings.uberAsmValid = savedSettings.uberAsmValid === 'true';
+      if (savedSettings.launchMethod) settings.launchMethod = savedSettings.launchMethod as typeof settings.launchMethod;
+      if (savedSettings.launchProgram) settings.launchProgram = savedSettings.launchProgram;
+      if (savedSettings.launchProgramArgs) settings.launchProgramArgs = savedSettings.launchProgramArgs;
+      if (savedSettings.usb2snesHostingMethod) settings.usb2snesHostingMethod = savedSettings.usb2snesHostingMethod as typeof settings.usb2snesHostingMethod;
+      if (savedSettings.usb2snesAddress) settings.usb2snesAddress = savedSettings.usb2snesAddress;
+      if (savedSettings.usb2snesFxpAutoStart) settings.usb2snesFxpAutoStart = savedSettings.usb2snesFxpAutoStart as typeof settings.usb2snesFxpAutoStart;
+      if (savedSettings.usb2snesFxpUseDummyDevice) settings.usb2snesFxpUseDummyDevice = savedSettings.usb2snesFxpUseDummyDevice as typeof settings.usb2snesFxpUseDummyDevice;
+      if (savedSettings.usb2snesFxpDiversionTarget) settings.usb2snesFxpDiversionTarget = savedSettings.usb2snesFxpDiversionTarget;
+      if (savedSettings.usb2snesFxpDiversionUseSocks) settings.usb2snesFxpDiversionUseSocks = savedSettings.usb2snesFxpDiversionUseSocks as typeof settings.usb2snesFxpDiversionUseSocks;
+      if (savedSettings.usb2snesFxpDiversionSocksProxyUrl) settings.usb2snesFxpDiversionSocksProxyUrl = savedSettings.usb2snesFxpDiversionSocksProxyUrl;
+      if (savedSettings.usb2snesProxyMode) settings.usb2snesProxyMode = savedSettings.usb2snesProxyMode as typeof settings.usb2snesProxyMode;
+      if (savedSettings.usb2snesSocksProxyUrl) settings.usb2snesSocksProxyUrl = savedSettings.usb2snesSocksProxyUrl;
+      if (savedSettings.usb2snesSshHost) settings.usb2snesSshHost = savedSettings.usb2snesSshHost;
+      if (savedSettings.usb2snesSshUsername) settings.usb2snesSshUsername = savedSettings.usb2snesSshUsername;
+      if (savedSettings.usb2snesSshLocalPort) settings.usb2snesSshLocalPort = parseInt(savedSettings.usb2snesSshLocalPort, 10) || 64213;
+      if (savedSettings.usb2snesSshRemotePort) settings.usb2snesSshRemotePort = parseInt(savedSettings.usb2snesSshRemotePort, 10) || 64213;
+      if (savedSettings.usb2snesSshIdentityFile) settings.usb2snesSshIdentityFile = savedSettings.usb2snesSshIdentityFile;
+      if (savedSettings.usb2snesEnabled) settings.usb2snesEnabled = savedSettings.usb2snesEnabled as typeof settings.usb2snesEnabled;
+      if (savedSettings.usb2snesLibrary) settings.usb2snesLibrary = savedSettings.usb2snesLibrary as typeof settings.usb2snesLibrary;
+      if (savedSettings.usb2snesLaunchPref) settings.usb2snesLaunchPref = savedSettings.usb2snesLaunchPref as typeof settings.usb2snesLaunchPref;
+      if (savedSettings.usb2snesUploadPref) settings.usb2snesUploadPref = savedSettings.usb2snesUploadPref as typeof settings.usb2snesUploadPref;
+      if (savedSettings.usb2snesUploadDir) settings.usb2snesUploadDir = savedSettings.usb2snesUploadDir;
+      if (savedSettings.tempDirOverride) settings.tempDirOverride = savedSettings.tempDirOverride;
+      if (savedSettings.tempDirValid !== undefined) settings.tempDirValid = savedSettings.tempDirValid === 'true';
+      if (savedSettings.enableRhpakFileAssociation !== undefined) {
+        settings.rhpakFileAssociationEnabled = savedSettings.enableRhpakFileAssociation === 'true';
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  }
 }
 
 function closeSettings() {

@@ -7,9 +7,20 @@
  * Other HTTP methods return errors
  */
 
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
+let express, path, fs;
+try {
+  express = require('express');
+  path = require('path');
+  fs = require('fs');
+} catch (requireError) {
+  if (process.parentPort) {
+    process.parentPort.postMessage({ 
+      type: 'error', 
+      error: `Failed to load required modules: ${requireError.message}` 
+    });
+  }
+  throw requireError;
+}
 
 let server = null;
 let app = null;
@@ -25,8 +36,20 @@ let app = null;
 async function startServer(options) {
   const { userDataPath, port = 2599, allowRemote = false } = options;
   
+  // Send log message to main process
+  if (process.parentPort) {
+    process.parentPort.postMessage({ 
+      type: 'log', 
+      message: `startServer called with port ${port}, host ${allowRemote ? '0.0.0.0' : '127.0.0.1'}` 
+    });
+  }
+  
   if (server) {
     return { success: false, error: 'Server is already running' };
+  }
+  
+  if (!express) {
+    return { success: false, error: 'Express module not loaded' };
   }
   
   try {
@@ -40,7 +63,7 @@ async function startServer(options) {
       next();
     });
     
-    // Serve runview.html (user requested runinfo.html, but we generate runview.html)
+    // Serve runview.html
     app.get('/runview.html', (req, res) => {
       const filePath = path.join(userDataPath, 'runview.html');
       if (fs.existsSync(filePath)) {
@@ -50,7 +73,7 @@ async function startServer(options) {
       }
     });
     
-    // Also serve as runinfo.html for compatibility (user mentioned runinfo.html)
+    // Also serve as runinfo.html for compatibility
     app.get('/runinfo.html', (req, res) => {
       const filePath = path.join(userDataPath, 'runview.html');
       if (fs.existsSync(filePath)) {
@@ -60,7 +83,7 @@ async function startServer(options) {
       }
     });
     
-    // Serve runinfo.css if it exists (for future use)
+    // Serve runinfo.css if it exists
     app.get('/runinfo.css', (req, res) => {
       const filePath = path.join(userDataPath, 'runinfo.css');
       if (fs.existsSync(filePath)) {
@@ -77,17 +100,21 @@ async function startServer(options) {
     
     // Start server
     const host = allowRemote ? '0.0.0.0' : '127.0.0.1';
+    
     await new Promise((resolve, reject) => {
-      server = app.listen(port, host, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          console.log(`[Overlay Web Server] Started on ${host}:${port}`);
-          resolve();
-        }
+      server = app.listen(port, host);
+      
+      const timeout = setTimeout(() => {
+        reject(new Error(`Server failed to start within 5 seconds`));
+      }, 5000);
+      
+      server.on('listening', () => {
+        clearTimeout(timeout);
+        resolve();
       });
       
       server.on('error', (err) => {
+        clearTimeout(timeout);
         if (err.code === 'EADDRINUSE') {
           reject(new Error(`Port ${port} is already in use`));
         } else {
@@ -98,10 +125,9 @@ async function startServer(options) {
     
     return { success: true, port };
   } catch (error) {
-    console.error('[Overlay Web Server] Error starting server:', error);
     server = null;
     app = null;
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || String(error) };
   }
 }
 
@@ -120,7 +146,6 @@ async function stopServer() {
         if (err) {
           reject(err);
         } else {
-          console.log('[Overlay Web Server] Stopped');
           resolve();
         }
       });
@@ -130,7 +155,6 @@ async function stopServer() {
     app = null;
     return { success: true };
   } catch (error) {
-    console.error('[Overlay Web Server] Error stopping server:', error);
     return { success: false, error: error.message };
   }
 }
@@ -147,37 +171,87 @@ function getStatus() {
 }
 
 // Handle IPC messages from main process (UtilityProcess)
-// In Electron UtilityProcess, process.parentPort is available as a MessagePort
 if (process.parentPort) {
-  // UtilityProcess communication
+  // Set up message handler FIRST
   process.parentPort.on('message', async (message) => {
+    // Log ALL messages received for debugging
+    process.parentPort.postMessage({ 
+      type: 'log', 
+      message: `Utility process received message: ${JSON.stringify(message)}` 
+    });
+    
+    if (!message || typeof message !== 'object' || !message.type) {
+      process.parentPort.postMessage({ 
+        type: 'log', 
+        message: 'Utility process: Invalid message format' 
+      });
+      return;
+    }
+    
     const { type, options } = message;
     
     try {
-      let result;
       switch (type) {
         case 'start':
-          result = await startServer(options);
-          process.parentPort.postMessage({ type: 'start-result', result });
+          // Immediately acknowledge
+          process.parentPort.postMessage({ 
+            type: 'start-ack', 
+            message: 'Received start command' 
+          });
+          
+          process.parentPort.postMessage({ 
+            type: 'log', 
+            message: `Starting server with options: ${JSON.stringify(options)}` 
+          });
+          
+          try {
+            const result = await startServer(options);
+            process.parentPort.postMessage({ type: 'start-result', result });
+            process.parentPort.postMessage({ 
+              type: 'log', 
+              message: `Server start result: ${JSON.stringify(result)}` 
+            });
+          } catch (startError) {
+            process.parentPort.postMessage({ 
+              type: 'start-result', 
+              result: { 
+                success: false, 
+                error: startError.message || String(startError)
+              } 
+            });
+            process.parentPort.postMessage({ 
+              type: 'log', 
+              message: `Server start error: ${startError.message}` 
+            });
+          }
           break;
         case 'stop':
-          result = await stopServer();
-          process.parentPort.postMessage({ type: 'stop-result', result });
+          const stopResult = await stopServer();
+          process.parentPort.postMessage({ type: 'stop-result', result: stopResult });
           break;
         case 'status':
-          result = getStatus();
-          process.parentPort.postMessage({ type: 'status-result', result });
+          const status = getStatus();
+          process.parentPort.postMessage({ type: 'status-result', result: status });
           break;
-        default:
-          process.parentPort.postMessage({ type: 'error', error: 'Unknown message type' });
       }
     } catch (error) {
-      process.parentPort.postMessage({ type: 'error', error: error.message });
+      process.parentPort.postMessage({ type: 'error', error: error.message || String(error) });
+      process.parentPort.postMessage({ 
+        type: 'log', 
+        message: `Error in message handler: ${error.message}` 
+      });
     }
   });
   
-  // Send ready signal
+  // Send ready signal after handler is set up
   process.parentPort.postMessage({ type: 'ready' });
+  process.parentPort.postMessage({ 
+    type: 'log', 
+    message: 'Utility process: Message handler set up, ready signal sent' 
+  });
+} else {
+  // Log error if parentPort is not available
+  console.error('[Overlay Web Server] process.parentPort is not available');
 }
 
 module.exports = {

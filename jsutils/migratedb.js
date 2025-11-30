@@ -1095,6 +1095,31 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_051_win_rules',
+      description: 'Add win rules configuration to runs and win rule tracking to run_results',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/051_clientdata_win_rules.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'runs')) {
+            return true; // Table doesn't exist, skip
+          }
+          if (!tableExists(db, 'run_results')) {
+            return true; // Table doesn't exist, skip
+          }
+          // Check if win rules columns exist
+          return columnExists(db, 'runs', 'win_rules_json')
+            && columnExists(db, 'run_results', 'win_rules_met')
+            && columnExists(db, 'run_results', 'rollover_time_at_start_ms')
+            && columnExists(db, 'run_results', 'rollover_time_at_end_ms')
+            && columnExists(db, 'run_results', 'allocated_time_ms')
+            && columnExists(db, 'run_results', 'grace_time_ms');
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   patchbin: [
     {

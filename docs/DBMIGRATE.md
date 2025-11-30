@@ -1,3 +1,30 @@
+- 2025-01-XX — Win Rules Support (clientdata)
+  - Purpose: Add win rules configuration to runs and win rule tracking to run_results
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db --verbose
+  - Applies:
+    - Migration ID: `clientdata_051_win_rules`
+    - SQL: `electron/sql/migrations/051_clientdata_win_rules.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `runs` table gains `win_rules_json` column for storing win rules configuration
+    - `run_results` table gains columns for tracking win rule compliance:
+      - `win_rules_met` (boolean, NULL/TRUE/FALSE)
+      - `rollover_time_at_start_ms` (integer, milliseconds)
+      - `rollover_time_at_end_ms` (integer, milliseconds)
+      - `allocated_time_ms` (integer, milliseconds)
+      - `grace_time_ms` (integer, milliseconds)
+    - Index created on `win_rules_met` for efficient queries
+  - Notes:
+    - Win rules are stored as JSON in `win_rules_json` column
+    - Supports: Challenge Time Cap, Challenge Time with Rollover, Run Time Limit, No Game Overs, No Hits
+    - Grace periods: 1% of time limit, minimum 2 seconds, maximum 60 seconds
+    - Rollover time can be saved from early completions and used on later challenges
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX — Game Difficulty Map Table (rhdata)
   - Purpose: Create game_difficulty_map table for mapping difficulty strings and legacy_type strings to numeric difficulty levels
   - Command:

@@ -1,3 +1,22 @@
+- 2025-01-XX: clientdata - Win Rules Support
+  - Description: Add win rules configuration to runs and win rule tracking to run_results
+  - Rationale: Allow users to set win conditions for runs beyond just clicking Done (time limits, rollover, no game overs, no hits)
+  - Tables/columns:
+    - `runs`:
+      - `win_rules_json TEXT` - JSON blob storing win rules configuration
+    - `run_results`:
+      - `win_rules_met BOOLEAN` - NULL = not applicable, TRUE = met, FALSE = not met
+      - `rollover_time_at_start_ms INTEGER` - Rollover time available when challenge started (milliseconds)
+      - `rollover_time_at_end_ms INTEGER` - Rollover time remaining when challenge ended (milliseconds)
+      - `allocated_time_ms INTEGER` - Total time available for challenge (base + rollover) in milliseconds
+      - `grace_time_ms INTEGER` - Grace period allowed for challenge in milliseconds
+  - Migration: `clientdata_051_win_rules` via `jsutils/migratedb.js`
+  - Notes:
+    - Win rule types: Challenge Time Cap, Challenge Time with Rollover, Run Time Limit, No Game Overs, No Hits
+    - Time limits support grace periods (1% of limit, min 2s, max 60s)
+    - Rollover allows time from early completions to be used on later challenges
+    - No Game Overs and No Hits are honor-based (user clicks Skip on violation)
+
 - 2025-01-XX: rhdata - Game Difficulty Map Table
   - Description: Create game_difficulty_map table for mapping difficulty strings and legacy_type strings to numeric difficulty levels
   - Rationale: Centralize difficulty mapping logic in database for filtering games by numeric difficulty ranges in random game selection

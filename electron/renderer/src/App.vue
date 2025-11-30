@@ -1106,6 +1106,22 @@
         </div>
       </header>
 
+      <!-- Win Rules Status Row (only shown when run is active and win rules are enabled) -->
+      <!-- This row appears first below the header, before the challenge name -->
+      <div v-if="isRunActive && hasWinRules && (parsedWinRules?.challengeTime?.enabled || parsedWinRules?.runTimeLimit?.enabled)" class="win-rules-status-row">
+        <div class="win-rules-timers">
+          <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
+            ⏱️ Item Time Left: {{ formatTime(itemTimeLeftSeconds) }}
+          </span>
+          <span v-if="runTimeLeftSeconds !== null" class="run-time-left-display" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
+            ⏳ Run Time Left: {{ formatTime(runTimeLeftSeconds) }}
+          </span>
+          <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
+            Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
+          </span>
+        </div>
+      </div>
+
       <!-- Current Challenge Info (only shown when run is active) -->
       <section v-if="isRunActive && currentChallenge" class="current-challenge-info">
         <div class="challenge-info-left">
@@ -1172,22 +1188,6 @@
               </div>
         </div>
       </section>
-
-      <!-- Win Rules Status Row (only shown when run is active and win rules are enabled) -->
-      <!-- This row appears below the challenge name and timer -->
-      <div v-if="isRunActive && hasWinRules && (parsedWinRules?.challengeTime?.enabled || parsedWinRules?.runTimeLimit?.enabled)" class="win-rules-status-row">
-        <div class="win-rules-timers">
-          <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
-            ⏱️ Item Time Left: {{ formatTime(itemTimeLeftSeconds) }}
-          </span>
-          <span v-if="runTimeLeftSeconds !== null" class="run-time-left-display" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
-            ⏳ Run Time Left: {{ formatTime(runTimeLeftSeconds) }}
-          </span>
-          <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
-            Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
-          </span>
-        </div>
-      </div>
 
       <!-- Toolbar only shown when preparing -->
       <section v-if="!isRunActive" class="modal-toolbar">
@@ -23938,6 +23938,18 @@ button:disabled {
   color: #ffaa00;
 }
 .item-time-left-display.time-critical {
+  color: #ff0000;
+}
+.run-time-left-display {
+  font-weight: bold;
+  font-size: 14px;
+  color: #059669;
+  font-family: 'Courier New', monospace;
+}
+.run-time-left-display.time-warning {
+  color: #ffaa00;
+}
+.run-time-left-display.time-critical {
   color: #ff0000;
 }
 .rollover-display {

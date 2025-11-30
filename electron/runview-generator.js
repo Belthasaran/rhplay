@@ -587,8 +587,8 @@ async function generateRunview(params) {
     const minHeight = Math.max(300, 300 + (displayIndices.length * 40));
     
     // Format current challenge details
-    const entryType = currentChallenge.entry_type === 'random_game' ? 'Random Game' :
-                      currentChallenge.entry_type === 'random_stage' ? 'Random Stage' :
+    const entryType = currentChallenge.entry_type === 'random_game' ? 'RNG.Game' :
+                      currentChallenge.entry_type === 'random_stage' ? 'RNG.Stage' :
                       currentChallenge.entry_type === 'stage' ? 'Stage' : 'Game';
     
     const currentGameName = currentChallenge.game_name || currentChallenge.gameid || '???';
@@ -685,11 +685,23 @@ async function generateRunview(params) {
     .run-timer.finished {
       color: #FFD700;
     }
+    .run-timer.time-warning {
+      color: #ffaa00; /* Orange when time is running out */
+    }
+    .run-timer.time-critical {
+      color: #ff0000; /* Red when time is almost depleted */
+    }
     .challenge-timer {
       font-size: 28px;
       font-weight: bold;
       color: #4CAF50;
       font-family: 'Courier New', monospace;
+    }
+    .challenge-timer.time-warning {
+      color: #ffaa00; /* Orange when time is running out */
+    }
+    .challenge-timer.time-critical {
+      color: #ff0000; /* Red when time is almost depleted */
     }
     .finished-label {
       font-size: 24px;
@@ -788,6 +800,11 @@ async function generateRunview(params) {
       color: #bf00ff; /* bright purple */
     }
     
+
+    [class^="difficulty-"] {
+            font-size: 22px;
+    }
+
     /* Difficulty color classes */
     .difficulty-0, .difficulty-1, .difficulty-2 {
       color: #00ff00; /* bright green - Newcomer, Casual, Beginner, Intermediate */
@@ -1108,6 +1125,19 @@ ${displayIndices.map(idx => {
         const runTimerEl = document.getElementById('run-timer');
         if (runTimerEl) {
           runTimerEl.textContent = formatTime(runElapsed);
+          
+          // Apply color based on run time limit (if win rules are active)
+          if (runTimeLimitMs !== null) {
+            const runTimeLeft = Math.max(0, runTimeLimitMs - runElapsed);
+            // Remove existing color classes
+            runTimerEl.classList.remove('time-warning', 'time-critical');
+            // Add color class based on remaining time
+            if (runTimeLeft < 30000) {
+              runTimerEl.classList.add('time-critical'); // Red when < 30 seconds left
+            } else if (runTimeLeft < 60000) {
+              runTimerEl.classList.add('time-warning'); // Orange when < 60 seconds left
+            }
+          }
         }
       }
       
@@ -1124,6 +1154,20 @@ ${displayIndices.map(idx => {
         const challengeTimerEl = document.getElementById('challenge-timer');
         if (challengeTimerEl) {
           challengeTimerEl.textContent = formatTime(challengeElapsed);
+          
+          // Apply color based on item time left (if challenge time limit win rule is active)
+          if (challengeTimeLimitMs !== null) {
+            const availableTime = challengeTimeLimitMs + rolloverMs;
+            const itemTimeLeft = Math.max(0, availableTime - challengeElapsed);
+            // Remove existing color classes
+            challengeTimerEl.classList.remove('time-warning', 'time-critical');
+            // Add color class based on remaining time
+            if (itemTimeLeft < 30000) {
+              challengeTimerEl.classList.add('time-critical'); // Red when < 30 seconds left
+            } else if (itemTimeLeft < 60000) {
+              challengeTimerEl.classList.add('time-warning'); // Orange when < 60 seconds left
+            }
+          }
         }
       }
       

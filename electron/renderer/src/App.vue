@@ -20237,7 +20237,7 @@ async function pauseRun() {
     console.log('Run paused at', runPauseStartTime.value);
   } catch (error) {
     console.error('Error pausing run:', error);
-    alert('Error pausing run');
+    await showAlert('Error pausing run', 'Error');
   }
 }
 
@@ -20305,7 +20305,7 @@ async function cancelRun() {
     closeRunModal();
   } catch (error) {
     console.error('Error cancelling run:', error);
-    alert('Error cancelling run');
+    await showAlert('Error cancelling run', 'Error');
   }
 }
 
@@ -20392,7 +20392,7 @@ async function nextChallenge() {
     }
   } catch (error) {
     console.error('Error recording challenge result:', error);
-    alert('Error recording result');
+    await showAlert('Error recording result', 'Error');
     // Clear cooldown on error
     skipDoneCooldownUntil.value = null;
   }
@@ -20482,7 +20482,7 @@ async function skipChallenge() {
     }
   } catch (error) {
     console.error('Error recording skip:', error);
-    alert('Error recording skip');
+    await showAlert('Error recording skip', 'Error');
     // Clear cooldown on error
     skipDoneCooldownUntil.value = null;
   }
@@ -20663,7 +20663,7 @@ async function undoChallenge() {
     }
   } catch (error) {
     console.error('Error undoing challenge:', error);
-    alert('Error undoing challenge: ' + (error instanceof Error ? error.message : String(error)));
+    await showAlert('Error undoing challenge: ' + (error instanceof Error ? error.message : String(error)), 'Error');
   }
 }
 
@@ -21555,7 +21555,11 @@ const itemGraceTimeLeftSeconds = computed(() => {
 });
 
 // Check if Done button should be disabled (time left + grace period <= 0)
+// Depend on runElapsedSeconds to trigger recalculation every second
 const isDoneButtonDisabled = computed(() => {
+  // Depend on runElapsedSeconds to trigger recalculation every second
+  const _ = runElapsedSeconds.value;
+  
   if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
     return false; // No time limit, Done is always enabled
   }
@@ -21578,7 +21582,13 @@ const isDoneButtonDisabled = computed(() => {
   
   // Calculate elapsed time
   const now = Date.now();
-  const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  let elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  
+  // Subtract current pause time if run is paused
+  if (isRunPaused.value && runPauseStartTime.value) {
+    const currentPauseMs = now - runPauseStartTime.value;
+    elapsedMs -= currentPauseMs;
+  }
   
   // Get rollover time
   const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
@@ -23349,7 +23359,7 @@ async function cancelRunFromStartup() {
     console.log('Run cancelled from startup');
   } catch (error) {
     console.error('Error cancelling run:', error);
-    alert('Error cancelling run');
+    await showAlert('Error cancelling run', 'Error');
   }
 }
 

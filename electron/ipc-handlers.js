@@ -2209,6 +2209,7 @@ function registerDatabaseHandlers(dbManager) {
         const nowMs = Date.now();
         
         // Get win rules to set initial rollover for first challenge
+        // Always set rollover when challengeTime is enabled (even if 0)
         const runData = db.prepare(`SELECT win_rules_json FROM runs WHERE run_uuid = ?`).get(runId);
         let winRules = null;
         let initialRolloverMs = null;
@@ -2216,6 +2217,7 @@ function registerDatabaseHandlers(dbManager) {
           try {
             winRules = JSON.parse(runData.win_rules_json);
             if (winRules && winRules.challengeTime && winRules.challengeTime.enabled) {
+              // Always set rollover (0 or starting value) when challengeTime is enabled
               initialRolloverMs = (winRules.challengeTime.rolloverStartMinutes || 0) * 60 * 1000;
             }
           } catch (e) {
@@ -2443,15 +2445,15 @@ function registerDatabaseHandlers(dbManager) {
           
           // Calculate rollover at end
           let rolloverAtEnd = rolloverAtStart;
+          const maxRolloverMs = (challengeTime.rolloverMaxMinutes || 0) * 60 * 1000;
           
-          if (timeOverLimit <= graceTimeMs) {
-            // Within grace period - no change to rollover (grace time doesn't add to rollover)
-            rolloverAtEnd = rolloverAtStart;
-          } else if (timeOverLimit < 0) {
+          if (timeOverLimit < 0) {
             // Completed early - add to rollover (up to max)
             const earlyBy = -timeOverLimit;
-            const maxRolloverMs = (challengeTime.rolloverMaxMinutes || 0) * 60 * 1000;
             rolloverAtEnd = Math.min(maxRolloverMs, rolloverAtStart + earlyBy);
+          } else if (timeOverLimit <= graceTimeMs) {
+            // Completed on time or slightly late within grace period - no change to rollover (grace time doesn't add to rollover)
+            rolloverAtEnd = rolloverAtStart;
           } else {
             // Completed late (beyond grace) - deduct from rollover
             const lateBy = timeOverLimit - graceTimeMs; // Grace period doesn't count against rollover
@@ -2530,10 +2532,10 @@ function registerDatabaseHandlers(dbManager) {
           
           if (nextChallenge) {
             // Set the next challenge's start time to now (when previous challenge completed)
-            // Also set initial rollover time for the next challenge
+            // Also set initial rollover time for the next challenge (always set when challengeTime is enabled, even if 0)
             let nextRolloverStart = null;
-            if (winRules && winRules.challengeTime && winRules.challengeTime.enabled && rolloverTimeRemainingEndMs !== null) {
-              nextRolloverStart = rolloverTimeRemainingEndMs;
+            if (winRules && winRules.challengeTime && winRules.challengeTime.enabled) {
+              nextRolloverStart = rolloverTimeRemainingEndMs !== null ? rolloverTimeRemainingEndMs : 0;
             }
             
             db.prepare(`

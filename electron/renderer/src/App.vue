@@ -1126,10 +1126,10 @@
               EXPIRED
             </div>
           </div>
-          <div v-if="rolloverTimeRemainingSeconds !== null" class="rollover-column">
+          <div v-if="parsedWinRules?.challengeTime?.enabled" class="rollover-column">
             <div class="time-label">Rollover:</div>
             <div class="time-value rollover-value">
-              {{ formatTime(rolloverTimeRemainingSeconds) }}
+              {{ formatTime(rolloverTimeRemainingSeconds || 0) }}
             </div>
           </div>
           <div v-if="runTimeLeftSeconds !== null" class="run-time-column">
@@ -21647,15 +21647,25 @@ const rolloverTimeRemainingSeconds = computed(() => {
     return null;
   }
   
+  const challengeTime = parsedWinRules.value.challengeTime;
   const currentResult = challengeResults.value[currentChallengeIndex.value];
-  if (!currentResult || currentResult.rolloverTimeRemainingStartMs === null || currentResult.rolloverTimeRemainingStartMs === undefined) {
-    return null;
+  if (!currentResult || !currentResult.startedAtMs) {
+    // If challenge hasn't started yet, return starting rollover or 0
+    const startRollover = currentResult?.rolloverTimeRemainingStartMs;
+    if (startRollover !== null && startRollover !== undefined) {
+      return Math.floor(startRollover / 1000);
+    }
+    return 0;
   }
   
   // Calculate current rollover remaining based on elapsed time
-  const challengeTime = parsedWinRules.value.challengeTime;
   const limitMinutes = challengeTime.minutes || 10;
   const limitMs = limitMinutes * 60 * 1000;
+  
+  // Get starting rollover (default to 0 if not set)
+  const rolloverStart = currentResult.rolloverTimeRemainingStartMs !== null && currentResult.rolloverTimeRemainingStartMs !== undefined
+    ? currentResult.rolloverTimeRemainingStartMs
+    : 0;
   
   const now = Date.now();
   let elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
@@ -21669,12 +21679,12 @@ const rolloverTimeRemainingSeconds = computed(() => {
   // If we're past the limit, rollover is being used
   const timeOverLimit = elapsedMs - limitMs;
   if (timeOverLimit <= 0) {
-    // Still within limit, rollover unchanged
-    return Math.floor((currentResult.rolloverTimeRemainingStartMs || 0) / 1000);
+    // Still within limit, rollover unchanged (for now - will be updated when challenge completes)
+    return Math.floor(rolloverStart / 1000);
   } else {
     // Past limit, rollover is being deducted
     const rolloverUsed = timeOverLimit;
-    const remaining = Math.max(0, (currentResult.rolloverTimeRemainingStartMs || 0) - rolloverUsed);
+    const remaining = Math.max(0, rolloverStart - rolloverUsed);
     return Math.floor(remaining / 1000);
   }
 });

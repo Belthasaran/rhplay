@@ -914,6 +914,14 @@ async function generateRunview(params) {
     .status-icon.failed {
       color: #ff0000;
     }
+    .challenge-entry-time-expired {
+      color: #FFCCCB;
+      font-weight: bold;
+    }
+    .time.challenge-entry-time-expired {
+      color: #FFCCCB;
+      font-weight: bold;
+    }
     .time {
       font-family: 'Courier New', monospace;
       color: #4CAF50;
@@ -938,6 +946,9 @@ async function generateRunview(params) {
       color: #ffaa00;
     }
     .win-rule-timer.time-critical {
+      color: #ff0000;
+    }
+    .win-rule-timer.time-expired {
       color: #ff0000;
     }
     .challenges-table tr.failed {
@@ -1077,14 +1088,34 @@ ${displayIndices.map(idx => {
     statusIcon = '<span class="status-icon"></span>';
   }
   
+  // Check if challenge failed due to time (when win rules are active)
+  // Show time in red if challenge failed and exceeded the time limit (including rollover and grace)
+  let timeExpired = false;
+  if (isFailed && winRules && winRules.challengeTime && winRules.challengeTime.enabled && result.duration_milliseconds) {
+    const limitMinutes = winRules.challengeTime.minutes || 10;
+    const limitMs = limitMinutes * 60 * 1000;
+    const rolloverMs = result.rollover_time_remaining_start_ms || 0;
+    // Calculate grace period
+    const gracePercent = winRules.challengeTime.gracePeriodPercent || 1.0;
+    const graceMinSeconds = winRules.challengeTime.gracePeriodMinSeconds || 2;
+    const graceMaxSeconds = winRules.challengeTime.gracePeriodMaxSeconds || 60;
+    const graceMs = Math.min(graceMaxSeconds * 1000, Math.max(graceMinSeconds * 1000, Math.floor(limitMs * (gracePercent / 100))));
+    const availableTime = limitMs + rolloverMs + graceMs;
+    // If duration exceeded available time (limit + rollover + grace), it failed due to time
+    if (result.duration_milliseconds > availableTime) {
+      timeExpired = true;
+    }
+  }
+  
   let timeText = '';
+  const timeClass = timeExpired ? ' challenge-entry-time-expired' : '';
   if (isCurrent && !result.completed_at_ms && result.started_at_ms) {
     // Current challenge - will be updated by JS
     const startMs = result.started_at_ms || 0;
     const pauseMs = result.pause_milliseconds || 0;
-    timeText = `<span class="time" data-start-ms="${startMs}" data-pause-ms="${pauseMs}">00:00:00</span>`;
+    timeText = `<span class="time${timeClass}" data-start-ms="${startMs}" data-pause-ms="${pauseMs}">00:00:00</span>`;
   } else if (result.duration_milliseconds) {
-    timeText = escapeHtml(formatDuration(result.duration_milliseconds));
+    timeText = `<span class="challenge-entry-time${timeClass}">${escapeHtml(formatDuration(result.duration_milliseconds))}</span>`;
   } else {
     timeText = '—';
   }
@@ -1103,7 +1134,7 @@ ${displayIndices.map(idx => {
             <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>${stageIdHtml}
             ${difficultyClass && (difficultyText || difficultyMnemonicText) ? ` <span class="${difficultyClass}">(${difficultyText}${difficultyMnemonicText})</span>` : ''}
           </td>
-          <td><span class="challenge-entry-time">${timeText}</span></td>
+          <td>${timeText}</td>
         </tr>`;
 }).join('\n')}
       </tbody>
@@ -1213,12 +1244,16 @@ ${displayIndices.map(idx => {
         const runTimeLeft = Math.max(0, runTimeLimitMs - runElapsed);
         const runTimeLeftEl = document.getElementById('run-time-left-value');
         if (runTimeLeftEl) {
-          runTimeLeftEl.textContent = formatTime(runTimeLeft);
+          if (runTimeLeft === 0) {
+            runTimeLeftEl.textContent = 'EXPIRED';
+          } else {
+            runTimeLeftEl.textContent = formatTime(runTimeLeft);
+          }
           // Update warning/critical classes
           const parentEl = document.getElementById('run-time-left');
           if (parentEl) {
             parentEl.className = 'win-rule-timer' + 
-              (runTimeLeft < 30000 ? ' time-critical' : (runTimeLeft < 60000 ? ' time-warning' : ''));
+              (runTimeLeft === 0 ? ' time-expired' : (runTimeLeft < 30000 ? ' time-critical' : (runTimeLeft < 60000 ? ' time-warning' : '')));
           }
         }
       }
@@ -1235,12 +1270,16 @@ ${displayIndices.map(idx => {
         const itemTimeLeft = Math.max(0, availableTime - challengeElapsed);
         const itemTimeLeftEl = document.getElementById('item-time-left-value');
         if (itemTimeLeftEl) {
-          itemTimeLeftEl.textContent = formatTime(itemTimeLeft);
+          if (itemTimeLeft === 0) {
+            itemTimeLeftEl.textContent = 'EXPIRED';
+          } else {
+            itemTimeLeftEl.textContent = formatTime(itemTimeLeft);
+          }
           // Update warning/critical classes
           const parentEl = document.getElementById('item-time-left');
           if (parentEl) {
             parentEl.className = 'win-rule-timer' + 
-              (itemTimeLeft < 30000 ? ' time-critical' : (itemTimeLeft < 60000 ? ' time-warning' : ''));
+              (itemTimeLeft === 0 ? ' time-expired' : (itemTimeLeft < 30000 ? ' time-critical' : (itemTimeLeft < 60000 ? ' time-warning' : '')));
           }
         }
         

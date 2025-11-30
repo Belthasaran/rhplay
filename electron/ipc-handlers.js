@@ -2475,16 +2475,32 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
-      // Transfer pause time to previous challenge if it exists
-      if (previousChallenge && undonePauseMs > 0) {
+      // When a challenge is undone, the previous challenge becomes current again
+      // According to RUN_TIMING_REVIEW.md: "Time that was spent on that challenge counts towards earlier challenge instead"
+      // The previous challenge should continue timing from its original start time
+      // All elapsed time (including time spent on the undone challenge) is attributed to the previous challenge
+      if (previousChallenge) {
+        // Transfer pause time from undone challenge to previous challenge
         const prevPauseMs = previousChallenge.pause_milliseconds ?? ((previousChallenge.pause_seconds || 0) * 1000);
         const newPauseMs = prevPauseMs + undonePauseMs;
         const newPauseSeconds = Math.floor(newPauseMs / 1000);
         
-        // Update previous challenge with transferred pause time
+        // Make the previous challenge pending again (it becomes the current challenge)
+        // According to RUN_TIMING_REVIEW.md: "Time that was spent on that challenge counts towards earlier challenge instead"
+        // Clear its completed_at timestamp so it can continue timing
+        // Keep its started_at_ms - it should continue from where it was (DON'T reset it!)
+        // Clear duration_seconds - it will be calculated dynamically from started_at_ms
+        // The elapsed time for the previous challenge should be: (current_time - started_at_ms) - pause_time
+        // This means the previous challenge's elapsed time will INCREASE, not decrease
+        // because all time (including time spent on the undone challenge) is attributed to it
         db.prepare(`
           UPDATE run_results
-          SET pause_milliseconds = ?,
+          SET status = 'pending',
+              completed_at = NULL,
+              completed_at_ms = NULL,
+              duration_seconds = NULL,
+              duration_milliseconds = NULL,
+              pause_milliseconds = ?,
               pause_seconds = ?
           WHERE result_uuid = ?
         `).run(newPauseMs, newPauseSeconds, previousChallenge.result_uuid);

@@ -3962,6 +3962,63 @@
             Leave blank to use the OS-specific temporary directory. If specified, the path must exist.
           </div>
         </div>
+
+        <!-- Overlay Web Server Settings -->
+        <div class="settings-section">
+          <div class="setting-row">
+            <label class="setting-label">Overlay Web Server</label>
+            <div class="setting-control">
+              <select v-model="settings.overlayWebServerEnabled">
+                <option value="Off">Off</option>
+                <option value="On">On</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-caption">
+            Enable a local web server to serve the runview.html file for display in external browsers or signage.
+          </div>
+        </div>
+
+        <div v-if="settings.overlayWebServerEnabled === 'On'" class="settings-section">
+          <div class="setting-row">
+            <label class="setting-label">Web Server Port</label>
+            <div class="setting-control">
+              <input type="number" v-model.number="settings.overlayWebServerPort" min="1024" max="65535" />
+            </div>
+          </div>
+          <div class="setting-caption">
+            Port number for the overlay web server to listen on. Default is 2599.
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="setting-row">
+            <label class="setting-label">Overlay Remote Connections</label>
+            <div class="setting-control">
+              <select v-model="settings.overlayRemoteConnectionsEnabled">
+                <option value="Off">Off</option>
+                <option value="On">On</option>
+              </select>
+            </div>
+          </div>
+          <div class="setting-caption">
+            Allow remote connections to the overlay web server. When Off, only localhost connections are allowed.
+          </div>
+        </div>
+
+        <div v-if="settings.overlayWebServerEnabled === 'On'" class="settings-section">
+          <div class="setting-row">
+            <label class="setting-label">Open Runview</label>
+            <div class="setting-control">
+              <a :href="overlayWebServerUrl" target="_blank" class="btn-link" style="text-decoration: underline;">
+                Open runview.html in browser
+              </a>
+            </div>
+          </div>
+          <div class="setting-caption">
+            Click to open the runview.html file from the local web server in your default browser.
+          </div>
+        </div>
       </section>
 
       <footer class="modal-footer">
@@ -16591,6 +16648,9 @@ async function saveSettings() {
       tempDirOverride: settings.tempDirOverride,
       tempDirValid: String(settings.tempDirValid),
       enableRhpakFileAssociation: settings.rhpakFileAssociationEnabled ? 'true' : 'false',
+      overlayWebServerEnabled: settings.overlayWebServerEnabled || 'Off',
+      overlayWebServerPort: String(settings.overlayWebServerPort || 2599),
+      overlayRemoteConnectionsEnabled: settings.overlayRemoteConnectionsEnabled || 'Off',
     };
     
     const result = await (window as any).electronAPI.saveSettings(settingsToSave);
@@ -21424,6 +21484,15 @@ const runTimeLeftSeconds = computed(() => {
   const left = limitSeconds - elapsedSeconds;
   
   return Math.max(0, left);
+});
+
+// Overlay web server URL
+const overlayWebServerUrl = computed(() => {
+  if (!settings.overlayWebServerEnabled || settings.overlayWebServerEnabled === 'Off') {
+    return '#';
+  }
+  const port = settings.overlayWebServerPort || 2599;
+  return `http://localhost:${port}/runview.html`;
 });
 
 // Rollover time remaining (for current challenge)

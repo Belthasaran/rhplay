@@ -20244,7 +20244,6 @@ async function undoChallenge() {
   try {
     // Get all challenge results to find the last completed challenge to undo
     // We undo the last COMPLETED challenge (highest sequence number WITH completed time)
-    // NOT the active challenge (which has no completed time yet)
     const allResults = await (window as any).electronAPI.getRunResults({
       runUuid: currentRunUuid.value
     });
@@ -20268,6 +20267,11 @@ async function undoChallenge() {
     
     // The last completed challenge is the one we undo
     const idx = challengeToUndoIndex;
+    
+    // Get the current active challenge index before undo
+    const currentActiveIndex = currentChallengeIndex.value;
+    
+    console.log(`[undoChallenge] Current active: ${currentActiveIndex}, undoing completed challenge: ${idx}`);
   
   // Before going back, mark any challenges AFTER this point as revealed_early
     // because the user has already seen them (permanent indicator that user revealed early)
@@ -20343,17 +20347,17 @@ async function undoChallenge() {
       undoneChallengeResult.pauseMilliseconds = 0;
     }
     
-    // After undo, the previous challenge (idx - 1) becomes active again
-    // The backend makes it pending and preserves its started_at_ms
-    // Set currentChallengeIndex AFTER reloading results so it uses the updated data
-    if (idx > 0 && idx - 1 < challengeResults.value.length) {
-      // Go back to the previous challenge (it became active again)
-      currentChallengeIndex.value = idx - 1;
-      console.log(`[undoChallenge] Undone completed challenge ${idx + 1}, challenge ${idx} (index ${idx - 1}) is now active`);
+    // After undo, we go back by ONE challenge from where we were
+    // If we were on currentActiveIndex and we undo challenge idx,
+    // we should go to currentActiveIndex - 1 (back by one)
+    // This ensures we only go back by ONE, not by the difference between currentActiveIndex and idx
+    if (currentActiveIndex > 0) {
+      currentChallengeIndex.value = currentActiveIndex - 1;
+      console.log(`[undoChallenge] Undone challenge ${idx + 1}, went back by one from ${currentActiveIndex} to ${currentActiveIndex - 1}`);
     } else {
-      // If undoing the first challenge (idx === 0) or invalid index, set to 0
+      // Already at first challenge, can't go back further
       currentChallengeIndex.value = 0;
-      console.log(`[undoChallenge] Undone challenge ${idx + 1}, challenge 1 (index 0) is now active`);
+      console.log(`[undoChallenge] Undone challenge ${idx + 1}, already at first challenge`);
     }
     
     // Update run pause time if it was affected

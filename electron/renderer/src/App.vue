@@ -22408,11 +22408,24 @@ async function resumeRunFromStartup() {
     
     console.log('Loaded run entries:', runEntries.length);
     
-    // Find current challenge index (first pending)
-    currentChallengeIndex.value = expandedResults.findIndex((r: any) => r.status === 'pending');
-    if (currentChallengeIndex.value === -1) {
-      currentChallengeIndex.value = expandedResults.length - 1;  // All complete, show last
+    // Find current challenge index: highest sequence_number with no completed time
+    // This should be the active challenge
+    let activeChallengeIndex = -1;
+    for (let i = expandedResults.length - 1; i >= 0; i--) {
+      const res = expandedResults[i];
+      // Active challenge has no completed_at_ms and is pending
+      if ((!res.status || res.status === 'pending') && !res.completed_at_ms) {
+        activeChallengeIndex = i;
+        break;
+      }
     }
+    
+    // If no active challenge found, default to last one
+    if (activeChallengeIndex === -1) {
+      activeChallengeIndex = expandedResults.length - 1;
+    }
+    
+    currentChallengeIndex.value = activeChallengeIndex;
     
     console.log('Current challenge index:', currentChallengeIndex.value);
     
@@ -22425,6 +22438,83 @@ async function resumeRunFromStartup() {
       startedAtMs: res.started_at_ms || null,
       pauseMilliseconds: res.pause_milliseconds || 0
     }));
+    
+    // CRITICAL: Validate that ONLY the active challenge has a started_at_ms
+    // If the active challenge is missing started_at_ms (corrupted by old undo logic), repair ONLY that one
+    // NEVER repair challenges after the active challenge - they haven't been reached yet
+    const activeChallenge = challengeResults.value[activeChallengeIndex];
+    const activeResult = expandedResults[activeChallengeIndex];
+    
+    if (activeChallenge && activeResult && activeChallenge.status === 'pending' && !activeChallenge.startedAtMs) {
+      // Verify this is actually the active challenge (highest sequence with no completed time)
+      // Double-check: all challenges after this should also be pending with no completed time
+      let isActuallyActive = true;
+      for (let i = activeChallengeIndex + 1; i < expandedResults.length; i++) {
+        const laterResult = expandedResults[i];
+        if (laterResult.completed_at_ms) {
+          // Found a later challenge that's completed - this shouldn't be the active one
+          isActuallyActive = false;
+          console.warn(`[resumeRunFromStartup] Challenge ${activeChallengeIndex + 1} cannot be active: challenge ${i + 1} is completed`);
+          break;
+        }
+      }
+      
+      if (isActuallyActive) {
+        console.warn(`[resumeRunFromStartup] Active challenge ${activeChallengeIndex + 1} is missing started_at_ms! Repairing ONLY this challenge...`);
+        
+        // Find the previous challenge's completion time to use as start time
+        let repairStartTimeMs: number | null = null;
+        
+        // Look for the previous completed challenge
+        for (let i = activeChallengeIndex - 1; i >= 0; i--) {
+          const prevResult = expandedResults[i];
+          if (prevResult.completed_at_ms) {
+            repairStartTimeMs = prevResult.completed_at_ms;
+            break;
+          }
+        }
+        
+        // If no previous completion found, use run start time (this is the first challenge)
+        if (!repairStartTimeMs) {
+          repairStartTimeMs = runStartTime.value;
+        }
+        
+        if (repairStartTimeMs) {
+          // Repair ONLY the active challenge in database
+          try {
+            await (window as any).electronAPI.repairChallengeStartTime({
+              runUuid: currentRunUuid.value,
+              resultUuid: activeResult.result_uuid,
+              startedAtMs: repairStartTimeMs,
+              sequenceNumber: activeResult.sequence_number // Pass for additional verification
+            });
+            
+            // Update local state for ONLY the active challenge
+            activeChallenge.startedAtMs = repairStartTimeMs;
+            challengeResults.value[activeChallengeIndex] = { ...activeChallenge };
+            
+            console.log(`[resumeRunFromStartup] Repaired started_at_ms for ACTIVE challenge ${activeChallengeIndex + 1} (sequence ${activeResult.sequence_number}): ${repairStartTimeMs}`);
+          } catch (error) {
+            console.error(`[resumeRunFromStartup] Failed to repair started_at_ms:`, error);
+          }
+        } else {
+          console.error(`[resumeRunFromStartup] Cannot repair: no valid start time available`);
+        }
+      }
+    }
+    
+    // Verify that challenges AFTER the active challenge do NOT have started_at_ms
+    // They should be pending but not started yet
+    for (let i = activeChallengeIndex + 1; i < expandedResults.length; i++) {
+      const laterResult = expandedResults[i];
+      const laterChallenge = challengeResults.value[i];
+      
+      // Challenges after the active one should NOT have started_at_ms
+      if (laterResult.started_at_ms || laterChallenge.startedAtMs) {
+        console.warn(`[resumeRunFromStartup] WARNING: Challenge ${i + 1} (sequence ${laterResult.sequence_number}) comes AFTER active challenge but has started_at_ms! This should not happen.`);
+        // Don't clear it here - let the user know something is wrong
+      }
+    }
     
     // Populate undo stack with completed challenges (for Back button)
     // No undo stack needed - active challenge is determined by highest sequence number with no completed time

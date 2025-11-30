@@ -2557,6 +2557,76 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Repair challenge start time (fix corrupted data)
+   * Channel: db:runs:repair-challenge-start-time
+   * CRITICAL: Only repairs the specified challenge - NEVER touches challenges after it
+   */
+  ipcMain.handle('db:runs:repair-challenge-start-time', async (event, { runUuid, resultUuid, startedAtMs, sequenceNumber }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Verify the result belongs to this run
+      const result = db.prepare(`
+        SELECT result_uuid, run_uuid, sequence_number, status, started_at_ms, completed_at_ms
+        FROM run_results
+        WHERE result_uuid = ? AND run_uuid = ?
+      `).get(resultUuid, runUuid);
+      
+      if (!result) {
+        throw new Error('Challenge not found or does not belong to this run');
+      }
+      
+      // Verify sequence number matches (additional safety check)
+      if (sequenceNumber !== undefined && result.sequence_number !== sequenceNumber) {
+        throw new Error(`Sequence number mismatch: expected ${sequenceNumber}, got ${result.sequence_number}`);
+      }
+      
+      // Verify this challenge should have a start time:
+      // 1. It should not be completed
+      // 2. It should not already have a start time
+      if (result.completed_at_ms) {
+        throw new Error(`Cannot repair: challenge ${result.sequence_number} is already completed`);
+      }
+      
+      if (result.started_at_ms) {
+        console.log(`[repair-challenge-start-time] Challenge ${result.sequence_number} already has started_at_ms, no repair needed`);
+        return { success: true, repaired: false };
+      }
+      
+      // CRITICAL: Verify that no challenges AFTER this one have started_at_ms
+      // If they do, this repair might be incorrect
+      const laterChallenges = db.prepare(`
+        SELECT sequence_number, started_at_ms, completed_at_ms
+        FROM run_results
+        WHERE run_uuid = ? AND sequence_number > ? AND started_at_ms IS NOT NULL
+        ORDER BY sequence_number
+        LIMIT 1
+      `).get(runUuid, result.sequence_number);
+      
+      if (laterChallenges) {
+        console.warn(`[repair-challenge-start-time] WARNING: Challenge ${result.sequence_number} comes before challenge ${laterChallenges.sequence_number} which already has started_at_ms. This may indicate incorrect active challenge detection.`);
+        // Continue anyway - the frontend determined this is the active challenge
+      }
+      
+      // Set the start time - ONLY for this specific challenge
+      const startedAt = new Date(startedAtMs).toISOString().replace('T', ' ').substring(0, 19);
+      db.prepare(`
+        UPDATE run_results
+        SET started_at = ?,
+            started_at_ms = ?
+        WHERE result_uuid = ?
+      `).run(startedAt, startedAtMs, resultUuid);
+      
+      console.log(`[repair-challenge-start-time] Repaired started_at_ms for challenge ${result.sequence_number} (result_uuid: ${resultUuid}): ${startedAtMs}`);
+      
+      return { success: true, repaired: true, sequenceNumber: result.sequence_number };
+    } catch (error) {
+      console.error('Error repairing challenge start time:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Cancel a run
    * Channel: db:runs:cancel
    */

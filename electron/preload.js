@@ -178,6 +178,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   undoChallenge: (params) => ipcRenderer.invoke('db:runs:undo-challenge', params),
   
   /**
+   * Repair challenge start time (fix corrupted data)
+   * @param {Object} params - {runUuid: string, resultUuid: string, startedAtMs: number}
+   * @returns {Promise<{success: boolean, repaired?: boolean}>}
+   */
+  repairChallengeStartTime: (params) => ipcRenderer.invoke('db:runs:repair-challenge-start-time', params),
+  
+  /**
    * Cancel a run
    * @param {Object} params - {runUuid: string}
    * @returns {Promise<{success: boolean}>}

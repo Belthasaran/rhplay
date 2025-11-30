@@ -2627,6 +2627,53 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Clear challenge start time (remove incorrect start time from challenges that haven't been reached)
+   * Channel: db:runs:clear-challenge-start-time
+   */
+  ipcMain.handle('db:runs:clear-challenge-start-time', async (event, { runUuid, resultUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Verify the result belongs to this run
+      const result = db.prepare(`
+        SELECT result_uuid, run_uuid, sequence_number, status, started_at_ms, completed_at_ms
+        FROM run_results
+        WHERE result_uuid = ? AND run_uuid = ?
+      `).get(resultUuid, runUuid);
+      
+      if (!result) {
+        throw new Error('Challenge not found or does not belong to this run');
+      }
+      
+      // Only clear if it's not completed and has a started_at_ms
+      if (result.completed_at_ms) {
+        console.log(`[clear-challenge-start-time] Challenge ${result.sequence_number} is completed, skipping clear`);
+        return { success: true, cleared: false };
+      }
+      
+      if (!result.started_at_ms) {
+        console.log(`[clear-challenge-start-time] Challenge ${result.sequence_number} has no started_at_ms, nothing to clear`);
+        return { success: true, cleared: false };
+      }
+      
+      // Clear the start time
+      db.prepare(`
+        UPDATE run_results
+        SET started_at = NULL,
+            started_at_ms = NULL
+        WHERE result_uuid = ?
+      `).run(resultUuid);
+      
+      console.log(`[clear-challenge-start-time] Cleared started_at_ms for challenge ${result.sequence_number} (result_uuid: ${resultUuid})`);
+      
+      return { success: true, cleared: true, sequenceNumber: result.sequence_number };
+    } catch (error) {
+      console.error('Error clearing challenge start time:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Cancel a run
    * Channel: db:runs:cancel
    */

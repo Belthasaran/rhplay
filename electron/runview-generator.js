@@ -896,7 +896,8 @@ async function generateRunview(params) {
 
 
     .status-icon {
-      font-size: 18px;
+      font-size: 24px;
+      font-weight: bold;
       display: inline-block;
       width: 20px;
       text-align: center;

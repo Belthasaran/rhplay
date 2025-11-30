@@ -1113,15 +1113,31 @@
           Rules: {{ getWinRulesDisplayName() }}
         </div>
         <div class="win-rules-timers">
-          <span v-if="itemTimeLeftSeconds !== null" class="item-time-left-display" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
-            Item: {{ formatTime(itemTimeLeftSeconds) }}
-          </span>
-          <span v-if="runTimeLeftSeconds !== null" class="run-time-left-display" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
-            Run: {{ formatTime(runTimeLeftSeconds) }}
-          </span>
-          <span v-if="rolloverTimeRemainingSeconds !== null" class="rollover-display">
-            Rollover: {{ formatTime(rolloverTimeRemainingSeconds) }}
-          </span>
+          <div v-if="itemTimeLeftSeconds !== null || parsedWinRules?.challengeTime?.enabled" class="item-time-column">
+            <div class="time-label">Item:</div>
+            <div v-if="itemTimeLeftSeconds !== null && itemTimeLeftSeconds > 0" class="time-value" :class="{ 'time-warning': itemTimeLeftSeconds < 60, 'time-critical': itemTimeLeftSeconds < 30 }">
+              {{ formatTime(itemTimeLeftSeconds) }}
+            </div>
+            <div v-else-if="itemTimeLeftSeconds === 0 && itemGraceTimeLeftSeconds !== null && itemGraceTimeLeftSeconds > 0" class="time-value time-critical">
+              {{ formatTime(0) }}
+              <div class="grace-time">({{ formatTime(itemGraceTimeLeftSeconds) }})</div>
+            </div>
+            <div v-else-if="itemTimeLeftSeconds === 0 && (itemGraceTimeLeftSeconds === null || itemGraceTimeLeftSeconds === 0)" class="time-value time-expired">
+              EXPIRED
+            </div>
+          </div>
+          <div v-if="runTimeLeftSeconds !== null" class="run-time-column">
+            <div class="time-label">Run:</div>
+            <div class="time-value" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
+              {{ formatTime(runTimeLeftSeconds) }}
+            </div>
+          </div>
+          <div v-if="rolloverTimeRemainingSeconds !== null" class="rollover-column">
+            <div class="time-label">Rollover:</div>
+            <div class="time-value rollover-value">
+              {{ formatTime(rolloverTimeRemainingSeconds) }}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -17403,6 +17419,9 @@ const runStartTime = ref<number | null>(null);  // Original start timestamp in m
 const runElapsedSeconds = ref<number>(0);
 const runPauseSeconds = ref<number>(0);  // Total pause time in seconds (tallied)
 
+// Cooldown for Skip and Done buttons (3 seconds after clicking)
+const skipDoneCooldownUntil = ref<number | null>(null);
+
 // Refs for scrolling to active challenge
 const runModalBodyRef = ref<HTMLElement | null>(null);
 const runEntriesTableWrapperRef = ref<HTMLElement | null>(null);
@@ -17612,6 +17631,7 @@ const currentStageDifficulty = computed(() => {
 });
 
 // canUndo: true if there's an active challenge (highest sequence number with no completed time)
+// Special restriction: When win rules are active, cannot undo if preceding challenge was skipped
 const canUndo = computed(() => {
   if (!isRunActive.value || challengeResults.value.length === 0) return false;
   
@@ -17620,10 +17640,24 @@ const canUndo = computed(() => {
     const result = challengeResults.value[i];
     // Active challenge has no completed_at_ms and is pending
     if (!result.status || result.status === 'pending') {
+      // Special restriction: When win rules are active, cannot undo if preceding challenge was skipped
+      if (hasWinRules.value && i > 0) {
+        const precedingChallenge = challengeResults.value[i - 1];
+        if (precedingChallenge && (precedingChallenge.status === 'skipped' || precedingChallenge.status === 'failed')) {
+          // Preceding challenge was skipped or failed - cannot undo when win rules are active
+          return false;
+        }
+      }
       return true;  // Found an active challenge - can undo
     }
   }
   return false;  // No active challenge found - all completed
+});
+
+// Check if Skip/Done buttons are on cooldown
+const isSkipDoneOnCooldown = computed(() => {
+  if (!skipDoneCooldownUntil.value) return false;
+  return Date.now() < skipDoneCooldownUntil.value;
 });
 
 // Watch for current challenge changes to reveal random challenges and load stage feedback
@@ -20282,7 +20316,7 @@ async function nextChallenge() {
       console.warn(`Challenge ${idx + 1} failed win rules: ${winRulesCheck.reason}`);
     }
   } else {
-    // Determine status: 'success' if not revealed early, 'ok' if revealed early
+  // Determine status: 'success' if not revealed early, 'ok' if revealed early
     finalStatus = result.revealedEarly ? 'ok' : 'success';
   }
   
@@ -21350,14 +21384,17 @@ const parsedWinRules = computed(() => {
 });
 
 // Run Time Left (for run time limit win rule)
+// Depend on runElapsedSeconds to trigger recalculation every second
 const runTimeLeftSeconds = computed(() => {
   if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.runTimeLimit?.enabled) {
     return null;
   }
   
+  // Depend on runElapsedSeconds to trigger recalculation every second
+  const elapsedSeconds = runElapsedSeconds.value;
+  
   const limitMinutes = parsedWinRules.value.runTimeLimit.minutes || 60;
   const limitSeconds = limitMinutes * 60;
-  const elapsedSeconds = runElapsedSeconds.value;
   const left = limitSeconds - elapsedSeconds;
   
   return Math.max(0, left);
@@ -21396,6 +21433,7 @@ const rolloverTimeRemainingSeconds = computed(() => {
 });
 
 // Item Time Left (for challenge time limit win rule, includes rollover)
+// Depend on runElapsedSeconds to trigger recalculation every second
 const itemTimeLeftSeconds = computed(() => {
   if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
     return null;
@@ -21406,13 +21444,23 @@ const itemTimeLeftSeconds = computed(() => {
     return null;
   }
   
+  // Depend on runElapsedSeconds to trigger recalculation every second
+  const _ = runElapsedSeconds.value;
+  
   const challengeTime = parsedWinRules.value.challengeTime;
   const limitMinutes = challengeTime.minutes || 10;
   const limitSeconds = limitMinutes * 60;
   
   // Calculate current challenge elapsed time
   const now = Date.now();
-  const elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  let elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  
+  // Subtract current pause time if run is paused
+  if (isRunPaused.value && runPauseStartTime.value) {
+    const currentPauseMs = now - runPauseStartTime.value;
+    elapsedMs -= currentPauseMs;
+  }
+  
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   
   // Get rollover time from database
@@ -21423,6 +21471,61 @@ const itemTimeLeftSeconds = computed(() => {
   const left = availableTime - elapsedSeconds;
   
   return Math.max(0, left);
+});
+
+// Grace time remaining (shown when item time hits zero)
+// Depend on runElapsedSeconds to trigger recalculation every second
+const itemGraceTimeLeftSeconds = computed(() => {
+  if (!isRunActive.value || !parsedWinRules.value || !parsedWinRules.value.challengeTime?.enabled) {
+    return null;
+  }
+  
+  // Depend on runElapsedSeconds to trigger recalculation every second
+  const _ = runElapsedSeconds.value;
+  
+  const itemTimeLeft = itemTimeLeftSeconds.value;
+  if (itemTimeLeft === null || itemTimeLeft > 0) {
+    return null; // Only show grace time when item time is at zero
+  }
+  
+  const challengeTime = parsedWinRules.value.challengeTime;
+  const limitMinutes = challengeTime.minutes || 10;
+  const limitMs = limitMinutes * 60 * 1000;
+  
+  // Calculate grace period
+  const gracePercent = challengeTime.gracePeriodPercent || 1.0;
+  const graceMinSeconds = challengeTime.gracePeriodMinSeconds || 2;
+  const graceMaxSeconds = challengeTime.gracePeriodMaxSeconds || 60;
+  const graceMs = Math.min(graceMaxSeconds * 1000, Math.max(graceMinSeconds * 1000, Math.floor(limitMs * (gracePercent / 100))));
+  const graceSeconds = Math.floor(graceMs / 1000);
+  
+  const currentResult = challengeResults.value[currentChallengeIndex.value];
+  if (!currentResult || !currentResult.startedAtMs) {
+    return null;
+  }
+  
+  // Calculate elapsed time beyond the limit
+  const now = Date.now();
+  let elapsedMs = now - currentResult.startedAtMs - (currentResult.pauseMilliseconds || 0);
+  
+  // Subtract current pause time if run is paused
+  if (isRunPaused.value && runPauseStartTime.value) {
+    const currentPauseMs = now - runPauseStartTime.value;
+    elapsedMs -= currentPauseMs;
+  }
+  
+  const rolloverMs = currentResult.rolloverTimeRemainingStartMs || 0;
+  const availableTime = limitMs + rolloverMs;
+  const timeOverLimit = elapsedMs - availableTime;
+  
+  if (timeOverLimit <= 0) {
+    return null; // Still within limit
+  }
+  
+  const graceLeft = graceMs - timeOverLimit;
+  const graceLeftSeconds = Math.floor(graceLeft / 1000);
+  
+  return Math.max(0, graceLeftSeconds);
 });
 
 // Check if Done button should be disabled (time left + grace period <= 0)
@@ -23927,18 +24030,19 @@ button:disabled {
 .win-rules-status-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 8px 10px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
   border-bottom: 1px solid var(--border-primary);
-  gap: 15px;
+  gap: 20px;
 }
 .win-rules-label {
   font-size: 14px;
   color: var(--text-primary);
   font-weight: 600;
   flex-shrink: 0;
+  padding-top: 2px;
 }
 .win-rules-info {
   display: flex;
@@ -23953,10 +24057,50 @@ button:disabled {
 }
 .win-rules-timers {
   display: flex;
-  gap: 15px;
-  align-items: center;
+  gap: 30px;
+  align-items: flex-start;
   justify-content: flex-start;
   flex: 1;
+}
+.item-time-column,
+.run-time-column,
+.rollover-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.time-label {
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.time-value {
+  font-weight: bold;
+  font-size: 14px;
+  color: #059669;
+  font-family: 'Courier New', monospace;
+  line-height: 1.2;
+}
+.time-value.time-warning {
+  color: #ffaa00;
+}
+.time-value.time-critical {
+  color: #ff0000;
+}
+.time-value.time-expired {
+  color: #ff0000;
+  font-weight: bold;
+}
+.grace-time {
+  font-size: 12px;
+  color: #ff0000;
+  font-family: 'Courier New', monospace;
+  margin-top: 2px;
+}
+.rollover-value {
+  color: #6b7280;
 }
 .item-time-left-display {
   font-weight: bold;

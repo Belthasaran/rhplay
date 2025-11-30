@@ -21209,10 +21209,11 @@ async function openWinRulesDropdown(event: MouseEvent) {
   const button = event.currentTarget as HTMLElement;
   const rect = button.getBoundingClientRect();
   
-  // Position dropdown to the right of the button, aligned with top
+  // Position dropdown below the button, with right edges aligned
+  // x will be the button's right edge, and we'll use CSS right property to align
   winRulesDropdownPosition.value = {
-    x: rect.right + 10,
-    y: rect.top
+    x: rect.right, // Button's right edge X coordinate
+    y: rect.bottom + 5 // Position below button with small gap
   };
   
   // Load win rules from current run if available

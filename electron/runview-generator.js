@@ -560,6 +560,22 @@ async function generateRunview(params) {
     const currentStageTags = currentStageInfo ? (currentStageInfo.tags || '') : '';
     const currentStageMnemonics = currentStageInfo ? (currentStageInfo.stageMnemonics || []) : [];
     
+    // Combine game and stage mnemonics for active challenge (top panel only)
+    // Remove duplicates and combine into single set
+    const allMnemonics = new Set();
+    currentGameMnemonics.forEach(m => allMnemonics.add(m));
+    currentStageMnemonics.forEach(m => allMnemonics.add(m));
+    const combinedMnemonics = Array.from(allMnemonics);
+    
+    // Get numeric difficulty for color coding
+    const currentGameNumDifficulty = currentGameInfo ? mapDifficultyToNumber(currentGameInfo.difficulty) : null;
+    const currentStageNumDifficulty = currentStageInfo ? (currentStageInfo.difficulty !== null && currentStageInfo.difficulty !== undefined ? currentStageInfo.difficulty : null) : null;
+    
+    // Determine entry type class for color
+    const entryTypeClass = currentChallenge.entry_type === 'random_stage' ? 'rng-s' :
+                           currentChallenge.entry_type === 'random_game' ? 'rng-g' :
+                           currentChallenge.entry_type === 'stage' ? 'stage' : 'game';
+    
     // Generate HTML
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -717,7 +733,41 @@ async function generateRunview(params) {
     }
     .entry-type {
       font-weight: bold;
-      color: #4CAF50;
+    }
+    .entry-type.rng-s, .entry-type.rng-g {
+      color: #ff0000; /* bright red */
+    }
+    .entry-type.stage {
+      color: #ff00ff; /* bright pink */
+    }
+    .entry-type.game {
+      color: #bf00ff; /* bright purple */
+    }
+    
+    /* Difficulty color classes */
+    .difficulty-0, .difficulty-1, .difficulty-2 {
+      color: #00ff00; /* bright green - Newcomer, Casual, Beginner, Intermediate */
+    }
+    .difficulty-3, .difficulty-4 {
+      color: #ffff00; /* yellow - Advanced, Skilled, Hard, Kaizo Intermediate */
+    }
+    .difficulty-5 {
+      color: #ff00ff; /* magenta - Very hard, Expert */
+    }
+    .difficulty-6, .difficulty-7 {
+      color: #ff0000; /* red - Master, Grandmaster, Grandmaster plus */
+    }
+    .difficulty-8 {
+      color: #ff0000; /* red text */
+      background-color: #ffff00; /* yellow background - Tool-assisted */
+      padding: 1px 3px;
+      border-radius: 2px;
+    }
+    
+    /* Stage ID font size increase */
+    .stage-id {
+      font-size: 1.2em; /* 20% larger */
+      font-weight: bold;
     }
     .game-id {
       font-family: monospace;
@@ -806,16 +856,17 @@ async function generateRunview(params) {
     
     <div class="current-challenge-details">
       <div class="game-line">
-        <span class="entry-type">${escapeHtml(entryType)}</span> 
+        <span class="entry-type ${entryTypeClass}">${escapeHtml(entryType)}</span> 
         <span class="game-id">${escapeHtml(currentChallenge.gameid || '—')}</span> - 
         <span class="game-name">${escapeHtml(abbreviateText(currentGameName))}</span>
-        ${currentGameDifficulty ? `<span class="author">(${escapeHtml(currentGameDifficulty)}${currentGameDifficultyMnemonic ? ' ' + escapeHtml(currentGameDifficultyMnemonic) : ''}${currentGameMnemonics.length > 0 ? ' ' + escapeHtml(currentGameMnemonics.join(' ')) : ''})</span>` : ''}
+        ${currentAuthor ? `<span class="author-line">${escapeHtml(abbreviateText(currentAuthor))}</span>` : ''}
+        ${currentGameNumDifficulty !== null ? `<span class="difficulty-${currentGameNumDifficulty}">(${currentGameDifficulty !== '' ? escapeHtml(currentGameDifficulty) : ''}${currentGameDifficultyMnemonic ? (currentGameDifficulty !== '' ? ' ' : '') + escapeHtml(currentGameDifficultyMnemonic) : ''}${combinedMnemonics.length > 0 ? ((currentGameDifficulty !== '' || currentGameDifficultyMnemonic) ? ' ' : '') + escapeHtml(combinedMnemonics.join(' ')) : ''})</span>` : (currentGameDifficulty || currentGameDifficultyMnemonic || combinedMnemonics.length > 0 ? `<span>(${currentGameDifficulty !== '' ? escapeHtml(currentGameDifficulty) : ''}${currentGameDifficultyMnemonic ? (currentGameDifficulty !== '' ? ' ' : '') + escapeHtml(currentGameDifficultyMnemonic) : ''}${combinedMnemonics.length > 0 ? ((currentGameDifficulty !== '' || currentGameDifficultyMnemonic) ? ' ' : '') + escapeHtml(combinedMnemonics.join(' ')) : ''})</span>` : '')}
       </div>
       ${currentStageId ? `
       <div class="stage-line">
-        <span class="stage-info">${escapeHtml(currentStageId)}</span>
+        <span class="stage-info stage-id">${escapeHtml(currentStageId)}</span>
         ${currentStageName ? ` <span class="stage-info">${escapeHtml(abbreviateText(currentStageName))}</span>` : ''}
-        ${(currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic || currentStageMnemonics.length > 0 ? `<span class="author">(${currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? escapeHtml(String(currentStageDifficulty)) : ''}${currentStageDifficultyMnemonic ? (currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? ' ' : '') + escapeHtml(currentStageDifficultyMnemonic) : ''}${currentStageMnemonics.length > 0 ? ((currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic ? ' ' : '') + escapeHtml(currentStageMnemonics.join('')) : ''})</span>` : ''}
+        ${currentStageNumDifficulty !== null ? `<span class="difficulty-${currentStageNumDifficulty}">(${currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? escapeHtml(String(currentStageDifficulty)) : ''}${currentStageDifficultyMnemonic ? (currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? ' ' : '') + escapeHtml(currentStageDifficultyMnemonic) : ''})</span>` : ((currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic ? `<span>(${currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? escapeHtml(String(currentStageDifficulty)) : ''}${currentStageDifficultyMnemonic ? (currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? ' ' : '') + escapeHtml(currentStageDifficultyMnemonic) : ''})</span>` : '')}
       ` : ''}
 
       ${currentStageTags ? `
@@ -857,34 +908,53 @@ ${displayIndices.map(idx => {
   
   const rowClass = isCurrent ? 'current' : (isCompleted ? 'completed' : (isSkipped ? 'skipped' : ''));
   
-  // Abbreviate entry type
+  // Abbreviate entry type and determine class for color
   let entryTypeAbbrev = '';
+  let entryTypeClassForTable = '';
   if (result.entry_type === 'random_game') {
     entryTypeAbbrev = 'RNG-G';
+    entryTypeClassForTable = 'rng-g';
   } else if (result.entry_type === 'random_stage') {
     entryTypeAbbrev = 'RNG-S';
+    entryTypeClassForTable = 'rng-s';
   } else if (result.entry_type === 'stage') {
     entryTypeAbbrev = 'Stage';
+    entryTypeClassForTable = 'stage';
   } else {
     entryTypeAbbrev = 'Game';
+    entryTypeClassForTable = 'game';
   }
   
   const gameName = result.game_name || result.gameid || '???';
-  // Use levelnumber/levelname if available, otherwise use exit_number/stage_description
-  const stageInfo = (result.levelnumber && result.levelname) 
-    ? `${result.levelnumber} - ${result.levelname}`
-    : result.levelnumber 
-    ? result.levelnumber 
-    : (result.exit_number && result.stage_description)
-    ? `${result.exit_number} - ${result.stage_description}`
-    : result.exit_number
-    ? result.exit_number
-    : result.stage_description
-    ? result.stage_description
-    : '';
+  
+  // Get game info for difficulty color
+  const gameInfoForResult = result.gameid ? gameInfo.get(result.gameid) : null;
+  const gameNumDifficulty = gameInfoForResult ? mapDifficultyToNumber(gameInfoForResult.difficulty) : null;
+  
+  // Get stage info for difficulty color and stage ID
+  const stageKeyForResult = result.gameid && (result.levelnumber || result.exit_number)
+    ? `${result.gameid}-${result.levelnumber || result.exit_number}`
+    : null;
+  const stageInfoForResult = stageKeyForResult ? stageInfo.get(stageKeyForResult) : null;
+  const stageNumDifficulty = stageInfoForResult ? (stageInfoForResult.difficulty !== null && stageInfoForResult.difficulty !== undefined ? stageInfoForResult.difficulty : null) : null;
+  
+  // Format stage info with larger font for stage ID
+  let stageInfoHtml = '';
+  if (result.levelnumber && result.levelname) {
+    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.levelnumber)}</span> - <span class="stage-info">${escapeHtml(abbreviateText(result.levelname))}</span>`;
+  } else if (result.levelnumber) {
+    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.levelnumber)}</span>`;
+  } else if (result.exit_number && result.stage_description) {
+    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.exit_number)}</span> - <span class="stage-info">${escapeHtml(abbreviateText(result.stage_description))}</span>`;
+  } else if (result.exit_number) {
+    stageInfoHtml = `<span class="stage-info stage-id">${escapeHtml(result.exit_number)}</span>`;
+  } else if (result.stage_description) {
+    stageInfoHtml = `<span class="stage-info">${escapeHtml(abbreviateText(result.stage_description))}</span>`;
+  } else {
+    stageInfoHtml = '—';
+  }
   
   // Get author from gameversions
-  const gameInfoForResult = result.gameid ? gameInfo.get(result.gameid) : null;
   const author = gameInfoForResult ? (gameInfoForResult.author || '') : '';
   
   // Status icon - only show for done, skipped, or early reveal
@@ -912,13 +982,22 @@ ${displayIndices.map(idx => {
     timeText = '—';
   }
   
+  // Determine difficulty class for game (use game difficulty if available, otherwise stage difficulty)
+  const difficultyClass = gameNumDifficulty !== null ? `difficulty-${gameNumDifficulty}` : 
+                         (stageNumDifficulty !== null ? `difficulty-${stageNumDifficulty}` : '');
+  const difficultyText = gameInfoForResult && gameInfoForResult.difficulty ? escapeHtml(gameInfoForResult.difficulty) : '';
+  const difficultyMnemonicText = gameInfoForResult && gameInfoForResult.difficultyMnemonic ? ' ' + escapeHtml(gameInfoForResult.difficultyMnemonic) : '';
+  
   return `        <tr class="${rowClass}">
           <td>${statusIcon}</td>
-          <td><span class="entry-type">${escapeHtml(entryTypeAbbrev)}</span></td>
+          <td><span class="entry-type ${entryTypeClassForTable}">${escapeHtml(entryTypeAbbrev)}</span></td>
           <td>
-            <span class="game-id">${escapeHtml(result.gameid || '—')}</span>
+            <span class="game-id">${escapeHtml(result.gameid || '—')}</span><br>
             <span class="game-name">${escapeHtml(abbreviateText(gameName))}</span>
-            <span class="stage-info">${escapeHtml(abbreviateText(stageInfo || '—'))}</span></td>
+            ${author ? `<br><span class="author">${escapeHtml(abbreviateText(author))}</span>` : ''}
+            ${difficultyClass && (difficultyText || difficultyMnemonicText) ? `<br><span class="${difficultyClass}">${difficultyText}${difficultyMnemonicText}</span>` : ''}
+          </td>
+          <td>${stageInfoHtml}</td>
           <td><span class="challenge-entry-time">${timeText}</span></td>
         </tr>`;
 }).join('\n')}

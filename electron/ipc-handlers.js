@@ -2506,15 +2506,14 @@ function registerDatabaseHandlers(dbManager) {
         `).run(newPauseMs, newPauseSeconds, previousChallenge.result_uuid);
       }
       
-      // Reset undone challenge: clear completion timestamps and duration, but set started_at_ms to NOW
-      // because this challenge is now the current challenge and should start timing immediately
+      // Reset undone challenge: clear all timestamps and duration
+      // The undone challenge should NOT have a started_at_ms - it hasn't been reached yet
       // Keep revealed_early flag (it's stored separately in the database if needed)
-      const nowMs = Date.now();
       db.prepare(`
         UPDATE run_results
         SET status = 'pending',
-            started_at = CURRENT_TIMESTAMP,
-            started_at_ms = ?,
+            started_at = NULL,
+            started_at_ms = NULL,
             completed_at = NULL,
             completed_at_ms = NULL,
             duration_seconds = NULL,
@@ -2526,7 +2525,7 @@ function registerDatabaseHandlers(dbManager) {
             pause_end = NULL,
             pause_end_ms = NULL
         WHERE result_uuid = ?
-      `).run(nowMs, undoneChallenge.result_uuid);
+      `).run(undoneChallenge.result_uuid);
       
       // Also clear started_at_ms on the NEXT challenge (if it exists and is pending)
       // When a challenge is undone, the next challenge should lose its started_at_ms

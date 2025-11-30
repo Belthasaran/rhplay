@@ -19896,28 +19896,30 @@ async function startRun() {
           // Final elapsed time: base elapsed minus tallied pause time minus pending pause time
           runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
           
-          // Update current challenge duration
-          // Calculate directly from challenge's started_at_ms timestamp (not from run total)
-          // This matches the approach in RUN_TIMING_REVIEW.md and ensures accuracy
-          if (currentChallengeIndex.value < challengeResults.value.length) {
-            const current = challengeResults.value[currentChallengeIndex.value];
-            if (current.status === 'pending' && current.startedAtMs) {
+          // Update challenge durations for ALL pending challenges with started_at_ms
+          // This ensures that when a previous challenge becomes current again after undo,
+          // its elapsed time continues to increase from its original start time
+          challengeResults.value.forEach((challenge, idx) => {
+            if (challenge.status === 'pending' && challenge.startedAtMs) {
               // Calculate duration: (now - started_at_ms) - pause_milliseconds - current_pause_time
-              let challengeElapsedMs = now - current.startedAtMs;
+              let challengeElapsedMs = now - challenge.startedAtMs;
               
               // Subtract accumulated pause time for this challenge
-              challengeElapsedMs -= current.pauseMilliseconds;
+              challengeElapsedMs -= (challenge.pauseMilliseconds || 0);
               
-              // If run is currently paused, subtract current pause time from challenge timer too
-              if (isRunPaused.value && runPauseStartTime.value) {
+              // If run is currently paused and this is the current challenge, subtract current pause time
+              if (isRunPaused.value && runPauseStartTime.value && idx === currentChallengeIndex.value) {
                 const currentPauseMs = now - runPauseStartTime.value;
                 challengeElapsedMs -= currentPauseMs;
               }
               
               // Convert to seconds and ensure non-negative
-              current.durationSeconds = Math.max(0, Math.floor(challengeElapsedMs / 1000));
+              challenge.durationSeconds = Math.max(0, Math.floor(challengeElapsedMs / 1000));
+            } else if (challenge.status === 'pending' && !challenge.startedAtMs) {
+              // Challenge hasn't started yet (started_at_ms is null) - duration should be 0
+              challenge.durationSeconds = 0;
             }
-          }
+          });
         }
       }, 1000);
       
@@ -20348,30 +20350,60 @@ async function undoChallenge() {
           runPauseSeconds.value = run.pause_seconds;
         }
       }
+      
+      // When undoing Challenge N (at index idx):
+      // - Challenge N gets cleared/reset (becomes pending, NO started_at_ms)
+      // - Challenge N-1 (previous) becomes active again and continues timing
+      // - Challenge N-1 should keep its original started_at_ms (NOT reset)
+      // - Challenge N-1's elapsed time should INCREASE (all time counts toward it)
+      // - We go back by 1 challenge: from the current position to the PREVIOUS challenge (N-1), not the undone one (N)
+      // CRITICAL: The previous challenge (N-1) becomes the active challenge, NOT the undone challenge (N)
+      // Set currentChallengeIndex IMMEDIATELY after reload so timer interval knows which challenge is current
+      if (idx > 0) {
+        // Go back to the PREVIOUS challenge (N-1), which becomes active again
+        currentChallengeIndex.value = idx - 1;
+        
+        // The previous challenge (now active) should continue timing from its original started_at_ms
+        // Its elapsed time should INCREASE, not reset, because all time (including time from challenge N)
+        // is now attributed to it
+        const previousChallenge = challengeResults.value[idx - 1];
+        if (previousChallenge && previousChallenge.status === 'pending' && previousChallenge.startedAtMs) {
+          // Calculate elapsed time dynamically from started_at_ms (it should continue, not reset)
+          const now = Date.now();
+          let elapsedMs = now - previousChallenge.startedAtMs;
+          elapsedMs -= (previousChallenge.pauseMilliseconds || 0);
+          previousChallenge.durationSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+        }
+      } else {
+        // Edge case: If undoing the first challenge (idx === 0), there is no previous challenge
+        // This shouldn't normally happen, but if it does, stay at index 0
+        currentChallengeIndex.value = 0;
+      }
     }
     
-    // When undoing Challenge N, we go back to the PREVIOUS challenge (N-1)
-    // The previous challenge becomes current again and continues timing
-    // The undone challenge (N) becomes pending but is not the current challenge
-    if (idx > 0) {
-      // Go back to the previous challenge (it should have become pending and is now current)
-      currentChallengeIndex.value = idx - 1;
-    } else {
-      // Can't go back further than the first challenge
-      currentChallengeIndex.value = idx;
+    // When undoing Challenge N (at index idx):
+    // - Challenge N gets cleared/reset (becomes pending, NO started_at_ms)
+    // - Challenge N-1 (previous) becomes active again and continues timing
+    // - Challenge N-1 should keep its original started_at_ms (NOT reset)
+    // - Challenge N-1's elapsed time should INCREASE (all time counts toward it)
+    // - We go back by 1 challenge: from the current position to the PREVIOUS challenge (N-1), not the undone one (N)
+    // CRITICAL: The previous challenge (N-1) becomes the active challenge, NOT the undone challenge (N)
+    // If backend wasn't available, set currentChallengeIndex here
+    if (!isElectronAvailable()) {
+      if (idx > 0) {
+        currentChallengeIndex.value = idx - 1;
+      } else {
+        currentChallengeIndex.value = 0;
+      }
     }
     
-    // The backend has already cleared the undone challenge's timestamps in the database
-    // and cleared the next challenge's started_at_ms
-    // We need to sync local state and set the start time for the undone challenge
-    // since it's now the current challenge and should start timing immediately
+    // The undone challenge (N) is reset - cleared timestamps, becomes pending, NO start time
     const undoneChallenge = challengeResults.value[idx];
     if (undoneChallenge) {
       undoneChallenge.durationSeconds = 0;
       undoneChallenge.pauseMilliseconds = 0;  // Pause time was transferred to previous challenge
-      // Set started_at_ms to now since this challenge is now current and should start timing
-      // We'll update the database when Done is pressed, but for now set it locally
-      undoneChallenge.startedAtMs = Date.now();
+      undoneChallenge.startedAtMs = null;  // Undone challenge has NO start time - it hasn't been reached yet
+      undoneChallenge.status = 'pending';  // Make sure it's pending
     }
     
     // Also clear the next challenge's start time locally (if it exists and is pending)
@@ -20385,7 +20417,7 @@ async function undoChallenge() {
       }
     }
     
-    console.log(`[undoChallenge] Undone: Challenge ${idx + 1} back to pending`);
+    console.log(`[undoChallenge] Undone: Challenge ${idx + 1} back to pending, now on Challenge ${currentChallengeIndex.value + 1}`);
   } catch (error) {
     console.error('Error undoing challenge:', error);
     alert('Error undoing challenge: ' + (error instanceof Error ? error.message : String(error)));

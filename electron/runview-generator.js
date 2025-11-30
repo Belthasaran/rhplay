@@ -743,15 +743,15 @@ async function generateRunview(params) {
        color: lightred;
     }
     .current-challenge-details .game-name {
-       font-size: 20px;
+       font-size: 24px;
        color: white;
     }
     .current-challenge-details .stage-info {
-       font-size: 18px;
+       font-size: 20px;
        color: white;
     }
     .current-challenge-details .author {
-       font-size: 20px;
+       font-size: 24px;
        color: lightgray;
     }
     .current-challenge-details .author-line {

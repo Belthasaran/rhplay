@@ -40,8 +40,18 @@ async function startServer(options) {
       next();
     });
     
-    // Serve runview.html
+    // Serve runview.html (user requested runinfo.html, but we generate runview.html)
     app.get('/runview.html', (req, res) => {
+      const filePath = path.join(userDataPath, 'runview.html');
+      if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+      } else {
+        res.status(404).send('File Not Found');
+      }
+    });
+    
+    // Also serve as runinfo.html for compatibility (user mentioned runinfo.html)
+    app.get('/runinfo.html', (req, res) => {
       const filePath = path.join(userDataPath, 'runview.html');
       if (fs.existsSync(filePath)) {
         res.sendFile(filePath);

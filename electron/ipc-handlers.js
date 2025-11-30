@@ -2145,15 +2145,30 @@ function registerDatabaseHandlers(dbManager) {
           WHERE run_uuid = ?
         `).run(runId);
         
-        // run_results were already created during staging, just update their timestamps
+        // run_results were already created during staging, just set timestamps for FIRST challenge only
+        // According to RUN_TIMING_REVIEW.md, only the first challenge gets started_at/started_at_ms when run starts
+        // Subsequent challenges will get started_at/started_at_ms when they actually begin (when previous completes)
         // Use millisecond precision
         const nowMs = Date.now();
-        db.prepare(`
-          UPDATE run_results
-          SET started_at = CURRENT_TIMESTAMP,
-              started_at_ms = ?
+        
+        // Get the first pending challenge (lowest sequence_number)
+        const firstPending = db.prepare(`
+          SELECT result_uuid FROM run_results
           WHERE run_uuid = ? AND status = 'pending'
-        `).run(nowMs, runId);
+          ORDER BY sequence_number
+          LIMIT 1
+        `).get(runId);
+        
+        if (firstPending) {
+          // Only set started_at and started_at_ms for the first pending challenge
+          // All other challenges remain NULL until they actually start
+          db.prepare(`
+            UPDATE run_results
+            SET started_at = CURRENT_TIMESTAMP,
+                started_at_ms = ?
+            WHERE result_uuid = ?
+          `).run(nowMs, firstPending.result_uuid);
+        }
         
         // Update total challenges count (should already be set, but update to be sure)
         const total = db.prepare(`SELECT COUNT(*) as count FROM run_results WHERE run_uuid = ?`).get(runId);
@@ -2319,6 +2334,36 @@ function registerDatabaseHandlers(dbManager) {
               duration_milliseconds = ?
           WHERE result_uuid = ?
         `).run(status, nowMs, durationSeconds, durationMilliseconds, result.result_uuid);
+        
+        // When a challenge completes (status changes to success/ok/skipped),
+        // the NEXT pending challenge should start.
+        // Set its started_at_ms to NOW (when this challenge completed).
+        // This ensures each challenge's timer starts when it actually begins.
+        // According to RUN_TIMING_REVIEW.md, each challenge's started_at_ms should be
+        // the exact time when that challenge actually started.
+        if ((status === 'success' || status === 'ok' || status === 'skipped') && 
+            oldStatus !== status) {
+          const nextChallenge = db.prepare(`
+            SELECT result_uuid, sequence_number FROM run_results
+            WHERE run_uuid = ? 
+            AND sequence_number > (
+              SELECT sequence_number FROM run_results WHERE result_uuid = ?
+            )
+            AND status = 'pending'
+            ORDER BY sequence_number
+            LIMIT 1
+          `).get(runUuid, result.result_uuid);
+          
+          if (nextChallenge) {
+            // Set the next challenge's start time to now (when previous challenge completed)
+            db.prepare(`
+              UPDATE run_results
+              SET started_at = CURRENT_TIMESTAMP,
+                  started_at_ms = ?
+              WHERE result_uuid = ?
+            `).run(nowMs, nextChallenge.result_uuid);
+          }
+        }
       }
       
       // Update run counts based on status change

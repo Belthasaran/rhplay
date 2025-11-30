@@ -17374,6 +17374,8 @@ type ChallengeResult = {
   status: 'pending' | 'success' | 'skipped' | 'ok';
   durationSeconds: number;
   revealedEarly: boolean;
+  startedAtMs: number | null;  // When this challenge started (milliseconds since epoch)
+  pauseMilliseconds: number;  // Total pause time for this challenge (milliseconds)
 };
 const challengeResults = ref<ChallengeResult[]>([]);
 const undoStack = ref<ChallengeResult[]>([]);
@@ -19859,11 +19861,15 @@ async function startRun() {
       console.log('[startRun] Start time:', runStartTime.value, 'Elapsed:', runElapsedSeconds.value, 'Pause:', runPauseSeconds.value);
       
       // Initialize challenge results tracking
+      // Note: startedAtMs will be set by backend when run starts (first challenge only)
+      // We'll need to reload results to get the actual started_at_ms values
       challengeResults.value = runEntries.map((_, idx) => ({
         index: idx,
         status: 'pending',
         durationSeconds: 0,
-        revealedEarly: false
+        revealedEarly: false,
+        startedAtMs: idx === 0 ? runStartTime.value : null,  // First challenge starts when run starts
+        pauseMilliseconds: 0
       }));
       undoStack.value = [];
       
@@ -19891,14 +19897,25 @@ async function startRun() {
           runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
           
           // Update current challenge duration
+          // Calculate directly from challenge's started_at_ms timestamp (not from run total)
+          // This matches the approach in RUN_TIMING_REVIEW.md and ensures accuracy
           if (currentChallengeIndex.value < challengeResults.value.length) {
             const current = challengeResults.value[currentChallengeIndex.value];
-            if (current.status === 'pending') {
-              // Calculate duration since this challenge started
-              const prevDuration = challengeResults.value
-                .slice(0, currentChallengeIndex.value)
-                .reduce((sum, r) => sum + r.durationSeconds, 0);
-              current.durationSeconds = runElapsedSeconds.value - prevDuration;
+            if (current.status === 'pending' && current.startedAtMs) {
+              // Calculate duration: (now - started_at_ms) - pause_milliseconds - current_pause_time
+              let challengeElapsedMs = now - current.startedAtMs;
+              
+              // Subtract accumulated pause time for this challenge
+              challengeElapsedMs -= current.pauseMilliseconds;
+              
+              // If run is currently paused, subtract current pause time from challenge timer too
+              if (isRunPaused.value && runPauseStartTime.value) {
+                const currentPauseMs = now - runPauseStartTime.value;
+                challengeElapsedMs -= currentPauseMs;
+              }
+              
+              // Convert to seconds and ensure non-negative
+              current.durationSeconds = Math.max(0, Math.floor(challengeElapsedMs / 1000));
             }
           }
         }
@@ -20104,8 +20121,11 @@ async function nextChallenge() {
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
       // Start timing next challenge
+      // Backend sets started_at_ms in database, but we also set it locally for immediate timer accuracy
       if (idx + 1 < challengeResults.value.length) {
-        challengeResults.value[idx + 1].durationSeconds = 0;
+        const nextChallenge = challengeResults.value[idx + 1];
+        nextChallenge.durationSeconds = 0;
+        nextChallenge.startedAtMs = Date.now();  // Next challenge starts now
       }
     } else {
       // This is the last challenge - show final confirmation with undo option
@@ -20186,8 +20206,11 @@ async function skipChallenge() {
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
       // Start timing next challenge
+      // Backend sets started_at_ms in database, but we also set it locally for immediate timer accuracy
       if (idx + 1 < challengeResults.value.length) {
-        challengeResults.value[idx + 1].durationSeconds = 0;
+        const nextChallenge = challengeResults.value[idx + 1];
+        nextChallenge.durationSeconds = 0;
+        nextChallenge.startedAtMs = Date.now();  // Next challenge starts now
       }
     } else {
       // This is the last challenge - show final confirmation with undo option
@@ -22328,7 +22351,9 @@ async function resumeRunFromStartup() {
       index: idx,
       status: res.status || 'pending',
       durationSeconds: res.duration_seconds || 0,
-      revealedEarly: res.revealed_early || false
+      revealedEarly: res.revealed_early || false,
+      startedAtMs: res.started_at_ms || null,
+      pauseMilliseconds: res.pause_milliseconds || 0
     }));
     
     // Populate undo stack with completed challenges (for Back button)
@@ -22367,14 +22392,25 @@ async function resumeRunFromStartup() {
         runElapsedSeconds.value = Math.max(0, baseElapsed - runPauseSeconds.value - pendingPauseSeconds);
         
         // Update current challenge duration
+        // Calculate directly from challenge's started_at_ms timestamp (not from run total)
+        // This matches the approach in RUN_TIMING_REVIEW.md and ensures accuracy
         if (currentChallengeIndex.value < challengeResults.value.length) {
           const current = challengeResults.value[currentChallengeIndex.value];
-          if (current.status === 'pending') {
-            // Calculate duration since this challenge started
-            const prevDuration = challengeResults.value
-              .slice(0, currentChallengeIndex.value)
-              .reduce((sum, r) => sum + r.durationSeconds, 0);
-            current.durationSeconds = runElapsedSeconds.value - prevDuration;
+          if (current.status === 'pending' && current.startedAtMs) {
+            // Calculate duration: (now - started_at_ms) - pause_milliseconds - current_pause_time
+            let challengeElapsedMs = now - current.startedAtMs;
+            
+            // Subtract accumulated pause time for this challenge
+            challengeElapsedMs -= current.pauseMilliseconds;
+            
+            // If run is currently paused, subtract current pause time from challenge timer too
+            if (isRunPaused.value && runPauseStartTime.value) {
+              const currentPauseMs = now - runPauseStartTime.value;
+              challengeElapsedMs -= currentPauseMs;
+            }
+            
+            // Convert to seconds and ensure non-negative
+            current.durationSeconds = Math.max(0, Math.floor(challengeElapsedMs / 1000));
           }
         }
       }

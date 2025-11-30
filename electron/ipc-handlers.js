@@ -2862,28 +2862,44 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('db:runs:update-win-rules', async (event, { runUuid, winRulesJson }) => {
     try {
+      console.log(`[db:runs:update-win-rules] Called with runUuid: ${runUuid}, winRulesJson:`, winRulesJson);
       const db = dbManager.getConnection('clientdata');
       
       // Verify run exists
       const run = db.prepare('SELECT run_uuid FROM runs WHERE run_uuid = ?').get(runUuid);
       if (!run) {
+        console.error(`[db:runs:update-win-rules] Run not found: ${runUuid}`);
         return { success: false, error: 'Run not found' };
       }
       
       // Update win rules JSON
       const nowMs = Date.now();
-      db.prepare(`
+      const stmt = db.prepare(`
         UPDATE runs 
         SET win_rules_json = ?,
             updated_at = CURRENT_TIMESTAMP,
             updated_at_ms = ?
         WHERE run_uuid = ?
-      `).run(winRulesJson, nowMs, runUuid);
+      `);
+      const result = stmt.run(winRulesJson, nowMs, runUuid);
       
-      console.log(`Updated win rules for run ${runUuid}`);
+      console.log(`[db:runs:update-win-rules] Updated win rules for run ${runUuid}, changes: ${result.changes}`);
+      
+      // Verify the update worked
+      const verify = db.prepare('SELECT win_rules_json FROM runs WHERE run_uuid = ?').get(runUuid);
+      console.log(`[db:runs:update-win-rules] Verification - win_rules_json in DB:`, verify?.win_rules_json);
+      
+      // Regenerate runview.html
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[db:runs:update-win-rules] Failed to generate runview after win rules update:', error);
+      }
+      
       return { success: true };
     } catch (error) {
-      console.error('Error updating win rules:', error);
+      console.error('[db:runs:update-win-rules] Error updating win rules:', error);
       return { success: false, error: error.message };
     }
   });

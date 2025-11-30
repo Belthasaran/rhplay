@@ -19934,6 +19934,14 @@ async function startRun() {
       // IMPORTANT: Use the original started_at timestamp from database, NEVER use Date.now()
       const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
       if (run) {
+        // Load win rules from run data
+        if (run.win_rules_json) {
+          currentWinRulesJson.value = run.win_rules_json;
+          console.log('[startRun] Loaded win rules:', currentWinRulesJson.value);
+        } else {
+          currentWinRulesJson.value = null;
+        }
+        
         // Use millisecond precision if available, otherwise convert from timestamp
         if (run.started_at_ms) {
           runStartTime.value = run.started_at_ms;
@@ -19984,10 +19992,15 @@ async function startRun() {
         runPauseSeconds.value = 0;
         isRunPaused.value = false;
         runPauseStartTime.value = null;
+        currentWinRulesJson.value = null;
       }
       
       console.log('[startRun] Run status set. isRunActive should now be true');
       console.log('[startRun] Start time:', runStartTime.value, 'Elapsed:', runElapsedSeconds.value, 'Pause:', runPauseSeconds.value);
+      console.log('[startRun] Win rules loaded:', currentWinRulesJson.value);
+      
+      // Explicitly load win rules after starting run (watcher might not trigger immediately)
+      await loadWinRules();
       
       // Initialize challenge results tracking
       // Note: startedAtMs will be set by backend when run starts (first challenge only)
@@ -21244,26 +21257,38 @@ function closeGlobalConditionsDialog() {
 
 // Win Rules helpers
 const hasWinRules = computed(() => {
-  if (!currentWinRulesJson.value) return false;
+  if (!currentWinRulesJson.value) {
+    console.log('[hasWinRules] No win rules JSON');
+    return false;
+  }
   try {
     const rules = JSON.parse(currentWinRulesJson.value);
-    return rules.challengeTime?.enabled ||
+    const hasRules = rules.challengeTime?.enabled ||
            rules.challengeTimeCap?.enabled || // Support old format
            rules.challengeTimeWithRollover?.enabled || // Support old format
            rules.runTimeLimit?.enabled ||
            rules.noGameOvers?.enabled ||
            rules.noHits?.enabled;
+    console.log('[hasWinRules] Check result:', hasRules, 'rules:', rules);
+    return hasRules;
   } catch (e) {
+    console.error('[hasWinRules] Error parsing win rules:', e);
     return false;
   }
 });
 
 // Parsed win rules
 const parsedWinRules = computed(() => {
-  if (!currentWinRulesJson.value) return null;
+  if (!currentWinRulesJson.value) {
+    console.log('[parsedWinRules] No win rules JSON');
+    return null;
+  }
   try {
-    return JSON.parse(currentWinRulesJson.value);
+    const parsed = JSON.parse(currentWinRulesJson.value);
+    console.log('[parsedWinRules] Parsed win rules:', parsed, 'challengeTime enabled:', parsed?.challengeTime?.enabled, 'runTimeLimit enabled:', parsed?.runTimeLimit?.enabled);
+    return parsed;
   } catch (e) {
+    console.error('[parsedWinRules] Error parsing win rules JSON:', e, 'JSON:', currentWinRulesJson.value);
     return null;
   }
 });
@@ -21418,36 +21443,42 @@ function handleCloseWinRulesDropdown() {
 }
 
 async function handleSaveWinRules(winRulesJson: string) {
+  console.log('[handleSaveWinRules] Called with winRulesJson:', winRulesJson);
+  console.log('[handleSaveWinRules] currentRunUuid:', currentRunUuid.value);
+  
   if (!currentRunUuid.value) {
-    console.warn('No current run UUID, cannot save win rules');
+    console.warn('[handleSaveWinRules] No current run UUID, cannot save win rules');
     return;
   }
   
   try {
     if (isElectronAvailable()) {
+      console.log('[handleSaveWinRules] Calling updateRunWinRules IPC...');
       const result = await (window as any).electronAPI.updateRunWinRules({
         runUuid: currentRunUuid.value,
         winRulesJson: winRulesJson
       });
       
-      if (result.success) {
+      console.log('[handleSaveWinRules] IPC result:', result);
+      
+      if (result && result.success) {
         currentWinRulesJson.value = winRulesJson;
-        // Show success toast
-        if (toastNotificationRef.value) {
-          toastNotificationRef.value.show('Win rules saved successfully', 'success');
-        }
+        console.log('[handleSaveWinRules] Win rules saved successfully, currentWinRulesJson.value set to:', currentWinRulesJson.value);
+        
+        // Verify the save by querying the database
+        const verifyRun = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+        console.log('[handleSaveWinRules] Verification - win_rules_json in DB after save:', verifyRun?.win_rules_json);
       } else {
-        console.error('Failed to save win rules:', result.error);
-        if (toastNotificationRef.value) {
-          toastNotificationRef.value.show('Failed to save win rules: ' + (result.error || 'Unknown error'), 'error');
+        console.error('[handleSaveWinRules] Failed to save win rules. Result:', result);
+        if (result && result.error) {
+          console.error('[handleSaveWinRules] Error details:', result.error);
         }
       }
+    } else {
+      console.warn('[handleSaveWinRules] Electron not available');
     }
   } catch (error) {
-    console.error('Error saving win rules:', error);
-    if (toastNotificationRef.value) {
-      toastNotificationRef.value.show('Error saving win rules: ' + (error instanceof Error ? error.message : String(error)), 'error');
-    }
+    console.error('[handleSaveWinRules] Error saving win rules:', error);
   }
 }
 
@@ -21455,18 +21486,22 @@ async function handleSaveWinRules(winRulesJson: string) {
 async function loadWinRules() {
   if (!currentRunUuid.value || !isElectronAvailable()) {
     currentWinRulesJson.value = null;
+    console.log('[loadWinRules] No run UUID or Electron not available');
     return;
   }
   
   try {
     const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    console.log('[loadWinRules] Run data:', run ? { runUuid: run.run_uuid, hasWinRulesJson: !!run.win_rules_json, winRulesJson: run.win_rules_json } : 'null');
     if (run && run.win_rules_json) {
       currentWinRulesJson.value = run.win_rules_json;
+      console.log('[loadWinRules] Loaded win rules:', currentWinRulesJson.value);
     } else {
       currentWinRulesJson.value = null;
+      console.log('[loadWinRules] No win rules found in run data');
     }
   } catch (error) {
-    console.error('Error loading win rules:', error);
+    console.error('[loadWinRules] Error loading win rules:', error);
     currentWinRulesJson.value = null;
   }
 }

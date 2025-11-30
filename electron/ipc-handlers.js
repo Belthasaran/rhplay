@@ -2041,9 +2041,28 @@ function registerDatabaseHandlers(dbManager) {
    * Save run plan entries
    * Channel: db:runs:save-plan
    */
-  ipcMain.handle('db:runs:save-plan', async (event, { runUuid, entries }) => {
+  ipcMain.handle('db:runs:save-plan', async (event, { runUuid, entries, winRulesJson }) => {
     try {
+      console.log(`[db:runs:save-plan] Called with runUuid: ${runUuid}, entries: ${entries?.length || 0}, winRulesJson: ${winRulesJson ? 'present' : 'null'}`);
       const db = dbManager.getConnection('clientdata');
+      
+      // If winRulesJson is provided, save it to the run
+      if (winRulesJson !== undefined && winRulesJson !== null) {
+        const nowMs = Date.now();
+        const updateStmt = db.prepare(`
+          UPDATE runs 
+          SET win_rules_json = ?,
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = ?
+          WHERE run_uuid = ?
+        `);
+        const updateResult = updateStmt.run(winRulesJson, nowMs, runUuid);
+        console.log(`[db:runs:save-plan] Updated win_rules_json for run ${runUuid}, changes: ${updateResult.changes}`);
+        
+        // Verify the update
+        const verify = db.prepare('SELECT win_rules_json FROM runs WHERE run_uuid = ?').get(runUuid);
+        console.log(`[db:runs:save-plan] Verification - win_rules_json in DB:`, verify?.win_rules_json ? 'present' : 'null');
+      }
       
       const transaction = db.transaction((runId, entryList) => {
         // Clear existing entries

@@ -4,9 +4,9 @@ Notes: Project uses enode.sh to run various standalone node scripts in parent di
 such as: enode.sh fetchpatches.js mode3 -b gameid 23415 
 Never run "node" for project scripts always run "enode.sh"
 
-
 ## File Guidelines
 
+* In electron app: Use custom dialogs such as await showAlert() for alerts not alert().
 * Don't create extra document files for minor changes, except by appending a very brief summary to a docs/CHANGELOG.md.
 * Even for major changes, also add a brief summary to docs/CHANGELOG.md
 * New document files generally go in the docs or devdocs subdirectory. not the root folder.

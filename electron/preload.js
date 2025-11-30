@@ -160,7 +160,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {Array} entries - Run plan entries
    * @returns {Promise<{success: boolean}>}
    */
-  saveRunPlan: (runUuid, entries) => ipcRenderer.invoke('db:runs:save-plan', { runUuid, entries }),
+  saveRunPlan: (runUuid, entries, winRulesJson) => ipcRenderer.invoke('db:runs:save-plan', { runUuid, entries, winRulesJson }),
   
   /**
    * Start a run (change status to active, expand plan to results)

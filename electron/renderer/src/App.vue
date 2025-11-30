@@ -18008,6 +18008,12 @@ async function openRunModal() {
   
   runModalOpen.value = true;
   
+  // Load win rules if a run exists (whether active or preparing)
+  if (currentRunUuid.value) {
+    console.log('[openRunModal] Loading win rules for run:', currentRunUuid.value);
+    await loadWinRules();
+  }
+  
   // If a run is active, scroll to show the active challenge after modal opens
   if (isRunActive.value) {
     nextTick(() => {
@@ -18046,6 +18052,9 @@ function clearRunState() {
   
   // Clear global conditions
   globalRunConditions.value = [];
+  
+  // Clear win rules
+  currentWinRulesJson.value = null;
   
   // Clear staging-related state
   stagingFolderPath.value = '';
@@ -18720,10 +18729,12 @@ async function saveRunToDatabase() {
       return;
     }
     
-    // Save run plan
+    // Save run plan (include win rules if set)
+    console.log('[saveRun] Saving run plan with win rules:', currentWinRulesJson.value);
     const planResult = await (window as any).electronAPI.saveRunPlan(
       result.runUuid,
-      plainRunEntries
+      plainRunEntries,
+      currentWinRulesJson.value || null  // Include win rules if set
     );
     
     if (!planResult.success) {

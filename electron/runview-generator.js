@@ -18,7 +18,7 @@ function getRunviewSettings(dbManager) {
   
   // Get runviewcount (default: 4, minimum: 1)
   const countRow = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('runviewcount');
-  const runviewcount = countRow ? Math.max(1, parseInt(countRow.csetting_value, 10) || 4) : 4;
+  const runviewcount = countRow ? Math.max(1, parseInt(countRow.csetting_value, 10) || 3) : 3;
   
   // Get runviewwidth (default: 500, range: 500-600)
   const widthRow = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('runviewwidth');
@@ -743,7 +743,7 @@ async function generateRunview(params) {
        color: lightred;
     }
     .current-challenge-details .game-name {
-       font-size: 18px;
+       font-size: 20px;
        color: white;
     }
     .current-challenge-details .stage-info {
@@ -751,7 +751,7 @@ async function generateRunview(params) {
        color: white;
     }
     .current-challenge-details .author {
-       font-size: 18px;
+       font-size: 20px;
        color: lightgray;
     }
     .current-challenge-details .author-line {
@@ -816,17 +816,18 @@ async function generateRunview(params) {
         <span class="stage-info">${escapeHtml(currentStageId)}</span>
         ${currentStageName ? ` <span class="stage-info">${escapeHtml(abbreviateText(currentStageName))}</span>` : ''}
         ${(currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic || currentStageMnemonics.length > 0 ? `<span class="author">(${currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? escapeHtml(String(currentStageDifficulty)) : ''}${currentStageDifficultyMnemonic ? (currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '' ? ' ' : '') + escapeHtml(currentStageDifficultyMnemonic) : ''}${currentStageMnemonics.length > 0 ? ((currentStageDifficulty !== null && currentStageDifficulty !== undefined && currentStageDifficulty !== '') || currentStageDifficultyMnemonic ? ' ' : '') + escapeHtml(currentStageMnemonics.join('')) : ''})</span>` : ''}
-      </div>
       ` : ''}
-      ${currentAuthor ? `
-      <div class="author-line">
-        <span class="author">Author: ${escapeHtml(abbreviateText(currentAuthor,20))}</span>
-      </div>
-      ` : ''}
+
       ${currentStageTags ? `
-      <div class="tags-line">
+      <span class="tags-line">
         ${escapeHtml(abbreviateStageTags(currentStageTags))}
-      </div>
+      </span>
+      ` : ''}
+
+      ${currentAuthor ? `
+      <span class="author-line">
+        <span class="author">By: ${escapeHtml(abbreviateText(currentAuthor,21))}</span>
+      </span>
       ` : ''}
     </div>
     

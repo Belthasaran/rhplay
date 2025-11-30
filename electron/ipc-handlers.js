@@ -55,7 +55,7 @@ function registerDatabaseHandlers(dbManager) {
         INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
         VALUES (?, ?, ?)
         ON CONFLICT(csetting_name) DO NOTHING
-      `).run(crypto.randomUUID(), 'runviewcount', '4');
+      `).run(crypto.randomUUID(), 'runviewcount', '3');
     }
     const runviewwidth = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('runviewwidth');
     if (!runviewwidth) {

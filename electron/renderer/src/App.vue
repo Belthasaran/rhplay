@@ -17958,6 +17958,16 @@ async function openRunModal() {
   }
   
   runModalOpen.value = true;
+  
+  // If a run is active, scroll to show the active challenge after modal opens
+  if (isRunActive.value) {
+    nextTick(() => {
+      // Use a small delay to ensure the modal is fully rendered
+      setTimeout(() => {
+        scrollToActiveChallenge();
+      }, 100);
+    });
+  }
 }
 function closeRunModal() {
   runModalOpen.value = false;

@@ -4012,8 +4012,8 @@
             <div class="setting-control" style="display: flex; gap: 8px; align-items: center;">
               <span 
                 :draggable="true"
-                @dragstart="(e: DragEvent) => handleDragStart(e, overlayWebServerUrl)"
-                @dragend="handleDragEnd"
+                @dragstart="(e: DragEvent) => handleRunviewUrlDragStart(e, overlayWebServerUrl)"
+                @dragend="handleRunviewUrlDragEnd"
                 class="runview-url-display"
                 style="flex: 1; padding: 4px 8px; background: var(--input-bg, #2a2a2a); border: 1px solid var(--border-color, #444); border-radius: 4px; cursor: grab; user-select: all;"
                 :title="overlayWebServerUrl"
@@ -21624,7 +21624,7 @@ async function copyRunviewUrl() {
 }
 
 // Handle drag start for URL
-function handleDragStart(event: DragEvent, url: string) {
+function handleRunviewUrlDragStart(event: DragEvent, url: string) {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData('text/plain', url);
@@ -21632,8 +21632,8 @@ function handleDragStart(event: DragEvent, url: string) {
   }
 }
 
-// Handle drag end
-function handleDragEnd() {
+// Handle drag end for URL
+function handleRunviewUrlDragEnd() {
   // Optional: Add visual feedback
 }
 

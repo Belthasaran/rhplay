@@ -488,6 +488,18 @@ async function generateRunview(params) {
     const allChallengesDone = results.length > 0 && results.every(r => r.status === 'success' || r.status === 'ok' || r.status === 'skipped' || r.status === 'failed');
     const isRunFinished = run.status === 'completed' || allChallengesDone;
     
+    // Calculate wins and remaining challenges when win rules are active
+    let winsCount = 0;
+    let remainingCount = 0;
+    const hasWinRules = winRules && (winRules.challengeTime?.enabled || winRules.runTimeLimit?.enabled || winRules.noGameOvers?.enabled || winRules.noHits?.enabled);
+    
+    if (hasWinRules) {
+      // Count wins: success or ok status
+      winsCount = results.filter(r => r.status === 'success' || r.status === 'ok').length;
+      // Count remaining: pending challenges (not yet completed)
+      remainingCount = results.filter(r => r.status === 'pending' || (!r.completed_at_ms && r.started_at_ms)).length;
+    }
+    
     // Check if run hasn't started yet
     const isRunNotStarted = run.status === 'preparing' || !run.started_at_ms;
     
@@ -936,7 +948,7 @@ async function generateRunview(params) {
 <body>
   <div class="runview-container">
     <div class="run-header">
-      <div class="run-name">${escapeHtml(run.run_name)} (${currentChallengeNum}/${totalChallenges})</div>
+      <div class="run-name">${escapeHtml(run.run_name)} (${currentChallengeNum}/${totalChallenges}${hasWinRules ? `, ${winsCount} Wins, ${remainingCount} Left` : ''})</div>
     </div>
     
     ${isRunNotStarted ? `

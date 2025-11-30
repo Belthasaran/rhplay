@@ -21133,6 +21133,8 @@ function getChallengeStatusIcon(index: number): string {
       return '⚠';  // Warning triangle - Completed but revealed early
     case 'skipped':
       return '✗';  // Red X - Skipped
+    case 'failed':
+      return '✗';  // Red X - Failed (when win rules are active, skipped = failed)
     case 'pending':
     default:
       return '';
@@ -21150,6 +21152,8 @@ function getChallengeStatusClass(index: number): string {
       return 'status-ok';
     case 'skipped':
       return 'status-skipped';
+    case 'failed':
+      return 'status-failed';
     case 'pending':
     default:
       return '';

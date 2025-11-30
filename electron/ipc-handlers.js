@@ -65,6 +65,31 @@ function registerDatabaseHandlers(dbManager) {
         ON CONFLICT(csetting_name) DO NOTHING
       `).run(crypto.randomUUID(), 'runviewwidth', '500');
     }
+    // Initialize default overlay web server settings
+    const overlayWebServerEnabled = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('overlayWebServerEnabled');
+    if (!overlayWebServerEnabled) {
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO NOTHING
+      `).run(crypto.randomUUID(), 'overlayWebServerEnabled', 'Off');
+    }
+    const overlayWebServerPort = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('overlayWebServerPort');
+    if (!overlayWebServerPort) {
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO NOTHING
+      `).run(crypto.randomUUID(), 'overlayWebServerPort', '2599');
+    }
+    const overlayRemoteConnectionsEnabled = db.prepare('SELECT csetting_value FROM csettings WHERE csetting_name = ?').get('overlayRemoteConnectionsEnabled');
+    if (!overlayRemoteConnectionsEnabled) {
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO NOTHING
+      `).run(crypto.randomUUID(), 'overlayRemoteConnectionsEnabled', 'Off');
+    }
   } catch (error) {
     console.warn('[runview] Failed to initialize default settings:', error);
   }

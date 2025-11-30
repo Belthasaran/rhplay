@@ -81,6 +81,8 @@
     "@nostr/gadgets": "npm:@jsr/nostr__gadgets@^0.0.39",
     "@nostrify/nostrify": "^0.47.1",
     "@poeticode/js-lzma": "^1.0.0",
+    "@twurple/api": "^8.0.2",
+    "@twurple/auth": "^8.0.2",
     "7zip-min": "^2.1.0",
     "adm-zip": "^0.5.10",
     "ardrive-cli": "^3.0.3",

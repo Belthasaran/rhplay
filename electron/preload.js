@@ -468,7 +468,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * Shell operations for opening folders/files
    */
   shell: {
-    openPath: (path) => ipcRenderer.invoke('shell:open-path', path)
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  openPath: (path) => ipcRenderer.invoke('shell:open-path', path)
   },
   
   /**

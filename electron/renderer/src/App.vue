@@ -4008,15 +4008,36 @@
 
         <div v-if="settings.overlayWebServerEnabled === 'On'" class="settings-section">
           <div class="setting-row">
-            <label class="setting-label">Open Runview</label>
-            <div class="setting-control">
-              <a :href="overlayWebServerUrl" target="_blank" class="btn-link" style="text-decoration: underline;">
-                Open runview.html in browser
-              </a>
+            <label class="setting-label">Runview URL</label>
+            <div class="setting-control" style="display: flex; gap: 8px; align-items: center;">
+              <span 
+                :draggable="true"
+                @dragstart="(e: DragEvent) => handleDragStart(e, overlayWebServerUrl)"
+                @dragend="handleDragEnd"
+                class="runview-url-display"
+                style="flex: 1; padding: 4px 8px; background: var(--input-bg, #2a2a2a); border: 1px solid var(--border-color, #444); border-radius: 4px; cursor: grab; user-select: all;"
+                :title="overlayWebServerUrl"
+              >
+                {{ overlayWebServerUrl }}
+              </span>
+              <button 
+                @click="openRunviewInBrowser"
+                class="btn"
+                style="white-space: nowrap;"
+              >
+                Open in Browser
+              </button>
+              <button 
+                @click="copyRunviewUrl"
+                class="btn"
+                style="white-space: nowrap;"
+              >
+                Copy Link
+              </button>
             </div>
           </div>
           <div class="setting-caption">
-            Click to open the runview.html file from the local web server in your default browser.
+            Drag the URL or use buttons to open in your default browser or copy to clipboard.
           </div>
         </div>
       </section>
@@ -21571,6 +21592,50 @@ const overlayWebServerUrl = computed(() => {
   const port = settings.overlayWebServerPort || 2599;
   return `http://localhost:${port}/runview.html`;
 });
+
+// Open runview in default browser
+async function openRunviewInBrowser() {
+  if (!overlayWebServerUrl.value || overlayWebServerUrl.value === '#') {
+    return;
+  }
+  try {
+    if (isElectronAvailable()) {
+      await (window as any).electronAPI.shell.openExternal(overlayWebServerUrl.value);
+    }
+  } catch (error) {
+    console.error('Error opening runview in browser:', error);
+  }
+}
+
+// Copy runview URL to clipboard
+async function copyRunviewUrl() {
+  if (!overlayWebServerUrl.value || overlayWebServerUrl.value === '#') {
+    return;
+  }
+  try {
+    if (isElectronAvailable()) {
+      await (window as any).electronAPI.copyToClipboard(overlayWebServerUrl.value);
+      // Show brief feedback (you might want to add a toast notification here)
+      console.log('URL copied to clipboard:', overlayWebServerUrl.value);
+    }
+  } catch (error) {
+    console.error('Error copying URL to clipboard:', error);
+  }
+}
+
+// Handle drag start for URL
+function handleDragStart(event: DragEvent, url: string) {
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData('text/plain', url);
+    event.dataTransfer.setData('text/uri-list', url);
+  }
+}
+
+// Handle drag end
+function handleDragEnd() {
+  // Optional: Add visual feedback
+}
 
 // Rollover time remaining (for current challenge)
 // Depend on runElapsedSeconds to trigger recalculation every second

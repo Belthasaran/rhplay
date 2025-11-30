@@ -754,6 +754,16 @@ function setupProvisionerIpc() {
         return { success: true };
     });
 
+    ipcMain.handle('shell:open-external', async (_event, url) => {
+      try {
+        await shell.openExternal(url);
+        return { success: true };
+      } catch (error) {
+        console.error('Error opening external URL:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle('shell:open-path', async (_event, targetPath) => {
         if (!targetPath) {
             return { success: false, error: 'No path specified.' };

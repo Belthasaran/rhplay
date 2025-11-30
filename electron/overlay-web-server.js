@@ -174,21 +174,24 @@ function getStatus() {
 if (process.parentPort) {
   // Set up message handler FIRST
   process.parentPort.on('message', async (message) => {
+    // In Electron UtilityProcess, messages are wrapped in a 'data' property
+    const actualMessage = message.data || message;
+    
     // Log ALL messages received for debugging
     process.parentPort.postMessage({ 
       type: 'log', 
       message: `Utility process received message: ${JSON.stringify(message)}` 
     });
     
-    if (!message || typeof message !== 'object' || !message.type) {
+    if (!actualMessage || typeof actualMessage !== 'object' || !actualMessage.type) {
       process.parentPort.postMessage({ 
         type: 'log', 
-        message: 'Utility process: Invalid message format' 
+        message: `Utility process: Invalid message format. actualMessage: ${JSON.stringify(actualMessage)}` 
       });
       return;
     }
     
-    const { type, options } = message;
+    const { type, options } = actualMessage;
     
     try {
       switch (type) {

@@ -2064,6 +2064,56 @@
           
           <div class="rating-component">
             <div class="rating-header">
+              <label class="rating-label">Player Fairness <span class="rating-description-inline">(Star rating for progression barriers - whether they are highly related to player skill level, and not artificial imposed barriers unrelated to player skill at SMW. A rating of 5 indicates all challenges are reasonable, and a player at the general skill level the game is intended for would spend 99% of their gameplay time tackling challenges of skill, and not being impeded by obstacles or sequence of challenges that a human of any skill level would usually fail at least once - e.g., hazards or trolls which cannot be anticipated, or very long runs of obstacles between checkpoints)</span></label>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'fairness-' + (n-1)"
+                  @click="updateRating('MyFairnessRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyFairnessRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyFairnessRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyFairnessComment"
+                @input="updateComment('MyFairnessComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Challenge Quality <span class="rating-description-inline">(Whether players actually need valid skill to complete this, or the game has mostly challenges where a player at the defined skill level simply wins with enough trial and error. A score of 0 suggests the hack contains many trial and error challenges that any player with enough time could clear. A score of 5 indicates that only by developing meaningful skills at SMW gameplay, native SMW mechanics, or understanding of SMW, can the player overcome these challenges. High challenge quality means there is high transferability of skills required to beat the hack to SMW in general)</span></label>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'challenge-' + (n-1)"
+                  @click="updateRating('MyChallengeQualityRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyChallengeQualityRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyChallengeQualityRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyChallengeQualityComment"
+                @input="updateComment('MyChallengeQualityComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
               <label class="rating-label">Originality / Creativity <span class="rating-description-inline">(The game is significantly unique and interesting)</span></label>
             </div>
             <div class="rating-row">
@@ -23878,6 +23928,8 @@ async function saveAnnotation() {
       MyImportanceRating: ratingData.MyImportanceRating ?? null,
       MyTechnicalQualityRating: ratingData.MyTechnicalQualityRating ?? null,
       MyGameplayDesignRating: ratingData.MyGameplayDesignRating ?? null,
+      MyFairnessRating: ratingData.MyFairnessRating ?? null,
+      MyChallengeQualityRating: ratingData.MyChallengeQualityRating ?? null,
       MyOriginalityRating: ratingData.MyOriginalityRating ?? null,
       MyVisualAestheticsRating: ratingData.MyVisualAestheticsRating ?? null,
       MyStoryRating: ratingData.MyStoryRating ?? null,
@@ -23963,6 +24015,8 @@ async function saveAnnotationDirect(item: Item) {
       MyImportanceRating: item.MyImportanceRating,
       MyTechnicalQualityRating: item.MyTechnicalQualityRating,
       MyGameplayDesignRating: item.MyGameplayDesignRating,
+      MyFairnessRating: (item as any).MyFairnessRating,
+      MyChallengeQualityRating: (item as any).MyChallengeQualityRating,
       MyOriginalityRating: item.MyOriginalityRating,
       MyVisualAestheticsRating: item.MyVisualAestheticsRating,
       MyStoryRating: item.MyStoryRating,
@@ -23980,6 +24034,8 @@ async function saveAnnotationDirect(item: Item) {
       myImportanceComment: (item as any).MyImportanceComment || null,
       myTechnicalQualityComment: (item as any).MyTechnicalQualityComment || null,
       myGameplayDesignComment: (item as any).MyGameplayDesignComment || null,
+      myFairnessComment: (item as any).MyFairnessComment || null,
+      myChallengeQualityComment: (item as any).MyChallengeQualityComment || null,
       myOriginalityComment: (item as any).MyOriginalityComment || null,
       myVisualAestheticsComment: (item as any).MyVisualAestheticsComment || null,
       myStoryComment: (item as any).MyStoryComment || null,
@@ -23992,6 +24048,8 @@ async function saveAnnotationDirect(item: Item) {
       myImportanceRating: item.MyImportanceRating ?? null,
       myTechnicalQualityRating: item.MyTechnicalQualityRating ?? null,
       myGameplayDesignRating: item.MyGameplayDesignRating ?? null,
+      myFairnessRating: (item as any).MyFairnessRating ?? null,
+      myChallengeQualityRating: (item as any).MyChallengeQualityRating ?? null,
       myOriginalityRating: item.MyOriginalityRating ?? null,
       myVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
       myStoryRating: item.MyStoryRating ?? null,
@@ -24400,6 +24458,8 @@ function openRatingSheetModal() {
     MyImportanceRating: item.MyImportanceRating ?? null,
     MyTechnicalQualityRating: item.MyTechnicalQualityRating ?? null,
     MyGameplayDesignRating: item.MyGameplayDesignRating ?? null,
+    MyFairnessRating: item.MyFairnessRating ?? null,
+    MyChallengeQualityRating: item.MyChallengeQualityRating ?? null,
     MyOriginalityRating: item.MyOriginalityRating ?? null,
     MyVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
     MyStoryRating: item.MyStoryRating ?? null,
@@ -24412,6 +24472,8 @@ function openRatingSheetModal() {
     MyImportanceComment: item.MyImportanceComment || '',
     MyTechnicalQualityComment: item.MyTechnicalQualityComment || '',
     MyGameplayDesignComment: item.MyGameplayDesignComment || '',
+    MyFairnessComment: item.MyFairnessComment || '',
+    MyChallengeQualityComment: item.MyChallengeQualityComment || '',
     MyOriginalityComment: item.MyOriginalityComment || '',
     MyVisualAestheticsComment: item.MyVisualAestheticsComment || '',
     MyStoryComment: item.MyStoryComment || '',
@@ -24439,6 +24501,8 @@ const hasAtLeastOneRating = computed(() => {
     (data.MyImportanceRating !== null && data.MyImportanceRating !== undefined) ||
     (data.MyTechnicalQualityRating !== null && data.MyTechnicalQualityRating !== undefined) ||
     (data.MyGameplayDesignRating !== null && data.MyGameplayDesignRating !== undefined) ||
+    (data.MyFairnessRating !== null && data.MyFairnessRating !== undefined) ||
+    (data.MyChallengeQualityRating !== null && data.MyChallengeQualityRating !== undefined) ||
     (data.MyOriginalityRating !== null && data.MyOriginalityRating !== undefined) ||
     (data.MyVisualAestheticsRating !== null && data.MyVisualAestheticsRating !== undefined) ||
     (data.MyStoryRating !== null && data.MyStoryRating !== undefined) ||
@@ -24492,6 +24556,8 @@ async function publishRatingsToNostr() {
         user_importance_rating: ratingSheetData.value.MyImportanceRating ?? null,
         user_technical_quality_rating: ratingSheetData.value.MyTechnicalQualityRating ?? null,
         user_gameplay_design_rating: ratingSheetData.value.MyGameplayDesignRating ?? null,
+        user_fairness_rating: ratingSheetData.value.MyFairnessRating ?? null,
+        user_challenge_quality_rating: ratingSheetData.value.MyChallengeQualityRating ?? null,
         user_originality_rating: ratingSheetData.value.MyOriginalityRating ?? null,
         user_visual_aesthetics_rating: ratingSheetData.value.MyVisualAestheticsRating ?? null,
         user_story_rating: ratingSheetData.value.MyStoryRating ?? null,
@@ -24506,6 +24572,8 @@ async function publishRatingsToNostr() {
         user_importance_comment: ratingSheetData.value.MyImportanceComment || null,
         user_technical_quality_comment: ratingSheetData.value.MyTechnicalQualityComment || null,
         user_gameplay_design_comment: ratingSheetData.value.MyGameplayDesignComment || null,
+        user_fairness_comment: ratingSheetData.value.MyFairnessComment || null,
+        user_challenge_quality_comment: ratingSheetData.value.MyChallengeQualityComment || null,
         user_originality_comment: ratingSheetData.value.MyOriginalityComment || null,
         user_visual_aesthetics_comment: ratingSheetData.value.MyVisualAestheticsComment || null,
         user_story_comment: ratingSheetData.value.MyStoryComment || null,

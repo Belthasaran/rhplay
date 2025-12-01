@@ -12671,14 +12671,15 @@ function registerDatabaseHandlers(dbManager) {
                 tokenWasValid = false;
               }
             } catch (validateErr) {
-              // Validation failed - token might be expired, that's okay
+                // Validation failed - token might be expired, that's okay
               tokenWasValid = false;
             }
+            }
           }
-        } catch (decryptErr) {
-          // Could not decrypt token - might be corrupted, that's okay
-          console.warn('[revoke_twitch_integration] Could not decrypt token:', decryptErr.message);
-        }
+          } catch (decryptErr) {
+            // Could not decrypt token - might be corrupted, that's okay
+            console.warn('[revoke_twitch_integration] Could not decrypt token:', decryptErr.message);
+          }
         }
       }
       

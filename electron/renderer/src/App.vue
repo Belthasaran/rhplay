@@ -20740,27 +20740,33 @@ async function nextChallenge() {
     
     console.log(`Challenge ${idx + 1} completed (${finalStatus})`);
     
-      // Refresh challenge results to get updated rollover values from database
-      await refreshChallengeResults();
-      
-      // Handle prediction lifecycle (non-blocking, uses toast notifications)
-      handlePredictionOnChallengeComplete(idx, finalStatus).catch(error => {
-        console.error('[nextChallenge] Prediction lifecycle error:', error);
-        // Error already handled in handlePredictionOnChallengeComplete with toast
-      });
+    // Refresh challenge results to get updated rollover values from database
+    await refreshChallengeResults();
+    
+    // Clean up stale prediction operations before handling lifecycle
+    cleanupStalePredictionOperations(idx);
+    
+    // Handle prediction lifecycle (non-blocking, uses toast notifications)
+    handlePredictionOnChallengeComplete(idx, finalStatus).catch(error => {
+      console.error('[nextChallenge] Prediction lifecycle error:', error);
+      // Error already handled in handlePredictionOnChallengeComplete with toast
+    });
     
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
-        
-        // Handle prediction lifecycle when challenge becomes active (for same_item mode)
-        if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
-          // Create prediction for the newly active challenge
-          createPredictionForNextChallenge(currentChallengeIndex.value).catch(error => {
-            console.error('[nextChallenge] Error creating prediction for new challenge:', error);
-            // Error already handled in createPredictionForNextChallenge with toast
-          });
-        }
+      
+      // Clean up stale operations again after moving to next challenge
+      cleanupStalePredictionOperations();
+      
+      // Handle prediction lifecycle when challenge becomes active (for same_item mode)
+      if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
+        // Create prediction for the newly active challenge
+        createPredictionForNextChallenge(currentChallengeIndex.value).catch(error => {
+          console.error('[nextChallenge] Error creating prediction for new challenge:', error);
+          // Error already handled in createPredictionForNextChallenge with toast
+        });
+      }
       // Start timing next challenge
       // Backend sets started_at_ms in database, but we also set it locally for immediate timer accuracy
       if (idx + 1 < challengeResults.value.length) {
@@ -20851,6 +20857,9 @@ async function skipChallenge() {
     // Refresh challenge results to get updated rollover values from database
     await refreshChallengeResults();
     
+    // Clean up stale prediction operations before handling lifecycle
+    cleanupStalePredictionOperations(idx);
+    
     // Handle prediction lifecycle (non-blocking, uses toast notifications)
     handlePredictionOnChallengeComplete(idx, finalStatus).catch(error => {
       console.error('[skipChallenge] Prediction lifecycle error:', error);
@@ -20858,6 +20867,21 @@ async function skipChallenge() {
     });
     
     // Move to next challenge
+    if (idx < runEntries.length - 1) {
+      currentChallengeIndex.value++;
+      
+      // Clean up stale operations again after moving to next challenge
+      cleanupStalePredictionOperations();
+      
+      // Handle prediction lifecycle when challenge becomes active (for same_item mode)
+      if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
+        // Create prediction for the newly active challenge
+        createPredictionForNextChallenge(currentChallengeIndex.value).catch(error => {
+          console.error('[skipChallenge] Error creating prediction for new challenge:', error);
+          // Error already handled in createPredictionForNextChallenge with toast
+        });
+      }
+    }
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
       // Start timing next challenge
@@ -22450,6 +22474,221 @@ function queuePredictionRetry(action: string, params: any, maxRetries: number = 
   }
 }
 
+// Clean up stale operations from retry queue
+// Called when user actions make certain operations no longer relevant
+function cleanupStalePredictionOperations(completedChallengeIndex?: number) {
+  if (predictionRetryQueue.value.length === 0) {
+    return;
+  }
+  
+  const initialLength = predictionRetryQueue.value.length;
+  
+  // Remove operations that are no longer valid
+  predictionRetryQueue.value = predictionRetryQueue.value.filter(item => {
+    // Remove create operations for challenges that have been completed
+    if (item.action === 'create' && completedChallengeIndex !== undefined) {
+      const params = item.params;
+      const targetSequenceNumber = params.challengeSequenceNumber;
+      
+      // If target sequence number is less than or equal to completed challenge, remove it
+      // (completedChallengeIndex is 0-indexed, targetSequenceNumber is 1-indexed)
+      if (targetSequenceNumber !== null && targetSequenceNumber <= completedChallengeIndex + 1) {
+        console.log(`[cleanupStalePredictionOperations] Removing create operation for completed challenge ${targetSequenceNumber}`);
+        return false;
+      }
+      
+      // For same_item mode, remove if target is no longer the next challenge
+      if (predictionsOperationalMode.value === 'same_item' && targetSequenceNumber !== null) {
+        const expectedSequenceNumber = currentChallengeIndex.value + 1;
+        if (targetSequenceNumber !== expectedSequenceNumber) {
+          console.log(`[cleanupStalePredictionOperations] Removing create operation for outdated challenge ${targetSequenceNumber} (expected ${expectedSequenceNumber})`);
+          return false;
+        }
+      }
+      
+      // For next_item mode, remove if target is no longer currentChallengeIndex + 2
+      if (predictionsOperationalMode.value === 'next_item' && targetSequenceNumber !== null) {
+        const expectedSequenceNumber = currentChallengeIndex.value + 2;
+        if (targetSequenceNumber !== expectedSequenceNumber) {
+          console.log(`[cleanupStalePredictionOperations] Removing create operation for outdated challenge ${targetSequenceNumber} (expected ${expectedSequenceNumber})`);
+          return false;
+        }
+      }
+    }
+    
+    // Remove operations if predictions are disabled
+    if (!predictionsEnabled.value) {
+      console.log(`[cleanupStalePredictionOperations] Removing operation ${item.action} - predictions disabled`);
+      return false;
+    }
+    
+    // Remove operations if run is no longer active
+    if (currentRunStatus.value !== 'active') {
+      console.log(`[cleanupStalePredictionOperations] Removing operation ${item.action} - run not active`);
+      return false;
+    }
+    
+    return true;
+  });
+  
+  const removedCount = initialLength - predictionRetryQueue.value.length;
+  if (removedCount > 0) {
+    console.log(`[cleanupStalePredictionOperations] Removed ${removedCount} stale operation(s) from queue`);
+  }
+  
+  // Stop retry timer if queue is now empty
+  if (predictionRetryQueue.value.length === 0 && predictionRetryTimer.value) {
+    predictionRetryTimer.value = null;
+  }
+}
+
+// Validate if a queued operation is still relevant/valid
+async function validateRetryOperation(item: {action: string, params: any}): Promise<{valid: boolean, reason?: string}> {
+  // Check if predictions are still enabled
+  if (!predictionsEnabled.value || !isElectronAvailable() || !currentRunUuid.value) {
+    return { valid: false, reason: 'Predictions disabled or run not active' };
+  }
+  
+  // Check if run is still active
+  if (currentRunStatus.value !== 'active') {
+    return { valid: false, reason: 'Run no longer active' };
+  }
+  
+  switch (item.action) {
+    case 'create': {
+      // Validate create operation
+      const params = item.params;
+      const targetSequenceNumber = params.challengeSequenceNumber;
+      
+      // For whole_challenge, only valid if sequenceNumber is null and we don't have an active prediction
+      if (targetSequenceNumber === null) {
+        if (predictionsOperationalMode.value !== 'whole_challenge') {
+          return { valid: false, reason: 'Whole challenge prediction not applicable' };
+        }
+        // Check if we already have an active prediction
+        if (activePredictionUuid.value) {
+          const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+            predictionUuid: activePredictionUuid.value
+          });
+          if (statusResult.success && (statusResult.twitchStatus === 'ACTIVE' || statusResult.twitchStatus === 'LOCKED')) {
+            return { valid: false, reason: 'Whole challenge prediction already exists' };
+          }
+        }
+        return { valid: true };
+      }
+      
+      // For individual item predictions, validate sequence number is still correct
+      if (predictionsOperationalMode.value === 'same_item') {
+        // Should be for currentChallengeIndex + 1 (next challenge)
+        const expectedSequenceNumber = currentChallengeIndex.value + 1;
+        if (targetSequenceNumber !== expectedSequenceNumber) {
+          return { valid: false, reason: `Challenge ${targetSequenceNumber} no longer next (now ${expectedSequenceNumber})` };
+        }
+      } else if (predictionsOperationalMode.value === 'next_item') {
+        // Should be for currentChallengeIndex + 2 (challenge after next)
+        const expectedSequenceNumber = currentChallengeIndex.value + 2;
+        if (targetSequenceNumber !== expectedSequenceNumber) {
+          return { valid: false, reason: `Challenge ${targetSequenceNumber} no longer next+1 (now ${expectedSequenceNumber})` };
+        }
+      } else {
+        return { valid: false, reason: 'Invalid operational mode for individual item prediction' };
+      }
+      
+      // Check if challenge still exists and hasn't been completed
+      if (targetSequenceNumber > runEntries.value.length) {
+        return { valid: false, reason: 'Challenge sequence number out of range' };
+      }
+      
+      const challengeIndex = targetSequenceNumber - 1; // Convert to 0-indexed
+      if (challengeIndex < challengeResults.value.length) {
+        const challengeResult = challengeResults.value[challengeIndex];
+        // If challenge is already completed, don't create prediction for it
+        if (challengeResult.status !== 'pending') {
+          return { valid: false, reason: `Challenge ${targetSequenceNumber} already completed` };
+        }
+      }
+      
+      // Check if a prediction already exists for this challenge
+      const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+      if (checkResult.success && checkResult.hasActivePredictions) {
+        const activePreds = checkResult.activePredictions || [];
+        const existingPred = activePreds.find((p: any) => 
+          p.run_uuid === currentRunUuid.value && 
+          p.challenge_sequence_number === targetSequenceNumber &&
+          p.isManaged
+        );
+        if (existingPred) {
+          return { valid: false, reason: `Prediction already exists for challenge ${targetSequenceNumber}` };
+        }
+      }
+      
+      return { valid: true };
+    }
+    
+    case 'lock':
+    case 'resolve': {
+      // Validate lock/resolve operation
+      const params = item.params;
+      if (!params.predictionUuid) {
+        return { valid: false, reason: 'Missing prediction UUID' };
+      }
+      
+      // Check if prediction still exists
+      const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+        predictionUuid: params.predictionUuid
+      });
+      
+      if (!statusResult.success) {
+        return { valid: false, reason: 'Prediction no longer exists' };
+      }
+      
+      // Check if prediction is still in a state that can be locked/resolved
+      const twitchStatus = statusResult.twitchStatus;
+      if (twitchStatus === 'RESOLVED' || twitchStatus === 'CANCELED') {
+        return { valid: false, reason: `Prediction already ${twitchStatus.toLowerCase()}` };
+      }
+      
+      // For resolve operations, check if the challenge is still relevant
+      if (item.action === 'resolve' && statusResult.prediction) {
+        const prediction = statusResult.prediction;
+        // If it's an individual item prediction, check if the challenge is still the current one
+        // (This is a simplified check - in practice, we'd need to check the challenge sequence number)
+        // For now, if prediction exists and is active, we'll allow the resolve
+      }
+      
+      return { valid: true };
+    }
+    
+    case 'cancel': {
+      // Validate cancel operation
+      const params = item.params;
+      if (!params.predictionUuid) {
+        return { valid: false, reason: 'Missing prediction UUID' };
+      }
+      
+      // Check if prediction still exists
+      const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+        predictionUuid: params.predictionUuid
+      });
+      
+      if (!statusResult.success) {
+        return { valid: false, reason: 'Prediction no longer exists' };
+      }
+      
+      // Can cancel if prediction is ACTIVE or LOCKED
+      const twitchStatus = statusResult.twitchStatus;
+      if (twitchStatus === 'RESOLVED' || twitchStatus === 'CANCELED') {
+        return { valid: false, reason: `Prediction already ${twitchStatus.toLowerCase()}` };
+      }
+      
+      return { valid: true };
+    }
+    
+    default:
+      return { valid: false, reason: 'Unknown action type' };
+  }
+}
+
 // Process retry queue
 async function processPredictionRetryQueue() {
   if (predictionRetryQueue.value.length === 0) {
@@ -22467,6 +22706,22 @@ async function processPredictionRetryQueue() {
       'error',
       5000
     );
+    
+    // Process next item if any
+    if (predictionRetryQueue.value.length > 0) {
+      setTimeout(() => processPredictionRetryQueue(), 5000);
+    } else {
+      predictionRetryTimer.value = null;
+    }
+    return;
+  }
+  
+  // Validate operation is still relevant before retrying
+  const validation = await validateRetryOperation(item);
+  if (!validation.valid) {
+    // Operation no longer valid - remove from queue silently
+    console.log(`[processPredictionRetryQueue] Removing invalid operation: ${item.action}, reason: ${validation.reason}`);
+    predictionRetryQueue.value.shift();
     
     // Process next item if any
     if (predictionRetryQueue.value.length > 0) {
@@ -22507,6 +22762,18 @@ async function processPredictionRetryQueue() {
     if (result.success) {
       // Success - remove from queue
       predictionRetryQueue.value.shift();
+      
+      // Update activePredictionUuid for create operations
+      if (item.action === 'create' && result.predictionUuid) {
+        activePredictionUuid.value = result.predictionUuid;
+      }
+      
+      // Clear activePredictionUuid for resolve/cancel operations
+      if ((item.action === 'resolve' || item.action === 'cancel') && 
+          item.params.predictionUuid === activePredictionUuid.value) {
+        activePredictionUuid.value = null;
+      }
+      
       showToastNotification(
         `Prediction ${item.action} completed`,
         'success',

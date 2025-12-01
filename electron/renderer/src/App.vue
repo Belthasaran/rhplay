@@ -21366,6 +21366,7 @@ async function completeRun() {
                 }
               } else {
                 // Fallback to lock if can't determine outcome
+                console.log(`Fallback to lock if cant determine outcome`)
                 const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
                   predictionUuid: activePredictionUuid.value
                 });
@@ -21402,6 +21403,7 @@ async function completeRun() {
                 
               // Try to determine outcome based on prediction type
               // This is a fallback - ideally the prediction should have been resolved when the challenge completed
+              console.log(`Try to determine outcome based on prediction type - this is a fallback`)
               const predictionSubtype = statusResult.prediction?.subtype;
               
               if (predictionSubtype === 'yes_no') {
@@ -21415,6 +21417,7 @@ async function completeRun() {
               
               // If we can't determine, use first outcome as fallback
               if (!winningOutcomeId) {
+                console.log(`For some reason we just pick the first outcome as fallback`)
                 winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
               }
               
@@ -23119,6 +23122,7 @@ function determineYesNoOutcome(outcomes: Array<{id: string, title: string}>, cha
   // Find Yes outcome (case-insensitive match for "Yes", "Success", "Win", etc.)
   const yesOutcome = outcomes.find(outcome => {
     const titleLower = outcome.title.toLowerCase();
+
     return titleLower.includes('yes') || titleLower.includes('success') || titleLower.includes('win');
   });
   
@@ -23129,15 +23133,19 @@ function determineYesNoOutcome(outcomes: Array<{id: string, title: string}>, cha
   });
   
   if (isWin && yesOutcome) {
+    console.log(`[determineYesNoOutcome] result yes, challengeStatus=${challengeStatus} id=${yesOutcome.id} title=${yesOutcome.title}`)
     return yesOutcome.id;
   } else if (!isWin && noOutcome) {
+    console.log(`determineYesNoOutcome result No challengeStatus=${challengeStatus} id=${noOutcome.id} title=${noOutcome.title}`)
     return noOutcome.id;
   }
   
   // Fallback: use first outcome for win, second for loss
   if (isWin && outcomes.length > 0) {
+    console.log(`Falling back to first outcome for win - Falling back to an outcome based on its order in the list is incorrect behavior and should be fixed`)
     return outcomes[0].id;
   } else if (!isWin && outcomes.length > 1) {
+    console.log(`Falling back to second outcome for win - Falling back to an outcome based on its order in the list is incorrect behavior and should be fixed`)
     return outcomes[1].id;
   }
   
@@ -23148,6 +23156,7 @@ function determineYesNoOutcome(outcomes: Array<{id: string, title: string}>, cha
  * Determine winning outcome for time range prediction
  */
 function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>, durationMinutes: number): string | null {
+  console.log(`[determineTimeRangeOutcome] durationMinutes=${durationMinutes}: `)
   // Parse time ranges from outcome titles
   // Format examples: "0 to 5", "6 to 10", "11 to 15", ">20"
   for (const outcome of outcomes) {
@@ -23169,6 +23178,7 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
       const min = parseInt(rangeMatch[1], 10);
       const max = parseInt(rangeMatch[2], 10);
       if (durationMinutes >= min && durationMinutes <= max) {
+        console.log(`[determineTimeRangeOutcome] return rangeMatch id=${outcome.id} title=${outcome.title}`)
         return outcome.id;
       }
       continue;
@@ -23178,7 +23188,8 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
     const exactMatch = title.match(/^(\d+)\s*(?:minutes?)?$/i);
     if (exactMatch) {
       const value = parseInt(exactMatch[1], 10);
-      if (Math.abs(durationMinutes - value) < 0.5) { // Within 0.5 minutes
+      if (Math.abs(durationMinutes - value) < 0.5) { // Within 0.5 minutesA
+        console.log(`[determineTimeRangeOutcome] return exactMatch id=${outcome.id} title=${outcome.title}`)
         return outcome.id;
       }
     }
@@ -23186,6 +23197,7 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
   
   // If no match found, use the last outcome (usually the ">N" or failure case)
   if (outcomes.length > 0) {
+    console.log(`[determineTimeRangeOutcome] return last outcome`)
     return outcomes[outcomes.length - 1].id;
   }
   
@@ -23196,6 +23208,7 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
  * Determine winning outcome for whole challenge prediction
  */
 function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: string}>, wins: number, total: number): string | null {
+  console.log(`[determineWholeChallengeOutcome] wins=${Wins} total=${total}`)
   // Parse outcome titles to find matching range
   for (const outcome of outcomes) {
     const title = outcome.title.trim();
@@ -23205,6 +23218,7 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
     if (lessThanMatch) {
       const threshold = parseInt(lessThanMatch[1], 10);
       if (wins < threshold) {
+        console.log(`[determineWholeChallengeOutcome]: lessThanMatch ${wins} < ${threshold} : id=${outcome.id} title=${outcome.title}`)
         return outcome.id;
       }
       continue;
@@ -23215,6 +23229,7 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
     if (moreThanMatch) {
       const threshold = parseInt(moreThanMatch[1], 10);
       if (wins >= threshold) {
+        console.log(`[determineWholeChallengeOutcome]: moreThanMatch ${wins} >= ${threshold} : id=${outcome.id} title=${outcome.title}`)
         return outcome.id;
       }
       continue;
@@ -23226,6 +23241,7 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
       const min = parseInt(rangeMatch[1], 10);
       const max = parseInt(rangeMatch[2], 10);
       if (wins >= min && wins <= max) {
+        console.log(`[determineWholeChallengeOutcome]: ${wins} >= ${min} && ${wins} <= ${max} :: id=${outcome.id} title=${outcome.title}`)
         return outcome.id;
       }
       continue;
@@ -23236,6 +23252,7 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
     if (exactMatch) {
       const value = parseInt(exactMatch[1], 10);
       if (wins === value) {
+        console.log(`[determineWholeChallengeOutcome]: exactMatch ${wins} == ${value} :: id=${outcome.id} title=${outcome.title}`)
         return outcome.id;
       }
     }
@@ -23328,7 +23345,11 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     if (isAlreadyLocked) {
       // If we can't determine outcome, use first outcome as fallback
       if (!winningOutcomeId) {
+        console.log(`!winningOutcomeId`)
         winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
+        if (winningOutcomeId) {
+            console.log(`!winningOutcomeId then id=${outcomes[0].id} title=${outcomes[0].title}`)
+        }
       }
       
       if (winningOutcomeId) {
@@ -23358,6 +23379,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     
     // Prediction is not locked yet
     if (!winningOutcomeId) {
+      console.log(`!winningOutcomeId`)
       // Can't determine outcome - lock it first
       const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
         predictionUuid: prediction.prediction_uuid

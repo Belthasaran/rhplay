@@ -12563,6 +12563,7 @@ function registerDatabaseHandlers(dbManager) {
    * Channel: revoke_twitch_integration
    */
   ipcMain.handle('revoke_twitch_integration', async (event, params = {}) => {
+    const forceDisconnect = params.force === true;
     try {
       // Get current profile using OnlineProfileManager
       const keyguardKey = getKeyguardKey(event);
@@ -12575,7 +12576,121 @@ function registerDatabaseHandlers(dbManager) {
       
       const db = dbManager.getConnection('clientdata');
       
-      // TODO: Call Twitch revoke endpoint if we have a token
+      // Get integration to check if we have a token to revoke
+      const integration = db.prepare(`
+        SELECT encrypted_access_token, is_active
+        FROM twitch_integration
+        WHERE profile_uuid = ? AND is_active = 1
+      `).get(currentProfileId);
+      
+      let tokenWasValid = false;
+      let revokeError = null;
+      
+      // Attempt to revoke token if we have one
+      if (integration && integration.encrypted_access_token) {
+        try {
+          // Decrypt token
+          const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
+          
+          if (accessToken) {
+            // Validate token first to check if it's still valid
+            const https = require('https');
+            const validateUrl = 'https://id.twitch.tv/oauth2/validate';
+            
+            try {
+              const validateResponse = await new Promise((resolve, reject) => {
+                const req = https.request(validateUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${accessToken.trim()}`
+                  }
+                }, (res) => {
+                  let data = '';
+                  res.on('data', (chunk) => { data += chunk; });
+                  res.on('end', () => {
+                    resolve({ statusCode: res.statusCode, data: data });
+                  });
+                });
+                req.on('error', reject);
+                req.setTimeout(10000, () => {
+                  req.destroy();
+                  reject(new Error('Request timeout'));
+                });
+                req.end();
+              });
+              
+              if (validateResponse.statusCode === 200) {
+                tokenWasValid = true;
+                
+                // Token is valid, attempt revocation
+                const clientId = getTwitchClientId();
+                if (!clientId) {
+                  revokeError = 'Twitch client ID not configured';
+                } else {
+                  const revokeUrl = 'https://id.twitch.tv/oauth2/revoke';
+                  const revokeParams = new URLSearchParams({
+                    client_id: clientId,
+                    token: accessToken.trim()
+                  });
+                  
+                  try {
+                    const revokeResponse = await new Promise((resolve, reject) => {
+                      const req = https.request(revokeUrl, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/x-www-form-urlencoded',
+                          'Content-Length': revokeParams.toString().length
+                        }
+                      }, (res) => {
+                        let data = '';
+                        res.on('data', (chunk) => { data += chunk; });
+                        res.on('end', () => {
+                          resolve({ statusCode: res.statusCode, data: data });
+                        });
+                      });
+                      req.on('error', reject);
+                      req.setTimeout(10000, () => {
+                        req.destroy();
+                        reject(new Error('Request timeout'));
+                      });
+                      req.write(revokeParams.toString());
+                      req.end();
+                    });
+                    
+                    // Twitch returns 200 on success, even if token was already revoked
+                    if (revokeResponse.statusCode !== 200) {
+                      revokeError = `Revocation failed with status ${revokeResponse.statusCode}`;
+                    }
+                  } catch (revokeErr) {
+                    revokeError = revokeErr.message || 'Revocation request failed';
+                  }
+                }
+              } else {
+                // Token is invalid/expired - that's okay, we can still disconnect
+                tokenWasValid = false;
+              }
+            } catch (validateErr) {
+              // Validation failed - token might be expired, that's okay
+              tokenWasValid = false;
+            }
+          }
+        } catch (decryptErr) {
+          // Could not decrypt token - might be corrupted, that's okay
+          console.warn('[revoke_twitch_integration] Could not decrypt token:', decryptErr.message);
+        }
+      }
+      
+      // If revocation failed but token was valid, return error info
+      // The frontend will prompt user to confirm disconnect anyway
+      // Unless force disconnect is requested
+      if (!forceDisconnect && tokenWasValid && revokeError) {
+        return { 
+          success: false, 
+          error: 'Token revocation failed',
+          revokeError: revokeError,
+          tokenWasValid: true
+        };
+      }
       
       // Delete integration from database
       db.prepare(`

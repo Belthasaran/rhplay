@@ -63,6 +63,7 @@ dist-builds/
 README_OLD*.md
 *.db_bak
 .env.private
+electron/twitch-config.json
 
 tests/fixtures/generated/
 blobs/

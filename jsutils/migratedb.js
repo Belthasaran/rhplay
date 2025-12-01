@@ -1149,6 +1149,15 @@ const MIGRATIONS = {
         return tableExists(db, 'twitch_integration');
       },
     },
+    {
+      id: 'clientdata_054_twitch_predictions',
+      description: 'Add Twitch predictions tracking table for lifecycle management',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/054_clientdata_twitch_predictions.sql'),
+      skipIf(db) {
+        return tableExists(db, 'twitch_predictions');
+      },
+    },
   ],
   patchbin: [
     {

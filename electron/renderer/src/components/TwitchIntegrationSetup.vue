@@ -100,28 +100,46 @@
                     :disabled="!integrationStatus"
                     class="config-select"
                   >
+                    <option :value="2">2 (Less/More than half)</option>
                     <option v-for="n in 8" :key="n + 2" :value="n + 2">{{ n + 2 }}</option>
                   </select>
                 </label>
                 <p class="field-help">
-                  How many different outcome ranges to offer (3-10). Outcomes are automatically divided across the challenge range.
+                  Number of outcomes (2-10). Choose 2 for "Less/More than half challenges won" (ties go to RNG).
                 </p>
               </div>
 
               <div class="config-field">
                 <label>
-                  Prediction Window (minutes):
+                  Prediction Window (seconds):
                   <input 
                     type="number"
-                    v-model.number="wholeChallengeWindowMinutes"
-                    min="1"
-                    max="60"
+                    v-model.number="wholeChallengeWindowSeconds"
+                    min="30"
+                    max="3600"
+                    step="30"
                     :disabled="!integrationStatus"
                     class="config-input"
                   />
                 </label>
                 <p class="field-help">
-                  How long the prediction stays open before automatically locking (default: 10 minutes).
+                  How long the prediction stays open (default: 600 seconds = 10 minutes). Minimum 30 seconds. Prediction auto-locks when challenge completes.
+                </p>
+              </div>
+
+              <div class="config-field">
+                <label>
+                  Custom Title (optional):
+                  <input 
+                    type="text"
+                    v-model="wholeChallengeCustomTitle"
+                    :disabled="!integrationStatus"
+                    class="config-input"
+                    placeholder="How many total challenge items will we win?"
+                  />
+                </label>
+                <p class="field-help">
+                  Optional custom title. Use $username to insert your Twitch username. Default: "How many total challenge items will we win?"
                 </p>
               </div>
             </div>
@@ -236,8 +254,15 @@ const integrationStatus = ref<any>(null);
 // Prediction template state
 const predictionType = ref<string>('whole_challenge'); // 'whole_challenge' | 'individual_item'
 const wholeChallengeOutcomeCount = ref<number>(5);
-const wholeChallengeWindowMinutes = ref<number>(10);
+const wholeChallengeWindowSeconds = ref<number>(600); // Default 10 minutes = 600 seconds
+const wholeChallengeCustomTitle = ref<string>(''); // Optional custom title
 const individualPredictionType = ref<string>('yes_no'); // 'yes_no' | 'time_range'
+const yesNoWindowSeconds = ref<number>(30); // Default 30 seconds
+const yesNoCustomTitle = ref<string>(''); // Optional custom title
+const yesOutcomeName = ref<string>('Yes'); // Default "Yes"
+const noOutcomeName = ref<string>('No'); // Default "No"
+const timeRangeWindowSeconds = ref<number>(45); // Default 45 seconds
+const timeRangeCustomTitle = ref<string>(''); // Optional custom title
 const timeRangeOutcomeCount = ref<number>(5);
 const timeRangeMaxMinutes = ref<number>(60);
 

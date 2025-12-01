@@ -258,10 +258,8 @@ const loadData = async () => {
     const status = await (window as any).electronAPI.getTwitchIntegrationStatus();
     integrationStatus.value = status;
     
-    // Load prediction template configuration
-    // const template = await (window as any).electronAPI.getPredictionsTemplate({
-    //   profileUuid: props.profileUuid
-    // });
+    // Load prediction template configuration (uses OnlineProfileManager internally)
+    // const template = await (window as any).electronAPI.getPredictionsTemplate();
     // if (template) {
     //   predictionType.value = template.type || 'whole_challenge';
     //   if (template.wholeChallenge) {

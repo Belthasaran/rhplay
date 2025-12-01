@@ -12074,14 +12074,14 @@ function registerDatabaseHandlers(dbManager) {
         
         // Prevent navigation to redirect URI (we'll handle it manually)
         // This must be set BEFORE loadURL
-        oauthWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        oauthWindow.webContents.on('will-navigate', (navEvent, navigationUrl) => {
           console.log('[Twitch OAuth] will-navigate:', navigationUrl);
           if (navigationUrl.startsWith(redirectUri)) {
-            event.preventDefault(); // Prevent actual navigation to localhost
+            navEvent.preventDefault(); // Prevent actual navigation to localhost
             if (!callbackHandled && !windowClosed) {
               callbackHandled = true;
               console.log('[Twitch OAuth] Handling callback from will-navigate');
-              handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+              handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
             }
           }
         });
@@ -12093,7 +12093,7 @@ function registerDatabaseHandlers(dbManager) {
             if (!callbackHandled && !windowClosed) {
               callbackHandled = true;
               console.log('[Twitch OAuth] Handling callback from setWindowOpenHandler');
-              handleOAuthCallback(url, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+              handleOAuthCallback(url, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
             }
             return { action: 'deny' }; // Prevent opening new window
           }
@@ -12103,22 +12103,22 @@ function registerDatabaseHandlers(dbManager) {
         // Listen for in-page navigation (for fragment-based redirects in implicit grant flow)
         // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
         // This is the primary handler for implicit grant flow
-        oauthWindow.webContents.on('did-navigate-in-page', (event, navigationUrl, isMainFrame) => {
+        oauthWindow.webContents.on('did-navigate-in-page', (navEvent, navigationUrl, isMainFrame) => {
           console.log('[Twitch OAuth] did-navigate-in-page:', navigationUrl, 'isMainFrame:', isMainFrame);
           if (isMainFrame && navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
             callbackHandled = true;
             console.log('[Twitch OAuth] Handling callback from did-navigate-in-page');
-            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
           }
         });
         
         // Fallback: Listen for navigation (for redirect-based flows, though implicit grant uses fragments)
-        oauthWindow.webContents.on('did-navigate', (event, navigationUrl) => {
+        oauthWindow.webContents.on('did-navigate', (navEvent, navigationUrl) => {
           console.log('[Twitch OAuth] did-navigate:', navigationUrl);
           if (navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
             callbackHandled = true;
             console.log('[Twitch OAuth] Handling callback from did-navigate');
-            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
           }
         });
         
@@ -12129,7 +12129,7 @@ function registerDatabaseHandlers(dbManager) {
           if (currentUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
             callbackHandled = true;
             console.log('[Twitch OAuth] Handling callback from dom-ready');
-            handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+            handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
           }
         });
         
@@ -12149,7 +12149,7 @@ function registerDatabaseHandlers(dbManager) {
                 callbackHandled = true;
                 clearInterval(urlCheckInterval);
                 console.log('[Twitch OAuth] Handling callback from periodic check');
-                handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+                handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
               }
             }
           } catch (error) {
@@ -12189,7 +12189,7 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Handle OAuth callback (helper function)
    */
-  function handleOAuthCallback(navigationUrl, redirectUri, expectedState, profileUuid, oauthWindow, resolve, reject) {
+  function handleOAuthCallback(navigationUrl, redirectUri, expectedState, profileUuid, oauthWindow, resolve, reject, event) {
     try {
       // Check if this is the redirect URI
       if (!navigationUrl.startsWith(redirectUri)) {
@@ -12241,15 +12241,16 @@ function registerDatabaseHandlers(dbManager) {
         return; // Still waiting for token
       }
       
-      console.log('[Twitch OAuth] Access token received, tokenType:', tokenType, 'token length:', accessToken.length);
+      console.log('[Twitch OAuth] Access token received, tokenType:', tokenType, 'token length:', accessToken ? accessToken.length : 0);
+      // NEVER log the actual token value - it's sensitive
       
       // Close OAuth window
       if (oauthWindow && !oauthWindow.isDestroyed()) {
         oauthWindow.close();
       }
       
-      // Get keyguard key for encryption
-      const keyguardKey = getKeyguardKey(event);
+      // Get keyguard key for encryption (event is passed from handleOAuthCallback)
+      const keyguardKey = event ? getKeyguardKey(event) : null;
       if (!keyguardKey) {
         reject(new Error('Profile Guard must be unlocked to store Twitch tokens'));
         return;
@@ -12294,8 +12295,9 @@ function registerDatabaseHandlers(dbManager) {
         throw new Error('Access token is missing');
       }
       
-      console.log('[validateAndStoreTwitchToken] Validating token, header format: OAuth <token>');
-      console.log('[validateAndStoreTwitchToken] Token length:', accessToken.length);
+      console.log('[validateAndStoreTwitchToken] Validating token, header format: Bearer <token>');
+      console.log('[validateAndStoreTwitchToken] Token length:', accessToken ? accessToken.length : 0);
+      // NEVER log the actual token value - it's sensitive
       
       const validateResponse = await new Promise((resolve, reject) => {
         const req = https.request(validateUrl, {

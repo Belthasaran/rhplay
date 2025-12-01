@@ -20446,7 +20446,7 @@ async function startRun() {
             template: template,
             runUuid: currentRunUuid.value,
             challengeSequenceNumber: null, // Whole run
-            totalChallenges: runEntries.value.length,
+            totalChallenges: runEntries.length,
             username: onlineProfile.value?.username || 'Player',
             gameId: null,
             stageId: null
@@ -20461,7 +20461,7 @@ async function startRun() {
               template: template,
               runUuid: currentRunUuid.value,
               challengeSequenceNumber: null,
-              totalChallenges: runEntries.value.length,
+              totalChallenges: runEntries.length,
               username: onlineProfile.value?.username || 'Player',
               gameId: null,
               stageId: null
@@ -22466,7 +22466,7 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
       
       // Determine which challenge to create prediction for
       let challengeSequenceNumber: number | null = null;
-      let totalChallenges = runEntries.value.length;
+      let totalChallenges = runEntries.length;
       
       if (mode === 'whole_challenge') {
         // Create prediction for entire run
@@ -22476,7 +22476,7 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
         challengeSequenceNumber = currentChallengeIndex.value + 1; // 1-indexed
       } else if (mode === 'next_item') {
         // Create prediction for next challenge (after current)
-        if (currentChallengeIndex.value < runEntries.value.length - 1) {
+        if (currentChallengeIndex.value < runEntries.length - 1) {
           challengeSequenceNumber = currentChallengeIndex.value + 2; // Next item (1-indexed)
         } else {
           showToastNotification('No next challenge available for prediction.', 'warning', 3000);
@@ -22485,7 +22485,7 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
       }
       
       // Get current challenge info for title
-      const currentChallenge = runEntries.value[currentChallengeIndex.value];
+      const currentChallenge = runEntries[currentChallengeIndex.value];
       const gameId = currentChallenge?.id || currentChallenge?.gameid || null;
       const stageId = currentChallenge?.stageNumber || currentChallenge?.levelnumber || null;
       
@@ -22713,7 +22713,7 @@ async function validateRetryOperation(item: {action: string, params: any}): Prom
       }
       
       // Check if challenge still exists and hasn't been completed
-      if (targetSequenceNumber > runEntries.value.length) {
+      if (targetSequenceNumber > runEntries.length) {
         return { valid: false, reason: 'Challenge sequence number out of range' };
       }
       
@@ -22976,7 +22976,7 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         await resolvePredictionForChallenge(runPrediction, status);
         
         // Create prediction for next challenge if available
-        if (challengeIndex < runEntries.value.length - 1) {
+        if (challengeIndex < runEntries.length - 1) {
           await createPredictionForNextChallenge(challengeIndex + 1);
         }
       }
@@ -22987,7 +22987,7 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         // This prediction is about the challenge that just became active
         // We don't resolve it yet - it will be resolved when that challenge completes
         // But we should create a new prediction for the item after that
-        if (challengeIndex + 1 < runEntries.value.length - 1) {
+        if (challengeIndex + 1 < runEntries.length - 1) {
           await createPredictionForNextChallenge(challengeIndex + 2);
         }
       } else if (runPrediction.challenge_sequence_number === challengeSequenceNumber) {
@@ -23310,7 +23310,7 @@ async function createPredictionForNextChallenge(nextChallengeIndex: number) {
     }
     
     // Get challenge info
-    const nextChallenge = runEntries.value[nextChallengeIndex];
+    const nextChallenge = runEntries[nextChallengeIndex];
     if (!nextChallenge) {
       return;
     }
@@ -23324,7 +23324,7 @@ async function createPredictionForNextChallenge(nextChallengeIndex: number) {
       template: template,
       runUuid: currentRunUuid.value,
       challengeSequenceNumber: challengeSequenceNumber,
-      totalChallenges: runEntries.value.length,
+      totalChallenges: runEntries.length,
       username: onlineProfile.value?.username || 'Player',
       gameId: gameId,
       stageId: stageId
@@ -23336,7 +23336,7 @@ async function createPredictionForNextChallenge(nextChallengeIndex: number) {
         template: template,
         runUuid: currentRunUuid.value,
         challengeSequenceNumber: challengeSequenceNumber,
-        totalChallenges: runEntries.value.length,
+        totalChallenges: runEntries.length,
         username: onlineProfile.value?.username || 'Player',
         gameId: gameId,
         stageId: stageId

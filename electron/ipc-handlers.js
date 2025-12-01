@@ -13436,9 +13436,11 @@ function registerDatabaseHandlers(dbManager) {
       `).get(predictionUuid);
       
       if (!prediction) {
+         console.log(`[twitch:prediction:lock] Prediction not found predictionUuid=${predictionUuid}`)
         return { success: false, error: 'Prediction not found' };
       }
-      
+      console.log(`[twitch:prediction:lock] predictionUuid=${predictionUuid}`)
+
       // Get decrypted tokens and create API client
       const { accessToken } = await getDecryptedTwitchTokens(event);
       const clientId = getTwitchClientId();
@@ -13449,10 +13451,9 @@ function registerDatabaseHandlers(dbManager) {
       const apiClient = createTwitchApiClient(accessToken, clientId);
       
       // Lock prediction using @twurple/api
-      await apiClient.predictions.endPrediction(
+      await apiClient.predictions.lockPrediction(
         prediction.twitch_broadcaster_id,
-        prediction.twitch_prediction_id,
-        'LOCKED'
+        prediction.twitch_prediction_id
       );
       
       // Update database
@@ -13505,10 +13506,9 @@ function registerDatabaseHandlers(dbManager) {
       const apiClient = createTwitchApiClient(accessToken, clientId);
       
       // Resolve prediction using @twurple/api
-      await apiClient.predictions.endPrediction(
+      await apiClient.predictions.resolvePrediction(
         prediction.twitch_broadcaster_id,
         prediction.twitch_prediction_id,
-        'RESOLVED',
         winningOutcomeId
       );
       
@@ -13547,8 +13547,10 @@ function registerDatabaseHandlers(dbManager) {
       `).get(predictionUuid);
       
       if (!prediction) {
+        console.log(`[twitch:prediction:cancel] Prediction not found predictionUuid=${predictionUuid}`)
         return { success: false, error: 'Prediction not found' };
       }
+      console.log(`[twitch:prediction:cancel] Prediction not found predictionUuid=${predictionUuid}`)
       
       // Get decrypted tokens and create API client
       const { accessToken } = await getDecryptedTwitchTokens(event);
@@ -13560,10 +13562,9 @@ function registerDatabaseHandlers(dbManager) {
       const apiClient = createTwitchApiClient(accessToken, clientId);
       
       // Cancel prediction using @twurple/api (cancels and refunds)
-      await apiClient.predictions.endPrediction(
+      await apiClient.predictions.cancelPrediction(
         prediction.twitch_broadcaster_id,
-        prediction.twitch_prediction_id,
-        'CANCELED'
+        prediction.twitch_prediction_id
       );
       
       // Update database
@@ -13591,6 +13592,7 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('twitch:prediction:cancel-by-twitch-id', async (event, { twitchPredictionId, twitchBroadcasterId }) => {
     try {
+      console.log(`[twitch:prediction:cancel-by-twitch-id] twitchPredictionId=${twitchPredictionId} twitchBroadcasterId=${twitchBroadcasterId}`)
       if (!twitchPredictionId || !twitchBroadcasterId) {
         return { success: false, error: 'Twitch prediction ID and broadcaster ID are required' };
       }
@@ -13605,10 +13607,9 @@ function registerDatabaseHandlers(dbManager) {
       const apiClient = createTwitchApiClient(accessToken, clientId);
       
       // Cancel prediction using @twurple/api (cancels and refunds)
-      await apiClient.predictions.endPrediction(
+      await apiClient.predictions.cancelPrediction(
         twitchBroadcasterId,
-        twitchPredictionId,
-        'CANCELED'
+        twitchPredictionId
       );
       
       return { success: true };

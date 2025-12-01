@@ -22579,9 +22579,12 @@ async function syncPredictionStatus() {
 
 // Queue a prediction operation for retry
 function queuePredictionRetry(action: string, params: any, maxRetries: number = 3) {
+  // Ensure params are serializable (deep clone and stringify/parse to remove reactive proxies)
+  const serializableParams = JSON.parse(JSON.stringify(params));
+  
   predictionRetryQueue.value.push({
     action,
-    params,
+    params: serializableParams,
     retryCount: 0,
     maxRetries
   });

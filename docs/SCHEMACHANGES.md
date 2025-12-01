@@ -1,3 +1,27 @@
+- 2025-12-01: clientdata - Fairness and Challenge Quality Ratings
+  - Description: Add Player Fairness Rating and Challenge Quality Rating columns with comments to user_game_annotations and user_game_version_annotations tables
+  - Rationale: Add two new gameplay-specific rating dimensions for SMW games:
+    - Player Fairness Rating: Rates progression barriers - whether they are skill-related vs artificial barriers (0-5 stars)
+    - Challenge Quality Rating: Rates whether challenges require meaningful skill development vs trial-and-error (0-5 stars)
+  - Tables/columns:
+    - `user_game_annotations`:
+      - `user_fairness_rating INTEGER` - Player fairness rating (0-5, NULL allowed)
+      - `user_fairness_comment TEXT` - Comment for fairness rating
+      - `user_challenge_quality_rating INTEGER` - Challenge quality rating (0-5, NULL allowed)
+      - `user_challenge_quality_comment TEXT` - Comment for challenge quality rating
+    - `user_game_version_annotations`:
+      - `user_fairness_rating INTEGER` - Player fairness rating (0-5, NULL allowed)
+      - `user_fairness_comment TEXT` - Comment for fairness rating
+      - `user_challenge_quality_rating INTEGER` - Challenge quality rating (0-5, NULL allowed)
+      - `user_challenge_quality_comment TEXT` - Comment for challenge quality rating
+  - Migration: `clientdata_056_fairness_challenge_quality_ratings` via `jsutils/migratedb.js`
+  - Notes:
+    - These ratings are specific to SMW gameplay factors related to gameplay design
+    - Player Fairness focuses on impediments to the player (unfair obstacles, trolls, blind jumps)
+    - Challenge Quality focuses on whether challenges require skill vs trial-and-error
+    - Both ratings appear in the Rating Sheet UI below "Gameplay Design"
+    - Ratings are included in Nostr publishing via online:ratings:publish-batch
+
 - 2025-01-XX: clientdata - Win Rules Support
   - Description: Add win rules configuration to runs and win rule tracking to run_results
   - Rationale: Allow users to set win conditions for runs beyond just clicking Done (time limits, rollover, no game overs, no hits)

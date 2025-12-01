@@ -1155,5 +1155,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   lockTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:lock', params),
   resolveTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:resolve', params),
   cancelTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:cancel', params),
+  cancelTwitchPredictionByTwitchId: (params) => ipcRenderer.invoke('twitch:prediction:cancel-by-twitch-id', params),
   releaseTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:release', params),
 });

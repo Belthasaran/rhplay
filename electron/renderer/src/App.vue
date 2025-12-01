@@ -22360,20 +22360,50 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
         const isManaged = activePreds.length > 0 && activePreds[0].isManaged;
         
         if (!isManaged) {
-          const confirmed = await showConfirm(
-            'A prediction exists on Twitch that we don\'t manage. Cancel it to proceed?',
-            'External Prediction Found',
-            'Cancel It',
-            'Cancel'
-          );
+          // Find unmanaged predictions
+          const unmanagedPreds = activePreds.filter((p: any) => !p.isManaged);
           
-          if (!confirmed) {
-            return; // User declined
+          if (unmanagedPreds.length > 0) {
+            const predTitles = unmanagedPreds.map((p: any) => p.title || 'Untitled').join(', ');
+            const confirmed = await showConfirm(
+              `A prediction exists on Twitch that we don't manage: "${predTitles}"\n\nCancel it to proceed?`,
+              'External Prediction Found',
+              'Cancel It',
+              'Cancel'
+            );
+            
+            if (!confirmed) {
+              return; // User declined
+            }
+            
+            // Cancel all unmanaged predictions
+            let allCancelled = true;
+            for (const unmanagedPred of unmanagedPreds) {
+              try {
+                const cancelResult = await (window as any).electronAPI.cancelTwitchPredictionByTwitchId({
+                  twitchPredictionId: unmanagedPred.twitch_prediction_id,
+                  twitchBroadcasterId: unmanagedPred.twitch_broadcaster_id
+                });
+                
+                if (!cancelResult.success) {
+                  console.error('[enablePredictionsMode] Failed to cancel unmanaged prediction:', cancelResult.error);
+                  allCancelled = false;
+                }
+              } catch (error: any) {
+                console.error('[enablePredictionsMode] Error canceling unmanaged prediction:', error);
+                allCancelled = false;
+              }
+            }
+            
+            if (allCancelled) {
+              showToastNotification('External prediction cancelled', 'success', 3000);
+            } else {
+              showToastNotification('Some external predictions could not be cancelled. Proceeding anyway...', 'warning', 5000);
+            }
+            
+            // Wait a moment for Twitch API to process the cancellation
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
-          
-          // TODO: Cancel the unmanaged prediction
-          // For now, we'll proceed and let the creation attempt handle the conflict
-          showToastNotification('Cancelling external prediction...', 'info', 2000);
         }
       }
       

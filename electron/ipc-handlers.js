@@ -13323,6 +13323,39 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Cancel a prediction by Twitch ID (for unmanaged predictions)
+   * Channel: twitch:prediction:cancel-by-twitch-id
+   */
+  ipcMain.handle('twitch:prediction:cancel-by-twitch-id', async (event, { twitchPredictionId, twitchBroadcasterId }) => {
+    try {
+      if (!twitchPredictionId || !twitchBroadcasterId) {
+        return { success: false, error: 'Twitch prediction ID and broadcaster ID are required' };
+      }
+      
+      // Get decrypted tokens and create API client
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
+      
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Cancel prediction using @twurple/api (cancels and refunds)
+      await apiClient.predictions.endPrediction(
+        twitchBroadcasterId,
+        twitchPredictionId,
+        'CANCELED'
+      );
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[twitch:prediction:cancel-by-twitch-id] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Release a prediction (stop managing it, let user manage)
    * Channel: twitch:prediction:release
    */

@@ -22860,16 +22860,19 @@ async function processPredictionRetryQueue() {
   
   // Attempt the operation
   try {
+    // Ensure params are serializable (deep clone to remove any reactive proxies)
+    const serializableParams = JSON.parse(JSON.stringify(item.params));
+    
     let result;
     switch (item.action) {
       case 'lock':
-        result = await (window as any).electronAPI.lockTwitchPrediction(item.params);
+        result = await (window as any).electronAPI.lockTwitchPrediction(serializableParams);
         break;
       case 'resolve':
-        result = await (window as any).electronAPI.resolveTwitchPrediction(item.params);
+        result = await (window as any).electronAPI.resolveTwitchPrediction(serializableParams);
         break;
       case 'cancel':
-        result = await (window as any).electronAPI.cancelTwitchPrediction(item.params);
+        result = await (window as any).electronAPI.cancelTwitchPrediction(serializableParams);
         break;
       case 'create':
         result = await (window as any).electronAPI.createTwitchPrediction(item.params);
@@ -23198,11 +23201,20 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       return;
     }
     
+    // Check if prediction is already locked - if so, we should resolve it, not lock it again
+    const isAlreadyLocked = statusResult.twitchStatus === 'LOCKED';
+    
     // Get outcomes from the status result (it already includes outcomes_json)
     const outcomes = parsePredictionOutcomes(statusResult.prediction);
     if (outcomes.length === 0) {
       console.warn('[resolvePredictionForChallenge] No outcomes found');
-      // Lock instead of resolving
+      // If already locked, we can't do anything - prediction is stuck
+      if (isAlreadyLocked) {
+        console.warn('[resolvePredictionForChallenge] Prediction is locked but has no outcomes - cannot resolve');
+        showToastNotification('Prediction is locked but has no outcomes', 'warning', 3000);
+        return;
+      }
+      // Lock instead of resolving (only if not already locked)
       const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
         predictionUuid: prediction.prediction_uuid
       });
@@ -23234,8 +23246,41 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       }
     }
     
-    // If we can't determine outcome, lock the prediction instead
+    // If prediction is already locked, we must resolve it (can't lock again)
+    if (isAlreadyLocked) {
+      // If we can't determine outcome, use first outcome as fallback
+      if (!winningOutcomeId) {
+        winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
+      }
+      
+      if (winningOutcomeId) {
+        // Resolve the locked prediction
+        const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
+          predictionUuid: prediction.prediction_uuid,
+          winningOutcomeId: winningOutcomeId,
+          resolutionMethod: 'automatic'
+        });
+        
+        if (!resolveResult.success) {
+          queuePredictionRetry('resolve', { 
+            predictionUuid: prediction.prediction_uuid,
+            winningOutcomeId: winningOutcomeId,
+            resolutionMethod: 'automatic'
+          });
+          showToastNotification('Resolving prediction...', 'info', 2000);
+        } else {
+          showToastNotification('Prediction resolved', 'success', 2000);
+        }
+      } else {
+        console.warn('[resolvePredictionForChallenge] Cannot resolve locked prediction - no valid outcome');
+        showToastNotification('Cannot resolve prediction - no valid outcome', 'warning', 3000);
+      }
+      return;
+    }
+    
+    // Prediction is not locked yet
     if (!winningOutcomeId) {
+      // Can't determine outcome - lock it first
       const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
         predictionUuid: prediction.prediction_uuid
       });
@@ -23247,6 +23292,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       } else {
         showToastNotification('Prediction locked', 'success', 2000);
       }
+      return;
     } else {
       // Resolve to winning outcome
       const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({

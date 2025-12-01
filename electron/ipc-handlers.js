@@ -12743,6 +12743,12 @@ function registerDatabaseHandlers(dbManager) {
     }
   }
 
+  // Import range calculation functions from centralized module
+  const {
+    calculateWholeChallengeRanges,
+    calculateTimeRangeOutcomes
+  } = require('./utils/twitch-prediction-ranges');
+
   /**
    * Create a Twitch prediction
    * Channel: twitch:prediction:create
@@ -12794,12 +12800,12 @@ function registerDatabaseHandlers(dbManager) {
             { title: `${half + 1} or More`, points: 0 }
           ];
         } else {
-          // Range outcomes
-          // TODO: Calculate ranges based on totalChallenges
-          for (let i = 0; i < outcomeCount; i++) {
-            // Placeholder - will calculate proper ranges
-            outcomes.push({ title: `Range ${i + 1}`, points: 0 });
-          }
+          // Range outcomes - calculate ranges from 0 to totalChallenges
+          const ranges = calculateWholeChallengeRanges(totalChallenges, outcomeCount);
+          outcomes = ranges.map(range => ({
+            title: range.title,
+            points: 0
+          }));
         }
       } else if (templateConfig.type === 'individual_item') {
         const config = templateConfig.individualItem;
@@ -12818,11 +12824,51 @@ function registerDatabaseHandlers(dbManager) {
           windowSeconds = timeRangeConfig.windowSeconds || 45;
           title = timeRangeConfig.customTitle || 'How many minutes do we spend on the current challenge item?';
           title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
-          // TODO: Calculate time ranges based on maxTimeMinutes and outcomeCount
-          const outcomeCount = timeRangeConfig.outcomeCount || 5;
-          for (let i = 0; i < outcomeCount; i++) {
-            outcomes.push({ title: `Range ${i + 1}`, points: 0 });
+          
+          // Get max time from config, or calculate from win rules if available
+          let maxTimeMinutes = timeRangeConfig.maxTimeMinutes || 60;
+          
+          // If runUuid is provided, try to get win rules to determine actual max time
+          if (runUuid) {
+            try {
+              const db = dbManager.getConnection('clientdata');
+              const run = db.prepare(`
+                SELECT win_rules_json FROM runs WHERE run_uuid = ?
+              `).get(runUuid);
+              
+              if (run && run.win_rules_json) {
+                const winRules = JSON.parse(run.win_rules_json);
+                if (winRules.challengeTime && winRules.challengeTime.enabled) {
+                  const limitMinutes = winRules.challengeTime.minutes || 10;
+                  const rolloverMaxMinutes = winRules.challengeTime.rolloverMaxMinutes || 0;
+                  const graceMinutes = Math.min(
+                    Math.max(
+                      Math.floor((limitMinutes * 60 * (winRules.challengeTime.gracePeriodPercent || 1)) / 100),
+                      (winRules.challengeTime.gracePeriodMinSeconds || 2) / 60
+                    ),
+                    (winRules.challengeTime.gracePeriodMaxSeconds || 60) / 60
+                  );
+                  
+                  // Max time is limit + max rollover + grace
+                  const calculatedMax = limitMinutes + rolloverMaxMinutes + graceMinutes;
+                  if (calculatedMax > 0) {
+                    maxTimeMinutes = Math.min(calculatedMax, 120); // Cap at 120 minutes
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('[twitch:prediction:create] Error getting win rules for max time:', error);
+              // Fall back to config value
+            }
           }
+          
+          // Calculate time ranges
+          const outcomeCount = timeRangeConfig.outcomeCount || 5;
+          const ranges = calculateTimeRangeOutcomes(maxTimeMinutes, outcomeCount);
+          outcomes = ranges.map(range => ({
+            title: range.title,
+            points: 0
+          }));
         }
       }
       

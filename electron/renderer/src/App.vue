@@ -21304,58 +21304,25 @@ async function completeRun() {
     currentRunStatus.value = 'completed';
     
     // Handle prediction lifecycle for run completion
-    if (predictionsEnabled.value && predictionsOperationalMode.value === 'whole_challenge' && activePredictionUuid.value) {
-      // Resolve whole challenge prediction
+    if (predictionsEnabled.value) {
       try {
-        // Count wins (success/ok) vs losses (failed/skipped)
-        const wins = challengeResults.value.filter(r => r.status === 'success' || r.status === 'ok').length;
-        const total = challengeResults.value.length;
-        
-        // Get prediction status to find outcome IDs
-        const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
-          predictionUuid: activePredictionUuid.value
-        });
-        
-        if (statusResult.success && statusResult.prediction) {
-          // Get outcomes from prediction data
-          const outcomes = parsePredictionOutcomes(statusResult.prediction);
+        if (predictionsOperationalMode.value === 'whole_challenge' && activePredictionUuid.value) {
+          // Resolve whole challenge prediction
+          // Count wins (success/ok) vs losses (failed/skipped)
+          const wins = challengeResults.value.filter(r => r.status === 'success' || r.status === 'ok').length;
+          const total = challengeResults.value.length;
           
-          if (outcomes.length === 0) {
-            // No outcomes - lock instead
-            const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
-              predictionUuid: activePredictionUuid.value
-            });
+          // Get prediction status to find outcome IDs
+          const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+            predictionUuid: activePredictionUuid.value
+          });
+          
+          if (statusResult.success && statusResult.prediction) {
+            // Get outcomes from prediction data
+            const outcomes = parsePredictionOutcomes(statusResult.prediction);
             
-            if (!lockResult.success) {
-              queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
-              showToastNotification('Locking run prediction...', 'info', 2000);
-            } else {
-              showToastNotification('Run prediction locked', 'success', 2000);
-            }
-          } else {
-            // Determine winning outcome
-            const winningOutcomeId = determineWholeChallengeOutcome(outcomes, wins, total);
-            
-            if (winningOutcomeId) {
-              const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
-                predictionUuid: activePredictionUuid.value,
-                winningOutcomeId: winningOutcomeId,
-                resolutionMethod: 'automatic'
-              });
-              
-              if (!resolveResult.success) {
-                queuePredictionRetry('resolve', {
-                  predictionUuid: activePredictionUuid.value,
-                  winningOutcomeId: winningOutcomeId,
-                  resolutionMethod: 'automatic'
-                });
-                showToastNotification('Resolving run prediction...', 'info', 2000);
-              } else {
-                showToastNotification(`Run prediction resolved: ${wins}/${total} wins`, 'success', 3000);
-                activePredictionUuid.value = null;
-              }
-            } else {
-              // Fallback to lock if can't determine outcome
+            if (outcomes.length === 0) {
+              // No outcomes - lock instead
               const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
                 predictionUuid: activePredictionUuid.value
               });
@@ -21366,6 +21333,108 @@ async function completeRun() {
               } else {
                 showToastNotification('Run prediction locked', 'success', 2000);
               }
+            } else {
+              // Determine winning outcome
+              const winningOutcomeId = determineWholeChallengeOutcome(outcomes, wins, total);
+              
+              if (winningOutcomeId) {
+                const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
+                  predictionUuid: activePredictionUuid.value,
+                  winningOutcomeId: winningOutcomeId,
+                  resolutionMethod: 'automatic'
+                });
+                
+                if (!resolveResult.success) {
+                  queuePredictionRetry('resolve', {
+                    predictionUuid: activePredictionUuid.value,
+                    winningOutcomeId: winningOutcomeId,
+                    resolutionMethod: 'automatic'
+                  });
+                  showToastNotification('Resolving run prediction...', 'info', 2000);
+                } else {
+                  showToastNotification(`Run prediction resolved: ${wins}/${total} wins`, 'success', 3000);
+                  activePredictionUuid.value = null;
+                }
+              } else {
+                // Fallback to lock if can't determine outcome
+                const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+                  predictionUuid: activePredictionUuid.value
+                });
+                
+                if (!lockResult.success) {
+                  queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
+                  showToastNotification('Locking run prediction...', 'info', 2000);
+                } else {
+                  showToastNotification('Run prediction locked', 'success', 2000);
+                }
+              }
+            }
+          }
+        } else if ((predictionsOperationalMode.value === 'same_item' || predictionsOperationalMode.value === 'next_item') && activePredictionUuid.value) {
+          // Resolve any remaining individual_item prediction when run completes
+          const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+            predictionUuid: activePredictionUuid.value
+          });
+          
+          if (statusResult.success && statusResult.prediction) {
+            const outcomes = parsePredictionOutcomes(statusResult.prediction);
+            const isAlreadyLocked = statusResult.twitchStatus === 'LOCKED';
+            
+            if (outcomes.length > 0) {
+              // Determine winning outcome based on the challenge this prediction is about
+              let winningOutcomeId: string | null = null;
+              
+              // Get the challenge sequence number this prediction is for
+              // We need to get this from the prediction data or from the status result
+              // For now, we'll try to resolve based on the last challenge or use first outcome as fallback
+              const lastChallengeIndex = challengeResults.value.length - 1;
+              if (lastChallengeIndex >= 0) {
+                const lastChallengeStatus = challengeResults.value[lastChallengeIndex].status;
+                
+              // Try to determine outcome based on prediction type
+              // This is a fallback - ideally the prediction should have been resolved when the challenge completed
+              const predictionSubtype = statusResult.prediction?.subtype;
+              
+              if (predictionSubtype === 'yes_no') {
+                winningOutcomeId = determineYesNoOutcome(outcomes, lastChallengeStatus as 'success' | 'ok' | 'failed' | 'skipped');
+              } else if (predictionSubtype === 'time_range' && lastChallengeIndex >= 0) {
+                const challengeResult = challengeResults.value[lastChallengeIndex];
+                const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
+                winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+              }
+              }
+              
+              // If we can't determine, use first outcome as fallback
+              if (!winningOutcomeId) {
+                winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
+              }
+              
+              if (winningOutcomeId) {
+                const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
+                  predictionUuid: activePredictionUuid.value,
+                  winningOutcomeId: winningOutcomeId,
+                  resolutionMethod: 'automatic'
+                });
+                
+                if (!resolveResult.success) {
+                  queuePredictionRetry('resolve', {
+                    predictionUuid: activePredictionUuid.value,
+                    winningOutcomeId: winningOutcomeId,
+                    resolutionMethod: 'automatic'
+                  });
+                  showToastNotification('Resolving prediction...', 'info', 2000);
+                } else {
+                  showToastNotification('Prediction resolved', 'success', 2000);
+                  activePredictionUuid.value = null;
+                }
+              } else {
+                console.warn('[completeRun] Cannot resolve individual_item prediction - no valid outcome');
+                showToastNotification('Cannot resolve prediction - no valid outcome', 'warning', 3000);
+              }
+            } else if (isAlreadyLocked) {
+              // Prediction is locked but has no outcomes - can't resolve
+              console.warn('[completeRun] Prediction is locked but has no outcomes');
+              showToastNotification('Prediction is locked but has no outcomes', 'warning', 3000);
             }
           }
         }

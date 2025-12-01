@@ -12594,86 +12594,86 @@ function registerDatabaseHandlers(dbManager) {
             const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
             
             if (accessToken) {
-            // Validate token first to check if it's still valid
-            const https = require('https');
-            const validateUrl = 'https://id.twitch.tv/oauth2/validate';
-            
-            try {
-              const validateResponse = await new Promise((resolve, reject) => {
-                const req = https.request(validateUrl, {
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${accessToken.trim()}`
-                  }
-                }, (res) => {
-                  let data = '';
-                  res.on('data', (chunk) => { data += chunk; });
-                  res.on('end', () => {
-                    resolve({ statusCode: res.statusCode, data: data });
-                  });
-                });
-                req.on('error', reject);
-                req.setTimeout(10000, () => {
-                  req.destroy();
-                  reject(new Error('Request timeout'));
-                });
-                req.end();
-              });
+              // Validate token first to check if it's still valid
+              const https = require('https');
+              const validateUrl = 'https://id.twitch.tv/oauth2/validate';
               
-              if (validateResponse.statusCode === 200) {
-                tokenWasValid = true;
-                
-                // Token is valid, attempt revocation
-                const clientId = getTwitchClientId();
-                if (!clientId) {
-                  revokeError = 'Twitch client ID not configured';
-                } else {
-                  const revokeUrl = 'https://id.twitch.tv/oauth2/revoke';
-                  const revokeParams = new URLSearchParams({
-                    client_id: clientId,
-                    token: accessToken.trim()
+              try {
+                const validateResponse = await new Promise((resolve, reject) => {
+                  const req = https.request(validateUrl, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${accessToken.trim()}`
+                    }
+                  }, (res) => {
+                    let data = '';
+                    res.on('data', (chunk) => { data += chunk; });
+                    res.on('end', () => {
+                      resolve({ statusCode: res.statusCode, data: data });
+                    });
                   });
+                  req.on('error', reject);
+                  req.setTimeout(10000, () => {
+                    req.destroy();
+                    reject(new Error('Request timeout'));
+                  });
+                  req.end();
+                });
+                
+                if (validateResponse.statusCode === 200) {
+                  tokenWasValid = true;
                   
-                  try {
-                    const revokeResponse = await new Promise((resolve, reject) => {
-                      const req = https.request(revokeUrl, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/x-www-form-urlencoded',
-                          'Content-Length': revokeParams.toString().length
-                        }
-                      }, (res) => {
-                        let data = '';
-                        res.on('data', (chunk) => { data += chunk; });
-                        res.on('end', () => {
-                          resolve({ statusCode: res.statusCode, data: data });
-                        });
-                      });
-                      req.on('error', reject);
-                      req.setTimeout(10000, () => {
-                        req.destroy();
-                        reject(new Error('Request timeout'));
-                      });
-                      req.write(revokeParams.toString());
-                      req.end();
+                  // Token is valid, attempt revocation
+                  const clientId = getTwitchClientId();
+                  if (!clientId) {
+                    revokeError = 'Twitch client ID not configured';
+                  } else {
+                    const revokeUrl = 'https://id.twitch.tv/oauth2/revoke';
+                    const revokeParams = new URLSearchParams({
+                      client_id: clientId,
+                      token: accessToken.trim()
                     });
                     
-                    // Twitch returns 200 on success, even if token was already revoked
-                    if (revokeResponse.statusCode !== 200) {
-                      revokeError = `Revocation failed with status ${revokeResponse.statusCode}`;
+                    try {
+                      const revokeResponse = await new Promise((resolve, reject) => {
+                        const req = https.request(revokeUrl, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Content-Length': revokeParams.toString().length
+                          }
+                        }, (res) => {
+                          let data = '';
+                          res.on('data', (chunk) => { data += chunk; });
+                          res.on('end', () => {
+                            resolve({ statusCode: res.statusCode, data: data });
+                          });
+                        });
+                        req.on('error', reject);
+                        req.setTimeout(10000, () => {
+                          req.destroy();
+                          reject(new Error('Request timeout'));
+                        });
+                        req.write(revokeParams.toString());
+                        req.end();
+                      });
+                      
+                      // Twitch returns 200 on success, even if token was already revoked
+                      if (revokeResponse.statusCode !== 200) {
+                        revokeError = `Revocation failed with status ${revokeResponse.statusCode}`;
+                      }
+                    } catch (revokeErr) {
+                      revokeError = revokeErr.message || 'Revocation request failed';
                     }
-                  } catch (revokeErr) {
-                    revokeError = revokeErr.message || 'Revocation request failed';
                   }
+                } else {
+                  // Token is invalid/expired - that's okay, we can still disconnect
+                  tokenWasValid = false;
                 }
-              } else {
-                // Token is invalid/expired - that's okay, we can still disconnect
+              } catch (validateErr) {
+                // Validation failed - token might be expired, that's okay
                 tokenWasValid = false;
               }
-            } catch (validateErr) {
-                // Validation failed - token might be expired, that's okay
-              tokenWasValid = false;
-            }
             }
           }
           } catch (decryptErr) {

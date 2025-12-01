@@ -12589,11 +12589,11 @@ function registerDatabaseHandlers(dbManager) {
         `).get(currentProfileId);
         
         if (integration && integration.encrypted_access_token) {
-        try {
-          // Decrypt token
-          const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
-          
-          if (accessToken) {
+          try {
+            // Decrypt token
+            const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
+            
+            if (accessToken) {
             // Validate token first to check if it's still valid
             const https = require('https');
             const validateUrl = 'https://id.twitch.tv/oauth2/validate';
@@ -12678,6 +12678,7 @@ function registerDatabaseHandlers(dbManager) {
         } catch (decryptErr) {
           // Could not decrypt token - might be corrupted, that's okay
           console.warn('[revoke_twitch_integration] Could not decrypt token:', decryptErr.message);
+        }
         }
       }
       

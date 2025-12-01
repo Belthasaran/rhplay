@@ -320,7 +320,7 @@
               </div>
             </div>
 
-            <!-- Save Button -->
+            <!-- Save and Close Buttons -->
             <div class="template-actions">
               <button 
                 @click="saveTemplate"
@@ -328,6 +328,12 @@
                 :disabled="!integrationStatus || !predictionType"
               >
                 Save Configuration
+              </button>
+              <button 
+                @click="handleClose"
+                class="btn-secondary"
+              >
+                Close
               </button>
             </div>
           </div>
@@ -914,6 +920,7 @@ onMounted(() => {
 .template-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
   padding-top: 16px;
   border-top: 1px solid #444;
 }
@@ -951,5 +958,20 @@ onMounted(() => {
 
 .btn-primary:hover {
   background: #a855f7;
+}
+
+.btn-secondary {
+  padding: 10px 24px;
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: #555;
 }
 </style>

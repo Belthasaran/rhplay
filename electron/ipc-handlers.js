@@ -12064,30 +12064,57 @@ function registerDatabaseHandlers(dbManager) {
           parent: BrowserWindow.getFocusedWindow() || undefined,
           webPreferences: {
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            webSecurity: true // Keep web security enabled
+          }
+        });
+        
+        let callbackHandled = false; // Prevent multiple callback handling
+        
+        // Prevent navigation to redirect URI (we'll handle it manually)
+        // This must be set BEFORE loadURL
+        oauthWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+          if (navigationUrl.startsWith(redirectUri)) {
+            event.preventDefault(); // Prevent actual navigation to localhost
+            if (!callbackHandled) {
+              callbackHandled = true;
+              handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+            }
+          }
+        });
+        
+        // Also prevent new window navigation to redirect URI
+        oauthWindow.webContents.setWindowOpenHandler(({ url }) => {
+          if (url.startsWith(redirectUri)) {
+            if (!callbackHandled) {
+              callbackHandled = true;
+              handleOAuthCallback(url, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+            }
+            return { action: 'deny' }; // Prevent opening new window
+          }
+          return { action: 'allow' };
+        });
+        
+        // Listen for in-page navigation (for fragment-based redirects in implicit grant flow)
+        // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
+        // This is the primary handler for implicit grant flow
+        oauthWindow.webContents.on('did-navigate-in-page', (event, navigationUrl, isMainFrame) => {
+          if (isMainFrame && navigationUrl.startsWith(redirectUri) && !callbackHandled) {
+            callbackHandled = true;
+            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+          }
+        });
+        
+        // Fallback: Listen for navigation (for redirect-based flows, though implicit grant uses fragments)
+        oauthWindow.webContents.on('did-navigate', (event, navigationUrl) => {
+          if (navigationUrl.startsWith(redirectUri) && !callbackHandled) {
+            callbackHandled = true;
+            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
           }
         });
         
         oauthWindow.loadURL(url);
         oauthWindow.show();
-        
-        // Listen for navigation to redirect URI
-        oauthWindow.webContents.on('did-redirect-navigation', (event, navigationUrl) => {
-          handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
-        });
-        
-        // Listen for navigation (for redirect-based flows)
-        oauthWindow.webContents.on('did-navigate', (event, navigationUrl) => {
-          handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
-        });
-        
-        // Listen for in-page navigation (for fragment-based redirects in implicit grant flow)
-        // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
-        oauthWindow.webContents.on('did-navigate-in-page', (event, navigationUrl, isMainFrame) => {
-          if (isMainFrame) {
-            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
-          }
-        });
         
         // Handle window close
         oauthWindow.on('closed', () => {

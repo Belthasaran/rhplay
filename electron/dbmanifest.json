@@ -67,7 +67,22 @@
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
       "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
     },
-    "sqlpatches": []
+    "sqlpatches": [
+      {
+        "file_name": "rhdata-20251124-to006.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "c31a15d238539d37fa795d965c943d0cc4b5446eb51f862ad0bba1ad8da3b834",
+        "ipfs_cidv1": "bafkreigddik5eocttu37u6k5szojipimys2ui3vvd6dcvuf3ugwy3i5ygq",
+        "size": "27668",
+        "ardrive_file_name": "rhdata-20251124-to006.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/rhdata-20251124-to006.sql.xz",
+        "ardrive_file_id": "05be289b-29f7-4e3a-9e91-538c217b1ba7",
+        "data_txid": "Tdj3s7Bp2l8qdJj2pMeU5tfL01qgXudGWi6olSDmgto",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      }
+    ]
   },
   "patchbin.db": {
     "base": {

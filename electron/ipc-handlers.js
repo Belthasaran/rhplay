@@ -12753,7 +12753,7 @@ function registerDatabaseHandlers(dbManager) {
    * Create a Twitch prediction
    * Channel: twitch:prediction:create
    */
-  ipcMain.handle('twitch:prediction:create', async (event, { template, runUuid, challengeSequenceNumber, totalChallenges, username }) => {
+  ipcMain.handle('twitch:prediction:create', async (event, { template, runUuid, challengeSequenceNumber, totalChallenges, username, gameId, stageId }) => {
     try {
       // Get decrypted tokens
       const { accessToken } = await getDecryptedTwitchTokens(event);
@@ -12786,9 +12786,16 @@ function registerDatabaseHandlers(dbManager) {
         const config = templateConfig.wholeChallenge;
         windowSeconds = config.predictionWindowSeconds || 600;
         
-        // Build title
-        title = config.customTitle || 'How many total challenge items will we win?';
-        title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
+        // Build title with game/stage info if provided
+        let baseTitle = config.customTitle || 'How many total challenge items will we win?';
+        if (gameId) {
+          baseTitle += ` (Game: ${gameId}`;
+          if (stageId) {
+            baseTitle += `, Stage: ${stageId}`;
+          }
+          baseTitle += ')';
+        }
+        title = baseTitle.replace(/\$username/g, integration.twitch_username || username || 'Player');
         
         // Build outcomes
         const outcomeCount = config.outcomeCount || 5;
@@ -12813,8 +12820,19 @@ function registerDatabaseHandlers(dbManager) {
         if (config.predictionType === 'yes_no') {
           const yesNoConfig = config.yesNo;
           windowSeconds = yesNoConfig.windowSeconds || 30;
-          title = yesNoConfig.customTitle || 'Will we win at the current challenge item?';
-          title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
+          // Build title with game/stage info
+          let baseTitle = yesNoConfig.customTitle || 'Will we win at the current challenge item?';
+          if (challengeSequenceNumber) {
+            baseTitle = baseTitle.replace('current', `challenge item ${challengeSequenceNumber}`);
+          }
+          if (gameId) {
+            baseTitle += ` (Game: ${gameId}`;
+            if (stageId) {
+              baseTitle += `, Stage: ${stageId}`;
+            }
+            baseTitle += ')';
+          }
+          title = baseTitle.replace(/\$username/g, integration.twitch_username || username || 'Player');
           outcomes = [
             { title: yesNoConfig.yesOutcomeName || 'Yes', points: 0 },
             { title: yesNoConfig.noOutcomeName || 'No', points: 0 }
@@ -12822,8 +12840,19 @@ function registerDatabaseHandlers(dbManager) {
         } else if (config.predictionType === 'time_range') {
           const timeRangeConfig = config.timeRange;
           windowSeconds = timeRangeConfig.windowSeconds || 45;
-          title = timeRangeConfig.customTitle || 'How many minutes do we spend on the current challenge item?';
-          title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
+          // Build title with game/stage info
+          let baseTitle = timeRangeConfig.customTitle || 'How many minutes do we spend on the current challenge item?';
+          if (challengeSequenceNumber) {
+            baseTitle = baseTitle.replace('current', `challenge item ${challengeSequenceNumber}`);
+          }
+          if (gameId) {
+            baseTitle += ` (Game: ${gameId}`;
+            if (stageId) {
+              baseTitle += `, Stage: ${stageId}`;
+            }
+            baseTitle += ')';
+          }
+          title = baseTitle.replace(/\$username/g, integration.twitch_username || username || 'Player');
           
           // Get max time from config, or calculate from win rules if available
           let maxTimeMinutes = timeRangeConfig.maxTimeMinutes || 60;
@@ -12936,6 +12965,105 @@ function registerDatabaseHandlers(dbManager) {
       };
     } catch (error) {
       console.error('[twitch:prediction:create] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Check for active predictions on Twitch (managed or unmanaged)
+   * Channel: twitch:prediction:check-active
+   */
+  ipcMain.handle('twitch:prediction:check-active', async (event) => {
+    try {
+      // Get decrypted tokens
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      
+      // Get profile info
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No active profile found' };
+      }
+      
+      const db = dbManager.getConnection('clientdata');
+      const integration = db.prepare(`
+        SELECT twitch_user_id, twitch_username
+        FROM twitch_integration
+        WHERE profile_uuid = ? AND is_active = 1
+      `).get(currentProfileId);
+      
+      if (!integration) {
+        return { success: false, error: 'Twitch integration not found' };
+      }
+      
+      // Get client ID and create API client
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
+      
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Query Twitch API for active predictions
+      // Note: @twurple/api doesn't have a direct "get active predictions" method
+      // We need to use the predictions API to get predictions for the broadcaster
+      // For now, we'll check our database for active predictions and verify with Twitch
+      const activeLocalPredictions = db.prepare(`
+        SELECT 
+          prediction_uuid,
+          twitch_prediction_id,
+          twitch_broadcaster_id,
+          prediction_type,
+          local_status,
+          twitch_status,
+          run_uuid,
+          challenge_sequence_number
+        FROM twitch_predictions
+        WHERE profile_uuid = ?
+          AND local_status IN ('created', 'locked')
+          AND twitch_status IN ('ACTIVE', 'LOCKED', NULL)
+        ORDER BY created_at_ms DESC
+        LIMIT 1
+      `).all(currentProfileId);
+      
+      // For each local prediction, verify it still exists on Twitch
+      const verifiedPredictions = [];
+      for (const localPred of activeLocalPredictions) {
+        try {
+          const twitchPred = await apiClient.predictions.getPredictionById(
+            localPred.twitch_broadcaster_id,
+            localPred.twitch_prediction_id
+          );
+          
+          if (twitchPred && (twitchPred.status === 'ACTIVE' || twitchPred.status === 'LOCKED')) {
+            verifiedPredictions.push({
+              ...localPred,
+              twitchStatus: twitchPred.status,
+              isManaged: true
+            });
+          }
+        } catch (error) {
+          // Prediction doesn't exist on Twitch or error - skip it
+          console.log(`[twitch:prediction:check-active] Prediction ${localPred.twitch_prediction_id} not found on Twitch:`, error.message);
+        }
+      }
+      
+      // Check if there are any unmanaged predictions on Twitch
+      // Note: Twitch API doesn't provide a direct way to list all active predictions
+      // We can only check predictions we know about. For unmanaged predictions,
+      // we'd need to use EventSub or check when trying to create a new one.
+      // For now, we'll return what we know and handle conflicts during creation.
+      
+      return {
+        success: true,
+        activePredictions: verifiedPredictions,
+        hasActivePredictions: verifiedPredictions.length > 0,
+        hasUnmanagedPredictions: false // Will be determined during creation attempt
+      };
+    } catch (error) {
+      console.error('[twitch:prediction:check-active] Error:', error);
       return { success: false, error: error.message };
     }
   });

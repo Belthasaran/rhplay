@@ -221,7 +221,6 @@ import { ref, computed, onMounted, watch } from 'vue';
 
 const props = defineProps<{
   visible: boolean;
-  profileUuid?: string | null;
   profileGuardEnabled?: boolean;
 }>();
 
@@ -244,18 +243,19 @@ const timeRangeMaxMinutes = ref<number>(60);
 // Check profile guard requirement
 const profileGuardEnabled = computed(() => props.profileGuardEnabled === true);
 
+// Note: Profile UUID is now handled by OnlineProfileManager in the backend
+// No need to pass it as a prop or watch it
+
 // Load integration status and template configuration
 const loadData = async () => {
-  if (!props.profileUuid || !profileGuardEnabled.value) {
+  if (!profileGuardEnabled.value) {
     integrationStatus.value = null;
     return;
   }
   
   try {
-    // Load integration status
-    const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
-      profileUuid: props.profileUuid
-    });
+    // Load integration status (uses OnlineProfileManager internally)
+    const status = await (window as any).electronAPI.getTwitchIntegrationStatus();
     integrationStatus.value = status;
     
     // Load prediction template configuration
@@ -284,10 +284,8 @@ const loadData = async () => {
 
 // Start OAuth flow
 const startOAuthFlow = async () => {
-  if (!props.profileUuid) {
-    alert('No profile selected');
-    return;
-  }
+  // Profile UUID is handled by OnlineProfileManager in the backend
+  // No need to check here
   
   oauthInProgress.value = true;
   
@@ -305,12 +303,11 @@ const startOAuthFlow = async () => {
     
     const authUrl = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
     
-    // Open OAuth window and handle callback
+    // Open OAuth window and handle callback (uses OnlineProfileManager internally)
     const result = await (window as any).electronAPI.openTwitchOAuthWindow({
       url: authUrl,
       redirectUri: redirectUri,
-      state: state,
-      profileUuid: props.profileUuid
+      state: state
     });
     
     if (result && result.success) {
@@ -334,9 +331,8 @@ const revokeTokens = async () => {
   }
   
   try {
-    const result = await (window as any).electronAPI.revokeTwitchIntegration({
-      profileUuid: props.profileUuid
-    });
+    // Revoke integration (uses OnlineProfileManager internally)
+    const result = await (window as any).electronAPI.revokeTwitchIntegration();
     
     if (result && result.success) {
       integrationStatus.value = null;
@@ -352,7 +348,7 @@ const revokeTokens = async () => {
 
 // Save template configuration
 const saveTemplate = async () => {
-  if (!props.profileUuid || !predictionType.value) {
+  if (!predictionType.value) {
     return;
   }
   
@@ -379,9 +375,8 @@ const saveTemplate = async () => {
       }
     }
     
-    // TODO: Implement IPC handler to save template
+    // TODO: Implement IPC handler to save template (uses OnlineProfileManager internally)
     // await (window as any).electronAPI.savePredictionsTemplate({
-    //   profileUuid: props.profileUuid,
     //   template: JSON.stringify(template)
     // });
     

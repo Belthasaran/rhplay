@@ -22021,18 +22021,8 @@ async function openTwitchIntegrationSetup() {
     return;
   }
   
-  // Check if we have a profile
-  if (!onlineProfile.value || !onlineProfile.value.profileId) {
-    console.error('[openTwitchIntegrationSetup] No active profile found:', {
-      hasOnlineProfile: !!onlineProfile.value,
-      profileId: onlineProfile.value?.profileId,
-      profileKeys: onlineProfile.value ? Object.keys(onlineProfile.value) : []
-    });
-    alert('No active profile found. Please ensure you have created and selected a profile.');
-    return;
-  }
-  
-  console.log('[openTwitchIntegrationSetup] Opening with profile UUID:', onlineProfile.value.profileId);
+  // Profile check is now handled by OnlineProfileManager in the backend
+  // No need to check here - the backend will return appropriate errors if no profile exists
   showTwitchIntegrationSetup.value = true;
   
   // Load predictions configuration status

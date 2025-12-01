@@ -12723,14 +12723,24 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Create Twitch API client using @twurple/api
    * @param {string} accessToken - Decrypted access token
+   * @param {string} clientId - Twitch client ID
    * @returns {Object} Twitch API client
    */
-  function createTwitchApiClient(accessToken) {
-    // TODO: Import and use @twurple/api
-    // For now, return a placeholder that will be implemented
-    // const { ApiClient } = require('@twurple/api');
-    // return new ApiClient({ authProvider: ... });
-    throw new Error('Twitch API client creation not yet implemented - need to integrate @twurple/api');
+  function createTwitchApiClient(accessToken, clientId) {
+    try {
+      const { StaticAuthProvider } = require('@twurple/auth');
+      const { ApiClient } = require('@twurple/api');
+      
+      // Create static auth provider with access token (implicit grant flow)
+      // StaticAuthProvider is for tokens that don't refresh (like implicit grant)
+      const authProvider = new StaticAuthProvider(clientId, accessToken);
+      
+      // Create and return API client
+      return new ApiClient({ authProvider });
+    } catch (error) {
+      console.error('[createTwitchApiClient] Error creating API client:', error);
+      throw new Error(`Failed to create Twitch API client: ${error.message}`);
+    }
   }
 
   /**
@@ -12816,40 +12826,59 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
-      // TODO: Use @twurple/api to create prediction
-      // const apiClient = createTwitchApiClient(accessToken);
-      // const prediction = await apiClient.predictions.createPrediction({
-      //   broadcasterId: integration.twitch_user_id,
-      //   title: title,
-      //   outcomes: outcomes,
-      //   predictionWindow: windowSeconds
-      // });
+      // Get client ID and create API client
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
       
-      // For now, return placeholder
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Create prediction using @twurple/api
+      const prediction = await apiClient.predictions.createPrediction(
+        integration.twitch_user_id,
+        {
+          title: title,
+          outcomes: outcomes.map(outcome => ({ title: outcome.title })),
+          predictionWindowSeconds: windowSeconds
+        }
+      );
+      
+      // Store in database
+      const predictionUuid = crypto.randomUUID();
+      const now = Date.now();
+      
+      db.prepare(`
+        INSERT INTO twitch_predictions (
+          prediction_uuid, profile_uuid, twitch_prediction_id, twitch_broadcaster_id,
+          prediction_type, prediction_subtype, template_config_json,
+          title, outcomes_json, prediction_window_seconds,
+          local_status, twitch_status, created_at_ms,
+          run_uuid, challenge_sequence_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        predictionUuid,
+        currentProfileId,
+        prediction.id,
+        integration.twitch_user_id,
+        templateConfig.type,
+        templateConfig.individualItem?.predictionType || null,
+        JSON.stringify(templateConfig),
+        title,
+        JSON.stringify(outcomes),
+        windowSeconds,
+        'created',
+        prediction.status,
+        now,
+        runUuid || null,
+        challengeSequenceNumber || null
+      );
+      
       return { 
-        success: false, 
-        error: 'Prediction creation not yet implemented - need to integrate @twurple/api' 
+        success: true, 
+        predictionId: prediction.id, 
+        predictionUuid: predictionUuid 
       };
-      
-      // Once implemented, store in database:
-      // const predictionUuid = crypto.randomUUID();
-      // db.prepare(`
-      //   INSERT INTO twitch_predictions (
-      //     prediction_uuid, profile_uuid, twitch_prediction_id, twitch_broadcaster_id,
-      //     prediction_type, prediction_subtype, template_config_json,
-      //     title, outcomes_json, prediction_window_seconds,
-      //     local_status, twitch_status, created_at_ms,
-      //     run_uuid, challenge_sequence_number
-      //   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      // `).run(
-      //   predictionUuid, currentProfileId, prediction.id, integration.twitch_user_id,
-      //   templateConfig.type, templateConfig.individualItem?.predictionType || null, JSON.stringify(templateConfig),
-      //   title, JSON.stringify(outcomes), windowSeconds,
-      //   'created', prediction.status, Date.now(),
-      //   runUuid || null, challengeSequenceNumber || null
-      // );
-      
-      // return { success: true, predictionId: prediction.id, predictionUuid };
     } catch (error) {
       console.error('[twitch:prediction:create] Error:', error);
       return { success: false, error: error.message };

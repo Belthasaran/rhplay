@@ -23195,17 +23195,8 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       return;
     }
     
-    // Get outcomes from database
-    const dbResult = await (window as any).electronAPI.getTwitchPredictionData({
-      predictionUuid: prediction.prediction_uuid
-    });
-    
-    if (!dbResult.success || !dbResult.prediction) {
-      console.warn('[resolvePredictionForChallenge] Could not get prediction data');
-      return;
-    }
-    
-    const outcomes = parsePredictionOutcomes(dbResult.prediction);
+    // Get outcomes from the status result (it already includes outcomes_json)
+    const outcomes = parsePredictionOutcomes(statusResult.prediction);
     if (outcomes.length === 0) {
       console.warn('[resolvePredictionForChallenge] No outcomes found');
       // Lock instead of resolving

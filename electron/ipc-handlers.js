@@ -13201,8 +13201,8 @@ function registerDatabaseHandlers(dbManager) {
           prediction_type, prediction_subtype, template_config_json,
           title, outcomes_json, prediction_window_seconds,
           local_status, twitch_status, created_at_ms,
-          run_uuid, challenge_sequence_number
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          run_uuid, challenge_sequence_number, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `).run(
         predictionUuid,
         currentProfileId,

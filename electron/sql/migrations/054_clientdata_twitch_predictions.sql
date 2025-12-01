@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS twitch_predictions (
     -- Lifecycle timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at_ms INTEGER NOT NULL, -- Milliseconds timestamp for precise timing
+    updated_at TIMESTAMP, -- Last update timestamp (updated by trigger, initialized to created_at)
     locked_at TIMESTAMP,
     locked_at_ms INTEGER,
     resolved_at TIMESTAMP,

@@ -13487,7 +13487,8 @@ function registerDatabaseHandlers(dbManager) {
         FROM twitch_predictions
         WHERE prediction_uuid = ?
       `).get(predictionUuid);
-      
+
+      console.log(`[twitch:prediction:resolve] prediction=${prediction} winningOutcomeId=${winningOutcomeId}`)
       if (!prediction) {
         return { success: false, error: 'Prediction not found' };
       }
@@ -13546,11 +13547,11 @@ function registerDatabaseHandlers(dbManager) {
         WHERE prediction_uuid = ?
       `).get(predictionUuid);
       
+      console.log(`[twitch:prediction:cancel] Prediction not found predictionUuid=${predictionUuid}`)
       if (!prediction) {
         console.log(`[twitch:prediction:cancel] Prediction not found predictionUuid=${predictionUuid}`)
         return { success: false, error: 'Prediction not found' };
       }
-      console.log(`[twitch:prediction:cancel] Prediction not found predictionUuid=${predictionUuid}`)
       
       // Get decrypted tokens and create API client
       const { accessToken } = await getDecryptedTwitchTokens(event);

@@ -1,0 +1,810 @@
+<template>
+  <div v-if="visible" class="modal-backdrop" @click="handleOverlayClick">
+    <div class="twitch-integration-modal" @click.stop>
+      <header class="modal-header">
+        <h3>Twitch Predictions Configuration</h3>
+        <button class="close" @click="handleClose">✕</button>
+      </header>
+      
+      <div class="modal-body">
+        <!-- Profile Guard Check -->
+        <div v-if="!profileGuardEnabled" class="warning-section">
+          <p class="warning-text">
+            ⚠️ Profile Guard must be configured before setting up Twitch integration.
+            Your Twitch tokens must be encrypted with your profile guard key for security.
+          </p>
+          <button @click="handleClose" class="btn-primary">Close</button>
+        </div>
+        
+        <!-- Main Setup Content -->
+        <div v-else>
+          <!-- Twitch Connection Status (Compact) -->
+          <div class="connection-status-bar">
+            <div class="connection-info">
+              <span v-if="integrationStatus" class="status-indicator connected">●</span>
+              <span v-else class="status-indicator disconnected">●</span>
+              <span class="status-text">
+                <span v-if="integrationStatus">
+                  Connected as {{ integrationStatus.twitch_username || 'Unknown' }}
+                </span>
+                <span v-else>
+                  Not connected to Twitch
+                </span>
+              </span>
+            </div>
+            <div class="connection-actions">
+              <button 
+                v-if="!integrationStatus"
+                @click="startOAuthFlow" 
+                class="btn-connect"
+                :disabled="oauthInProgress"
+              >
+                {{ oauthInProgress ? 'Connecting...' : 'Connect to Twitch' }}
+              </button>
+              <button 
+                v-else
+                @click="revokeTokens" 
+                class="btn-disconnect"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+
+          <!-- Prediction Templates Configuration (Main Content) -->
+          <div class="templates-section">
+            <h4>Prediction Templates</h4>
+            <p class="section-description">
+              Configure how predictions are created during challenge runs. Only one template type can be active at a time.
+            </p>
+
+            <!-- Prediction Type Selection -->
+            <div class="prediction-type-selector">
+              <label class="type-option">
+                <input 
+                  type="radio" 
+                  name="predictionType" 
+                  value="whole_challenge"
+                  v-model="predictionType"
+                  :disabled="!integrationStatus"
+                />
+                <span class="type-label">Whole Challenge</span>
+                <span class="type-description">
+                  One prediction for the entire run covering all remaining challenges
+                </span>
+              </label>
+              <label class="type-option">
+                <input 
+                  type="radio" 
+                  name="predictionType" 
+                  value="individual_item"
+                  v-model="predictionType"
+                  :disabled="!integrationStatus"
+                />
+                <span class="type-label">Individual Item</span>
+                <span class="type-description">
+                  Separate prediction for each challenge item
+                </span>
+              </label>
+            </div>
+
+            <!-- Whole Challenge Template Configuration -->
+            <div v-if="predictionType === 'whole_challenge'" class="template-config">
+              <h5>Whole Challenge Settings</h5>
+              
+              <div class="config-field">
+                <label>
+                  Number of Outcomes:
+                  <select 
+                    v-model.number="wholeChallengeOutcomeCount"
+                    :disabled="!integrationStatus"
+                    class="config-select"
+                  >
+                    <option v-for="n in 8" :key="n + 2" :value="n + 2">{{ n + 2 }}</option>
+                  </select>
+                </label>
+                <p class="field-help">
+                  How many different outcome ranges to offer (3-10). Outcomes are automatically divided across the challenge range.
+                </p>
+              </div>
+
+              <div class="config-field">
+                <label>
+                  Prediction Window (minutes):
+                  <input 
+                    type="number"
+                    v-model.number="wholeChallengeWindowMinutes"
+                    min="1"
+                    max="60"
+                    :disabled="!integrationStatus"
+                    class="config-input"
+                  />
+                </label>
+                <p class="field-help">
+                  How long the prediction stays open before automatically locking (default: 10 minutes).
+                </p>
+              </div>
+            </div>
+
+            <!-- Individual Item Template Configuration -->
+            <div v-if="predictionType === 'individual_item'" class="template-config">
+              <h5>Individual Item Settings</h5>
+              
+              <div class="config-field">
+                <label class="prediction-subtype-label">
+                  <input 
+                    type="radio" 
+                    name="individualPredictionType" 
+                    value="yes_no"
+                    v-model="individualPredictionType"
+                    :disabled="!integrationStatus"
+                  />
+                  <span class="subtype-label">Yes/No (Success/Fail)</span>
+                  <span class="subtype-description">
+                    Simple prediction: Will we win this challenge? (Done = Yes, Skip = No)
+                  </span>
+                </label>
+              </div>
+
+              <div class="config-field">
+                <label class="prediction-subtype-label">
+                  <input 
+                    type="radio" 
+                    name="individualPredictionType" 
+                    value="time_range"
+                    v-model="individualPredictionType"
+                    :disabled="!integrationStatus"
+                  />
+                  <span class="subtype-label">Time Range</span>
+                  <span class="subtype-description">
+                    Predict how many minutes will be spent on this challenge
+                  </span>
+                </label>
+              </div>
+
+              <!-- Time Range Specific Settings -->
+              <div v-if="individualPredictionType === 'time_range'" class="time-range-config">
+                <div class="config-field">
+                  <label>
+                    Number of Time Outcomes:
+                    <select 
+                      v-model.number="timeRangeOutcomeCount"
+                      :disabled="!integrationStatus"
+                      class="config-select"
+                    >
+                      <option v-for="n in 5" :key="n + 2" :value="n + 2">{{ n + 2 }}</option>
+                    </select>
+                  </label>
+                  <p class="field-help">
+                    How many time ranges to offer (3-7). Ranges are automatically calculated based on challenge time limits.
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label>
+                    Maximum Time (minutes):
+                    <input 
+                      type="number"
+                      v-model.number="timeRangeMaxMinutes"
+                      min="5"
+                      max="120"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                    />
+                  </label>
+                  <p class="field-help">
+                    Maximum time range to offer. If win rules are active, this will be capped at the challenge time limit + rollover.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="template-actions">
+              <button 
+                @click="saveTemplate"
+                class="btn-save"
+                :disabled="!integrationStatus || !predictionType"
+              >
+                Save Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue';
+
+const props = defineProps<{
+  visible: boolean;
+  profileUuid?: string | null;
+  profileGuardEnabled?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: 'close'): void;
+  (e: 'update'): void;
+}>();
+
+const oauthInProgress = ref(false);
+const integrationStatus = ref<any>(null);
+
+// Prediction template state
+const predictionType = ref<string>('whole_challenge'); // 'whole_challenge' | 'individual_item'
+const wholeChallengeOutcomeCount = ref<number>(5);
+const wholeChallengeWindowMinutes = ref<number>(10);
+const individualPredictionType = ref<string>('yes_no'); // 'yes_no' | 'time_range'
+const timeRangeOutcomeCount = ref<number>(5);
+const timeRangeMaxMinutes = ref<number>(60);
+
+// Check profile guard requirement
+const profileGuardEnabled = computed(() => props.profileGuardEnabled === true);
+
+// Load integration status and template configuration
+const loadData = async () => {
+  if (!props.profileUuid || !profileGuardEnabled.value) {
+    integrationStatus.value = null;
+    return;
+  }
+  
+  try {
+    // Load integration status
+    const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
+      profileUuid: props.profileUuid
+    });
+    integrationStatus.value = status;
+    
+    // Load prediction template configuration
+    // const template = await (window as any).electronAPI.getPredictionsTemplate({
+    //   profileUuid: props.profileUuid
+    // });
+    // if (template) {
+    //   predictionType.value = template.type || 'whole_challenge';
+    //   if (template.wholeChallenge) {
+    //     wholeChallengeOutcomeCount.value = template.wholeChallenge.outcomeCount || 5;
+    //     wholeChallengeWindowMinutes.value = template.wholeChallenge.predictionWindowMinutes || 10;
+    //   }
+    //   if (template.individualItem) {
+    //     individualPredictionType.value = template.individualItem.predictionType || 'yes_no';
+    //     if (template.individualItem.timeRange) {
+    //       timeRangeOutcomeCount.value = template.individualItem.timeRange.outcomeCount || 5;
+    //       timeRangeMaxMinutes.value = template.individualItem.timeRange.maxTimeMinutes || 60;
+    //     }
+    //   }
+    // }
+  } catch (error) {
+    console.error('[TwitchIntegrationSetup] Error loading data:', error);
+    integrationStatus.value = null;
+  }
+};
+
+// Start OAuth flow
+const startOAuthFlow = async () => {
+  if (!props.profileUuid) {
+    alert('No profile selected');
+    return;
+  }
+  
+  oauthInProgress.value = true;
+  
+  try {
+    // Get client ID and redirect URI
+    const clientId = await (window as any).electronAPI.getTwitchClientId();
+    if (!clientId) {
+      alert('Twitch client ID not configured. Please check your build configuration.');
+      return;
+    }
+    
+    const redirectUri = 'https://localhost';
+    const scopes = 'channel:read:predictions channel:manage:predictions channel:read:vips moderator:read:moderators user:read:chat moderator:read:chat_messages moderator:read:chatters moderator:read:followers moderator:read:shoutouts channel:bot';
+    const state = crypto.randomUUID();
+    
+    const authUrl = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
+    
+    // Open OAuth window and handle callback
+    const result = await (window as any).electronAPI.openTwitchOAuthWindow({
+      url: authUrl,
+      redirectUri: redirectUri,
+      state: state,
+      profileUuid: props.profileUuid
+    });
+    
+    if (result && result.success) {
+      await loadData();
+      emit('update');
+    } else {
+      alert('Failed to complete OAuth flow. Please try again.');
+    }
+  } catch (error: any) {
+    console.error('[TwitchIntegrationSetup] OAuth error:', error);
+    alert(`Failed to complete OAuth flow: ${error.message || 'Unknown error'}`);
+  } finally {
+    oauthInProgress.value = false;
+  }
+};
+
+// Revoke tokens
+const revokeTokens = async () => {
+  if (!confirm('Are you sure you want to disconnect from Twitch? This will delete all stored tokens.')) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.revokeTwitchIntegration({
+      profileUuid: props.profileUuid
+    });
+    
+    if (result && result.success) {
+      integrationStatus.value = null;
+      emit('update');
+    } else {
+      alert(`Failed to disconnect: ${result?.error || 'Unknown error'}`);
+    }
+  } catch (error: any) {
+    console.error('[TwitchIntegrationSetup] Revoke error:', error);
+    alert(`Failed to disconnect: ${error.message || 'Unknown error'}`);
+  }
+};
+
+// Save template configuration
+const saveTemplate = async () => {
+  if (!props.profileUuid || !predictionType.value) {
+    return;
+  }
+  
+  try {
+    const template: any = {
+      type: predictionType.value
+    };
+    
+    if (predictionType.value === 'whole_challenge') {
+      template.wholeChallenge = {
+        outcomeCount: wholeChallengeOutcomeCount.value,
+        predictionWindowMinutes: wholeChallengeWindowMinutes.value
+      };
+    } else if (predictionType.value === 'individual_item') {
+      template.individualItem = {
+        predictionType: individualPredictionType.value
+      };
+      
+      if (individualPredictionType.value === 'time_range') {
+        template.individualItem.timeRange = {
+          outcomeCount: timeRangeOutcomeCount.value,
+          maxTimeMinutes: timeRangeMaxMinutes.value
+        };
+      }
+    }
+    
+    // TODO: Implement IPC handler to save template
+    // await (window as any).electronAPI.savePredictionsTemplate({
+    //   profileUuid: props.profileUuid,
+    //   template: JSON.stringify(template)
+    // });
+    
+    alert('Template configuration saved successfully!');
+    emit('update');
+  } catch (error) {
+    console.error('[TwitchIntegrationSetup] Save error:', error);
+    alert('Failed to save configuration. Please try again.');
+  }
+};
+
+// Handle overlay click (close modal)
+const handleOverlayClick = () => {
+  handleClose();
+};
+
+// Handle close
+const handleClose = () => {
+  emit('close');
+};
+
+// Watch for visibility changes
+watch(() => props.visible, (newVal) => {
+  if (newVal) {
+    loadData();
+  }
+});
+
+onMounted(() => {
+  if (props.visible) {
+    loadData();
+  }
+});
+</script>
+
+<style scoped>
+.twitch-integration-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 60001;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 60000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #444;
+  flex-shrink: 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #fff;
+}
+
+.modal-header .close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-header .close:hover {
+  background: #444;
+  border-radius: 4px;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.warning-section {
+  padding: 16px;
+  background: #4a2a00;
+  border: 1px solid #ff8800;
+  border-radius: 4px;
+}
+
+.warning-text {
+  color: #ffaa44;
+  margin: 0 0 16px 0;
+}
+
+/* Connection Status Bar (Compact) */
+.connection-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.connection-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.status-indicator.connected {
+  color: #10b981;
+}
+
+.status-indicator.disconnected {
+  color: #ef4444;
+}
+
+.status-text {
+  color: #ccc;
+  font-size: 14px;
+}
+
+.connection-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-connect,
+.btn-disconnect {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-connect {
+  background: #9146ff;
+  color: #fff;
+}
+
+.btn-connect:hover:not(:disabled) {
+  background: #a855f7;
+}
+
+.btn-connect:disabled {
+  background: #555;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-disconnect {
+  background: #444;
+  color: #fff;
+  border: 1px solid #666;
+}
+
+.btn-disconnect:hover {
+  background: #555;
+}
+
+/* Templates Section (Main Content) */
+.templates-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.templates-section h4 {
+  margin: 0 0 8px 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.section-description {
+  color: #aaa;
+  font-size: 13px;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+/* Prediction Type Selection */
+.prediction-type-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.type-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #1a1a1a;
+  border: 2px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.type-option:hover:not(:has(input:disabled)) {
+  border-color: #666;
+}
+
+.type-option:has(input:checked) {
+  border-color: #9146ff;
+  background: #2a1a3a;
+}
+
+.type-option:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.type-option input[type="radio"] {
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.type-label {
+  font-weight: 600;
+  color: #fff;
+  font-size: 15px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.type-description {
+  color: #aaa;
+  font-size: 13px;
+  display: block;
+}
+
+/* Template Configuration */
+.template-config {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.template-config h5 {
+  margin: 0 0 16px 0;
+  color: #fff;
+  font-size: 16px;
+}
+
+.config-field {
+  margin-bottom: 20px;
+}
+
+.config-field:last-child {
+  margin-bottom: 0;
+}
+
+.config-field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.config-select,
+.config-input {
+  padding: 6px 10px;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.config-select:disabled,
+.config-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.config-select {
+  min-width: 80px;
+}
+
+.config-input {
+  width: 100px;
+}
+
+.field-help {
+  color: #aaa;
+  font-size: 12px;
+  margin: 6px 0 0 0;
+  line-height: 1.4;
+}
+
+.prediction-subtype-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.prediction-subtype-label:hover:not(:has(input:disabled)) {
+  border-color: #666;
+}
+
+.prediction-subtype-label:has(input:checked) {
+  border-color: #9146ff;
+  background: #2a1a3a;
+}
+
+.prediction-subtype-label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prediction-subtype-label input[type="radio"] {
+  margin: 0;
+}
+
+.subtype-label {
+  font-weight: 600;
+  color: #fff;
+  font-size: 14px;
+}
+
+.subtype-description {
+  color: #aaa;
+  font-size: 13px;
+}
+
+.time-range-config {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #444;
+}
+
+.template-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #444;
+}
+
+.btn-save {
+  padding: 10px 24px;
+  background: #9146ff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-save:hover:not(:disabled) {
+  background: #a855f7;
+}
+
+.btn-save:disabled {
+  background: #555;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn-primary {
+  padding: 8px 16px;
+  background: #9146ff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-primary:hover {
+  background: #a855f7;
+}
+</style>

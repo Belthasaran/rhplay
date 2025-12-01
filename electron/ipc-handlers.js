@@ -13006,11 +13006,18 @@ function registerDatabaseHandlers(dbManager) {
       
       const apiClient = createTwitchApiClient(accessToken, clientId);
       
-      // Query Twitch API for active predictions
-      // Note: @twurple/api doesn't have a direct "get active predictions" method
-      // We need to use the predictions API to get predictions for the broadcaster
-      // For now, we'll check our database for active predictions and verify with Twitch
-      const activeLocalPredictions = db.prepare(`
+      // Get list of predictions from Twitch API (returns most recent first)
+      // Since Twitch only allows one active prediction at a time, the first result
+      // will be the active one if it exists
+      const predictions = await apiClient.predictions.getPredictions(integration.twitch_user_id);
+      
+      // Find active predictions (ACTIVE or LOCKED status)
+      const activeTwitchPredictions = predictions.filter(p => 
+        p.status === 'ACTIVE' || p.status === 'LOCKED'
+      );
+      
+      // Check our database for managed predictions
+      const localPredictions = db.prepare(`
         SELECT 
           prediction_uuid,
           twitch_prediction_id,
@@ -13023,44 +13030,55 @@ function registerDatabaseHandlers(dbManager) {
         FROM twitch_predictions
         WHERE profile_uuid = ?
           AND local_status IN ('created', 'locked')
-          AND twitch_status IN ('ACTIVE', 'LOCKED', NULL)
         ORDER BY created_at_ms DESC
-        LIMIT 1
       `).all(currentProfileId);
       
-      // For each local prediction, verify it still exists on Twitch
+      // Match Twitch predictions with our local records
       const verifiedPredictions = [];
-      for (const localPred of activeLocalPredictions) {
-        try {
-          const twitchPred = await apiClient.predictions.getPredictionById(
-            localPred.twitch_broadcaster_id,
-            localPred.twitch_prediction_id
-          );
-          
-          if (twitchPred && (twitchPred.status === 'ACTIVE' || twitchPred.status === 'LOCKED')) {
-            verifiedPredictions.push({
-              ...localPred,
-              twitchStatus: twitchPred.status,
-              isManaged: true
-            });
-          }
-        } catch (error) {
-          // Prediction doesn't exist on Twitch or error - skip it
-          console.log(`[twitch:prediction:check-active] Prediction ${localPred.twitch_prediction_id} not found on Twitch:`, error.message);
+      let hasUnmanagedPredictions = false;
+      
+      for (const twitchPred of activeTwitchPredictions) {
+        // Find matching local prediction
+        const localMatch = localPredictions.find(lp => 
+          lp.twitch_prediction_id === twitchPred.id
+        );
+        
+        if (localMatch) {
+          // This is a managed prediction
+          verifiedPredictions.push({
+            prediction_uuid: localMatch.prediction_uuid,
+            twitch_prediction_id: twitchPred.id,
+            twitch_broadcaster_id: localMatch.twitch_broadcaster_id,
+            prediction_type: localMatch.prediction_type,
+            local_status: localMatch.local_status,
+            twitch_status: twitchPred.status,
+            run_uuid: localMatch.run_uuid,
+            challenge_sequence_number: localMatch.challenge_sequence_number,
+            isManaged: true
+          });
+        } else {
+          // This is an unmanaged prediction (created outside our system)
+          hasUnmanagedPredictions = true;
+          verifiedPredictions.push({
+            prediction_uuid: null,
+            twitch_prediction_id: twitchPred.id,
+            twitch_broadcaster_id: integration.twitch_user_id,
+            prediction_type: null,
+            local_status: null,
+            twitch_status: twitchPred.status,
+            run_uuid: null,
+            challenge_sequence_number: null,
+            isManaged: false,
+            title: twitchPred.title
+          });
         }
       }
-      
-      // Check if there are any unmanaged predictions on Twitch
-      // Note: Twitch API doesn't provide a direct way to list all active predictions
-      // We can only check predictions we know about. For unmanaged predictions,
-      // we'd need to use EventSub or check when trying to create a new one.
-      // For now, we'll return what we know and handle conflicts during creation.
       
       return {
         success: true,
         activePredictions: verifiedPredictions,
-        hasActivePredictions: verifiedPredictions.length > 0,
-        hasUnmanagedPredictions: false // Will be determined during creation attempt
+        hasActivePredictions: activeTwitchPredictions.length > 0,
+        hasUnmanagedPredictions: hasUnmanagedPredictions
       };
     } catch (error) {
       console.error('[twitch:prediction:check-active] Error:', error);

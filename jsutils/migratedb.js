@@ -1170,6 +1170,22 @@ const MIGRATIONS = {
         return columnExists(db, 'twitch_integration', 'last_validated_at');
       },
     },
+    {
+      id: 'clientdata_056_fairness_challenge_quality_ratings',
+      description: 'Add fairness and challenge quality rating columns with comments',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/056_clientdata_fairness_challenge_quality_ratings.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_game_annotations', 'user_fairness_rating')
+          && columnExists(db, 'user_game_annotations', 'user_fairness_comment')
+          && columnExists(db, 'user_game_annotations', 'user_challenge_quality_rating')
+          && columnExists(db, 'user_game_annotations', 'user_challenge_quality_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_fairness_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_fairness_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_challenge_quality_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_challenge_quality_comment');
+      },
+    },
   ],
   patchbin: [
     {

@@ -180,8 +180,111 @@
                 </label>
               </div>
 
+              <!-- Yes/No Specific Settings -->
+              <div v-if="individualPredictionType === 'yes_no'" class="yes-no-config">
+                <div class="config-field">
+                  <label>
+                    Prediction Window (seconds):
+                    <input 
+                      type="number"
+                      v-model.number="yesNoWindowSeconds"
+                      min="30"
+                      max="300"
+                      step="5"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                    />
+                  </label>
+                  <p class="field-help">
+                    How long the prediction stays open (default: 30 seconds). Prediction is cancelled and refunded if Done/Skip is clicked before window expires.
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label>
+                    Custom Title (optional):
+                    <input 
+                      type="text"
+                      v-model="yesNoCustomTitle"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                      placeholder="Will we win at the current challenge item?"
+                    />
+                  </label>
+                  <p class="field-help">
+                    Optional custom title. Use $username to insert your Twitch username. Default: "Will we win at the current challenge item?"
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label>
+                    "Yes" Outcome Name:
+                    <input 
+                      type="text"
+                      v-model="yesOutcomeName"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                      placeholder="Yes"
+                    />
+                  </label>
+                  <p class="field-help">
+                    Name for the success outcome (default: "Yes")
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label>
+                    "No" Outcome Name:
+                    <input 
+                      type="text"
+                      v-model="noOutcomeName"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                      placeholder="No"
+                    />
+                  </label>
+                  <p class="field-help">
+                    Name for the failure outcome (default: "No")
+                  </p>
+                </div>
+              </div>
+
               <!-- Time Range Specific Settings -->
               <div v-if="individualPredictionType === 'time_range'" class="time-range-config">
+                <div class="config-field">
+                  <label>
+                    Prediction Window (seconds):
+                    <input 
+                      type="number"
+                      v-model.number="timeRangeWindowSeconds"
+                      min="30"
+                      max="300"
+                      step="5"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                    />
+                  </label>
+                  <p class="field-help">
+                    How long the prediction stays open (default: 45 seconds). Prediction is cancelled and refunded if Done/Skip is clicked before window expires.
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label>
+                    Custom Title (optional):
+                    <input 
+                      type="text"
+                      v-model="timeRangeCustomTitle"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                      placeholder="How many minutes do we spend on the current challenge item?"
+                    />
+                  </label>
+                  <p class="field-help">
+                    Optional custom title. Use $username to insert your Twitch username. Default: "How many minutes do we spend on the current challenge item?"
+                  </p>
+                </div>
+
                 <div class="config-field">
                   <label>
                     Number of Time Outcomes:
@@ -388,15 +491,25 @@ const saveTemplate = async () => {
     if (predictionType.value === 'whole_challenge') {
       template.wholeChallenge = {
         outcomeCount: wholeChallengeOutcomeCount.value,
-        predictionWindowMinutes: wholeChallengeWindowMinutes.value
+        predictionWindowSeconds: wholeChallengeWindowSeconds.value,
+        customTitle: wholeChallengeCustomTitle.value || undefined
       };
     } else if (predictionType.value === 'individual_item') {
       template.individualItem = {
         predictionType: individualPredictionType.value
       };
       
-      if (individualPredictionType.value === 'time_range') {
+      if (individualPredictionType.value === 'yes_no') {
+        template.individualItem.yesNo = {
+          windowSeconds: yesNoWindowSeconds.value,
+          customTitle: yesNoCustomTitle.value || undefined,
+          yesOutcomeName: yesOutcomeName.value,
+          noOutcomeName: noOutcomeName.value
+        };
+      } else if (individualPredictionType.value === 'time_range') {
         template.individualItem.timeRange = {
+          windowSeconds: timeRangeWindowSeconds.value,
+          customTitle: timeRangeCustomTitle.value || undefined,
           outcomeCount: timeRangeOutcomeCount.value,
           maxTimeMinutes: timeRangeMaxMinutes.value
         };

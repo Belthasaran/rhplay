@@ -17732,6 +17732,7 @@ const showPredictionsManageDropdown = ref(false);  // Whether dropdown menu is v
 const activePredictionUuid = ref<string | null>(null);  // UUID of currently active prediction
 const predictionRetryQueue = ref<Array<{action: string, params: any, retryCount: number, maxRetries: number}>>([]);  // Queue for retrying failed operations
 const predictionRetryTimer = ref<number | null>(null);  // Timer for retry attempts
+const queuedPredictionCreation = ref<{challengeIndex: number, timer: number | null} | null>(null);  // Queued prediction creation with delay
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
@@ -20809,9 +20810,14 @@ async function nextChallenge() {
       // Clean up stale operations again after moving to next challenge
       cleanupStalePredictionOperations();
       
+      // Cancel any queued prediction creation if we've moved past the challenge it was queued for
+      cancelQueuedPredictionIfNeeded();
+      
       // Handle prediction lifecycle when challenge becomes active (for same_item mode)
-      if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
-        // Create prediction for the newly active challenge
+      // Note: We don't create prediction immediately - it will be created after resolving the previous one with delay
+      // But if this is the first challenge, create it immediately
+      if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item' && currentChallengeIndex.value === 0) {
+        // First challenge - create prediction immediately
         createPredictionForNextChallenge(currentChallengeIndex.value).catch(error => {
           console.error('[nextChallenge] Error creating prediction for new challenge:', error);
           // Error already handled in createPredictionForNextChallenge with toast
@@ -20923,9 +20929,14 @@ async function skipChallenge() {
       // Clean up stale operations again after moving to next challenge
       cleanupStalePredictionOperations();
       
+      // Cancel any queued prediction creation if we've moved past the challenge it was queued for
+      cancelQueuedPredictionIfNeeded();
+      
       // Handle prediction lifecycle when challenge becomes active (for same_item mode)
-      if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
-        // Create prediction for the newly active challenge
+      // Note: We don't create prediction immediately - it will be created after resolving the previous one with delay
+      // But if this is the first challenge, create it immediately
+      if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item' && currentChallengeIndex.value === 0) {
+        // First challenge - create prediction immediately
         createPredictionForNextChallenge(currentChallengeIndex.value).catch(error => {
           console.error('[skipChallenge] Error creating prediction for new challenge:', error);
           // Error already handled in createPredictionForNextChallenge with toast
@@ -23050,9 +23061,9 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         // This prediction is about the challenge that just completed
         await resolvePredictionForChallenge(runPrediction, status);
         
-        // Create prediction for next challenge if available
+        // Queue prediction creation for next challenge with delay (if available)
         if (challengeIndex < runEntries.length - 1) {
-          await createPredictionForNextChallenge(challengeIndex + 1);
+          queueDelayedPredictionCreation(challengeIndex + 1);
         }
       }
       
@@ -23390,6 +23401,64 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       'error',
       5000
     );
+  }
+}
+
+// Queue prediction creation with delay (for same_item mode)
+async function queueDelayedPredictionCreation(nextChallengeIndex: number) {
+  // Cancel any existing queued prediction
+  if (queuedPredictionCreation.value?.timer) {
+    clearTimeout(queuedPredictionCreation.value.timer);
+    queuedPredictionCreation.value = null;
+  }
+  
+  // Get delay from template
+  try {
+    const template = await (window as any).electronAPI.getPredictionsTemplate();
+    if (!template || template.type !== 'individual_item') {
+      return;
+    }
+    
+    const delaySeconds = template.individualItem?.predictionCreationDelaySeconds || 30;
+    
+    // Queue the creation with delay
+    const timer = window.setTimeout(async () => {
+      // Check if we're still before or on the challenge the prediction is for
+      // If currentChallengeIndex > nextChallengeIndex, we've moved past it, so don't create
+      if (currentChallengeIndex.value <= nextChallengeIndex) {
+        await createPredictionForNextChallenge(nextChallengeIndex);
+      } else {
+        console.log(`[queueDelayedPredictionCreation] Skipping creation for challenge ${nextChallengeIndex} - already moved past it (current: ${currentChallengeIndex.value})`);
+      }
+      
+      // Clear the queued creation
+      if (queuedPredictionCreation.value?.challengeIndex === nextChallengeIndex) {
+        queuedPredictionCreation.value = null;
+      }
+    }, delaySeconds * 1000);
+    
+    queuedPredictionCreation.value = {
+      challengeIndex: nextChallengeIndex,
+      timer: timer
+    };
+    
+    console.log(`[queueDelayedPredictionCreation] Queued prediction creation for challenge ${nextChallengeIndex} after ${delaySeconds} seconds`);
+  } catch (error: any) {
+    console.error('[queueDelayedPredictionCreation] Error:', error);
+  }
+}
+
+// Cancel queued prediction creation if we've moved past the challenge
+function cancelQueuedPredictionIfNeeded() {
+  if (queuedPredictionCreation.value) {
+    // If we've moved to or past the challenge the prediction was queued for, cancel it
+    if (currentChallengeIndex.value >= queuedPredictionCreation.value.challengeIndex) {
+      if (queuedPredictionCreation.value.timer) {
+        clearTimeout(queuedPredictionCreation.value.timer);
+      }
+      console.log(`[cancelQueuedPredictionIfNeeded] Cancelled queued prediction for challenge ${queuedPredictionCreation.value.challengeIndex} - moved to challenge ${currentChallengeIndex.value}`);
+      queuedPredictionCreation.value = null;
+    }
   }
 }
 

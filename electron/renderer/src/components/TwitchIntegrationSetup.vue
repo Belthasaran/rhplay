@@ -180,6 +180,25 @@
                 </label>
               </div>
 
+              <!-- Common Individual Item Settings -->
+              <div class="config-field">
+                <label>
+                  Delay Before Next Prediction (seconds):
+                  <input 
+                    type="number"
+                    v-model.number="predictionCreationDelaySeconds"
+                    min="0"
+                    max="300"
+                    step="5"
+                    :disabled="!integrationStatus"
+                    class="config-input"
+                  />
+                </label>
+                <p class="field-help">
+                  After resolving a prediction, wait this many seconds before creating the next prediction. If you move to the next challenge before the delay expires, no prediction will be created for that challenge. This gives viewers time to see attempts and check the previous resolution. Default: 30 seconds.
+                </p>
+              </div>
+
               <!-- Yes/No Specific Settings -->
               <div v-if="individualPredictionType === 'yes_no'" class="yes-no-config">
                 <div class="config-field">
@@ -366,6 +385,7 @@ const wholeChallengeOutcomeCount = ref<number>(5);
 const wholeChallengeWindowSeconds = ref<number>(600); // Default 10 minutes = 600 seconds
 const wholeChallengeCustomTitle = ref<string>(''); // Optional custom title
 const individualPredictionType = ref<string>('yes_no'); // 'yes_no' | 'time_range'
+const predictionCreationDelaySeconds = ref<number>(30); // Default 30 seconds delay before creating next prediction
 const yesNoWindowSeconds = ref<number>(30); // Default 30 seconds
 const yesNoCustomTitle = ref<string>(''); // Optional custom title
 const yesOutcomeName = ref<string>('Yes'); // Default "Yes"
@@ -404,6 +424,7 @@ const loadData = async () => {
       }
       if (template.individualItem) {
         individualPredictionType.value = template.individualItem.predictionType || 'yes_no';
+        predictionCreationDelaySeconds.value = template.individualItem.predictionCreationDelaySeconds || 30;
         if (template.individualItem.yesNo) {
           yesNoWindowSeconds.value = template.individualItem.yesNo.windowSeconds || 30;
           yesNoCustomTitle.value = template.individualItem.yesNo.customTitle || '';
@@ -537,7 +558,8 @@ const saveTemplate = async () => {
       };
     } else if (predictionType.value === 'individual_item') {
       template.individualItem = {
-        predictionType: individualPredictionType.value
+        predictionType: individualPredictionType.value,
+        predictionCreationDelaySeconds: predictionCreationDelaySeconds.value
       };
       
       if (individualPredictionType.value === 'yes_no') {

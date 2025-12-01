@@ -388,21 +388,30 @@ const loadData = async () => {
     integrationStatus.value = status;
     
     // Load prediction template configuration (uses OnlineProfileManager internally)
-    // const template = await (window as any).electronAPI.getPredictionsTemplate();
-    // if (template) {
-    //   predictionType.value = template.type || 'whole_challenge';
-    //   if (template.wholeChallenge) {
-    //     wholeChallengeOutcomeCount.value = template.wholeChallenge.outcomeCount || 5;
-    //     wholeChallengeWindowMinutes.value = template.wholeChallenge.predictionWindowMinutes || 10;
-    //   }
-    //   if (template.individualItem) {
-    //     individualPredictionType.value = template.individualItem.predictionType || 'yes_no';
-    //     if (template.individualItem.timeRange) {
-    //       timeRangeOutcomeCount.value = template.individualItem.timeRange.outcomeCount || 5;
-    //       timeRangeMaxMinutes.value = template.individualItem.timeRange.maxTimeMinutes || 60;
-    //     }
-    //   }
-    // }
+    const template = await (window as any).electronAPI.getPredictionsTemplate();
+    if (template) {
+      predictionType.value = template.type || 'whole_challenge';
+      if (template.wholeChallenge) {
+        wholeChallengeOutcomeCount.value = template.wholeChallenge.outcomeCount || 5;
+        wholeChallengeWindowSeconds.value = template.wholeChallenge.predictionWindowSeconds || 600;
+        wholeChallengeCustomTitle.value = template.wholeChallenge.customTitle || '';
+      }
+      if (template.individualItem) {
+        individualPredictionType.value = template.individualItem.predictionType || 'yes_no';
+        if (template.individualItem.yesNo) {
+          yesNoWindowSeconds.value = template.individualItem.yesNo.windowSeconds || 30;
+          yesNoCustomTitle.value = template.individualItem.yesNo.customTitle || '';
+          yesOutcomeName.value = template.individualItem.yesNo.yesOutcomeName || 'Yes';
+          noOutcomeName.value = template.individualItem.yesNo.noOutcomeName || 'No';
+        }
+        if (template.individualItem.timeRange) {
+          timeRangeWindowSeconds.value = template.individualItem.timeRange.windowSeconds || 45;
+          timeRangeCustomTitle.value = template.individualItem.timeRange.customTitle || '';
+          timeRangeOutcomeCount.value = template.individualItem.timeRange.outcomeCount || 5;
+          timeRangeMaxMinutes.value = template.individualItem.timeRange.maxTimeMinutes || 60;
+        }
+      }
+    }
   } catch (error) {
     console.error('[TwitchIntegrationSetup] Error loading data:', error);
     integrationStatus.value = null;
@@ -516,10 +525,10 @@ const saveTemplate = async () => {
       }
     }
     
-    // TODO: Implement IPC handler to save template (uses OnlineProfileManager internally)
-    // await (window as any).electronAPI.savePredictionsTemplate({
-    //   template: JSON.stringify(template)
-    // });
+    // Save template using IPC handler (uses OnlineProfileManager internally)
+    await (window as any).electronAPI.savePredictionsTemplate({
+      template: JSON.stringify(template)
+    });
     
     await showAlert('Template configuration saved successfully!', 'Configuration Saved');
     emit('update');

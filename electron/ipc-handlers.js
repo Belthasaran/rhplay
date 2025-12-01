@@ -12009,6 +12009,9 @@ function registerDatabaseHandlers(dbManager) {
           twitch_username,
           scopes,
           is_active,
+          expires_in,
+          obtainment_timestamp,
+          last_validated_at,
           created_at,
           updated_at,
           last_used_at
@@ -12024,11 +12027,150 @@ function registerDatabaseHandlers(dbManager) {
         twitch_user_id: integration.twitch_user_id,
         twitch_username: integration.twitch_username,
         scopes: integration.scopes,
-        is_active: Boolean(integration.is_active)
+        is_active: Boolean(integration.is_active),
+        expires_in: integration.expires_in || 0,
+        obtainment_timestamp: integration.obtainment_timestamp || 0,
+        last_validated_at: integration.last_validated_at || 0
       };
     } catch (error) {
       console.error('[get_twitch_integration_status] Error:', error);
       return null;
+    }
+  });
+
+  /**
+   * Validate Twitch token and check if re-authentication is needed
+   * Channel: validate_twitch_token
+   */
+  ipcMain.handle('validate_twitch_token', async (event, params = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { valid: false, needsReauth: true, reason: 'Profile Guard not unlocked' };
+      }
+      
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return { valid: false, needsReauth: false, reason: 'No active profile' };
+      }
+      
+      const db = dbManager.getConnection('clientdata');
+      const integration = db.prepare(`
+        SELECT 
+          encrypted_access_token,
+          expires_in,
+          obtainment_timestamp,
+          last_validated_at,
+          is_active
+        FROM twitch_integration
+        WHERE profile_uuid = ? AND is_active = 1
+      `).get(currentProfileId);
+      
+      if (!integration) {
+        return { valid: false, needsReauth: false, reason: 'No Twitch integration found' };
+      }
+      
+      const now = Date.now();
+      const lastValidated = integration.last_validated_at || 0;
+      const obtainmentTime = integration.obtainment_timestamp || 0;
+      const expiresIn = integration.expires_in || 0;
+      
+      // Check if token has expired based on expiration time
+      let tokenExpired = false;
+      if (expiresIn > 0 && obtainmentTime > 0) {
+        const expirationTime = obtainmentTime + (expiresIn * 1000);
+        tokenExpired = now >= expirationTime;
+      }
+      
+      // Check if validation is needed:
+      // 1. Never validated this session (last_validated_at is 0 or very old)
+      // 2. Not validated within past 24 hours
+      // 3. Token has expired
+      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+      const needsValidation = lastValidated === 0 || lastValidated < twentyFourHoursAgo || tokenExpired;
+      
+      if (!needsValidation) {
+        // Token is still valid, no need to check with Twitch
+        return { 
+          valid: true, 
+          needsReauth: false,
+          lastValidated: lastValidated,
+          expiresAt: expiresIn > 0 && obtainmentTime > 0 ? obtainmentTime + (expiresIn * 1000) : null
+        };
+      }
+      
+      // Need to validate with Twitch API
+      try {
+        const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
+        
+        // Validate token with Twitch API
+        const https = require('https');
+        const validateUrl = 'https://id.twitch.tv/oauth2/validate';
+        
+        const validateResponse = await new Promise((resolve, reject) => {
+          const req = https.request(validateUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken.trim()}`
+            }
+          }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  resolve(JSON.parse(data));
+                } catch (e) {
+                  reject(new Error('Failed to parse validation response'));
+                }
+              } else {
+                reject(new Error(`Token validation failed: ${res.statusCode}`));
+              }
+            });
+          });
+          
+          req.on('error', reject);
+          req.end();
+        });
+        
+        // Token is valid - update last_validated_at
+        db.prepare(`
+          UPDATE twitch_integration
+          SET last_validated_at = ?, last_used_at = CURRENT_TIMESTAMP
+          WHERE profile_uuid = ?
+        `).run(now, currentProfileId);
+        
+        return { 
+          valid: true, 
+          needsReauth: false,
+          lastValidated: now,
+          expiresAt: expiresIn > 0 && obtainmentTime > 0 ? obtainmentTime + (expiresIn * 1000) : null
+        };
+        
+      } catch (error) {
+        // Token validation failed - needs re-authentication
+        console.error('[validate_twitch_token] Token validation failed:', error);
+        
+        // Mark integration as needing re-auth (but don't delete it)
+        db.prepare(`
+          UPDATE twitch_integration
+          SET is_active = 0, last_used_at = CURRENT_TIMESTAMP
+          WHERE profile_uuid = ?
+        `).run(currentProfileId);
+        
+        return { 
+          valid: false, 
+          needsReauth: true, 
+          reason: error.message || 'Token validation failed',
+          lastValidated: lastValidated
+        };
+      }
+      
+    } catch (error) {
+      console.error('[validate_twitch_token] Error:', error);
+      return { valid: false, needsReauth: true, reason: error.message || 'Unknown error' };
     }
   });
 
@@ -12363,6 +12505,8 @@ function registerDatabaseHandlers(dbManager) {
       // Store integration with encrypted tokens
       const integrationUuid = crypto.randomUUID();
       
+      const now = Date.now();
+      
       db.prepare(`
         INSERT INTO twitch_integration (
           integration_uuid,
@@ -12373,9 +12517,10 @@ function registerDatabaseHandlers(dbManager) {
           encrypted_refresh_token,
           expires_in,
           obtainment_timestamp,
+          last_validated_at,
           scopes,
           is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         ON CONFLICT(profile_uuid) DO UPDATE SET
           twitch_user_id = excluded.twitch_user_id,
           twitch_username = excluded.twitch_username,
@@ -12383,6 +12528,7 @@ function registerDatabaseHandlers(dbManager) {
           encrypted_refresh_token = excluded.encrypted_refresh_token,
           expires_in = excluded.expires_in,
           obtainment_timestamp = excluded.obtainment_timestamp,
+          last_validated_at = excluded.last_validated_at,
           scopes = excluded.scopes,
           is_active = 1,
           updated_at = CURRENT_TIMESTAMP,
@@ -12395,7 +12541,8 @@ function registerDatabaseHandlers(dbManager) {
         encryptedAccessToken,
         encryptedRefreshToken,
         expires_in || 0,
-        Date.now(),
+        now,
+        now, // Set last_validated_at to now when token is first obtained
         Array.isArray(scopes) ? scopes.join(' ') : (scopes || '')
       );
       
@@ -12439,6 +12586,376 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('[revoke_twitch_integration] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Save prediction template configuration
+   * Channel: save_predictions_template
+   */
+  ipcMain.handle('save_predictions_template', async (event, { template }) => {
+    try {
+      // Get current profile using OnlineProfileManager
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No active profile found' };
+      }
+      
+      const db = dbManager.getConnection('clientdata');
+      
+      // Save template to csettings
+      const uuid = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+      `).run(uuid, 'predictionsTemplate', template);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[save_predictions_template] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get prediction template configuration
+   * Channel: get_predictions_template
+   */
+  ipcMain.handle('get_predictions_template', async (event) => {
+    try {
+      // Get current profile using OnlineProfileManager
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return null;
+      }
+      
+      const db = dbManager.getConnection('clientdata');
+      
+      const row = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('predictionsTemplate');
+      
+      if (!row || !row.csetting_value) {
+        return null;
+      }
+      
+      try {
+        return JSON.parse(row.csetting_value);
+      } catch (e) {
+        console.error('[get_predictions_template] Failed to parse template JSON:', e);
+        return null;
+      }
+    } catch (error) {
+      console.error('[get_predictions_template] Error:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Decrypt Twitch token from database
+   * @param {string} encryptedToken - Encrypted token (format: iv:encrypted)
+   * @param {Buffer} keyguardKey - Profile guard key
+   * @returns {string} Decrypted token
+   */
+  function decryptTwitchToken(encryptedToken, keyguardKey) {
+    if (!encryptedToken || !keyguardKey) {
+      throw new Error('Missing token or keyguard key');
+    }
+    
+    const parts = encryptedToken.split(':');
+    if (parts.length !== 2) {
+      throw new Error('Invalid encrypted token format');
+    }
+    
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = Buffer.from(parts[1], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+    let decrypted = decipher.update(encrypted);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString('utf8');
+  }
+
+  /**
+   * Get decrypted Twitch tokens for current profile
+   * @param {Object} event - IPC event
+   * @returns {Promise<{accessToken: string, refreshToken: string|null}>}
+   */
+  async function getDecryptedTwitchTokens(event) {
+    const keyguardKey = getKeyguardKey(event);
+    if (!keyguardKey) {
+      throw new Error('Profile Guard must be unlocked to access Twitch tokens');
+    }
+    
+    const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+    const currentProfileId = profileManager.getCurrentProfileId();
+    
+    if (!currentProfileId) {
+      throw new Error('No active profile found');
+    }
+    
+    const db = dbManager.getConnection('clientdata');
+    const integration = db.prepare(`
+      SELECT encrypted_access_token, encrypted_refresh_token
+      FROM twitch_integration
+      WHERE profile_uuid = ? AND is_active = 1
+    `).get(currentProfileId);
+    
+    if (!integration) {
+      throw new Error('Twitch integration not found or not active');
+    }
+    
+    const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
+    const refreshToken = integration.encrypted_refresh_token 
+      ? decryptTwitchToken(integration.encrypted_refresh_token, keyguardKey)
+      : null;
+    
+    return { accessToken, refreshToken };
+  }
+
+  /**
+   * Create Twitch API client using @twurple/api
+   * @param {string} accessToken - Decrypted access token
+   * @returns {Object} Twitch API client
+   */
+  function createTwitchApiClient(accessToken) {
+    // TODO: Import and use @twurple/api
+    // For now, return a placeholder that will be implemented
+    // const { ApiClient } = require('@twurple/api');
+    // return new ApiClient({ authProvider: ... });
+    throw new Error('Twitch API client creation not yet implemented - need to integrate @twurple/api');
+  }
+
+  /**
+   * Create a Twitch prediction
+   * Channel: twitch:prediction:create
+   */
+  ipcMain.handle('twitch:prediction:create', async (event, { template, runUuid, challengeSequenceNumber, totalChallenges, username }) => {
+    try {
+      // Get decrypted tokens
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      
+      // Get profile info
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      const db = dbManager.getConnection('clientdata');
+      const integration = db.prepare(`
+        SELECT twitch_user_id, twitch_username
+        FROM twitch_integration
+        WHERE profile_uuid = ? AND is_active = 1
+      `).get(currentProfileId);
+      
+      if (!integration) {
+        return { success: false, error: 'Twitch integration not found' };
+      }
+      
+      // Parse template
+      const templateConfig = typeof template === 'string' ? JSON.parse(template) : template;
+      
+      // Build prediction title with variable substitution
+      let title = '';
+      let outcomes = [];
+      let windowSeconds = 0;
+      
+      if (templateConfig.type === 'whole_challenge') {
+        const config = templateConfig.wholeChallenge;
+        windowSeconds = config.predictionWindowSeconds || 600;
+        
+        // Build title
+        title = config.customTitle || 'How many total challenge items will we win?';
+        title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
+        
+        // Build outcomes
+        const outcomeCount = config.outcomeCount || 5;
+        if (outcomeCount === 2) {
+          // Less/More than half
+          const half = Math.floor(totalChallenges / 2);
+          outcomes = [
+            { title: `Less than ${half + 1}`, points: 0 },
+            { title: `${half + 1} or More`, points: 0 }
+          ];
+        } else {
+          // Range outcomes
+          // TODO: Calculate ranges based on totalChallenges
+          for (let i = 0; i < outcomeCount; i++) {
+            // Placeholder - will calculate proper ranges
+            outcomes.push({ title: `Range ${i + 1}`, points: 0 });
+          }
+        }
+      } else if (templateConfig.type === 'individual_item') {
+        const config = templateConfig.individualItem;
+        
+        if (config.predictionType === 'yes_no') {
+          const yesNoConfig = config.yesNo;
+          windowSeconds = yesNoConfig.windowSeconds || 30;
+          title = yesNoConfig.customTitle || 'Will we win at the current challenge item?';
+          title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
+          outcomes = [
+            { title: yesNoConfig.yesOutcomeName || 'Yes', points: 0 },
+            { title: yesNoConfig.noOutcomeName || 'No', points: 0 }
+          ];
+        } else if (config.predictionType === 'time_range') {
+          const timeRangeConfig = config.timeRange;
+          windowSeconds = timeRangeConfig.windowSeconds || 45;
+          title = timeRangeConfig.customTitle || 'How many minutes do we spend on the current challenge item?';
+          title = title.replace(/\$username/g, integration.twitch_username || username || 'Player');
+          // TODO: Calculate time ranges based on maxTimeMinutes and outcomeCount
+          const outcomeCount = timeRangeConfig.outcomeCount || 5;
+          for (let i = 0; i < outcomeCount; i++) {
+            outcomes.push({ title: `Range ${i + 1}`, points: 0 });
+          }
+        }
+      }
+      
+      // TODO: Use @twurple/api to create prediction
+      // const apiClient = createTwitchApiClient(accessToken);
+      // const prediction = await apiClient.predictions.createPrediction({
+      //   broadcasterId: integration.twitch_user_id,
+      //   title: title,
+      //   outcomes: outcomes,
+      //   predictionWindow: windowSeconds
+      // });
+      
+      // For now, return placeholder
+      return { 
+        success: false, 
+        error: 'Prediction creation not yet implemented - need to integrate @twurple/api' 
+      };
+      
+      // Once implemented, store in database:
+      // const predictionUuid = crypto.randomUUID();
+      // db.prepare(`
+      //   INSERT INTO twitch_predictions (
+      //     prediction_uuid, profile_uuid, twitch_prediction_id, twitch_broadcaster_id,
+      //     prediction_type, prediction_subtype, template_config_json,
+      //     title, outcomes_json, prediction_window_seconds,
+      //     local_status, twitch_status, created_at_ms,
+      //     run_uuid, challenge_sequence_number
+      //   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      // `).run(
+      //   predictionUuid, currentProfileId, prediction.id, integration.twitch_user_id,
+      //   templateConfig.type, templateConfig.individualItem?.predictionType || null, JSON.stringify(templateConfig),
+      //   title, JSON.stringify(outcomes), windowSeconds,
+      //   'created', prediction.status, Date.now(),
+      //   runUuid || null, challengeSequenceNumber || null
+      // );
+      
+      // return { success: true, predictionId: prediction.id, predictionUuid };
+    } catch (error) {
+      console.error('[twitch:prediction:create] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get prediction status (local and Twitch)
+   * Channel: twitch:prediction:get-status
+   */
+  ipcMain.handle('twitch:prediction:get-status', async (event, { predictionUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const prediction = db.prepare(`
+        SELECT * FROM twitch_predictions WHERE prediction_uuid = ?
+      `).get(predictionUuid);
+      
+      if (!prediction) {
+        return { success: false, error: 'Prediction not found' };
+      }
+      
+      // TODO: Query Twitch API for current status
+      // const { accessToken } = await getDecryptedTwitchTokens(event);
+      // const apiClient = createTwitchApiClient(accessToken);
+      // const twitchPrediction = await apiClient.predictions.getPrediction({
+      //   broadcasterId: prediction.twitch_broadcaster_id,
+      //   id: prediction.twitch_prediction_id
+      // });
+      
+      return {
+        success: true,
+        localStatus: prediction.local_status,
+        twitchStatus: prediction.twitch_status,
+        // twitchStatus: twitchPrediction.status,
+        prediction: {
+          uuid: prediction.prediction_uuid,
+          twitchId: prediction.twitch_prediction_id,
+          title: prediction.title,
+          type: prediction.prediction_type,
+          subtype: prediction.prediction_subtype
+        }
+      };
+    } catch (error) {
+      console.error('[twitch:prediction:get-status] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Lock a prediction (close it early)
+   * Channel: twitch:prediction:lock
+   */
+  ipcMain.handle('twitch:prediction:lock', async (event, { predictionUuid }) => {
+    try {
+      // TODO: Implement using @twurple/api
+      return { success: false, error: 'Not yet implemented' };
+    } catch (error) {
+      console.error('[twitch:prediction:lock] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Resolve a prediction to an outcome
+   * Channel: twitch:prediction:resolve
+   */
+  ipcMain.handle('twitch:prediction:resolve', async (event, { predictionUuid, winningOutcomeId, resolutionMethod }) => {
+    try {
+      // TODO: Implement using @twurple/api
+      return { success: false, error: 'Not yet implemented' };
+    } catch (error) {
+      console.error('[twitch:prediction:resolve] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Cancel and refund a prediction
+   * Channel: twitch:prediction:cancel
+   */
+  ipcMain.handle('twitch:prediction:cancel', async (event, { predictionUuid }) => {
+    try {
+      // TODO: Implement using @twurple/api
+      return { success: false, error: 'Not yet implemented' };
+    } catch (error) {
+      console.error('[twitch:prediction:cancel] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Release a prediction (stop managing it, let user manage)
+   * Channel: twitch:prediction:release
+   */
+  ipcMain.handle('twitch:prediction:release', async (event, { predictionUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        UPDATE twitch_predictions
+        SET local_status = 'released', updated_at = CURRENT_TIMESTAMP
+        WHERE prediction_uuid = ?
+      `).run(predictionUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[twitch:prediction:release] Error:', error);
       return { success: false, error: error.message };
     }
   });

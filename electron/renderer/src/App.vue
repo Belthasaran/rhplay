@@ -18250,6 +18250,37 @@ async function openRunModal() {
     }
   }
   
+  // Validate Twitch token if integration is active
+  if (isElectronAvailable()) {
+    try {
+      const integrationStatus = await (window as any).electronAPI.getTwitchIntegrationStatus();
+      if (integrationStatus && integrationStatus.is_active) {
+        const validationResult = await (window as any).electronAPI.validateTwitchToken();
+        
+        if (validationResult && validationResult.needsReauth) {
+          // Token needs re-authentication
+          const confirmed = await showConfirm(
+            `Your Twitch connection needs to be re-authenticated. ${validationResult.reason ? `Reason: ${validationResult.reason}` : ''}\n\nWould you like to re-authenticate now?`,
+            'Twitch Re-authentication Required'
+          );
+          
+          if (confirmed) {
+            // Open Twitch Integration Setup modal for re-authentication
+            await openTwitchIntegrationSetup();
+            // Don't open run modal if user needs to re-authenticate
+            return;
+          } else {
+            // User declined - still open run modal but they won't be able to use predictions
+            await showAlert('Twitch predictions will not be available until you re-authenticate.', 'Twitch Connection Expired');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[openRunModal] Error validating Twitch token:', error);
+      // Continue to open modal even if validation fails
+    }
+  }
+  
   runModalOpen.value = true;
   
   // Load win rules if a run exists (whether active or preparing)

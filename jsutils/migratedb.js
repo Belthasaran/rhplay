@@ -1158,6 +1158,18 @@ const MIGRATIONS = {
         return tableExists(db, 'twitch_predictions');
       },
     },
+    {
+      id: 'clientdata_055_twitch_token_validation',
+      description: 'Add last_validated_at field for token validation tracking',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/055_clientdata_twitch_token_validation.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'twitch_integration')) {
+          return true; // Table doesn't exist, skip
+        }
+        return columnExists(db, 'twitch_integration', 'last_validated_at');
+      },
+    },
   ],
   patchbin: [
     {

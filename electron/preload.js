@@ -1145,4 +1145,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTwitchIntegrationStatus: (params) => ipcRenderer.invoke('get_twitch_integration_status', params),
   openTwitchOAuthWindow: (params) => ipcRenderer.invoke('open_twitch_oauth_window', params),
   revokeTwitchIntegration: (params) => ipcRenderer.invoke('revoke_twitch_integration', params),
+  savePredictionsTemplate: (params) => ipcRenderer.invoke('save_predictions_template', params),
+  getPredictionsTemplate: () => ipcRenderer.invoke('get_predictions_template'),
+  validateTwitchToken: () => ipcRenderer.invoke('validate_twitch_token'),
+  // Prediction Lifecycle Management
+  createTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:create', params),
+  getTwitchPredictionStatus: (params) => ipcRenderer.invoke('twitch:prediction:get-status', params),
+  lockTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:lock', params),
+  resolveTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:resolve', params),
+  cancelTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:cancel', params),
+  releaseTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:release', params),
 });

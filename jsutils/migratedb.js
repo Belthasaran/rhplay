@@ -1140,6 +1140,15 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_053_twitch_integration',
+      description: 'Add Twitch integration table for OAuth tokens and predictions',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/053_clientdata_twitch_integration.sql'),
+      skipIf(db) {
+        return tableExists(db, 'twitch_integration');
+      },
+    },
   ],
   patchbin: [
     {

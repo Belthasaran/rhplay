@@ -12844,6 +12844,15 @@ function registerDatabaseHandlers(dbManager) {
         }
       );
       
+      // Store outcomes with their Twitch IDs
+      const outcomesWithIds = prediction.outcomes.map((outcome, index) => ({
+        id: outcome.id,
+        title: outcome.title,
+        color: outcome.color || null,
+        users: outcome.users || 0,
+        channelPoints: outcome.channelPoints || 0
+      }));
+      
       // Store in database
       const predictionUuid = crypto.randomUUID();
       const now = Date.now();
@@ -12865,7 +12874,7 @@ function registerDatabaseHandlers(dbManager) {
         templateConfig.individualItem?.predictionType || null,
         JSON.stringify(templateConfig),
         title,
-        JSON.stringify(outcomes),
+        JSON.stringify(outcomesWithIds),
         windowSeconds,
         'created',
         prediction.status,
@@ -13009,10 +13018,55 @@ function registerDatabaseHandlers(dbManager) {
    * Resolve a prediction to an outcome
    * Channel: twitch:prediction:resolve
    */
-  ipcMain.handle('twitch:prediction:resolve', async (event, { predictionUuid, winningOutcomeId, resolutionMethod }) => {
+  ipcMain.handle('twitch:prediction:resolve', async (event, { predictionUuid, winningOutcomeId, resolutionMethod = 'automatic' }) => {
     try {
-      // TODO: Implement using @twurple/api
-      return { success: false, error: 'Not yet implemented' };
+      const db = dbManager.getConnection('clientdata');
+      const prediction = db.prepare(`
+        SELECT twitch_prediction_id, twitch_broadcaster_id, outcomes_json
+        FROM twitch_predictions
+        WHERE prediction_uuid = ?
+      `).get(predictionUuid);
+      
+      if (!prediction) {
+        return { success: false, error: 'Prediction not found' };
+      }
+      
+      if (!winningOutcomeId) {
+        return { success: false, error: 'winningOutcomeId is required' };
+      }
+      
+      // Get decrypted tokens and create API client
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
+      
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Resolve prediction using @twurple/api
+      await apiClient.predictions.endPrediction(
+        prediction.twitch_broadcaster_id,
+        prediction.twitch_prediction_id,
+        'RESOLVED',
+        winningOutcomeId
+      );
+      
+      // Update database
+      const now = Date.now();
+      db.prepare(`
+        UPDATE twitch_predictions
+        SET local_status = 'resolved',
+            twitch_status = 'RESOLVED',
+            winning_outcome_id = ?,
+            resolution_method = ?,
+            resolved_at = datetime(?, 'unixepoch'),
+            resolved_at_ms = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE prediction_uuid = ?
+      `).run(winningOutcomeId, resolutionMethod, Math.floor(now / 1000), now, predictionUuid);
+      
+      return { success: true };
     } catch (error) {
       console.error('[twitch:prediction:resolve] Error:', error);
       return { success: false, error: error.message };
@@ -13025,8 +13079,46 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('twitch:prediction:cancel', async (event, { predictionUuid }) => {
     try {
-      // TODO: Implement using @twurple/api
-      return { success: false, error: 'Not yet implemented' };
+      const db = dbManager.getConnection('clientdata');
+      const prediction = db.prepare(`
+        SELECT twitch_prediction_id, twitch_broadcaster_id
+        FROM twitch_predictions
+        WHERE prediction_uuid = ?
+      `).get(predictionUuid);
+      
+      if (!prediction) {
+        return { success: false, error: 'Prediction not found' };
+      }
+      
+      // Get decrypted tokens and create API client
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
+      
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Cancel prediction using @twurple/api (cancels and refunds)
+      await apiClient.predictions.endPrediction(
+        prediction.twitch_broadcaster_id,
+        prediction.twitch_prediction_id,
+        'CANCELED'
+      );
+      
+      // Update database
+      const now = Date.now();
+      db.prepare(`
+        UPDATE twitch_predictions
+        SET local_status = 'cancelled',
+            twitch_status = 'CANCELED',
+            cancelled_at = datetime(?, 'unixepoch'),
+            cancelled_at_ms = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE prediction_uuid = ?
+      `).run(Math.floor(now / 1000), now, predictionUuid);
+      
+      return { success: true };
     } catch (error) {
       console.error('[twitch:prediction:cancel] Error:', error);
       return { success: false, error: error.message };

@@ -12957,7 +12957,8 @@ function registerDatabaseHandlers(dbManager) {
       
       if (templateConfig.type === 'whole_challenge') {
         const config = templateConfig.wholeChallenge;
-        windowSeconds = config.predictionWindowSeconds || 600;
+        const parsedWindow = parseInt(config.predictionWindowSeconds);
+        windowSeconds = Math.max(1, isNaN(parsedWindow) ? 600 : parsedWindow);
         
         // Build title with game/stage info if provided
         let baseTitle = config.customTitle || 'How many total challenge items will we win?';
@@ -12992,7 +12993,8 @@ function registerDatabaseHandlers(dbManager) {
         
         if (config.predictionType === 'yes_no') {
           const yesNoConfig = config.yesNo;
-          windowSeconds = yesNoConfig.windowSeconds || 30;
+          const parsedWindow = parseInt(yesNoConfig.windowSeconds);
+          windowSeconds = Math.max(1, isNaN(parsedWindow) ? 30 : parsedWindow);
           // Build title with game/stage info
           let baseTitle = yesNoConfig.customTitle || 'Will we win at the current challenge item?';
           if (challengeSequenceNumber) {
@@ -13012,7 +13014,8 @@ function registerDatabaseHandlers(dbManager) {
           ];
         } else if (config.predictionType === 'time_range') {
           const timeRangeConfig = config.timeRange;
-          windowSeconds = timeRangeConfig.windowSeconds || 45;
+          const parsedWindow = parseInt(timeRangeConfig.windowSeconds);
+          windowSeconds = Math.max(1, isNaN(parsedWindow) ? 45 : parsedWindow);
           // Build title with game/stage info
           let baseTitle = timeRangeConfig.customTitle || 'How many minutes do we spend on the current challenge item?';
           if (challengeSequenceNumber) {
@@ -13074,6 +13077,33 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // Validate windowSeconds before creating prediction
+      if (!windowSeconds || windowSeconds < 1) {
+        return { 
+          success: false, 
+          error: `Invalid prediction window: ${windowSeconds}. Must be at least 1 second.` 
+        };
+      }
+      
+      // Ensure windowSeconds is an integer
+      windowSeconds = Math.floor(windowSeconds);
+      
+      // Validate that we have outcomes
+      if (!outcomes || outcomes.length < 2) {
+        return { 
+          success: false, 
+          error: `Invalid prediction: must have at least 2 outcomes, got ${outcomes?.length || 0}` 
+        };
+      }
+      
+      // Validate title
+      if (!title || title.trim().length === 0) {
+        return { 
+          success: false, 
+          error: 'Invalid prediction: title cannot be empty' 
+        };
+      }
+      
       // Get client ID and create API client
       const clientId = getTwitchClientId();
       if (!clientId) {
@@ -13086,7 +13116,7 @@ function registerDatabaseHandlers(dbManager) {
       const prediction = await apiClient.predictions.createPrediction(
         integration.twitch_user_id,
         {
-          title: title,
+          title: title.trim(),
           outcomes: outcomes.map(outcome => ({ title: outcome.title })),
           predictionWindowSeconds: windowSeconds
         }

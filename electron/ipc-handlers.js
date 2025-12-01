@@ -11989,8 +11989,17 @@ function registerDatabaseHandlers(dbManager) {
    * Get Twitch integration status
    * Channel: get_twitch_integration_status
    */
-  ipcMain.handle('get_twitch_integration_status', async (event, { profileUuid }) => {
+  ipcMain.handle('get_twitch_integration_status', async (event, params = {}) => {
     try {
+      // Get keyguard key for OnlineProfileManager
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return null;
+      }
+      
       const db = dbManager.getConnection('clientdata');
       
       const integration = db.prepare(`
@@ -12005,7 +12014,7 @@ function registerDatabaseHandlers(dbManager) {
           last_used_at
         FROM twitch_integration
         WHERE profile_uuid = ?
-      `).get(profileUuid);
+      `).get(currentProfileId);
       
       if (!integration) {
         return null;
@@ -12027,9 +12036,19 @@ function registerDatabaseHandlers(dbManager) {
    * Open Twitch OAuth window and handle callback
    * Channel: open_twitch_oauth_window
    */
-  ipcMain.handle('open_twitch_oauth_window', async (event, { url, redirectUri, state, profileUuid }) => {
+  ipcMain.handle('open_twitch_oauth_window', async (event, { url, redirectUri, state }) => {
     return new Promise((resolve, reject) => {
       try {
+        // Get current profile using OnlineProfileManager
+        const keyguardKey = getKeyguardKey(event);
+        const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+        const currentProfileId = profileManager.getCurrentProfileId();
+        
+        if (!currentProfileId) {
+          reject(new Error('No active profile found'));
+          return;
+        }
+        
         const clientId = getTwitchClientId();
         if (!clientId) {
           reject(new Error('Twitch client ID not configured'));
@@ -12054,19 +12073,19 @@ function registerDatabaseHandlers(dbManager) {
         
         // Listen for navigation to redirect URI
         oauthWindow.webContents.on('did-redirect-navigation', (event, navigationUrl) => {
-          handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject);
+          handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
         });
         
         // Listen for navigation (for redirect-based flows)
         oauthWindow.webContents.on('did-navigate', (event, navigationUrl) => {
-          handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject);
+          handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
         });
         
         // Listen for in-page navigation (for fragment-based redirects in implicit grant flow)
         // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
         oauthWindow.webContents.on('did-navigate-in-page', (event, navigationUrl, isMainFrame) => {
           if (isMainFrame) {
-            handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject);
+            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
           }
         });
         
@@ -12248,8 +12267,17 @@ function registerDatabaseHandlers(dbManager) {
    * Revoke Twitch integration
    * Channel: revoke_twitch_integration
    */
-  ipcMain.handle('revoke_twitch_integration', async (event, { profileUuid }) => {
+  ipcMain.handle('revoke_twitch_integration', async (event, params = {}) => {
     try {
+      // Get current profile using OnlineProfileManager
+      const keyguardKey = getKeyguardKey(event);
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No active profile found' };
+      }
+      
       const db = dbManager.getConnection('clientdata');
       
       // TODO: Call Twitch revoke endpoint if we have a token
@@ -12258,7 +12286,7 @@ function registerDatabaseHandlers(dbManager) {
       db.prepare(`
         DELETE FROM twitch_integration
         WHERE profile_uuid = ?
-      `).run(profileUuid);
+      `).run(currentProfileId);
       
       return { success: true };
     } catch (error) {

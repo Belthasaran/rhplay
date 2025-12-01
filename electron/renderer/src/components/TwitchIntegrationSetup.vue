@@ -430,7 +430,7 @@ onMounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  z-index: 60001;
+  z-index: 30001; /* Above Prepare Run (20000) and Online dropdown (1000), but below alert dialogs (70000) */
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
@@ -441,7 +441,7 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.7);
-  z-index: 60000;
+  z-index: 30000; /* Above Prepare Run (20000) and Online dropdown (1000), but below alert dialogs (70000) */
   display: flex;
   align-items: center;
   justify-content: center;

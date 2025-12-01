@@ -24126,6 +24126,13 @@ button:disabled {
   justify-content: center; 
   z-index: 20000; 
 }
+
+/* Alert and Confirm dialogs should be on top of everything */
+.modal-backdrop:has(.alert-dialog),
+.modal-backdrop:has(.confirm-dialog),
+.modal-backdrop:has(.prompt-dialog) {
+  z-index: 70000 !important;
+}
 .modal { 
   width: 1200px; 
   max-width: 98vw; 

@@ -91,17 +91,17 @@ For example: If you decide to use Twitch integration features, then security tok
 
 # Challenge Run Feature
 
-    - Allows selecting random SMW games   and/or   random SMW Game stages (Only for those games which currently have a detailed stage list specified in the database  and a "Play my level" System patch preset in place that defines How to modify the game to load player into a specific stage)
+  - Allows selecting random SMW games   and/or   random SMW Game stages (Only for those games which currently have a detailed stage list specified in the database  and a "Play my level" System patch preset in place that defines How to modify the game to load player into a specific stage)
 
-     - Optional Stage Limits, Game Limits filtering  games based on various criteria.
+  - Optional Stage Limits, Game Limits filtering  games based on various criteria.
 
-     - Optional challenge overlay feature for generating a HTML overlay displaying run timer during challenge runs: runview.html
+  - Optional challenge overlay feature for generating a HTML overlay displaying run timer during challenge runs: runview.html
 
-     - Optional Win conditions: such as Time limit for run.  Time limit per challenge item.   Optional Rollover time which means that if you finish a challenge item before the time limit - you can accumulate some amount of rollover time and spend that time on other challenges.
+  - Optional Win conditions: such as Time limit for run.  Time limit per challenge item.   Optional Rollover time which means that if you finish a challenge item before the time limit - you can accumulate some amount of rollover time and spend that time on other challenges.
 
-     - Optional web server utility process that can help serve the overlay locally or remotely for easy OBS Access - http://localhost:2599/runview.html
+  - Optional web server utility process that can help serve the overlay locally or remotely for easy OBS Access - http://localhost:2599/runview.html
 
-     - Current work: Twitch Predictions integration with the "Challenge Run" timer feature, which is currently incomplete.
+  - Current work: Twitch Predictions integration with the "Challenge Run" timer feature, which is currently incomplete.
 
 ## NEW Initial Release
 

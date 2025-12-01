@@ -484,7 +484,33 @@ const revokeTokens = async () => {
       integrationStatus.value = null;
       emit('update');
     } else {
-      await showAlert(`Failed to disconnect: ${result?.error || 'Unknown error'}`, 'Disconnect Error');
+      // Check if revocation failed but token was valid
+      if (result && result.tokenWasValid && result.revokeError) {
+        // Token was valid but revocation failed - ask user if they want to disconnect anyway
+        const disconnectAnyway = await showConfirm(
+          `Token revocation failed: ${result.revokeError}\n\n` +
+          `The token may still be valid on Twitch. Do you want to disconnect anyway? ` +
+          `(The token will be deleted locally but may remain valid on Twitch's servers)`,
+          'Revocation Failed',
+          'Disconnect Anyway',
+          'Cancel'
+        );
+        
+        if (disconnectAnyway) {
+          // User wants to disconnect anyway - force delete from database
+          // We'll need to call a force disconnect handler
+          const forceResult = await (window as any).electronAPI.revokeTwitchIntegration({ force: true });
+          if (forceResult && forceResult.success) {
+            integrationStatus.value = null;
+            emit('update');
+          } else {
+            await showAlert(`Failed to disconnect: ${forceResult?.error || 'Unknown error'}`, 'Disconnect Error');
+          }
+        }
+        // If user cancels, do nothing - integration remains
+      } else {
+        await showAlert(`Failed to disconnect: ${result?.error || 'Unknown error'}`, 'Disconnect Error');
+      }
     }
   } catch (error: any) {
     console.error('[TwitchIntegrationSetup] Revoke error:', error);

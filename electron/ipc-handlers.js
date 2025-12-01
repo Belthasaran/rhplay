@@ -12070,14 +12070,17 @@ function registerDatabaseHandlers(dbManager) {
         });
         
         let callbackHandled = false; // Prevent multiple callback handling
+        let windowClosed = false; // Track if window was closed
         
         // Prevent navigation to redirect URI (we'll handle it manually)
         // This must be set BEFORE loadURL
         oauthWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+          console.log('[Twitch OAuth] will-navigate:', navigationUrl);
           if (navigationUrl.startsWith(redirectUri)) {
             event.preventDefault(); // Prevent actual navigation to localhost
-            if (!callbackHandled) {
+            if (!callbackHandled && !windowClosed) {
               callbackHandled = true;
+              console.log('[Twitch OAuth] Handling callback from will-navigate');
               handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
             }
           }
@@ -12085,9 +12088,11 @@ function registerDatabaseHandlers(dbManager) {
         
         // Also prevent new window navigation to redirect URI
         oauthWindow.webContents.setWindowOpenHandler(({ url }) => {
+          console.log('[Twitch OAuth] setWindowOpenHandler:', url);
           if (url.startsWith(redirectUri)) {
-            if (!callbackHandled) {
+            if (!callbackHandled && !windowClosed) {
               callbackHandled = true;
+              console.log('[Twitch OAuth] Handling callback from setWindowOpenHandler');
               handleOAuthCallback(url, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
             }
             return { action: 'deny' }; // Prevent opening new window
@@ -12099,26 +12104,79 @@ function registerDatabaseHandlers(dbManager) {
         // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
         // This is the primary handler for implicit grant flow
         oauthWindow.webContents.on('did-navigate-in-page', (event, navigationUrl, isMainFrame) => {
-          if (isMainFrame && navigationUrl.startsWith(redirectUri) && !callbackHandled) {
+          console.log('[Twitch OAuth] did-navigate-in-page:', navigationUrl, 'isMainFrame:', isMainFrame);
+          if (isMainFrame && navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
             callbackHandled = true;
+            console.log('[Twitch OAuth] Handling callback from did-navigate-in-page');
             handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
           }
         });
         
         // Fallback: Listen for navigation (for redirect-based flows, though implicit grant uses fragments)
         oauthWindow.webContents.on('did-navigate', (event, navigationUrl) => {
-          if (navigationUrl.startsWith(redirectUri) && !callbackHandled) {
+          console.log('[Twitch OAuth] did-navigate:', navigationUrl);
+          if (navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
             callbackHandled = true;
+            console.log('[Twitch OAuth] Handling callback from did-navigate');
             handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
           }
+        });
+        
+        // Monitor URL changes (for debugging and as additional fallback)
+        oauthWindow.webContents.on('dom-ready', () => {
+          const currentUrl = oauthWindow.webContents.getURL();
+          console.log('[Twitch OAuth] dom-ready, current URL:', currentUrl);
+          if (currentUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
+            callbackHandled = true;
+            console.log('[Twitch OAuth] Handling callback from dom-ready');
+            handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+          }
+        });
+        
+        // Periodic check for URL changes (fallback for fragment-based redirects)
+        // Fragment changes might not always trigger navigation events
+        const urlCheckInterval = setInterval(() => {
+          if (callbackHandled || windowClosed || oauthWindow.isDestroyed()) {
+            clearInterval(urlCheckInterval);
+            return;
+          }
+          
+          try {
+            const currentUrl = oauthWindow.webContents.getURL();
+            if (currentUrl && currentUrl.startsWith(redirectUri) && currentUrl.includes('#')) {
+              console.log('[Twitch OAuth] Periodic check found redirect URL:', currentUrl);
+              if (!callbackHandled && !windowClosed) {
+                callbackHandled = true;
+                clearInterval(urlCheckInterval);
+                console.log('[Twitch OAuth] Handling callback from periodic check');
+                handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject);
+              }
+            }
+          } catch (error) {
+            // Window might be destroyed, ignore
+            if (!oauthWindow.isDestroyed()) {
+              console.error('[Twitch OAuth] Error in periodic URL check:', error);
+            }
+          }
+        }, 500); // Check every 500ms
+        
+        // Clean up interval when window closes
+        oauthWindow.on('closed', () => {
+          clearInterval(urlCheckInterval);
         });
         
         oauthWindow.loadURL(url);
         oauthWindow.show();
         
-        // Handle window close
+        // Handle window close - only reject if callback wasn't handled
         oauthWindow.on('closed', () => {
-          reject(new Error('OAuth window closed by user'));
+          windowClosed = true;
+          if (!callbackHandled) {
+            console.log('[Twitch OAuth] Window closed before callback was handled');
+            reject(new Error('OAuth window closed by user'));
+          } else {
+            console.log('[Twitch OAuth] Window closed after callback was handled (this is normal)');
+          }
         });
         
       } catch (error) {
@@ -12140,6 +12198,9 @@ function registerDatabaseHandlers(dbManager) {
       
       const url = new URL(navigationUrl);
       
+      console.log('[handleOAuthCallback] Full navigation URL:', navigationUrl);
+      console.log('[handleOAuthCallback] URL hash:', url.hash);
+      
       // Extract access token from fragment (implicit grant flow)
       const hash = url.hash.substring(1); // Remove leading #
       const params = new URLSearchParams(hash);
@@ -12149,6 +12210,14 @@ function registerDatabaseHandlers(dbManager) {
       const state = params.get('state');
       const error = params.get('error');
       const errorDescription = params.get('error_description');
+      
+      console.log('[handleOAuthCallback] Extracted params:', {
+        hasAccessToken: !!accessToken,
+        accessTokenLength: accessToken ? accessToken.length : 0,
+        tokenType: tokenType,
+        hasState: !!state,
+        hasError: !!error
+      });
       
       if (error) {
         if (oauthWindow && !oauthWindow.isDestroyed()) {
@@ -12168,8 +12237,11 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       if (!accessToken) {
+        console.log('[Twitch OAuth] No access token found in callback URL');
         return; // Still waiting for token
       }
+      
+      console.log('[Twitch OAuth] Access token received, tokenType:', tokenType, 'token length:', accessToken.length);
       
       // Close OAuth window
       if (oauthWindow && !oauthWindow.isDestroyed()) {
@@ -12203,29 +12275,50 @@ function registerDatabaseHandlers(dbManager) {
       const https = require('https');
       const validateUrl = 'https://id.twitch.tv/oauth2/validate';
       
+      // Twitch OAuth2 validate endpoint expects "Bearer <token>" format (OAuth2 standard)
+      // According to Twitch API docs: https://dev.twitch.tv/docs/authentication/#validating-requests
+      const authHeader = accessToken ? `Bearer ${accessToken.trim()}` : null;
+      
+      if (!authHeader) {
+        throw new Error('Access token is missing');
+      }
+      
+      console.log('[validateAndStoreTwitchToken] Validating token, header format: OAuth <token>');
+      console.log('[validateAndStoreTwitchToken] Token length:', accessToken.length);
+      
       const validateResponse = await new Promise((resolve, reject) => {
         const req = https.request(validateUrl, {
           method: 'GET',
           headers: {
-            'Authorization': `${tokenType || 'Bearer'} ${accessToken}`
+            'Authorization': authHeader
           }
         }, (res) => {
           let data = '';
           res.on('data', chunk => data += chunk);
           res.on('end', () => {
+            console.log('[validateAndStoreTwitchToken] Validation response status:', res.statusCode);
+            console.log('[validateAndStoreTwitchToken] Validation response body:', data.substring(0, 200));
+            
             if (res.statusCode === 200) {
               try {
-                resolve(JSON.parse(data));
+                const parsed = JSON.parse(data);
+                console.log('[validateAndStoreTwitchToken] Token validated successfully, user_id:', parsed.user_id);
+                resolve(parsed);
               } catch (e) {
+                console.error('[validateAndStoreTwitchToken] Failed to parse response:', e);
                 reject(new Error('Failed to parse validation response'));
               }
             } else {
-              reject(new Error(`Token validation failed: ${res.statusCode}`));
+              console.error('[validateAndStoreTwitchToken] Validation failed with status:', res.statusCode, 'body:', data);
+              reject(new Error(`Token validation failed: ${res.statusCode} - ${data.substring(0, 100)}`));
             }
           });
         });
         
-        req.on('error', reject);
+        req.on('error', (error) => {
+          console.error('[validateAndStoreTwitchToken] Request error:', error);
+          reject(error);
+        });
         req.end();
       });
       

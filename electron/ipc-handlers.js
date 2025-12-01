@@ -13162,12 +13162,23 @@ function registerDatabaseHandlers(dbManager) {
       });
       
       // Create prediction using @twurple/api
+      // Note: @twurple/api expects 'autoLockAfter' (not 'predictionWindowSeconds')
+      // The library maps autoLockAfter to prediction_window in the API request
+      // Also, outcomes should be string[] (array of titles), not objects
+      const outcomeTitles = outcomes.map(outcome => {
+        const titleStr = typeof outcome === 'string' ? outcome : outcome.title;
+        if (!titleStr || titleStr.trim().length === 0) {
+          throw new Error(`Invalid outcome title: ${JSON.stringify(outcome)}`);
+        }
+        return titleStr.trim();
+      });
+      
       const prediction = await apiClient.predictions.createPrediction(
         integration.twitch_user_id,
         {
           title: title.trim(),
-          outcomes: outcomes.map(outcome => ({ title: outcome.title })),
-          predictionWindowSeconds: windowSeconds
+          outcomes: outcomeTitles,
+          autoLockAfter: windowSeconds
         }
       );
       

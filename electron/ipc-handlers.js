@@ -12709,7 +12709,6 @@ function registerDatabaseHandlers(dbManager) {
                 tokenWasValid = false;
               }
             }
-          }
           } catch (decryptErr) {
             // Could not decrypt token - might be corrupted, that's okay
             console.warn('[revoke_twitch_integration] Could not decrypt token:', decryptErr.message);

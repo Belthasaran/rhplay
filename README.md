@@ -36,6 +36,9 @@ A Manifest pointed to 0.1.9beta Source of this release and game description data
 
  - Attempts to provision databases on first launch (rhdata.db, patchbin.db, clientdata.db, etc)
 
+ - USB2SNES Game uploads and launches - Requires working USB2SNES on a computer connected to a SD2SNES.  You will have to configure the websocket URL to connect to manually if your system does not use the default of ws://localhost:64213  (as expplained in other sections of this document).   In my testing this is usually a physical computer while my copy of this program runs inside a Linux virtual machine.   You can connect to a remote computer using SSH and forward a port from the local machine to the remote computer.   For example: Forward 64213 to localhost:64213 on the destination machine through your SSH client.   Even Windows11 provides an OpenSSH Feature you can turn on from Windows features these days.   This app also supports configuring a SOCKS proxy for forwarding the USB2SNES connection: If you wish to go that route.
+The app has incomplete "Embedded usb server" settings which are clearly labelled as does not work, and don't try them yet.
+
  - SMW Randomizer features: From the "Select Menu" you can click Check Random to pick one random game and quickly start it.
 
  - SMW Game+Stage Randomizer: You can prepare a "Challenge run" that includes multiple random SMW Games or random SMW stages in sequence.  Random SMW game is any game in the database that contains BPS patching instructions  (A few gameids or gameversions might not due to various issues).

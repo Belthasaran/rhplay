@@ -46,11 +46,8 @@ are used to dynamically patch a SMW Romhack, so that when you enter the game: in
 
 
    `"stage_uuid","gameid","levelnumber","levelname","versions","submapid","translevel_13bf","tile_x","tile_y","tile_value","requisites","playable","rando","difficulty","mainexit","keyhole","credits","ghouse","spalace","castle","water","boss","secret","troll","final","lock","playlevel_patch_code","excluded_patchcodes","stagetags","rhpakuuid","extradescription"`
-    
    `"9c77664a3c2d274fdbd7582abaa9647e","18612","126","Australian Airways","*","","4A","","","","","1","1","3","1","0","0","0","0","0","0","0","0","0","0","0","1lvno","","cape","",""`
-    
    `"e19982aa50a3d374d64da4caf2dcfdad","16059","002","The River Dyx","*","","02","","","","pall,infliv","1","1","5","1","0","0","0","0","0","0","0","0","0","0","0","1lvno","","","",""`
-    
    `"","17441","101","CHUCK CITY","*","","25","","","","","1","1","1","1","0","0","0","0","0","0","0","0","0","0","0","","","","",""`
 
 And the ASAR (assembly script template) format for gamestage patchcodes which requires either a two-byte zero-padded level number (glevelnum) such as $001, $02A, $103, etc,  OR a  levelnumber with leading zeros stripped such as  $2A format  glevelnum_s.  Limitations:

@@ -20942,9 +20942,7 @@ async function skipChallenge() {
           // Error already handled in createPredictionForNextChallenge with toast
         });
       }
-    }
-    if (idx < runEntries.length - 1) {
-      currentChallengeIndex.value++;
+      
       // Start timing next challenge
       // Backend sets started_at_ms in database, but we also set it locally for immediate timer accuracy
       if (idx + 1 < challengeResults.value.length) {

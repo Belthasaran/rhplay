@@ -1150,6 +1150,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   validateTwitchToken: () => ipcRenderer.invoke('validate_twitch_token'),
   // Prediction Lifecycle Management
   createTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:create', params),
+  checkTwitchPredictionsActive: () => ipcRenderer.invoke('twitch:prediction:check-active'),
   getTwitchPredictionStatus: (params) => ipcRenderer.invoke('twitch:prediction:get-status', params),
   lockTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:lock', params),
   resolveTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:resolve', params),

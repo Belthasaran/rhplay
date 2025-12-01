@@ -12248,8 +12248,15 @@ function registerDatabaseHandlers(dbManager) {
         oauthWindow.close();
       }
       
+      // Get keyguard key for encryption
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        reject(new Error('Profile Guard must be unlocked to store Twitch tokens'));
+        return;
+      }
+      
       // Validate token and get user info
-      validateAndStoreTwitchToken(accessToken, tokenType, profileUuid)
+      validateAndStoreTwitchToken(accessToken, tokenType, profileUuid, keyguardKey)
         .then(result => {
           resolve(result);
         })
@@ -12268,8 +12275,12 @@ function registerDatabaseHandlers(dbManager) {
 
   /**
    * Validate Twitch token and store encrypted
+   * @param {string} accessToken - OAuth access token
+   * @param {string} tokenType - Token type (usually "bearer")
+   * @param {string} profileUuid - Profile UUID
+   * @param {Buffer} keyguardKey - Profile guard key for encryption
    */
-  async function validateAndStoreTwitchToken(accessToken, tokenType, profileUuid) {
+  async function validateAndStoreTwitchToken(accessToken, tokenType, profileUuid, keyguardKey) {
     try {
       // Validate token and get user info
       const https = require('https');
@@ -12324,16 +12335,31 @@ function registerDatabaseHandlers(dbManager) {
       
       const { client_id, login: username, user_id, scopes, expires_in } = validateResponse;
       
-      // TODO: Encrypt tokens with profile guard key
-      // For now, we'll store them (they should be encrypted in production)
-      // This requires implementing encryption using profile guard key
+      if (!keyguardKey) {
+        throw new Error('Profile Guard key is required to encrypt tokens');
+      }
+      
+      // Encrypt access token using AES-256-CBC with profile guard key
+      const accessTokenData = Buffer.from(accessToken, 'utf8');
+      const accessTokenIv = crypto.randomBytes(16);
+      const accessTokenCipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, accessTokenIv);
+      let accessTokenEncrypted = accessTokenCipher.update(accessTokenData);
+      accessTokenEncrypted = Buffer.concat([accessTokenEncrypted, accessTokenCipher.final()]);
+      const encryptedAccessToken = accessTokenIv.toString('hex') + ':' + accessTokenEncrypted.toString('hex');
+      
+      // Encrypt refresh token (empty for implicit grant, but still encrypt the empty string for consistency)
+      const refreshToken = ''; // Implicit grant doesn't provide refresh token
+      const refreshTokenData = Buffer.from(refreshToken, 'utf8');
+      const refreshTokenIv = crypto.randomBytes(16);
+      const refreshTokenCipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, refreshTokenIv);
+      let refreshTokenEncrypted = refreshTokenCipher.update(refreshTokenData);
+      refreshTokenEncrypted = Buffer.concat([refreshTokenEncrypted, refreshTokenCipher.final()]);
+      const encryptedRefreshToken = refreshTokenIv.toString('hex') + ':' + refreshTokenEncrypted.toString('hex');
       
       const db = dbManager.getConnection('clientdata');
       
-      // Store integration (tokens should be encrypted - TODO)
+      // Store integration with encrypted tokens
       const integrationUuid = crypto.randomUUID();
-      const encryptedAccessToken = accessToken; // TODO: Encrypt with profile guard
-      const encryptedRefreshToken = ''; // Implicit grant doesn't provide refresh token
       
       db.prepare(`
         INSERT INTO twitch_integration (

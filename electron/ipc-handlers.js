@@ -12900,19 +12900,45 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Prediction not found' };
       }
       
-      // TODO: Query Twitch API for current status
-      // const { accessToken } = await getDecryptedTwitchTokens(event);
-      // const apiClient = createTwitchApiClient(accessToken);
-      // const twitchPrediction = await apiClient.predictions.getPrediction({
-      //   broadcasterId: prediction.twitch_broadcaster_id,
-      //   id: prediction.twitch_prediction_id
-      // });
+      // Query Twitch API for current status
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
+      
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      const twitchPrediction = await apiClient.predictions.getPredictionById(
+        prediction.twitch_broadcaster_id,
+        prediction.twitch_prediction_id
+      );
+      
+      // Update local status if Twitch status changed
+      if (twitchPrediction && twitchPrediction.status !== prediction.twitch_status) {
+        let localStatus = prediction.local_status;
+        if (twitchPrediction.status === 'LOCKED' && prediction.local_status === 'created') {
+          localStatus = 'locked';
+        } else if (twitchPrediction.status === 'RESOLVED' && prediction.local_status !== 'resolved') {
+          localStatus = 'resolved';
+        } else if (twitchPrediction.status === 'CANCELED' && prediction.local_status !== 'cancelled') {
+          localStatus = 'cancelled';
+        }
+        
+        const db = dbManager.getConnection('clientdata');
+        db.prepare(`
+          UPDATE twitch_predictions
+          SET local_status = ?, twitch_status = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE prediction_uuid = ?
+        `).run(localStatus, twitchPrediction.status, predictionUuid);
+        
+        prediction.local_status = localStatus;
+        prediction.twitch_status = twitchPrediction.status;
+      }
       
       return {
         success: true,
         localStatus: prediction.local_status,
-        twitchStatus: prediction.twitch_status,
-        // twitchStatus: twitchPrediction.status,
+        twitchStatus: twitchPrediction?.status || prediction.twitch_status,
         prediction: {
           uuid: prediction.prediction_uuid,
           twitchId: prediction.twitch_prediction_id,
@@ -12933,8 +12959,46 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('twitch:prediction:lock', async (event, { predictionUuid }) => {
     try {
-      // TODO: Implement using @twurple/api
-      return { success: false, error: 'Not yet implemented' };
+      const db = dbManager.getConnection('clientdata');
+      const prediction = db.prepare(`
+        SELECT twitch_prediction_id, twitch_broadcaster_id
+        FROM twitch_predictions
+        WHERE prediction_uuid = ?
+      `).get(predictionUuid);
+      
+      if (!prediction) {
+        return { success: false, error: 'Prediction not found' };
+      }
+      
+      // Get decrypted tokens and create API client
+      const { accessToken } = await getDecryptedTwitchTokens(event);
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        return { success: false, error: 'Twitch client ID not configured' };
+      }
+      
+      const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Lock prediction using @twurple/api
+      await apiClient.predictions.endPrediction(
+        prediction.twitch_broadcaster_id,
+        prediction.twitch_prediction_id,
+        'LOCKED'
+      );
+      
+      // Update database
+      const now = Date.now();
+      db.prepare(`
+        UPDATE twitch_predictions
+        SET local_status = 'locked',
+            twitch_status = 'LOCKED',
+            locked_at = datetime(?, 'unixepoch'),
+            locked_at_ms = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE prediction_uuid = ?
+      `).run(Math.floor(now / 1000), now, predictionUuid);
+      
+      return { success: true };
     } catch (error) {
       console.error('[twitch:prediction:lock] Error:', error);
       return { success: false, error: error.message };

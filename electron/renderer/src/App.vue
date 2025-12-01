@@ -2371,7 +2371,7 @@
             <div class="readonly-field-group">
               <div><strong>Username:</strong> {{ onlineProfile.username }}</div>
               <div><strong>Display Name:</strong> {{ onlineProfile.displayname }}</div>
-              <div><strong>Profile UUID:</strong> {{ onlineProfile.uuid }}</div>
+              <div><strong>Profile UUID:</strong> {{ onlineProfile.profileId }}</div>
             </div>
             <p class="field-hint">
               For User Op keys, profile identifiers will be included to prove authorization.
@@ -7472,7 +7472,6 @@
   <!-- Twitch Integration Setup Modal -->
   <TwitchIntegrationSetup
     :visible="showTwitchIntegrationSetup"
-    :profileUuid="onlineProfile?.profileUuid || null"
     :profileGuardEnabled="profileGuardEnabled"
     @close="showTwitchIntegrationSetup = false"
     @update="handleTwitchIntegrationUpdate"
@@ -11608,8 +11607,8 @@ async function openTrustDeclarationDetailsModal() {
   await loadSelectedTrustDeclaration();
   // Load admin and user-op keypairs for signing
   await loadAdminKeypairsList();
-  if (onlineProfile.value?.uuid) {
-    await loadUserOpKeypairsList(onlineProfile.value.uuid);
+  if (onlineProfile.value?.profileId) {
+    await loadUserOpKeypairsList(onlineProfile.value.profileId);
   }
   trustDeclarationDetailsTab.value = 'summary';
   localTrustOverride.value = false;
@@ -22022,6 +22021,18 @@ async function openTwitchIntegrationSetup() {
     return;
   }
   
+  // Check if we have a profile
+  if (!onlineProfile.value || !onlineProfile.value.profileId) {
+    console.error('[openTwitchIntegrationSetup] No active profile found:', {
+      hasOnlineProfile: !!onlineProfile.value,
+      profileId: onlineProfile.value?.profileId,
+      profileKeys: onlineProfile.value ? Object.keys(onlineProfile.value) : []
+    });
+    alert('No active profile found. Please ensure you have created and selected a profile.');
+    return;
+  }
+  
+  console.log('[openTwitchIntegrationSetup] Opening with profile UUID:', onlineProfile.value.profileId);
   showTwitchIntegrationSetup.value = true;
   
   // Load predictions configuration status
@@ -22037,9 +22048,9 @@ async function checkPredictionsConfiguration() {
   // Check if Twitch integration is configured
   // TODO: Implement IPC call to check integration status
   try {
-    if (isElectronAvailable() && onlineProfile.value?.profileUuid) {
+    if (isElectronAvailable() && onlineProfile.value?.profileId) {
       // const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
-      //   profileUuid: onlineProfile.value.profileUuid
+      //   profileUuid: onlineProfile.value.profileId
       // });
       // predictionsConfigured.value = status && status.is_active === true;
       predictionsConfigured.value = false; // Placeholder until IPC is implemented

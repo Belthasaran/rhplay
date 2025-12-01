@@ -12957,8 +12957,13 @@ function registerDatabaseHandlers(dbManager) {
       
       if (templateConfig.type === 'whole_challenge') {
         const config = templateConfig.wholeChallenge;
+        if (!config) {
+          console.error('[twitch:prediction:create] Missing wholeChallenge config');
+          return { success: false, error: 'Missing wholeChallenge configuration' };
+        }
         const parsedWindow = parseInt(config.predictionWindowSeconds);
-        windowSeconds = Math.max(1, isNaN(parsedWindow) ? 600 : parsedWindow);
+        windowSeconds = Math.max(1, (isNaN(parsedWindow) || parsedWindow <= 0) ? 600 : parsedWindow);
+        console.log('[twitch:prediction:create] whole_challenge windowSeconds:', windowSeconds, 'from config:', config.predictionWindowSeconds);
         
         // Build title with game/stage info if provided
         let baseTitle = config.customTitle || 'How many total challenge items will we win?';
@@ -12993,8 +12998,13 @@ function registerDatabaseHandlers(dbManager) {
         
         if (config.predictionType === 'yes_no') {
           const yesNoConfig = config.yesNo;
+          if (!yesNoConfig) {
+            console.error('[twitch:prediction:create] Missing yesNo config');
+            return { success: false, error: 'Missing yesNo configuration' };
+          }
           const parsedWindow = parseInt(yesNoConfig.windowSeconds);
-          windowSeconds = Math.max(1, isNaN(parsedWindow) ? 30 : parsedWindow);
+          windowSeconds = Math.max(1, (isNaN(parsedWindow) || parsedWindow <= 0) ? 30 : parsedWindow);
+          console.log('[twitch:prediction:create] yes_no windowSeconds:', windowSeconds, 'from config:', yesNoConfig.windowSeconds);
           // Build title with game/stage info
           let baseTitle = yesNoConfig.customTitle || 'Will we win at the current challenge item?';
           if (challengeSequenceNumber) {
@@ -13014,8 +13024,13 @@ function registerDatabaseHandlers(dbManager) {
           ];
         } else if (config.predictionType === 'time_range') {
           const timeRangeConfig = config.timeRange;
+          if (!timeRangeConfig) {
+            console.error('[twitch:prediction:create] Missing timeRange config');
+            return { success: false, error: 'Missing timeRange configuration' };
+          }
           const parsedWindow = parseInt(timeRangeConfig.windowSeconds);
-          windowSeconds = Math.max(1, isNaN(parsedWindow) ? 45 : parsedWindow);
+          windowSeconds = Math.max(1, (isNaN(parsedWindow) || parsedWindow <= 0) ? 45 : parsedWindow);
+          console.log('[twitch:prediction:create] time_range windowSeconds:', windowSeconds, 'from config:', timeRangeConfig.windowSeconds);
           // Build title with game/stage info
           let baseTitle = timeRangeConfig.customTitle || 'How many minutes do we spend on the current challenge item?';
           if (challengeSequenceNumber) {
@@ -13074,22 +13089,47 @@ function registerDatabaseHandlers(dbManager) {
             title: range.title,
             points: 0
           }));
+        } else {
+          // Unknown prediction type for individual_item
+          console.error('[twitch:prediction:create] Unknown prediction type for individual_item:', config.predictionType);
+          return { 
+            success: false, 
+            error: `Unknown prediction type for individual_item: ${config.predictionType}` 
+          };
         }
+      } else {
+        // Unknown template type
+        console.error('[twitch:prediction:create] Unknown template type:', templateConfig.type);
+        return { 
+          success: false, 
+          error: `Unknown prediction template type: ${templateConfig.type}` 
+        };
       }
       
       // Validate windowSeconds before creating prediction
-      if (!windowSeconds || windowSeconds < 1) {
+      if (!windowSeconds || windowSeconds < 1 || isNaN(windowSeconds)) {
+        console.error('[twitch:prediction:create] Invalid windowSeconds:', windowSeconds, 'Template type:', templateConfig.type, 'Template config:', JSON.stringify(templateConfig, null, 2));
         return { 
           success: false, 
-          error: `Invalid prediction window: ${windowSeconds}. Must be at least 1 second.` 
+          error: `Invalid prediction window: ${windowSeconds}. Must be at least 1 second. Template type: ${templateConfig.type}` 
         };
       }
       
       // Ensure windowSeconds is an integer
       windowSeconds = Math.floor(windowSeconds);
       
+      // Double-check after floor
+      if (windowSeconds < 1) {
+        console.error('[twitch:prediction:create] windowSeconds < 1 after floor:', windowSeconds);
+        return { 
+          success: false, 
+          error: `Invalid prediction window: ${windowSeconds}. Must be at least 1 second.` 
+        };
+      }
+      
       // Validate that we have outcomes
       if (!outcomes || outcomes.length < 2) {
+        console.error('[twitch:prediction:create] Invalid outcomes:', outcomes);
         return { 
           success: false, 
           error: `Invalid prediction: must have at least 2 outcomes, got ${outcomes?.length || 0}` 
@@ -13098,6 +13138,7 @@ function registerDatabaseHandlers(dbManager) {
       
       // Validate title
       if (!title || title.trim().length === 0) {
+        console.error('[twitch:prediction:create] Invalid title:', title);
         return { 
           success: false, 
           error: 'Invalid prediction: title cannot be empty' 
@@ -13111,6 +13152,14 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       const apiClient = createTwitchApiClient(accessToken, clientId);
+      
+      // Log the values being sent (for debugging)
+      console.log('[twitch:prediction:create] Creating prediction with:', {
+        title: title.trim(),
+        outcomesCount: outcomes.length,
+        predictionWindowSeconds: windowSeconds,
+        windowSecondsType: typeof windowSeconds
+      });
       
       // Create prediction using @twurple/api
       const prediction = await apiClient.predictions.createPrediction(

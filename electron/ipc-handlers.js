@@ -1647,6 +1647,28 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // Validate star ratings (0-5)
+      const starRatings = [
+        { value: myRecommendationRating, name: 'Recommendation' },
+        { value: myImportanceRating, name: 'Importance' },
+        { value: myTechnicalQualityRating, name: 'Technical Quality' },
+        { value: myGameplayDesignRating, name: 'Gameplay Design' },
+        { value: myFairnessRating, name: 'Fairness' },
+        { value: myChallengeQualityRating, name: 'Challenge Quality' },
+        { value: myOriginalityRating, name: 'Originality' },
+        { value: myVisualAestheticsRating, name: 'Visual Aesthetics' },
+        { value: myStoryRating, name: 'Story' },
+        { value: mySoundtrackGraphicsRating, name: 'Soundtrack Graphics' }
+      ];
+      
+      for (const rating of starRatings) {
+        if (rating.value !== null && rating.value !== undefined) {
+          if (rating.value < 0 || rating.value > 5) {
+            throw new Error(`${rating.name} rating must be 0-5`);
+          }
+        }
+      }
+      
       // Log the values being saved for debugging
       console.log('[Save Annotation] Saving for gameid:', gameid);
       console.log('[Save Annotation] Ratings:', {
@@ -13160,8 +13182,8 @@ function registerDatabaseHandlers(dbManager) {
       // Get list of predictions from Twitch API (returns most recent first)
       // Since Twitch only allows one active prediction at a time, the first result
       // will be the active one if it exists
-      // @twurple/api structure: apiClient.helix.predictions.getPredictions()
-      const predictionsResult = await apiClient.helix.predictions.getPredictions(integration.twitch_user_id);
+      // @twurple/api structure: apiClient.predictions.getPredictions()
+      const predictionsResult = await apiClient.predictions.getPredictions(integration.twitch_user_id);
       const allPredictions = predictionsResult.data; // Extract data array from paginated result
       
       // Find active predictions (ACTIVE or LOCKED status)

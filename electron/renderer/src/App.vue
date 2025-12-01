@@ -1163,13 +1163,71 @@
           >
             Setup
           </button>
+          <div class="predictions-manage-wrapper" v-if="predictionsConfigured">
+            <button 
+              @click="togglePredictionsManageDropdown"
+              class="btn-predictions-manage"
+              :disabled="!profileGuardEnabled"
+              :class="{ 'active': showPredictionsManageDropdown }"
+            >
+              {{ getManagePredictionsButtonText() }}
+            </button>
+            <!-- Dropdown Menu -->
+            <div 
+              v-if="showPredictionsManageDropdown" 
+              class="predictions-manage-dropdown"
+              @click.stop
+            >
+              <!-- Options when Off -->
+              <template v-if="!predictionsEnabled">
+                <button 
+                  @click="enablePredictionsMode('whole_challenge')"
+                  class="dropdown-item"
+                >
+                  Create full Run predictions
+                </button>
+                <button 
+                  @click="enablePredictionsMode('same_item')"
+                  class="dropdown-item"
+                >
+                  Create Item Predictions (same items)
+                </button>
+                <button 
+                  @click="enablePredictionsMode('next_item')"
+                  class="dropdown-item"
+                >
+                  Create Item Predictions (next item, alternates)
+                </button>
+              </template>
+              <!-- Options when On -->
+              <template v-else>
+                <button 
+                  @click="disablePredictionsWithAction('cancel')"
+                  class="dropdown-item"
+                >
+                  Turn off and cancel prediction
+                </button>
+                <button 
+                  @click="disablePredictionsWithAction('resolve')"
+                  class="dropdown-item"
+                >
+                  Turn off and resolve (closest match)
+                </button>
+                <button 
+                  @click="disablePredictionsWithAction('leave_open')"
+                  class="dropdown-item"
+                >
+                  Turn off and leave prediction open
+                </button>
+              </template>
+            </div>
+          </div>
           <button 
-            @click="togglePredictionsEnabled"
-            class="btn-predictions-toggle"
-            :disabled="!predictionsConfigured || !profileGuardEnabled"
-            :class="{ 'enabled': predictionsEnabled }"
+            v-else
+            class="btn-predictions-manage"
+            disabled
           >
-            {{ predictionsEnabled ? 'On' : 'Off' }}
+            Off: Press Setup First
           </button>
           <div class="predictions-status">
             <span v-if="!predictionsConfigured">Predictions not configured</span>
@@ -17619,6 +17677,8 @@ const currentWinRulesJson = ref<string | null>(null);  // Current win rules JSON
 const showTwitchIntegrationSetup = ref(false);  // Twitch Integration Setup modal visibility
 const predictionsEnabled = ref(false);  // Whether predictions are enabled for current run
 const predictionsConfigured = ref(false);  // Whether Twitch integration is configured
+const predictionsOperationalMode = ref<'whole_challenge' | 'same_item' | 'next_item' | null>(null);  // Operational mode when enabled
+const showPredictionsManageDropdown = ref(false);  // Whether dropdown menu is visible
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
@@ -18214,9 +18274,11 @@ onMounted(() => {
     }
   };
   document.addEventListener('click', handleClickOutside);
+  document.addEventListener('click', handleClickOutsidePredictionsDropdown);
   
   onUnmounted(() => {
     document.removeEventListener('click', handleClickOutside);
+    document.removeEventListener('click', handleClickOutsidePredictionsDropdown);
   });
 });
 
@@ -22084,15 +22146,84 @@ async function checkPredictionsConfiguration() {
   }
 }
 
-async function togglePredictionsEnabled() {
+function getManagePredictionsButtonText(): string {
+  if (!predictionsConfigured.value) {
+    return 'Off: Press Setup First';
+  }
+  return `Manage Predictions (${predictionsEnabled.value ? 'On' : 'Off'})`;
+}
+
+function togglePredictionsManageDropdown() {
+  if (!predictionsConfigured.value) {
+    return;
+  }
+  showPredictionsManageDropdown.value = !showPredictionsManageDropdown.value;
+}
+
+// Close dropdown when clicking outside
+function handleClickOutsidePredictionsDropdown(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.predictions-manage-wrapper')) {
+    showPredictionsManageDropdown.value = false;
+  }
+}
+
+async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'next_item') {
   if (!predictionsConfigured.value) {
     return;
   }
   
-  predictionsEnabled.value = !predictionsEnabled.value;
+  // Close dropdown
+  showPredictionsManageDropdown.value = false;
   
-  // TODO: Save predictions enabled state to run or csettings
-  // This should probably be stored with the run or as a csetting
+  // Check for existing predictions on Twitch
+  try {
+    if (isElectronAvailable()) {
+      // TODO: Check Twitch API for existing active predictions
+      // If unmanaged prediction exists, prompt user to cancel it
+      
+      // For now, just enable the mode
+      predictionsEnabled.value = true;
+      predictionsOperationalMode.value = mode;
+      
+      // TODO: Create prediction based on mode
+      // - whole_challenge: Create prediction for entire run
+      // - same_item: Create prediction for current active challenge
+      // - next_item: Create prediction for next challenge (after current)
+      
+      console.log(`[enablePredictionsMode] Enabled predictions with mode: ${mode}`);
+    }
+  } catch (error) {
+    console.error('[enablePredictionsMode] Error:', error);
+    await showAlert('Failed to enable predictions. Please try again.', 'Error');
+  }
+}
+
+async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leave_open') {
+  if (!predictionsEnabled.value) {
+    return;
+  }
+  
+  // Close dropdown
+  showPredictionsManageDropdown.value = false;
+  
+  try {
+    if (isElectronAvailable()) {
+      // TODO: Perform action based on choice
+      // - cancel: Cancel current prediction and refund
+      // - resolve: Resolve to closest matching outcome
+      // - leave_open: Just stop automation, leave prediction active
+      
+      // For now, just disable
+      predictionsEnabled.value = false;
+      predictionsOperationalMode.value = null;
+      
+      console.log(`[disablePredictionsWithAction] Disabled predictions with action: ${action}`);
+    }
+  } catch (error) {
+    console.error('[disablePredictionsWithAction] Error:', error);
+    await showAlert('Failed to disable predictions. Please try again.', 'Error');
+  }
 }
 
 async function handleSaveWinRules(winRulesJson: string) {
@@ -24654,7 +24785,12 @@ button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.btn-predictions-toggle {
+.predictions-manage-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-predictions-manage {
   padding: 4px 12px;
   background: #444;
   color: #fff;
@@ -24665,20 +24801,53 @@ button:disabled {
   cursor: pointer;
   white-space: nowrap;
 }
-.btn-predictions-toggle:hover:not(:disabled) {
+.btn-predictions-manage:hover:not(:disabled) {
   background: #555;
 }
-.btn-predictions-toggle:disabled {
+.btn-predictions-manage:disabled {
   background: #333;
   cursor: not-allowed;
   opacity: 0.5;
 }
-.btn-predictions-toggle.enabled {
-  background: #059669;
-  border-color: #10b981;
+.btn-predictions-manage.active {
+  background: #555;
+  border-color: #777;
 }
-.btn-predictions-toggle.enabled:hover:not(:disabled) {
-  background: #10b981;
+
+.predictions-manage-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  min-width: 220px;
+  overflow: hidden;
+}
+
+.predictions-manage-dropdown .dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.predictions-manage-dropdown .dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.predictions-manage-dropdown .dropdown-item:hover {
+  background: var(--bg-hover);
 }
 .predictions-status {
   font-size: 11px;

@@ -22017,7 +22017,7 @@ function handleCloseWinRulesDropdown() {
 async function openTwitchIntegrationSetup() {
   // Check if profile guard is enabled
   if (!profileGuardEnabled.value) {
-    alert('Profile Guard must be enabled before setting up Twitch integration.');
+    await showAlert('Profile Guard must be enabled before setting up Twitch integration.', 'Profile Guard Required');
     return;
   }
   

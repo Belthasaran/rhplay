@@ -218,6 +218,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { showAlert, showConfirm } from '../utils/dialogs';
 
 const props = defineProps<{
   visible: boolean;
@@ -291,7 +292,7 @@ const startOAuthFlow = async () => {
     // Get client ID and redirect URI
     const clientId = await (window as any).electronAPI.getTwitchClientId();
     if (!clientId) {
-      alert('Twitch client ID not configured. Please check your build configuration.');
+      await showAlert('Twitch client ID not configured. Please check your build configuration.', 'Configuration Error');
       return;
     }
     
@@ -312,11 +313,11 @@ const startOAuthFlow = async () => {
       await loadData();
       emit('update');
     } else {
-      alert('Failed to complete OAuth flow. Please try again.');
+      await showAlert('Failed to complete OAuth flow. Please try again.', 'OAuth Error');
     }
   } catch (error: any) {
     console.error('[TwitchIntegrationSetup] OAuth error:', error);
-    alert(`Failed to complete OAuth flow: ${error.message || 'Unknown error'}`);
+    await showAlert(`Failed to complete OAuth flow: ${error.message || 'Unknown error'}`, 'OAuth Error');
   } finally {
     oauthInProgress.value = false;
   }
@@ -324,7 +325,11 @@ const startOAuthFlow = async () => {
 
 // Revoke tokens
 const revokeTokens = async () => {
-  if (!confirm('Are you sure you want to disconnect from Twitch? This will delete all stored tokens.')) {
+  const confirmed = await showConfirm(
+    'Are you sure you want to disconnect from Twitch? This will delete all stored tokens.',
+    'Disconnect from Twitch'
+  );
+  if (!confirmed) {
     return;
   }
   
@@ -336,11 +341,11 @@ const revokeTokens = async () => {
       integrationStatus.value = null;
       emit('update');
     } else {
-      alert(`Failed to disconnect: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to disconnect: ${result?.error || 'Unknown error'}`, 'Disconnect Error');
     }
   } catch (error: any) {
     console.error('[TwitchIntegrationSetup] Revoke error:', error);
-    alert(`Failed to disconnect: ${error.message || 'Unknown error'}`);
+    await showAlert(`Failed to disconnect: ${error.message || 'Unknown error'}`, 'Disconnect Error');
   }
 };
 
@@ -378,11 +383,11 @@ const saveTemplate = async () => {
     //   template: JSON.stringify(template)
     // });
     
-    alert('Template configuration saved successfully!');
+    await showAlert('Template configuration saved successfully!', 'Configuration Saved');
     emit('update');
   } catch (error) {
     console.error('[TwitchIntegrationSetup] Save error:', error);
-    alert('Failed to save configuration. Please try again.');
+    await showAlert('Failed to save configuration. Please try again.', 'Save Error');
   }
 };
 

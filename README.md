@@ -30,6 +30,76 @@ A Manifest pointed to 0.1.9beta Source of this release and game description data
   Metadata Tx Id: MJDsk-3v8ATxOgRWDV7Fk35FcnFxwZjyqIKIDtQbjZk
   ArNS Name: rhplay_smwresource
 
+# Current Features
+
+ - Quick launch automation feature for SMW Hacks -  Once the entire ~2GB database file is provisioned: this program lets you choose a random SMW hack from the local database; so long as you provided your own SMW ROM to use - you can quickly automated the process of loading any random game; uploading it to your SNES over the SD2SNES USB port, and boot the game in a few seconds with a single click.  (No need to shuffle memory cards)
+
+ - Attempts to provision databases on first launch (rhdata.db, patchbin.db, clientdata.db, etc)
+
+ - SMW Randomizer features: From the "Select Menu" you can click Check Random to pick one random game and quickly start it.
+
+ - SMW Game+Stage Randomizer: You can prepare a "Challenge run" that includes multiple random SMW Games or random SMW stages in sequence.  Random SMW game is any game in the database that contains BPS patching instructions  (A few gameids or gameversions might not due to various issues).
+
+ - Random Stage for Stage randomizer challenge run is Limited to gamestages manually added to the gamestages database with
+a Defined "Play my Level" patch preset.  Such as the "2lvno, 1lvno, or Storks level selector"   These special patch presets
+are used to dynamically patch a SMW Romhack, so that when you enter the game: instead of playing that game normally - you enter directly to a randomly selected level id from  our database of translevel level ID numbers for that game.   This only works on certain games currently, and different SMW games require different patches,   therefore your random selection for Stage Randomizer is Limited to games that had  specific stage Id numbers with a patch preset manually entered into the database  Indicating which patches are required for a specific game.   E.G.  For "Storks Apes and Crocodiles" -   I wrote a very specific patch for level selection which applies to no other SMW hack.    Additional patches and gamestages records could be contributed  using the CSV format below:
+
+    "stage_uuid","gameid","levelnumber","levelname","versions","submapid","translevel_13bf","tile_x","tile_y","tile_value","requisites","playable","rando","difficulty","mainexit","keyhole","credits","ghouse","spalace","castle","water","boss","secret","troll","final","lock","playlevel_patch_code","excluded_patchcodes","stagetags","rhpakuuid","extradescription"
+    "","17441","101","CHUCK CITY","*","","25","","","","","1","1","1","1","0","0","0","0","0","0","0","0","0","0","0","","","","",""
+
+And the ASAR (assembly script template) format for gamestage patchcodes which requires either a two-byte zero-padded level number (glevelnum) such as $001, $02A, $103, etc,  OR a  levelnumber with leading zeros stripped such as  $2A format  glevelnum_s.  Limitations:
+
+ - 2lvno - Patch preset works for most games, But non-retry patch games lose midway support.  Some retry-patch games work p
+erfectly.   Some retry-patch games do not re-enter the player at the same level.   Some games crash.
+ - 1lvno - Patch preset for level selector has the limitaiton that since it uses UberASM;  Many Hack-specific custom ASMs are disabled. Some games crash.
+
+Neither patch preset works for all games, and they just represent the best I have been able to do so far.
+
+ - Databases include a list of many SMW "Romgames"
+
+ - Search and Filtering options to find games; Details such as name, Author, Download location, Web link to the game's SMWC page for example, manual download links for BPS; file checksums, etc.
+
+ - Options to select a game and click "Start" to quickly automate the process of gathering BPS patch files and applying patches to game file supplied by the user (automate process of using the ROM you already own with flips to play a modded/tweaked game)
+
+ - USB2SNES Websocket server support; so you can click Start, then UPLOAD TO SNES to automatically upload files to your SNES equipped with Sd2SNES using the USB port.
+
+ - Search and Filtering options to quickly find what you are looking for.
+
+ - Option to check multiple items (Multi-select)  and create a batch of files to quickly patch and upload to your SNES as a bulk staging operation.
+
+ - "My SNES Files" button to list games loadable from the /work directory on your SD2SNES' SD card.
+
+ - Plus Patch button to create ADDITIONAL "Patch preset definitions" which you can apply to certain Batches, Game stages, or games.   For example: "CrowdControl-2023 enablement IPS patch"  for certain SMW hacks.     Use the +Patch button  to automatically load a copy of SMW on your SNES  apply the ROMHACK,  and any of the custom additional patches you want.
+
+Your patching options for +Patch are to include:
+
+ - "Game genie codes" - Decoded and used to create an ASAR script which burns the game genie code in to your game for quicker access.
+
+ - ASAR script.  ASAR script template - You can write a script template in assembly to be patched on top of your game.  This allows flexible patching of complex assembly snippets such as  "Warp player to certain level on overworld level entry";  Storks random levl selector use case, etc.   "pall" - Set all Switch Palaces, etc.
+
+ - IPS/BPS files.   IPS files are more generic;  BPS files are specific to a certain base patch, generally.
+
+# Online Profiles
+
+ - Matter for future work for Online support.  The function is not yet finished.  Allows (require) creation of an online user profile.  This is protected by a Master password function called Keyguard configured on first time startup.
+
+  - Keyguard will encrypt your profile data inside the program to help protect it,  especially in high security mode.
+For example: If you decide to use Twitch integration features, then security tokens issued when you connect your account should be encrypted and protected by Keyguard.
+
+# Challenge Run Feature
+
+    - Allows selecting random SMW games   and/or   random SMW Game stages (Only for those games which currently have a detailed stage list specified in the database  and a "Play my level" System patch preset in place that defines How to modify the game to load player into a specific stage)
+
+     - Optional Stage Limits, Game Limits filtering  games based on various criteria.
+
+     - Optional challenge overlay feature for generating a HTML overlay displaying run timer during challenge runs: runview.html
+
+     - Optional Win conditions: such as Time limit for run.  Time limit per challenge item.   Optional Rollover time which means that if you finish a challenge item before the time limit - you can accumulate some amount of rollover time and spend that time on other challenges.
+
+     - Optional web server utility process that can help serve the overlay locally or remotely for easy OBS Access - http://localhost:2599/runview.html
+
+     - Current work: Twitch Predictions integration with the "Challenge Run" timer feature, which is currently incomplete.
+
 ## NEW Initial Release
 
 This program has been reconstructed from Python into NodeJS and Electron with a complete replacement of the Graphical User Interface.

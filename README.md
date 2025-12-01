@@ -32,7 +32,7 @@ A Manifest pointed to 0.1.9beta Source of this release and game description data
 
 # Current Features
 
- - Quick launch automation feature for SMW Hacks -  Once the entire ~2GB database file is provisioned: this program lets you choose a random SMW hack from the local database; so long as you provided your own SMW ROM to use - you can quickly automated the process of loading any random game; uploading it to your SNES over the SD2SNES USB port, and boot the game in a few seconds with a single click.  (No need to shuffle memory cards)
+ - Quick launch automation feature for SMW Hacks -  Once the entire ~2GB database file is provisioned: this program lets you choose a random SMW hack from the local database; so long as you provided your own SMW ROM to use - you can quickly automate the process of loading any random game; uploading it to your SNES over the SD2SNES USB port, and boot the game in a few seconds with a single click.  (No need to get out of your chair and shuffle memory cards).  Perhaps i'm just lazy, but this was and always should be the primary use case for the program - streamlining the process for quicker and less tedious access to review and study/analyze massive SMW game collections.   Looking at many SMW romhacks a little bit; finding, downloading, patching, and launching hack manually is 4 steps - that wastes 5 or 6 minutes per hack: making the process of research impractical. Automation and point-and-click launch from a games listing is desired!
 
  - Attempts to provision databases on first launch (rhdata.db, patchbin.db, clientdata.db, etc)
 

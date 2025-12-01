@@ -150,6 +150,20 @@
                 </div>
               </div>
 
+              <!-- Twitch Integration Section -->
+              <div class="online-section">
+                <h4>Twitch Integration</h4>
+                <p class="info-text">
+                  Integrate with Twitch to automatically create and manage predictions during challenge runs.
+                </p>
+                <button @click="openTwitchIntegrationSetup" class="btn-primary-small" :disabled="!profileGuardEnabled">
+                  Twitch Integration Setup
+                </button>
+                <p v-if="!profileGuardEnabled" class="warning-text" style="margin-top: 8px; font-size: 12px;">
+                  ⚠️ Profile Guard must be enabled to use Twitch integration.
+                </p>
+              </div>
+
               <!-- Encryption Keys Section (shown if admin options enabled) -->
               <div v-if="onlineShowAdminOptions" class="online-section admin-section">
                 <h4>Encryption Keys</h4>
@@ -1137,6 +1151,30 @@
             <div class="time-value" :class="{ 'time-warning': runTimeLeftSeconds < 60, 'time-critical': runTimeLeftSeconds < 30 }">
               {{ formatTime(runTimeLeftSeconds) }}
             </div>
+          </div>
+        </div>
+        <!-- Predictions Column -->
+        <div class="predictions-column">
+          <div class="predictions-label">Predictions:</div>
+          <button 
+            @click="openTwitchIntegrationSetup" 
+            class="btn-predictions-setup"
+            :disabled="!profileGuardEnabled"
+          >
+            Setup
+          </button>
+          <button 
+            @click="togglePredictionsEnabled"
+            class="btn-predictions-toggle"
+            :disabled="!predictionsConfigured || !profileGuardEnabled"
+            :class="{ 'enabled': predictionsEnabled }"
+          >
+            {{ predictionsEnabled ? 'On' : 'Off' }}
+          </button>
+          <div class="predictions-status">
+            <span v-if="!predictionsConfigured">Predictions not configured</span>
+            <span v-else-if="!predictionsEnabled">Off: Toggle on to create and automate predictions.</span>
+            <span v-else>On: Prediction automation live</span>
           </div>
         </div>
       </div>
@@ -7431,6 +7469,15 @@
     @close="handleCloseWinRulesDropdown"
   />
   
+  <!-- Twitch Integration Setup Modal -->
+  <TwitchIntegrationSetup
+    :visible="showTwitchIntegrationSetup"
+    :profileUuid="onlineProfile?.profileUuid || null"
+    :profileGuardEnabled="profileGuardEnabled"
+    @close="showTwitchIntegrationSetup = false"
+    @update="handleTwitchIntegrationUpdate"
+  />
+  
 </template>
 
 <script setup lang="ts">
@@ -7465,6 +7512,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import WinRulesDropdown from './components/WinRulesDropdown.vue';
+import TwitchIntegrationSetup from './components/TwitchIntegrationSetup.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -17568,6 +17616,11 @@ const showWinRulesDropdown = ref(false);  // Win rules dropdown visibility
 const winRulesDropdownPosition = ref<{ x: number; y: number } | null>(null);  // Position for win rules dropdown
 const currentWinRulesJson = ref<string | null>(null);  // Current win rules JSON from run
 
+// Twitch Integration
+const showTwitchIntegrationSetup = ref(false);  // Twitch Integration Setup modal visibility
+const predictionsEnabled = ref(false);  // Whether predictions are enabled for current run
+const predictionsConfigured = ref(false);  // Whether Twitch integration is configured
+
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
 const currentRunStatus = ref<'preparing' | 'active' | 'completed' | 'cancelled'>('preparing');
@@ -21961,6 +22014,55 @@ function handleCloseWinRulesDropdown() {
   winRulesDropdownPosition.value = null;
 }
 
+// Twitch Integration Setup
+async function openTwitchIntegrationSetup() {
+  // Check if profile guard is enabled
+  if (!profileGuardEnabled.value) {
+    alert('Profile Guard must be enabled before setting up Twitch integration.');
+    return;
+  }
+  
+  showTwitchIntegrationSetup.value = true;
+  
+  // Load predictions configuration status
+  await checkPredictionsConfiguration();
+}
+
+async function handleTwitchIntegrationUpdate() {
+  // Reload predictions configuration status after integration update
+  await checkPredictionsConfiguration();
+}
+
+async function checkPredictionsConfiguration() {
+  // Check if Twitch integration is configured
+  // TODO: Implement IPC call to check integration status
+  try {
+    if (isElectronAvailable() && onlineProfile.value?.profileUuid) {
+      // const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
+      //   profileUuid: onlineProfile.value.profileUuid
+      // });
+      // predictionsConfigured.value = status && status.is_active === true;
+      predictionsConfigured.value = false; // Placeholder until IPC is implemented
+    } else {
+      predictionsConfigured.value = false;
+    }
+  } catch (error) {
+    console.error('[checkPredictionsConfiguration] Error:', error);
+    predictionsConfigured.value = false;
+  }
+}
+
+async function togglePredictionsEnabled() {
+  if (!predictionsConfigured.value) {
+    return;
+  }
+  
+  predictionsEnabled.value = !predictionsEnabled.value;
+  
+  // TODO: Save predictions enabled state to run or csettings
+  // This should probably be stored with the run or as a csetting
+}
+
 async function handleSaveWinRules(winRulesJson: string) {
   console.log('[handleSaveWinRules] Called with winRulesJson:', winRulesJson);
   console.log('[handleSaveWinRules] currentRunUuid:', currentRunUuid.value);
@@ -24477,6 +24579,73 @@ button:disabled {
 }
 .rollover-value {
   color: #6b7280;
+}
+.predictions-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-primary);
+  min-width: 200px;
+}
+.predictions-label {
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn-predictions-setup {
+  padding: 4px 12px;
+  background: #9146ff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-predictions-setup:hover:not(:disabled) {
+  background: #a855f7;
+}
+.btn-predictions-setup:disabled {
+  background: #555;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.btn-predictions-toggle {
+  padding: 4px 12px;
+  background: #444;
+  color: #fff;
+  border: 1px solid #666;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-predictions-toggle:hover:not(:disabled) {
+  background: #555;
+}
+.btn-predictions-toggle:disabled {
+  background: #333;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.btn-predictions-toggle.enabled {
+  background: #059669;
+  border-color: #10b981;
+}
+.btn-predictions-toggle.enabled:hover:not(:disabled) {
+  background: #10b981;
+}
+.predictions-status {
+  font-size: 11px;
+  color: #aaa;
+  white-space: nowrap;
+  margin-top: 2px;
 }
 .item-time-left-display {
   font-weight: bold;

@@ -10,7 +10,8 @@
     "electron:start": "cross-env ELECTRON_START_URL=http://localhost:5173 electron electron/main.js --xdg-portal-required-version=4",
     "electron:start-smart": "cd electron && ./smart-start.sh",
     "renderer:dev": "npm --prefix electron/renderer run dev",
-    "renderer:build": "npm --prefix electron/renderer run build && npm run fix-asset-paths",
+    "build:twitch-config": "node scripts/build-twitch-config.js",
+    "renderer:build": "npm run build:twitch-config && npm --prefix electron/renderer run build && npm run fix-asset-paths",
     "fix-asset-paths": "node scripts/fix-asset-paths.js",
     "app:dev": "run-p renderer:dev electron:start",
     "app:dev-smart": "cd electron && ./smart-start.sh",
@@ -168,6 +169,10 @@
       {
         "from": "electron/dbmanifest.json",
         "to": "db/dbmanifest.json"
+      },
+      {
+        "from": "electron/twitch-config.json",
+        "to": "twitch-config.json"
       },
       {
         "from": "electron/packed_db/clientdata.db.initial.xz",

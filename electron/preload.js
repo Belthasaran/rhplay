@@ -1139,4 +1139,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   overlayWebServerStart: () => ipcRenderer.invoke('overlay-web-server:start'),
   overlayWebServerStop: () => ipcRenderer.invoke('overlay-web-server:stop'),
   overlayWebServerStatus: () => ipcRenderer.invoke('overlay-web-server:status'),
+  
+  // Twitch Integration
+  getTwitchClientId: () => ipcRenderer.invoke('get_twitch_client_id'),
+  getTwitchIntegrationStatus: (params) => ipcRenderer.invoke('get_twitch_integration_status', params),
+  openTwitchOAuthWindow: (params) => ipcRenderer.invoke('open_twitch_oauth_window', params),
+  revokeTwitchIntegration: (params) => ipcRenderer.invoke('revoke_twitch_integration', params),
 });

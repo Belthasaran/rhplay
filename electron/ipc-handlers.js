@@ -28,6 +28,7 @@ const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
 const { HostFP } = require('./main/HostFP');
 const TrustManager = require('./utils/TrustManager');
+const { getTwitchClientId, getTwitchRedirectUri } = require('./twitch-config');
 const PermissionHelper = require('./utils/PermissionHelper');
 const ModerationManager = require('./utils/ModerationManager');
 const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
@@ -11962,6 +11963,306 @@ function registerDatabaseHandlers(dbManager) {
       };
     } catch (error) {
       console.error('[ratings:summaries:get] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ===========================================================================
+  // TWITCH INTEGRATION HANDLERS
+  // ===========================================================================
+
+  /**
+   * Get Twitch client ID
+   * Channel: get_twitch_client_id
+   */
+  ipcMain.handle('get_twitch_client_id', async () => {
+    try {
+      const clientId = getTwitchClientId();
+      return clientId;
+    } catch (error) {
+      console.error('[get_twitch_client_id] Error:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Get Twitch integration status
+   * Channel: get_twitch_integration_status
+   */
+  ipcMain.handle('get_twitch_integration_status', async (event, { profileUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const integration = db.prepare(`
+        SELECT 
+          integration_uuid,
+          twitch_user_id,
+          twitch_username,
+          scopes,
+          is_active,
+          created_at,
+          updated_at,
+          last_used_at
+        FROM twitch_integration
+        WHERE profile_uuid = ?
+      `).get(profileUuid);
+      
+      if (!integration) {
+        return null;
+      }
+      
+      return {
+        twitch_user_id: integration.twitch_user_id,
+        twitch_username: integration.twitch_username,
+        scopes: integration.scopes,
+        is_active: Boolean(integration.is_active)
+      };
+    } catch (error) {
+      console.error('[get_twitch_integration_status] Error:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Open Twitch OAuth window and handle callback
+   * Channel: open_twitch_oauth_window
+   */
+  ipcMain.handle('open_twitch_oauth_window', async (event, { url, redirectUri, state, profileUuid }) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const clientId = getTwitchClientId();
+        if (!clientId) {
+          reject(new Error('Twitch client ID not configured'));
+          return;
+        }
+        
+        // Create OAuth window
+        const oauthWindow = new BrowserWindow({
+          width: 500,
+          height: 650,
+          show: false,
+          modal: true,
+          parent: BrowserWindow.getFocusedWindow() || undefined,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true
+          }
+        });
+        
+        oauthWindow.loadURL(url);
+        oauthWindow.show();
+        
+        // Listen for navigation to redirect URI
+        oauthWindow.webContents.on('did-redirect-navigation', (event, navigationUrl) => {
+          handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject);
+        });
+        
+        // Listen for navigation (for redirect-based flows)
+        oauthWindow.webContents.on('did-navigate', (event, navigationUrl) => {
+          handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject);
+        });
+        
+        // Listen for in-page navigation (for fragment-based redirects in implicit grant flow)
+        // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
+        oauthWindow.webContents.on('did-navigate-in-page', (event, navigationUrl, isMainFrame) => {
+          if (isMainFrame) {
+            handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject);
+          }
+        });
+        
+        // Handle window close
+        oauthWindow.on('closed', () => {
+          reject(new Error('OAuth window closed by user'));
+        });
+        
+      } catch (error) {
+        console.error('[open_twitch_oauth_window] Error:', error);
+        reject(error);
+      }
+    });
+  });
+
+  /**
+   * Handle OAuth callback (helper function)
+   */
+  function handleOAuthCallback(navigationUrl, redirectUri, expectedState, profileUuid, oauthWindow, resolve, reject) {
+    try {
+      // Check if this is the redirect URI
+      if (!navigationUrl.startsWith(redirectUri)) {
+        return; // Not our redirect
+      }
+      
+      const url = new URL(navigationUrl);
+      
+      // Extract access token from fragment (implicit grant flow)
+      const hash = url.hash.substring(1); // Remove leading #
+      const params = new URLSearchParams(hash);
+      
+      const accessToken = params.get('access_token');
+      const tokenType = params.get('token_type');
+      const state = params.get('state');
+      const error = params.get('error');
+      const errorDescription = params.get('error_description');
+      
+      if (error) {
+        if (oauthWindow && !oauthWindow.isDestroyed()) {
+          oauthWindow.close();
+        }
+        reject(new Error(`OAuth error: ${error} - ${errorDescription || 'Unknown error'}`));
+        return;
+      }
+      
+      // Verify state
+      if (state !== expectedState) {
+        if (oauthWindow && !oauthWindow.isDestroyed()) {
+          oauthWindow.close();
+        }
+        reject(new Error('OAuth state mismatch - possible CSRF attack'));
+        return;
+      }
+      
+      if (!accessToken) {
+        return; // Still waiting for token
+      }
+      
+      // Close OAuth window
+      if (oauthWindow && !oauthWindow.isDestroyed()) {
+        oauthWindow.close();
+      }
+      
+      // Validate token and get user info
+      validateAndStoreTwitchToken(accessToken, tokenType, profileUuid)
+        .then(result => {
+          resolve(result);
+        })
+        .catch(err => {
+          reject(err);
+        });
+        
+    } catch (error) {
+      console.error('[handleOAuthCallback] Error:', error);
+      if (oauthWindow && !oauthWindow.isDestroyed()) {
+        oauthWindow.close();
+      }
+      reject(error);
+    }
+  }
+
+  /**
+   * Validate Twitch token and store encrypted
+   */
+  async function validateAndStoreTwitchToken(accessToken, tokenType, profileUuid) {
+    try {
+      // Validate token and get user info
+      const https = require('https');
+      const validateUrl = 'https://id.twitch.tv/oauth2/validate';
+      
+      const validateResponse = await new Promise((resolve, reject) => {
+        const req = https.request(validateUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `${tokenType || 'Bearer'} ${accessToken}`
+          }
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error('Failed to parse validation response'));
+              }
+            } else {
+              reject(new Error(`Token validation failed: ${res.statusCode}`));
+            }
+          });
+        });
+        
+        req.on('error', reject);
+        req.end();
+      });
+      
+      const { client_id, login: username, user_id, scopes, expires_in } = validateResponse;
+      
+      // TODO: Encrypt tokens with profile guard key
+      // For now, we'll store them (they should be encrypted in production)
+      // This requires implementing encryption using profile guard key
+      
+      const db = dbManager.getConnection('clientdata');
+      
+      // Store integration (tokens should be encrypted - TODO)
+      const integrationUuid = crypto.randomUUID();
+      const encryptedAccessToken = accessToken; // TODO: Encrypt with profile guard
+      const encryptedRefreshToken = ''; // Implicit grant doesn't provide refresh token
+      
+      db.prepare(`
+        INSERT INTO twitch_integration (
+          integration_uuid,
+          profile_uuid,
+          twitch_user_id,
+          twitch_username,
+          encrypted_access_token,
+          encrypted_refresh_token,
+          expires_in,
+          obtainment_timestamp,
+          scopes,
+          is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(profile_uuid) DO UPDATE SET
+          twitch_user_id = excluded.twitch_user_id,
+          twitch_username = excluded.twitch_username,
+          encrypted_access_token = excluded.encrypted_access_token,
+          encrypted_refresh_token = excluded.encrypted_refresh_token,
+          expires_in = excluded.expires_in,
+          obtainment_timestamp = excluded.obtainment_timestamp,
+          scopes = excluded.scopes,
+          is_active = 1,
+          updated_at = CURRENT_TIMESTAMP,
+          last_used_at = CURRENT_TIMESTAMP
+      `).run(
+        integrationUuid,
+        profileUuid,
+        user_id,
+        username,
+        encryptedAccessToken,
+        encryptedRefreshToken,
+        expires_in || 0,
+        Date.now(),
+        Array.isArray(scopes) ? scopes.join(' ') : (scopes || '')
+      );
+      
+      return {
+        success: true,
+        twitch_username: username,
+        twitch_user_id: user_id
+      };
+      
+    } catch (error) {
+      console.error('[validateAndStoreTwitchToken] Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revoke Twitch integration
+   * Channel: revoke_twitch_integration
+   */
+  ipcMain.handle('revoke_twitch_integration', async (event, { profileUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // TODO: Call Twitch revoke endpoint if we have a token
+      
+      // Delete integration from database
+      db.prepare(`
+        DELETE FROM twitch_integration
+        WHERE profile_uuid = ?
+      `).run(profileUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[revoke_twitch_integration] Error:', error);
       return { success: false, error: error.message };
     }
   });

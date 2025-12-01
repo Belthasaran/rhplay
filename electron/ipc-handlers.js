@@ -13009,10 +13009,12 @@ function registerDatabaseHandlers(dbManager) {
       // Get list of predictions from Twitch API (returns most recent first)
       // Since Twitch only allows one active prediction at a time, the first result
       // will be the active one if it exists
-      const predictions = await apiClient.predictions.getPredictions(integration.twitch_user_id);
+      // @twurple/api structure: apiClient.helix.predictions.getPredictions()
+      const predictionsResult = await apiClient.helix.predictions.getPredictions(integration.twitch_user_id);
+      const allPredictions = predictionsResult.data; // Extract data array from paginated result
       
       // Find active predictions (ACTIVE or LOCKED status)
-      const activeTwitchPredictions = predictions.filter(p => 
+      const activeTwitchPredictions = allPredictions.filter(p => 
         p.status === 'ACTIVE' || p.status === 'LOCKED'
       );
       
@@ -13039,15 +13041,17 @@ function registerDatabaseHandlers(dbManager) {
       
       for (const twitchPred of activeTwitchPredictions) {
         // Find matching local prediction
+        // @twurple/api HelixPrediction uses .id property
+        const twitchPredId = twitchPred.id;
         const localMatch = localPredictions.find(lp => 
-          lp.twitch_prediction_id === twitchPred.id
+          lp.twitch_prediction_id === twitchPredId
         );
         
         if (localMatch) {
           // This is a managed prediction
           verifiedPredictions.push({
             prediction_uuid: localMatch.prediction_uuid,
-            twitch_prediction_id: twitchPred.id,
+            twitch_prediction_id: twitchPredId,
             twitch_broadcaster_id: localMatch.twitch_broadcaster_id,
             prediction_type: localMatch.prediction_type,
             local_status: localMatch.local_status,
@@ -13061,7 +13065,7 @@ function registerDatabaseHandlers(dbManager) {
           hasUnmanagedPredictions = true;
           verifiedPredictions.push({
             prediction_uuid: null,
-            twitch_prediction_id: twitchPred.id,
+            twitch_prediction_id: twitchPredId,
             twitch_broadcaster_id: integration.twitch_user_id,
             prediction_type: null,
             local_status: null,

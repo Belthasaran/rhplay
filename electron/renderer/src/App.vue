@@ -17679,6 +17679,9 @@ const predictionsEnabled = ref(false);  // Whether predictions are enabled for c
 const predictionsConfigured = ref(false);  // Whether Twitch integration is configured
 const predictionsOperationalMode = ref<'whole_challenge' | 'same_item' | 'next_item' | null>(null);  // Operational mode when enabled
 const showPredictionsManageDropdown = ref(false);  // Whether dropdown menu is visible
+const activePredictionUuid = ref<string | null>(null);  // UUID of currently active prediction
+const predictionRetryQueue = ref<Array<{action: string, params: any, retryCount: number, maxRetries: number}>>([]);  // Queue for retrying failed operations
+const predictionRetryTimer = ref<number | null>(null);  // Timer for retry attempts
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
@@ -20383,6 +20386,46 @@ async function startRun() {
       // Explicitly load win rules after starting run (watcher might not trigger immediately)
       await loadWinRules();
       
+      // Load prediction state if enabled
+      await checkPredictionsConfiguration();
+      if (predictionsEnabled.value && predictionsOperationalMode.value === 'whole_challenge') {
+        // Create whole challenge prediction when run starts
+        const template = await (window as any).electronAPI.getPredictionsTemplate();
+        if (template && template.type === 'whole_challenge') {
+          const createResult = await (window as any).electronAPI.createTwitchPrediction({
+            template: template,
+            runUuid: currentRunUuid.value,
+            challengeSequenceNumber: null, // Whole run
+            totalChallenges: runEntries.value.length,
+            username: onlineProfile.value?.username || 'Player',
+            gameId: null,
+            stageId: null
+          });
+          
+          if (createResult.success) {
+            activePredictionUuid.value = createResult.predictionUuid;
+            showToastNotification('Run prediction created', 'success', 3000);
+          } else {
+            // Queue for retry
+            queuePredictionRetry('create', {
+              template: template,
+              runUuid: currentRunUuid.value,
+              challengeSequenceNumber: null,
+              totalChallenges: runEntries.value.length,
+              username: onlineProfile.value?.username || 'Player',
+              gameId: null,
+              stageId: null
+            });
+            showToastNotification('Creating run prediction... (will retry if needed)', 'info', 3000);
+          }
+        }
+      } else if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
+        // Create prediction for first challenge
+        createPredictionForNextChallenge(0).catch(error => {
+          console.error('[startRun] Error creating prediction for first challenge:', error);
+        });
+      }
+      
       // Initialize challenge results tracking
       // Note: startedAtMs will be set by backend when run starts (first challenge only)
       // We'll need to reload results to get the actual started_at_ms values
@@ -20697,12 +20740,27 @@ async function nextChallenge() {
     
     console.log(`Challenge ${idx + 1} completed (${finalStatus})`);
     
-    // Refresh challenge results to get updated rollover values from database
-    await refreshChallengeResults();
+      // Refresh challenge results to get updated rollover values from database
+      await refreshChallengeResults();
+      
+      // Handle prediction lifecycle (non-blocking, uses toast notifications)
+      handlePredictionOnChallengeComplete(idx, finalStatus).catch(error => {
+        console.error('[nextChallenge] Prediction lifecycle error:', error);
+        // Error already handled in handlePredictionOnChallengeComplete with toast
+      });
     
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
+        
+        // Handle prediction lifecycle when challenge becomes active (for same_item mode)
+        if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
+          // Create prediction for the newly active challenge
+          createPredictionForNextChallenge(currentChallengeIndex.value).catch(error => {
+            console.error('[nextChallenge] Error creating prediction for new challenge:', error);
+            // Error already handled in createPredictionForNextChallenge with toast
+          });
+        }
       // Start timing next challenge
       // Backend sets started_at_ms in database, but we also set it locally for immediate timer accuracy
       if (idx + 1 < challengeResults.value.length) {
@@ -20792,6 +20850,12 @@ async function skipChallenge() {
     
     // Refresh challenge results to get updated rollover values from database
     await refreshChallengeResults();
+    
+    // Handle prediction lifecycle (non-blocking, uses toast notifications)
+    handlePredictionOnChallengeComplete(idx, finalStatus).catch(error => {
+      console.error('[skipChallenge] Prediction lifecycle error:', error);
+      // Error already handled in handlePredictionOnChallengeComplete with toast
+    });
     
     // Move to next challenge
     if (idx < runEntries.length - 1) {
@@ -21164,6 +21228,40 @@ async function completeRun() {
     }
     
     currentRunStatus.value = 'completed';
+    
+    // Handle prediction lifecycle for run completion
+    if (predictionsEnabled.value && predictionsOperationalMode.value === 'whole_challenge' && activePredictionUuid.value) {
+      // Resolve whole challenge prediction
+      try {
+        // Count wins (success/ok) vs losses (failed/skipped)
+        const wins = challengeResults.value.filter(r => r.status === 'success' || r.status === 'ok').length;
+        const total = challengeResults.value.length;
+        
+        // Get prediction status to find outcome IDs
+        const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+          predictionUuid: activePredictionUuid.value
+        });
+        
+        if (statusResult.success && statusResult.prediction) {
+          // Find matching outcome based on wins count
+          // TODO: Parse outcomes_json to find exact outcome ID
+          // For now, lock the prediction
+          const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+            predictionUuid: activePredictionUuid.value
+          });
+          
+          if (!lockResult.success) {
+            queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
+            showToastNotification('Locking run prediction...', 'info', 2000);
+          } else {
+            showToastNotification('Run prediction locked', 'success', 2000);
+          }
+        }
+      } catch (error: any) {
+        console.error('[completeRun] Error handling prediction:', error);
+        showToastNotification('Error handling run prediction', 'error', 3000);
+      }
+    }
     
     // Show toast notification
     if (toastNotificationRef.value) {
@@ -22189,7 +22287,7 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
       const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
       
       if (!checkResult.success) {
-        await showAlert(`Failed to check for existing predictions: ${checkResult.error}`, 'Error');
+        showToastNotification(`Failed to check predictions: ${checkResult.error}`, 'error', 5000);
         return;
       }
       
@@ -22213,13 +22311,14 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
           
           // TODO: Cancel the unmanaged prediction
           // For now, we'll proceed and let the creation attempt handle the conflict
+          showToastNotification('Cancelling external prediction...', 'info', 2000);
         }
       }
       
       // Get prediction template
       const template = await (window as any).electronAPI.getPredictionsTemplate();
       if (!template || !template.type) {
-        await showAlert('Prediction template not configured. Please set up predictions first.', 'Configuration Required');
+        showToastNotification('Prediction template not configured. Please set up predictions first.', 'warning', 5000);
         return;
       }
       
@@ -22238,7 +22337,7 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
         if (currentChallengeIndex.value < runEntries.value.length - 1) {
           challengeSequenceNumber = currentChallengeIndex.value + 2; // Next item (1-indexed)
         } else {
-          await showAlert('No next challenge available for prediction.', 'No Next Challenge');
+          showToastNotification('No next challenge available for prediction.', 'warning', 3000);
           return;
         }
       }
@@ -22261,14 +22360,25 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
       
       if (!createResult.success) {
         // Check if error is due to existing prediction
-        if (createResult.error && createResult.error.includes('already exists') || 
-            createResult.error && createResult.error.includes('active prediction')) {
-          await showAlert(
+        if (createResult.error && (createResult.error.includes('already exists') || 
+            createResult.error.includes('active prediction'))) {
+          showToastNotification(
             'A prediction already exists on Twitch. Please cancel it first or wait for it to resolve.',
-            'Prediction Conflict'
+            'error',
+            5000
           );
         } else {
-          await showAlert(`Failed to create prediction: ${createResult.error}`, 'Error');
+          // Queue for retry
+          queuePredictionRetry('create', {
+            template: template,
+            runUuid: currentRunUuid.value,
+            challengeSequenceNumber: challengeSequenceNumber,
+            totalChallenges: totalChallenges,
+            username: onlineProfile.value?.username || 'Player',
+            gameId: gameId,
+            stageId: stageId
+          });
+          showToastNotification(`Creating prediction... (will retry if needed)`, 'info', 3000);
         }
         return;
       }
@@ -22276,12 +22386,388 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
       // Success - enable predictions
       predictionsEnabled.value = true;
       predictionsOperationalMode.value = mode;
+      activePredictionUuid.value = createResult.predictionUuid;
       
+      showToastNotification('Prediction created and enabled', 'success', 3000);
       console.log(`[enablePredictionsMode] Enabled predictions with mode: ${mode}, prediction UUID: ${createResult.predictionUuid}`);
     }
   } catch (error: any) {
     console.error('[enablePredictionsMode] Error:', error);
-    await showAlert(`Failed to enable predictions: ${error.message || 'Unknown error'}`, 'Error');
+    showToastNotification(
+      `Failed to enable predictions: ${error.message || 'Unknown error'}`,
+      'error',
+      5000
+    );
+  }
+}
+
+/**
+ * Prediction Lifecycle Management
+ * Handles prediction operations with background retries and toast notifications
+ */
+
+// Sync prediction status from database and Twitch API
+async function syncPredictionStatus() {
+  if (!predictionsEnabled.value || !activePredictionUuid.value || !isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+      predictionUuid: activePredictionUuid.value
+    });
+    
+    if (!statusResult.success) {
+      // Prediction doesn't exist or error - clear active prediction
+      if (statusResult.error && statusResult.error.includes('not found')) {
+        activePredictionUuid.value = null;
+        console.log('[syncPredictionStatus] Prediction no longer exists, cleared active prediction');
+      }
+      return;
+    }
+    
+    // Update local status if needed
+    // Status is already synced in the backend handler
+    console.log('[syncPredictionStatus] Prediction status synced:', statusResult.twitchStatus);
+  } catch (error: any) {
+    console.error('[syncPredictionStatus] Error:', error);
+    // Don't show toast for sync errors - they're background operations
+  }
+}
+
+// Queue a prediction operation for retry
+function queuePredictionRetry(action: string, params: any, maxRetries: number = 3) {
+  predictionRetryQueue.value.push({
+    action,
+    params,
+    retryCount: 0,
+    maxRetries
+  });
+  
+  // Start retry timer if not already running
+  if (!predictionRetryTimer.value) {
+    startPredictionRetryTimer();
+  }
+}
+
+// Process retry queue
+async function processPredictionRetryQueue() {
+  if (predictionRetryQueue.value.length === 0) {
+    predictionRetryTimer.value = null;
+    return;
+  }
+  
+  const item = predictionRetryQueue.value[0];
+  
+  if (item.retryCount >= item.maxRetries) {
+    // Max retries reached - remove from queue and notify
+    predictionRetryQueue.value.shift();
+    showToastNotification(
+      `Prediction operation failed after ${item.maxRetries} attempts: ${item.action}`,
+      'error',
+      5000
+    );
+    
+    // Process next item if any
+    if (predictionRetryQueue.value.length > 0) {
+      setTimeout(() => processPredictionRetryQueue(), 5000);
+    } else {
+      predictionRetryTimer.value = null;
+    }
+    return;
+  }
+  
+  // Wait minimum 5 seconds between retries
+  if (item.retryCount > 0) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+  
+  // Attempt the operation
+  try {
+    let result;
+    switch (item.action) {
+      case 'lock':
+        result = await (window as any).electronAPI.lockTwitchPrediction(item.params);
+        break;
+      case 'resolve':
+        result = await (window as any).electronAPI.resolveTwitchPrediction(item.params);
+        break;
+      case 'cancel':
+        result = await (window as any).electronAPI.cancelTwitchPrediction(item.params);
+        break;
+      case 'create':
+        result = await (window as any).electronAPI.createTwitchPrediction(item.params);
+        break;
+      default:
+        console.error('[processPredictionRetryQueue] Unknown action:', item.action);
+        predictionRetryQueue.value.shift();
+        return;
+    }
+    
+    if (result.success) {
+      // Success - remove from queue
+      predictionRetryQueue.value.shift();
+      showToastNotification(
+        `Prediction ${item.action} completed`,
+        'success',
+        3000
+      );
+      
+      // Process next item if any
+      if (predictionRetryQueue.value.length > 0) {
+        setTimeout(() => processPredictionRetryQueue(), 5000);
+      } else {
+        predictionRetryTimer.value = null;
+      }
+    } else {
+      // Failed - increment retry count
+      item.retryCount++;
+      console.log(`[processPredictionRetryQueue] Retry ${item.retryCount}/${item.maxRetries} for ${item.action}`);
+      
+      // Schedule next retry
+      setTimeout(() => processPredictionRetryQueue(), 5000);
+    }
+  } catch (error: any) {
+    // Error - increment retry count
+    item.retryCount++;
+    console.error(`[processPredictionRetryQueue] Error on retry ${item.retryCount}:`, error);
+    
+    // Schedule next retry
+    setTimeout(() => processPredictionRetryQueue(), 5000);
+  }
+}
+
+// Start retry timer
+function startPredictionRetryTimer() {
+  if (predictionRetryTimer.value) {
+    return; // Already running
+  }
+  
+  // Process first item after 5 seconds
+  setTimeout(() => {
+    processPredictionRetryQueue();
+  }, 5000);
+}
+
+// Handle prediction lifecycle when challenge completes
+async function handlePredictionOnChallengeComplete(challengeIndex: number, status: 'success' | 'ok' | 'failed' | 'skipped') {
+  if (!predictionsEnabled.value || !isElectronAvailable() || !currentRunUuid.value) {
+    return;
+  }
+  
+  try {
+    // Sync prediction status first
+    if (activePredictionUuid.value) {
+      await syncPredictionStatus();
+    }
+    
+    // Check for active prediction
+    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    if (!checkResult.success || !checkResult.hasActivePredictions) {
+      return; // No active prediction
+    }
+    
+    const activePreds = checkResult.activePredictions || [];
+    const runPrediction = activePreds.find((p: any) => 
+      p.run_uuid === currentRunUuid.value && p.isManaged
+    );
+    
+    if (!runPrediction) {
+      return; // No prediction for this run
+    }
+    
+    // Determine action based on operational mode and challenge
+    const challengeSequenceNumber = challengeIndex + 1; // 1-indexed
+    
+    if (predictionsOperationalMode.value === 'whole_challenge') {
+      // Whole challenge prediction - lock when run completes (handled in completeRun)
+      // For individual challenges, we don't lock/resolve until run ends
+      return;
+      
+    } else if (predictionsOperationalMode.value === 'same_item') {
+      // Same item mode - prediction is about current challenge
+      if (runPrediction.challenge_sequence_number === challengeSequenceNumber) {
+        // This prediction is about the challenge that just completed
+        await resolvePredictionForChallenge(runPrediction, status);
+        
+        // Create prediction for next challenge if available
+        if (challengeIndex < runEntries.value.length - 1) {
+          await createPredictionForNextChallenge(challengeIndex + 1);
+        }
+      }
+      
+    } else if (predictionsOperationalMode.value === 'next_item') {
+      // Next item mode - prediction is about next challenge
+      if (runPrediction.challenge_sequence_number === challengeSequenceNumber + 1) {
+        // This prediction is about the challenge that just became active
+        // We don't resolve it yet - it will be resolved when that challenge completes
+        // But we should create a new prediction for the item after that
+        if (challengeIndex + 1 < runEntries.value.length - 1) {
+          await createPredictionForNextChallenge(challengeIndex + 2);
+        }
+      } else if (runPrediction.challenge_sequence_number === challengeSequenceNumber) {
+        // This prediction is about the challenge that just completed
+        await resolvePredictionForChallenge(runPrediction, status);
+      }
+    }
+  } catch (error: any) {
+    console.error('[handlePredictionOnChallengeComplete] Error:', error);
+    // Don't show blocking alert - use toast
+    showToastNotification(
+      `Prediction management error: ${error.message || 'Unknown error'}`,
+      'error',
+      5000
+    );
+  }
+}
+
+// Resolve prediction for a completed challenge
+async function resolvePredictionForChallenge(prediction: any, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped') {
+  if (!prediction.prediction_uuid) {
+    return;
+  }
+  
+  try {
+    // Get prediction details to determine winning outcome
+    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+      predictionUuid: prediction.prediction_uuid
+    });
+    
+    if (!statusResult.success || !statusResult.prediction) {
+      console.warn('[resolvePredictionForChallenge] Could not get prediction status');
+      return;
+    }
+    
+    // Determine winning outcome based on prediction type and challenge result
+    let winningOutcomeId: string | null = null;
+    
+    if (prediction.prediction_type === 'individual_item') {
+      if (prediction.prediction_subtype === 'yes_no') {
+        // Yes/No prediction: Yes = success/ok, No = failed/skipped
+        // We need to get the outcome IDs from the prediction
+        // For now, we'll need to get the full prediction data to find outcome IDs
+        // This is a simplified version - full implementation would parse outcomes_json
+        winningOutcomeId = null; // TODO: Determine based on outcomes
+      } else if (prediction.prediction_subtype === 'time_range') {
+        // Time range prediction: Determine based on time spent
+        // This requires getting the challenge duration from database
+        winningOutcomeId = null; // TODO: Calculate based on time spent
+      }
+    }
+    
+    // If we can't determine outcome, lock the prediction instead
+    if (!winningOutcomeId) {
+      const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+        predictionUuid: prediction.prediction_uuid
+      });
+      
+      if (!lockResult.success) {
+        // Queue for retry
+        queuePredictionRetry('lock', { predictionUuid: prediction.prediction_uuid });
+        showToastNotification('Locking prediction...', 'info', 2000);
+      } else {
+        showToastNotification('Prediction locked', 'success', 2000);
+      }
+    } else {
+      // Resolve to winning outcome
+      const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
+        predictionUuid: prediction.prediction_uuid,
+        winningOutcomeId: winningOutcomeId,
+        resolutionMethod: 'automatic'
+      });
+      
+      if (!resolveResult.success) {
+        // Queue for retry
+        queuePredictionRetry('resolve', {
+          predictionUuid: prediction.prediction_uuid,
+          winningOutcomeId: winningOutcomeId,
+          resolutionMethod: 'automatic'
+        });
+        showToastNotification('Resolving prediction...', 'info', 2000);
+      } else {
+        showToastNotification('Prediction resolved', 'success', 2000);
+        activePredictionUuid.value = null; // Clear active prediction
+      }
+    }
+  } catch (error: any) {
+    console.error('[resolvePredictionForChallenge] Error:', error);
+    showToastNotification(
+      `Failed to resolve prediction: ${error.message || 'Unknown error'}`,
+      'error',
+      5000
+    );
+  }
+}
+
+// Create prediction for next challenge
+async function createPredictionForNextChallenge(nextChallengeIndex: number) {
+  if (!predictionsEnabled.value || !isElectronAvailable() || !currentRunUuid.value) {
+    return;
+  }
+  
+  try {
+    // Check for existing active predictions
+    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    if (!checkResult.success) {
+      return;
+    }
+    
+    if (checkResult.hasActivePredictions) {
+      // Already have an active prediction - can't create another
+      console.log('[createPredictionForNextChallenge] Active prediction exists, skipping creation');
+      return;
+    }
+    
+    // Get prediction template
+    const template = await (window as any).electronAPI.getPredictionsTemplate();
+    if (!template || template.type !== 'individual_item') {
+      return; // Not configured for individual item predictions
+    }
+    
+    // Get challenge info
+    const nextChallenge = runEntries.value[nextChallengeIndex];
+    if (!nextChallenge) {
+      return;
+    }
+    
+    const gameId = nextChallenge.id || nextChallenge.gameid || null;
+    const stageId = nextChallenge.stageNumber || nextChallenge.levelnumber || null;
+    const challengeSequenceNumber = nextChallengeIndex + 1; // 1-indexed
+    
+    // Create prediction
+    const createResult = await (window as any).electronAPI.createTwitchPrediction({
+      template: template,
+      runUuid: currentRunUuid.value,
+      challengeSequenceNumber: challengeSequenceNumber,
+      totalChallenges: runEntries.value.length,
+      username: onlineProfile.value?.username || 'Player',
+      gameId: gameId,
+      stageId: stageId
+    });
+    
+    if (!createResult.success) {
+      // Queue for retry
+      queuePredictionRetry('create', {
+        template: template,
+        runUuid: currentRunUuid.value,
+        challengeSequenceNumber: challengeSequenceNumber,
+        totalChallenges: runEntries.value.length,
+        username: onlineProfile.value?.username || 'Player',
+        gameId: gameId,
+        stageId: stageId
+      });
+      showToastNotification('Creating prediction...', 'info', 2000);
+    } else {
+      activePredictionUuid.value = createResult.predictionUuid;
+      showToastNotification('Prediction created', 'success', 2000);
+    }
+  } catch (error: any) {
+    console.error('[createPredictionForNextChallenge] Error:', error);
+    showToastNotification(
+      `Failed to create prediction: ${error.message || 'Unknown error'}`,
+      'error',
+      5000
+    );
   }
 }
 

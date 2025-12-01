@@ -21267,18 +21267,56 @@ async function completeRun() {
         });
         
         if (statusResult.success && statusResult.prediction) {
-          // Find matching outcome based on wins count
-          // TODO: Parse outcomes_json to find exact outcome ID
-          // For now, lock the prediction
-          const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
-            predictionUuid: activePredictionUuid.value
-          });
+          // Get outcomes from prediction data
+          const outcomes = parsePredictionOutcomes(statusResult.prediction);
           
-          if (!lockResult.success) {
-            queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
-            showToastNotification('Locking run prediction...', 'info', 2000);
+          if (outcomes.length === 0) {
+            // No outcomes - lock instead
+            const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+              predictionUuid: activePredictionUuid.value
+            });
+            
+            if (!lockResult.success) {
+              queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
+              showToastNotification('Locking run prediction...', 'info', 2000);
+            } else {
+              showToastNotification('Run prediction locked', 'success', 2000);
+            }
           } else {
-            showToastNotification('Run prediction locked', 'success', 2000);
+            // Determine winning outcome
+            const winningOutcomeId = determineWholeChallengeOutcome(outcomes, wins, total);
+            
+            if (winningOutcomeId) {
+              const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
+                predictionUuid: activePredictionUuid.value,
+                winningOutcomeId: winningOutcomeId,
+                resolutionMethod: 'automatic'
+              });
+              
+              if (!resolveResult.success) {
+                queuePredictionRetry('resolve', {
+                  predictionUuid: activePredictionUuid.value,
+                  winningOutcomeId: winningOutcomeId,
+                  resolutionMethod: 'automatic'
+                });
+                showToastNotification('Resolving run prediction...', 'info', 2000);
+              } else {
+                showToastNotification(`Run prediction resolved: ${wins}/${total} wins`, 'success', 3000);
+                activePredictionUuid.value = null;
+              }
+            } else {
+              // Fallback to lock if can't determine outcome
+              const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+                predictionUuid: activePredictionUuid.value
+              });
+              
+              if (!lockResult.success) {
+                queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
+                showToastNotification('Locking run prediction...', 'info', 2000);
+              } else {
+                showToastNotification('Run prediction locked', 'success', 2000);
+              }
+            }
           }
         }
       } catch (error: any) {
@@ -22888,6 +22926,178 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
   }
 }
 
+/**
+ * Get outcomes from prediction data
+ */
+function parsePredictionOutcomes(prediction: any): Array<{id: string, title: string}> {
+  try {
+    if (prediction.outcomes_json) {
+      const outcomes = typeof prediction.outcomes_json === 'string' 
+        ? JSON.parse(prediction.outcomes_json)
+        : prediction.outcomes_json;
+      return outcomes.map((outcome: any) => ({
+        id: outcome.id,
+        title: outcome.title || ''
+      }));
+    }
+  } catch (error) {
+    console.error('[parsePredictionOutcomes] Error parsing outcomes:', error);
+  }
+  return [];
+}
+
+/**
+ * Determine winning outcome for yes/no prediction
+ */
+function determineYesNoOutcome(outcomes: Array<{id: string, title: string}>, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped'): string | null {
+  const isWin = challengeStatus === 'success' || challengeStatus === 'ok';
+  
+  // Find Yes outcome (case-insensitive match for "Yes", "Success", "Win", etc.)
+  const yesOutcome = outcomes.find(outcome => {
+    const titleLower = outcome.title.toLowerCase();
+    return titleLower.includes('yes') || titleLower.includes('success') || titleLower.includes('win');
+  });
+  
+  // Find No outcome (case-insensitive match for "No", "Fail", "Loss", etc.)
+  const noOutcome = outcomes.find(outcome => {
+    const titleLower = outcome.title.toLowerCase();
+    return titleLower.includes('no') || titleLower.includes('fail') || titleLower.includes('loss');
+  });
+  
+  if (isWin && yesOutcome) {
+    return yesOutcome.id;
+  } else if (!isWin && noOutcome) {
+    return noOutcome.id;
+  }
+  
+  // Fallback: use first outcome for win, second for loss
+  if (isWin && outcomes.length > 0) {
+    return outcomes[0].id;
+  } else if (!isWin && outcomes.length > 1) {
+    return outcomes[1].id;
+  }
+  
+  return null;
+}
+
+/**
+ * Determine winning outcome for time range prediction
+ */
+function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>, durationMinutes: number): string | null {
+  // Parse time ranges from outcome titles
+  // Format examples: "0 to 5", "6 to 10", "11 to 15", ">20"
+  for (const outcome of outcomes) {
+    const title = outcome.title.trim();
+    
+    // Check for ">N" format (greater than)
+    const greaterThanMatch = title.match(/^>\s*(\d+)/);
+    if (greaterThanMatch) {
+      const threshold = parseInt(greaterThanMatch[1], 10);
+      if (durationMinutes > threshold) {
+        return outcome.id;
+      }
+      continue;
+    }
+    
+    // Check for "N to M" or "N-M" format (range)
+    const rangeMatch = title.match(/(\d+)\s*(?:to|-)\s*(\d+)/i);
+    if (rangeMatch) {
+      const min = parseInt(rangeMatch[1], 10);
+      const max = parseInt(rangeMatch[2], 10);
+      if (durationMinutes >= min && durationMinutes <= max) {
+        return outcome.id;
+      }
+      continue;
+    }
+    
+    // Check for single number (exact match or "N minutes")
+    const exactMatch = title.match(/^(\d+)\s*(?:minutes?)?$/i);
+    if (exactMatch) {
+      const value = parseInt(exactMatch[1], 10);
+      if (Math.abs(durationMinutes - value) < 0.5) { // Within 0.5 minutes
+        return outcome.id;
+      }
+    }
+  }
+  
+  // If no match found, use the last outcome (usually the ">N" or failure case)
+  if (outcomes.length > 0) {
+    return outcomes[outcomes.length - 1].id;
+  }
+  
+  return null;
+}
+
+/**
+ * Determine winning outcome for whole challenge prediction
+ */
+function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: string}>, wins: number, total: number): string | null {
+  // Parse outcome titles to find matching range
+  for (const outcome of outcomes) {
+    const title = outcome.title.trim();
+    
+    // Check for "Less than N" or "Less than N+1"
+    const lessThanMatch = title.match(/less\s+than\s+(\d+)/i);
+    if (lessThanMatch) {
+      const threshold = parseInt(lessThanMatch[1], 10);
+      if (wins < threshold) {
+        return outcome.id;
+      }
+      continue;
+    }
+    
+    // Check for "N or More" or "N+1 or More"
+    const moreThanMatch = title.match(/(\d+)\s+or\s+more/i);
+    if (moreThanMatch) {
+      const threshold = parseInt(moreThanMatch[1], 10);
+      if (wins >= threshold) {
+        return outcome.id;
+      }
+      continue;
+    }
+    
+    // Check for range "N to M" or "N-M"
+    const rangeMatch = title.match(/(\d+)\s*(?:to|-)\s*(\d+)/i);
+    if (rangeMatch) {
+      const min = parseInt(rangeMatch[1], 10);
+      const max = parseInt(rangeMatch[2], 10);
+      if (wins >= min && wins <= max) {
+        return outcome.id;
+      }
+      continue;
+    }
+    
+    // Check for exact number "N"
+    const exactMatch = title.match(/^(\d+)$/);
+    if (exactMatch) {
+      const value = parseInt(exactMatch[1], 10);
+      if (wins === value) {
+        return outcome.id;
+      }
+    }
+  }
+  
+  // Fallback: find closest match by numeric value
+  let closestOutcome: {id: string, value: number} | null = null;
+  let minDifference = Infinity;
+  
+  for (const outcome of outcomes) {
+    const title = outcome.title.trim();
+    // Extract any number from the title
+    const numberMatch = title.match(/(\d+)/);
+    if (numberMatch) {
+      const value = parseInt(numberMatch[1], 10);
+      const difference = Math.abs(wins - value);
+      if (difference < minDifference) {
+        minDifference = difference;
+        closestOutcome = { id: outcome.id, value };
+      }
+    }
+  }
+  
+  return closestOutcome ? closestOutcome.id : (outcomes.length > 0 ? outcomes[0].id : null);
+}
+
 // Resolve prediction for a completed challenge
 async function resolvePredictionForChallenge(prediction: any, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped') {
   if (!prediction.prediction_uuid) {
@@ -22905,20 +23115,48 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       return;
     }
     
+    // Get outcomes from database
+    const dbResult = await (window as any).electronAPI.getTwitchPredictionData({
+      predictionUuid: prediction.prediction_uuid
+    });
+    
+    if (!dbResult.success || !dbResult.prediction) {
+      console.warn('[resolvePredictionForChallenge] Could not get prediction data');
+      return;
+    }
+    
+    const outcomes = parsePredictionOutcomes(dbResult.prediction);
+    if (outcomes.length === 0) {
+      console.warn('[resolvePredictionForChallenge] No outcomes found');
+      // Lock instead of resolving
+      const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+        predictionUuid: prediction.prediction_uuid
+      });
+      if (!lockResult.success) {
+        queuePredictionRetry('lock', { predictionUuid: prediction.prediction_uuid });
+        showToastNotification('Locking prediction...', 'info', 2000);
+      } else {
+        showToastNotification('Prediction locked', 'success', 2000);
+      }
+      return;
+    }
+    
     // Determine winning outcome based on prediction type and challenge result
     let winningOutcomeId: string | null = null;
     
     if (prediction.prediction_type === 'individual_item') {
       if (prediction.prediction_subtype === 'yes_no') {
         // Yes/No prediction: Yes = success/ok, No = failed/skipped
-        // We need to get the outcome IDs from the prediction
-        // For now, we'll need to get the full prediction data to find outcome IDs
-        // This is a simplified version - full implementation would parse outcomes_json
-        winningOutcomeId = null; // TODO: Determine based on outcomes
+        winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
       } else if (prediction.prediction_subtype === 'time_range') {
         // Time range prediction: Determine based on time spent
-        // This requires getting the challenge duration from database
-        winningOutcomeId = null; // TODO: Calculate based on time spent
+        // Get challenge duration from current challenge result
+        const challengeIndex = (prediction.challenge_sequence_number || 1) - 1; // Convert to 0-indexed
+        if (challengeIndex >= 0 && challengeIndex < challengeResults.value.length) {
+          const challengeResult = challengeResults.value[challengeIndex];
+          const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
+          winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+        }
       }
     }
     
@@ -23095,22 +23333,79 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
         console.log('[disablePredictionsWithAction] Cancelled prediction and stopped automation');
         
       } else if (action === 'resolve') {
-        // Resolve to closest matching outcome
-        // TODO: Determine closest matching outcome based on current run state
-        // For now, we'll need to get the prediction details and calculate the outcome
+        // Resolve to closest matching outcome based on current run state
         const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
           predictionUuid: runPrediction.prediction_uuid
         });
         
-        if (!statusResult.success) {
-          await showAlert(`Failed to get prediction status: ${statusResult.error}`, 'Error');
+        if (!statusResult.success || !statusResult.prediction) {
+          showToastNotification(`Failed to get prediction status: ${statusResult.error || 'Unknown error'}`, 'error', 5000);
           return;
         }
         
-        // TODO: Calculate winning outcome based on current run results
-        // For whole challenge: count wins vs total
-        // For item predictions: determine based on challenge result
-        await showAlert('Resolve to closest match is not yet implemented. Please use "Cancel" or "Leave Open" for now.', 'Not Implemented');
+        // Get outcomes from prediction data
+        const outcomes = parsePredictionOutcomes(statusResult.prediction);
+        
+        if (outcomes.length === 0) {
+          showToastNotification('No outcomes found in prediction', 'error', 3000);
+          return;
+        }
+        
+        // Calculate winning outcome based on current run results
+        let winningOutcomeId: string | null = null;
+        
+        if (runPrediction.prediction_type === 'whole_challenge') {
+          // Whole challenge: count wins vs total
+          const wins = challengeResults.value.filter(r => r.status === 'success' || r.status === 'ok').length;
+          const total = challengeResults.value.length;
+          winningOutcomeId = determineWholeChallengeOutcome(outcomes, wins, total);
+        } else if (runPrediction.prediction_type === 'individual_item') {
+          // Individual item: determine based on current challenge
+          const challengeIndex = (runPrediction.challenge_sequence_number || 1) - 1; // Convert to 0-indexed
+          
+          if (challengeIndex >= 0 && challengeIndex < challengeResults.value.length) {
+            const challengeResult = challengeResults.value[challengeIndex];
+            const challengeStatus = challengeResult.status as 'success' | 'ok' | 'failed' | 'skipped';
+            
+            if (runPrediction.prediction_subtype === 'yes_no') {
+              // Yes/No prediction
+              winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
+            } else if (runPrediction.prediction_subtype === 'time_range') {
+              // Time range prediction
+              const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
+              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+            }
+          } else {
+            // Challenge not found - use first outcome as fallback
+            winningOutcomeId = outcomes[0].id;
+          }
+        }
+        
+        if (!winningOutcomeId) {
+          // Fallback to first outcome
+          winningOutcomeId = outcomes[0].id;
+        }
+        
+        // Resolve prediction
+        const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
+          predictionUuid: runPrediction.prediction_uuid,
+          winningOutcomeId: winningOutcomeId,
+          resolutionMethod: 'closest_match'
+        });
+        
+        if (!resolveResult.success) {
+          queuePredictionRetry('resolve', {
+            predictionUuid: runPrediction.prediction_uuid,
+            winningOutcomeId: winningOutcomeId,
+            resolutionMethod: 'closest_match'
+          });
+          showToastNotification('Resolving prediction to closest match...', 'info', 2000);
+        } else {
+          showToastNotification('Prediction resolved to closest match', 'success', 3000);
+          activePredictionUuid.value = null;
+          predictionsEnabled.value = false;
+          predictionsOperationalMode.value = null;
+        }
         return;
       }
     }

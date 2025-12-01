@@ -13149,7 +13149,8 @@ function registerDatabaseHandlers(dbManager) {
           twitchId: prediction.twitch_prediction_id,
           title: prediction.title,
           type: prediction.prediction_type,
-          subtype: prediction.prediction_subtype
+          subtype: prediction.prediction_subtype,
+          outcomes_json: prediction.outcomes_json // Include outcomes for outcome resolution
         }
       };
     } catch (error) {

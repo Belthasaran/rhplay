@@ -12576,18 +12576,19 @@ function registerDatabaseHandlers(dbManager) {
       
       const db = dbManager.getConnection('clientdata');
       
-      // Get integration to check if we have a token to revoke
-      const integration = db.prepare(`
-        SELECT encrypted_access_token, is_active
-        FROM twitch_integration
-        WHERE profile_uuid = ? AND is_active = 1
-      `).get(currentProfileId);
-      
       let tokenWasValid = false;
       let revokeError = null;
       
-      // Attempt to revoke token if we have one
-      if (integration && integration.encrypted_access_token) {
+      // Attempt to revoke token if we have one (unless force disconnect)
+      if (!forceDisconnect) {
+        // Get integration to check if we have a token to revoke
+        const integration = db.prepare(`
+          SELECT encrypted_access_token, is_active
+          FROM twitch_integration
+          WHERE profile_uuid = ? AND is_active = 1
+        `).get(currentProfileId);
+        
+        if (integration && integration.encrypted_access_token) {
         try {
           // Decrypt token
           const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);

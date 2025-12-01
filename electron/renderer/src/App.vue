@@ -22129,14 +22129,21 @@ async function handleTwitchIntegrationUpdate() {
 
 async function checkPredictionsConfiguration() {
   // Check if Twitch integration is configured
-  // TODO: Implement IPC call to check integration status
   try {
     if (isElectronAvailable() && onlineProfile.value?.profileId) {
-      // const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
-      //   profileUuid: onlineProfile.value.profileId
-      // });
-      // predictionsConfigured.value = status && status.is_active === true;
-      predictionsConfigured.value = false; // Placeholder until IPC is implemented
+      const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
+        profileUuid: onlineProfile.value.profileId
+      });
+      predictionsConfigured.value = status && status.is_active === true;
+      
+      // Also check if prediction template is configured
+      if (predictionsConfigured.value) {
+        const template = await (window as any).electronAPI.getPredictionsTemplate();
+        if (!template || !template.type) {
+          // Integration is active but no template configured
+          predictionsConfigured.value = false;
+        }
+      }
     } else {
       predictionsConfigured.value = false;
     }
@@ -22169,38 +22176,117 @@ function handleClickOutsidePredictionsDropdown(event: MouseEvent) {
 }
 
 async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'next_item') {
-  if (!predictionsConfigured.value) {
+  if (!predictionsConfigured.value || !currentRunUuid.value) {
     return;
   }
   
   // Close dropdown
   showPredictionsManageDropdown.value = false;
   
-  // Check for existing predictions on Twitch
   try {
     if (isElectronAvailable()) {
-      // TODO: Check Twitch API for existing active predictions
-      // If unmanaged prediction exists, prompt user to cancel it
+      // Check for existing active predictions on Twitch
+      const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
       
-      // For now, just enable the mode
+      if (!checkResult.success) {
+        await showAlert(`Failed to check for existing predictions: ${checkResult.error}`, 'Error');
+        return;
+      }
+      
+      // If unmanaged prediction exists, prompt user to cancel it
+      if (checkResult.hasUnmanagedPredictions || 
+          (checkResult.hasActivePredictions && checkResult.activePredictions.length > 0)) {
+        const activePreds = checkResult.activePredictions || [];
+        const isManaged = activePreds.length > 0 && activePreds[0].isManaged;
+        
+        if (!isManaged) {
+          const confirmed = await showConfirm(
+            'A prediction exists on Twitch that we don\'t manage. Cancel it to proceed?',
+            'External Prediction Found',
+            'Cancel It',
+            'Cancel'
+          );
+          
+          if (!confirmed) {
+            return; // User declined
+          }
+          
+          // TODO: Cancel the unmanaged prediction
+          // For now, we'll proceed and let the creation attempt handle the conflict
+        }
+      }
+      
+      // Get prediction template
+      const template = await (window as any).electronAPI.getPredictionsTemplate();
+      if (!template || !template.type) {
+        await showAlert('Prediction template not configured. Please set up predictions first.', 'Configuration Required');
+        return;
+      }
+      
+      // Determine which challenge to create prediction for
+      let challengeSequenceNumber: number | null = null;
+      let totalChallenges = runEntries.value.length;
+      
+      if (mode === 'whole_challenge') {
+        // Create prediction for entire run
+        challengeSequenceNumber = null;
+      } else if (mode === 'same_item') {
+        // Create prediction for current active challenge
+        challengeSequenceNumber = currentChallengeIndex.value + 1; // 1-indexed
+      } else if (mode === 'next_item') {
+        // Create prediction for next challenge (after current)
+        if (currentChallengeIndex.value < runEntries.value.length - 1) {
+          challengeSequenceNumber = currentChallengeIndex.value + 2; // Next item (1-indexed)
+        } else {
+          await showAlert('No next challenge available for prediction.', 'No Next Challenge');
+          return;
+        }
+      }
+      
+      // Get current challenge info for title
+      const currentChallenge = runEntries.value[currentChallengeIndex.value];
+      const gameId = currentChallenge?.id || currentChallenge?.gameid || null;
+      const stageId = currentChallenge?.stageNumber || currentChallenge?.levelnumber || null;
+      
+      // Create prediction
+      const createResult = await (window as any).electronAPI.createTwitchPrediction({
+        template: template,
+        runUuid: currentRunUuid.value,
+        challengeSequenceNumber: challengeSequenceNumber,
+        totalChallenges: totalChallenges,
+        username: onlineProfile.value?.username || 'Player',
+        gameId: gameId,
+        stageId: stageId
+      });
+      
+      if (!createResult.success) {
+        // Check if error is due to existing prediction
+        if (createResult.error && createResult.error.includes('already exists') || 
+            createResult.error && createResult.error.includes('active prediction')) {
+          await showAlert(
+            'A prediction already exists on Twitch. Please cancel it first or wait for it to resolve.',
+            'Prediction Conflict'
+          );
+        } else {
+          await showAlert(`Failed to create prediction: ${createResult.error}`, 'Error');
+        }
+        return;
+      }
+      
+      // Success - enable predictions
       predictionsEnabled.value = true;
       predictionsOperationalMode.value = mode;
       
-      // TODO: Create prediction based on mode
-      // - whole_challenge: Create prediction for entire run
-      // - same_item: Create prediction for current active challenge
-      // - next_item: Create prediction for next challenge (after current)
-      
-      console.log(`[enablePredictionsMode] Enabled predictions with mode: ${mode}`);
+      console.log(`[enablePredictionsMode] Enabled predictions with mode: ${mode}, prediction UUID: ${createResult.predictionUuid}`);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('[enablePredictionsMode] Error:', error);
-    await showAlert('Failed to enable predictions. Please try again.', 'Error');
+    await showAlert(`Failed to enable predictions: ${error.message || 'Unknown error'}`, 'Error');
   }
 }
 
 async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leave_open') {
-  if (!predictionsEnabled.value) {
+  if (!predictionsEnabled.value || !currentRunUuid.value) {
     return;
   }
   
@@ -22209,20 +22295,75 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
   
   try {
     if (isElectronAvailable()) {
-      // TODO: Perform action based on choice
-      // - cancel: Cancel current prediction and refund
-      // - resolve: Resolve to closest matching outcome
-      // - leave_open: Just stop automation, leave prediction active
+      // Get active prediction for this run
+      const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
       
-      // For now, just disable
-      predictionsEnabled.value = false;
-      predictionsOperationalMode.value = null;
+      if (!checkResult.success) {
+        await showAlert(`Failed to check predictions: ${checkResult.error}`, 'Error');
+        return;
+      }
       
-      console.log(`[disablePredictionsWithAction] Disabled predictions with action: ${action}`);
+      const activePreds = checkResult.activePredictions || [];
+      const runPrediction = activePreds.find((p: any) => p.run_uuid === currentRunUuid.value);
+      
+      if (!runPrediction && action !== 'leave_open') {
+        // No active prediction found, just disable
+        predictionsEnabled.value = false;
+        predictionsOperationalMode.value = null;
+        return;
+      }
+      
+      if (action === 'leave_open') {
+        // Just stop automation, leave prediction active
+        predictionsEnabled.value = false;
+        predictionsOperationalMode.value = null;
+        console.log('[disablePredictionsWithAction] Left prediction open, stopped automation');
+        return;
+      }
+      
+      if (!runPrediction) {
+        await showAlert('No active prediction found to cancel or resolve.', 'No Prediction');
+        return;
+      }
+      
+      if (action === 'cancel') {
+        // Cancel prediction and refund
+        const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
+          predictionUuid: runPrediction.prediction_uuid
+        });
+        
+        if (!cancelResult.success) {
+          await showAlert(`Failed to cancel prediction: ${cancelResult.error}`, 'Error');
+          return;
+        }
+        
+        predictionsEnabled.value = false;
+        predictionsOperationalMode.value = null;
+        console.log('[disablePredictionsWithAction] Cancelled prediction and stopped automation');
+        
+      } else if (action === 'resolve') {
+        // Resolve to closest matching outcome
+        // TODO: Determine closest matching outcome based on current run state
+        // For now, we'll need to get the prediction details and calculate the outcome
+        const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+          predictionUuid: runPrediction.prediction_uuid
+        });
+        
+        if (!statusResult.success) {
+          await showAlert(`Failed to get prediction status: ${statusResult.error}`, 'Error');
+          return;
+        }
+        
+        // TODO: Calculate winning outcome based on current run results
+        // For whole challenge: count wins vs total
+        // For item predictions: determine based on challenge result
+        await showAlert('Resolve to closest match is not yet implemented. Please use "Cancel" or "Leave Open" for now.', 'Not Implemented');
+        return;
+      }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('[disablePredictionsWithAction] Error:', error);
-    await showAlert('Failed to disable predictions. Please try again.', 'Error');
+    await showAlert(`Failed to disable predictions: ${error.message || 'Unknown error'}`, 'Error');
   }
 }
 

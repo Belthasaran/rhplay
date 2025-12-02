@@ -22717,10 +22717,10 @@ async function handlePredictionConflicts(mode: 'whole_challenge' | 'same_item' |
           
           if (challengeResult) {
             // Resolve based on challenge status
-            await resolvePredictionForChallenge(statusResult.prediction, challengeResult.status || 'failed');
+            await resolvePredictionForChallenge(statusResult.prediction, challengeResult.status || 'failed', statusResult.twitchStatus);
           } else {
             // Challenge not found - resolve as failed
-            await resolvePredictionForChallenge(statusResult.prediction, 'failed');
+            await resolvePredictionForChallenge(statusResult.prediction, 'failed', statusResult.twitchStatus);
           }
         } else if (twitchStatus === 'ACTIVE') {
           // Not locked - cancel it
@@ -23477,11 +23477,16 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         });
         if (statusResult.success && statusResult.prediction) {
           console.log(`[handlePredictionOnChallengeComplete] Got prediction status, calling resolvePredictionForChallenge`);
-          await resolvePredictionForChallenge(statusResult.prediction, status);
+          // Pass the full statusResult so we have the correct twitchStatus
+          await resolvePredictionForChallenge(statusResult.prediction, status, statusResult.twitchStatus);
         } else {
           console.warn(`[handlePredictionOnChallengeComplete] Failed to get prediction status, using fallback`);
-          // Fallback to runPrediction if status call fails
-          await resolvePredictionForChallenge(runPrediction, status);
+          // Fallback to runPrediction if status call fails - fetch status separately
+          const fallbackStatusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+            predictionUuid: runPrediction.prediction_uuid
+          });
+          const fallbackTwitchStatus = fallbackStatusResult.success ? fallbackStatusResult.twitchStatus : 'ACTIVE';
+          await resolvePredictionForChallenge(runPrediction, status, fallbackTwitchStatus);
         }
         
         // Queue prediction creation for next challenge with delay (if available)
@@ -23508,10 +23513,14 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
           predictionUuid: runPrediction.prediction_uuid
         });
         if (statusResult.success && statusResult.prediction) {
-          await resolvePredictionForChallenge(statusResult.prediction, status);
+          await resolvePredictionForChallenge(statusResult.prediction, status, statusResult.twitchStatus);
         } else {
           // Fallback to runPrediction if status call fails
-          await resolvePredictionForChallenge(runPrediction, status);
+          const fallbackStatusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+            predictionUuid: runPrediction.prediction_uuid
+          });
+          const fallbackTwitchStatus = fallbackStatusResult.success ? fallbackStatusResult.twitchStatus : 'ACTIVE';
+          await resolvePredictionForChallenge(runPrediction, status, fallbackTwitchStatus);
         }
       }
     }
@@ -23751,10 +23760,10 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
 }
 
 // Resolve prediction for a completed challenge
-async function resolvePredictionForChallenge(prediction: any, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped') {
+async function resolvePredictionForChallenge(prediction: any, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped', twitchStatus?: string) {
   // Handle both uuid (from getTwitchPredictionStatus) and prediction_uuid (from other sources)
   const predictionUuid = prediction.uuid || prediction.prediction_uuid;
-  console.log(`[resolvePredictionForChallenge] Called with prediction object keys: ${Object.keys(prediction).join(', ')}, uuid=${prediction.uuid}, prediction_uuid=${prediction.prediction_uuid}, resolvedUuid=${predictionUuid}, challengeStatus=${challengeStatus}`);
+  console.log(`[resolvePredictionForChallenge] Called with prediction object keys: ${Object.keys(prediction).join(', ')}, uuid=${prediction.uuid}, prediction_uuid=${prediction.prediction_uuid}, resolvedUuid=${predictionUuid}, challengeStatus=${challengeStatus}, twitchStatus=${twitchStatus}`);
   if (!predictionUuid) {
     console.warn('[resolvePredictionForChallenge] No prediction_uuid provided. Prediction object:', prediction);
     return;
@@ -23767,9 +23776,18 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     let statusResult: any;
     if (prediction.type !== undefined && prediction.subtype !== undefined && prediction.outcomes_json !== undefined) {
       // We already have the status result data, construct it
+      // Use the provided twitchStatus if available, otherwise fetch it
+      let actualTwitchStatus = twitchStatus;
+      if (!actualTwitchStatus) {
+        // Fetch just the status
+        const statusCheck = await (window as any).electronAPI.getTwitchPredictionStatus({
+          predictionUuid: predictionUuid
+        });
+        actualTwitchStatus = statusCheck.success ? statusCheck.twitchStatus : 'ACTIVE';
+      }
       statusResult = {
         success: true,
-        twitchStatus: prediction.twitchStatus || 'ACTIVE',
+        twitchStatus: actualTwitchStatus,
         prediction: {
           prediction_uuid: predictionUuid,
           prediction_type: prediction.type,
@@ -23992,6 +24010,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
               }
               
               winningOutcomeId = determineTimeRangeOutcome(eligibleOutcomes, durationMinutes);
+              console.log(`[resolvePredictionForChallenge] time_range: determineTimeRangeOutcome returned: ${winningOutcomeId ? 'found' : 'null'}`);
             } else {
               console.warn(`[resolvePredictionForChallenge] time_range: Could not find duration for challenge ${challengeSequenceNumber}`);
             }

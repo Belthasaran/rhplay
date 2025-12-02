@@ -12108,6 +12108,47 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Update run config_json field
+   * Channel: db:runs:update-config
+   */
+  ipcMain.handle('db:runs:update-config', async (event, { runUuid, configJson }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Validate run exists
+      const run = db.prepare('SELECT run_uuid FROM runs WHERE run_uuid = ?').get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+      
+      // Validate configJson is a string (should be JSON stringified)
+      if (typeof configJson !== 'string') {
+        return { success: false, error: 'configJson must be a JSON string' };
+      }
+      
+      // Validate it's valid JSON
+      try {
+        JSON.parse(configJson);
+      } catch (e) {
+        return { success: false, error: 'configJson is not valid JSON: ' + e.message };
+      }
+      
+      // Update config_json
+      db.prepare(`
+        UPDATE runs
+        SET config_json = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE run_uuid = ?
+      `).run(configJson, runUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[update-config] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // ===========================================================================
   // TWITCH INTEGRATION HANDLERS
   // ===========================================================================

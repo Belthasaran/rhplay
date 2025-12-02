@@ -13569,7 +13569,8 @@ function registerDatabaseHandlers(dbManager) {
           title: prediction.title,
           type: prediction.prediction_type,
           subtype: prediction.prediction_subtype,
-          outcomes_json: prediction.outcomes_json // Include outcomes for outcome resolution
+          outcomes_json: prediction.outcomes_json, // Include outcomes for outcome resolution
+          challenge_sequence_number: prediction.challenge_sequence_number // Include sequence number for resolution
         }
       };
     } catch (error) {

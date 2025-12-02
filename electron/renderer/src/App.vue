@@ -23752,26 +23752,56 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
 
 // Resolve prediction for a completed challenge
 async function resolvePredictionForChallenge(prediction: any, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped') {
-  console.log(`[resolvePredictionForChallenge] Called with prediction_uuid=${prediction.prediction_uuid}, challengeStatus=${challengeStatus}`);
-  if (!prediction.prediction_uuid) {
-    console.warn('[resolvePredictionForChallenge] No prediction_uuid provided');
+  // Handle both uuid (from getTwitchPredictionStatus) and prediction_uuid (from other sources)
+  const predictionUuid = prediction.uuid || prediction.prediction_uuid;
+  console.log(`[resolvePredictionForChallenge] Called with prediction object keys: ${Object.keys(prediction).join(', ')}, uuid=${prediction.uuid}, prediction_uuid=${prediction.prediction_uuid}, resolvedUuid=${predictionUuid}, challengeStatus=${challengeStatus}`);
+  if (!predictionUuid) {
+    console.warn('[resolvePredictionForChallenge] No prediction_uuid provided. Prediction object:', prediction);
     return;
   }
   
   try {
     // Get prediction details to determine winning outcome
-    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
-      predictionUuid: prediction.prediction_uuid
-    });
+    // If we already have the full status result (from getTwitchPredictionStatus), use it
+    // Otherwise, fetch it again
+    let statusResult: any;
+    if (prediction.type !== undefined && prediction.subtype !== undefined && prediction.outcomes_json !== undefined) {
+      // We already have the status result data, construct it
+      statusResult = {
+        success: true,
+        twitchStatus: prediction.twitchStatus || 'ACTIVE',
+        prediction: {
+          prediction_uuid: predictionUuid,
+          prediction_type: prediction.type,
+          prediction_subtype: prediction.subtype,
+          outcomes_json: prediction.outcomes_json,
+          challenge_sequence_number: prediction.challenge_sequence_number
+        }
+      };
+    } else {
+      // Fetch the status
+      statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+        predictionUuid: predictionUuid
+      });
+    }
     
     if (!statusResult.success || !statusResult.prediction) {
       console.warn('[resolvePredictionForChallenge] Could not get prediction status:', statusResult.error || 'Unknown error');
       return;
     }
     
+    // Normalize the prediction object - handle both uuid and prediction_uuid
+    const normalizedPrediction = {
+      ...statusResult.prediction,
+      prediction_uuid: statusResult.prediction.uuid || statusResult.prediction.prediction_uuid || predictionUuid,
+      prediction_type: statusResult.prediction.type || statusResult.prediction.prediction_type,
+      prediction_subtype: statusResult.prediction.subtype || statusResult.prediction.prediction_subtype,
+      challenge_sequence_number: statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number
+    };
+    
     // Check if prediction is already locked - if so, we should resolve it, not lock it again
     const isAlreadyLocked = statusResult.twitchStatus === 'LOCKED';
-    console.log(`[resolvePredictionForChallenge] Prediction status: ${statusResult.twitchStatus}, isAlreadyLocked=${isAlreadyLocked}`);
+    console.log(`[resolvePredictionForChallenge] Prediction status: ${statusResult.twitchStatus}, isAlreadyLocked=${isAlreadyLocked}, normalized uuid=${normalizedPrediction.prediction_uuid}`);
     
     // Get outcomes from the status result (it already includes outcomes_json)
     const outcomes = parsePredictionOutcomes(statusResult.prediction);
@@ -23785,10 +23815,10 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       }
       // Lock instead of resolving (only if not already locked)
       const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
-        predictionUuid: prediction.prediction_uuid
+        predictionUuid: normalizedPrediction.prediction_uuid
       });
       if (!lockResult.success) {
-        queuePredictionRetry('lock', { predictionUuid: prediction.prediction_uuid });
+        queuePredictionRetry('lock', { predictionUuid: normalizedPrediction.prediction_uuid });
         showToastNotification('Locking prediction...', 'info', 2000);
       } else {
         showToastNotification('Prediction locked', 'success', 2000);
@@ -23797,9 +23827,9 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     }
     
     // Determine winning outcome based on prediction type and challenge result
-    // Use statusResult.prediction for type/subtype as it has the full database record
-    const predictionType = statusResult.prediction.prediction_type || prediction.prediction_type;
-    const predictionSubtype = statusResult.prediction.prediction_subtype || prediction.prediction_subtype;
+    // Use normalizedPrediction for type/subtype as it has the full database record
+    const predictionType = normalizedPrediction.prediction_type;
+    const predictionSubtype = normalizedPrediction.prediction_subtype;
     
     let winningOutcomeId: string | null = null;
     
@@ -23822,7 +23852,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       } else if (predictionSubtype === 'time_range') {
         // Time range prediction: Determine based on time spent
         // Get challenge duration from database (challengeResults might not have durationSeconds)
-        const challengeSequenceNumber = statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number;
+        const challengeSequenceNumber = normalizedPrediction.challenge_sequence_number;
         if (challengeSequenceNumber && currentRunUuid.value) {
           try {
             // Get template config to check for "low time ranges only on success" option
@@ -23984,7 +24014,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     if (isAlreadyLocked) {
       // If we can't determine outcome, use first outcome as fallback
       if (!winningOutcomeId) {
-        const seq = statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number;
+        const seq = normalizedPrediction.challenge_sequence_number;
         console.log(`!winningOutcomeId seq=${seq} r=${challengeResults.value.length} type=${predictionType} subtype=${predictionSubtype}`)
         winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
         if (winningOutcomeId) {
@@ -23995,14 +24025,14 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       if (winningOutcomeId) {
         // Resolve the locked prediction
         const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
-          predictionUuid: prediction.prediction_uuid,
+          predictionUuid: normalizedPrediction.prediction_uuid,
           winningOutcomeId: winningOutcomeId,
           resolutionMethod: 'automatic'
         });
         
         if (!resolveResult.success) {
           queuePredictionRetry('resolve', { 
-            predictionUuid: prediction.prediction_uuid,
+            predictionUuid: normalizedPrediction.prediction_uuid,
             winningOutcomeId: winningOutcomeId,
             resolutionMethod: 'automatic'
           });
@@ -24025,12 +24055,12 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       console.log(`!winningOutcomeId`)
       // Can't determine outcome - lock it first
       const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
-        predictionUuid: prediction.prediction_uuid
+        predictionUuid: normalizedPrediction.prediction_uuid
       });
       
       if (!lockResult.success) {
         // Queue for retry
-        queuePredictionRetry('lock', { predictionUuid: prediction.prediction_uuid });
+        queuePredictionRetry('lock', { predictionUuid: normalizedPrediction.prediction_uuid });
         showToastNotification('Locking prediction...', 'info', 2000);
       } else {
         showToastNotification('Prediction locked', 'success', 2000);

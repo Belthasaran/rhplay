@@ -1079,7 +1079,7 @@
   </main>
   
   <!-- Prepare Run Modal -->
-  <div v-if="runModalOpen" class="modal-backdrop" @click.self="closeRunModal">
+  <div v-if="runModalOpen" class="modal-backdrop">
     <div class="modal">
       <header class="modal-header">
         <h3>{{ isRunActive ? 'Active Run' : 'Prepare Run' }}{{ currentRunName ? ': ' + currentRunName : '' }}</h3>
@@ -1108,6 +1108,10 @@
             <span class="run-timer">⏱ {{ formatTime(runElapsedSeconds) }}</span>
             <span class="pause-time" v-if="runPauseSeconds > 0">⏸ {{ formatTime(runPauseSeconds) }}</span>
             <span class="run-progress">Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
+            <button v-if="currentChallenge && currentChallengeSfcPath" @click="toggleUsbPolling" :class="['btn-poll-usb', { 'active': usbPollingEnabled }]" :title="usbPollingEnabled ? 'USB polling is active' : 'Enable USB polling for automatic challenge completion'">
+              <input type="checkbox" :checked="usbPollingEnabled" @change="toggleUsbPolling" class="poll-checkbox" />
+              <span>Poll USB</span>
+            </button>
             <button @click="pauseRun" v-if="!isRunPaused" class="btn-pause">⏸ Pause</button>
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
             <button @click="undoChallenge" :disabled="!canUndo || isRunPaused" class="btn-back">↶ Back</button>
@@ -17818,6 +17822,15 @@ const runPauseSeconds = ref<number>(0);  // Total pause time in seconds (tallied
 // Cooldown for Skip and Done buttons (3 seconds after clicking)
 const skipDoneCooldownUntil = ref<number | null>(null);
 
+// USB polling state
+const usbPollingEnabled = ref<boolean>(false);
+const usbPollingInterval = ref<number | null>(null);
+const usbPollingLastPollTime = ref<number | null>(null);
+const usbPollingConditionATime = ref<number>(0); // Time in ms that Condition A has been met
+const usbPollingLastMemoryValues = ref<Record<string, number>>({});
+const usbPollingCurrentMemoryValues = ref<Record<string, number>>({});
+const usbPollingLastSnesInfo = ref<string | null>(null);
+
 // Refs for scrolling to active challenge
 const runModalBodyRef = ref<HTMLElement | null>(null);
 const runEntriesTableWrapperRef = ref<HTMLElement | null>(null);
@@ -26789,6 +26802,193 @@ function handleViewRatingDetails(rating: any) {
   // Could open a modal or navigate to rating details
   console.log('View rating details:', rating);
 }
+
+// ============================================================================
+// USB Polling for Automatic Challenge Completion
+// ============================================================================
+
+// Memory addresses to poll (SNES RAM addresses 0x7E format)
+const USB_POLLING_ADDRESSES = {
+  animation: 0x7E0071,
+  regularlevel: 0x7E0D9B,
+  run_game: 0x7E0010,
+  paused: 0x7E13D4,
+  endtimer: 0x7E1493,
+  keyhole_timer: 0x7E1434,
+  fanfare: 0x7E0906,
+  victory: 0x7E1B99,
+  yellowSwitch: 0x7E1f28,
+  greenSwitch: 0x7E1f27,
+  blueSwitch: 0x7E1F29,
+  redSwitch: 0x7E1f2a,
+  roomCounter: 0x7E141A,
+  yoshiBan: 0x7E1B9B,
+  bossDefeat: 0x7E13C6,
+  bowserPal: 0x7E1429,
+  peach: 0x7E190D
+};
+
+// Convert SNES RAM address (0x7Exxxx) to USB2SNES protocol address (0xF5xxxx)
+function convertToUsb2SnesAddress(snesAddr: number): number {
+  if (snesAddr >= 0x7E0000 && snesAddr <= 0x7FFFFF) {
+    return 0xF50000 + (snesAddr - 0x7E0000);
+  }
+  return snesAddr;
+}
+
+// Toggle USB polling on/off
+async function toggleUsbPolling() {
+  if (usbPollingEnabled.value) {
+    // Stop polling
+    if (usbPollingInterval.value !== null) {
+      clearInterval(usbPollingInterval.value);
+      usbPollingInterval.value = null;
+    }
+    usbPollingEnabled.value = false;
+    usbPollingConditionATime.value = 0;
+    usbPollingLastMemoryValues.value = {};
+    usbPollingCurrentMemoryValues.value = {};
+    usbPollingLastSnesInfo.value = null;
+    console.log('[USB Polling] Stopped');
+  } else {
+    // Start polling
+    usbPollingEnabled.value = true;
+    startUsbPolling();
+    console.log('[USB Polling] Started');
+  }
+  
+  // Save state
+  await saveUsbPollingState();
+}
+
+// Save USB polling state to run config
+async function saveUsbPollingState() {
+  if (!isElectronAvailable() || !currentRunUuid.value) return;
+  
+  try {
+    const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    if (!run) return;
+    
+    let configJson: any = {};
+    if (run.config_json) {
+      try {
+        configJson = JSON.parse(run.config_json);
+      } catch (e) {
+        console.warn('[saveUsbPollingState] Failed to parse config_json:', e);
+        configJson = {};
+      }
+    }
+    
+    configJson.usbPolling = {
+      enabled: usbPollingEnabled.value,
+      updatedAt: Date.now()
+    };
+    
+    // Update run config_json
+    await (window as any).electronAPI.updateRunConfig({
+      runUuid: currentRunUuid.value,
+      configJson: JSON.stringify(configJson)
+    });
+  } catch (error: any) {
+    console.error('[saveUsbPollingState] Error:', error);
+  }
+}
+
+// Load USB polling state from run config
+async function loadUsbPollingState() {
+  if (!isElectronAvailable() || !currentRunUuid.value) {
+    usbPollingEnabled.value = false;
+    return;
+  }
+  
+  try {
+    const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+    if (!run || !run.config_json) {
+      usbPollingEnabled.value = false;
+      return;
+    }
+    
+    const configJson = JSON.parse(run.config_json);
+    if (configJson.usbPolling && configJson.usbPolling.enabled) {
+      usbPollingEnabled.value = true;
+      // Start polling if run is active
+      if (isRunActive.value) {
+        startUsbPolling();
+      }
+    } else {
+      usbPollingEnabled.value = false;
+    }
+  } catch (error: any) {
+    console.error('[loadUsbPollingState] Error:', error);
+    usbPollingEnabled.value = false;
+  }
+}
+
+// Start the USB polling loop
+function startUsbPolling() {
+  if (usbPollingInterval.value !== null) {
+    clearInterval(usbPollingInterval.value);
+  }
+  
+  // Poll every 1 second (1000ms)
+  usbPollingInterval.value = window.setInterval(async () => {
+    await performUsbPollingCycle();
+  }, 1000);
+  
+  // Initial poll immediately
+  performUsbPollingCycle();
+}
+
+// Main polling cycle - checks connection, SNES info, and memory
+async function performUsbPollingCycle() {
+  if (!usbPollingEnabled.value || !isRunActive.value || !currentChallenge.value || !currentChallengeSfcPath.value) {
+    return;
+  }
+  
+  try {
+    // 1. Check USB2SNES connection status
+    const status = await (window as any).electronAPI.usb2snesStatus();
+    if (!status || !status.connected || !status.attached) {
+      // Auto-reconnect if disconnected
+      if (!status.connected) {
+        console.log('[USB Polling] Disconnected, attempting to reconnect...');
+        await (window as any).electronAPI.usb2snesConnect({});
+      }
+      return;
+    }
+    
+    // 2. Get SNES Info to check loaded ROM
+    // TODO: Implement Info command call
+    // For now, we'll skip this check and proceed with memory polling
+    
+    // 3. Poll memory addresses if conditions are met
+    await pollMemoryAddresses();
+    
+    // Record poll time for Auto button color feedback
+    const now = Date.now();
+    if (usbPollingLastPollTime.value) {
+      const pollDelay = now - usbPollingLastPollTime.value;
+      // Update Auto button color based on polling performance
+      // This will be implemented in the next phase
+    }
+    usbPollingLastPollTime.value = now;
+    
+  } catch (error: any) {
+    console.error('[performUsbPollingCycle] Error:', error);
+  }
+}
+
+// Poll memory addresses and check conditions/goals
+async function pollMemoryAddresses() {
+  // TODO: Implement memory polling logic
+  // This will include:
+  // - Converting addresses to USB2SNES format
+  // - Calling usb2snesReadMemoryBatch
+  // - Checking Condition A
+  // - Detecting goal events
+  // - Auto-advancing challenges
+}
+
 </script>
 
 <style>

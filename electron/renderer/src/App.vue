@@ -1201,6 +1201,45 @@
               </template>
               <!-- Options when On -->
               <template v-else>
+                <!-- Manual Control Actions (only when conditions are met) -->
+                <template v-if="canLockCurrentPrediction()">
+                  <button 
+                    @click="lockCurrentPrediction"
+                    class="dropdown-item"
+                  >
+                    Lock Cur
+                  </button>
+                </template>
+                <template v-if="canCancelCurrentPrediction()">
+                  <button 
+                    @click="cancelCurrentPrediction"
+                    class="dropdown-item"
+                  >
+                    Cancel Cur
+                  </button>
+                </template>
+                <template v-if="canReopenPrediction()">
+                  <button 
+                    @click="reopenAsItemCurrent"
+                    class="dropdown-item"
+                  >
+                    Reopen as Item (current)
+                  </button>
+                  <button 
+                    @click="reopenAsItemNext"
+                    class="dropdown-item"
+                  >
+                    Reopen as Item (next)
+                  </button>
+                  <button 
+                    @click="reopenAsRunPrediction"
+                    class="dropdown-item"
+                  >
+                    Reopen as Run Prediction
+                  </button>
+                </template>
+                <!-- Turn Off Options -->
+                <div class="dropdown-divider" v-if="canLockCurrentPrediction() || canCancelCurrentPrediction() || canReopenPrediction()"></div>
                 <button 
                   @click="disablePredictionsWithAction('cancel')"
                   class="dropdown-item"
@@ -1232,7 +1271,13 @@
           <div class="predictions-status">
             <span v-if="!predictionsConfigured">Predictions not configured</span>
             <span v-else-if="!predictionsEnabled">Off: Toggle on to create and automate predictions.</span>
-            <span v-else>On: Prediction automation live</span>
+            <template v-else>
+              <span v-if="predictionStatusWarning" class="prediction-warning">{{ predictionStatusWarning }}</span>
+              <span v-else-if="lastPredictionAction" class="prediction-action">
+                On: Last action - {{ getPredictionActionDisplayName(lastPredictionAction) }}
+              </span>
+              <span v-else>On: Prediction automation live</span>
+            </template>
           </div>
         </div>
       </div>
@@ -17733,6 +17778,9 @@ const activePredictionUuid = ref<string | null>(null);  // UUID of currently act
 const predictionRetryQueue = ref<Array<{action: string, params: any, retryCount: number, maxRetries: number}>>([]);  // Queue for retrying failed operations
 const predictionRetryTimer = ref<number | null>(null);  // Timer for retry attempts
 const queuedPredictionCreation = ref<{challengeIndex: number, timer: number | null} | null>(null);  // Queued prediction creation with delay
+const lastPredictionAction = ref<string | null>(null);  // Last successful action: 'created', 'locked', 'resolved', 'cancelled'
+const predictionStatusMessage = ref<string>('');  // Status message for prediction management
+const predictionStatusWarning = ref<string | null>(null);  // Warning message if something needs attention
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
@@ -22641,6 +22689,9 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
 
 // Sync prediction status from database and Twitch API
 async function syncPredictionStatus() {
+  // Always update manual control availability, even if no active prediction
+  await updateManualControlAvailability();
+  
   if (!predictionsEnabled.value || !activePredictionUuid.value || !isElectronAvailable()) {
     return;
   }
@@ -22655,16 +22706,20 @@ async function syncPredictionStatus() {
       if (statusResult.error && statusResult.error.includes('not found')) {
         activePredictionUuid.value = null;
         console.log('[syncPredictionStatus] Prediction no longer exists, cleared active prediction');
+        updatePredictionStatus(null, 'Prediction no longer exists on Twitch');
       }
+      await updateManualControlAvailability();
       return;
     }
     
     // Update local status if needed
     // Status is already synced in the backend handler
     console.log('[syncPredictionStatus] Prediction status synced:', statusResult.twitchStatus);
+    await updateManualControlAvailability();
   } catch (error: any) {
     console.error('[syncPredictionStatus] Error:', error);
     // Don't show toast for sync errors - they're background operations
+    await updateManualControlAvailability();
   }
 }
 
@@ -23748,6 +23803,374 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
     console.error('[disablePredictionsWithAction] Error:', error);
     await showAlert(`Failed to disable predictions: ${error.message || 'Unknown error'}`, 'Error');
   }
+}
+
+// Helper function to get display name for prediction action
+function getPredictionActionDisplayName(action: string | null): string {
+  if (!action) return '';
+  switch (action) {
+    case 'created': return 'Created';
+    case 'locked': return 'Locked';
+    case 'resolved': return 'Resolved';
+    case 'cancelled': return 'Cancelled';
+    default: return action;
+  }
+}
+
+// Update prediction status message and last action
+function updatePredictionStatus(action: string | null, warning: string | null = null) {
+  lastPredictionAction.value = action;
+  predictionStatusWarning.value = warning;
+  
+  // Clear warning after 10 seconds if it's transient
+  if (warning) {
+    setTimeout(() => {
+      if (predictionStatusWarning.value === warning) {
+        predictionStatusWarning.value = null;
+      }
+    }, 10000);
+  }
+}
+
+// Check if we can lock the current prediction
+async function canLockCurrentPrediction(): Promise<boolean> {
+  if (!predictionsEnabled.value || !activePredictionUuid.value || !currentRunUuid.value) {
+    return false;
+  }
+  
+  try {
+    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+      predictionUuid: activePredictionUuid.value
+    });
+    
+    if (!statusResult.success || !statusResult.prediction) {
+      return false;
+    }
+    
+    // Can lock if status is ACTIVE (not already locked/resolved/cancelled)
+    return statusResult.twitchStatus === 'ACTIVE';
+  } catch (error) {
+    return false;
+  }
+}
+
+// Check if we can cancel the current prediction
+async function canCancelCurrentPrediction(): Promise<boolean> {
+  if (!predictionsEnabled.value || !activePredictionUuid.value || !currentRunUuid.value) {
+    return false;
+  }
+  
+  try {
+    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+      predictionUuid: activePredictionUuid.value
+    });
+    
+    if (!statusResult.success || !statusResult.prediction) {
+      return false;
+    }
+    
+    // Can cancel if status is ACTIVE or LOCKED (not resolved/cancelled)
+    const status = statusResult.twitchStatus;
+    return status === 'ACTIVE' || status === 'LOCKED';
+  } catch (error) {
+    return false;
+  }
+}
+
+// Check if we can reopen a prediction (no active prediction exists)
+async function canReopenPrediction(): Promise<boolean> {
+  if (!predictionsEnabled.value || !currentRunUuid.value) {
+    return false;
+  }
+  
+  try {
+    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    if (!checkResult.success) {
+      return false;
+    }
+    
+    // Can reopen if no active predictions exist
+    return !checkResult.hasActivePredictions;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Lock current prediction immediately
+async function lockCurrentPrediction() {
+  if (!activePredictionUuid.value) {
+    showToastNotification('No active prediction to lock', 'error', 3000);
+    return;
+  }
+  
+  showPredictionsManageDropdown.value = false;
+  
+  try {
+    const lockResult = await (window as any).electronAPI.lockTwitchPrediction({
+      predictionUuid: activePredictionUuid.value
+    });
+    
+    if (!lockResult.success) {
+      queuePredictionRetry('lock', { predictionUuid: activePredictionUuid.value });
+      showToastNotification('Locking prediction... (will retry if needed)', 'info', 2000);
+      updatePredictionStatus(null, 'Failed to lock prediction - retrying');
+    } else {
+      showToastNotification('Prediction locked', 'success', 2000);
+      updatePredictionStatus('locked');
+    }
+  } catch (error: any) {
+    console.error('[lockCurrentPrediction] Error:', error);
+    showToastNotification(`Failed to lock prediction: ${error.message || 'Unknown error'}`, 'error', 5000);
+    updatePredictionStatus(null, 'Failed to lock prediction');
+  }
+}
+
+// Cancel current prediction immediately
+async function cancelCurrentPrediction() {
+  if (!activePredictionUuid.value) {
+    showToastNotification('No active prediction to cancel', 'error', 3000);
+    return;
+  }
+  
+  showPredictionsManageDropdown.value = false;
+  
+  try {
+    const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
+      predictionUuid: activePredictionUuid.value
+    });
+    
+    if (!cancelResult.success) {
+      queuePredictionRetry('cancel', { predictionUuid: activePredictionUuid.value });
+      showToastNotification('Cancelling prediction... (will retry if needed)', 'info', 2000);
+      updatePredictionStatus(null, 'Failed to cancel prediction - retrying');
+    } else {
+      showToastNotification('Prediction cancelled', 'success', 2000);
+      activePredictionUuid.value = null;
+      updatePredictionStatus('cancelled');
+      // Management remains active - we'll create predictions for later challenges
+    }
+  } catch (error: any) {
+    console.error('[cancelCurrentPrediction] Error:', error);
+    showToastNotification(`Failed to cancel prediction: ${error.message || 'Unknown error'}`, 'error', 5000);
+    updatePredictionStatus(null, 'Failed to cancel prediction');
+  }
+}
+
+// Reopen prediction as Item (current) mode
+async function reopenAsItemCurrent() {
+  showPredictionsManageDropdown.value = false;
+  
+  if (!currentRunUuid.value) {
+    showToastNotification('No active run', 'error', 3000);
+    return;
+  }
+  
+  try {
+    // Switch to same_item mode
+    predictionsOperationalMode.value = 'same_item';
+    await savePredictionManagementState();
+    
+    // Create prediction for current challenge
+    if (currentChallengeIndex.value >= 0 && currentChallengeIndex.value < runEntries.length) {
+      await createPredictionForNextChallenge(currentChallengeIndex.value);
+      updatePredictionStatus('created');
+    } else {
+      showToastNotification('Cannot create prediction - no current challenge', 'error', 3000);
+    }
+  } catch (error: any) {
+    console.error('[reopenAsItemCurrent] Error:', error);
+    showToastNotification(`Failed to reopen prediction: ${error.message || 'Unknown error'}`, 'error', 5000);
+    updatePredictionStatus(null, 'Failed to reopen prediction');
+  }
+}
+
+// Reopen prediction as Item (next) mode
+async function reopenAsItemNext() {
+  showPredictionsManageDropdown.value = false;
+  
+  if (!currentRunUuid.value) {
+    showToastNotification('No active run', 'error', 3000);
+    return;
+  }
+  
+  try {
+    // Switch to next_item mode
+    predictionsOperationalMode.value = 'next_item';
+    await savePredictionManagementState();
+    
+    // Create prediction for next challenge
+    const nextChallengeIndex = currentChallengeIndex.value + 1;
+    if (nextChallengeIndex < runEntries.length) {
+      await createPredictionForNextChallenge(nextChallengeIndex);
+      updatePredictionStatus('created');
+    } else {
+      showToastNotification('Cannot create prediction - no next challenge', 'error', 3000);
+    }
+  } catch (error: any) {
+    console.error('[reopenAsItemNext] Error:', error);
+    showToastNotification(`Failed to reopen prediction: ${error.message || 'Unknown error'}`, 'error', 5000);
+    updatePredictionStatus(null, 'Failed to reopen prediction');
+  }
+}
+
+// Reopen prediction as Run Prediction (whole challenge) mode
+async function reopenAsRunPrediction() {
+  showPredictionsManageDropdown.value = false;
+  
+  if (!currentRunUuid.value) {
+    showToastNotification('No active run', 'error', 3000);
+    return;
+  }
+  
+  try {
+    // Switch to whole_challenge mode
+    predictionsOperationalMode.value = 'whole_challenge';
+    await savePredictionManagementState();
+    
+    // Create whole challenge prediction
+    const template = await (window as any).electronAPI.getPredictionsTemplate();
+    if (!template || template.type !== 'whole_challenge') {
+      showToastNotification('Whole challenge prediction template not configured', 'error', 3000);
+      return;
+    }
+    
+    const createResult = await (window as any).electronAPI.createTwitchPrediction({
+      template: template,
+      runUuid: currentRunUuid.value,
+      totalChallenges: runEntries.length,
+      username: onlineProfile.value?.username || 'Player'
+    });
+    
+    if (!createResult.success) {
+      queuePredictionRetry('create', {
+        template: template,
+        runUuid: currentRunUuid.value,
+        totalChallenges: runEntries.length,
+        username: onlineProfile.value?.username || 'Player'
+      });
+      showToastNotification('Creating run prediction... (will retry if needed)', 'info', 2000);
+      updatePredictionStatus(null, 'Failed to create prediction - retrying');
+    } else {
+      activePredictionUuid.value = createResult.predictionUuid;
+      showToastNotification('Run prediction created', 'success', 2000);
+      updatePredictionStatus('created');
+    }
+  } catch (error: any) {
+    console.error('[reopenAsRunPrediction] Error:', error);
+    showToastNotification(`Failed to reopen prediction: ${error.message || 'Unknown error'}`, 'error', 5000);
+    updatePredictionStatus(null, 'Failed to reopen prediction');
+  }
+}
+
+// Save prediction management state to database
+async function savePredictionManagementState() {
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    await (window as any).electronAPI.saveRunPredictionManagementState({
+      runUuid: currentRunUuid.value,
+      enabled: predictionsEnabled.value,
+      operationalMode: predictionsOperationalMode.value,
+      activePredictionUuid: activePredictionUuid.value
+    });
+  } catch (error: any) {
+    console.error('[savePredictionManagementState] Error:', error);
+  }
+}
+
+// Load prediction management state from database
+async function loadPredictionManagementState() {
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const stateResult = await (window as any).electronAPI.loadRunPredictionManagementState({
+      runUuid: currentRunUuid.value
+    });
+    
+    if (stateResult.success && stateResult.state) {
+      const state = stateResult.state;
+      predictionsEnabled.value = state.enabled || false;
+      predictionsOperationalMode.value = state.operationalMode || null;
+      activePredictionUuid.value = state.activePredictionUuid || null;
+      
+      // Sync prediction status if we have an active prediction
+      if (activePredictionUuid.value) {
+        await syncPredictionStatus();
+      }
+    }
+  } catch (error: any) {
+    console.error('[loadPredictionManagementState] Error:', error);
+  }
+}
+
+// Reactive state for manual control availability (updated by syncPredictionStatus)
+const canLockCurrent = ref(false);
+const canCancelCurrent = ref(false);
+const canReopen = ref(false);
+const currentPredictionStatus = ref<'ACTIVE' | 'LOCKED' | 'RESOLVED' | 'CANCELLED' | null>(null);
+
+// Update manual control availability based on current prediction status
+async function updateManualControlAvailability() {
+  if (!predictionsEnabled.value) {
+    canLockCurrent.value = false;
+    canCancelCurrent.value = false;
+    canReopen.value = !activePredictionUuid.value; // Can reopen if no active prediction
+    return;
+  }
+  
+  if (activePredictionUuid.value) {
+    try {
+      const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+        predictionUuid: activePredictionUuid.value
+      });
+      
+      if (statusResult.success && statusResult.prediction) {
+        currentPredictionStatus.value = statusResult.twitchStatus;
+        const status = statusResult.twitchStatus;
+        canLockCurrent.value = status === 'ACTIVE';
+        canCancelCurrent.value = status === 'ACTIVE' || status === 'LOCKED';
+        canReopen.value = false; // Can't reopen if we have an active prediction
+      } else {
+        // Prediction doesn't exist
+        currentPredictionStatus.value = null;
+        canLockCurrent.value = false;
+        canCancelCurrent.value = false;
+        canReopen.value = true;
+      }
+    } catch (error) {
+      console.error('[updateManualControlAvailability] Error:', error);
+      canLockCurrent.value = false;
+      canCancelCurrent.value = false;
+      canReopen.value = false;
+    }
+  } else {
+    // No active prediction - check if we can reopen
+    try {
+      const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+      canReopen.value = checkResult.success && !checkResult.hasActivePredictions;
+    } catch (error) {
+      canReopen.value = false;
+    }
+    canLockCurrent.value = false;
+    canCancelCurrent.value = false;
+  }
+}
+
+// Wrapper functions for template
+function canLockCurrentPrediction() {
+  return canLockCurrent.value;
+}
+
+function canCancelCurrentPrediction() {
+  return canCancelCurrent.value;
+}
+
+function canReopenPrediction() {
+  return canReopen.value;
 }
 
 async function handleSaveWinRules(winRulesJson: string) {

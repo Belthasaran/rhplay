@@ -21407,7 +21407,17 @@ async function completeRun() {
               const predictionSubtype = statusResult.prediction?.subtype;
               
               if (predictionSubtype === 'yes_no') {
-                winningOutcomeId = determineYesNoOutcome(outcomes, lastChallengeStatus as 'success' | 'ok' | 'failed' | 'skipped');
+                // Get template config to match by configured outcome names
+                try {
+                  const template = await (window as any).electronAPI.getPredictionsTemplate();
+                  const yesNoConfig = template?.individualItem?.yesNo;
+                  const configuredYesName = yesNoConfig?.yesOutcomeName;
+                  const configuredNoName = yesNoConfig?.noOutcomeName;
+                  winningOutcomeId = determineYesNoOutcome(outcomes, lastChallengeStatus as 'success' | 'ok' | 'failed' | 'skipped', configuredYesName, configuredNoName);
+                } catch (error) {
+                  console.warn('[completeRun] Could not get template config, using position-based matching:', error);
+                  winningOutcomeId = determineYesNoOutcome(outcomes, lastChallengeStatus as 'success' | 'ok' | 'failed' | 'skipped');
+                }
               } else if (predictionSubtype === 'time_range' && lastChallengeIndex >= 0) {
                 const challengeResult = challengeResults.value[lastChallengeIndex];
                 const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
@@ -23115,41 +23125,68 @@ function parsePredictionOutcomes(prediction: any): Array<{id: string, title: str
 
 /**
  * Determine winning outcome for yes/no prediction
+ * For yes/no predictions, outcomes are always created in order: Yes outcome first, No outcome second
+ * We match by exact title (case-insensitive) if outcome names are provided, otherwise use position
+ * 
+ * @param outcomes - Array of outcome objects with id and title
+ * @param challengeStatus - Status of the challenge ('success' | 'ok' | 'failed' | 'skipped')
+ * @param configuredYesName - Optional: configured "Yes" outcome name to match by exact title
+ * @param configuredNoName - Optional: configured "No" outcome name to match by exact title
+ * @returns The outcome ID to resolve to, or null if unable to determine
  */
-function determineYesNoOutcome(outcomes: Array<{id: string, title: string}>, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped'): string | null {
+function determineYesNoOutcome(
+  outcomes: Array<{id: string, title: string}>, 
+  challengeStatus: 'success' | 'ok' | 'failed' | 'skipped',
+  configuredYesName?: string,
+  configuredNoName?: string
+): string | null {
   const isWin = challengeStatus === 'success' || challengeStatus === 'ok';
   
-  // Find Yes outcome (case-insensitive match for "Yes", "Success", "Win", etc.)
-  const yesOutcome = outcomes.find(outcome => {
-    const titleLower = outcome.title.toLowerCase();
-
-    return titleLower.includes('yes') || titleLower.includes('success') || titleLower.includes('win');
-  });
-  
-  // Find No outcome (case-insensitive match for "No", "Fail", "Loss", etc.)
-  const noOutcome = outcomes.find(outcome => {
-    const titleLower = outcome.title.toLowerCase();
-    return titleLower.includes('no') || titleLower.includes('fail') || titleLower.includes('loss');
-  });
-  
-  if (isWin && yesOutcome) {
-    console.log(`[determineYesNoOutcome] result yes, challengeStatus=${challengeStatus} id=${yesOutcome.id} title=${yesOutcome.title}`)
-    return yesOutcome.id;
-  } else if (!isWin && noOutcome) {
-    console.log(`determineYesNoOutcome result No challengeStatus=${challengeStatus} id=${noOutcome.id} title=${noOutcome.title}`)
-    return noOutcome.id;
+  // For yes/no predictions, there should always be exactly 2 outcomes
+  if (outcomes.length !== 2) {
+    console.warn(`[determineYesNoOutcome] Expected 2 outcomes for yes/no prediction, got ${outcomes.length}`);
+    // Fallback to position-based selection (first = Yes, second = No)
+    if (isWin && outcomes.length > 0) {
+      return outcomes[0].id;
+    } else if (!isWin && outcomes.length > 1) {
+      return outcomes[1].id;
+    }
+    return outcomes.length > 0 ? outcomes[0].id : null;
   }
   
-  // Fallback: use first outcome for win, second for loss
-  if (isWin && outcomes.length > 0) {
-    console.log(`Falling back to first outcome for win - Falling back to an outcome based on its order in the list is incorrect behavior and should be fixed`)
+  // If configured outcome names are provided, try to match by exact title (case-insensitive)
+  if (configuredYesName && configuredNoName) {
+    const yesNameLower = configuredYesName.trim().toLowerCase();
+    const noNameLower = configuredNoName.trim().toLowerCase();
+    
+    const yesOutcome = outcomes.find(outcome => 
+      outcome.title.trim().toLowerCase() === yesNameLower
+    );
+    const noOutcome = outcomes.find(outcome => 
+      outcome.title.trim().toLowerCase() === noNameLower
+    );
+    
+    if (isWin && yesOutcome) {
+      console.log(`[determineYesNoOutcome] Matched by configured name: Yes outcome "${yesOutcome.title}" (id=${yesOutcome.id})`);
+      return yesOutcome.id;
+    } else if (!isWin && noOutcome) {
+      console.log(`[determineYesNoOutcome] Matched by configured name: No outcome "${noOutcome.title}" (id=${noOutcome.id})`);
+      return noOutcome.id;
+    }
+    
+    // If matching failed, log warning but continue to position-based fallback
+    console.warn(`[determineYesNoOutcome] Could not match outcomes by configured names (Yes: "${configuredYesName}", No: "${configuredNoName}"), using position-based selection`);
+  }
+  
+  // Position-based selection (reliable for yes/no predictions)
+  // Yes/no predictions always have exactly 2 outcomes in order: Yes first, No second
+  if (isWin) {
+    console.log(`[determineYesNoOutcome] Using first outcome for win (id=${outcomes[0].id}, title="${outcomes[0].title}")`);
     return outcomes[0].id;
-  } else if (!isWin && outcomes.length > 1) {
-    console.log(`Falling back to second outcome for win - Falling back to an outcome based on its order in the list is incorrect behavior and should be fixed`)
+  } else {
+    console.log(`[determineYesNoOutcome] Using second outcome for loss (id=${outcomes[1].id}, title="${outcomes[1].title}")`);
     return outcomes[1].id;
   }
-  
-  return null;
 }
 
 /**
@@ -23208,7 +23245,7 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
  * Determine winning outcome for whole challenge prediction
  */
 function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: string}>, wins: number, total: number): string | null {
-  console.log(`[determineWholeChallengeOutcome] wins=${Wins} total=${total}`)
+  console.log(`[determineWholeChallengeOutcome] wins=${wins} total=${total}`)
   // Parse outcome titles to find matching range
   for (const outcome of outcomes) {
     const title = outcome.title.trim();
@@ -23328,7 +23365,17 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     if (prediction.prediction_type === 'individual_item') {
       if (prediction.prediction_subtype === 'yes_no') {
         // Yes/No prediction: Yes = success/ok, No = failed/skipped
-        winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
+        // Get template config to match by configured outcome names
+        try {
+          const template = await (window as any).electronAPI.getPredictionsTemplate();
+          const yesNoConfig = template?.individualItem?.yesNo;
+          const configuredYesName = yesNoConfig?.yesOutcomeName;
+          const configuredNoName = yesNoConfig?.noOutcomeName;
+          winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus, configuredYesName, configuredNoName);
+        } catch (error) {
+          console.warn('[resolvePredictionForChallenge] Could not get template config, using position-based matching:', error);
+          winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
+        }
       } else if (prediction.prediction_subtype === 'time_range') {
         // Time range prediction: Determine based on time spent
         // Get challenge duration from current challenge result
@@ -23647,7 +23694,17 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
             
             if (runPrediction.prediction_subtype === 'yes_no') {
               // Yes/No prediction
-              winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
+              // Get template config to match by configured outcome names
+              try {
+                const template = await (window as any).electronAPI.getPredictionsTemplate();
+                const yesNoConfig = template?.individualItem?.yesNo;
+                const configuredYesName = yesNoConfig?.yesOutcomeName;
+                const configuredNoName = yesNoConfig?.noOutcomeName;
+                winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus, configuredYesName, configuredNoName);
+              } catch (error) {
+                console.warn('[completeRun] Could not get template config, using position-based matching:', error);
+                winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
+              }
             } else if (runPrediction.prediction_subtype === 'time_range') {
               // Time range prediction
               const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);

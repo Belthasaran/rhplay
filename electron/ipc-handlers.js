@@ -12966,14 +12966,14 @@ function registerDatabaseHandlers(dbManager) {
         console.log('[twitch:prediction:create] whole_challenge windowSeconds:', windowSeconds, 'from config:', config.predictionWindowSeconds);
         
         // Build title with game/stage info if provided
-        let baseTitle = config.customTitle || 'How many wins?';
+        /*let baseTitle = config.customTitle || 'How many wins?';
         if (gameId) {
           baseTitle += ` (Game: ${gameId}`;
           if (stageId) {
             baseTitle += `, Stage: ${stageId}`;
           }
           baseTitle += ')';
-        }
+        }*/
         title = baseTitle.replace(/\$username/g, integration.twitch_username || username || 'Player');
         
         // Build outcomes
@@ -13006,14 +13006,14 @@ function registerDatabaseHandlers(dbManager) {
           windowSeconds = Math.max(1, (isNaN(parsedWindow) || parsedWindow <= 0) ? 30 : parsedWindow);
           console.log('[twitch:prediction:create] yes_no windowSeconds:', windowSeconds, 'from config:', yesNoConfig.windowSeconds);
           // Build title with game/stage info
-          let baseTitle = yesNoConfig.customTitle || 'Will we win?';
+          let baseTitle = yesNoConfig.customTitle || 'Do we win?';
           if (challengeSequenceNumber) {
-            baseTitle = baseTitle.replace('current', `challenge item ${challengeSequenceNumber}`);
+            baseTitle = baseTitle.replace('current', `${challengeSequenceNumber}`);
           }
-          if (gameId) {
-            baseTitle += ` (Game ${gameId}`;
+          if (gameId) { /* (Game: ${gameId} */
+            baseTitle += ` (${gameId}`;
             if (stageId) {
-              baseTitle += `, Stage ${stageId}`;
+              baseTitle += `, ${stageId}`;
             }
             baseTitle += ')';
           }
@@ -13032,14 +13032,14 @@ function registerDatabaseHandlers(dbManager) {
           windowSeconds = Math.max(1, (isNaN(parsedWindow) || parsedWindow <= 0) ? 45 : parsedWindow);
           console.log('[twitch:prediction:create] time_range windowSeconds:', windowSeconds, 'from config:', timeRangeConfig.windowSeconds);
           // Build title with game/stage info
-          let baseTitle = timeRangeConfig.customTitle || 'How many minutes do we take?';
+          let baseTitle = timeRangeConfig.customTitle || 'How many minutes?';
           if (challengeSequenceNumber) {
             baseTitle = baseTitle.replace('current', `challenge item ${challengeSequenceNumber}`);
           }
-          if (gameId) {
-            baseTitle += ` (Game: ${gameId}`;
+          if (gameId) { /* (Game: ${gameId} */
+            baseTitle += ` (${gameId}`;
             if (stageId) {
-              baseTitle += `, Stage: ${stageId}`;
+              baseTitle += `, ${stageId}`;
             }
             baseTitle += ')';
           }

@@ -366,6 +366,21 @@
                     If checked, always use the template maximum time, even if the challenge's win rule allows less time. If unchecked (default), win rules take priority when they allow more time than the template maximum.
                   </p>
                 </div>
+
+                <div class="config-field">
+                  <label class="checkbox-label">
+                    <input 
+                      type="checkbox"
+                      v-model="timeRangeExcludePredictionWindow"
+                      :disabled="!integrationStatus"
+                      class="config-checkbox"
+                    />
+                    <span>Exclude the prediction time window</span>
+                  </label>
+                  <p class="field-help">
+                    If checked (default), the first time range starts after the prediction window closes. If a challenge completes before the prediction window closes in "current item" mode, the prediction will be cancelled for fairness (since viewers could have seen the outcome before placing bets).
+                  </p>
+                </div>
               </div>
             </div>
 

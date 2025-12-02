@@ -27088,6 +27088,113 @@ function checkConditionA(memoryValues: Record<string, number>): boolean {
   );
 }
 
+// Detect goal events by comparing previous and current memory values
+// Returns the name of the goal event if detected, null otherwise
+function detectGoalEvent(lastValues: Record<string, number>, currentValues: Record<string, number>): string | null {
+  // endtimer: changed from 0 to non-zero
+  if ((lastValues.endtimer === 0 || !lastValues.endtimer) && currentValues.endtimer !== 0) {
+    return 'endtimer';
+  }
+  
+  // fanfare: changed from 0 to non-zero
+  if ((lastValues.fanfare === 0 || !lastValues.fanfare) && currentValues.fanfare !== 0) {
+    return 'fanfare';
+  }
+  
+  // bossDefeat: changed from 0 to non-zero
+  if ((lastValues.bossDefeat === 0 || !lastValues.bossDefeat) && currentValues.bossDefeat !== 0) {
+    return 'bossDefeat';
+  }
+  
+  // keyhole_timer: changed from 0 to non-zero
+  if ((lastValues.keyhole_timer === 0 || !lastValues.keyhole_timer) && currentValues.keyhole_timer !== 0) {
+    return 'keyhole_timer';
+  }
+  
+  // Switches: any switch changed from 0 to non-zero
+  if ((lastValues.yellowSwitch === 0 || !lastValues.yellowSwitch) && currentValues.yellowSwitch !== 0) {
+    return 'yellowSwitch';
+  }
+  if ((lastValues.greenSwitch === 0 || !lastValues.greenSwitch) && currentValues.greenSwitch !== 0) {
+    return 'greenSwitch';
+  }
+  if ((lastValues.blueSwitch === 0 || !lastValues.blueSwitch) && currentValues.blueSwitch !== 0) {
+    return 'blueSwitch';
+  }
+  if ((lastValues.redSwitch === 0 || !lastValues.redSwitch) && currentValues.redSwitch !== 0) {
+    return 'redSwitch';
+  }
+  
+  // peach: changed from 0 to 1 (specific value)
+  if ((lastValues.peach === 0 || !lastValues.peach) && currentValues.peach === 1) {
+    return 'peach';
+  }
+  
+  // victory: changed from 0 to non-zero
+  if ((lastValues.victory === 0 || !lastValues.victory) && currentValues.victory !== 0) {
+    return 'victory';
+  }
+  
+  return null; // No goal event detected
+}
+
+// Handle goal event by auto-advancing the challenge
+async function handleGoalEvent(goalEvent: string) {
+  if (!isRunActive.value || !currentChallenge.value) {
+    return;
+  }
+  
+  console.log(`[USB Polling] Handling goal event: ${goalEvent}`);
+  
+  // Check if we're on the last challenge
+  const isLastChallenge = currentChallengeIndex.value >= runEntries.length - 1;
+  
+  if (isLastChallenge) {
+    // Last challenge - complete the run
+    // Check if Done button is enabled
+    if (!isDoneButtonDisabled.value) {
+      // Call nextChallenge which will complete the run
+      await nextChallenge();
+    } else {
+      // Done disabled (failed win rule) - use Skip
+      await skipChallenge();
+    }
+  } else {
+    // Not last challenge - advance to next
+    // Check if Done button is enabled
+    if (!isDoneButtonDisabled.value) {
+      // Call nextChallenge
+      await nextChallenge();
+      
+      // Auto-launch next challenge after a short delay
+      // This gives the system time to process the challenge advance
+      setTimeout(async () => {
+        if (currentChallenge.value && currentChallengeSfcPath.value) {
+          try {
+            await launchCurrentChallenge();
+          } catch (error: any) {
+            console.error('[USB Polling] Error auto-launching next challenge:', error);
+          }
+        }
+      }, 500); // 500ms delay
+    } else {
+      // Done disabled (failed win rule) - use Skip
+      await skipChallenge();
+      
+      // Auto-launch next challenge after a short delay
+      setTimeout(async () => {
+        if (currentChallenge.value && currentChallengeSfcPath.value) {
+          try {
+            await launchCurrentChallenge();
+          } catch (error: any) {
+            console.error('[USB Polling] Error auto-launching next challenge:', error);
+          }
+        }
+      }, 500); // 500ms delay
+    }
+  }
+}
+
 // Poll memory addresses and check conditions/goals
 async function pollMemoryAddresses() {
   // Prerequisites: Timer must be running, not paused, and at least 5 seconds elapsed
@@ -27175,8 +27282,14 @@ async function pollMemoryAddresses() {
       usbPollingConditionATime.value = 0;
     }
     
-    // Condition A time is now tracked
-    // Goal event detection will use this in Phase 6
+    // Detect goal events (only if Condition A threshold reached)
+    if (usbPollingConditionATime.value >= 10000) {
+      const goalEvent = detectGoalEvent(usbPollingLastMemoryValues.value, usbPollingCurrentMemoryValues.value);
+      if (goalEvent) {
+        console.log(`[USB Polling] Goal event detected: ${goalEvent}`);
+        await handleGoalEvent(goalEvent);
+      }
+    }
     
   } catch (error: any) {
     console.error('[pollMemoryAddresses] Error:', error);

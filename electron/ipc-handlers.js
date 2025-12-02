@@ -13132,9 +13132,11 @@ function registerDatabaseHandlers(dbManager) {
           
           // Get max time from config, or calculate from win rules if available
           let maxTimeMinutes = timeRangeConfig.maxTimeMinutes || 60;
+          const useTemplateMax = timeRangeConfig.useTemplateMaxEvenIfWinRulesAllowLess || false;
+          const lowTimeRangesOnlyOnSuccess = timeRangeConfig.lowTimeRangesOnlyOnSuccess !== false; // Default true
           
           // If runUuid is provided, try to get win rules to determine actual max time
-          if (runUuid) {
+          if (runUuid && !useTemplateMax) {
             try {
               const db = dbManager.getConnection('clientdata');
               const run = db.prepare(`
@@ -13145,20 +13147,83 @@ function registerDatabaseHandlers(dbManager) {
                 const winRules = JSON.parse(run.win_rules_json);
                 if (winRules.challengeTime && winRules.challengeTime.enabled) {
                   const limitMinutes = winRules.challengeTime.minutes || 10;
+                  const limitSeconds = limitMinutes * 60;
                   const rolloverMaxMinutes = winRules.challengeTime.rolloverMaxMinutes || 0;
-                  const graceMinutes = Math.min(
+                  const rolloverMaxSeconds = rolloverMaxMinutes * 60;
+                  
+                  // Calculate grace period in seconds, then convert to minutes and round UP
+                  const graceSeconds = Math.min(
                     Math.max(
-                      Math.floor((limitMinutes * 60 * (winRules.challengeTime.gracePeriodPercent || 1)) / 100),
-                      (winRules.challengeTime.gracePeriodMinSeconds || 2) / 60
+                      Math.floor((limitSeconds * (winRules.challengeTime.gracePeriodPercent || 1)) / 100),
+                      winRules.challengeTime.gracePeriodMinSeconds || 2
                     ),
-                    (winRules.challengeTime.gracePeriodMaxSeconds || 60) / 60
+                    winRules.challengeTime.gracePeriodMaxSeconds || 60
                   );
                   
-                  // Max time is limit + max rollover + grace
-                  const calculatedMax = limitMinutes + rolloverMaxMinutes + graceMinutes;
-                  if (calculatedMax > 0) {
-                    maxTimeMinutes = Math.min(calculatedMax, 120); // Cap at 120 minutes
+                  // Get actual accumulated rollover at start of this challenge from database
+                  let accumulatedRolloverMinutes = 0;
+                  if (challengeSequenceNumber) {
+                    // Get the rollover_time_remaining_start_ms for this challenge
+                    const challengeResult = db.prepare(`
+                      SELECT rollover_time_remaining_start_ms
+                      FROM run_results
+                      WHERE run_uuid = ? AND sequence_number = ?
+                    `).get(runUuid, challengeSequenceNumber);
+                    
+                    if (challengeResult && challengeResult.rollover_time_remaining_start_ms !== null && challengeResult.rollover_time_remaining_start_ms !== undefined) {
+                      // Convert from milliseconds to minutes, rounded UP
+                      accumulatedRolloverMinutes = Math.ceil(challengeResult.rollover_time_remaining_start_ms / 60000);
+                    } else {
+                      // Challenge hasn't started yet - calculate rollover from previous challenges
+                      // This can happen when creating prediction for "next_item" mode
+                      if (challengeSequenceNumber > 1) {
+                        const previousResults = db.prepare(`
+                          SELECT duration_seconds, status, sequence_number
+                          FROM run_results
+                          WHERE run_uuid = ? AND sequence_number < ?
+                          ORDER BY sequence_number ASC
+                        `).all(runUuid, challengeSequenceNumber);
+                        
+                        // Calculate rollover from each previous challenge
+                        for (const result of previousResults) {
+                          if (result.duration_seconds !== null && result.duration_seconds !== undefined) {
+                            // If completed successfully and faster than limit, add rollover
+                            if ((result.status === 'success' || result.status === 'ok') && result.duration_seconds < limitSeconds) {
+                              const rolloverFromThis = limitSeconds - result.duration_seconds;
+                              accumulatedRolloverMinutes += Math.ceil(rolloverFromThis / 60);
+                            }
+                            // Cap at maximum rollover allowed
+                            const accumulatedRolloverSeconds = accumulatedRolloverMinutes * 60;
+                            if (accumulatedRolloverSeconds > rolloverMaxSeconds) {
+                              accumulatedRolloverMinutes = rolloverMaxMinutes;
+                            }
+                          }
+                        }
+                      }
+                      // Also check for initial rollover from win rules
+                      if (winRules.challengeTime.rolloverStartMinutes) {
+                        accumulatedRolloverMinutes += winRules.challengeTime.rolloverStartMinutes;
+                        if (accumulatedRolloverMinutes > rolloverMaxMinutes) {
+                          accumulatedRolloverMinutes = rolloverMaxMinutes;
+                        }
+                      }
+                    }
                   }
+                  
+                  // Max time = limit + actual accumulated rollover + grace, all rounded UP to nearest minute
+                  const graceMinutes = Math.ceil(graceSeconds / 60);
+                  const calculatedMax = limitMinutes + accumulatedRolloverMinutes + graceMinutes;
+                  
+                  if (calculatedMax > 0) {
+                    // If win rule allows more than template max, win rule takes priority
+                    if (calculatedMax > maxTimeMinutes) {
+                      maxTimeMinutes = calculatedMax;
+                    } else {
+                      maxTimeMinutes = calculatedMax;
+                    }
+                  }
+                  
+                  console.log(`[twitch:prediction:create] time_range: limit=${limitMinutes}, rollover=${accumulatedRolloverMinutes}, grace=${graceMinutes}, max=${maxTimeMinutes}`);
                 }
               }
             } catch (error) {
@@ -13166,6 +13231,12 @@ function registerDatabaseHandlers(dbManager) {
               // Fall back to config value
             }
           }
+          
+          // Store the options in template config for later use during resolution
+          if (!templateConfig.individualItem.timeRange) {
+            templateConfig.individualItem.timeRange = {};
+          }
+          templateConfig.individualItem.timeRange.lowTimeRangesOnlyOnSuccess = lowTimeRangesOnlyOnSuccess;
           
           // Calculate time ranges
           const outcomeCount = timeRangeConfig.outcomeCount || 5;

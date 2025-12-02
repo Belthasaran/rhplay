@@ -333,7 +333,37 @@
                     />
                   </label>
                   <p class="field-help">
-                    Maximum time range to offer. If win rules are active, this will be capped at the challenge time limit + rollover.
+                    Maximum time range to offer. If win rules are active and "Use template maximum" is unchecked, this will be overridden by the challenge time limit + rollover + grace (rounded up).
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label class="checkbox-label">
+                    <input 
+                      type="checkbox"
+                      v-model="timeRangeLowTimeRangesOnlyOnSuccess"
+                      :disabled="!integrationStatus"
+                      class="config-checkbox"
+                    />
+                    <span>Low time ranges only eligible on success</span>
+                  </label>
+                  <p class="field-help">
+                    If checked (default), when a challenge fails or is skipped, only outcomes at or above the time limit are eligible. This prevents low time ranges from winning on failures.
+                  </p>
+                </div>
+
+                <div class="config-field">
+                  <label class="checkbox-label">
+                    <input 
+                      type="checkbox"
+                      v-model="timeRangeUseTemplateMax"
+                      :disabled="!integrationStatus"
+                      class="config-checkbox"
+                    />
+                    <span>Use template maximum even if win rules allow less</span>
+                  </label>
+                  <p class="field-help">
+                    If checked, always use the template maximum time, even if the challenge's win rule allows less time. If unchecked (default), win rules take priority when they allow more time than the template maximum.
                   </p>
                 </div>
               </div>
@@ -394,6 +424,8 @@ const timeRangeWindowSeconds = ref<number>(45); // Default 45 seconds
 const timeRangeCustomTitle = ref<string>(''); // Optional custom title
 const timeRangeOutcomeCount = ref<number>(5);
 const timeRangeMaxMinutes = ref<number>(60);
+const timeRangeLowTimeRangesOnlyOnSuccess = ref<boolean>(true); // Default true
+const timeRangeUseTemplateMax = ref<boolean>(false); // Default false
 
 // Check profile guard requirement
 const profileGuardEnabled = computed(() => props.profileGuardEnabled === true);
@@ -436,6 +468,8 @@ const loadData = async () => {
           timeRangeCustomTitle.value = template.individualItem.timeRange.customTitle || '';
           timeRangeOutcomeCount.value = template.individualItem.timeRange.outcomeCount || 5;
           timeRangeMaxMinutes.value = template.individualItem.timeRange.maxTimeMinutes || 60;
+          timeRangeLowTimeRangesOnlyOnSuccess.value = template.individualItem.timeRange.lowTimeRangesOnlyOnSuccess !== false; // Default true
+          timeRangeUseTemplateMax.value = template.individualItem.timeRange.useTemplateMaxEvenIfWinRulesAllowLess || false; // Default false
         }
       }
     }
@@ -574,7 +608,9 @@ const saveTemplate = async () => {
           windowSeconds: timeRangeWindowSeconds.value,
           customTitle: timeRangeCustomTitle.value || undefined,
           outcomeCount: timeRangeOutcomeCount.value,
-          maxTimeMinutes: timeRangeMaxMinutes.value
+          maxTimeMinutes: timeRangeMaxMinutes.value,
+          lowTimeRangesOnlyOnSuccess: timeRangeLowTimeRangesOnlyOnSuccess.value,
+          useTemplateMaxEvenIfWinRulesAllowLess: timeRangeUseTemplateMax.value
         };
       }
     }

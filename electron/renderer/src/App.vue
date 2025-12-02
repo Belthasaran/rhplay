@@ -23804,10 +23804,106 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
         const challengeSequenceNumber = statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number;
         if (challengeSequenceNumber && currentRunUuid.value) {
           try {
-            // Get run results from database to get accurate duration
+            // Get template config to check for "low time ranges only on success" option
+            const template = await (window as any).electronAPI.getPredictionsTemplate();
+            const timeRangeConfig = template?.individualItem?.timeRange;
+            const lowTimeRangesOnlyOnSuccess = timeRangeConfig?.lowTimeRangesOnlyOnSuccess !== false; // Default true
+            
+            // Get run results from database to get accurate duration (needed for both duration and rollover calculation)
             const runResults = await (window as any).electronAPI.getRunResults({
               runUuid: currentRunUuid.value
             });
+            
+            // Get win rules to determine time limit (using actual accumulated rollover)
+            let timeLimitMinutes: number | null = null;
+            if (lowTimeRangesOnlyOnSuccess && (challengeStatus === 'failed' || challengeStatus === 'skipped')) {
+              try {
+                // Get win rules from current run state
+                let winRules: any = null;
+                if (currentWinRulesJson.value) {
+                  try {
+                    winRules = JSON.parse(currentWinRulesJson.value);
+                  } catch (e) {
+                    console.warn('[resolvePredictionForChallenge] Error parsing currentWinRulesJson:', e);
+                  }
+                }
+                
+                // If not available in state, try to get from database
+                if (!winRules && currentRunUuid.value) {
+                  try {
+                    const runData = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+                    if (runData && runData.win_rules_json) {
+                      winRules = JSON.parse(runData.win_rules_json);
+                    }
+                  } catch (error) {
+                    console.warn('[resolvePredictionForChallenge] Error getting run data:', error);
+                  }
+                }
+                
+                if (winRules && winRules.challengeTime && winRules.challengeTime.enabled) {
+                  const limitMinutes = winRules.challengeTime.minutes || 10;
+                  const limitSeconds = limitMinutes * 60;
+                  const rolloverMaxMinutes = winRules.challengeTime.rolloverMaxMinutes || 0;
+                  const rolloverMaxSeconds = rolloverMaxMinutes * 60;
+                  
+                  // Calculate grace period in seconds, then round UP to minutes
+                  const graceSeconds = Math.min(
+                    Math.max(
+                      Math.floor((limitSeconds * (winRules.challengeTime.gracePeriodPercent || 1)) / 100),
+                      winRules.challengeTime.gracePeriodMinSeconds || 2
+                    ),
+                    winRules.challengeTime.gracePeriodMaxSeconds || 60
+                  );
+                  const graceMinutes = Math.ceil(graceSeconds / 60);
+                  
+                  // Get actual accumulated rollover at start of this challenge from database
+                  let accumulatedRolloverMinutes = 0;
+                  if (challengeSequenceNumber) {
+                    const challengeResult = runResults.find((r: any) => 
+                      r.sequence_number === challengeSequenceNumber
+                    );
+                    
+                    if (challengeResult && challengeResult.rollover_time_remaining_start_ms !== null && challengeResult.rollover_time_remaining_start_ms !== undefined) {
+                      // Convert from milliseconds to minutes, rounded UP
+                      accumulatedRolloverMinutes = Math.ceil(challengeResult.rollover_time_remaining_start_ms / 60000);
+                    } else {
+                      // Fallback: calculate from previous challenges (shouldn't happen if challenge completed, but handle gracefully)
+                      if (challengeSequenceNumber > 1) {
+                        const previousResults = runResults.filter((r: any) => 
+                          r.sequence_number < challengeSequenceNumber
+                        );
+                        
+                        for (const result of previousResults) {
+                          if (result.duration_seconds !== null && result.duration_seconds !== undefined) {
+                            if ((result.status === 'success' || result.status === 'ok') && result.duration_seconds < limitSeconds) {
+                              const rolloverFromThis = limitSeconds - result.duration_seconds;
+                              accumulatedRolloverMinutes += Math.ceil(rolloverFromThis / 60);
+                            }
+                            if (accumulatedRolloverMinutes * 60 > rolloverMaxSeconds) {
+                              accumulatedRolloverMinutes = rolloverMaxMinutes;
+                            }
+                          }
+                        }
+                      }
+                      // Also check for initial rollover from win rules
+                      if (winRules.challengeTime.rolloverStartMinutes) {
+                        accumulatedRolloverMinutes += winRules.challengeTime.rolloverStartMinutes;
+                        if (accumulatedRolloverMinutes > rolloverMaxMinutes) {
+                          accumulatedRolloverMinutes = rolloverMaxMinutes;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Time limit = limit + actual accumulated rollover + grace, all rounded UP
+                  timeLimitMinutes = limitMinutes + accumulatedRolloverMinutes + graceMinutes;
+                  
+                  console.log(`[resolvePredictionForChallenge] time_range timeLimit: limit=${limitMinutes}, rollover=${accumulatedRolloverMinutes}, grace=${graceMinutes}, total=${timeLimitMinutes}`);
+                }
+              } catch (error) {
+                console.warn('[resolvePredictionForChallenge] Error getting win rules:', error);
+              }
+            }
             
             const challengeResult = runResults.find((r: any) => 
               r.sequence_number === challengeSequenceNumber
@@ -23815,8 +23911,36 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
             
             if (challengeResult && challengeResult.duration_seconds !== undefined && challengeResult.duration_seconds !== null) {
               const durationMinutes = Math.floor(challengeResult.duration_seconds / 60);
-              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${challengeResult.duration_seconds}, durationMinutes=${durationMinutes}, outcomes=${outcomes.length}`);
-              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${challengeResult.duration_seconds}, durationMinutes=${durationMinutes}, outcomes=${outcomes.length}, timeLimitMinutes=${timeLimitMinutes}, lowTimeRangesOnlyOnSuccess=${lowTimeRangesOnlyOnSuccess}`);
+              
+              // Filter outcomes if needed (low time ranges only eligible on success)
+              let eligibleOutcomes = outcomes;
+              if (lowTimeRangesOnlyOnSuccess && timeLimitMinutes !== null && (challengeStatus === 'failed' || challengeStatus === 'skipped')) {
+                // Filter out outcomes below time limit (keep ">N" outcomes)
+                eligibleOutcomes = outcomes.filter((outcome: any) => {
+                  const title = outcome.title.trim();
+                  // Keep ">N" outcomes (failure outcomes)
+                  if (title.match(/^>\s*(\d+)/)) {
+                    return true;
+                  }
+                  // Parse range and check if max is >= timeLimit
+                  const rangeMatch = title.match(/(\d+)\s*(?:to|-)\s*(\d+)/i);
+                  if (rangeMatch) {
+                    const max = parseInt(rangeMatch[2], 10);
+                    return max >= timeLimitMinutes!;
+                  }
+                  // Single number - check if >= timeLimit
+                  const exactMatch = title.match(/^(\d+)\s*(?:minutes?)?$/i);
+                  if (exactMatch) {
+                    const value = parseInt(exactMatch[1], 10);
+                    return value >= timeLimitMinutes!;
+                  }
+                  return true; // Keep if we can't parse
+                });
+                console.log(`[resolvePredictionForChallenge] Filtered outcomes: ${outcomes.length} -> ${eligibleOutcomes.length} (timeLimit=${timeLimitMinutes})`);
+              }
+              
+              winningOutcomeId = determineTimeRangeOutcome(eligibleOutcomes, durationMinutes);
             } else {
               console.warn(`[resolvePredictionForChallenge] time_range: Could not find duration for challenge ${challengeSequenceNumber}`);
             }

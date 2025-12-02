@@ -18368,7 +18368,7 @@ function closeStageNotesModal() {
 }
 
 // Close difficulty dropdown when clicking outside
-onMounted(() => {
+onMounted(async () => {
   const handleClickOutside = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     if (!target.closest('.difficulty-dropdown-wrapper')) {
@@ -18377,6 +18377,21 @@ onMounted(() => {
   };
   document.addEventListener('click', handleClickOutside);
   document.addEventListener('click', handleClickOutsidePredictionsDropdown);
+  
+  // Check for prediction template early - template is the permanent configuration
+  // This ensures predictionsConfigured is set correctly from the start
+  if (isElectronAvailable()) {
+    try {
+      const template = await (window as any).electronAPI.getPredictionsTemplate();
+      if (template && template.type) {
+        // Template exists - setup is permanently complete
+        predictionsConfigured.value = true;
+      }
+    } catch (error) {
+      console.warn('[onMounted] Error checking prediction template:', error);
+      // Don't change configured status on error
+    }
+  }
   
   onUnmounted(() => {
     document.removeEventListener('click', handleClickOutside);
@@ -22494,49 +22509,52 @@ async function handleTwitchIntegrationUpdate() {
 }
 
 async function checkPredictionsConfiguration() {
-  // Check if Twitch integration is configured
+  // Template is the source of truth - if it exists, setup is complete
+  // We only check Twitch token validity to show warnings, not to determine if setup is complete
   try {
-    if (isElectronAvailable() && onlineProfile.value?.profileId) {
-      const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
-        profileUuid: onlineProfile.value.profileId
-      });
-      const isActive = status && status.is_active === true;
+    if (!isElectronAvailable()) {
+      // Electron not available - preserve current state
+      return;
+    }
+    
+    // First, check if template exists - this is the permanent configuration
+    const template = await (window as any).electronAPI.getPredictionsTemplate();
+    if (template && template.type) {
+      // Template exists - setup is complete, period
+      predictionsConfigured.value = true;
       
-      if (isActive) {
-        // Also check if prediction template is configured
-        const template = await (window as any).electronAPI.getPredictionsTemplate();
-        if (template && template.type) {
-          predictionsConfigured.value = true;
-        } else {
-          // Integration is active but no template configured
-          // Only set to false if we don't have a saved enabled state
-          // (This prevents clearing configured status when resuming a run)
-          if (!predictionsEnabled.value) {
-            predictionsConfigured.value = false;
+      // Optionally check Twitch token validity for warnings (but don't change configured status)
+      if (onlineProfile.value?.profileId) {
+        try {
+          const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
+            profileUuid: onlineProfile.value.profileId
+          });
+          
+          // If token is invalid, we might want to show a warning later
+          // But we don't change predictionsConfigured - template exists, so setup is complete
+          if (!status || !status.is_active) {
+            // Token might be expired - but template is still configured
+            // User can reconnect if needed, but setup remains complete
+            console.log('[checkPredictionsConfiguration] Template exists but Twitch token may be invalid');
           }
-          // Otherwise keep it as is - user might be resuming a run
-        }
-      } else {
-        // Integration not active - only set to false if we don't have saved enabled state
-        if (!predictionsEnabled.value) {
-          predictionsConfigured.value = false;
+        } catch (tokenError) {
+          // Error checking token - but template exists, so setup is still complete
+          console.warn('[checkPredictionsConfiguration] Error checking Twitch token:', tokenError);
         }
       }
     } else {
-      // No profile or electron not available
+      // No template exists - setup is not complete
       // Only set to false if we don't have a saved enabled state
-      // (This prevents clearing configured status when profile hasn't loaded yet)
+      // (This prevents clearing configured status when resuming a run that was enabled)
       if (!predictionsEnabled.value) {
         predictionsConfigured.value = false;
       }
+      // If predictionsEnabled is true, keep configured as is (might be loading state)
     }
   } catch (error) {
     console.error('[checkPredictionsConfiguration] Error:', error);
-    // Don't set to false on error if we have a saved enabled state
-    // (This prevents clearing configured status due to temporary errors)
-    if (!predictionsEnabled.value) {
-      predictionsConfigured.value = false;
-    }
+    // On error, preserve current state - don't clear configured status
+    // This prevents clearing due to temporary errors
   }
 }
 
@@ -24087,7 +24105,25 @@ async function savePredictionManagementState() {
 
 // Load prediction management state from database
 async function loadPredictionManagementState() {
-  if (!currentRunUuid.value || !isElectronAvailable()) {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // First, check if template exists - this determines if setup is complete
+  // Template is the permanent configuration that never gets cleared
+  try {
+    const template = await (window as any).electronAPI.getPredictionsTemplate();
+    if (template && template.type) {
+      // Template exists - setup is permanently complete
+      predictionsConfigured.value = true;
+    }
+  } catch (error) {
+    console.warn('[loadPredictionManagementState] Error checking template:', error);
+    // Don't change configured status on error
+  }
+  
+  // Then load run-specific state (if we have a run)
+  if (!currentRunUuid.value) {
     return;
   }
   
@@ -24102,8 +24138,8 @@ async function loadPredictionManagementState() {
       predictionsOperationalMode.value = state.operationalMode || null;
       activePredictionUuid.value = state.activePredictionUuid || null;
       
-      // If we loaded a state with predictions enabled, configuration must be complete
-      // (Otherwise predictions couldn't have been enabled in the first place)
+      // If we loaded a state with predictions enabled, ensure configured is true
+      // (Double-check in case template check failed)
       if (predictionsEnabled.value) {
         predictionsConfigured.value = true;
       }
@@ -24114,7 +24150,7 @@ async function loadPredictionManagementState() {
       }
     }
   } catch (error: any) {
-    console.error('[loadPredictionManagementState] Error:', error);
+    console.error('[loadPredictionManagementState] Error loading state:', error);
   }
 }
 

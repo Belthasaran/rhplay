@@ -5923,6 +5923,38 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get SNES device information (firmware, ROM running, etc.)
+   * Channel: usb2snes:info
+   * @returns {Promise<Object|null>} Device info or null if not attached
+   */
+  ipcMain.handle('usb2snes:info', async () => {
+    try {
+      const wrapper = getSnesWrapper();
+      
+      if (!wrapper.isAttached()) {
+        console.log('[USB2SNES] Info: Not attached');
+        return null;
+      }
+      
+      const info = await wrapper.Info();
+      
+      if (info) {
+        console.log('[USB2SNES] Info:', {
+          firmwareversion: info.firmwareversion,
+          versionstring: info.versionstring,
+          romrunning: info.romrunning
+        });
+      }
+      
+      return info;
+    } catch (error) {
+      console.error('[USB2SNES] Info error:', error);
+      // Return null on error rather than throwing, to allow graceful handling
+      return null;
+    }
+  });
+
+  /**
    * Reset the console
    * Channel: usb2snes:reset
    */

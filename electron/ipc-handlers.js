@@ -13352,7 +13352,20 @@ function registerDatabaseHandlers(dbManager) {
       
       // Store in database
       const predictionUuid = crypto.randomUUID();
-      const now = Date.now();
+      // Use Twitch's creation timestamp if available, otherwise use current time
+      // The Twitch API returns created_at as a Date object or timestamp
+      // This is more accurate than our local time since it's when Twitch actually created it
+      let now = Date.now();
+
+      //uncomment this later to try using Twitch timestamps
+      //if (prediction.createdAt) {
+      //  // If createdAt is a Date object, convert to milliseconds
+      //  now = prediction.createdAt instanceof Date ? prediction.createdAt.getTime() : prediction.createdAt;
+      //} else if (prediction.created_at) {
+      //  // Some APIs return created_at as a string or number
+      //  now = typeof prediction.created_at === 'string' ? new Date(prediction.created_at).getTime() : prediction.created_at;
+      // }
+      // If neither exists, fall back to current time (shouldn't happen, but be safe)
       
       db.prepare(`
         INSERT INTO twitch_predictions (

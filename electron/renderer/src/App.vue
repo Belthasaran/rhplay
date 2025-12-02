@@ -17832,6 +17832,7 @@ const usbPollingCurrentMemoryValues = ref<Record<string, number>>({});
 const usbPollingLastSnesInfo = ref<string | null>(null);
 const usbPollingCorrectGameLoaded = ref<boolean>(false); // Whether the correct game file is loaded
 const usbPollingStatus = ref<'good' | 'slow' | 'wrong-file' | null>(null); // Polling status for button color
+const usbPollingHandlingGoalEvent = ref<boolean>(false); // Flag to prevent multiple goal events from triggering simultaneously
 
 // Refs for scrolling to active challenge
 const runModalBodyRef = ref<HTMLElement | null>(null);
@@ -18542,6 +18543,7 @@ function clearRunState() {
   usbPollingLastSnesInfo.value = null;
   usbPollingCorrectGameLoaded.value = false;
   usbPollingStatus.value = null;
+  usbPollingHandlingGoalEvent.value = false;
   
   // Clear run entries
   runEntries.splice(0, runEntries.length);
@@ -20954,6 +20956,7 @@ async function nextChallenge() {
       usbPollingLastMemoryValues.value = {};
       usbPollingCurrentMemoryValues.value = {};
       usbPollingLastSnesInfo.value = null;
+      usbPollingHandlingGoalEvent.value = false; // Reset goal event handling flag
       
       // Clean up stale operations again after moving to next challenge
       cleanupStalePredictionOperations();
@@ -21079,6 +21082,7 @@ async function skipChallenge() {
       usbPollingLastMemoryValues.value = {};
       usbPollingCurrentMemoryValues.value = {};
       usbPollingLastSnesInfo.value = null;
+      usbPollingHandlingGoalEvent.value = false; // Reset goal event handling flag
       
       // Clean up stale operations again after moving to next challenge
       cleanupStalePredictionOperations();
@@ -26889,6 +26893,7 @@ async function toggleUsbPolling() {
     usbPollingLastSnesInfo.value = null;
     usbPollingCorrectGameLoaded.value = false;
     usbPollingStatus.value = null;
+    usbPollingHandlingGoalEvent.value = false;
     console.log('[USB Polling] Stopped');
   } else {
     // Start polling
@@ -27144,10 +27149,25 @@ async function handleGoalEvent(goalEvent: string) {
     return;
   }
   
-  console.log(`[USB Polling] Handling goal event: ${goalEvent}`);
+  // Prevent multiple goal events from triggering simultaneously
+  if (usbPollingHandlingGoalEvent.value) {
+    console.log(`[USB Polling] Already handling a goal event, ignoring: ${goalEvent}`);
+    return;
+  }
   
-  // Check if we're on the last challenge
-  const isLastChallenge = currentChallengeIndex.value >= runEntries.length - 1;
+  // Check cooldown to prevent rapid-fire triggers
+  if (isSkipDoneOnCooldown.value) {
+    console.log(`[USB Polling] Cooldown active, ignoring goal event: ${goalEvent}`);
+    return;
+  }
+  
+  usbPollingHandlingGoalEvent.value = true;
+  
+  try {
+    console.log(`[USB Polling] Handling goal event: ${goalEvent}`);
+    
+    // Check if we're on the last challenge
+    const isLastChallenge = currentChallengeIndex.value >= runEntries.length - 1;
   
   if (isLastChallenge) {
     // Last challenge - complete the run
@@ -27192,6 +27212,14 @@ async function handleGoalEvent(goalEvent: string) {
         }
       }, 500); // 500ms delay
     }
+  } catch (error: any) {
+    console.error('[USB Polling] Error handling goal event:', error);
+    // Don't rethrow - allow polling to continue
+  } finally {
+    // Reset flag after a delay to allow challenge advance to complete
+    setTimeout(() => {
+      usbPollingHandlingGoalEvent.value = false;
+    }, 2000); // 2 second delay to ensure challenge advance completes
   }
 }
 
@@ -27282,8 +27310,8 @@ async function pollMemoryAddresses() {
       usbPollingConditionATime.value = 0;
     }
     
-    // Detect goal events (only if Condition A threshold reached)
-    if (usbPollingConditionATime.value >= 10000) {
+    // Detect goal events (only if Condition A threshold reached and not already handling one)
+    if (usbPollingConditionATime.value >= 10000 && !usbPollingHandlingGoalEvent.value) {
       const goalEvent = detectGoalEvent(usbPollingLastMemoryValues.value, usbPollingCurrentMemoryValues.value);
       if (goalEvent) {
         console.log(`[USB Polling] Goal event detected: ${goalEvent}`);

@@ -22557,7 +22557,7 @@ async function checkPredictionsConfiguration() {
           console.warn('[checkPredictionsConfiguration] Error checking Twitch token:', tokenError);
         }
       } else {
-        // No profile - assume token invalid
+        // No profile loaded yet - we can't check validity, so assume invalid until we can check
         twitchTokenValid.value = false;
       }
     } else {
@@ -22577,6 +22577,14 @@ async function checkPredictionsConfiguration() {
     // This prevents clearing due to temporary errors
   }
 }
+
+// Watch for profile loading and check token validity when profile becomes available
+watch(onlineProfile, async (newProfile) => {
+  // When profile loads and we have a template configured, check token validity
+  if (newProfile?.profileId && predictionsConfigured.value) {
+    await checkPredictionsConfiguration();
+  }
+}, { immediate: false });
 
 function getManagePredictionsButtonText(): string {
   if (!predictionsConfigured.value) {

@@ -10103,6 +10103,12 @@ async function loadOnlineProfile() {
     if (profile) {
       selectedProfileId.value = profile.profileId || null;
     }
+    
+    // After profile loads, check predictions configuration and token validity once
+    // This ensures the button is set correctly after profile finishes loading
+    if (profile?.profileId) {
+      await checkPredictionsConfiguration();
+    }
   } catch (error) {
     console.error('Error loading online profile:', error);
     onlineProfile.value = null;
@@ -18379,10 +18385,17 @@ onMounted(async () => {
   document.addEventListener('click', handleClickOutside);
   document.addEventListener('click', handleClickOutsidePredictionsDropdown);
   
-  // Check for prediction template and token validity early
-  // This ensures predictionsConfigured and twitchTokenValid are set correctly from the start
+  // Check for prediction template early (but not token validity - wait for profile to load)
+  // This ensures predictionsConfigured is set correctly from the start
   if (isElectronAvailable()) {
-    await checkPredictionsConfiguration();
+    try {
+      const template = await (window as any).electronAPI.getPredictionsTemplate();
+      if (template && template.type) {
+        predictionsConfigured.value = true;
+      }
+    } catch (error) {
+      console.warn('[onMounted] Error checking prediction template:', error);
+    }
   }
   
   onUnmounted(() => {
@@ -22539,6 +22552,7 @@ async function checkPredictionsConfiguration() {
       predictionsConfigured.value = true;
       
       // Check Twitch token validity - required for predictions to actually work
+      // Only check if profile is loaded (we check once after profile loads in loadOnlineProfile)
       if (onlineProfile.value?.profileId) {
         try {
           const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
@@ -22556,10 +22570,8 @@ async function checkPredictionsConfiguration() {
           twitchTokenValid.value = false;
           console.warn('[checkPredictionsConfiguration] Error checking Twitch token:', tokenError);
         }
-      } else {
-        // No profile loaded yet - we can't check validity, so assume invalid until we can check
-        twitchTokenValid.value = false;
       }
+      // If profile not loaded yet, don't change twitchTokenValid - wait for profile to load
     } else {
       // No template exists - setup is not complete
       // Only set to false if we don't have a saved enabled state
@@ -22577,14 +22589,6 @@ async function checkPredictionsConfiguration() {
     // This prevents clearing due to temporary errors
   }
 }
-
-// Watch for profile loading and check token validity when profile becomes available
-watch(onlineProfile, async (newProfile) => {
-  // When profile loads and we have a template configured, check token validity
-  if (newProfile?.profileId && predictionsConfigured.value) {
-    await checkPredictionsConfiguration();
-  }
-}, { immediate: false });
 
 function getManagePredictionsButtonText(): string {
   if (!predictionsConfigured.value) {

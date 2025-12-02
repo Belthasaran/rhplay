@@ -13240,7 +13240,10 @@ function registerDatabaseHandlers(dbManager) {
           
           // Calculate time ranges
           const outcomeCount = timeRangeConfig.outcomeCount || 5;
-          const ranges = calculateTimeRangeOutcomes(maxTimeMinutes, outcomeCount);
+          // Get prediction window and exclude setting from template
+          const predictionWindowSeconds = config.windowSeconds || 45;
+          const excludePredictionWindow = config.excludePredictionWindow !== false; // Default true
+          const ranges = calculateTimeRangeOutcomes(maxTimeMinutes, outcomeCount, predictionWindowSeconds, excludePredictionWindow);
           outcomes = ranges.map(range => ({
             title: range.title,
             points: 0

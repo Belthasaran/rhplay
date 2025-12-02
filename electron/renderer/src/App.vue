@@ -23889,6 +23889,58 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     console.log(`[resolvePredictionForChallenge] predictionType=${predictionType}, predictionSubtype=${predictionSubtype}, challengeStatus=${challengeStatus}`);
     
     if (predictionType === 'individual_item') {
+      // Check if challenge completed too quickly after prediction creation (failsafe for late predictions)
+      const predictionCreatedAtMs = statusResult.prediction.created_at_ms || prediction.created_at_ms;
+      if (predictionCreatedAtMs) {
+        const currentTimeMs = Date.now();
+        const timeSinceCreationSeconds = Math.floor((currentTimeMs - predictionCreatedAtMs) / 1000);
+        
+        // Get cancellation threshold from template
+        let cancelThresholdSeconds: number | null = null;
+        try {
+          const template = await (window as any).electronAPI.getPredictionsTemplate();
+          if (predictionSubtype === 'yes_no') {
+            const yesNoConfig = template?.individualItem?.yesNo;
+            cancelThresholdSeconds = yesNoConfig?.cancelIfSuccessWithinSeconds ?? null;
+            // Default to window + 10 if not set
+            if (cancelThresholdSeconds === null) {
+              const windowSeconds = yesNoConfig?.windowSeconds || 30;
+              cancelThresholdSeconds = windowSeconds + 10;
+            }
+          } else if (predictionSubtype === 'time_range') {
+            const timeRangeConfig = template?.individualItem?.timeRange;
+            cancelThresholdSeconds = timeRangeConfig?.cancelIfSuccessWithinSeconds ?? null;
+            // Default to window + 10 if not set
+            if (cancelThresholdSeconds === null) {
+              const windowSeconds = timeRangeConfig?.windowSeconds || 45;
+              cancelThresholdSeconds = windowSeconds + 10;
+            }
+          }
+        } catch (error) {
+          console.warn('[resolvePredictionForChallenge] Could not get template config for cancellation check:', error);
+        }
+        
+        if (cancelThresholdSeconds !== null && timeSinceCreationSeconds <= cancelThresholdSeconds) {
+          // Challenge completed too quickly after prediction creation - cancel for fairness
+          console.log(`[resolvePredictionForChallenge] Challenge completed ${timeSinceCreationSeconds}s after prediction creation (threshold: ${cancelThresholdSeconds}s) - cancelling prediction for fairness`);
+          const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
+            predictionUuid: normalizedPrediction.prediction_uuid
+          });
+          if (!cancelResult.success) {
+            console.warn(`[resolvePredictionForChallenge] Failed to cancel prediction:`, cancelResult.error);
+            queuePredictionRetry('cancel', { predictionUuid: normalizedPrediction.prediction_uuid });
+            showToastNotification('Cancelling prediction...', 'info', 2000);
+          } else {
+            console.log(`[resolvePredictionForChallenge] Successfully cancelled prediction`);
+            updatePredictionStatus('cancelled', `Challenge completed too quickly (${timeSinceCreationSeconds}s after creation)`);
+            await savePredictionManagementState();
+            await updateManualControlAvailability();
+            showToastNotification('Prediction cancelled (completed too quickly)', 'success', 3000);
+          }
+          return; // Don't try to resolve
+        }
+      }
+      
       if (predictionSubtype === 'yes_no') {
         // Yes/No prediction: Yes = success/ok, No = failed/skipped
         // Get template config to match by configured outcome names

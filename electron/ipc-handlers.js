@@ -13573,7 +13573,8 @@ function registerDatabaseHandlers(dbManager) {
           type: prediction.prediction_type,
           subtype: prediction.prediction_subtype,
           outcomes_json: prediction.outcomes_json, // Include outcomes for outcome resolution
-          challenge_sequence_number: prediction.challenge_sequence_number // Include sequence number for resolution
+          challenge_sequence_number: prediction.challenge_sequence_number, // Include sequence number for resolution
+          created_at_ms: prediction.created_at_ms // Include creation timestamp for cancellation checks
         }
       };
     } catch (error) {

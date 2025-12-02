@@ -266,6 +266,25 @@
                     Name for the failure outcome (default: "No")
                   </p>
                 </div>
+
+                <div class="config-field">
+                  <label>
+                    Cancel if success within X seconds of prediction start:
+                    <input 
+                      type="number"
+                      v-model.number="yesNoCancelIfSuccessWithinSeconds"
+                      min="0"
+                      max="300"
+                      step="5"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                      placeholder=""
+                    />
+                  </label>
+                  <p class="field-help">
+                    Cancel prediction if challenge completes within this many seconds after the prediction was created on Twitch. If empty, defaults to prediction window + 10 seconds. This is a failsafe for when predictions are created late.
+                  </p>
+                </div>
               </div>
 
               <!-- Time Range Specific Settings -->
@@ -381,6 +400,25 @@
                     If checked (default), the first time range starts after the prediction window closes. If a challenge completes before the prediction window closes in "current item" mode, the prediction will be cancelled for fairness (since viewers could have seen the outcome before placing bets).
                   </p>
                 </div>
+
+                <div class="config-field">
+                  <label>
+                    Cancel if success within X seconds of prediction start:
+                    <input 
+                      type="number"
+                      v-model.number="timeRangeCancelIfSuccessWithinSeconds"
+                      min="0"
+                      max="300"
+                      step="5"
+                      :disabled="!integrationStatus"
+                      class="config-input"
+                      placeholder=""
+                    />
+                  </label>
+                  <p class="field-help">
+                    Cancel prediction if challenge completes within this many seconds after the prediction was created on Twitch. If empty, defaults to prediction window + 10 seconds. This is a failsafe for when predictions are created late.
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -435,6 +473,7 @@ const yesNoWindowSeconds = ref<number>(30); // Default 30 seconds
 const yesNoCustomTitle = ref<string>(''); // Optional custom title
 const yesOutcomeName = ref<string>('Yes'); // Default "Yes"
 const noOutcomeName = ref<string>('No'); // Default "No"
+const yesNoCancelIfSuccessWithinSeconds = ref<number | null>(null); // Null means use default (window + 10)
 const timeRangeWindowSeconds = ref<number>(45); // Default 45 seconds
 const timeRangeCustomTitle = ref<string>(''); // Optional custom title
 const timeRangeOutcomeCount = ref<number>(5);
@@ -442,6 +481,7 @@ const timeRangeMaxMinutes = ref<number>(60);
 const timeRangeLowTimeRangesOnlyOnSuccess = ref<boolean>(true); // Default true
 const timeRangeUseTemplateMax = ref<boolean>(false); // Default false
 const timeRangeExcludePredictionWindow = ref<boolean>(true); // Default true
+const timeRangeCancelIfSuccessWithinSeconds = ref<number | null>(null); // Null means use default (window + 10)
 
 // Check profile guard requirement
 const profileGuardEnabled = computed(() => props.profileGuardEnabled === true);
@@ -478,6 +518,7 @@ const loadData = async () => {
           yesNoCustomTitle.value = template.individualItem.yesNo.customTitle || '';
           yesOutcomeName.value = template.individualItem.yesNo.yesOutcomeName || 'Yes';
           noOutcomeName.value = template.individualItem.yesNo.noOutcomeName || 'No';
+          yesNoCancelIfSuccessWithinSeconds.value = template.individualItem.yesNo.cancelIfSuccessWithinSeconds ?? null;
         }
         if (template.individualItem.timeRange) {
           timeRangeWindowSeconds.value = template.individualItem.timeRange.windowSeconds || 45;
@@ -487,6 +528,7 @@ const loadData = async () => {
           timeRangeLowTimeRangesOnlyOnSuccess.value = template.individualItem.timeRange.lowTimeRangesOnlyOnSuccess !== false; // Default true
           timeRangeUseTemplateMax.value = template.individualItem.timeRange.useTemplateMaxEvenIfWinRulesAllowLess || false; // Default false
           timeRangeExcludePredictionWindow.value = template.individualItem.timeRange.excludePredictionWindow !== false; // Default true
+          timeRangeCancelIfSuccessWithinSeconds.value = template.individualItem.timeRange.cancelIfSuccessWithinSeconds ?? null;
         }
       }
     }
@@ -618,7 +660,8 @@ const saveTemplate = async () => {
           windowSeconds: yesNoWindowSeconds.value,
           customTitle: yesNoCustomTitle.value || undefined,
           yesOutcomeName: yesOutcomeName.value,
-          noOutcomeName: noOutcomeName.value
+          noOutcomeName: noOutcomeName.value,
+          cancelIfSuccessWithinSeconds: yesNoCancelIfSuccessWithinSeconds.value ?? undefined
         };
       } else if (individualPredictionType.value === 'time_range') {
         template.individualItem.timeRange = {
@@ -628,7 +671,8 @@ const saveTemplate = async () => {
           maxTimeMinutes: timeRangeMaxMinutes.value,
           lowTimeRangesOnlyOnSuccess: timeRangeLowTimeRangesOnlyOnSuccess.value,
           useTemplateMaxEvenIfWinRulesAllowLess: timeRangeUseTemplateMax.value,
-          excludePredictionWindow: timeRangeExcludePredictionWindow.value
+          excludePredictionWindow: timeRangeExcludePredictionWindow.value,
+          cancelIfSuccessWithinSeconds: timeRangeCancelIfSuccessWithinSeconds.value ?? undefined
         };
       }
     }

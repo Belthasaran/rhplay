@@ -22623,6 +22623,246 @@ function handleClickOutsidePredictionsDropdown(event: MouseEvent) {
   }
 }
 
+// Handle conflicting predictions when enabling predictions
+// Returns: { canProceed: boolean, adoptedPredictionUuid?: string }
+async function handlePredictionConflicts(mode: 'whole_challenge' | 'same_item' | 'next_item'): Promise<{ canProceed: boolean, adoptedPredictionUuid?: string }> {
+  if (!isElectronAvailable() || !currentRunUuid.value) {
+    return { canProceed: true };
+  }
+  
+  try {
+    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    
+    if (!checkResult.success || !checkResult.hasActivePredictions) {
+      return { canProceed: true }; // No conflicts
+    }
+    
+    const activePreds = checkResult.activePredictions || [];
+    
+    // Determine target for the mode we're enabling
+    let targetRunUuid = currentRunUuid.value;
+    let targetSequence: number | null = null;
+    let targetType: string | null = null;
+    
+    if (mode === 'whole_challenge') {
+      targetType = 'whole_challenge';
+    } else if (mode === 'same_item') {
+      targetType = 'individual_item';
+      targetSequence = currentChallengeIndex.value + 1;
+    } else if (mode === 'next_item') {
+      targetType = 'individual_item';
+      targetSequence = currentChallengeIndex.value + 2;
+    }
+    
+    // Check for matching prediction (our prediction for current run/item)
+    const matchingPred = activePreds.find((p: any) => 
+      p.isManaged &&
+      p.run_uuid === targetRunUuid &&
+      p.prediction_type === targetType &&
+      (targetSequence === null ? p.challenge_sequence_number === null : p.challenge_sequence_number === targetSequence)
+    );
+    
+    if (matchingPred) {
+      // Found matching prediction - adopt it
+      console.log(`[handlePredictionConflicts] Adopting existing prediction: ${matchingPred.prediction_uuid}`);
+      return { canProceed: true, adoptedPredictionUuid: matchingPred.prediction_uuid };
+    }
+    
+    // Check for previous challenge item predictions (same run, different sequence)
+    const previousItemPreds = activePreds.filter((p: any) =>
+      p.isManaged &&
+      p.run_uuid === targetRunUuid &&
+      p.prediction_type === 'individual_item' &&
+      p.challenge_sequence_number !== null &&
+      (targetSequence === null || p.challenge_sequence_number < targetSequence)
+    );
+    
+    // Handle previous item predictions
+    for (const prevPred of previousItemPreds) {
+      const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+        predictionUuid: prevPred.prediction_uuid
+      });
+      
+      if (statusResult.success && statusResult.prediction) {
+        const twitchStatus = statusResult.twitchStatus;
+        
+        if (twitchStatus === 'LOCKED') {
+          // Locked - resolve it based on challenge status
+          // Get challenge result from database
+          const runResults = await (window as any).electronAPI.getRunResults({
+            runUuid: targetRunUuid
+          });
+          
+          const challengeResult = runResults.find((r: any) => 
+            r.sequence_number === prevPred.challenge_sequence_number
+          );
+          
+          if (challengeResult) {
+            // Resolve based on challenge status
+            await resolvePredictionForChallenge(statusResult.prediction, challengeResult.status || 'failed');
+          } else {
+            // Challenge not found - resolve as failed
+            await resolvePredictionForChallenge(statusResult.prediction, 'failed');
+          }
+        } else if (twitchStatus === 'ACTIVE') {
+          // Not locked - cancel it
+          const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
+            predictionUuid: prevPred.prediction_uuid
+          });
+          
+          if (!cancelResult.success) {
+            console.warn(`[handlePredictionConflicts] Failed to cancel previous item prediction: ${cancelResult.error}`);
+          }
+        }
+      }
+    }
+    
+    // Check for conflicting predictions (not ours or not for current run)
+    const conflictingPreds = activePreds.filter((p: any) => 
+      !p.isManaged || 
+      p.run_uuid !== targetRunUuid ||
+      (p.prediction_type !== targetType) ||
+      (targetSequence !== null && p.challenge_sequence_number !== null && p.challenge_sequence_number !== targetSequence)
+    );
+    
+    if (conflictingPreds.length > 0) {
+      // Show dialog for user to choose how to handle
+      const result = await showPredictionConflictDialog(conflictingPreds);
+      
+      if (result === 'cancel_operation') {
+        return { canProceed: false };
+      } else if (result === 'cancel_and_refund') {
+        // Cancel all conflicting predictions
+        for (const conflictPred of conflictingPreds) {
+          if (conflictPred.isManaged && conflictPred.prediction_uuid) {
+            await (window as any).electronAPI.cancelTwitchPrediction({
+              predictionUuid: conflictPred.prediction_uuid
+            });
+          } else {
+            await (window as any).electronAPI.cancelTwitchPredictionByTwitchId({
+              twitchPredictionId: conflictPred.twitch_prediction_id,
+              twitchBroadcasterId: conflictPred.twitch_broadcaster_id
+            });
+          }
+        }
+        // Wait for Twitch to process
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return { canProceed: true };
+      } else if (result && result.startsWith('resolve_')) {
+        // User chose to resolve to a specific outcome
+        const outcomeIndex = parseInt(result.split('_')[1]);
+        const conflictPred = conflictingPreds[0]; // Resolve the first one
+        
+        // Lock if not already locked
+        if (conflictPred.twitch_status === 'ACTIVE') {
+          if (conflictPred.isManaged && conflictPred.prediction_uuid) {
+            await (window as any).electronAPI.lockTwitchPrediction({
+              predictionUuid: conflictPred.prediction_uuid
+            });
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Resolve to selected outcome
+        if (conflictPred.isManaged && conflictPred.prediction_uuid) {
+          const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+            predictionUuid: conflictPred.prediction_uuid
+          });
+          
+          if (statusResult.success && statusResult.prediction) {
+            const outcomes = JSON.parse(statusResult.prediction.outcomes_json || '[]');
+            if (outcomes[outcomeIndex]) {
+              await (window as any).electronAPI.resolveTwitchPrediction({
+                predictionUuid: conflictPred.prediction_uuid,
+                winningOutcomeId: outcomes[outcomeIndex].id
+              });
+            }
+          }
+        }
+        
+        // Wait for Twitch to process
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return { canProceed: true };
+      }
+    }
+    
+    return { canProceed: true };
+  } catch (error: any) {
+    console.error('[handlePredictionConflicts] Error:', error);
+    return { canProceed: false };
+  }
+}
+
+// Show dialog for handling prediction conflicts
+// Returns: 'cancel_operation' | 'cancel_and_refund' | 'resolve_0' | 'resolve_1' | etc.
+async function showPredictionConflictDialog(conflictingPreds: any[]): Promise<string> {
+  const pred = conflictingPreds[0]; // Show dialog for first conflict
+  const title = pred.title || 'Untitled Prediction';
+  
+  // Get outcomes if available
+  let outcomes: any[] = [];
+  if (pred.isManaged && pred.prediction_uuid) {
+    try {
+      const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+        predictionUuid: pred.prediction_uuid
+      });
+      if (statusResult.success && statusResult.prediction) {
+        outcomes = JSON.parse(statusResult.prediction.outcomes_json || '[]');
+      }
+    } catch (error) {
+      console.warn('[showPredictionConflictDialog] Error getting outcomes:', error);
+    }
+  }
+  
+  // Build message
+  let message = `A prediction exists on Twitch that conflicts with enabling predictions:\n\n"${title}"\n\n`;
+  if (!pred.isManaged) {
+    message += 'This prediction was not created by this application.\n\n';
+  } else if (pred.run_uuid !== currentRunUuid.value) {
+    message += 'This prediction is for a different run.\n\n';
+  } else {
+    message += 'This prediction is for a different challenge item.\n\n';
+  }
+  
+  message += 'How would you like to proceed?';
+  
+  // For now, use a simple confirm dialog with options
+  // In a full implementation, this would be a custom modal with buttons
+  // We'll use showConfirm for "Cancel and Refund" vs "Cancel Operation"
+  // For "Pick outcome", we'll need a custom dialog (simplified for now)
+  
+  if (outcomes.length > 0) {
+    // Show dialog with outcome options
+    // Simplified: use showConfirm for cancel options, and we'll add a custom modal later
+    const cancelRefund = await showConfirm(
+      message + '\n\nClick "Yes" to cancel and refund the existing prediction, or "No" to cancel this operation.',
+      'Conflicting Prediction',
+      'Cancel and Refund',
+      'Cancel Operation'
+    );
+    
+    if (cancelRefund) {
+      return 'cancel_and_refund';
+    } else {
+      return 'cancel_operation';
+    }
+  } else {
+    // No outcomes available - just offer cancel options
+    const cancelRefund = await showConfirm(
+      message + '\n\nClick "Yes" to cancel and refund the existing prediction, or "No" to cancel this operation.',
+      'Conflicting Prediction',
+      'Cancel and Refund',
+      'Cancel Operation'
+    );
+    
+    if (cancelRefund) {
+      return 'cancel_and_refund';
+    } else {
+      return 'cancel_operation';
+    }
+  }
+}
+
 async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'next_item') {
   if (!predictionsConfigured.value || !currentRunUuid.value) {
     return;
@@ -22640,66 +22880,24 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
   
   try {
     if (isElectronAvailable()) {
-      // Check for existing active predictions on Twitch
-      const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+      // Handle conflicts (adopt matching, resolve/cancel previous items, show dialog for others)
+      const conflictResult = await handlePredictionConflicts(mode);
       
-      if (!checkResult.success) {
-        showToastNotification(`Failed to check predictions: ${checkResult.error}`, 'error', 5000);
-        return;
+      if (!conflictResult.canProceed) {
+        return; // User cancelled the operation
       }
       
-      // If unmanaged prediction exists, prompt user to cancel it
-      if (checkResult.hasUnmanagedPredictions || 
-          (checkResult.hasActivePredictions && checkResult.activePredictions.length > 0)) {
-        const activePreds = checkResult.activePredictions || [];
-        const isManaged = activePreds.length > 0 && activePreds[0].isManaged;
-        
-        if (!isManaged) {
-          // Find unmanaged predictions
-          const unmanagedPreds = activePreds.filter((p: any) => !p.isManaged);
-          
-          if (unmanagedPreds.length > 0) {
-            const predTitles = unmanagedPreds.map((p: any) => p.title || 'Untitled').join(', ');
-            const confirmed = await showConfirm(
-              `A prediction exists on Twitch that we don't manage: "${predTitles}"\n\nCancel it to proceed?`,
-              'External Prediction Found',
-              'Cancel It',
-              'Cancel'
-            );
-            
-            if (!confirmed) {
-              return; // User declined
-            }
-            
-            // Cancel all unmanaged predictions
-            let allCancelled = true;
-            for (const unmanagedPred of unmanagedPreds) {
-              try {
-                const cancelResult = await (window as any).electronAPI.cancelTwitchPredictionByTwitchId({
-                  twitchPredictionId: unmanagedPred.twitch_prediction_id,
-                  twitchBroadcasterId: unmanagedPred.twitch_broadcaster_id
-                });
-                
-                if (!cancelResult.success) {
-                  console.error('[enablePredictionsMode] Failed to cancel unmanaged prediction:', cancelResult.error);
-                  allCancelled = false;
-                }
-              } catch (error: any) {
-                console.error('[enablePredictionsMode] Error canceling unmanaged prediction:', error);
-                allCancelled = false;
-              }
-            }
-            
-            if (allCancelled) {
-              showToastNotification('External prediction cancelled', 'success', 3000);
-            } else {
-              showToastNotification('Some external predictions could not be cancelled. Proceeding anyway...', 'warning', 5000);
-            }
-            
-            // Wait a moment for Twitch API to process the cancellation
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        }
+      // If we adopted an existing prediction, use it
+      if (conflictResult.adoptedPredictionUuid) {
+        predictionsEnabled.value = true;
+        predictionsOperationalMode.value = mode;
+        activePredictionUuid.value = conflictResult.adoptedPredictionUuid;
+        await savePredictionManagementState();
+        await syncPredictionStatus();
+        await updateManualControlAvailability();
+        updatePredictionStatus('created', 'Adopted existing prediction');
+        showToastNotification('Adopted existing prediction', 'success', 3000);
+        return;
       }
       
       // Get prediction template
@@ -24196,9 +24394,78 @@ async function loadPredictionManagementState() {
       if (activePredictionUuid.value && twitchTokenValid.value) {
         await syncPredictionStatus();
       }
+      
+      // Check if there's an active prediction on Twitch that matches our current run/item
+      // This handles the case where predictions were enabled but the app was restarted
+      if (twitchTokenValid.value && predictionsEnabled.value) {
+        await checkAndResumeExistingPrediction();
+      }
     }
   } catch (error: any) {
     console.error('[loadPredictionManagementState] Error loading state:', error);
+  }
+}
+
+// Check for existing active predictions and resume managing them if they match current run/item
+async function checkAndResumeExistingPrediction() {
+  if (!currentRunUuid.value || !isElectronAvailable() || !twitchTokenValid.value) {
+    return;
+  }
+  
+  try {
+    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    
+    if (!checkResult.success || !checkResult.hasActivePredictions) {
+      return; // No active predictions
+    }
+    
+    const activePreds = checkResult.activePredictions || [];
+    
+    // Find predictions that match our current run
+    const matchingPreds = activePreds.filter((p: any) => 
+      p.isManaged && 
+      p.run_uuid === currentRunUuid.value
+    );
+    
+    if (matchingPreds.length === 0) {
+      return; // No matching predictions
+    }
+    
+    // Check if any prediction matches the current operational mode
+    let matchingPred = null;
+    
+    if (predictionsOperationalMode.value === 'whole_challenge') {
+      // Look for whole_challenge prediction
+      matchingPred = matchingPreds.find((p: any) => 
+        p.prediction_type === 'whole_challenge'
+      );
+    } else if (predictionsOperationalMode.value === 'same_item') {
+      // Look for prediction matching current challenge item
+      const currentSequence = currentChallengeIndex.value + 1;
+      matchingPred = matchingPreds.find((p: any) => 
+        p.prediction_type === 'individual_item' &&
+        p.challenge_sequence_number === currentSequence
+      );
+    } else if (predictionsOperationalMode.value === 'next_item') {
+      // Look for prediction matching next challenge item
+      const nextSequence = currentChallengeIndex.value + 2;
+      matchingPred = matchingPreds.find((p: any) => 
+        p.prediction_type === 'individual_item' &&
+        p.challenge_sequence_number === nextSequence
+      );
+    }
+    
+    if (matchingPred && matchingPred.prediction_uuid) {
+      // Found a matching prediction - resume managing it
+      activePredictionUuid.value = matchingPred.prediction_uuid;
+      await savePredictionManagementState();
+      await syncPredictionStatus();
+      await updateManualControlAvailability();
+      console.log(`[checkAndResumeExistingPrediction] Resumed managing prediction: ${matchingPred.prediction_uuid}`);
+      updatePredictionStatus('created', 'Resumed managing existing prediction');
+    }
+  } catch (error: any) {
+    console.error('[checkAndResumeExistingPrediction] Error:', error);
   }
 }
 

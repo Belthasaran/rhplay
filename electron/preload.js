@@ -590,6 +590,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   usb2snesStatus: () => ipcRenderer.invoke('usb2snes:status'),
   
   /**
+   * Get SNES device information (firmware, ROM running, etc.)
+   * @returns {Promise<Object|null>} Device info or null if not attached/error
+   */
+  usb2snesInfo: () => ipcRenderer.invoke('usb2snes:info'),
+  
+  /**
    * Reset the console
    * @returns {Promise<{success: boolean}>}
    */

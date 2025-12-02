@@ -1108,7 +1108,7 @@
             <span class="run-timer">⏱ {{ formatTime(runElapsedSeconds) }}</span>
             <span class="pause-time" v-if="runPauseSeconds > 0">⏸ {{ formatTime(runPauseSeconds) }}</span>
             <span class="run-progress">Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
-            <button v-if="currentChallenge && currentChallengeSfcPath" @click="toggleUsbPolling" :class="['btn-poll-usb', { 'active': usbPollingEnabled }]" :title="usbPollingEnabled ? 'USB polling is active' : 'Enable USB polling for automatic challenge completion'">
+            <button v-if="currentChallenge && currentChallengeSfcPath" @click="toggleUsbPolling" :class="['btn-poll-usb', { 'active': usbPollingEnabled }, usbPollingStatus ? `poll-status-${usbPollingStatus}` : '']" :title="usbPollingEnabled ? 'USB polling is active' : 'Enable USB polling for automatic challenge completion'">
               <input type="checkbox" :checked="usbPollingEnabled" @change="toggleUsbPolling" class="poll-checkbox" />
               <span>Poll USB</span>
             </button>
@@ -17830,6 +17830,8 @@ const usbPollingConditionATime = ref<number>(0); // Time in ms that Condition A 
 const usbPollingLastMemoryValues = ref<Record<string, number>>({});
 const usbPollingCurrentMemoryValues = ref<Record<string, number>>({});
 const usbPollingLastSnesInfo = ref<string | null>(null);
+const usbPollingCorrectGameLoaded = ref<boolean>(false); // Whether the correct game file is loaded
+const usbPollingStatus = ref<'good' | 'slow' | 'wrong-file' | null>(null); // Polling status for button color
 
 // Refs for scrolling to active challenge
 const runModalBodyRef = ref<HTMLElement | null>(null);
@@ -18538,6 +18540,8 @@ function clearRunState() {
   usbPollingLastMemoryValues.value = {};
   usbPollingCurrentMemoryValues.value = {};
   usbPollingLastSnesInfo.value = null;
+  usbPollingCorrectGameLoaded.value = false;
+  usbPollingStatus.value = null;
   
   // Clear run entries
   runEntries.splice(0, runEntries.length);
@@ -26883,6 +26887,8 @@ async function toggleUsbPolling() {
     usbPollingLastMemoryValues.value = {};
     usbPollingCurrentMemoryValues.value = {};
     usbPollingLastSnesInfo.value = null;
+    usbPollingCorrectGameLoaded.value = false;
+    usbPollingStatus.value = null;
     console.log('[USB Polling] Stopped');
   } else {
     // Start polling
@@ -26992,18 +26998,53 @@ async function performUsbPollingCycle() {
     }
     
     // 2. Get SNES Info to check loaded ROM
-    // TODO: Implement Info command call
-    // For now, we'll skip this check and proceed with memory polling
+    const snesInfo = await (window as any).electronAPI.usb2snesInfo();
+    
+    if (!snesInfo) {
+      // SNES not attached or error getting info
+      usbPollingCorrectGameLoaded.value = false;
+      usbPollingStatus.value = 'wrong-file';
+      return;
+    }
+    
+    // Extract ROM filename from Info result
+    // Format: "/work/run251130_1837/30_1764463051_2lvno11.sfc"
+    // We need just the filename after the last "/"
+    const romRunning = snesInfo.romrunning || '';
+    const loadedFilename = romRunning ? getBasename(romRunning) : '';
+    const expectedFilename = currentChallengeSfcPath.value ? getBasename(currentChallengeSfcPath.value) : '';
+    
+    // Store SNES info for comparison
+    usbPollingLastSnesInfo.value = romRunning;
+    
+    // Verify correct game file is loaded
+    if (!loadedFilename || !expectedFilename || loadedFilename !== expectedFilename) {
+      // Wrong game file loaded
+      usbPollingCorrectGameLoaded.value = false;
+      usbPollingConditionATime.value = 0; // Clamp Condition A time to 0
+      usbPollingStatus.value = 'wrong-file';
+      console.log(`[USB Polling] Wrong game file: expected "${expectedFilename}", got "${loadedFilename}"`);
+      return; // Don't proceed with memory polling if wrong file
+    }
+    
+    // Correct game file is loaded
+    usbPollingCorrectGameLoaded.value = true;
     
     // 3. Poll memory addresses if conditions are met
     await pollMemoryAddresses();
     
-    // Record poll time for Auto button color feedback
+    // Record poll time for button color feedback
     const now = Date.now();
     if (usbPollingLastPollTime.value) {
       const pollDelay = now - usbPollingLastPollTime.value;
-      // Update Auto button color based on polling performance
-      // This will be implemented in the next phase
+      // Update button color based on polling performance
+      // Good: within 1.3 seconds (1300ms)
+      // Slow: exceeds 1.3 seconds
+      if (pollDelay <= 1300) {
+        usbPollingStatus.value = 'good';
+      } else {
+        usbPollingStatus.value = 'slow';
+      }
     }
     usbPollingLastPollTime.value = now;
     
@@ -27655,6 +27696,70 @@ button:disabled {
 .btn-skip:hover:not(:disabled) { background: #d97706; }
 .btn-pause { background: #6b7280; color: white; }
 .btn-pause:hover { background: #4b5563; }
+
+/* Poll USB Button */
+.btn-poll-usb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+  font-size: var(--base-font-size);
+}
+
+.btn-poll-usb:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-primary);
+}
+
+.btn-poll-usb.active {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+  font-weight: 500;
+}
+
+.btn-poll-usb .poll-checkbox {
+  margin: 0;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* Poll USB Status Colors */
+.btn-poll-usb.poll-status-good {
+  background: #e3f2fd; /* Light blue */
+  border-color: #2196f3;
+  color: #1976d2;
+}
+
+.btn-poll-usb.poll-status-good:hover {
+  background: #bbdefb;
+}
+
+.btn-poll-usb.poll-status-slow {
+  background: #ffebee; /* Light red */
+  border-color: #f44336;
+  color: #c62828;
+}
+
+.btn-poll-usb.poll-status-slow:hover {
+  background: #ffcdd2;
+}
+
+.btn-poll-usb.poll-status-wrong-file {
+  background: #fff3e0; /* Light orange */
+  border-color: #ff9800;
+  color: #e65100;
+}
+
+.btn-poll-usb.poll-status-wrong-file:hover {
+  background: #ffe0b2;
+}
 .btn-unpause { background: #10b981; color: white; font-weight: bold; }
 .btn-unpause:hover { background: #059669; }
 .run-timer { font-weight: bold; color: #059669; font-size: 24px; padding: 0 8px; }

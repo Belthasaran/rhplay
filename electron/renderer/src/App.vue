@@ -7612,6 +7612,17 @@
   
   <ToastNotification ref="toastNotificationRef" />
   
+  <!-- Prediction Conflict Dialog -->
+  <PredictionConflictDialog
+    :visible="predictionConflictDialogVisible"
+    :title="predictionConflictDialogTitle"
+    :message="predictionConflictDialogMessage"
+    :outcomes="predictionConflictDialogOutcomes"
+    @pick-outcome="handlePredictionConflictPickOutcome"
+    @cancel-and-refund="handlePredictionConflictCancelAndRefund"
+    @cancel-operation="handlePredictionConflictCancelOperation"
+  />
+  
   <!-- Win Rules Dropdown -->
   <WinRulesDropdown
     :visible="showWinRulesDropdown"
@@ -7665,6 +7676,7 @@ import PromptDialog from './components/PromptDialog.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import WinRulesDropdown from './components/WinRulesDropdown.vue';
 import TwitchIntegrationSetup from './components/TwitchIntegrationSetup.vue';
+import PredictionConflictDialog from './components/PredictionConflictDialog.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -17788,6 +17800,11 @@ const queuedPredictionCreation = ref<{challengeIndex: number, timer: number | nu
 const lastPredictionAction = ref<string | null>(null);  // Last successful action: 'created', 'locked', 'resolved', 'cancelled'
 const predictionStatusMessage = ref<string>('');  // Status message for prediction management
 const predictionStatusWarning = ref<string | null>(null);  // Warning message if something needs attention
+const predictionConflictDialogVisible = ref(false);  // Whether prediction conflict dialog is visible
+const predictionConflictDialogTitle = ref('Conflicting Prediction');
+const predictionConflictDialogMessage = ref('');
+const predictionConflictDialogOutcomes = ref<Array<{id: string, title: string, channelPoints?: number}>>([]);
+let predictionConflictDialogResolve: ((value: string) => void) | null = null;  // Promise resolver for dialog result
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
@@ -22826,40 +22843,46 @@ async function showPredictionConflictDialog(conflictingPreds: any[]): Promise<st
   
   message += 'How would you like to proceed?';
   
-  // For now, use a simple confirm dialog with options
-  // In a full implementation, this would be a custom modal with buttons
-  // We'll use showConfirm for "Cancel and Refund" vs "Cancel Operation"
-  // For "Pick outcome", we'll need a custom dialog (simplified for now)
+  // Set up dialog state
+  predictionConflictDialogTitle.value = 'Conflicting Prediction';
+  predictionConflictDialogMessage.value = message;
+  predictionConflictDialogOutcomes.value = outcomes.map((o: any) => ({
+    id: o.id,
+    title: o.title,
+    channelPoints: o.channelPoints
+  }));
   
-  if (outcomes.length > 0) {
-    // Show dialog with outcome options
-    // Simplified: use showConfirm for cancel options, and we'll add a custom modal later
-    const cancelRefund = await showConfirm(
-      message + '\n\nClick "Yes" to cancel and refund the existing prediction, or "No" to cancel this operation.',
-      'Conflicting Prediction',
-      'Cancel and Refund',
-      'Cancel Operation'
-    );
-    
-    if (cancelRefund) {
-      return 'cancel_and_refund';
-    } else {
-      return 'cancel_operation';
-    }
-  } else {
-    // No outcomes available - just offer cancel options
-    const cancelRefund = await showConfirm(
-      message + '\n\nClick "Yes" to cancel and refund the existing prediction, or "No" to cancel this operation.',
-      'Conflicting Prediction',
-      'Cancel and Refund',
-      'Cancel Operation'
-    );
-    
-    if (cancelRefund) {
-      return 'cancel_and_refund';
-    } else {
-      return 'cancel_operation';
-    }
+  // Show dialog and wait for user response
+  return new Promise<string>((resolve) => {
+    predictionConflictDialogResolve = resolve;
+    predictionConflictDialogVisible.value = true;
+  });
+}
+
+// Handler for when user picks an outcome
+function handlePredictionConflictPickOutcome(index: number) {
+  predictionConflictDialogVisible.value = false;
+  if (predictionConflictDialogResolve) {
+    predictionConflictDialogResolve(`resolve_${index}`);
+    predictionConflictDialogResolve = null;
+  }
+}
+
+// Handler for when user chooses to cancel and refund
+function handlePredictionConflictCancelAndRefund() {
+  predictionConflictDialogVisible.value = false;
+  if (predictionConflictDialogResolve) {
+    predictionConflictDialogResolve('cancel_and_refund');
+    predictionConflictDialogResolve = null;
+  }
+}
+
+// Handler for when user cancels the operation
+function handlePredictionConflictCancelOperation() {
+  predictionConflictDialogVisible.value = false;
+  if (predictionConflictDialogResolve) {
+    predictionConflictDialogResolve('cancel_operation');
+    predictionConflictDialogResolve = null;
   }
 }
 

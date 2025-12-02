@@ -24069,7 +24069,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     } else {
       // Resolve to winning outcome
       const resolveResult = await (window as any).electronAPI.resolveTwitchPrediction({
-        predictionUuid: prediction.prediction_uuid,
+        predictionUuid: normalizedPrediction.prediction_uuid,
         winningOutcomeId: winningOutcomeId,
         resolutionMethod: 'automatic'
       });
@@ -24077,7 +24077,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       if (!resolveResult.success) {
         // Queue for retry
         queuePredictionRetry('resolve', {
-          predictionUuid: prediction.prediction_uuid,
+          predictionUuid: normalizedPrediction.prediction_uuid,
           winningOutcomeId: winningOutcomeId,
           resolutionMethod: 'automatic'
         });

@@ -426,6 +426,7 @@ const timeRangeOutcomeCount = ref<number>(5);
 const timeRangeMaxMinutes = ref<number>(60);
 const timeRangeLowTimeRangesOnlyOnSuccess = ref<boolean>(true); // Default true
 const timeRangeUseTemplateMax = ref<boolean>(false); // Default false
+const timeRangeExcludePredictionWindow = ref<boolean>(true); // Default true
 
 // Check profile guard requirement
 const profileGuardEnabled = computed(() => props.profileGuardEnabled === true);
@@ -470,6 +471,7 @@ const loadData = async () => {
           timeRangeMaxMinutes.value = template.individualItem.timeRange.maxTimeMinutes || 60;
           timeRangeLowTimeRangesOnlyOnSuccess.value = template.individualItem.timeRange.lowTimeRangesOnlyOnSuccess !== false; // Default true
           timeRangeUseTemplateMax.value = template.individualItem.timeRange.useTemplateMaxEvenIfWinRulesAllowLess || false; // Default false
+          timeRangeExcludePredictionWindow.value = template.individualItem.timeRange.excludePredictionWindow !== false; // Default true
         }
       }
     }
@@ -610,7 +612,8 @@ const saveTemplate = async () => {
           outcomeCount: timeRangeOutcomeCount.value,
           maxTimeMinutes: timeRangeMaxMinutes.value,
           lowTimeRangesOnlyOnSuccess: timeRangeLowTimeRangesOnlyOnSuccess.value,
-          useTemplateMaxEvenIfWinRulesAllowLess: timeRangeUseTemplateMax.value
+          useTemplateMaxEvenIfWinRulesAllowLess: timeRangeUseTemplateMax.value,
+          excludePredictionWindow: timeRangeExcludePredictionWindow.value
         };
       }
     }

@@ -23908,10 +23908,12 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
         const challengeSequenceNumber = normalizedPrediction.challenge_sequence_number;
         if (challengeSequenceNumber && currentRunUuid.value) {
           try {
-            // Get template config to check for "low time ranges only on success" option
+            // Get template config to check for options
             const template = await (window as any).electronAPI.getPredictionsTemplate();
             const timeRangeConfig = template?.individualItem?.timeRange;
             const lowTimeRangesOnlyOnSuccess = timeRangeConfig?.lowTimeRangesOnlyOnSuccess !== false; // Default true
+            const excludePredictionWindow = timeRangeConfig?.excludePredictionWindow !== false; // Default true
+            const predictionWindowSeconds = timeRangeConfig?.windowSeconds || 45;
             
             // Get run results from database to get accurate duration (needed for both duration and rollover calculation)
             const runResults = await (window as any).electronAPI.getRunResults({
@@ -24022,12 +24024,33 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
             
             if (challengeResult && challengeResult.duration_seconds !== undefined && challengeResult.duration_seconds !== null) {
               const durationSeconds = challengeResult.duration_seconds;
+              
+              // Check if challenge completed before prediction window closed (only for same_item mode)
+              // For next_item mode, the prediction is locked before the challenge starts, so no fairness issue
+              if (excludePredictionWindow && predictionsOperationalMode.value === 'same_item' && durationSeconds < predictionWindowSeconds) {
+                // Challenge completed before prediction window closed - cancel for fairness
+                console.log(`[resolvePredictionForChallenge] time_range: Challenge completed (${durationSeconds}s) before prediction window closed (${predictionWindowSeconds}s) - cancelling prediction for fairness (same_item mode)`);
+                const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
+                  predictionUuid: normalizedPrediction.prediction_uuid
+                });
+                if (!cancelResult.success) {
+                  queuePredictionRetry('cancel', { predictionUuid: normalizedPrediction.prediction_uuid });
+                  showToastNotification('Cancelling prediction...', 'info', 2000);
+                } else {
+                  updatePredictionStatus('cancelled', 'Challenge completed before prediction window closed');
+                  await savePredictionManagementState();
+                  await updateManualControlAvailability();
+                  showToastNotification('Prediction cancelled (completed before window closed)', 'success', 3000);
+                }
+                return; // Don't try to resolve
+              }
+              
               // Use precise minute calculation (not floored) for accurate range matching
               // Ranges are displayed in minutes for viewer convenience, but we need precise matching
               const durationMinutesPrecise = durationSeconds / 60;
               // For display/logging, show floored minutes
               const durationMinutesDisplay = Math.floor(durationSeconds / 60);
-              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${durationSeconds}, durationMinutesPrecise=${durationMinutesPrecise.toFixed(2)}, durationMinutesDisplay=${durationMinutesDisplay}, outcomes=${outcomes.length}, timeLimitMinutes=${timeLimitMinutes}, lowTimeRangesOnlyOnSuccess=${lowTimeRangesOnlyOnSuccess}`);
+              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${durationSeconds}, durationMinutesPrecise=${durationMinutesPrecise.toFixed(2)}, durationMinutesDisplay=${durationMinutesDisplay}, outcomes=${outcomes.length}, timeLimitMinutes=${timeLimitMinutes}, lowTimeRangesOnlyOnSuccess=${lowTimeRangesOnlyOnSuccess}, excludePredictionWindow=${excludePredictionWindow}, predictionWindowSeconds=${predictionWindowSeconds}`);
               
               // Filter outcomes if needed (low time ranges only eligible on success)
               let eligibleOutcomes = outcomes;

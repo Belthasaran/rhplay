@@ -23580,17 +23580,26 @@ function determineYesNoOutcome(
  * Determine winning outcome for time range prediction
  */
 function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>, durationMinutes: number): string | null {
-  console.log(`[determineTimeRangeOutcome] durationMinutes=${durationMinutes}: `)
+  console.log(`[determineTimeRangeOutcome] durationMinutes=${durationMinutes}, outcomes count=${outcomes.length}`);
+  
+  if (outcomes.length === 0) {
+    console.warn('[determineTimeRangeOutcome] No outcomes provided');
+    return null;
+  }
+  
   // Parse time ranges from outcome titles
   // Format examples: "0 to 5", "6 to 10", "11 to 15", ">20"
   for (const outcome of outcomes) {
     const title = outcome.title.trim();
+    console.log(`[determineTimeRangeOutcome] Checking outcome: "${title}"`);
     
     // Check for ">N" format (greater than)
     const greaterThanMatch = title.match(/^>\s*(\d+)/);
     if (greaterThanMatch) {
       const threshold = parseInt(greaterThanMatch[1], 10);
+      console.log(`[determineTimeRangeOutcome] Greater than match: threshold=${threshold}, durationMinutes=${durationMinutes}`);
       if (durationMinutes > threshold) {
+        console.log(`[determineTimeRangeOutcome] Matched greater than: id=${outcome.id} title=${outcome.title}`);
         return outcome.id;
       }
       continue;
@@ -23601,8 +23610,9 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
     if (rangeMatch) {
       const min = parseInt(rangeMatch[1], 10);
       const max = parseInt(rangeMatch[2], 10);
+      console.log(`[determineTimeRangeOutcome] Range match: min=${min}, max=${max}, durationMinutes=${durationMinutes}`);
       if (durationMinutes >= min && durationMinutes <= max) {
-        console.log(`[determineTimeRangeOutcome] return rangeMatch id=${outcome.id} title=${outcome.title}`)
+        console.log(`[determineTimeRangeOutcome] Matched range: id=${outcome.id} title=${outcome.title}`);
         return outcome.id;
       }
       continue;
@@ -23612,8 +23622,9 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
     const exactMatch = title.match(/^(\d+)\s*(?:minutes?)?$/i);
     if (exactMatch) {
       const value = parseInt(exactMatch[1], 10);
-      if (Math.abs(durationMinutes - value) < 0.5) { // Within 0.5 minutesA
-        console.log(`[determineTimeRangeOutcome] return exactMatch id=${outcome.id} title=${outcome.title}`)
+      console.log(`[determineTimeRangeOutcome] Exact match: value=${value}, durationMinutes=${durationMinutes}`);
+      if (Math.abs(durationMinutes - value) < 0.5) { // Within 0.5 minutes
+        console.log(`[determineTimeRangeOutcome] Matched exact: id=${outcome.id} title=${outcome.title}`);
         return outcome.id;
       }
     }
@@ -23621,7 +23632,7 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
   
   // If no match found, use the last outcome (usually the ">N" or failure case)
   if (outcomes.length > 0) {
-    console.log(`[determineTimeRangeOutcome] return last outcome`)
+    console.log(`[determineTimeRangeOutcome] No match found, using last outcome: id=${outcomes[outcomes.length - 1].id} title=${outcomes[outcomes.length - 1].title}`);
     return outcomes[outcomes.length - 1].id;
   }
   
@@ -23747,10 +23758,16 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     }
     
     // Determine winning outcome based on prediction type and challenge result
+    // Use statusResult.prediction for type/subtype as it has the full database record
+    const predictionType = statusResult.prediction.prediction_type || prediction.prediction_type;
+    const predictionSubtype = statusResult.prediction.prediction_subtype || prediction.prediction_subtype;
+    
     let winningOutcomeId: string | null = null;
     
-    if (prediction.prediction_type === 'individual_item') {
-      if (prediction.prediction_subtype === 'yes_no') {
+    console.log(`[resolvePredictionForChallenge] predictionType=${predictionType}, predictionSubtype=${predictionSubtype}, challengeStatus=${challengeStatus}`);
+    
+    if (predictionType === 'individual_item') {
+      if (predictionSubtype === 'yes_no') {
         // Yes/No prediction: Yes = success/ok, No = failed/skipped
         // Get template config to match by configured outcome names
         try {
@@ -23763,14 +23780,39 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
           console.warn('[resolvePredictionForChallenge] Could not get template config, using position-based matching:', error);
           winningOutcomeId = determineYesNoOutcome(outcomes, challengeStatus);
         }
-      } else if (prediction.prediction_subtype === 'time_range') {
+      } else if (predictionSubtype === 'time_range') {
         // Time range prediction: Determine based on time spent
-        // Get challenge duration from current challenge result
-        const challengeIndex = (prediction.challenge_sequence_number || 1) - 1; // Convert to 0-indexed
-        if (challengeIndex >= 0 && challengeIndex < challengeResults.value.length) {
-          const challengeResult = challengeResults.value[challengeIndex];
-          const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
-          winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+        // Get challenge duration from database (challengeResults might not have durationSeconds)
+        const challengeSequenceNumber = statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number;
+        if (challengeSequenceNumber && currentRunUuid.value) {
+          try {
+            // Get run results from database to get accurate duration
+            const runResults = await (window as any).electronAPI.getRunResults({
+              runUuid: currentRunUuid.value
+            });
+            
+            const challengeResult = runResults.find((r: any) => 
+              r.sequence_number === challengeSequenceNumber
+            );
+            
+            if (challengeResult && challengeResult.duration_seconds !== undefined && challengeResult.duration_seconds !== null) {
+              const durationMinutes = Math.floor(challengeResult.duration_seconds / 60);
+              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${challengeResult.duration_seconds}, durationMinutes=${durationMinutes}, outcomes=${outcomes.length}`);
+              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+            } else {
+              console.warn(`[resolvePredictionForChallenge] time_range: Could not find duration for challenge ${challengeSequenceNumber}`);
+            }
+          } catch (error) {
+            console.error('[resolvePredictionForChallenge] Error getting run results:', error);
+            // Fallback to challengeResults if database call fails
+            const challengeIndex = challengeSequenceNumber - 1; // Convert to 0-indexed
+            if (challengeIndex >= 0 && challengeIndex < challengeResults.value.length) {
+              const challengeResult = challengeResults.value[challengeIndex];
+              const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
+              console.log(`[resolvePredictionForChallenge] time_range fallback: durationMinutes=${durationMinutes}`);
+              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+            }
+          }
         }
       }
     }
@@ -23779,7 +23821,8 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     if (isAlreadyLocked) {
       // If we can't determine outcome, use first outcome as fallback
       if (!winningOutcomeId) {
-        console.log(`!winningOutcomeId seq=${prediction.challenge_sequence_number} r=${challengeResults.value.length} type=${prediction.prediction_type} subtype=${prediction.prediction_subtype}`)
+        const seq = statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number;
+        console.log(`!winningOutcomeId seq=${seq} r=${challengeResults.value.length} type=${predictionType} subtype=${predictionSubtype}`)
         winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
         if (winningOutcomeId) {
             console.log(`!winningOutcomeId then id=${outcomes[0].id} title=${outcomes[0].title}`)

@@ -20766,6 +20766,14 @@ async function pauseRun() {
     }
     
     isRunPaused.value = true;
+    
+    // Stop USB polling when run is paused
+    if (usbPollingEnabled.value && usbPollingInterval.value !== null) {
+      clearInterval(usbPollingInterval.value);
+      usbPollingInterval.value = null;
+      console.log('[USB Polling] Stopped due to pause');
+    }
+    
     console.log('Run paused at', runPauseStartTime.value);
   } catch (error) {
     console.error('Error pausing run:', error);
@@ -20836,6 +20844,12 @@ async function unpauseRun() {
         // IMPORTANT: Do NOT adjust runStartTime.value
         // The elapsed time calculation will automatically account for
         // the updated runPauseSeconds.value
+        
+        // Resume USB polling if it was enabled
+        if (usbPollingEnabled.value && usbPollingInterval.value === null) {
+          startUsbPolling();
+          console.log('[USB Polling] Resumed after unpause');
+        }
         
         console.log('Run unpaused, total pause time:', runPauseSeconds.value);
       } else {

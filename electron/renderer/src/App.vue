@@ -27055,13 +27055,70 @@ async function performUsbPollingCycle() {
 
 // Poll memory addresses and check conditions/goals
 async function pollMemoryAddresses() {
-  // TODO: Implement memory polling logic
-  // This will include:
-  // - Converting addresses to USB2SNES format
-  // - Calling usb2snesReadMemoryBatch
-  // - Checking Condition A
-  // - Detecting goal events
-  // - Auto-advancing challenges
+  // Prerequisites: Timer must be running, not paused, and at least 5 seconds elapsed
+  if (isRunPaused.value) {
+    return; // Don't poll when paused
+  }
+  
+  // Check if at least 5 seconds have elapsed on current challenge
+  // We need to calculate elapsed time for the current challenge
+  // For now, we'll use a simple check - this will be refined in Phase 5
+  const challengeElapsedSeconds = runElapsedSeconds.value; // Approximate for now
+  if (challengeElapsedSeconds < 5) {
+    return; // Not enough time elapsed
+  }
+  
+  // Convert all SNES addresses to USB2SNES protocol format
+  const addressList: Array<[number, number]> = [];
+  const addressKeys: string[] = [];
+  
+  for (const [key, snesAddr] of Object.entries(USB_POLLING_ADDRESSES)) {
+    const protocolAddr = convertToUsb2SnesAddress(snesAddr);
+    addressList.push([protocolAddr, 1]); // Read 1 byte from each address
+    addressKeys.push(key);
+  }
+  
+  try {
+    // Perform batch memory read
+    const result = await (window as any).electronAPI.usb2snesReadMemoryBatch(addressList);
+    
+    if (!result || !result.success || !result.data) {
+      console.warn('[USB Polling] Memory read failed or returned no data');
+      return;
+    }
+    
+    // Extract byte values from results
+    // Each result is an array of bytes, we only need the first byte (index 0)
+    const dataArrays = result.data;
+    if (dataArrays.length !== addressKeys.length) {
+      console.warn(`[USB Polling] Mismatch: expected ${addressKeys.length} values, got ${dataArrays.length}`);
+      return;
+    }
+    
+    // Move current values to last values for comparison
+    usbPollingLastMemoryValues.value = { ...usbPollingCurrentMemoryValues.value };
+    
+    // Store new values in current values
+    const newValues: Record<string, number> = {};
+    for (let i = 0; i < addressKeys.length; i++) {
+      const key = addressKeys[i];
+      const byteArray = dataArrays[i];
+      if (byteArray && byteArray.length > 0) {
+        newValues[key] = byteArray[0]; // First byte value
+      } else {
+        newValues[key] = 0; // Default to 0 if no data
+      }
+    }
+    usbPollingCurrentMemoryValues.value = newValues;
+    
+    // Now we have both previous and current values stored
+    // Condition A checks and goal event detection will be implemented in later phases
+    // For now, the infrastructure is in place
+    
+  } catch (error: any) {
+    console.error('[pollMemoryAddresses] Error:', error);
+    // Don't throw - allow polling to continue on next cycle
+  }
 }
 
 </script>

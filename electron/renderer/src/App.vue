@@ -18528,6 +18528,17 @@ function clearRunState() {
   runPauseSeconds.value = 0;
   isRunPaused.value = false;
   
+  // Clear USB polling state
+  if (usbPollingInterval.value !== null) {
+    clearInterval(usbPollingInterval.value);
+    usbPollingInterval.value = null;
+  }
+  usbPollingEnabled.value = false;
+  usbPollingConditionATime.value = 0;
+  usbPollingLastMemoryValues.value = {};
+  usbPollingCurrentMemoryValues.value = {};
+  usbPollingLastSnesInfo.value = null;
+  
   // Clear run entries
   runEntries.splice(0, runEntries.length);
   
@@ -20539,6 +20550,9 @@ async function startRun() {
       // This ensures saved state is restored even if configuration check fails temporarily
       await loadPredictionManagementState();
       
+      // Load USB polling state
+      await loadUsbPollingState();
+      
       // Then check configuration (but don't let it override loaded state)
       await checkPredictionsConfiguration();
       
@@ -20855,6 +20869,14 @@ async function cancelRun() {
       runTimerInterval.value = null;
     }
     
+    // Stop USB polling
+    if (usbPollingInterval.value !== null) {
+      clearInterval(usbPollingInterval.value);
+      usbPollingInterval.value = null;
+    }
+    usbPollingEnabled.value = false;
+    usbPollingConditionATime.value = 0;
+    
     currentRunStatus.value = 'cancelled';
     console.log('Run cancelled');
     if (toastNotificationRef.value) {
@@ -20922,6 +20944,12 @@ async function nextChallenge() {
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
+      
+      // Reset USB polling Condition A time when advancing to next challenge
+      usbPollingConditionATime.value = 0;
+      usbPollingLastMemoryValues.value = {};
+      usbPollingCurrentMemoryValues.value = {};
+      usbPollingLastSnesInfo.value = null;
       
       // Clean up stale operations again after moving to next challenge
       cleanupStalePredictionOperations();
@@ -21041,6 +21069,12 @@ async function skipChallenge() {
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
+      
+      // Reset USB polling Condition A time when advancing to next challenge
+      usbPollingConditionATime.value = 0;
+      usbPollingLastMemoryValues.value = {};
+      usbPollingCurrentMemoryValues.value = {};
+      usbPollingLastSnesInfo.value = null;
       
       // Clean up stale operations again after moving to next challenge
       cleanupStalePredictionOperations();

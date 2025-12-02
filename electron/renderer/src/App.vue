@@ -23914,6 +23914,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
             const lowTimeRangesOnlyOnSuccess = timeRangeConfig?.lowTimeRangesOnlyOnSuccess !== false; // Default true
             const excludePredictionWindow = timeRangeConfig?.excludePredictionWindow !== false; // Default true
             const predictionWindowSeconds = timeRangeConfig?.windowSeconds || 45;
+            console.log(`[resolvePredictionForChallenge] time_range config: excludePredictionWindow=${excludePredictionWindow}, predictionWindowSeconds=${predictionWindowSeconds}, operationalMode=${predictionsOperationalMode.value}`);
             
             // Get run results from database to get accurate duration (needed for both duration and rollover calculation)
             const runResults = await (window as any).electronAPI.getRunResults({
@@ -24025,24 +24026,38 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
             if (challengeResult && challengeResult.duration_seconds !== undefined && challengeResult.duration_seconds !== null) {
               const durationSeconds = challengeResult.duration_seconds;
               
-              // Check if challenge completed before prediction window closed (only for same_item mode)
+              // Check if challenge completed before the first time range starts (only for same_item mode)
               // For next_item mode, the prediction is locked before the challenge starts, so no fairness issue
-              if (excludePredictionWindow && predictionsOperationalMode.value === 'same_item' && durationSeconds < predictionWindowSeconds) {
-                // Challenge completed before prediction window closed - cancel for fairness
-                console.log(`[resolvePredictionForChallenge] time_range: Challenge completed (${durationSeconds}s) before prediction window closed (${predictionWindowSeconds}s) - cancelling prediction for fairness (same_item mode)`);
+              // If excludePredictionWindow is enabled, the first range starts after the prediction window (rounded up to nearest minute)
+              let firstRangeStartSeconds = 0;
+              if (excludePredictionWindow) {
+                // First range starts after prediction window, rounded up to nearest minute
+                // e.g., 30 seconds -> 1 minute (60 seconds), 45 seconds -> 1 minute (60 seconds)
+                const firstRangeStartMinutes = Math.ceil(predictionWindowSeconds / 60);
+                firstRangeStartSeconds = firstRangeStartMinutes * 60;
+              }
+              
+              console.log(`[resolvePredictionForChallenge] time_range: Checking cancellation - excludePredictionWindow=${excludePredictionWindow}, operationalMode=${predictionsOperationalMode.value}, durationSeconds=${durationSeconds}, firstRangeStartSeconds=${firstRangeStartSeconds}`);
+              if (excludePredictionWindow && predictionsOperationalMode.value === 'same_item' && durationSeconds <= firstRangeStartSeconds) {
+                // Challenge completed before the first time range starts - cancel for fairness
+                console.log(`[resolvePredictionForChallenge] time_range: Challenge completed (${durationSeconds}s) before first range starts (${firstRangeStartSeconds}s) - cancelling prediction for fairness (same_item mode)`);
                 const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
                   predictionUuid: normalizedPrediction.prediction_uuid
                 });
                 if (!cancelResult.success) {
+                  console.warn(`[resolvePredictionForChallenge] time_range: Failed to cancel prediction:`, cancelResult.error);
                   queuePredictionRetry('cancel', { predictionUuid: normalizedPrediction.prediction_uuid });
                   showToastNotification('Cancelling prediction...', 'info', 2000);
                 } else {
-                  updatePredictionStatus('cancelled', 'Challenge completed before prediction window closed');
+                  console.log(`[resolvePredictionForChallenge] time_range: Successfully cancelled prediction`);
+                  updatePredictionStatus('cancelled', 'Challenge completed before first time range');
                   await savePredictionManagementState();
                   await updateManualControlAvailability();
-                  showToastNotification('Prediction cancelled (completed before window closed)', 'success', 3000);
+                  showToastNotification('Prediction cancelled (completed before first range)', 'success', 3000);
                 }
                 return; // Don't try to resolve
+              } else {
+                console.log(`[resolvePredictionForChallenge] time_range: Not cancelling - excludePredictionWindow=${excludePredictionWindow}, operationalMode=${predictionsOperationalMode.value}, durationSeconds=${durationSeconds} < ${firstRangeStartSeconds}=${durationSeconds < firstRangeStartSeconds}`);
               }
               
               // Use precise minute calculation (not floored) for accurate range matching

@@ -23457,7 +23457,16 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
       // Same item mode - prediction is about current challenge
       if (runPrediction.challenge_sequence_number === challengeSequenceNumber) {
         // This prediction is about the challenge that just completed
-        await resolvePredictionForChallenge(runPrediction, status);
+        // Get full prediction details from database to ensure we have subtype
+        const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+          predictionUuid: runPrediction.prediction_uuid
+        });
+        if (statusResult.success && statusResult.prediction) {
+          await resolvePredictionForChallenge(statusResult.prediction, status);
+        } else {
+          // Fallback to runPrediction if status call fails
+          await resolvePredictionForChallenge(runPrediction, status);
+        }
         
         // Queue prediction creation for next challenge with delay (if available)
         if (challengeIndex < runEntries.length - 1) {
@@ -23476,7 +23485,16 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         }
       } else if (runPrediction.challenge_sequence_number === challengeSequenceNumber) {
         // This prediction is about the challenge that just completed
-        await resolvePredictionForChallenge(runPrediction, status);
+        // Get full prediction details from database to ensure we have subtype
+        const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
+          predictionUuid: runPrediction.prediction_uuid
+        });
+        if (statusResult.success && statusResult.prediction) {
+          await resolvePredictionForChallenge(statusResult.prediction, status);
+        } else {
+          // Fallback to runPrediction if status call fails
+          await resolvePredictionForChallenge(runPrediction, status);
+        }
       }
     }
   } catch (error: any) {

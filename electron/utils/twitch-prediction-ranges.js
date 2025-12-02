@@ -111,7 +111,7 @@ function calculateTimeRangeOutcomes(maxTimeMinutes, outcomeCount) {
     let title;
     
     if (i === outcomeCount - 1) {
-      // Last range: ">N" for failure case
+      // Last range: ">N" for failure case (exclusive lower bound, no upper bound)
       rangeEnd = null;
       title = `>${maxTimeMinutes}`;
     } else {
@@ -119,15 +119,12 @@ function calculateTimeRangeOutcomes(maxTimeMinutes, outcomeCount) {
       const extra = i < remainder ? 1 : 0;
       rangeEnd = currentStart + baseRangeSize + extra - 1;
       
-      // Format title
-      if (currentStart === 0 && rangeEnd === 0) {
-        title = '0';
-      } else if (currentStart === rangeEnd) {
-        title = `${currentStart}`;
-      } else if (currentStart === 0) {
-        title = `0 to ${rangeEnd}`;
+      // Format title with new notation: ">N to M" means >N and <=M
+      // First range: ">0 to 2" means >0 minutes and <=2 minutes (1-120 seconds)
+      if (currentStart === 0) {
+        title = `>0 to ${rangeEnd}`;
       } else {
-        title = `${currentStart} to ${rangeEnd}`;
+        title = `>${currentStart} to ${rangeEnd}`;
       }
     }
     

@@ -23642,18 +23642,21 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
   }
   
   // Parse time ranges from outcome titles
-  // Format examples: "0 to 2", "3 to 5", ">10"
-  // Ranges are inclusive: "0 to 2" means 0 <= time <= 2 minutes (0-120 seconds)
-  // "3 to 5" means 3 <= time <= 5 minutes (180-300 seconds)
+  // Format examples: ">0 to 2", ">2 to 4", ">10"
+  // New notation: ">N to M" means >N minutes AND <=M minutes (exclusive lower, inclusive upper)
+  // ">0 to 2" means >0 minutes and <=2 minutes (1-120 seconds inclusive)
+  // ">2 to 4" means >2 minutes and <=4 minutes (121-240 seconds inclusive)
+  // ">N" means strictly greater than N minutes (no upper bound)
   for (const outcome of outcomes) {
     const title = outcome.title.trim();
     console.log(`[determineTimeRangeOutcome] Checking outcome: "${title}"`);
     
-    // Check for ">N" format (greater than, exclusive)
-    const greaterThanMatch = title.match(/^>\s*(\d+)/);
-    if (greaterThanMatch) {
-      const threshold = parseInt(greaterThanMatch[1], 10);
-      console.log(`[determineTimeRangeOutcome] Greater than match: threshold=${threshold} minutes, durationMinutes=${durationMinutes.toFixed(3)}`);
+    // Check for ">N" format (greater than, exclusive, no upper bound)
+    // This is the last outcome, e.g., ">10"
+    const greaterThanOnlyMatch = title.match(/^>\s*(\d+)\s*$/);
+    if (greaterThanOnlyMatch) {
+      const threshold = parseInt(greaterThanOnlyMatch[1], 10);
+      console.log(`[determineTimeRangeOutcome] Greater than only match: threshold=${threshold} minutes, durationMinutes=${durationMinutes.toFixed(3)}`);
       // ">N" means strictly greater than N minutes
       if (durationMinutes > threshold) {
         console.log(`[determineTimeRangeOutcome] Matched greater than: id=${outcome.id} title=${outcome.title}`);
@@ -23662,16 +23665,33 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
       continue;
     }
     
-    // Check for "N to M" or "N-M" format (range, inclusive)
-    const rangeMatch = title.match(/(\d+)\s*(?:to|-)\s*(\d+)/i);
+    // Check for ">N to M" format (exclusive lower, inclusive upper)
+    // Examples: ">0 to 2", ">2 to 4"
+    const rangeMatch = title.match(/^>\s*(\d+)\s+to\s+(\d+)/i);
     if (rangeMatch) {
-      const min = parseInt(rangeMatch[1], 10);
-      const max = parseInt(rangeMatch[2], 10);
-      console.log(`[determineTimeRangeOutcome] Range match: min=${min}, max=${max} minutes, durationMinutes=${durationMinutes.toFixed(3)}`);
-      // Range is inclusive: "0 to 2" means 0 <= time <= 2 minutes
-      // So 120 seconds (2.0 minutes) matches, but 121 seconds (2.016... minutes) does not
-      if (durationMinutes >= min && durationMinutes <= max) {
+      const minExclusive = parseInt(rangeMatch[1], 10);
+      const maxInclusive = parseInt(rangeMatch[2], 10);
+      console.log(`[determineTimeRangeOutcome] Range match: >${minExclusive} to ${maxInclusive} minutes, durationMinutes=${durationMinutes.toFixed(3)}`);
+      // ">N to M" means >N minutes AND <=M minutes
+      // So ">0 to 2" means >0 and <=2 (1-120 seconds inclusive)
+      // And ">2 to 4" means >2 and <=4 (121-240 seconds inclusive)
+      if (durationMinutes > minExclusive && durationMinutes <= maxInclusive) {
         console.log(`[determineTimeRangeOutcome] Matched range: id=${outcome.id} title=${outcome.title}`);
+        return outcome.id;
+      }
+      continue;
+    }
+    
+    // Legacy format support: "N to M" or "N-M" (inclusive both ends)
+    // This is for backwards compatibility with old predictions
+    const legacyRangeMatch = title.match(/^(\d+)\s*(?:to|-)\s*(\d+)/i);
+    if (legacyRangeMatch) {
+      const min = parseInt(legacyRangeMatch[1], 10);
+      const max = parseInt(legacyRangeMatch[2], 10);
+      console.log(`[determineTimeRangeOutcome] Legacy range match: ${min} to ${max} minutes (inclusive), durationMinutes=${durationMinutes.toFixed(3)}`);
+      // Legacy: inclusive both ends
+      if (durationMinutes >= min && durationMinutes <= max) {
+        console.log(`[determineTimeRangeOutcome] Matched legacy range: id=${outcome.id} title=${outcome.title}`);
         return outcome.id;
       }
       continue;
@@ -24012,17 +24032,25 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
               // Filter outcomes if needed (low time ranges only eligible on success)
               let eligibleOutcomes = outcomes;
               if (lowTimeRangesOnlyOnSuccess && timeLimitMinutes !== null && (challengeStatus === 'failed' || challengeStatus === 'skipped')) {
-                // Filter out outcomes below time limit (keep ">N" outcomes)
+                // Filter out outcomes below time limit
+                // Keep ">N" outcomes (standalone failure outcomes like ">10")
+                // Keep ">N to M" outcomes where M >= timeLimit (ranges that include or exceed the limit)
                 eligibleOutcomes = outcomes.filter((outcome: any) => {
                   const title = outcome.title.trim();
-                  // Keep ">N" outcomes (failure outcomes)
-                  if (title.match(/^>\s*(\d+)/)) {
+                  // Keep standalone ">N" outcomes (failure outcomes like ">10")
+                  if (title.match(/^>\s*(\d+)\s*$/)) {
                     return true;
                   }
-                  // Parse range and check if max is >= timeLimit
-                  const rangeMatch = title.match(/(\d+)\s*(?:to|-)\s*(\d+)/i);
-                  if (rangeMatch) {
-                    const max = parseInt(rangeMatch[2], 10);
+                  // Check for new notation ">N to M" format
+                  const newRangeMatch = title.match(/^>\s*(\d+)\s+to\s+(\d+)/i);
+                  if (newRangeMatch) {
+                    const max = parseInt(newRangeMatch[2], 10);
+                    return max >= timeLimitMinutes!;
+                  }
+                  // Legacy format: "N to M" or "N-M" (inclusive both ends)
+                  const legacyRangeMatch = title.match(/^(\d+)\s*(?:to|-)\s*(\d+)/i);
+                  if (legacyRangeMatch) {
+                    const max = parseInt(legacyRangeMatch[2], 10);
                     return max >= timeLimitMinutes!;
                   }
                   // Single number - check if >= timeLimit

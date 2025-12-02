@@ -21523,8 +21523,8 @@ async function completeRun() {
                 }
               } else if (predictionSubtype === 'time_range' && lastChallengeIndex >= 0) {
                 const challengeResult = challengeResults.value[lastChallengeIndex];
-                const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
-                winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+                const durationSeconds = challengeResult.durationSeconds || 0;
+                winningOutcomeId = determineTimeRangeOutcome(outcomes, durationSeconds);
               }
               }
               
@@ -23627,9 +23627,14 @@ function determineYesNoOutcome(
 
 /**
  * Determine winning outcome for time range prediction
+ * @param outcomes - Array of outcome objects with id and title
+ * @param durationSeconds - Duration in seconds (for precise matching)
+ * @returns The ID of the matching outcome, or null if no match
  */
-function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>, durationMinutes: number): string | null {
-  console.log(`[determineTimeRangeOutcome] durationMinutes=${durationMinutes}, outcomes count=${outcomes.length}`);
+function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>, durationSeconds: number): string | null {
+  // Convert to precise minutes for comparison (ranges are displayed in minutes)
+  const durationMinutes = durationSeconds / 60;
+  console.log(`[determineTimeRangeOutcome] durationSeconds=${durationSeconds}, durationMinutes=${durationMinutes.toFixed(3)}, outcomes count=${outcomes.length}`);
   
   if (outcomes.length === 0) {
     console.warn('[determineTimeRangeOutcome] No outcomes provided');
@@ -23637,16 +23642,19 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
   }
   
   // Parse time ranges from outcome titles
-  // Format examples: "0 to 5", "6 to 10", "11 to 15", ">20"
+  // Format examples: "0 to 2", "3 to 5", ">10"
+  // Ranges are inclusive: "0 to 2" means 0 <= time <= 2 minutes (0-120 seconds)
+  // "3 to 5" means 3 <= time <= 5 minutes (180-300 seconds)
   for (const outcome of outcomes) {
     const title = outcome.title.trim();
     console.log(`[determineTimeRangeOutcome] Checking outcome: "${title}"`);
     
-    // Check for ">N" format (greater than)
+    // Check for ">N" format (greater than, exclusive)
     const greaterThanMatch = title.match(/^>\s*(\d+)/);
     if (greaterThanMatch) {
       const threshold = parseInt(greaterThanMatch[1], 10);
-      console.log(`[determineTimeRangeOutcome] Greater than match: threshold=${threshold}, durationMinutes=${durationMinutes}`);
+      console.log(`[determineTimeRangeOutcome] Greater than match: threshold=${threshold} minutes, durationMinutes=${durationMinutes.toFixed(3)}`);
+      // ">N" means strictly greater than N minutes
       if (durationMinutes > threshold) {
         console.log(`[determineTimeRangeOutcome] Matched greater than: id=${outcome.id} title=${outcome.title}`);
         return outcome.id;
@@ -23654,12 +23662,14 @@ function determineTimeRangeOutcome(outcomes: Array<{id: string, title: string}>,
       continue;
     }
     
-    // Check for "N to M" or "N-M" format (range)
+    // Check for "N to M" or "N-M" format (range, inclusive)
     const rangeMatch = title.match(/(\d+)\s*(?:to|-)\s*(\d+)/i);
     if (rangeMatch) {
       const min = parseInt(rangeMatch[1], 10);
       const max = parseInt(rangeMatch[2], 10);
-      console.log(`[determineTimeRangeOutcome] Range match: min=${min}, max=${max}, durationMinutes=${durationMinutes}`);
+      console.log(`[determineTimeRangeOutcome] Range match: min=${min}, max=${max} minutes, durationMinutes=${durationMinutes.toFixed(3)}`);
+      // Range is inclusive: "0 to 2" means 0 <= time <= 2 minutes
+      // So 120 seconds (2.0 minutes) matches, but 121 seconds (2.016... minutes) does not
       if (durationMinutes >= min && durationMinutes <= max) {
         console.log(`[determineTimeRangeOutcome] Matched range: id=${outcome.id} title=${outcome.title}`);
         return outcome.id;
@@ -23818,8 +23828,9 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
       prediction_uuid: statusResult.prediction.uuid || statusResult.prediction.prediction_uuid || predictionUuid,
       prediction_type: statusResult.prediction.type || statusResult.prediction.prediction_type,
       prediction_subtype: statusResult.prediction.subtype || statusResult.prediction.prediction_subtype,
-      challenge_sequence_number: statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number
+      challenge_sequence_number: statusResult.prediction.challenge_sequence_number || prediction.challenge_sequence_number || prediction.challengeSequenceNumber
     };
+    console.log(`[resolvePredictionForChallenge] normalizedPrediction.challenge_sequence_number=${normalizedPrediction.challenge_sequence_number}`);
     
     // Check if prediction is already locked - if so, we should resolve it, not lock it again
     const isAlreadyLocked = statusResult.twitchStatus === 'LOCKED';
@@ -23978,13 +23989,25 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
               }
             }
             
+            console.log(`[resolvePredictionForChallenge] time_range: Looking for challenge with sequence_number=${challengeSequenceNumber}, runResults count=${runResults.length}`);
             const challengeResult = runResults.find((r: any) => 
               r.sequence_number === challengeSequenceNumber
             );
             
+            if (challengeResult) {
+              console.log(`[resolvePredictionForChallenge] time_range: Found challenge result: sequence_number=${challengeResult.sequence_number}, duration_seconds=${challengeResult.duration_seconds}, status=${challengeResult.status}`);
+            } else {
+              console.warn(`[resolvePredictionForChallenge] time_range: Challenge result not found for sequence_number=${challengeSequenceNumber}`);
+            }
+            
             if (challengeResult && challengeResult.duration_seconds !== undefined && challengeResult.duration_seconds !== null) {
-              const durationMinutes = Math.floor(challengeResult.duration_seconds / 60);
-              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${challengeResult.duration_seconds}, durationMinutes=${durationMinutes}, outcomes=${outcomes.length}, timeLimitMinutes=${timeLimitMinutes}, lowTimeRangesOnlyOnSuccess=${lowTimeRangesOnlyOnSuccess}`);
+              const durationSeconds = challengeResult.duration_seconds;
+              // Use precise minute calculation (not floored) for accurate range matching
+              // Ranges are displayed in minutes for viewer convenience, but we need precise matching
+              const durationMinutesPrecise = durationSeconds / 60;
+              // For display/logging, show floored minutes
+              const durationMinutesDisplay = Math.floor(durationSeconds / 60);
+              console.log(`[resolvePredictionForChallenge] time_range: seq=${challengeSequenceNumber}, durationSeconds=${durationSeconds}, durationMinutesPrecise=${durationMinutesPrecise.toFixed(2)}, durationMinutesDisplay=${durationMinutesDisplay}, outcomes=${outcomes.length}, timeLimitMinutes=${timeLimitMinutes}, lowTimeRangesOnlyOnSuccess=${lowTimeRangesOnlyOnSuccess}`);
               
               // Filter outcomes if needed (low time ranges only eligible on success)
               let eligibleOutcomes = outcomes;
@@ -24013,7 +24036,8 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
                 console.log(`[resolvePredictionForChallenge] Filtered outcomes: ${outcomes.length} -> ${eligibleOutcomes.length} (timeLimit=${timeLimitMinutes})`);
               }
               
-              winningOutcomeId = determineTimeRangeOutcome(eligibleOutcomes, durationMinutes);
+              // Pass durationSeconds for precise matching (ranges are in minutes but boundaries are exact)
+              winningOutcomeId = determineTimeRangeOutcome(eligibleOutcomes, durationSeconds);
               console.log(`[resolvePredictionForChallenge] time_range: determineTimeRangeOutcome returned: ${winningOutcomeId ? 'found' : 'null'}`);
             } else {
               console.warn(`[resolvePredictionForChallenge] time_range: Could not find duration for challenge ${challengeSequenceNumber}`);
@@ -24024,9 +24048,9 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
             const challengeIndex = challengeSequenceNumber - 1; // Convert to 0-indexed
             if (challengeIndex >= 0 && challengeIndex < challengeResults.value.length) {
               const challengeResult = challengeResults.value[challengeIndex];
-              const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
-              console.log(`[resolvePredictionForChallenge] time_range fallback: durationMinutes=${durationMinutes}`);
-              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+              const durationSeconds = challengeResult.durationSeconds || 0;
+              console.log(`[resolvePredictionForChallenge] time_range fallback: durationSeconds=${durationSeconds}`);
+              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationSeconds);
             }
           }
         }
@@ -24369,8 +24393,8 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
               }
             } else if (runPrediction.prediction_subtype === 'time_range') {
               // Time range prediction
-              const durationMinutes = Math.floor((challengeResult.durationSeconds || 0) / 60);
-              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationMinutes);
+              const durationSeconds = challengeResult.durationSeconds || 0;
+              winningOutcomeId = determineTimeRangeOutcome(outcomes, durationSeconds);
             }
           } else {
             // Challenge not found - use first outcome as fallback

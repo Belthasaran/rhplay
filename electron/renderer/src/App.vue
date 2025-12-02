@@ -17772,6 +17772,7 @@ const currentWinRulesJson = ref<string | null>(null);  // Current win rules JSON
 const showTwitchIntegrationSetup = ref(false);  // Twitch Integration Setup modal visibility
 const predictionsEnabled = ref(false);  // Whether predictions are enabled for current run
 const predictionsConfigured = ref(false);  // Whether Twitch integration is configured
+const twitchTokenValid = ref(true);  // Whether Twitch token is valid (required for predictions to work)
 const predictionsOperationalMode = ref<'whole_challenge' | 'same_item' | 'next_item' | null>(null);  // Operational mode when enabled
 const showPredictionsManageDropdown = ref(false);  // Whether dropdown menu is visible
 const activePredictionUuid = ref<string | null>(null);  // UUID of currently active prediction
@@ -18378,19 +18379,10 @@ onMounted(async () => {
   document.addEventListener('click', handleClickOutside);
   document.addEventListener('click', handleClickOutsidePredictionsDropdown);
   
-  // Check for prediction template early - template is the permanent configuration
-  // This ensures predictionsConfigured is set correctly from the start
+  // Check for prediction template and token validity early
+  // This ensures predictionsConfigured and twitchTokenValid are set correctly from the start
   if (isElectronAvailable()) {
-    try {
-      const template = await (window as any).electronAPI.getPredictionsTemplate();
-      if (template && template.type) {
-        // Template exists - setup is permanently complete
-        predictionsConfigured.value = true;
-      }
-    } catch (error) {
-      console.warn('[onMounted] Error checking prediction template:', error);
-      // Don't change configured status on error
-    }
+    await checkPredictionsConfiguration();
   }
   
   onUnmounted(() => {
@@ -22505,12 +22497,35 @@ async function openTwitchIntegrationSetup() {
 
 async function handleTwitchIntegrationUpdate() {
   // Reload predictions configuration status after integration update
+  const wasEnabled = predictionsEnabled.value;  // Remember if predictions were enabled
+  const previousMode = predictionsOperationalMode.value;  // Remember the mode
+  
   await checkPredictionsConfiguration();
+  
+  // If token is now valid and predictions were previously enabled, resume them
+  if (twitchTokenValid.value && wasEnabled && previousMode && currentRunUuid.value) {
+    // Resume predictions with the previous mode
+    predictionsEnabled.value = true;
+    predictionsOperationalMode.value = previousMode;
+    
+    // Save the resumed state
+    await savePredictionManagementState();
+    
+    // If we have an active prediction UUID, sync its status
+    if (activePredictionUuid.value) {
+      await syncPredictionStatus();
+    }
+    
+    // Update manual control availability
+    await updateManualControlAvailability();
+    
+    console.log(`[handleTwitchIntegrationUpdate] Resumed predictions with mode: ${previousMode}`);
+  }
 }
 
 async function checkPredictionsConfiguration() {
   // Template is the source of truth - if it exists, setup is complete
-  // We only check Twitch token validity to show warnings, not to determine if setup is complete
+  // We check Twitch token validity to determine if reconnection is needed
   try {
     if (!isElectronAvailable()) {
       // Electron not available - preserve current state
@@ -22523,24 +22538,27 @@ async function checkPredictionsConfiguration() {
       // Template exists - setup is complete, period
       predictionsConfigured.value = true;
       
-      // Optionally check Twitch token validity for warnings (but don't change configured status)
+      // Check Twitch token validity - required for predictions to actually work
       if (onlineProfile.value?.profileId) {
         try {
           const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
             profileUuid: onlineProfile.value.profileId
           });
           
-          // If token is invalid, we might want to show a warning later
-          // But we don't change predictionsConfigured - template exists, so setup is complete
-          if (!status || !status.is_active) {
-            // Token might be expired - but template is still configured
-            // User can reconnect if needed, but setup remains complete
-            console.log('[checkPredictionsConfiguration] Template exists but Twitch token may be invalid');
+          // Token is valid if status exists and is_active is true
+          twitchTokenValid.value = !!(status && status.is_active === true);
+          
+          if (!twitchTokenValid.value) {
+            console.log('[checkPredictionsConfiguration] Template exists but Twitch token is invalid - reconnection needed');
           }
         } catch (tokenError) {
-          // Error checking token - but template exists, so setup is still complete
+          // Error checking token - assume invalid
+          twitchTokenValid.value = false;
           console.warn('[checkPredictionsConfiguration] Error checking Twitch token:', tokenError);
         }
+      } else {
+        // No profile - assume token invalid
+        twitchTokenValid.value = false;
       }
     } else {
       // No template exists - setup is not complete
@@ -22550,6 +22568,8 @@ async function checkPredictionsConfiguration() {
         predictionsConfigured.value = false;
       }
       // If predictionsEnabled is true, keep configured as is (might be loading state)
+      // Token validity doesn't matter if template doesn't exist
+      twitchTokenValid.value = false;
     }
   } catch (error) {
     console.error('[checkPredictionsConfiguration] Error:', error);
@@ -22562,13 +22582,24 @@ function getManagePredictionsButtonText(): string {
   if (!predictionsConfigured.value) {
     return 'Off: Press Setup First';
   }
+  // If template exists but token is invalid, show reconnect message
+  if (!twitchTokenValid.value) {
+    return 'Reconnect Twitch';
+  }
   return `Manage Predictions (${predictionsEnabled.value ? 'On' : 'Off'})`;
 }
 
-function togglePredictionsManageDropdown() {
+async function togglePredictionsManageDropdown() {
   if (!predictionsConfigured.value) {
     return;
   }
+  
+  // If token is invalid, open setup menu instead of dropdown
+  if (!twitchTokenValid.value) {
+    await openTwitchIntegrationSetup();
+    return;
+  }
+  
   showPredictionsManageDropdown.value = !showPredictionsManageDropdown.value;
 }
 
@@ -22582,6 +22613,13 @@ function handleClickOutsidePredictionsDropdown(event: MouseEvent) {
 
 async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'next_item') {
   if (!predictionsConfigured.value || !currentRunUuid.value) {
+    return;
+  }
+  
+  // Check token validity - required for predictions to work
+  if (!twitchTokenValid.value) {
+    await showAlert('Twitch token is invalid. Please reconnect Twitch to enable predictions.', 'Reconnect Required');
+    await openTwitchIntegrationSetup();
     return;
   }
   
@@ -24109,18 +24147,8 @@ async function loadPredictionManagementState() {
     return;
   }
   
-  // First, check if template exists - this determines if setup is complete
-  // Template is the permanent configuration that never gets cleared
-  try {
-    const template = await (window as any).electronAPI.getPredictionsTemplate();
-    if (template && template.type) {
-      // Template exists - setup is permanently complete
-      predictionsConfigured.value = true;
-    }
-  } catch (error) {
-    console.warn('[loadPredictionManagementState] Error checking template:', error);
-    // Don't change configured status on error
-  }
+  // First, check template and token validity
+  await checkPredictionsConfiguration();
   
   // Then load run-specific state (if we have a run)
   if (!currentRunUuid.value) {
@@ -24144,8 +24172,16 @@ async function loadPredictionManagementState() {
         predictionsConfigured.value = true;
       }
       
-      // Sync prediction status if we have an active prediction
-      if (activePredictionUuid.value) {
+      // If predictions were enabled but token is invalid, disable them
+      // (User will need to reconnect to resume)
+      if (predictionsEnabled.value && !twitchTokenValid.value) {
+        console.log('[loadPredictionManagementState] Predictions were enabled but token is invalid - disabling until reconnection');
+        predictionsEnabled.value = false;
+        // Don't clear the mode - it will be restored when reconnected
+      }
+      
+      // Sync prediction status if we have an active prediction and token is valid
+      if (activePredictionUuid.value && twitchTokenValid.value) {
         await syncPredictionStatus();
       }
     }

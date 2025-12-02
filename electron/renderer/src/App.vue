@@ -20487,6 +20487,9 @@ async function startRun() {
       
       // Load prediction state if enabled
       await checkPredictionsConfiguration();
+      await loadPredictionManagementState();
+      await updateManualControlAvailability();
+      
       if (predictionsEnabled.value && predictionsOperationalMode.value === 'whole_challenge') {
         // Create whole challenge prediction when run starts
         const template = await (window as any).electronAPI.getPredictionsTemplate();
@@ -20503,6 +20506,9 @@ async function startRun() {
           
           if (createResult.success) {
             activePredictionUuid.value = createResult.predictionUuid;
+            updatePredictionStatus('created');
+            await savePredictionManagementState();
+            await updateManualControlAvailability();
             showToastNotification('Run prediction created', 'success', 3000);
           } else {
             // Queue for retry
@@ -22669,6 +22675,11 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
       predictionsOperationalMode.value = mode;
       activePredictionUuid.value = createResult.predictionUuid;
       
+      // Update status and persist state
+      updatePredictionStatus('created');
+      await savePredictionManagementState();
+      await updateManualControlAvailability();
+      
       showToastNotification('Prediction created and enabled', 'success', 3000);
       console.log(`[enablePredictionsMode] Enabled predictions with mode: ${mode}, prediction UUID: ${createResult.predictionUuid}`);
     }
@@ -23447,7 +23458,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     if (isAlreadyLocked) {
       // If we can't determine outcome, use first outcome as fallback
       if (!winningOutcomeId) {
-        console.log(`!winningOutcomeId`)
+        console.log(`!winningOutcomeId seq=${prediction.challenge_sequence_number} r=${challengeResults.value.length} type=${prediction.prediction_type} subtype=${prediction.prediction_subtype}`)
         winningOutcomeId = outcomes.length > 0 ? outcomes[0].id : null;
         if (winningOutcomeId) {
             console.log(`!winningOutcomeId then id=${outcomes[0].id} title=${outcomes[0].title}`)
@@ -23470,6 +23481,9 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
           });
           showToastNotification('Resolving prediction...', 'info', 2000);
         } else {
+          updatePredictionStatus('resolved');
+          await savePredictionManagementState();
+          await updateManualControlAvailability();
           showToastNotification('Prediction resolved', 'success', 2000);
         }
       } else {
@@ -23512,8 +23526,11 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
         });
         showToastNotification('Resolving prediction...', 'info', 2000);
       } else {
-        showToastNotification('Prediction resolved', 'success', 2000);
+        updatePredictionStatus('resolved');
+        await savePredictionManagementState();
+        await updateManualControlAvailability();
         activePredictionUuid.value = null; // Clear active prediction
+        showToastNotification('Prediction resolved', 'success', 2000);
       }
     }
   } catch (error: any) {
@@ -23644,6 +23661,9 @@ async function createPredictionForNextChallenge(nextChallengeIndex: number) {
       showToastNotification('Creating prediction...', 'info', 2000);
     } else {
       activePredictionUuid.value = createResult.predictionUuid;
+      updatePredictionStatus('created');
+      await savePredictionManagementState();
+      await updateManualControlAvailability();
       showToastNotification('Prediction created', 'success', 2000);
     }
   } catch (error: any) {
@@ -23681,6 +23701,8 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
         // No active prediction found, just disable
         predictionsEnabled.value = false;
         predictionsOperationalMode.value = null;
+        await savePredictionManagementState();
+        await updateManualControlAvailability();
         return;
       }
       
@@ -23688,6 +23710,8 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
         // Just stop automation, leave prediction active
         predictionsEnabled.value = false;
         predictionsOperationalMode.value = null;
+        await savePredictionManagementState();
+        await updateManualControlAvailability();
         console.log('[disablePredictionsWithAction] Left prediction open, stopped automation');
         return;
       }
@@ -23708,8 +23732,11 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
           return;
         }
         
+        updatePredictionStatus('cancelled');
         predictionsEnabled.value = false;
         predictionsOperationalMode.value = null;
+        await savePredictionManagementState();
+        await updateManualControlAvailability();
         console.log('[disablePredictionsWithAction] Cancelled prediction and stopped automation');
         
       } else if (action === 'resolve') {
@@ -23791,9 +23818,13 @@ async function disablePredictionsWithAction(action: 'cancel' | 'resolve' | 'leav
           });
           showToastNotification('Resolving prediction to closest match...', 'info', 2000);
         } else {
-          showToastNotification('Prediction resolved to closest match', 'success', 3000);
+          updatePredictionStatus('resolved');
           activePredictionUuid.value = null;
           predictionsEnabled.value = false;
+          predictionsOperationalMode.value = null;
+          await savePredictionManagementState();
+          await updateManualControlAvailability();
+          showToastNotification('Prediction resolved to closest match', 'success', 3000);
           predictionsOperationalMode.value = null;
         }
         return;
@@ -23832,70 +23863,6 @@ function updatePredictionStatus(action: string | null, warning: string | null = 
   }
 }
 
-// Check if we can lock the current prediction
-async function canLockCurrentPrediction(): Promise<boolean> {
-  if (!predictionsEnabled.value || !activePredictionUuid.value || !currentRunUuid.value) {
-    return false;
-  }
-  
-  try {
-    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
-      predictionUuid: activePredictionUuid.value
-    });
-    
-    if (!statusResult.success || !statusResult.prediction) {
-      return false;
-    }
-    
-    // Can lock if status is ACTIVE (not already locked/resolved/cancelled)
-    return statusResult.twitchStatus === 'ACTIVE';
-  } catch (error) {
-    return false;
-  }
-}
-
-// Check if we can cancel the current prediction
-async function canCancelCurrentPrediction(): Promise<boolean> {
-  if (!predictionsEnabled.value || !activePredictionUuid.value || !currentRunUuid.value) {
-    return false;
-  }
-  
-  try {
-    const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
-      predictionUuid: activePredictionUuid.value
-    });
-    
-    if (!statusResult.success || !statusResult.prediction) {
-      return false;
-    }
-    
-    // Can cancel if status is ACTIVE or LOCKED (not resolved/cancelled)
-    const status = statusResult.twitchStatus;
-    return status === 'ACTIVE' || status === 'LOCKED';
-  } catch (error) {
-    return false;
-  }
-}
-
-// Check if we can reopen a prediction (no active prediction exists)
-async function canReopenPrediction(): Promise<boolean> {
-  if (!predictionsEnabled.value || !currentRunUuid.value) {
-    return false;
-  }
-  
-  try {
-    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
-    if (!checkResult.success) {
-      return false;
-    }
-    
-    // Can reopen if no active predictions exist
-    return !checkResult.hasActivePredictions;
-  } catch (error) {
-    return false;
-  }
-}
-
 // Lock current prediction immediately
 async function lockCurrentPrediction() {
   if (!activePredictionUuid.value) {
@@ -23917,6 +23884,8 @@ async function lockCurrentPrediction() {
     } else {
       showToastNotification('Prediction locked', 'success', 2000);
       updatePredictionStatus('locked');
+      await savePredictionManagementState();
+      await updateManualControlAvailability();
     }
   } catch (error: any) {
     console.error('[lockCurrentPrediction] Error:', error);
@@ -23947,6 +23916,8 @@ async function cancelCurrentPrediction() {
       showToastNotification('Prediction cancelled', 'success', 2000);
       activePredictionUuid.value = null;
       updatePredictionStatus('cancelled');
+      await savePredictionManagementState();
+      await updateManualControlAvailability();
       // Management remains active - we'll create predictions for later challenges
     }
   } catch (error: any) {
@@ -24002,7 +23973,7 @@ async function reopenAsItemNext() {
     const nextChallengeIndex = currentChallengeIndex.value + 1;
     if (nextChallengeIndex < runEntries.length) {
       await createPredictionForNextChallenge(nextChallengeIndex);
-      updatePredictionStatus('created');
+      // Status already updated in createPredictionForNextChallenge
     } else {
       showToastNotification('Cannot create prediction - no next challenge', 'error', 3000);
     }
@@ -24052,8 +24023,10 @@ async function reopenAsRunPrediction() {
       updatePredictionStatus(null, 'Failed to create prediction - retrying');
     } else {
       activePredictionUuid.value = createResult.predictionUuid;
-      showToastNotification('Run prediction created', 'success', 2000);
       updatePredictionStatus('created');
+      await savePredictionManagementState();
+      await updateManualControlAvailability();
+      showToastNotification('Run prediction created', 'success', 2000);
     }
   } catch (error: any) {
     console.error('[reopenAsRunPrediction] Error:', error);
@@ -26637,7 +26610,7 @@ button:disabled {
 .btn-pause:hover { background: #4b5563; }
 .btn-unpause { background: #10b981; color: white; font-weight: bold; }
 .btn-unpause:hover { background: #059669; }
-.run-timer { font-weight: bold; color: #059669; font-size: 16px; padding: 0 8px; }
+.run-timer { font-weight: bold; color: #059669; font-size: 24px; padding: 0 8px; }
 .pause-time { font-weight: bold; color: #ef4444; font-size: 16px; padding: 0 8px; }
 .run-progress { color: #6b7280; padding: 0 8px; }
 .win-rules-status-row {
@@ -26684,14 +26657,14 @@ button:disabled {
   gap: 2px;
 }
 .time-label {
-  font-size: 13px;
+  font-size: 16px;
   color: #ffffff;
   font-weight: 500;
   white-space: nowrap;
 }
 .time-value {
   font-weight: bold;
-  font-size: 14px;
+  font-size: 24px;
   color: #059669;
   font-family: 'Courier New', monospace;
   line-height: 1.2;
@@ -26726,7 +26699,7 @@ button:disabled {
   min-width: 200px;
 }
 .predictions-label {
-  font-size: 13px;
+  font-size: 16px;
   color: #ffffff;
   font-weight: 500;
   white-space: nowrap;
@@ -26737,7 +26710,7 @@ button:disabled {
   color: #fff;
   border: none;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -26761,7 +26734,7 @@ button:disabled {
   color: #fff;
   border: 1px solid #666;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -26802,7 +26775,7 @@ button:disabled {
   color: var(--text-primary);
   border: none;
   border-bottom: 1px solid var(--border-primary);
-  font-size: 12px;
+  font-size: 15px;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -26815,7 +26788,7 @@ button:disabled {
   background: var(--bg-hover);
 }
 .predictions-status {
-  font-size: 11px;
+  font-size: 18px;
   color: #aaa;
   white-space: nowrap;
   margin-top: 2px;

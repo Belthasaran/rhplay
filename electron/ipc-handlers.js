@@ -12024,6 +12024,91 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   // ===========================================================================
+  // PREDICTION MANAGEMENT STATE PERSISTENCE
+  // ===========================================================================
+
+  /**
+   * Save prediction management state for a run
+   * Channel: db:runs:save-prediction-state
+   */
+  ipcMain.handle('db:runs:save-prediction-state', async (event, { runUuid, enabled, operationalMode, activePredictionUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      // Get current config_json or initialize it
+      const run = db.prepare('SELECT config_json FROM runs WHERE run_uuid = ?').get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+      
+      let configJson = {};
+      if (run.config_json) {
+        try {
+          configJson = JSON.parse(run.config_json);
+        } catch (e) {
+          console.warn('[save-prediction-state] Failed to parse existing config_json, initializing new:', e);
+          configJson = {};
+        }
+      }
+      
+      // Update prediction management state
+      configJson.predictionManagement = {
+        enabled: enabled || false,
+        operationalMode: operationalMode || null,
+        activePredictionUuid: activePredictionUuid || null,
+        updatedAt: Date.now()
+      };
+      
+      // Save updated config_json
+      db.prepare(`
+        UPDATE runs
+        SET config_json = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE run_uuid = ?
+      `).run(JSON.stringify(configJson), runUuid);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[save-prediction-state] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Load prediction management state for a run
+   * Channel: db:runs:load-prediction-state
+   */
+  ipcMain.handle('db:runs:load-prediction-state', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const run = db.prepare('SELECT config_json FROM runs WHERE run_uuid = ?').get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+      
+      if (!run.config_json) {
+        return { success: true, state: null };
+      }
+      
+      let configJson = {};
+      try {
+        configJson = JSON.parse(run.config_json);
+      } catch (e) {
+        console.warn('[load-prediction-state] Failed to parse config_json:', e);
+        return { success: true, state: null };
+      }
+      
+      const predictionState = configJson.predictionManagement || null;
+      
+      return { success: true, state: predictionState };
+    } catch (error) {
+      console.error('[load-prediction-state] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ===========================================================================
   // TWITCH INTEGRATION HANDLERS
   // ===========================================================================
 
@@ -12966,8 +13051,8 @@ function registerDatabaseHandlers(dbManager) {
         console.log('[twitch:prediction:create] whole_challenge windowSeconds:', windowSeconds, 'from config:', config.predictionWindowSeconds);
         
         // Build title with game/stage info if provided
-        /*let baseTitle = config.customTitle || 'How many wins?';
-        if (gameId) {
+        let baseTitle = config.customTitle || 'How many wins?';
+        /*if (gameId) {
           baseTitle += ` (Game: ${gameId}`;
           if (stageId) {
             baseTitle += `, Stage: ${stageId}`;

@@ -255,6 +255,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   getActiveRun: () => ipcRenderer.invoke('db:runs:get-active'),
   
+  // Prediction Management State Persistence
+  saveRunPredictionManagementState: (params) => ipcRenderer.invoke('db:runs:save-prediction-state', params),
+  loadRunPredictionManagementState: (params) => ipcRenderer.invoke('db:runs:load-prediction-state', params),
+  
   /**
    * Get all runs from database
    * @returns {Promise<Array>} Array of all runs

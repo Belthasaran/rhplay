@@ -20485,9 +20485,20 @@ async function startRun() {
       // Explicitly load win rules after starting run (watcher might not trigger immediately)
       await loadWinRules();
       
-      // Load prediction state if enabled
-      await checkPredictionsConfiguration();
+      // Load prediction state first (before checking configuration)
+      // This ensures saved state is restored even if configuration check fails temporarily
       await loadPredictionManagementState();
+      
+      // Then check configuration (but don't let it override loaded state)
+      await checkPredictionsConfiguration();
+      
+      // If we loaded a state that says predictions are enabled, ensure configured is true
+      // (This handles the case where configuration check failed but setup is actually complete)
+      if (predictionsEnabled.value && !predictionsConfigured.value) {
+        // Re-check configuration - it might have failed due to timing
+        await checkPredictionsConfiguration();
+      }
+      
       await updateManualControlAvailability();
       
       if (predictionsEnabled.value && predictionsOperationalMode.value === 'whole_challenge') {
@@ -22489,22 +22500,43 @@ async function checkPredictionsConfiguration() {
       const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
         profileUuid: onlineProfile.value.profileId
       });
-      predictionsConfigured.value = status && status.is_active === true;
+      const isActive = status && status.is_active === true;
       
-      // Also check if prediction template is configured
-      if (predictionsConfigured.value) {
+      if (isActive) {
+        // Also check if prediction template is configured
         const template = await (window as any).electronAPI.getPredictionsTemplate();
-        if (!template || !template.type) {
+        if (template && template.type) {
+          predictionsConfigured.value = true;
+        } else {
           // Integration is active but no template configured
+          // Only set to false if we don't have a saved enabled state
+          // (This prevents clearing configured status when resuming a run)
+          if (!predictionsEnabled.value) {
+            predictionsConfigured.value = false;
+          }
+          // Otherwise keep it as is - user might be resuming a run
+        }
+      } else {
+        // Integration not active - only set to false if we don't have saved enabled state
+        if (!predictionsEnabled.value) {
           predictionsConfigured.value = false;
         }
       }
     } else {
-      predictionsConfigured.value = false;
+      // No profile or electron not available
+      // Only set to false if we don't have a saved enabled state
+      // (This prevents clearing configured status when profile hasn't loaded yet)
+      if (!predictionsEnabled.value) {
+        predictionsConfigured.value = false;
+      }
     }
   } catch (error) {
     console.error('[checkPredictionsConfiguration] Error:', error);
-    predictionsConfigured.value = false;
+    // Don't set to false on error if we have a saved enabled state
+    // (This prevents clearing configured status due to temporary errors)
+    if (!predictionsEnabled.value) {
+      predictionsConfigured.value = false;
+    }
   }
 }
 
@@ -24069,6 +24101,12 @@ async function loadPredictionManagementState() {
       predictionsEnabled.value = state.enabled || false;
       predictionsOperationalMode.value = state.operationalMode || null;
       activePredictionUuid.value = state.activePredictionUuid || null;
+      
+      // If we loaded a state with predictions enabled, configuration must be complete
+      // (Otherwise predictions couldn't have been enabled in the first place)
+      if (predictionsEnabled.value) {
+        predictionsConfigured.value = true;
+      }
       
       // Sync prediction status if we have an active prediction
       if (activePredictionUuid.value) {

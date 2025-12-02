@@ -23804,7 +23804,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     console.log(`[resolvePredictionForChallenge] Prediction status: ${statusResult.twitchStatus}, isAlreadyLocked=${isAlreadyLocked}, normalized uuid=${normalizedPrediction.prediction_uuid}`);
     
     // Get outcomes from the status result (it already includes outcomes_json)
-    const outcomes = parsePredictionOutcomes(statusResult.prediction);
+    const outcomes = parsePredictionOutcomes(normalizedPrediction);
     if (outcomes.length === 0) {
       console.warn('[resolvePredictionForChallenge] No outcomes found');
       // If already locked, we can't do anything - prediction is stuck

@@ -20900,6 +20900,7 @@ async function nextChallenge() {
     cleanupStalePredictionOperations(idx);
     
     // Handle prediction lifecycle (non-blocking, uses toast notifications)
+    console.log(`[nextChallenge] Calling handlePredictionOnChallengeComplete for challenge ${idx} with status ${finalStatus}`);
     handlePredictionOnChallengeComplete(idx, finalStatus).catch(error => {
       console.error('[nextChallenge] Prediction lifecycle error:', error);
       // Error already handled in handlePredictionOnChallengeComplete with toast
@@ -23432,21 +23433,28 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
     
     // Check for active prediction
     const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    console.log(`[handlePredictionOnChallengeComplete] checkResult: success=${checkResult.success}, hasActivePredictions=${checkResult.hasActivePredictions}`);
     if (!checkResult.success || !checkResult.hasActivePredictions) {
+      console.log(`[handlePredictionOnChallengeComplete] No active predictions, returning`);
       return; // No active prediction
     }
     
     const activePreds = checkResult.activePredictions || [];
+    console.log(`[handlePredictionOnChallengeComplete] Found ${activePreds.length} active predictions`);
     const runPrediction = activePreds.find((p: any) => 
       p.run_uuid === currentRunUuid.value && p.isManaged
     );
     
     if (!runPrediction) {
+      console.log(`[handlePredictionOnChallengeComplete] No managed prediction found for run ${currentRunUuid.value}`);
       return; // No prediction for this run
     }
     
+    console.log(`[handlePredictionOnChallengeComplete] Found run prediction: uuid=${runPrediction.prediction_uuid}, sequence=${runPrediction.challenge_sequence_number}, type=${runPrediction.prediction_type}`);
+    
     // Determine action based on operational mode and challenge
     const challengeSequenceNumber = challengeIndex + 1; // 1-indexed
+    console.log(`[handlePredictionOnChallengeComplete] challengeIndex=${challengeIndex}, challengeSequenceNumber=${challengeSequenceNumber}, operationalMode=${predictionsOperationalMode.value}`);
     
     if (predictionsOperationalMode.value === 'whole_challenge') {
       // Whole challenge prediction - lock when run completes (handled in completeRun)
@@ -23455,15 +23463,23 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
       
     } else if (predictionsOperationalMode.value === 'same_item') {
       // Same item mode - prediction is about current challenge
-      if (runPrediction.challenge_sequence_number === challengeSequenceNumber) {
+      // Convert both to numbers for comparison (in case one is a string)
+      const predSequence = typeof runPrediction.challenge_sequence_number === 'number' 
+        ? runPrediction.challenge_sequence_number 
+        : parseInt(runPrediction.challenge_sequence_number, 10);
+      console.log(`[handlePredictionOnChallengeComplete] same_item mode: challengeSequenceNumber=${challengeSequenceNumber} (type: ${typeof challengeSequenceNumber}), runPrediction.challenge_sequence_number=${runPrediction.challenge_sequence_number} (type: ${typeof runPrediction.challenge_sequence_number}), predSequence=${predSequence}`);
+      if (predSequence === challengeSequenceNumber) {
         // This prediction is about the challenge that just completed
+        console.log(`[handlePredictionOnChallengeComplete] Resolving prediction for challenge ${challengeSequenceNumber} with status ${status}`);
         // Get full prediction details from database to ensure we have subtype
         const statusResult = await (window as any).electronAPI.getTwitchPredictionStatus({
           predictionUuid: runPrediction.prediction_uuid
         });
         if (statusResult.success && statusResult.prediction) {
+          console.log(`[handlePredictionOnChallengeComplete] Got prediction status, calling resolvePredictionForChallenge`);
           await resolvePredictionForChallenge(statusResult.prediction, status);
         } else {
+          console.warn(`[handlePredictionOnChallengeComplete] Failed to get prediction status, using fallback`);
           // Fallback to runPrediction if status call fails
           await resolvePredictionForChallenge(runPrediction, status);
         }
@@ -23472,6 +23488,8 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         if (challengeIndex < runEntries.length - 1) {
           queueDelayedPredictionCreation(challengeIndex + 1);
         }
+      } else {
+        console.log(`[handlePredictionOnChallengeComplete] Prediction sequence mismatch: prediction is for ${runPrediction.challenge_sequence_number}, but challenge ${challengeSequenceNumber} completed`);
       }
       
     } else if (predictionsOperationalMode.value === 'next_item') {
@@ -23734,7 +23752,9 @@ function determineWholeChallengeOutcome(outcomes: Array<{id: string, title: stri
 
 // Resolve prediction for a completed challenge
 async function resolvePredictionForChallenge(prediction: any, challengeStatus: 'success' | 'ok' | 'failed' | 'skipped') {
+  console.log(`[resolvePredictionForChallenge] Called with prediction_uuid=${prediction.prediction_uuid}, challengeStatus=${challengeStatus}`);
   if (!prediction.prediction_uuid) {
+    console.warn('[resolvePredictionForChallenge] No prediction_uuid provided');
     return;
   }
   
@@ -23745,12 +23765,13 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
     });
     
     if (!statusResult.success || !statusResult.prediction) {
-      console.warn('[resolvePredictionForChallenge] Could not get prediction status');
+      console.warn('[resolvePredictionForChallenge] Could not get prediction status:', statusResult.error || 'Unknown error');
       return;
     }
     
     // Check if prediction is already locked - if so, we should resolve it, not lock it again
     const isAlreadyLocked = statusResult.twitchStatus === 'LOCKED';
+    console.log(`[resolvePredictionForChallenge] Prediction status: ${statusResult.twitchStatus}, isAlreadyLocked=${isAlreadyLocked}`);
     
     // Get outcomes from the status result (it already includes outcomes_json)
     const outcomes = parsePredictionOutcomes(statusResult.prediction);

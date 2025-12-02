@@ -23477,6 +23477,10 @@ async function handlePredictionOnChallengeComplete(challengeIndex: number, statu
         });
         if (statusResult.success && statusResult.prediction) {
           console.log(`[handlePredictionOnChallengeComplete] Got prediction status, calling resolvePredictionForChallenge`);
+          // Ensure challenge_sequence_number is set (in case it's missing from the response)
+          if (!statusResult.prediction.challenge_sequence_number) {
+            statusResult.prediction.challenge_sequence_number = challengeSequenceNumber;
+          }
           // Pass the full statusResult so we have the correct twitchStatus
           await resolvePredictionForChallenge(statusResult.prediction, status, statusResult.twitchStatus);
         } else {
@@ -23793,7 +23797,7 @@ async function resolvePredictionForChallenge(prediction: any, challengeStatus: '
           prediction_type: prediction.type,
           prediction_subtype: prediction.subtype,
           outcomes_json: prediction.outcomes_json,
-          challenge_sequence_number: prediction.challenge_sequence_number
+          challenge_sequence_number: prediction.challenge_sequence_number || prediction.challengeSequenceNumber
         }
       };
     } else {

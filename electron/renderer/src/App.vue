@@ -27053,19 +27053,63 @@ async function performUsbPollingCycle() {
   }
 }
 
+// Calculate elapsed time for current challenge
+function getCurrentChallengeElapsedSeconds(): number {
+  if (!runStartTime.value || !isRunActive.value) {
+    return 0;
+  }
+  
+  // Calculate total elapsed time (accounting for pauses)
+  const now = Date.now();
+  const baseElapsed = Math.floor((now - runStartTime.value) / 1000);
+  let totalElapsed = Math.max(0, baseElapsed - runPauseSeconds.value);
+  
+  // If currently paused, subtract pending pause time
+  if (isRunPaused.value && runPauseStartTime.value) {
+    const pendingPauseSeconds = Math.floor((now - runPauseStartTime.value) / 1000);
+    totalElapsed = Math.max(0, totalElapsed - pendingPauseSeconds);
+  }
+  
+  // For now, use total elapsed time as challenge elapsed time
+  // This is approximate - in a perfect world we'd track per-challenge start times
+  // But for Condition A purposes, this should be sufficient
+  return totalElapsed;
+}
+
+// Check if Condition A is met (all required values are 0x00)
+function checkConditionA(memoryValues: Record<string, number>): boolean {
+  return (
+    memoryValues.run_game === 0x00 &&
+    memoryValues.paused === 0x00 &&
+    memoryValues.animation === 0x00 &&
+    memoryValues.regularlevel === 0x00 &&
+    memoryValues.endtimer === 0x00 &&
+    memoryValues.keyhole_timer === 0x00
+  );
+}
+
 // Poll memory addresses and check conditions/goals
 async function pollMemoryAddresses() {
   // Prerequisites: Timer must be running, not paused, and at least 5 seconds elapsed
   if (isRunPaused.value) {
+    // Reset Condition A time when paused
+    usbPollingConditionATime.value = 0;
     return; // Don't poll when paused
   }
   
+  // Check if correct game file is loaded (required for Condition A)
+  if (!usbPollingCorrectGameLoaded.value) {
+    // Wrong game file - Condition A time stays at 0
+    usbPollingConditionATime.value = 0;
+    return;
+  }
+  
   // Check if at least 5 seconds have elapsed on current challenge
-  // We need to calculate elapsed time for the current challenge
-  // For now, we'll use a simple check - this will be refined in Phase 5
-  const challengeElapsedSeconds = runElapsedSeconds.value; // Approximate for now
+  const challengeElapsedSeconds = getCurrentChallengeElapsedSeconds();
   if (challengeElapsedSeconds < 5) {
-    return; // Not enough time elapsed
+    // Not enough time elapsed - Condition A time stays at 0
+    usbPollingConditionATime.value = 0;
+    return;
   }
   
   // Convert all SNES addresses to USB2SNES protocol format
@@ -27111,9 +27155,28 @@ async function pollMemoryAddresses() {
     }
     usbPollingCurrentMemoryValues.value = newValues;
     
-    // Now we have both previous and current values stored
-    // Condition A checks and goal event detection will be implemented in later phases
-    // For now, the infrastructure is in place
+    // Check Condition A
+    const conditionAMet = checkConditionA(usbPollingCurrentMemoryValues.value);
+    
+    if (conditionAMet) {
+      // Condition A is met - increment tracking time
+      // We poll every 1 second, so add 1000ms
+      usbPollingConditionATime.value += 1000;
+      
+      // Log when threshold is reached (only once)
+      if (usbPollingConditionATime.value >= 10000 && usbPollingConditionATime.value < 11000) {
+        console.log('[USB Polling] Condition A threshold reached (10 seconds)');
+      }
+    } else {
+      // Condition A is not met - reset tracking time
+      if (usbPollingConditionATime.value > 0) {
+        console.log('[USB Polling] Condition A no longer met, resetting timer');
+      }
+      usbPollingConditionATime.value = 0;
+    }
+    
+    // Condition A time is now tracked
+    // Goal event detection will use this in Phase 6
     
   } catch (error: any) {
     console.error('[pollMemoryAddresses] Error:', error);

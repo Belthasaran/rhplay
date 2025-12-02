@@ -95,49 +95,58 @@ function calculateTimeRangeOutcomes(maxTimeMinutes, outcomeCount) {
     maxTimeMinutes = 60; // Default to 60 minutes if unlimited
   }
   
-  // We need to cover 0 to maxTimeMinutes (inclusive), which is maxTimeMinutes + 1 numbers
-  // But the last outcome is ">maxTimeMinutes" for failure, so we divide 0 to maxTimeMinutes
-  const totalNumbers = maxTimeMinutes + 1;
-  const rangesToDivide = outcomeCount - 1; // Last one is ">N"
-  
   const outcomes = [];
-  const baseRangeSize = Math.floor(totalNumbers / rangesToDivide);
-  const remainder = totalNumbers % rangesToDivide;
   
-  let currentStart = 0;
+  // We need to create continuous ranges with no gaps
+  // Each range must be at least 1 minute long
+  // Notation: ">N to M" means >N minutes AND <=M minutes (exclusive lower, inclusive upper)
+  // This ensures ranges are continuous: ">0 to 1" covers 1-60s, ">1 to 2" covers 61-120s, etc.
   
-  for (let i = 0; i < outcomeCount; i++) {
-    let rangeEnd;
-    let title;
+  // Calculate how many ranges we can actually create (excluding the final ">N" outcome)
+  const rangesToCreate = outcomeCount - 1; // Last one is ">N"
+  
+  // We need to cover 0 to maxTimeMinutes with continuous ranges
+  // Each range must be at least 1 minute, so we can create at most maxTimeMinutes ranges
+  // If rangesToCreate > maxTimeMinutes, we can't create that many 1-minute ranges
+  // In that case, we'll create fewer ranges (but each will be at least 1 minute)
+  const actualRangesToCreate = Math.min(rangesToCreate, maxTimeMinutes);
+  
+  // Calculate the size of each range
+  // We want to distribute maxTimeMinutes evenly across actualRangesToCreate ranges
+  // But each range must be at least 1 minute
+  const baseRangeSize = Math.floor(maxTimeMinutes / actualRangesToCreate);
+  const remainder = maxTimeMinutes % actualRangesToCreate;
+  
+  let currentLowerBound = 0; // Exclusive lower bound for next range
+  
+  // Create the ranges
+  for (let i = 0; i < actualRangesToCreate; i++) {
+    // Distribute remainder across first ranges (give extra minute to earlier ranges)
+    const extra = i < remainder ? 1 : 0;
+    const rangeSize = baseRangeSize + extra;
     
-    if (i === outcomeCount - 1) {
-      // Last range: ">N" for failure case (exclusive lower bound, no upper bound)
-      rangeEnd = null;
-      title = `>${maxTimeMinutes}`;
-    } else {
-      // Distribute remainder across first ranges
-      const extra = i < remainder ? 1 : 0;
-      rangeEnd = currentStart + baseRangeSize + extra - 1;
-      
-      // Format title with new notation: ">N to M" means >N and <=M
-      // First range: ">0 to 2" means >0 minutes and <=2 minutes (1-120 seconds)
-      if (currentStart === 0) {
-        title = `>0 to ${rangeEnd}`;
-      } else {
-        title = `>${currentStart} to ${rangeEnd}`;
-      }
-    }
+    // Upper bound is inclusive
+    const upperBound = currentLowerBound + rangeSize;
+    
+    // Format title: ">N to M" means >N minutes AND <=M minutes
+    const title = currentLowerBound === 0 ? `>0 to ${upperBound}` : `>${currentLowerBound} to ${upperBound}`;
     
     outcomes.push({
       title: title,
-      min: currentStart,
-      max: rangeEnd
+      min: currentLowerBound,
+      max: upperBound
     });
     
-    if (rangeEnd !== null) {
-      currentStart = rangeEnd + 1;
-    }
+    // Next range starts where this one ends (exclusive lower bound)
+    currentLowerBound = upperBound;
   }
+  
+  // Always add the final ">N" outcome for failure case
+  outcomes.push({
+    title: `>${maxTimeMinutes}`,
+    min: maxTimeMinutes,
+    max: null
+  });
   
   return outcomes;
 }

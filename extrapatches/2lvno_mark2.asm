@@ -6,6 +6,10 @@
 ;
 ; WORKING VERSION - Tested on gameid 18238, level $106
 ; KNOWN ISSUE: Player's overworld location/submap changes after exiting level
+; (Actually: this particular issue was fixed.
+;  Current limitation is: Midway/Checkpoint entry broken in most games with vanilla retry.
+;  Some games such as Perchance - Player does not re-enter level on retry with their implementation of retry system
+; )
 ;===========================================
 
 ;===========================================

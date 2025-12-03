@@ -27012,6 +27012,10 @@ async function performUsbPollingCycle() {
     return;
   }
   
+  // Capture the current challenge index at the start to detect if challenge advances during async operations
+  const initialChallengeIndex = currentChallengeIndex.value;
+  const initialChallengeSfcPath = currentChallengeSfcPath.value;
+  
   try {
     // 1. Check USB2SNES connection status
     const status = await (window as any).electronAPI.usb2snesStatus();
@@ -27060,12 +27064,25 @@ async function performUsbPollingCycle() {
       return;
     }
     
+    // CRITICAL: Verify we're still on the same challenge after async operations
+    // If the challenge advanced during async calls, we need to wait for the next cycle
+    if (currentChallengeIndex.value !== initialChallengeIndex || currentChallengeSfcPath.value !== initialChallengeSfcPath) {
+      console.log(`[USB Polling] Challenge advanced during polling cycle (${initialChallengeIndex} -> ${currentChallengeIndex.value}), resetting and waiting for next cycle`);
+      // Reset Condition A time since challenge changed
+      usbPollingConditionATime.value = 0;
+      usbPollingLastMemoryValues.value = {};
+      usbPollingCurrentMemoryValues.value = {};
+      usbPollingLastSnesInfo.value = null;
+      return; // Wait for next cycle to poll the new challenge
+    }
+    
     // Extract ROM filename from Info result
     // Format: "/work/run251130_1837/30_1764463051_2lvno11.sfc"
     // We need just the filename after the last "/"
     const romRunning = snesInfo.romrunning || '';
     const loadedFilename = romRunning ? getBasename(romRunning) : '';
-    const expectedFilename = currentChallengeSfcPath.value ? getBasename(currentChallengeSfcPath.value) : '';
+    // Use the captured initial path to ensure consistency
+    const expectedFilename = initialChallengeSfcPath ? getBasename(initialChallengeSfcPath) : '';
     
     // Store SNES info for comparison
     usbPollingLastSnesInfo.value = romRunning;
@@ -27076,7 +27093,7 @@ async function performUsbPollingCycle() {
       usbPollingCorrectGameLoaded.value = false;
       usbPollingConditionATime.value = 0; // Clamp Condition A time to 0
       usbPollingStatus.value = 'wrong-file';
-      console.log(`[USB Polling] Wrong game file: expected "${expectedFilename}", got "${loadedFilename}"`);
+      console.log(`[USB Polling] Wrong game file: expected "${expectedFilename}", got "${loadedFilename}" (challenge ${initialChallengeIndex + 1})`);
       return; // Don't proceed with memory polling if wrong file
     }
     

@@ -8,6 +8,7 @@ The database collected allows automating operations such as "Choose and launch a
 **Key Features:**
 - **Advanced Search & Filtering**: Powerful search and filtering system to find hacks by name, author, tags, difficulty, and more from a database of thousands of SMW romhacks
 - **One-Click Game Launch**: Select any game from the database and launch it to your SNES hardware (using USB SD2SNES) in seconds with automatic patching, uploading, and booting
+- **First Launch Automatic Install/Database Provisioning**: If your databases are not ready to use in Windows %APPDATA%\\rhtools\\rhdata.db %APPDATA\\rhtools\\patchbin.db or Linux ~/.config/rhtools/  etc.. the program on first now launches a helper to walk you through downloading romhack cache data and building local databases.
 - **Save Local Research notes and your own Personal review of games based on the following available  star ratings (Planned future work for Publishing and aggregating crowdsourced star ratings and comments on romhacks from other users; with rated game rankings on dimensions based on player skill verified using USB-Monitored challenge runs)**:
 - Current rating dimensions you can currently rate games in the user interface against the following dimensions:
     - My Overall rating (Choose between 0 and 5 stars)

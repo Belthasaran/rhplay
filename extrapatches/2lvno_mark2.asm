@@ -1,7 +1,11 @@
 ;===========================================
 ; SMW Overworld Level Force Patch
 ; Forces all overworld tiles to enter level !val
-; Compatible with Lunar Magic + Retry System
+; Used to implement gamestage randomization.
+; (Function that allows users to create a run through a random list of gamestages 
+; across different hacks found that have been collected so far into the gamestages database)
+;
+; Compatible with Lunar Magic + Retry System (some versions of retry system)
 ; Strategy: Intercept $7ED000 read and override at $05DCDD
 ;
 ; WORKING VERSION - Tested on gameid 18238, level $106

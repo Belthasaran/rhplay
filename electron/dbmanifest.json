@@ -1,4 +1,7 @@
 {
+  "greetings" : {
+	  "message": "No announcement has been specified"
+  },
   "clientdata.db": {
     "final_sha256": "b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8",
     "base": {
@@ -18,6 +21,7 @@
     }
   },
   "resource.db": {
+    "version" : "6",
     "base": {
       "source_path": "packed_db/resource.db.initial.xz",
       "file_name": "resource.db.initial.xz",
@@ -35,6 +39,7 @@
     "sqlpatches": []
   },
   "screenshot.db": {
+    "version" : "6",
     "base": {
       "source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
@@ -52,6 +57,7 @@
     "sqlpatches": []
   },
   "rhdata.db": {
+    "version" : "6",
     "base": {
       "file_name": "full_rhdata_2025_11_24.tar.xz",
       "format": "tar+xz",
@@ -85,6 +91,7 @@
     ]
   },
   "patchbin.db": {
+    "version" : "6",
     "base": {
       "file_name": "bare_patchbin_2025_11_01.tar.xz",
       "format": "tar+xz",

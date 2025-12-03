@@ -270,6 +270,155 @@ function normalizeWorkingPaths(plan) {
   };
 }
 
+/**
+ * Get search paths for local file discovery
+ * Searches: working directory, executable directory, OS Downloads folder
+ */
+function getSearchPaths(userDataDir, workingDir) {
+  const paths = [workingDir]; // Current downloads directory (highest priority)
+
+  // Executable directory (for portable apps)
+  if (process.resourcesPath) {
+    // In packaged app, executable is typically one level up from resourcesPath
+    const execDir = path.dirname(process.execPath);
+    paths.push(execDir);
+  } else {
+    // Development mode: use __dirname
+    paths.push(path.dirname(__dirname));
+  }
+
+  // OS Downloads directory
+  const platform = process.platform;
+  if (platform === 'win32') {
+    paths.push(path.join(os.homedir(), 'Downloads'));
+  } else if (platform === 'darwin') {
+    paths.push(path.join(os.homedir(), 'Downloads'));
+  } else {
+    // Linux
+    const xdgDownload = process.env.XDG_DOWNLOAD_DIR;
+    if (xdgDownload) {
+      paths.push(xdgDownload);
+    }
+    paths.push(path.join(os.homedir(), 'Downloads'));
+  }
+
+  return paths.filter((p) => p && fs.existsSync(path.dirname(p)));
+}
+
+/**
+ * Check if file matches criteria (extension, size, SHA256)
+ * Checks are performed in order: extension (fastest), size (fast), SHA256 (slowest but definitive)
+ * SHA256 is REQUIRED - files without matching hash are rejected
+ */
+function matchesFileCriteria(filePath, criteria) {
+  // SHA256 is required
+  if (!criteria.sha256) {
+    return false;
+  }
+
+  const stats = fs.statSync(filePath);
+
+  // Step 1: Check extension (fastest check)
+  if (criteria.extension) {
+    const fileExt = path.extname(filePath);
+    if (fileExt.toLowerCase() !== criteria.extension.toLowerCase()) {
+      return false;
+    }
+  }
+
+  // Step 2: Check size (fast check, exact match required)
+  // Size is the exact size of the compressed archive in bytes
+  if (criteria.size !== null && criteria.size !== undefined) {
+    if (stats.size !== criteria.size) {
+      return false;
+    }
+  }
+
+  // Step 3: Check SHA256 hash (slowest but definitive verification)
+  // This is the final and required check
+  const actualHash = sha256File(filePath);
+  if (actualHash !== criteria.sha256) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Recursively search for file matching criteria in a directory
+ */
+function findFileInDirectory(dir, criteria) {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      // Skip symlinks to avoid loops
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        // Recursively search subdirectories
+        const found = findFileInDirectory(fullPath, criteria);
+        if (found) {
+          return found;
+        }
+      } else if (entry.isFile()) {
+        // Check if file matches
+        if (matchesFileCriteria(fullPath, criteria)) {
+          return fullPath;
+        }
+      }
+    }
+  } catch (err) {
+    // Skip directories we can't read
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Search for a file matching the spec in multiple locations
+ * SHA256 hash is REQUIRED for file matching - files without matching hash are rejected
+ * @param {Object} spec - File specification from manifest (base or patch)
+ * @param {Array<string>} searchPaths - Array of directory paths to search
+ * @returns {string|null} - Path to found file, or null if not found
+ */
+function searchLocalFile(spec, searchPaths) {
+  const fileName = spec.file_name;
+  const expectedExt = path.extname(fileName);
+  const expectedSize = spec.size ? parseInt(spec.size, 10) : null;
+  const expectedSha256 = spec.sha256;
+
+  // SHA256 is required for file search
+  if (!expectedSha256) {
+    console.warn(`[search-local] ${fileName}: SHA256 not provided in manifest, skipping local search`);
+    return null;
+  }
+
+  for (const searchDir of searchPaths) {
+    if (!fs.existsSync(searchDir)) {
+      continue;
+    }
+
+    // Search recursively in directory
+    const found = findFileInDirectory(searchDir, {
+      extension: expectedExt,
+      size: expectedSize,
+      sha256: expectedSha256,
+    });
+
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
 function sha256File(filePath) {
   try {
     const buffer = fs.readFileSync(filePath);
@@ -277,6 +426,80 @@ function sha256File(filePath) {
   } catch (err) {
     return null;
   }
+}
+
+/**
+ * Compute SHA256 hash of provisioned.json data (excluding hashdata section)
+ */
+function computeProvisionedHash(data) {
+  // Create copy without hashdata
+  const { hashdata, ...dataWithoutHash } = data;
+  // Minify JSON
+  const jsonString = JSON.stringify(dataWithoutHash);
+  // Compute SHA256
+  return crypto.createHash('sha256').update(jsonString, 'utf8').digest('hex');
+}
+
+/**
+ * Load provisioned.json from userDataDir
+ */
+function loadProvisionedJson(userDataDir) {
+  const filePath = path.join(userDataDir, 'provisioned.json');
+  if (!fs.existsSync(filePath)) {
+    return { targets: {}, hashdata: { sha256: null } };
+  }
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+
+    // Verify hash if present
+    if (data.hashdata && data.hashdata.sha256) {
+      const computedHash = computeProvisionedHash(data);
+      if (computedHash !== data.hashdata.sha256) {
+        console.warn('[provisioned.json] Hash verification failed, file may be corrupted');
+        return { targets: {}, hashdata: { sha256: null } };
+      }
+    }
+
+    return data;
+  } catch (err) {
+    console.warn(`[provisioned.json] Failed to load: ${err.message}`);
+    return { targets: {}, hashdata: { sha256: null } };
+  }
+}
+
+/**
+ * Save provisioned.json to userDataDir
+ */
+function saveProvisionedJson(userDataDir, data) {
+  // Compute hash
+  const hash = computeProvisionedHash(data);
+  data.hashdata = { sha256: hash };
+
+  const filePath = path.join(userDataDir, 'provisioned.json');
+  ensureDirectory(userDataDir);
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+/**
+ * Update provisioned.json entry for a database
+ */
+function updateProvisionedEntry(userDataDir, dbName, manifestEntry, baseSha256, lastPatchSha256, lastPatchFileName) {
+  const provisioned = loadProvisionedJson(userDataDir);
+
+  const version = manifestEntry.version || '0';
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+
+  provisioned.targets[dbName] = {
+    version,
+    timestamp,
+    patch: lastPatchFileName || null,
+    base_sha256: baseSha256,
+    patch_sha256: lastPatchSha256 || null,
+  };
+
+  saveProvisionedJson(userDataDir, provisioned);
 }
 
 function inspectDatabases(opts, manifest) {
@@ -508,7 +731,56 @@ const IPFS_GATEWAYS = [
   'https://gateway.pinata.cloud/ipfs/',
 ];
 
-async function ensureArtifact(spec, workingDir, downloadTracker) {
+/**
+ * Parse priority array and expand shorthand tokens
+ * @param {Array<string>|undefined} priority - Priority array from manifest
+ * @param {Object} spec - File specification
+ * @returns {Array<Object>} - Array of download source objects
+ */
+function parsePriority(priority, spec) {
+  if (!priority) {
+    // Default priority based on available sources
+    const sources = [];
+    if (spec.ipfs_cidv1) {
+      sources.push({ type: 'ipfs', cid: spec.ipfs_cidv1 });
+    }
+    if (spec.url) {
+      const urls = Array.isArray(spec.url) ? spec.url : [spec.url];
+      urls.forEach((url, idx) => {
+        sources.push({ type: 'url', url, index: idx });
+      });
+    }
+    if (spec.data_txid || spec.ardrive_file_path) {
+      sources.push({ type: 'ardrive', txid: spec.data_txid, path: spec.ardrive_file_path });
+    }
+    return sources;
+  }
+
+  const sources = [];
+  const urlArray = Array.isArray(spec.url) ? spec.url : spec.url ? [spec.url] : [];
+
+  for (const token of priority) {
+    if (token === 'ipfs' && spec.ipfs_cidv1) {
+      sources.push({ type: 'ipfs', cid: spec.ipfs_cidv1 });
+    } else if (token === 'ardrive' && (spec.data_txid || spec.ardrive_file_path)) {
+      sources.push({ type: 'ardrive', txid: spec.data_txid, path: spec.ardrive_file_path });
+    } else if (token === 'url') {
+      // Expand to all URLs
+      urlArray.forEach((url, idx) => {
+        sources.push({ type: 'url', url, index: idx });
+      });
+    } else if (token.startsWith('url.')) {
+      const idx = parseInt(token.substring(4), 10);
+      if (!isNaN(idx) && idx >= 0 && idx < urlArray.length) {
+        sources.push({ type: 'url', url: urlArray[idx], index: idx });
+      }
+    }
+  }
+
+  return sources;
+}
+
+async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
   const destPath = path.join(workingDir, spec.file_name);
   if (downloadTracker) {
     downloadTracker.register(spec);
@@ -525,52 +797,87 @@ async function ensureArtifact(spec, workingDir, downloadTracker) {
     console.warn(`[download-retry] ${spec.file_name} present but hash mismatch, re-downloading.`);
   }
 
+  // Search local paths first (before any downloads)
+  // SHA256 is required for local search
+  if (spec.sha256) {
+    const searchPaths = getSearchPaths(userDataDir, workingDir);
+    const localFile = searchLocalFile(spec, searchPaths);
+    if (localFile) {
+      console.log(`[download-local] Found ${spec.file_name} at ${localFile}`);
+      // Copy to working directory
+      fs.copyFileSync(localFile, destPath);
+      // Verify hash (should already match, but double-check)
+      if (spec.sha256 && sha256File(destPath) !== spec.sha256) {
+        fs.unlinkSync(destPath);
+        throw new Error(`Local file hash mismatch for ${spec.file_name}`);
+      }
+      if (downloadTracker) {
+        downloadTracker.skip(spec);
+      }
+      return destPath;
+    }
+  }
+
+  // Parse priority and attempt downloads in order
+  const priority = spec.priority || (spec.url ? ['ipfs', 'url', 'ardrive'] : ['ipfs', 'ardrive']);
+  const sources = parsePriority(priority, spec);
+
   let lastError = null;
 
-  const attempts = [];
-
-  if (spec.ipfs_cidv1) {
-    for (const gateway of IPFS_GATEWAYS) {
-      const url = `${gateway}${spec.ipfs_cidv1}`;
-      attempts.push({ url, label: `ipfs:${gateway}` });
-      try {
-        await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`);
-        return destPath;
-      } catch (err) {
-        lastError = err;
-        console.error(`[download-error] ${spec.file_name} via ipfs:${gateway} -> ${err.message}`);
+  for (const source of sources) {
+    try {
+      if (source.type === 'ipfs') {
+        // Try all IPFS gateways
+        for (const gateway of IPFS_GATEWAYS) {
+          const url = `${gateway}${source.cid}`;
+          try {
+            await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`);
+            return destPath;
+          } catch (err) {
+            lastError = err;
+            console.error(`[download-error] ${spec.file_name} via ipfs:${gateway} -> ${err.message}`);
+          }
+        }
+      } else if (source.type === 'url') {
+        try {
+          await downloadFromUrl(source.url, destPath, spec.sha256, spec, downloadTracker, `url:${source.index}`);
+          return destPath;
+        } catch (err) {
+          lastError = err;
+          console.error(`[download-error] ${spec.file_name} via url.${source.index} -> ${err.message}`);
+        }
+      } else if (source.type === 'ardrive') {
+        // Existing ArDrive logic
+        if (source.txid) {
+          const url = `https://arweave.net/${source.txid}`;
+          try {
+            await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:data_txid');
+            return destPath;
+          } catch (err) {
+            lastError = err;
+            console.error(`[download-error] ${spec.file_name} via arweave:data_txid -> ${err.message}`);
+          }
+        } else if (source.path) {
+          const url = `https://arweave.net${source.path}`;
+          try {
+            await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:ardrive_path');
+            return destPath;
+          } catch (err) {
+            lastError = err;
+            console.error(`[download-error] ${spec.file_name} via arweave:ardrive_path -> ${err.message}`);
+          }
+        }
       }
+    } catch (err) {
+      lastError = err;
     }
   }
 
-  if (spec.data_txid) {
-    const url = `https://arweave.net/${spec.data_txid}`;
-    attempts.push({ url, label: 'arweave:data_txid' });
-    try {
-      await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:data_txid');
-      return destPath;
-    } catch (err) {
-      lastError = err;
-      console.error(`[download-error] ${spec.file_name} via arweave:data_txid -> ${err.message}`);
-    }
-  } else if (spec.ardrive_file_path) {
-    // Last resort: attempt to download via public ArDrive gateway path.
-    const url = `https://arweave.net${spec.ardrive_file_path}`;
-    attempts.push({ url, label: 'arweave:ardrive_path' });
-    try {
-      await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:ardrive_path');
-      return destPath;
-    } catch (err) {
-      lastError = err;
-      console.error(`[download-error] ${spec.file_name} via arweave:ardrive_path -> ${err.message}`);
-    }
-  }
-
-  if (attempts.length === 0) {
+  if (sources.length === 0) {
     console.error(`[download-fail] ${spec.file_name}: no download sources available in manifest.`);
   } else {
     console.error(
-      `[download-fail] ${spec.file_name}: exhausted ${attempts.length} source(s). Last error was: ${
+      `[download-fail] ${spec.file_name}: exhausted ${sources.length} source(s). Last error was: ${
         lastError ? lastError.message : 'unknown'
       }`
     );
@@ -666,7 +973,7 @@ async function extractFileFromTar(tarPath, extractFile, outputPath) {
   }
 }
 
-async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker) {
+async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker, userDataDir) {
   const { downloadsDir, stagingDir } = planPaths;
   ensureDirectory(stagingDir);
 
@@ -675,7 +982,7 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
     throw new Error(`Manifest entry missing base description.`);
   }
 
-  const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker);
+  const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir);
   console.log(`[extract] ${dbStatus.name}: decompressing base archive ${base.file_name}`);
   const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
   const tempDbPath = path.join(stagingDir, `${dbStatus.name}.tmp.db`);
@@ -697,20 +1004,31 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
   const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
   patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
 
+  let lastPatchSha256 = null;
+  let lastPatchFileName = null;
+
   for (const patch of patches) {
-    const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker);
+    const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir);
     console.log(`[patch-start] ${dbStatus.name}: applying ${patch.file_name}`);
     const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
     await decompressXz(patchArchivePath, sqlPath);
     await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
     fs.unlinkSync(sqlPath);
     console.log(`[patch-complete] ${dbStatus.name}: applied ${patch.file_name}`);
+    
+    // Track last applied patch
+    lastPatchSha256 = patch.sha256;
+    lastPatchFileName = patch.file_name;
   }
 
   ensureDirectory(path.dirname(finalDbPath));
   fs.copyFileSync(tempDbPath, finalDbPath);
   fs.unlinkSync(tempDbPath);
   console.log(`[provision] ${dbStatus.name}: finalized database at ${finalDbPath}`);
+  
+  // Update provisioned.json
+  updateProvisionedEntry(userDataDir, dbStatus.name, manifestEntry, base.sha256, lastPatchSha256, lastPatchFileName);
+  
   return finalDbPath;
 }
 
@@ -774,12 +1092,19 @@ async function executeProvision(plan, manifest) {
         const dest = await stageEmbeddedDb(db.name, paths.finalDir, true);
         result.executed.push({ name: db.name, action: 'copied-embedded', path: dest });
         console.log(`[provision] ${db.name}: embedded seed copied to ${dest}`);
+        // Update provisioned.json for embedded databases
+        // For embedded databases, compute SHA256 from final database file
+        const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name)?.manifestKey];
+        if (manifestEntry) {
+          const finalDbSha256 = sha256File(dest);
+          updateProvisionedEntry(plan.userDataDir, db.name, manifestEntry, finalDbSha256, null, null);
+        }
       } else if (db.action === 'provision-from-manifest') {
         const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name).manifestKey];
         if (!manifestEntry) {
           throw new Error('Manifest entry missing.');
         }
-        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker);
+        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker, plan.userDataDir);
         result.executed.push({ name: db.name, action: 'provisioned', path: dest });
         console.log(`[provision] ${db.name}: provisioning completed -> ${dest}`);
       } else {

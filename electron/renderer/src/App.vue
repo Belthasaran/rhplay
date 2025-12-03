@@ -27183,48 +27183,49 @@ async function handleGoalEvent(goalEvent: string) {
     // Check if we're on the last challenge
     const isLastChallenge = currentChallengeIndex.value >= runEntries.length - 1;
   
-  if (isLastChallenge) {
-    // Last challenge - complete the run
-    // Check if Done button is enabled
-    if (!isDoneButtonDisabled.value) {
-      // Call nextChallenge which will complete the run
-      await nextChallenge();
+    if (isLastChallenge) {
+      // Last challenge - complete the run
+      // Check if Done button is enabled
+      if (!isDoneButtonDisabled.value) {
+        // Call nextChallenge which will complete the run
+        await nextChallenge();
+      } else {
+        // Done disabled (failed win rule) - use Skip
+        await skipChallenge();
+      }
     } else {
-      // Done disabled (failed win rule) - use Skip
-      await skipChallenge();
-    }
-  } else {
-    // Not last challenge - advance to next
-    // Check if Done button is enabled
-    if (!isDoneButtonDisabled.value) {
-      // Call nextChallenge
-      await nextChallenge();
-      
-      // Auto-launch next challenge after a short delay
-      // This gives the system time to process the challenge advance
-      setTimeout(async () => {
-        if (currentChallenge.value && currentChallengeSfcPath.value) {
-          try {
-            await launchCurrentChallenge();
-          } catch (error: any) {
-            console.error('[USB Polling] Error auto-launching next challenge:', error);
+      // Not last challenge - advance to next
+      // Check if Done button is enabled
+      if (!isDoneButtonDisabled.value) {
+        // Call nextChallenge
+        await nextChallenge();
+        
+        // Auto-launch next challenge after a short delay
+        // This gives the system time to process the challenge advance
+        setTimeout(async () => {
+          if (currentChallenge.value && currentChallengeSfcPath.value) {
+            try {
+              await launchCurrentChallenge();
+            } catch (error: any) {
+              console.error('[USB Polling] Error auto-launching next challenge:', error);
+            }
           }
-        }
-      }, 500); // 500ms delay
-    } else {
-      // Done disabled (failed win rule) - use Skip
-      await skipChallenge();
-      
-      // Auto-launch next challenge after a short delay
-      setTimeout(async () => {
-        if (currentChallenge.value && currentChallengeSfcPath.value) {
-          try {
-            await launchCurrentChallenge();
-          } catch (error: any) {
-            console.error('[USB Polling] Error auto-launching next challenge:', error);
+        }, 500); // 500ms delay
+      } else {
+        // Done disabled (failed win rule) - use Skip
+        await skipChallenge();
+        
+        // Auto-launch next challenge after a short delay
+        setTimeout(async () => {
+          if (currentChallenge.value && currentChallengeSfcPath.value) {
+            try {
+              await launchCurrentChallenge();
+            } catch (error: any) {
+              console.error('[USB Polling] Error auto-launching next challenge:', error);
+            }
           }
-        }
-      }, 500); // 500ms delay
+        }, 500); // 500ms delay
+      }
     }
   } catch (error: any) {
     console.error('[USB Polling] Error handling goal event:', error);
@@ -27316,7 +27317,7 @@ async function pollMemoryAddresses() {
       if (usbPollingConditionATime.value >= 10000 && usbPollingConditionATime.value < 11000) {
         console.log('[USB Polling] Condition A threshold reached (10 seconds)');
       }
-    } else {
+    } else if (usbPollingConditionATime.value < 10000) {
       // Condition A is not met - reset tracking time
       if (usbPollingConditionATime.value > 0) {
         console.log('[USB Polling] Condition A no longer met, resetting timer');
@@ -27974,66 +27975,119 @@ button:disabled {
 
 /* Poll USB Button */
 .btn-poll-usb {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  gap: 8px;
+  padding: 8px 14px;
+  background: #6366f1; /* Indigo background - matches other action buttons */
+  border: 1px solid #4f46e5;
   border-radius: 4px;
-  color: var(--text-primary);
+  color: white;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition: all 0.2s ease;
   font-size: var(--base-font-size);
+  font-weight: 500;
+  white-space: nowrap;
+  position: relative;
+  min-height: 36px; /* Match other button heights */
 }
 
-.btn-poll-usb:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-primary);
+.btn-poll-usb:hover:not(:disabled) {
+  background: #4f46e5;
+  border-color: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .btn-poll-usb.active {
-  background: var(--bg-hover);
-  border-color: var(--primary-color);
-  font-weight: 500;
+  background: #8b5cf6; /* Purple when active/polling */
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
 }
 
+.btn-poll-usb.active:hover:not(:disabled) {
+  background: #7c3aed;
+  border-color: #6d28d9;
+}
+
+.btn-poll-usb:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.btn-poll-usb:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Checkbox styling - integrated with button */
 .btn-poll-usb .poll-checkbox {
   margin: 0;
   cursor: pointer;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  accent-color: white;
+  flex-shrink: 0;
+  cursor: inherit;
+  pointer-events: auto; /* Allow checkbox clicks */
 }
 
-/* Poll USB Status Colors */
+.btn-poll-usb .poll-checkbox:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Button text - prevent text selection */
+.btn-poll-usb span {
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Poll USB Status Colors - override base styles when status is active */
 .btn-poll-usb.poll-status-good {
-  background: #e3f2fd; /* Light blue */
-  border-color: #2196f3;
-  color: #1976d2;
+  background: #0ea5e9; /* Sky blue - good performance */
+  border-color: #0284c7;
+  color: white;
 }
 
-.btn-poll-usb.poll-status-good:hover {
-  background: #bbdefb;
+.btn-poll-usb.poll-status-good:hover:not(:disabled) {
+  background: #0284c7;
+  border-color: #0369a1;
+}
+
+.btn-poll-usb.poll-status-good.active {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.3);
 }
 
 .btn-poll-usb.poll-status-slow {
-  background: #ffebee; /* Light red */
-  border-color: #f44336;
-  color: #c62828;
+  background: #ef4444; /* Red - slow performance */
+  border-color: #dc2626;
+  color: white;
 }
 
-.btn-poll-usb.poll-status-slow:hover {
-  background: #ffcdd2;
+.btn-poll-usb.poll-status-slow:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #b91c1c;
+}
+
+.btn-poll-usb.poll-status-slow.active {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
 }
 
 .btn-poll-usb.poll-status-wrong-file {
-  background: #fff3e0; /* Light orange */
-  border-color: #ff9800;
-  color: #e65100;
+  background: #f59e0b; /* Amber/Orange - wrong game file */
+  border-color: #d97706;
+  color: white;
 }
 
-.btn-poll-usb.poll-status-wrong-file:hover {
-  background: #ffe0b2;
+.btn-poll-usb.poll-status-wrong-file:hover:not(:disabled) {
+  background: #d97706;
+  border-color: #b45309;
+}
+
+.btn-poll-usb.poll-status-wrong-file.active {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
 }
 .btn-unpause { background: #10b981; color: white; font-weight: bold; }
 .btn-unpause:hover { background: #059669; }

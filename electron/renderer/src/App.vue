@@ -27000,7 +27000,15 @@ function startUsbPolling() {
 
 // Main polling cycle - checks connection, SNES info, and memory
 async function performUsbPollingCycle() {
-  if (!usbPollingEnabled.value || !isRunActive.value || !currentChallenge.value || !currentChallengeSfcPath.value) {
+  // CRITICAL: Stop polling entirely if run is not active, paused, or polling disabled
+  // This prevents unnecessary USB2SNES requests after run completion
+  if (!usbPollingEnabled.value || !isRunActive.value || isRunPaused.value || !currentChallenge.value || !currentChallengeSfcPath.value || !currentRunUuid.value) {
+    // Stop the polling interval if conditions aren't met
+    if (usbPollingInterval.value !== null) {
+      clearInterval(usbPollingInterval.value);
+      usbPollingInterval.value = null;
+      console.log('[USB Polling] Stopped polling - run not active or paused');
+    }
     return;
   }
   
@@ -27013,11 +27021,37 @@ async function performUsbPollingCycle() {
         console.log('[USB Polling] Disconnected, attempting to reconnect...');
         await (window as any).electronAPI.usb2snesConnect({});
       }
+      // Re-check conditions after async operation before proceeding
+      if (!usbPollingEnabled.value || !isRunActive.value || isRunPaused.value || !currentChallenge.value || !currentChallengeSfcPath.value || !currentRunUuid.value) {
+        if (usbPollingInterval.value !== null) {
+          clearInterval(usbPollingInterval.value);
+          usbPollingInterval.value = null;
+        }
+        return;
+      }
+      return;
+    }
+    
+    // Re-check conditions after async operation before proceeding
+    if (!usbPollingEnabled.value || !isRunActive.value || isRunPaused.value || !currentChallenge.value || !currentChallengeSfcPath.value || !currentRunUuid.value) {
+      if (usbPollingInterval.value !== null) {
+        clearInterval(usbPollingInterval.value);
+        usbPollingInterval.value = null;
+      }
       return;
     }
     
     // 2. Get SNES Info to check loaded ROM
     const snesInfo = await (window as any).electronAPI.usb2snesInfo();
+    
+    // Re-check conditions after async operation before proceeding
+    if (!usbPollingEnabled.value || !isRunActive.value || isRunPaused.value || !currentChallenge.value || !currentChallengeSfcPath.value || !currentRunUuid.value) {
+      if (usbPollingInterval.value !== null) {
+        clearInterval(usbPollingInterval.value);
+        usbPollingInterval.value = null;
+      }
+      return;
+    }
     
     if (!snesInfo) {
       // SNES not attached or error getting info
@@ -27069,6 +27103,15 @@ async function performUsbPollingCycle() {
     
   } catch (error: any) {
     console.error('[performUsbPollingCycle] Error:', error);
+    // Check if we should stop polling due to run state change
+    if (!usbPollingEnabled.value || !isRunActive.value || isRunPaused.value || !currentRunUuid.value) {
+      // Stop the polling interval if run is no longer active
+      if (usbPollingInterval.value !== null) {
+        clearInterval(usbPollingInterval.value);
+        usbPollingInterval.value = null;
+        console.log('[USB Polling] Stopped polling due to run state change');
+      }
+    }
   }
 }
 
@@ -27100,7 +27143,7 @@ function checkConditionA(memoryValues: Record<string, number>): boolean {
   return (
     memoryValues.run_game === 0x00 &&
     memoryValues.paused === 0x00 &&
-    memoryValues.animation === 0x00 &&
+    /* memoryValues.animation === 0x00 && */
     memoryValues.regularlevel === 0x00 &&
     memoryValues.endtimer === 0x00 &&
     memoryValues.keyhole_timer === 0x00

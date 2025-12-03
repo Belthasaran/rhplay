@@ -27020,10 +27020,27 @@ async function performUsbPollingCycle() {
     // 1. Check USB2SNES connection status
     const status = await (window as any).electronAPI.usb2snesStatus();
     if (!status || !status.connected || !status.attached) {
-      // Auto-reconnect if disconnected
+      // Auto-reconnect if disconnected - use same connection options as manual connect
       if (!status.connected) {
         console.log('[USB Polling] Disconnected, attempting to reconnect...');
-        await (window as any).electronAPI.usb2snesConnect({});
+        try {
+          // Build connection options using the same function as manual connect
+          // This requires proper USB2SNES configuration (library, address, etc.)
+          const connectOptions = buildUsb2snesConnectOptions();
+          const reconnectResult = await (window as any).electronAPI.usb2snesConnect(connectOptions);
+          
+          // Update status after successful reconnect
+          if (reconnectResult && reconnectResult.device) {
+            console.log('[USB Polling] Reconnection successful:', reconnectResult.device);
+          } else {
+            console.log('[USB Polling] Reconnection completed');
+          }
+        } catch (reconnectError: any) {
+          // Log the error but don't stop polling - user can manually reconnect if needed
+          console.warn('[USB Polling] Auto-reconnect failed (configuration may be missing):', reconnectError?.message || reconnectError);
+          // Continue polling cycle - will detect disconnection again next cycle
+          // User can manually reconnect via USB2SNES dropdown if needed
+        }
       }
       // Re-check conditions after async operation before proceeding
       if (!usbPollingEnabled.value || !isRunActive.value || isRunPaused.value || !currentChallenge.value || !currentChallengeSfcPath.value || !currentRunUuid.value) {
@@ -27033,7 +27050,11 @@ async function performUsbPollingCycle() {
         }
         return;
       }
-      return;
+      // If still disconnected/not attached after reconnect attempt, skip this cycle
+      const recheckStatus = await (window as any).electronAPI.usb2snesStatus();
+      if (!recheckStatus || !recheckStatus.connected || !recheckStatus.attached) {
+        return;
+      }
     }
     
     // Re-check conditions after async operation before proceeding
@@ -27157,8 +27178,9 @@ function getCurrentChallengeElapsedSeconds(): number {
 
 // Check if Condition A is met (all required values are 0x00)
 function checkConditionA(memoryValues: Record<string, number>): boolean {
+  // console.log(`rg${memoryValues.run_game === 0x00} p${memoryValues.paused === 0x00} rl${ memoryValues.regularlevel === 0x00} et${memoryValues.endtimer === 0x00} kh${memoryValues.keyhole_timer === 0x00}`)
   return (
-    memoryValues.run_game === 0x00 &&
+    /* memoryValues.run_game === 0x00 && */
     memoryValues.paused === 0x00 &&
     /* memoryValues.animation === 0x00 && */
     memoryValues.regularlevel === 0x00 &&

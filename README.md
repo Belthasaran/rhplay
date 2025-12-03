@@ -8,10 +8,10 @@ The database collected allows automating operations such as "Choose and launch a
 **Key Features:**
 - **Advanced Search & Filtering**: Powerful search and filtering system to find hacks by name, author, tags, difficulty, and more from a database of thousands of SMW romhacks
 - **One-Click Game Launch**: Select any game from the database and launch it to your SNES hardware (using USB SD2SNES) in seconds with automatic patching, uploading, and booting
-- **Additional Patches/Burned-In Cheats System with built-in patch presets** - Automatically add specified patches burned into ROM: including Game Genie codes and ASAR patch templates.  Built-in patch templates such as Start every level Cape, No Yoshi Ditch, One-Hit KO, "Infinite Lives" (Useful for Kaizo Mario World)
-- **Automated Challenge Runs**: Create timed challenge runs with multiple random games or stages, complete with win conditions, rollover time mechanics, and real-time timer overlays for streaming
+- **Additional Patches/Burned-In Cheats System with built-in patch presets** - Automatically add specified patches burned into ROM: including Game Genie codes and ASAR patch templates.  Built-in patch templates such as Start every level Cape, No Yoshi Ditch, One-Hit KO, "Infinite Lives" (Useful for Kaizo Mario World,  Some games or patch/addons may have limited compatibility with each other)
+- **Automated Challenge Runs** (ALPHA): Create timed challenge runs with multiple random games or stages, complete with win conditions, rollover time mechanics, and real-time timer overlays for streaming
 - **USB2SNES Auto-Completion**: Revolutionary USB polling system that connects to SD2SNES flash carts (EXPERIMENTAL): automatically detects when you complete a challenge by monitoring SNES memory, advancing to the next challenge and launching it automatically - no manual button presses needed
-- **Twitch Predictions Integration**: Seamlessly integrate with Twitch to create, manage, and resolve predictions for your challenge runs - supports Yes/No, Time Range, and Whole Challenge prediction types with automatic resolution
+- **Twitch Predictions Integration** (NEW Experimental system): Seamlessly integrate with Twitch to create, manage, and resolve predictions for your challenge runs - supports Yes/No, Time Range, and Whole Challenge prediction types with automatic resolution
 - **Live Cheats System**: Using the USB port of USB2SNES: You can make certain live tweaks for your challenges, such as Turn current level into water level, Warp to a different level, Grant Star or Cape.  OR create additional challenges, such as Poll and reduce game timer.
 
 This is a sample release.

@@ -6,6 +6,7 @@ A searchable cache database is provided, allowing any hack in the database to be
 The database collected allows automating operations such as "Choose and launch a random game from the collection based on criteria X, Y, and Z"
 
 **Key Features:**
+- **Source code, Linux-first releases**: There are both Linux and Windows builds, but development and testing is primarily on Linux. Windows support is secondary.  All project source code is included with release packages, so you can review it to ensure software is to your liking.
 - **Advanced Search & Filtering**: Powerful search and filtering system to find hacks by name, author, tags, difficulty, and more from a database of thousands of SMW romhacks
 - **One-Click Game Launch**: Select any game from the database and launch it to your SNES hardware (using USB SD2SNES) in seconds with automatic patching, uploading, and booting
 - **First Launch Automatic Install/Database Provisioning**: If your databases are not ready to use in Windows %APPDATA%\\rhtools\\rhdata.db %APPDATA\\rhtools\\patchbin.db or Linux ~/.config/rhtools/  etc.. the program on first now launches a helper to walk you through downloading romhack cache data and building local databases.

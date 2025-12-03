@@ -9,19 +9,18 @@ The database collected allows automating operations such as "Choose and launch a
 - **Advanced Search & Filtering**: Powerful search and filtering system to find hacks by name, author, tags, difficulty, and more from a database of thousands of SMW romhacks
 - **One-Click Game Launch**: Select any game from the database and launch it to your SNES hardware (using USB SD2SNES) in seconds with automatic patching, uploading, and booting
 - **Save Local Research notes and your own Personal review of games based on the following available  star ratings (Planned future work for Publishing and aggregating crowdsourced star ratings and comments on romhacks from other users; with rated game rankings on dimensions based on player skill verified using USB-Monitored challenge runs)**:
--   Current rating dimensions you can currently rate games in the user interface against the following dimensions:
--     My Overall rating (Choose between 0 and 5 stars)
--     My Difficulty (Opinion on correct game difficulty), My skill (at time of rating), My skill (at time I beat),
--     Recommendation - do I recommend the game for others
--     Importance (Special significance of the game, such as Kaizo SMW)
--     Gameplay Design (Enjoyable gameplay, interesting mechanics, free of obstacles that impede player for reasons other than skill - e.g., blind jumps)
-✕
--     Design Quality: Player Fairness (Star rating for progression barriers - whether in the game rated: progression barriers are highly related to player skill level, and not artificial imposed barriers unrelated to player skill at SMW. A rating of 5 stars indicates all challenges are reasonable, and a player at the general skill level the game is intended for would spend 99% of their gameplay time tackling challenges of skill, and not being impeded by obstacles or sequence of challenges that a human of any skill level would usually fail at least once - e.g., hazards or trolls which cannot be anticipated, or very long runs of obstacles between checkpoints)
--     Design Quality: Challenge Quality Rating (Whether players actually need valid skill to complete this, or the game has mostly challenges where a player at the defined skill level simply wins with enough trial and error. A score of 0 suggests the hack contains many trial and error challenges that any player with enough time could clear. A score of 5 indicates that only by developing meaningful skills at SMW gameplay, native SMW mechanics, or understanding of SMW, can the player overcome these challenges. High challenge quality means there is high transferability of skills required to beat the hack to SMW in general)
--     Originality / Creativity (The game is significantly unique and interesting)
--     Design Quality: Visual Aesthetics (Overworld and levels well designed visually - free of floating muncher stacks, naked pipes, etc.)
--     Story (Does the game have a compelling or interesting story?)
--     Soundtrack and Graphics (Quality of soundtrack and graphics presentation)
+- Current rating dimensions you can currently rate games in the user interface against the following dimensions:
+ - My Overall rating (Choose between 0 and 5 stars)
+ - My Difficulty (Opinion on correct game difficulty), My skill (at time of rating), My skill (at time I beat),
+ - Recommendation - do I recommend the game for others
+ - Importance (Special significance of the game, such as Kaizo SMW)
+ - Gameplay Design (Enjoyable gameplay, interesting mechanics, free of obstacles that impede player for reasons other than skill - e.g., blind jumps)
+ - Design Quality: Player Fairness (Star rating for progression barriers - whether in the game rated: progression barriers are highly related to player skill level, and not artificial imposed barriers unrelated to player skill at SMW. A rating of 5 stars indicates all challenges are reasonable, and a player at the general skill level the game is intended for would spend 99% of their gameplay time tackling challenges of skill, and not being impeded by obstacles or sequence of challenges that a human of any skill level would usually fail at least once - e.g., hazards or trolls which cannot be anticipated, or very long runs of obstacles between checkpoints)
+ - Design Quality: Challenge Quality Rating (Whether players actually need valid skill to complete this, or the game has mostly challenges where a player at the defined skill level simply wins with enough trial and error. A score of 0 suggests the hack contains many trial and error challenges that any player with enough time could clear. A score of 5 indicates that only by developing meaningful skills at SMW gameplay, native SMW mechanics, or understanding of SMW, can the player overcome these challenges. High challenge quality means there is high transferability of skills required to beat the hack to SMW in general)
+ - Originality / Creativity (The game is significantly unique and interesting)
+ - Design Quality: Visual Aesthetics (Overworld and levels well designed visually - free of floating muncher stacks, naked pipes, etc.)
+ - Story (Does the game have a compelling or interesting story?)
+ -Soundtrack and Graphics (Quality of soundtrack and graphics presentation)
 
 
 - **Additional Patches/Burned-In Cheats System with built-in patch presets** - Automatically add specified patches burned into ROM: including Game Genie codes and ASAR patch templates.  Built-in patch templates such as Start every level Cape, No Yoshi Ditch, One-Hit KO, "Infinite Lives" (Useful for Kaizo Mario World,  Some games or patch/addons may have limited compatibility with each other)

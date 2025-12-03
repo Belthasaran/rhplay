@@ -5,6 +5,15 @@ A searchable cache database is provided, allowing any hack in the database to be
 
 The database collected allows automating operations such as "Choose and launch a random game from the collection based on criteria X, Y, and Z"
 
+**Key Features:**
+- **Advanced Search & Filtering**: Powerful search and filtering system to find hacks by name, author, tags, difficulty, and more from a database of thousands of SMW romhacks
+- **One-Click Game Launch**: Select any game from the database and launch it to your SNES hardware (using USB SD2SNES) in seconds with automatic patching, uploading, and booting
+- **Additional Patches/Burned-In Cheats System with built-in patch presets** - Automatically add specified patches burned into ROM: including Game Genie codes and ASAR patch templates.  Built-in patch templates such as Start every level Cape, No Yoshi Ditch, One-Hit KO, "Infinite Lives" (Useful for Kaizo Mario World)
+- **Automated Challenge Runs**: Create timed challenge runs with multiple random games or stages, complete with win conditions, rollover time mechanics, and real-time timer overlays for streaming
+- **USB2SNES Auto-Completion**: Revolutionary USB polling system that connects to SD2SNES flash carts (EXPERIMENTAL): automatically detects when you complete a challenge by monitoring SNES memory, advancing to the next challenge and launching it automatically - no manual button presses needed
+- **Twitch Predictions Integration**: Seamlessly integrate with Twitch to create, manage, and resolve predictions for your challenge runs - supports Yes/No, Time Range, and Whole Challenge prediction types with automatic resolution
+- **Live Cheats System**: Using the USB port of USB2SNES: You can make certain live tweaks for your challenges, such as Turn current level into water level, Warp to a different level, Grant Star or Cape.  OR create additional challenges, such as Poll and reduce game timer.
+
 This is a sample release.
 This program is incomplete and a work in progress.
 
@@ -30,9 +39,9 @@ A Manifest pointed to 0.1.9beta Source of this release and game description data
   Metadata Tx Id: MJDsk-3v8ATxOgRWDV7Fk35FcnFxwZjyqIKIDtQbjZk
   ArNS Name: rhplay_smwresource
 
-# Current Features
+# Current Features Detail
 
- - Quick launch automation feature for SMW Hacks -  Once the entire ~2GB database file is provisioned: this program lets you choose a random SMW hack from the local database; so long as you provided your own SMW ROM to use - you can quickly automate the process of loading any random game; uploading it to your SNES over the SD2SNES USB port, and boot the game in a few seconds with a single click.  (No need to get out of your chair and shuffle memory cards).  Perhaps i'm just lazy, but this was and always should be the primary use case for the program - streamlining the process for quicker and less tedious access to review and study/analyze massive SMW game collections.   Looking at many SMW romhacks a little bit; finding, downloading, patching, and launching hack manually is 4 steps - that wastes 5 or 6 minutes per hack: making the process of research impractical. Automation and point-and-click launch from a games listing is desired!
+ - Quick launch automation feature for "ROM Games" (SMW Hacks) -  Once the entire ~2GB database file is provisioned: this program lets you choose a random SMW hack from the local database; so long as you provided your own SMW ROM to use - you can quickly automate the process of loading any random game; uploading it to your SNES over the SD2SNES USB port, and boot the game in a few seconds with a single click.  (No need to get out of your chair and shuffle memory cards).  Perhaps i'm just lazy, but this was and always should be the primary use case for the program - streamlining the process for quicker and less tedious access to review and study/analyze massive SMW game collections.   Looking at many SMW romhacks a little bit; finding, downloading, patching, and launching hack manually is 4 steps - that wastes 5 or 6 minutes per hack: making the process of research impractical. Automation and point-and-click launch from a games listing is desired!
 
  - Attempts to provision databases on first launch (rhdata.db, patchbin.db, clientdata.db, etc)
 
@@ -102,9 +111,33 @@ For example: If you decide to use Twitch integration features, then security tok
 
   - Optional Win conditions: such as Time limit for run.  Time limit per challenge item.   Optional Rollover time which means that if you finish a challenge item before the time limit - you can accumulate some amount of rollover time and spend that time on other challenges.
 
-  - Optional web server utility process that can help serve the overlay locally or remotely for easy OBS Access - http://localhost:2599/runview.html
+  - Optional built-in web server (utility process) that can help serve the overlay locally or remotely for easy OBS Access - http://localhost:2599/runview.html
 
-  - Current work: Twitch Predictions integration with the "Challenge Run" timer feature, which is currently incomplete.
+  - **Twitch Predictions Integration**: Full-featured integration with Twitch's Prediction API for challenge runs. Supports three prediction modes:
+    - **Individual Item (Current)**: Create predictions for the current challenge item as you play
+    - **Individual Item (Next)**: Create predictions for the next challenge item before you start it
+    - **Whole Challenge**: Create a single prediction for the entire challenge run
+    - Supports **Yes/No** predictions (e.g., "Will the player complete this challenge?")
+    - Supports **Time Range** predictions (e.g., "How long will this challenge take?") with configurable ranges based on win rules, rollover time, and grace periods
+    - Supports **Whole Challenge** predictions (e.g., "How many challenges will be completed?")
+    - Automatic prediction creation, locking, and resolution based on challenge completion
+    - Manual control options for locking, canceling, and reopening predictions
+    - Automatic conflict detection and resolution when enabling predictions
+    - Prediction state persistence across application restarts
+    - Configurable prediction windows, delays, and outcome options
+    - Status messages and warnings for prediction management
+
+  - **USB Polling Auto-Completion**: Revolutionary feature that automatically detects challenge completion by polling SNES memory addresses:
+    - Monitors game state (animation, level status, timers, switches, etc.) every second
+    - Automatically detects goal events (level completion, boss defeat, keyhole entry, switch activation, etc.)
+    - Automatically advances to the next challenge when completion is detected
+    - Automatically launches the next challenge's game file
+    - Visual feedback with color-coded button status (blue = good performance, red = slow, orange = wrong game file)
+    - Condition A system ensures stable game state before enabling goal detection
+    - Respects pause/unpause and run lifecycle
+    - Only polls when run is active and not paused
+    - Auto-reconnects to USB2SNES if connection is lost
+    - Verifies correct game file is loaded before polling
 
 ## NEW Initial Release
 

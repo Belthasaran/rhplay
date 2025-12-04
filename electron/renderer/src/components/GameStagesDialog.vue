@@ -1791,9 +1791,15 @@ async function deleteStage(stage: GameStage) {
   }
   
   const levelHex = formatLevelNumberHex(stage.levelnumber);
-  if (!confirm(`Are you sure you want to delete stage "${stage.levelname}" (Level ${levelHex})?`)) {
-    return;
-  }
+
+  /* Disable confirm prompt for now.
+   * Confirm prompts get very annoying here, since often people want to delete several stages at once.
+   * It doubles work and causes fatigue, irritation to repeatedly answer Are you sure prompts.
+   *
+   * if (!confirm(`Are you sure you want to delete stage "${stage.levelname}" (Level ${levelHex})?`)) {
+   *   return;
+   * }
+   */
   
   try {
     const api = (window as any)?.electronAPI;

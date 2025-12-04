@@ -12078,7 +12078,7 @@ async function saveTrustDeclarationEdits() {
       try {
         JSON.parse(editingTrustDeclaration.value.content_json);
       } catch (error: any) {
-        alert(`Invalid JSON in content: ${error.message}`);
+        await showAlert(`Invalid JSON in content: ${error.message}`, 'Invalid JSON');
         return;
       }
     }
@@ -14395,7 +14395,7 @@ async function backupSelectedAdminKeypair() {
   
   const confirmPassword = prompt('Confirm password:');
   if (password !== confirmPassword) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -18305,11 +18305,11 @@ async function setStageDifficultyFeedback(difficulty: number) {
       difficultyDropdownOpen.value = false;
     } else {
       console.error('Error saving stage feedback:', result.error);
-      alert('Error saving feedback: ' + result.error);
+      await showAlert('Error saving feedback: ' + result.error, 'Save Failed');
     }
   } catch (error) {
     console.error('Error saving stage feedback:', error);
-    alert('Error saving feedback');
+    await showAlert('Error saving feedback', 'Save Error');
   }
 }
 
@@ -19212,14 +19212,14 @@ async function stageRun(mode: 'save' | 'upload') {
 
 async function saveRunToDatabase() {
   if (!isElectronAvailable()) {
-    alert('Run saving requires Electron environment');
+    await showAlert('Run saving requires Electron environment', 'Error');
     return;
   }
   
   try {
     const runName = currentRunName.value;
     if (!runName) {
-      alert('Run name is required');
+      await showAlert('Run name is required', 'Validation Error');
       return;
     }
     
@@ -19662,9 +19662,10 @@ async function loadRestoreRun() {
   try {
     // Confirm if there's a current run in progress
     if (currentRunUuid.value && currentRunUuid.value !== preparingRunUuid) {
-      const confirmed = confirm(
+      const confirmed = await showConfirm(
         `You have a current run "${currentRunName.value}" in progress.\n\n` +
-        `Loading this run will replace it. Continue?`
+        `Loading this run will replace it. Continue?`,
+        'Replace Current Run'
       );
       if (!confirmed) return;
     }
@@ -20244,9 +20245,9 @@ async function launchWithProgram() {
   }
 }
 
-function launchGameProgram() {
+async function launchGameProgram() {
   // TODO: Implement launching the configured game program with first SFC file
-  alert('Launch game program - to be implemented');
+  await showAlert('Launch game program - to be implemented', 'Not Implemented');
   // This will be implemented in a later phase
 }
 
@@ -20290,7 +20291,7 @@ async function launchSnesFile(file: any) {
         try {
           connectOptions = buildUsb2snesConnectOptions();
         } catch (configError: any) {
-          alert(`Launch failed: ${configError.message}`);
+          await showAlert(`Launch failed: ${configError.message}`, 'Launch Failed');
           return;
         }
 
@@ -26069,12 +26070,12 @@ const hasAtLeastOneRating = computed(() => {
 // Function to publish ratings to Nostr
 async function publishRatingsToNostr() {
   if (!hasAtLeastOneRating.value) {
-    alert('Please set at least one rating before publishing.');
+    await showAlert('Please set at least one rating before publishing.', 'Validation Error');
     return;
   }
   
   if (!ratingSheetGameId.value || !selectedItem.value) {
-    alert('No game selected for publishing.');
+    await showAlert('No game selected for publishing.', 'Selection Required');
     return;
   }
   

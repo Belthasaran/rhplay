@@ -463,12 +463,74 @@
       @close="showStagesDialog = false"
       @saved="handleStagesSaved"
     />
+
+    <!-- Custom Modal Dialogs -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogTitle"
+      :message="alertDialogMessage"
+      @confirm="handleAlertConfirm"
+      @cancel="handleAlertCancel"
+    />
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      :confirm-text="confirmDialogConfirmText"
+      :cancel-text="confirmDialogCancelText"
+      @confirm="handleConfirmConfirm"
+      @cancel="handleConfirmCancel"
+    />
+    <PromptDialog
+      :visible="promptDialogVisible"
+      :title="promptDialogTitle"
+      :message="promptDialogMessage"
+      :placeholder="promptDialogPlaceholder"
+      :default-value="promptDialogDefaultValue"
+      :input-type="promptDialogInputType"
+      :required="promptDialogRequired"
+      :confirm-text="promptDialogConfirmText"
+      :cancel-text="promptDialogCancelText"
+      @confirm="handlePromptConfirm"
+      @cancel="handlePromptCancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import GameStagesDialog from '../GameStagesDialog.vue';
+import AlertDialog from '../AlertDialog.vue';
+import ConfirmDialog from '../ConfirmDialog.vue';
+import PromptDialog from '../PromptDialog.vue';
+import {
+  showAlert,
+  showConfirm,
+  showPrompt,
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+  confirmDialogVisible,
+  confirmDialogTitle,
+  confirmDialogMessage,
+  confirmDialogConfirmText,
+  confirmDialogCancelText,
+  handleConfirmConfirm,
+  handleConfirmCancel,
+  promptDialogVisible,
+  promptDialogTitle,
+  promptDialogMessage,
+  promptDialogPlaceholder,
+  promptDialogDefaultValue,
+  promptDialogInputType,
+  promptDialogRequired,
+  promptDialogConfirmText,
+  promptDialogCancelText,
+  handlePromptConfirm,
+  handlePromptCancel,
+} from '@/utils/dialogs';
 // Predefined tags loaded from text file (one tag per line)
 // Vite raw import to get file contents as string
 // File: electron/renderer/src/components/submit/smwtags.txt
@@ -654,7 +716,7 @@ function newDraft() {
 
 async function openStagesEditor() {
   if (!current.value || !current.value.meta.name) {
-    alert('Please provide a game name first before editing stages.');
+    await showAlert('Please provide a game name first before editing stages.', 'Validation Error');
     return;
   }
   const api = (window as any)?.electronAPI;
@@ -665,7 +727,7 @@ async function openStagesEditor() {
     // Save draft first to generate gameid
     await saveDraftToDb();
     if (!current.value.meta.gameid) {
-      alert('Failed to generate game ID. Please save the draft first.');
+      await showAlert('Failed to generate game ID. Please save the draft first.', 'Error');
       return;
     }
   }
@@ -794,7 +856,7 @@ async function pickScreenshots() {
   const existing = current.value!.files.screenshots;
   // Enforce max count
   if (existing.length + paths.length > MAX_SCREENSHOTS) {
-    alert(`You can select up to ${MAX_SCREENSHOTS} screenshots.`);
+    await showAlert(`You can select up to ${MAX_SCREENSHOTS} screenshots.`, 'Validation Error');
   }
   const allowedSlots = Math.max(0, MAX_SCREENSHOTS - existing.length);
   const toAdd = paths.slice(0, allowedSlots);
@@ -807,7 +869,7 @@ async function pickScreenshots() {
       if (api.validateScreenshot) {
         const info = await api.validateScreenshot({ filePath: p });
         if (!info?.success) {
-          alert(`Failed to validate screenshot ${name}: ${info?.error || 'Unknown error'}`);
+          await showAlert(`Failed to validate screenshot ${name}: ${info?.error || 'Unknown error'}`, 'Validation Error');
           continue;
         }
         width = info.width || 0;
@@ -819,17 +881,17 @@ async function pickScreenshots() {
     }
     if (width && height) {
       if (width !== REQUIRED_WIDTH || height !== REQUIRED_HEIGHT) {
-        alert(`Screenshot ${name} must be exactly ${REQUIRED_WIDTH}x${REQUIRED_HEIGHT} (got ${width}x${height}).`);
+        await showAlert(`Screenshot ${name} must be exactly ${REQUIRED_WIDTH}x${REQUIRED_HEIGHT} (got ${width}x${height}).`, 'Validation Error');
         continue;
       }
     }
     if (sizeBytes && sizeBytes > MAX_SCREENSHOT_BYTES) {
-      alert(`Screenshot ${name} exceeds ${Math.floor(MAX_SCREENSHOT_BYTES/1024)}KB.`);
+      await showAlert(`Screenshot ${name} exceeds ${Math.floor(MAX_SCREENSHOT_BYTES/1024)}KB.`, 'Validation Error');
       continue;
     }
     const currentTotal = existing.reduce((sum, s) => sum + (s.size || 0), 0);
     if (sizeBytes && currentTotal + sizeBytes > MAX_TOTAL_SCREENSHOTS_BYTES) {
-      alert(`Total screenshots size exceeds ${(MAX_TOTAL_SCREENSHOTS_BYTES/1024).toFixed(0)}KB. Remove some or choose smaller images.`);
+      await showAlert(`Total screenshots size exceeds ${(MAX_TOTAL_SCREENSHOTS_BYTES/1024).toFixed(0)}KB. Remove some or choose smaller images.`, 'Validation Error');
       break;
     }
     existing.push({ path: p, name, size: sizeBytes || 0, width: width || undefined, height: height || undefined });
@@ -1115,12 +1177,12 @@ async function saveDraftToDb() {
       if (res.gvuuid) {
         (current.value as any).meta.gvuuid = res.gvuuid;
       }
-      alert('Draft saved.');
+      await showAlert('Draft saved.', 'Success');
     } else {
-      alert(`Failed to save draft: ${res?.error || 'Unknown error'}`);
+      await showAlert(`Failed to save draft: ${res?.error || 'Unknown error'}`, 'Save Failed');
     }
   } catch (e: any) {
-    alert(`Error saving draft: ${e?.message || String(e)}`);
+    await showAlert(`Error saving draft: ${e?.message || String(e)}`, 'Error');
   }
 }
 
@@ -1139,7 +1201,7 @@ async function importDraft() {
     step.value = 2;
     initSelectedTagsFromMeta();
   } catch (e: any) {
-    alert(`Error importing draft: ${e?.message || String(e)}`);
+    await showAlert(`Error importing draft: ${e?.message || String(e)}`, 'Error');
   }
 }
 
@@ -1186,9 +1248,14 @@ async function loadDraftFromDb() {
   try {
     const list = await api.listSubmissionDrafts();
     const drafts = list?.drafts || [];
-    if (!drafts.length) { alert('No drafts saved.'); return; }
+    if (!drafts.length) { await showAlert('No drafts saved.', 'Info'); return; }
     const labels = drafts.map((d: any) => `${d.draft_uuid} — ${d.draft_name || '(untitled)'} — updated ${new Date((d.updated_at_utc||0)*1000).toLocaleString()} (${d.state||'draft'})`);
-    const pick = prompt(`Enter draft number to load:\n${labels.map((s: string, i: number) => `${i+1}. ${s}`).join('\n')}`);
+    const pick = await showPrompt(
+      `Enter draft number to load:\n${labels.map((s: string, i: number) => `${i+1}. ${s}`).join('\n')}`,
+      '',
+      'Load Draft',
+      'Enter draft number'
+    );
     const idx = pick ? (parseInt(pick, 10) - 1) : -1;
     if (idx < 0 || idx >= drafts.length) return;
     const chosen = drafts[idx];
@@ -1201,10 +1268,10 @@ async function loadDraftFromDb() {
       initSelectedTagsFromMeta();
       updateUploadMethodFromDraft();
     } else {
-      alert(`Failed to load draft: ${got?.error || 'Unknown error'}`);
+      await showAlert(`Failed to load draft: ${got?.error || 'Unknown error'}`, 'Load Failed');
     }
   } catch (e: any) {
-    alert(`Error loading draft: ${e?.message || String(e)}`);
+    await showAlert(`Error loading draft: ${e?.message || String(e)}`, 'Error');
   }
 }
 
@@ -1237,18 +1304,18 @@ async function loadSelectedDraft() {
       step.value = 2;
       initSelectedTagsFromMeta();
     } else {
-      alert(`Failed to load draft: ${got?.error || 'Unknown error'}`);
+      await showAlert(`Failed to load draft: ${got?.error || 'Unknown error'}`, 'Load Failed');
     }
   } catch (e: any) {
-    alert(`Error loading draft: ${e?.message || String(e)}`);
+    await showAlert(`Error loading draft: ${e?.message || String(e)}`, 'Error');
   }
 }
 
-function saveAndClose() {
+async function saveAndClose() {
   if (!current.value) return;
   const name = current.value?.meta?.name?.trim();
   if (!name) {
-    alert('Please provide a unique game Name before saving and closing the draft.');
+    await showAlert('Please provide a unique game Name before saving and closing the draft.', 'Validation Error');
     return;
   }
   saveDraftToDb().then(() => {
@@ -1301,14 +1368,14 @@ async function runPrepare() {
             }
           } catch {}
         }
-        alert('Prepare completed.');
+        await showAlert('Prepare completed.', 'Success');
       }
-      else alert(`Prepare failed: ${res?.error || 'Unknown error'}`);
+      else await showAlert(`Prepare failed: ${res?.error || 'Unknown error'}`, 'Prepare Failed');
     } else {
-      alert('Prepare requires Electron environment with temp file support.');
+      await showAlert('Prepare requires Electron environment with temp file support.', 'Error');
     }
   } catch (e: any) {
-    alert(`Prepare error: ${e?.message || String(e)}`);
+    await showAlert(`Prepare error: ${e?.message || String(e)}`, 'Error');
   }
 }
 
@@ -1373,7 +1440,7 @@ async function runPackage() {
       const draftUuid = (current.value as any)?.meta?.draft_uuid || null;
       const prep = await api.prepareSubmission({ configPath: draftTempPath, draftUuid });
       if (!prep?.success || !prep?.skeleton) {
-        alert(`Package failed: Prepare step did not succeed (${prep?.error || 'Unknown error'})`);
+        await showAlert(`Package failed: Prepare step did not succeed (${prep?.error || 'Unknown error'})`, 'Package Failed');
         return;
       }
 
@@ -1383,17 +1450,21 @@ async function runPackage() {
         const ov = (overrideGameIdValue.value || '').trim();
         if (ov) {
           if (!/^[A-Za-z0-9_]+$/.test(ov)) {
-            alert('Override gameid may only contain alphanumeric characters and underscores.');
+            await showAlert('Override gameid may only contain alphanumeric characters and underscores.', 'Validation Error');
             return;
           }
           const version = current.value?.meta?.version || 1;
           try {
             const existing = await api.getGame(ov, Number(version));
-            if (existing && !confirm(`A game with id "${ov}" and version ${version} already exists. Using this override will conflict. Continue anyway (for testing only)?`)) {
-              return;
+            if (existing) {
+              const confirmed = await showConfirm(`A game with id "${ov}" and version ${version} already exists. Using this override will conflict. Continue anyway (for testing only)?`, 'Override Conflict');
+              if (!confirmed) {
+                return;
+              }
             }
           } catch {}
-          if (!confirm(`You are about to package a RHPAK with override gameid "${ov}" for testing purposes. This will not be persisted to your draft. Continue?`)) {
+          const confirmed = await showConfirm(`You are about to package a RHPAK with override gameid "${ov}" for testing purposes. This will not be persisted to your draft. Continue?`, 'Override Confirmation');
+          if (!confirmed) {
             return;
           }
           overrideGameId = ov;
@@ -1494,16 +1565,16 @@ async function runPackage() {
             console.warn('Failed to calculate RHPAK hash:', e);
           }
         }
-        alert('Package completed. Proceed to step 9 "Publish & Verify" to provide download information.');
+        await showAlert('Package completed. Proceed to step 9 "Publish & Verify" to provide download information.', 'Package Success');
         step.value = 9;
       } else {
-        alert(`Package failed: ${res?.error || 'Unknown error'}`);
+        await showAlert(`Package failed: ${res?.error || 'Unknown error'}`, 'Package Failed');
       }
     } else {
-      alert('Package requires Electron environment with temp file support.');
+      await showAlert('Package requires Electron environment with temp file support.', 'Error');
     }
   } catch (e: any) {
-    alert(`Package error: ${e?.message || String(e)}`);
+    await showAlert(`Package error: ${e?.message || String(e)}`, 'Error');
   }
 }
 async function loadDraft() {
@@ -1520,10 +1591,10 @@ async function loadDraft() {
       initSelectedTagsFromMeta();
       updateUploadMethodFromDraft();
     } catch (e) {
-      alert('Invalid draft JSON');
+      await showAlert('Invalid draft JSON', 'Error');
     }
   } else {
-    alert('Reading files requires Electron environment.');
+    await showAlert('Reading files requires Electron environment.', 'Error');
   }
 }
 
@@ -1531,12 +1602,12 @@ async function submitNow() {
   if (!current.value) return;
   if (!canSubmitVerified.value) {
     if (!canSubmit.value) {
-      alert('Please provide required fields and a patch file.');
+      await showAlert('Please provide required fields and a patch file.', 'Validation Error');
     } else if (!current.value.meta.rhpak_verified) {
-      alert('Please verify your RHPAK download in step 9 "Publish & Verify" before submitting.');
+      await showAlert('Please verify your RHPAK download in step 9 "Publish & Verify" before submitting.', 'Validation Error');
       step.value = 9;
     } else {
-      alert('Please provide RHPAK download information (IPFS CID or download URL) and verify it before submitting.');
+      await showAlert('Please provide RHPAK download information (IPFS CID or download URL) and verify it before submitting.', 'Validation Error');
     }
     return;
   }
@@ -1546,21 +1617,21 @@ async function submitNow() {
     // Ensure profile is available
     const profileCheck = await api.checkProfileForPublishing();
     if (!profileCheck?.hasProfile || !profileCheck?.hasNostrKeypair) {
-      alert('An online profile with a Nostr keypair is required to submit.');
+      await showAlert('An online profile with a Nostr keypair is required to submit.', 'Validation Error');
       return;
     }
 
     const submission = buildSubmissionPayload(current.value);
     const result = await api.enqueueGameSubmission({ submission });
     if (result?.success) {
-      alert('Submission enqueued for publishing to Nostr.');
+      await showAlert('Submission enqueued for publishing to Nostr.', 'Success');
       // Optionally navigate back to review or close
     } else {
-      alert(`Failed to enqueue submission: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to enqueue submission: ${result?.error || 'Unknown error'}`, 'Submit Failed');
     }
   } catch (e: any) {
     console.error('Submit error', e);
-    alert(`Error: ${e?.message || String(e)}`);
+    await showAlert(`Error: ${e?.message || String(e)}`, 'Error');
   }
 }
 
@@ -1574,12 +1645,12 @@ async function calculateRHPakHash() {
         current.value.meta.rhpak_sha256 = hashRes.sha256;
         current.value.meta.rhpak_size = hashRes.sizeBytes || 0;
       }
-      alert('Hash calculated successfully.');
+      await showAlert('Hash calculated successfully.', 'Success');
     } else {
-      alert(`Failed to calculate hash: ${hashRes?.error || 'Unknown error'}`);
+      await showAlert(`Failed to calculate hash: ${hashRes?.error || 'Unknown error'}`, 'Hash Failed');
     }
   } catch (e: any) {
-    alert(`Error calculating hash: ${e?.message || String(e)}`);
+    await showAlert(`Error calculating hash: ${e?.message || String(e)}`, 'Error');
   }
 }
 
@@ -1588,7 +1659,7 @@ async function verifyRHPakDownload() {
   if (!api || !current.value) return;
   const meta = current.value.meta;
   if (!meta.rhpak_sha256) {
-    alert('Please calculate the hash first.');
+    await showAlert('Please calculate the hash first.', 'Validation Error');
     return;
   }
   let ipfsCid: string | undefined = undefined;
@@ -1597,23 +1668,23 @@ async function verifyRHPakDownload() {
   if (rhpakUploadMethod.value === 'ipfs') {
     ipfsCid = meta.rhpak_ipfs_cid?.trim();
     if (!ipfsCid) {
-      alert('Please provide an IPFS CID.');
+      await showAlert('Please provide an IPFS CID.', 'Validation Error');
       return;
     }
   } else if (rhpakUploadMethod.value === 'ardrive') {
     if (!meta.rhpak_ardrive_file_id?.trim()) {
-      alert('Please provide an ArDrive File ID.');
+      await showAlert('Please provide an ArDrive File ID.', 'Validation Error');
       return;
     }
     downloadUrl = meta.rhpak_download_url?.trim();
     if (!downloadUrl) {
-      alert('Please provide an ArDrive download URL.');
+      await showAlert('Please provide an ArDrive download URL.', 'Validation Error');
       return;
     }
   } else if (rhpakUploadMethod.value === 'url') {
     downloadUrl = meta.rhpak_download_url?.trim();
     if (!downloadUrl) {
-      alert('Please provide a download URL.');
+      await showAlert('Please provide a download URL.', 'Validation Error');
       return;
     }
   }
@@ -1629,12 +1700,12 @@ async function verifyRHPakDownload() {
         current.value.meta.rhpak_verified = true;
         current.value.meta.rhpak_verified_at = Math.floor(Date.now() / 1000);
       }
-      alert('✓ Verification successful! The file is accessible and matches the expected hash.');
+      await showAlert('✓ Verification successful! The file is accessible and matches the expected hash.', 'Verification Success');
     } else {
-      alert(`Verification failed: ${verifyRes?.error || 'Unknown error'}`);
+      await showAlert(`Verification failed: ${verifyRes?.error || 'Unknown error'}`, 'Verification Failed');
     }
   } catch (e: any) {
-    alert(`Error verifying download: ${e?.message || String(e)}`);
+    await showAlert(`Error verifying download: ${e?.message || String(e)}`, 'Error');
   }
 }
 

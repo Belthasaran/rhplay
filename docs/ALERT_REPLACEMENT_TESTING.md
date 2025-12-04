@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 574 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49, Batch 7: 11)
+**Total Replacements Made**: 618 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49, Batch 7: 11, Batch 8: 44, Batch 9: 40)
 
 ## Testing Instructions
 
@@ -2231,7 +2231,7 @@ For each dialog replacement, verify:
 
 All instances of `alert()` and `confirm()` have been successfully replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`). The codebase now uses consistent, Electron-friendly dialogs throughout the application.
 
-**Final Count**: 574 total replacements across 7 batches in `App.vue`, plus 50 additional replacements in component files (Batch 8)
+**Final Count**: 574 total replacements across 7 batches in `App.vue`, plus 44 additional replacements in component files (Batch 8), plus 40 additional replacements in component files (Batch 9)
 
 ---
 
@@ -2629,4 +2629,508 @@ All instances of `alert()` and `confirm()` have been successfully replaced with 
 ---
 
 **Note**: One commented-out `confirm()` call remains in `GameStagesDialog.vue` at line 1837. This is intentionally disabled per the code comments and does not need to be replaced.
+
+---
+
+## Batch 9: Component Files (GameSubmissionDashboard.vue)
+
+**Date**: Component dialog replacement  
+**Files Modified**: 
+- `electron/renderer/src/components/submit/GameSubmissionDashboard.vue` (40 instances: 37 alerts, 2 confirms, 1 prompt)
+
+**Total**: 40 instances replaced
+
+### GameSubmissionDashboard.vue Replacements
+
+#### 9.1 Open Stages Editor - No Game Name
+- **Location**: `openStagesEditor()` function (line ~657)
+- **Original**: `alert('Please provide a game name first before editing stages.')`
+- **Replaced with**: `await showAlert('Please provide a game name first before editing stages.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 5.5 "Game Levels (Optional)"
+  - Click "Edit Stages" without providing a game name
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.2 Open Stages Editor - Failed to Generate Game ID
+- **Location**: `openStagesEditor()` function (line ~668)
+- **Original**: `alert('Failed to generate game ID. Please save the draft first.')`
+- **Replaced with**: `await showAlert('Failed to generate game ID. Please save the draft first.', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Provide a game name but don't save
+  - Click "Edit Stages" and trigger a game ID generation failure
+  - Verify error alert appears
+
+#### 9.3 Pick Screenshots - Max Count Exceeded
+- **Location**: `pickScreenshots()` function (line ~797)
+- **Original**: `alert('You can select up to X screenshots.')`
+- **Replaced with**: `await showAlert('You can select up to X screenshots.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 1 "Files"
+  - Try to add more than 12 screenshots
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.4 Pick Screenshots - Validation Failed
+- **Location**: `pickScreenshots()` function (line ~810)
+- **Original**: `alert('Failed to validate screenshot X: ...')`
+- **Replaced with**: `await showAlert('Failed to validate screenshot X: ...', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 1 "Files"
+  - Add a screenshot that fails validation
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.5 Pick Screenshots - Wrong Dimensions
+- **Location**: `pickScreenshots()` function (line ~822)
+- **Original**: `alert('Screenshot X must be exactly 256x224 (got WxH).')`
+- **Replaced with**: `await showAlert('Screenshot X must be exactly 256x224 (got WxH).', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 1 "Files"
+  - Add a screenshot with incorrect dimensions
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.6 Pick Screenshots - Size Exceeds Limit
+- **Location**: `pickScreenshots()` function (line ~827)
+- **Original**: `alert('Screenshot X exceeds 300KB.')`
+- **Replaced with**: `await showAlert('Screenshot X exceeds 300KB.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 1 "Files"
+  - Add a screenshot larger than 300KB
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.7 Pick Screenshots - Total Size Exceeds Limit
+- **Location**: `pickScreenshots()` function (line ~832)
+- **Original**: `alert('Total screenshots size exceeds XKB. Remove some or choose smaller images.')`
+- **Replaced with**: `await showAlert('Total screenshots size exceeds XKB. Remove some or choose smaller images.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 1 "Files"
+  - Add screenshots that exceed total size limit
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.8 Save Draft - Success
+- **Location**: `saveDraftToDb()` function (line ~1118)
+- **Original**: `alert('Draft saved.')`
+- **Replaced with**: `await showAlert('Draft saved.', 'Success')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Fill in draft information
+  - Click "Save Draft"
+  - Verify success alert appears with title "Success"
+
+#### 9.9 Save Draft - Failed
+- **Location**: `saveDraftToDb()` function (line ~1120)
+- **Original**: `alert('Failed to save draft: ...')`
+- **Replaced with**: `await showAlert('Failed to save draft: ...', 'Save Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Fill in draft information
+  - Click "Save Draft" and simulate a failure
+  - Verify error alert appears with title "Save Failed"
+
+#### 9.10 Save Draft - Error
+- **Location**: `saveDraftToDb()` function (line ~1123)
+- **Original**: `alert('Error saving draft: ...')`
+- **Replaced with**: `await showAlert('Error saving draft: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Fill in draft information
+  - Click "Save Draft" and trigger an exception
+  - Verify error alert appears
+
+#### 9.11 Import Draft - Error
+- **Location**: `importDraft()` function (line ~1142)
+- **Original**: `alert('Error importing draft: ...')`
+- **Replaced with**: `await showAlert('Error importing draft: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Import Draft…"
+  - Select an invalid JSON file
+  - Verify error alert appears
+
+#### 9.12 Load Draft From DB - No Drafts
+- **Location**: `loadDraftFromDb()` function (line ~1189)
+- **Original**: `alert('No drafts saved.')`
+- **Replaced with**: `await showAlert('No drafts saved.', 'Info')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Load Draft" when no drafts exist
+  - Verify info alert appears with title "Info"
+
+#### 9.13 Load Draft From DB - Prompt
+- **Location**: `loadDraftFromDb()` function (line ~1191)
+- **Original**: `prompt('Enter draft number to load:\n...')`
+- **Replaced with**: `await showPrompt('Enter draft number to load:\n...', '', 'Load Draft', 'Enter draft number')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Load Draft" when drafts exist
+  - Verify prompt dialog appears with title "Load Draft"
+  - Enter a draft number and test both "OK" and "Cancel"
+
+#### 9.14 Load Draft From DB - Failed
+- **Location**: `loadDraftFromDb()` function (line ~1204)
+- **Original**: `alert('Failed to load draft: ...')`
+- **Replaced with**: `await showAlert('Failed to load draft: ...', 'Load Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Load Draft" and select a draft
+  - Simulate a load failure
+  - Verify error alert appears with title "Load Failed"
+
+#### 9.15 Load Draft From DB - Error
+- **Location**: `loadDraftFromDb()` function (line ~1207)
+- **Original**: `alert('Error loading draft: ...')`
+- **Replaced with**: `await showAlert('Error loading draft: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Load Draft" and trigger an exception
+  - Verify error alert appears
+
+#### 9.16 Load Selected Draft - Failed
+- **Location**: `loadSelectedDraft()` function (line ~1240)
+- **Original**: `alert('Failed to load draft: ...')`
+- **Replaced with**: `await showAlert('Failed to load draft: ...', 'Load Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Select a draft from dropdown
+  - Click "Load" and simulate a failure
+  - Verify error alert appears with title "Load Failed"
+
+#### 9.17 Load Selected Draft - Error
+- **Location**: `loadSelectedDraft()` function (line ~1243)
+- **Original**: `alert('Error loading draft: ...')`
+- **Replaced with**: `await showAlert('Error loading draft: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Select a draft from dropdown
+  - Click "Load" and trigger an exception
+  - Verify error alert appears
+
+#### 9.18 Save And Close - No Name
+- **Location**: `saveAndClose()` function (line ~1251)
+- **Original**: `alert('Please provide a unique game Name before saving and closing the draft.')`
+- **Replaced with**: `await showAlert('Please provide a unique game Name before saving and closing the draft.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Fill in draft without a game name
+  - Click "Save & Close"
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.19 Run Prepare - Success
+- **Location**: `runPrepare()` function (line ~1304)
+- **Original**: `alert('Prepare completed.')`
+- **Replaced with**: `await showAlert('Prepare completed.', 'Success')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Fill in draft information
+  - Go to step 7 "Developer Options"
+  - Click "Prepare" and wait for completion
+  - Verify success alert appears with title "Success"
+
+#### 9.20 Run Prepare - Failed
+- **Location**: `runPrepare()` function (line ~1306)
+- **Original**: `alert('Prepare failed: ...')`
+- **Replaced with**: `await showAlert('Prepare failed: ...', 'Prepare Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Prepare" and simulate a failure
+  - Verify error alert appears with title "Prepare Failed"
+
+#### 9.21 Run Prepare - Electron Required
+- **Location**: `runPrepare()` function (line ~1308)
+- **Original**: `alert('Prepare requires Electron environment with temp file support.')`
+- **Replaced with**: `await showAlert('Prepare requires Electron environment with temp file support.', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard in non-Electron environment
+  - Click "Prepare"
+  - Verify error alert appears
+
+#### 9.22 Run Prepare - Error
+- **Location**: `runPrepare()` function (line ~1311)
+- **Original**: `alert('Prepare error: ...')`
+- **Replaced with**: `await showAlert('Prepare error: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Prepare" and trigger an exception
+  - Verify error alert appears
+
+#### 9.23 Run Package - Prepare Failed
+- **Location**: `runPackage()` function (line ~1376)
+- **Original**: `alert('Package failed: Prepare step did not succeed (...)')`
+- **Replaced with**: `await showAlert('Package failed: Prepare step did not succeed (...)', 'Package Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 8 "Review & Submit"
+  - Click "Package" when prepare step fails
+  - Verify error alert appears with title "Package Failed"
+
+#### 9.24 Run Package - Invalid Override Game ID
+- **Location**: `runPackage()` function (line ~1386)
+- **Original**: `alert('Override gameid may only contain alphanumeric characters and underscores.')`
+- **Replaced with**: `await showAlert('Override gameid may only contain alphanumeric characters and underscores.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 7 "Developer Options"
+  - Enable "Override gameid" and enter invalid characters
+  - Click "Package"
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.25 Run Package - Override Conflict Confirmation
+- **Location**: `runPackage()` function (line ~1392)
+- **Original**: `if (!confirm('A game with id "X" and version Y already exists. Using this override will conflict. Continue anyway (for testing only)?'))`
+- **Replaced with**: `const confirmed = await showConfirm('A game with id "X" and version Y already exists. Using this override will conflict. Continue anyway (for testing only)?', 'Override Conflict')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Enable override gameid with a conflicting ID
+  - Click "Package"
+  - Verify confirmation dialog appears with title "Override Conflict"
+  - Test both "OK" and "Cancel" buttons
+
+#### 9.26 Run Package - Override Confirmation
+- **Location**: `runPackage()` function (line ~1396)
+- **Original**: `if (!confirm('You are about to package a RHPAK with override gameid "X" for testing purposes. This will not be persisted to your draft. Continue?'))`
+- **Replaced with**: `const confirmed = await showConfirm('You are about to package a RHPAK with override gameid "X" for testing purposes. This will not be persisted to your draft. Continue?', 'Override Confirmation')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Enable override gameid
+  - Click "Package"
+  - Verify confirmation dialog appears with title "Override Confirmation"
+  - Test both "OK" and "Cancel" buttons
+
+#### 9.27 Run Package - Success
+- **Location**: `runPackage()` function (line ~1497)
+- **Original**: `alert('Package completed. Proceed to step 9 "Publish & Verify" to provide download information.')`
+- **Replaced with**: `await showAlert('Package completed. Proceed to step 9 "Publish & Verify" to provide download information.', 'Package Success')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Complete all required fields
+  - Click "Package" and wait for completion
+  - Verify success alert appears with title "Package Success"
+
+#### 9.28 Run Package - Failed
+- **Location**: `runPackage()` function (line ~1500)
+- **Original**: `alert('Package failed: ...')`
+- **Replaced with**: `await showAlert('Package failed: ...', 'Package Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Package" and simulate a failure
+  - Verify error alert appears with title "Package Failed"
+
+#### 9.29 Run Package - Electron Required
+- **Location**: `runPackage()` function (line ~1503)
+- **Original**: `alert('Package requires Electron environment with temp file support.')`
+- **Replaced with**: `await showAlert('Package requires Electron environment with temp file support.', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard in non-Electron environment
+  - Click "Package"
+  - Verify error alert appears
+
+#### 9.30 Run Package - Error
+- **Location**: `runPackage()` function (line ~1506)
+- **Original**: `alert('Package error: ...')`
+- **Replaced with**: `await showAlert('Package error: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Package" and trigger an exception
+  - Verify error alert appears
+
+#### 9.31 Load Draft - Invalid JSON
+- **Location**: `loadDraft()` function (line ~1523)
+- **Original**: `alert('Invalid draft JSON')`
+- **Replaced with**: `await showAlert('Invalid draft JSON', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Import Draft…"
+  - Select a file with invalid JSON
+  - Verify error alert appears
+
+#### 9.32 Load Draft - Electron Required
+- **Location**: `loadDraft()` function (line ~1526)
+- **Original**: `alert('Reading files requires Electron environment.')`
+- **Replaced with**: `await showAlert('Reading files requires Electron environment.', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard in non-Electron environment
+  - Click "Import Draft…"
+  - Verify error alert appears
+
+#### 9.33 Submit Now - Missing Fields
+- **Location**: `submitNow()` function (line ~1534)
+- **Original**: `alert('Please provide required fields and a patch file.')`
+- **Replaced with**: `await showAlert('Please provide required fields and a patch file.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 8 "Review & Submit"
+  - Click "Submit & Publish" without required fields
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.34 Submit Now - Not Verified
+- **Location**: `submitNow()` function (line ~1536)
+- **Original**: `alert('Please verify your RHPAK download in step 9 "Publish & Verify" before submitting.')`
+- **Replaced with**: `await showAlert('Please verify your RHPAK download in step 9 "Publish & Verify" before submitting.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Complete draft but don't verify RHPAK
+  - Click "Submit & Publish"
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.35 Submit Now - Missing Download Info
+- **Location**: `submitNow()` function (line ~1539)
+- **Original**: `alert('Please provide RHPAK download information (IPFS CID or download URL) and verify it before submitting.')`
+- **Replaced with**: `await showAlert('Please provide RHPAK download information (IPFS CID or download URL) and verify it before submitting.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Complete draft but don't provide download info
+  - Click "Submit & Publish"
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.36 Submit Now - No Profile
+- **Location**: `submitNow()` function (line ~1549)
+- **Original**: `alert('An online profile with a Nostr keypair is required to submit.')`
+- **Replaced with**: `await showAlert('An online profile with a Nostr keypair is required to submit.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Complete draft without a Nostr profile
+  - Click "Submit & Publish"
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.37 Submit Now - Success
+- **Location**: `submitNow()` function (line ~1556)
+- **Original**: `alert('Submission enqueued for publishing to Nostr.')`
+- **Replaced with**: `await showAlert('Submission enqueued for publishing to Nostr.', 'Success')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Complete all requirements
+  - Click "Submit & Publish" successfully
+  - Verify success alert appears with title "Success"
+
+#### 9.38 Submit Now - Failed
+- **Location**: `submitNow()` function (line ~1559)
+- **Original**: `alert('Failed to enqueue submission: ...')`
+- **Replaced with**: `await showAlert('Failed to enqueue submission: ...', 'Submit Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Submit & Publish" and simulate a failure
+  - Verify error alert appears with title "Submit Failed"
+
+#### 9.39 Submit Now - Error
+- **Location**: `submitNow()` function (line ~1563)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Submit & Publish" and trigger an exception
+  - Verify error alert appears
+
+#### 9.40 Calculate RHPak Hash - Success
+- **Location**: `calculateRHPakHash()` function (line ~1577)
+- **Original**: `alert('Hash calculated successfully.')`
+- **Replaced with**: `await showAlert('Hash calculated successfully.', 'Success')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 9 "Publish & Verify"
+  - Click "Calculate Hash" successfully
+  - Verify success alert appears with title "Success"
+
+#### 9.41 Calculate RHPak Hash - Failed
+- **Location**: `calculateRHPakHash()` function (line ~1579)
+- **Original**: `alert('Failed to calculate hash: ...')`
+- **Replaced with**: `await showAlert('Failed to calculate hash: ...', 'Hash Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Calculate Hash" and simulate a failure
+  - Verify error alert appears with title "Hash Failed"
+
+#### 9.42 Calculate RHPak Hash - Error
+- **Location**: `calculateRHPakHash()` function (line ~1582)
+- **Original**: `alert('Error calculating hash: ...')`
+- **Replaced with**: `await showAlert('Error calculating hash: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Calculate Hash" and trigger an exception
+  - Verify error alert appears
+
+#### 9.43 Verify RHPak Download - No Hash
+- **Location**: `verifyRHPakDownload()` function (line ~1591)
+- **Original**: `alert('Please calculate the hash first.')`
+- **Replaced with**: `await showAlert('Please calculate the hash first.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Go to step 9 "Publish & Verify"
+  - Click "Verify Download" without calculating hash
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.44 Verify RHPak Download - Missing IPFS CID
+- **Location**: `verifyRHPakDownload()` function (line ~1600)
+- **Original**: `alert('Please provide an IPFS CID.')`
+- **Replaced with**: `await showAlert('Please provide an IPFS CID.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Select IPFS upload method
+  - Click "Verify Download" without CID
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.45 Verify RHPak Download - Missing ArDrive File ID
+- **Location**: `verifyRHPakDownload()` function (line ~1605)
+- **Original**: `alert('Please provide an ArDrive File ID.')`
+- **Replaced with**: `await showAlert('Please provide an ArDrive File ID.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Select ArDrive upload method
+  - Click "Verify Download" without File ID
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.46 Verify RHPak Download - Missing ArDrive URL
+- **Location**: `verifyRHPakDownload()` function (line ~1610)
+- **Original**: `alert('Please provide an ArDrive download URL.')`
+- **Replaced with**: `await showAlert('Please provide an ArDrive download URL.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Select ArDrive upload method
+  - Click "Verify Download" without download URL
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.47 Verify RHPak Download - Missing Download URL
+- **Location**: `verifyRHPakDownload()` function (line ~1616)
+- **Original**: `alert('Please provide a download URL.')`
+- **Replaced with**: `await showAlert('Please provide a download URL.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Select URL upload method
+  - Click "Verify Download" without URL
+  - Verify error alert appears with title "Validation Error"
+
+#### 9.48 Verify RHPak Download - Success
+- **Location**: `verifyRHPakDownload()` function (line ~1632)
+- **Original**: `alert('✓ Verification successful! The file is accessible and matches the expected hash.')`
+- **Replaced with**: `await showAlert('✓ Verification successful! The file is accessible and matches the expected hash.', 'Verification Success')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Complete verification successfully
+  - Verify success alert appears with title "Verification Success"
+
+#### 9.49 Verify RHPak Download - Failed
+- **Location**: `verifyRHPakDownload()` function (line ~1634)
+- **Original**: `alert('Verification failed: ...')`
+- **Replaced with**: `await showAlert('Verification failed: ...', 'Verification Failed')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Verify Download" and simulate a failure
+  - Verify error alert appears with title "Verification Failed"
+
+#### 9.50 Verify RHPak Download - Error
+- **Location**: `verifyRHPakDownload()` function (line ~1637)
+- **Original**: `alert('Error verifying download: ...')`
+- **Replaced with**: `await showAlert('Error verifying download: ...', 'Error')`
+- **How to test**: 
+  - Open Game Submission Dashboard
+  - Click "Verify Download" and trigger an exception
+  - Verify error alert appears
+
+---
+
+**Total Replacements in Batch 9**: 40 instances (37 alerts, 2 confirms, 1 prompt)
 

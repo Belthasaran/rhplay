@@ -15221,7 +15221,7 @@ function initializeProfileCreationWizard(mode: 'create-first' | 'new-profile' = 
       homepage: '',
       socialIds: [],
       bio: '',
-      keypairType: 'ML-DSA-44'
+      keypairType: 'Nostr' // 'ML-DSA-44'
     };
     newSocialIdType.value = 'discord';
     newSocialIdValue.value = '';

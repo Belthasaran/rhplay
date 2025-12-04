@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 465 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49)
+**Total Replacements Made**: 514 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49)
 
 ## Testing Instructions
 
@@ -1504,6 +1504,455 @@ For each dialog replacement, verify:
 
 ---
 
+## 22. Additional File Selection and Validation Functions
+
+### 22.1 Browse ASAR File - Electron Required
+- **Location**: `browseAsarFile()` function (line ~17309)
+- **Original**: `alert('File selection requires Electron environment')`
+- **Replaced with**: `await showAlert('File selection requires Electron environment', 'Error')`
+- **How to test**: Attempt to browse ASAR file outside Electron environment
+
+### 22.2 Browse ASAR File - Selection Error
+- **Location**: `browseAsarFile()` function (line ~17328)
+- **Original**: `alert('Error selecting ASAR file: ...')`
+- **Replaced with**: `await showAlert('Error selecting ASAR file: ...', 'File Selection Error')`
+- **How to test**: Trigger exception during ASAR file selection
+
+### 22.3 Validate ASAR File - Invalid File
+- **Location**: `validateAndSetAsar()` function (line ~17392)
+- **Original**: `alert('Invalid ASAR file: ...')`
+- **Replaced with**: `await showAlert('Invalid ASAR file: ...', 'Invalid File')`
+- **How to test**: Select an invalid ASAR executable in settings
+
+### 22.4 Validate ASAR File - Validation Error
+- **Location**: `validateAndSetAsar()` function (line ~17397)
+- **Original**: `alert('Error validating ASAR: ...')`
+- **Replaced with**: `await showAlert('Error validating ASAR: ...', 'Validation Error')`
+- **How to test**: Trigger exception during ASAR validation
+
+### 22.5 Browse Launch Program - Electron Required
+- **Location**: `browseLaunchProgram()` function (line ~17334)
+- **Original**: `alert('File selection requires Electron environment')`
+- **Replaced with**: `await showAlert('File selection requires Electron environment', 'Error')`
+- **How to test**: Attempt to browse launch program outside Electron environment
+
+### 22.6 Browse Launch Program - Selection Error
+- **Location**: `browseLaunchProgram()` function (line ~17354)
+- **Original**: `alert('Error selecting launch program: ...')`
+- **Replaced with**: `await showAlert('Error selecting launch program: ...', 'File Selection Error')`
+- **How to test**: Trigger exception during launch program selection
+
+### 22.7 Browse SSH Identity File - Electron Required
+- **Location**: `browseUsb2snesIdentityFile()` function (line ~17360)
+- **Original**: `alert('File selection requires Electron environment')`
+- **Replaced with**: `await showAlert('File selection requires Electron environment', 'Error')`
+- **How to test**: Attempt to browse SSH identity file outside Electron environment
+
+### 22.8 Browse SSH Identity File - Selection Error
+- **Location**: `browseUsb2snesIdentityFile()` function (line ~17376)
+- **Original**: `alert('Error selecting SSH identity file: ...')`
+- **Replaced with**: `await showAlert('Error selecting SSH identity file: ...', 'File Selection Error')`
+- **How to test**: Trigger exception during SSH identity file selection
+
+### 22.9 Browse UberASM File - Electron Required
+- **Location**: `browseUberAsmFile()` function (line ~17412)
+- **Original**: `alert('File selection requires Electron environment')`
+- **Replaced with**: `await showAlert('File selection requires Electron environment', 'Error')`
+- **How to test**: Attempt to browse UberASM file outside Electron environment
+
+### 22.10 Browse UberASM File - Selection Error
+- **Location**: `browseUberAsmFile()` function (line ~17431)
+- **Original**: `alert('Error selecting UberASM file: ...')`
+- **Replaced with**: `await showAlert('Error selecting UberASM file: ...', 'File Selection Error')`
+- **How to test**: Trigger exception during UberASM file selection
+
+### 22.11 Validate UberASM File - Invalid File
+- **Location**: `validateAndSetUberAsm()` function (line ~17447)
+- **Original**: `alert('Invalid UberASM file: ...')`
+- **Replaced with**: `await showAlert('Invalid UberASM file: ...', 'Invalid File')`
+- **How to test**: Select an invalid UberASM executable in settings
+
+### 22.12 Validate UberASM File - Validation Error
+- **Location**: `validateAndSetUberAsm()` function (line ~17452)
+- **Original**: `alert('Error validating UberASM: ...')`
+- **Replaced with**: `await showAlert('Error validating UberASM: ...', 'Validation Error')`
+- **How to test**: Trigger exception during UberASM validation
+
+---
+
+## 23. Run Management Functions
+
+### 23.1 Save Run to Database - Electron Required
+- **Location**: `saveRunToDatabase()` function (line ~19215)
+- **Original**: `alert('Run saving requires Electron environment')`
+- **Replaced with**: `await showAlert('Run saving requires Electron environment', 'Error')`
+- **How to test**: Attempt to save run outside Electron environment
+
+### 23.2 Save Run to Database - Run Name Required
+- **Location**: `saveRunToDatabase()` function (line ~19222)
+- **Original**: `alert('Run name is required')`
+- **Replaced with**: `await showAlert('Run name is required', 'Validation Error')`
+- **How to test**: Attempt to save run without entering a name
+
+### 23.3 Save Run to Database - No Match Count
+- **Location**: `saveRunToDatabase()` function (line ~19233)
+- **Original**: `alert('Cannot stage run:\n\nRandom entry "..." has no match count...')`
+- **Replaced with**: `await showAlert('Cannot stage run:\n\nRandom entry "..." has no match count...', 'Validation Error')`
+- **How to test**: Attempt to save run with random entry that has no match count
+
+### 23.4 Save Run to Database - Insufficient Matching Games
+- **Location**: `saveRunToDatabase()` function (line ~19238)
+- **Original**: `alert('Cannot stage run:\n\nRandom entry "..." has insufficient matching games...')`
+- **Replaced with**: `await showAlert('Cannot stage run:\n\nRandom entry "..." has insufficient matching games...', 'Validation Error')`
+- **How to test**: Attempt to save run with random entry that has insufficient matching games
+
+### 23.5 Save Run to Database - Create Failed
+- **Location**: `saveRunToDatabase()` function (line ~19257)
+- **Original**: `alert('Failed to create run: ...')`
+- **Replaced with**: `await showAlert('Failed to create run: ...', 'Create Failed')`
+- **How to test**: Simulate run creation failure
+
+### 23.6 Save Run to Database - Save Plan Failed
+- **Location**: `saveRunToDatabase()` function (line ~19292)
+- **Original**: `alert('Failed to save run plan: ...')`
+- **Replaced with**: `await showAlert('Failed to save run plan: ...', 'Save Failed')`
+- **How to test**: Simulate run plan save failure
+
+### 23.7 Save Run to Database - Save Error
+- **Location**: `saveRunToDatabase()` function (line ~19305)
+- **Original**: `alert('Error saving run: ...')`
+- **Replaced with**: `await showAlert('Error saving run: ...', 'Save Error')`
+- **How to test**: Trigger exception during run save
+
+### 23.8 Stage Run Games - Expand Failed
+- **Location**: `stageRunGames()` function (line ~19322)
+- **Original**: `alert('Failed to expand run plan: ...')`
+- **Replaced with**: `await showAlert('Failed to expand run plan: ...', 'Expand Failed')`
+- **How to test**: Simulate run plan expansion failure
+
+### 23.9 Stage Run Games - Staging Failed
+- **Location**: `stageRunGames()` function (line ~19355)
+- **Original**: `alert('Failed to stage run games: ...')`
+- **Replaced with**: `await showAlert('Failed to stage run games: ...', 'Staging Failed')`
+- **How to test**: Simulate game staging failure
+
+### 23.10 Stage Run Games - Staging Error
+- **Location**: `stageRunGames()` function (line ~19375)
+- **Original**: `alert('Error staging run games: ...')`
+- **Replaced with**: `await showAlert('Error staging run games: ...', 'Staging Error')`
+- **How to test**: Trigger exception during staging
+
+### 23.11 Reopen Staging Window - Staging Required
+- **Location**: `reopenStagingWindow()` function (line ~19432)
+- **Original**: `alert('No staging folder found. Please stage the run again.')`
+- **Replaced with**: `await showAlert('No staging folder found. Please stage the run again.', 'Staging Required')`
+- **How to test**: Attempt to reopen staging window when no staging folder exists
+
+### 23.12 Restore Run - Selection Required
+- **Location**: `restoreRun()` function (line ~19652)
+- **Original**: `alert('Please select a run in "preparing" status to restore')`
+- **Replaced with**: `await showAlert('Please select a run in "preparing" status to restore', 'Selection Required')`
+- **How to test**: Attempt to restore without selecting a run
+
+### 23.13 Restore Run - Run Not Found
+- **Location**: `restoreRun()` function (line ~19658)
+- **Original**: `alert('Run not found')`
+- **Replaced with**: `await showAlert('Run not found', 'Error')`
+- **How to test**: Attempt to restore a run that no longer exists
+
+### 23.14 Restore Run - Replace Current Run Confirmation
+- **Location**: `restoreRun()` function (line ~19665)
+- **Original**: `confirm('You have a current run "..." in progress.\n\nLoading this run will replace it. Continue?')`
+- **Replaced with**: `await showConfirm('You have a current run "..." in progress.\n\nLoading this run will replace it. Continue?', 'Replace Current Run')`
+- **How to test**:
+  - Have a current run in progress
+  - Attempt to restore another run
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 23.15 Restore Run - No Plan Entries
+- **Location**: `restoreRun()` function (line ~19678)
+- **Original**: `alert('No plan entries found for this run')`
+- **Replaced with**: `await showAlert('No plan entries found for this run', 'No Plan Entries')`
+- **How to test**: Attempt to restore a run with no plan entries
+
+### 23.16 Restore Run - Load Error
+- **Location**: `restoreRun()` function (line ~19783)
+- **Original**: `alert('Error loading run: ...')`
+- **Replaced with**: `await showAlert('Error loading run: ...', 'Load Error')`
+- **How to test**: Trigger exception during run restoration
+
+---
+
+## 24. Game Launch and SNES Contents Functions
+
+### 24.1 Launch Game Program - Not Implemented
+- **Location**: `launchGameProgram()` function (line ~20249)
+- **Original**: `alert('Launch game program - to be implemented')`
+- **Replaced with**: `await showAlert('Launch game program - to be implemented', 'Not Implemented')`
+- **How to test**: Click "Launch Game Program" button
+
+### 24.2 Launch SNES File - Config Error
+- **Location**: `launchSnesFile()` function (line ~20293)
+- **Original**: `alert('Launch failed: ...')`
+- **Replaced with**: `await showAlert('Launch failed: ...', 'Launch Failed')`
+- **How to test**: Trigger configuration error when launching SNES file
+
+### 24.3 Launch SNES File - USB2SNES Connection Failed
+- **Location**: `launchSnesFile()` function (line ~20310)
+- **Original**: `alert('Launch failed: Could not connect to USB2SNES - ...')`
+- **Replaced with**: `await showAlert('Launch failed: Could not connect to USB2SNES - ...', 'Connection Failed')`
+- **How to test**: Simulate USB2SNES connection failure when launching
+
+### 24.4 Launch SNES File - Launch Failed
+- **Location**: `launchSnesFile()` function (line ~20329)
+- **Original**: `alert('Launch failed: ...')`
+- **Replaced with**: `await showAlert('Launch failed: ...', 'Launch Failed')`
+- **How to test**: Trigger exception during SNES file launch
+
+### 24.5 Upload to USB2SNES - Not Implemented
+- **Location**: `uploadToUsb2Snes()` function (line ~20376)
+- **Original**: `alert('USB2SNES upload - to be implemented')`
+- **Replaced with**: `await showAlert('USB2SNES upload - to be implemented', 'Not Implemented')`
+- **How to test**: Click "Upload to USB2SNES" button
+
+### 24.6 Manually Uploaded Confirm - Not Implemented
+- **Location**: `manuallyUploadedConfirm()` function (line ~20382)
+- **Original**: `alert('USB2SNES launch - to be implemented')`
+- **Replaced with**: `await showAlert('USB2SNES launch - to be implemented', 'Not Implemented')`
+- **How to test**: Click "Manually Uploaded Confirm" button
+
+### 24.7 Start Run - No Challenges
+- **Location**: `startRun()` function (line ~20425)
+- **Original**: `alert('Failed to load run results - no challenges found')`
+- **Replaced with**: `await showAlert('Failed to load run results - no challenges found', 'No Challenges')`
+- **How to test**: Attempt to start a run with no challenges
+
+### 24.8 Start Run - Start Failed
+- **Location**: `startRun()` function (line ~20717)
+- **Original**: `alert('Failed to start run: ...')`
+- **Replaced with**: `await showAlert('Failed to start run: ...', 'Start Failed')`
+- **How to test**: Simulate run start failure
+
+### 24.9 Start Run - Start Error
+- **Location**: `startRun()` function (line ~20721)
+- **Original**: `alert('Error starting run')`
+- **Replaced with**: `await showAlert('Error starting run', 'Start Error')`
+- **How to test**: Trigger exception during run start
+
+### 24.10 Launch Current Challenge - Config Error
+- **Location**: `launchCurrentChallenge()` function (line ~20741)
+- **Original**: `alert('Launch failed: ...')`
+- **Replaced with**: `await showAlert('Launch failed: ...', 'Launch Failed')`
+- **How to test**: Trigger configuration error when launching challenge
+
+### 24.11 Launch Current Challenge - USB2SNES Connection Failed
+- **Location**: `launchCurrentChallenge()` function (line ~20758)
+- **Original**: `alert('Launch failed: Could not connect to USB2SNES - ...')`
+- **Replaced with**: `await showAlert('Launch failed: Could not connect to USB2SNES - ...', 'Connection Failed')`
+- **How to test**: Simulate USB2SNES connection failure when launching challenge
+
+### 24.12 Launch Current Challenge - Launch Error
+- **Location**: `launchCurrentChallenge()` function (line ~20776)
+- **Original**: `alert('Error launching game: ...')`
+- **Replaced with**: `await showAlert('Error launching game: ...', 'Launch Error')`
+- **How to test**: Trigger exception during challenge launch
+
+### 24.13 Unpause Run - Unpause Failed
+- **Location**: `unpauseRun()` function (line ~20880)
+- **Original**: `alert('Failed to unpause run: ...')`
+- **Replaced with**: `await showAlert('Failed to unpause run: ...', 'Unpause Failed')`
+- **How to test**: Simulate unpause failure
+
+### 24.14 Unpause Run - Unpause Error
+- **Location**: `unpauseRun()` function (line ~20889)
+- **Original**: `alert('Error unpausing run: ...')`
+- **Replaced with**: `await showAlert('Error unpausing run: ...', 'Unpause Error')`
+- **How to test**: Trigger exception during unpause
+
+### 24.15 Complete Run - Complete Failed
+- **Location**: `completeRun()` function (line ~21503)
+- **Original**: `alert('Error completing run: ...')`
+- **Replaced with**: `await showAlert('Error completing run: ...', 'Complete Failed')`
+- **How to test**: Simulate run completion failure
+
+### 24.16 Complete Run - Complete Error
+- **Location**: `completeRun()` function (line ~21688)
+- **Original**: `alert('Error completing run: ...')`
+- **Replaced with**: `await showAlert('Error completing run: ...', 'Complete Error')`
+- **How to test**: Trigger exception during run completion
+
+### 24.17 Load Past Runs - Load Error
+- **Location**: `loadPastRuns()` function (line ~21868)
+- **Original**: `alert('Error loading past runs: ...')`
+- **Replaced with**: `await showAlert('Error loading past runs: ...', 'Load Error')`
+- **How to test**: Trigger exception when loading past runs
+
+### 24.18 Delete Runs - Delete Error
+- **Location**: `deleteSelectedPastRuns()` function (line ~22000)
+- **Original**: `alert('Error deleting runs: ...')`
+- **Replaced with**: `await showAlert('Error deleting runs: ...', 'Delete Error')`
+- **How to test**: Trigger exception when deleting runs
+
+---
+
+## 25. Ratings Publishing Functions
+
+### 25.1 Publish Ratings - Validation Error
+- **Location**: `publishRatingsToNostr()` function (line ~26072)
+- **Original**: `alert('Please set at least one rating before publishing.')`
+- **Replaced with**: `await showAlert('Please set at least one rating before publishing.', 'Validation Error')`
+- **How to test**: Attempt to publish ratings without setting any ratings
+
+### 25.2 Publish Ratings - Selection Required
+- **Location**: `publishRatingsToNostr()` function (line ~26077)
+- **Original**: `alert('No game selected for publishing.')`
+- **Replaced with**: `await showAlert('No game selected for publishing.', 'Selection Required')`
+- **How to test**: Attempt to publish without selecting a game
+
+### 25.3 Publish Ratings - Success
+- **Location**: `publishRatingsToNostr()` function (line ~26142)
+- **Original**: `alert('Ratings published successfully!')`
+- **Replaced with**: `showToastNotification('Ratings published successfully!', 'success', 3000)`
+- **How to test**: Successfully publish ratings to Nostr
+
+### 25.4 Publish Ratings - Failure
+- **Location**: `publishRatingsToNostr()` function (line ~26144)
+- **Original**: `alert('Failed to publish ratings: ...')`
+- **Replaced with**: `await showAlert('Failed to publish ratings: ...', 'Publish Failed')`
+- **How to test**: Simulate publishing failure
+
+### 25.5 Publish Ratings - Error
+- **Location**: `publishRatingsToNostr()` function (line ~26148)
+- **Original**: `alert('Error publishing ratings: ...')`
+- **Replaced with**: `await showAlert('Error publishing ratings: ...', 'Publish Error')`
+- **How to test**: Trigger exception during publishing
+
+---
+
+## 26. Version-Specific Rating and Run Export/Import Functions
+
+### 26.1 Set Version-Specific Rating - Already Set
+- **Location**: `setVersionSpecificRating()` function (line ~26258)
+- **Original**: `alert('This version already has version-specific ratings.')`
+- **Replaced with**: `await showAlert('This version already has version-specific ratings.', 'Already Set')`
+- **How to test**: Attempt to set version-specific rating when already set
+
+### 26.2 Set Version-Specific Rating - Confirmation
+- **Location**: `setVersionSpecificRating()` function (line ~26262)
+- **Original**: `confirm('Set ratings specifically for version X?...')`
+- **Replaced with**: `await showConfirm('Set ratings specifically for version X?...', 'Set Version-Specific Rating')`
+- **How to test**:
+  - Select a game version
+  - Click "Set Version-Specific Rating"
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 26.3 Set Version-Specific Rating - Success
+- **Location**: `setVersionSpecificRating()` function (line ~26270)
+- **Original**: `alert('Version-specific rating enabled for version X')`
+- **Replaced with**: `showToastNotification('Version-specific rating enabled for version X', 'success', 3000)`
+- **How to test**: Successfully set version-specific rating
+
+### 26.4 Export Run - No Run
+- **Location**: `exportRunToFile()` function (line ~26277)
+- **Original**: `alert('No run to export. Please save the run first.')`
+- **Replaced with**: `await showAlert('No run to export. Please save the run first.', 'No Run')`
+- **How to test**: Attempt to export run without saving first
+
+### 26.5 Export Run - Electron Required
+- **Location**: `exportRunToFile()` function (line ~26282)
+- **Original**: `alert('Export requires Electron environment')`
+- **Replaced with**: `await showAlert('Export requires Electron environment', 'Error')`
+- **How to test**: Attempt to export run outside Electron environment
+
+### 26.6 Export Run - Export Failed
+- **Location**: `exportRunToFile()` function (line ~26301)
+- **Original**: `alert('Failed to export run: ...')`
+- **Replaced with**: `await showAlert('Failed to export run: ...', 'Export Failed')`
+- **How to test**: Simulate export failure
+
+### 26.7 Export Run - Export Error
+- **Location**: `exportRunToFile()` function (line ~26305)
+- **Original**: `alert('Error exporting run')`
+- **Replaced with**: `await showAlert('Error exporting run', 'Export Error')`
+- **How to test**: Trigger exception during export
+
+### 26.8 Import Run - Electron Required
+- **Location**: `importRunFromFile()` function (line ~26311)
+- **Original**: `alert('Import requires Electron environment')`
+- **Replaced with**: `await showAlert('Import requires Electron environment', 'Error')`
+- **How to test**: Attempt to import run outside Electron environment
+
+### 26.9 Import Run - Success
+- **Location**: `importRunFromFile()` function (line ~26334)
+- **Original**: `alert('Run imported successfully!...')`
+- **Replaced with**: `await showAlert('Run imported successfully!...', 'Import Successful')`
+- **How to test**: Successfully import a run file
+
+### 26.10 Import Run - Failure
+- **Location**: `importRunFromFile()` function (line ~26339)
+- **Original**: `alert('Failed to import run: ...')`
+- **Replaced with**: `await showAlert('Failed to import run: ...', 'Import Failed')`
+- **How to test**: Attempt to import invalid or corrupted run file
+
+### 26.11 Import Run - Error
+- **Location**: `importRunFromFile()` function (line ~26343)
+- **Original**: `alert('Error importing run: Invalid file or format')`
+- **Replaced with**: `await showAlert('Error importing run: Invalid file or format', 'Import Error')`
+- **How to test**: Attempt to import file with invalid format
+
+### 26.12 Resume Run - Corrupted Run Confirmation
+- **Location**: `resumeRunFromStartup()` function (line ~26450)
+- **Original**: `confirm('This run appears to be corrupted (no results found). Would you like to cancel it and start fresh?')`
+- **Replaced with**: `await showConfirm('This run appears to be corrupted (no results found). Would you like to cancel it and start fresh?', 'Corrupted Run')`
+- **How to test**:
+  - Resume a run that appears corrupted
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 26.13 Resume Run - Run Cancelled
+- **Location**: `resumeRunFromStartup()` function (line ~26453)
+- **Original**: `alert('Run cancelled. You can now create a new run.')`
+- **Replaced with**: `await showAlert('Run cancelled. You can now create a new run.', 'Run Cancelled')`
+- **How to test**: Cancel a corrupted run during resume
+
+### 26.14 Resume Run - Resume Error
+- **Location**: `resumeRunFromStartup()` function (line ~26767)
+- **Original**: `alert('Error resuming run: ...')`
+- **Replaced with**: `await showAlert('Error resuming run: ...', 'Resume Error')`
+- **How to test**: Trigger exception during run resume
+
+---
+
+## 27. Feedback and Comment Functions
+
+### 27.1 Save Stage Feedback - Save Failed
+- **Location**: `saveStageDifficultyFeedback()` function (line ~18308)
+- **Original**: `alert('Error saving feedback: ...')`
+- **Replaced with**: `await showAlert('Error saving feedback: ...', 'Save Failed')`
+- **How to test**: Simulate feedback save failure
+
+### 27.2 Save Stage Feedback - Save Error
+- **Location**: `saveStageDifficultyFeedback()` function (line ~18312)
+- **Original**: `alert('Error saving feedback')`
+- **Replaced with**: `await showAlert('Error saving feedback', 'Save Error')`
+- **How to test**: Trigger exception during feedback save
+
+### 27.3 Save Stage Comment - Save Failed
+- **Location**: `saveStageComment()` function (line ~18405)
+- **Original**: `alert('Error saving comment: ...')`
+- **Replaced with**: `await showAlert('Error saving comment: ...', 'Save Failed')`
+- **How to test**: Simulate comment save failure
+
+### 27.4 Save Stage Comment - Save Error
+- **Location**: `saveStageComment()` function (line ~18409)
+- **Original**: `alert('Error saving comment')`
+- **Replaced with**: `await showAlert('Error saving comment', 'Save Error')`
+- **How to test**: Trigger exception during comment save
+
+---
+
 ## Notes
 
 - **Blocking dialogs** (`showAlert`, `showConfirm`): These use `await` and block execution until user responds
@@ -1514,10 +1963,9 @@ For each dialog replacement, verify:
 
 ## Remaining Instances
 
-There are still approximately 106 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
-- Additional file selection and validation functions (ASAR, UberASM, SSH identity, launch program)
-- Run management functions (create, save, stage, restore)
-- Game launch and USB2SNES upload functions
-- Feedback and comment saving functions
+There are still approximately 65 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
+- Additional profile import/export functions (duplicate instances)
+- Additional trust declaration functions (duplicate instances)
 - Additional validation and error messages
+- Edge cases and error handlers
 

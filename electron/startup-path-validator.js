@@ -113,8 +113,8 @@ class StartupPathValidator {
                 return;
             }
             
-            // Search for flips executable
-            const foundFlips = await this.searchForExecutable('flips');
+            // Search for flips executable (try platform-specific names first)
+            const foundFlips = await this.searchForExecutableWithPlatformNames('flips');
             
             if (foundFlips) {
                 console.log('✅ Found flips executable:', foundFlips);
@@ -150,7 +150,8 @@ class StartupPathValidator {
                 return;
             }
             
-            const foundAsar = await this.searchForExecutable('asar');
+            // Search for asar executable (try platform-specific names first)
+            const foundAsar = await this.searchForExecutableWithPlatformNames('asar');
             
             if (foundAsar) {
                 console.log('✅ Found asar executable:', foundAsar);
@@ -277,6 +278,40 @@ class StartupPathValidator {
             console.error('Error validating executable:', error);
             return false;
         }
+    }
+
+    /**
+     * Get platform-specific binary names
+     * Returns array with platform-specific name first, then generic name
+     */
+    getPlatformSpecificNames(baseName) {
+        if (process.platform === 'win32') {
+            return [`${baseName}.exe`];
+        } else if (process.platform === 'darwin') {
+            return [`${baseName}-macos`, baseName];
+        } else if (process.platform === 'linux') {
+            return [`${baseName}-linux`, baseName];
+        } else {
+            return [baseName];
+        }
+    }
+
+    /**
+     * Search for executable in various locations with platform-specific names
+     * Tries platform-specific names first (e.g., flips-macos, asar-linux) before generic names
+     */
+    async searchForExecutableWithPlatformNames(executableName) {
+        const platformNames = this.getPlatformSpecificNames(executableName);
+        
+        // Try each platform-specific name in order
+        for (const name of platformNames) {
+            const found = await this.searchForExecutable(name);
+            if (found) {
+                return found;
+            }
+        }
+        
+        return null;
     }
 
     /**

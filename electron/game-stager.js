@@ -1392,12 +1392,29 @@ async function applyAsarPatch(params) {
         if (foundAsar) {
           asarBinary = foundAsar;
         } else {
-          // Fallback to 'asar' or 'asar.exe' based on platform
-          asarBinary = process.platform === 'win32' ? 'asar.exe' : 'asar';
+          // BinaryFinder already tries platform-specific names, so if it returns null,
+          // we should also try platform-specific names in fallback
+          if (process.platform === 'win32') {
+            asarBinary = 'asar.exe';
+          } else if (process.platform === 'darwin') {
+            asarBinary = 'asar-macos';
+          } else if (process.platform === 'linux') {
+            asarBinary = 'asar-linux';
+          } else {
+            asarBinary = 'asar';
+          }
         }
       } catch (e) {
         // BinaryFinder not available, use platform-specific default
-        asarBinary = process.platform === 'win32' ? 'asar.exe' : 'asar';
+        if (process.platform === 'win32') {
+          asarBinary = 'asar.exe';
+        } else if (process.platform === 'darwin') {
+          asarBinary = 'asar-macos';
+        } else if (process.platform === 'linux') {
+          asarBinary = 'asar-linux';
+        } else {
+          asarBinary = 'asar';
+        }
         console.log(`[ASAR] Could not use BinaryFinder, using default: ${asarBinary}`);
       }
     }

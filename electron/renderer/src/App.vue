@@ -15394,7 +15394,7 @@ function nextWizardStep() {
   }
   
   if (!profileCreationData.value.displayName.trim()) {
-    showAlertSync('Display name is required', 'Validation Error');
+    showAlertSync('Display name is required', 'Validation Error', {blocking:false});
     return;
   }
   
@@ -21841,6 +21841,7 @@ const allConditions: ChallengeCondition[] = [
 ];
 
 function editConditions(entry: RunEntry) {
+  return; /*  */
   const current = entry.conditions || [];
   const message = 'Select challenge conditions for this entry:\n\n' +
     allConditions.map((c, i) => `${i + 1}. ${c} ${current.includes(c) ? '✓' : ''}`).join('\n') +

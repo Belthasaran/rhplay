@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 618 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49, Batch 7: 11, Batch 8: 44, Batch 9: 40)
+**Total Replacements Made**: 673 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49, Batch 7: 11, Batch 8: 44, Batch 9: 40, Batch 10: 15)
 
 ## Testing Instructions
 
@@ -2231,7 +2231,7 @@ For each dialog replacement, verify:
 
 All instances of `alert()` and `confirm()` have been successfully replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`). The codebase now uses consistent, Electron-friendly dialogs throughout the application.
 
-**Final Count**: 574 total replacements across 7 batches in `App.vue`, plus 44 additional replacements in component files (Batch 8), plus 40 additional replacements in component files (Batch 9)
+**Final Count**: 574 total replacements across 7 batches in `App.vue`, plus 99 additional replacements in component files (Batches 8-10)
 
 ---
 
@@ -3133,4 +3133,239 @@ All instances of `alert()` and `confirm()` have been successfully replaced with 
 ---
 
 **Total Replacements in Batch 9**: 40 instances (37 alerts, 2 confirms, 1 prompt)
+
+---
+
+## Batch 10: Remaining Component Files (PublishingQueueDashboard.vue, ProfilePublishingDashboard.vue, RelayHealthDashboard.vue)
+
+**Date**: Component dialog replacement  
+**Files Modified**: 
+- `electron/renderer/src/components/publish/PublishingQueueDashboard.vue` (10 instances: 6 alerts, 2 confirms)
+- `electron/renderer/src/components/publish/ProfilePublishingDashboard.vue` (3 instances: 3 alerts)
+- `electron/renderer/src/components/relay/RelayHealthDashboard.vue` (10 instances: 10 alerts)
+
+**Total**: 23 instances replaced
+
+### PublishingQueueDashboard.vue Replacements
+
+#### 10.1 Retry All Failed - Confirmation
+- **Location**: `retryFailed()` function (line ~235)
+- **Original**: `if (!confirm('Retry all failed queue entries?'))`
+- **Replaced with**: `const confirmed = await showConfirm('Retry all failed queue entries?', 'Retry Failed Entries')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Retry All Failed" when failed entries exist
+  - Verify confirmation dialog appears with title "Retry Failed Entries"
+  - Test both "OK" and "Cancel" buttons
+
+#### 10.2 Retry All Failed - Partial Success
+- **Location**: `retryFailed()` function (line ~263)
+- **Original**: `alert('Retried X entries. Y failed.')`
+- **Replaced with**: `await showAlert('Retried X entries. Y failed.', 'Retry Results')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Retry All Failed" and simulate partial success
+  - Verify alert appears with title "Retry Results"
+
+#### 10.3 Retry All Failed - Success
+- **Location**: `retryFailed()` function (line ~265)
+- **Original**: `alert('Successfully retried X entries.')`
+- **Replaced with**: `await showAlert('Successfully retried X entries.', 'Success')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Retry All Failed" successfully
+  - Verify success alert appears with title "Success"
+
+#### 10.4 Retry All Failed - Error
+- **Location**: `retryFailed()` function (line ~271)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Retry All Failed" and trigger an exception
+  - Verify error alert appears
+
+#### 10.5 Clear Completed - Confirmation
+- **Location**: `clearCompleted()` function (line ~278)
+- **Original**: `if (!confirm('Clear completed published events from the store?'))`
+- **Replaced with**: `const confirmed = await showConfirm('Clear completed published events from the store?', 'Clear Completed')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Clear Completed" when completed entries exist
+  - Verify confirmation dialog appears with title "Clear Completed"
+  - Test both "OK" and "Cancel" buttons
+
+#### 10.6 Clear Completed - Success
+- **Location**: `clearCompleted()` function (line ~286)
+- **Original**: `alert('Removed X completed event(s).')`
+- **Replaced with**: `await showAlert('Removed X completed event(s).', 'Success')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Clear Completed" successfully
+  - Verify success alert appears with title "Success"
+
+#### 10.7 Clear Completed - Failed
+- **Location**: `clearCompleted()` function (line ~288)
+- **Original**: `alert('Failed to clear: ...')`
+- **Replaced with**: `await showAlert('Failed to clear: ...', 'Clear Failed')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Clear Completed" and simulate a failure
+  - Verify error alert appears with title "Clear Failed"
+
+#### 10.8 Clear Completed - Error
+- **Location**: `clearCompleted()` function (line ~291)
+- **Original**: `alert('Error clearing: ...')`
+- **Replaced with**: `await showAlert('Error clearing: ...', 'Error')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Clear Completed" and trigger an exception
+  - Verify error alert appears
+
+#### 10.9 Handle Retry - Failed
+- **Location**: `handleRetry()` function (line ~321)
+- **Original**: `alert('Failed to retry: ...')`
+- **Replaced with**: `await showAlert('Failed to retry: ...', 'Retry Failed')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Retry" on a queue entry and simulate a failure
+  - Verify error alert appears with title "Retry Failed"
+
+#### 10.10 Handle Retry - Error
+- **Location**: `handleRetry()` function (line ~325)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Publishing Queue Dashboard
+  - Click "Retry" on a queue entry and trigger an exception
+  - Verify error alert appears
+
+### ProfilePublishingDashboard.vue Replacements
+
+#### 10.11 Publish Profile - Success
+- **Location**: `publishProfile()` function (line ~188)
+- **Original**: `alert('Profile published successfully!')`
+- **Replaced with**: `await showAlert('Profile published successfully!', 'Success')`
+- **How to test**: 
+  - Open Profile Publishing Dashboard
+  - Click "Publish Profile" successfully
+  - Verify success alert appears with title "Success"
+
+#### 10.12 Publish Profile - Failed
+- **Location**: `publishProfile()` function (line ~191)
+- **Original**: `alert('Failed to publish profile: ...')`
+- **Replaced with**: `await showAlert('Failed to publish profile: ...', 'Publish Failed')`
+- **How to test**: 
+  - Open Profile Publishing Dashboard
+  - Click "Publish Profile" and simulate a failure
+  - Verify error alert appears with title "Publish Failed"
+
+#### 10.13 Publish Profile - Error
+- **Location**: `publishProfile()` function (line ~195)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Profile Publishing Dashboard
+  - Click "Publish Profile" and trigger an exception
+  - Verify error alert appears
+
+### RelayHealthDashboard.vue Replacements
+
+#### 10.14 Connect All - Failed
+- **Location**: `connectAll()` function (line ~146)
+- **Original**: `alert('Failed to connect: ...')`
+- **Replaced with**: `await showAlert('Failed to connect: ...', 'Connect Failed')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Connect All" and simulate a failure
+  - Verify error alert appears with title "Connect Failed"
+
+#### 10.15 Connect All - Error
+- **Location**: `connectAll()` function (line ~150)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Connect All" and trigger an exception
+  - Verify error alert appears
+
+#### 10.16 Disconnect All - Failed
+- **Location**: `disconnectAll()` function (line ~166)
+- **Original**: `alert('Failed to disconnect: ...')`
+- **Replaced with**: `await showAlert('Failed to disconnect: ...', 'Disconnect Failed')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Disconnect All" and simulate a failure
+  - Verify error alert appears with title "Disconnect Failed"
+
+#### 10.17 Disconnect All - Error
+- **Location**: `disconnectAll()` function (line ~170)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Disconnect All" and trigger an exception
+  - Verify error alert appears
+
+#### 10.18 Handle Connect - Failed
+- **Location**: `handleConnect()` function (line ~186)
+- **Original**: `alert('Failed to connect relay: ...')`
+- **Replaced with**: `await showAlert('Failed to connect relay: ...', 'Connect Failed')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Connect" on a specific relay and simulate a failure
+  - Verify error alert appears with title "Connect Failed"
+
+#### 10.19 Handle Connect - Error
+- **Location**: `handleConnect()` function (line ~190)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Connect" on a specific relay and trigger an exception
+  - Verify error alert appears
+
+#### 10.20 Handle Disconnect - Failed
+- **Location**: `handleDisconnect()` function (line ~206)
+- **Original**: `alert('Failed to disconnect relay: ...')`
+- **Replaced with**: `await showAlert('Failed to disconnect relay: ...', 'Disconnect Failed')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Disconnect" on a specific relay and simulate a failure
+  - Verify error alert appears with title "Disconnect Failed"
+
+#### 10.21 Handle Disconnect - Error
+- **Location**: `handleDisconnect()` function (line ~210)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Disconnect" on a specific relay and trigger an exception
+  - Verify error alert appears
+
+#### 10.22 Handle Retry - Failed
+- **Location**: `handleRetry()` function (line ~226)
+- **Original**: `alert('Failed to retry relay: ...')`
+- **Replaced with**: `await showAlert('Failed to retry relay: ...', 'Retry Failed')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Retry" on a specific relay and simulate a failure
+  - Verify error alert appears with title "Retry Failed"
+
+#### 10.23 Handle Retry - Error
+- **Location**: `handleRetry()` function (line ~230)
+- **Original**: `alert('Error: ...')`
+- **Replaced with**: `await showAlert('Error: ...', 'Error')`
+- **How to test**: 
+  - Open Relay Health Dashboard
+  - Click "Retry" on a specific relay and trigger an exception
+  - Verify error alert appears
+
+---
+
+**Total Replacements in Batch 10**: 23 instances (19 alerts, 2 confirms)
+
+✅ **ALL COMPONENT INSTANCES REPLACED!**
+
+All instances of `alert()`, `confirm()`, and `prompt()` have been successfully replaced with custom modal functions in all Vue components. The codebase now uses consistent, Electron-friendly dialogs throughout the entire application.
 

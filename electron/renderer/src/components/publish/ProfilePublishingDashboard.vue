@@ -107,11 +107,29 @@
         </label>
       </div>
     </div>
+
+    <!-- Custom Modal Dialogs -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogTitle"
+      :message="alertDialogMessage"
+      @confirm="handleAlertConfirm"
+      @cancel="handleAlertCancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import AlertDialog from '../AlertDialog.vue';
+import {
+  showAlert,
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+} from '@/utils/dialogs';
 
 type ProfileInfo = {
   profileId?: string;
@@ -185,14 +203,14 @@ async function publishProfile() {
     });
 
     if (result?.success) {
-      alert('Profile published successfully!');
+      await showAlert('Profile published successfully!', 'Success');
       await refreshStatus();
     } else {
-      alert(`Failed to publish profile: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to publish profile: ${result?.error || 'Unknown error'}`, 'Publish Failed');
     }
   } catch (error: any) {
     console.error('Failed to publish profile:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }

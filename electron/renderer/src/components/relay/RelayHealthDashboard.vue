@@ -52,12 +52,30 @@
       @disconnect="handleDisconnect"
       @retry="handleRetry"
     />
+
+    <!-- Custom Modal Dialogs -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogTitle"
+      :message="alertDialogMessage"
+      @confirm="handleAlertConfirm"
+      @cancel="handleAlertCancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import RelayStatusList from './RelayStatusList.vue';
+import AlertDialog from '../AlertDialog.vue';
+import {
+  showAlert,
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+} from '@/utils/dialogs';
 
 type RelayHealth = {
   relayUrl: string;
@@ -143,11 +161,11 @@ async function connectAll() {
     if (response?.success) {
       await refreshHealth();
     } else {
-      alert(`Failed to connect: ${response?.error || 'Unknown error'}`);
+      await showAlert(`Failed to connect: ${response?.error || 'Unknown error'}`, 'Connect Failed');
     }
   } catch (error: any) {
     console.error('Failed to connect all relays:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }
@@ -163,11 +181,11 @@ async function disconnectAll() {
     if (response?.success) {
       await refreshHealth();
     } else {
-      alert(`Failed to disconnect: ${response?.error || 'Unknown error'}`);
+      await showAlert(`Failed to disconnect: ${response?.error || 'Unknown error'}`, 'Disconnect Failed');
     }
   } catch (error: any) {
     console.error('Failed to disconnect all relays:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }
@@ -183,11 +201,11 @@ async function handleConnect(relayUrl: string) {
     if (response?.success) {
       await refreshHealth();
     } else {
-      alert(`Failed to connect relay: ${response?.error || 'Unknown error'}`);
+      await showAlert(`Failed to connect relay: ${response?.error || 'Unknown error'}`, 'Connect Failed');
     }
   } catch (error: any) {
     console.error('Failed to connect relay:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }
@@ -203,11 +221,11 @@ async function handleDisconnect(relayUrl: string) {
     if (response?.success) {
       await refreshHealth();
     } else {
-      alert(`Failed to disconnect relay: ${response?.error || 'Unknown error'}`);
+      await showAlert(`Failed to disconnect relay: ${response?.error || 'Unknown error'}`, 'Disconnect Failed');
     }
   } catch (error: any) {
     console.error('Failed to disconnect relay:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }
@@ -223,11 +241,11 @@ async function handleRetry(relayUrl: string) {
     if (response?.success) {
       await refreshHealth();
     } else {
-      alert(`Failed to retry relay: ${response?.error || 'Unknown error'}`);
+      await showAlert(`Failed to retry relay: ${response?.error || 'Unknown error'}`, 'Retry Failed');
     }
   } catch (error: any) {
     console.error('Failed to retry relay:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }

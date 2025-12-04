@@ -112,6 +112,24 @@
         <PublishHistory :limit="50" :table-name="historyScope?.tableName" :record-uuid="historyScope?.recordUuid" />
       </section>
     </div>
+
+    <!-- Custom Modal Dialogs -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogTitle"
+      :message="alertDialogMessage"
+      @confirm="handleAlertConfirm"
+      @cancel="handleAlertCancel"
+    />
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      :confirm-text="confirmDialogConfirmText"
+      :cancel-text="confirmDialogCancelText"
+      @confirm="handleConfirmConfirm"
+      @cancel="handleConfirmCancel"
+    />
   </div>
 </template>
 
@@ -119,6 +137,24 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import PublishingQueueList from './PublishingQueueList.vue';
 import PublishHistory from './PublishHistory.vue';
+import AlertDialog from '../AlertDialog.vue';
+import ConfirmDialog from '../ConfirmDialog.vue';
+import {
+  showAlert,
+  showConfirm,
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+  confirmDialogVisible,
+  confirmDialogTitle,
+  confirmDialogMessage,
+  confirmDialogConfirmText,
+  confirmDialogCancelText,
+  handleConfirmConfirm,
+  handleConfirmCancel,
+} from '@/utils/dialogs';
 
 type QueueEntry = {
   id: string;
@@ -232,7 +268,8 @@ async function refreshQueue() {
 }
 
 async function retryFailed() {
-  if (!confirm('Retry all failed queue entries?')) return;
+  const confirmed = await showConfirm('Retry all failed queue entries?', 'Retry Failed Entries');
+  if (!confirmed) return;
   
   loading.value = true;
   try {
@@ -260,22 +297,23 @@ async function retryFailed() {
     }
 
     if (errorCount > 0) {
-      alert(`Retried ${successCount} entries. ${errorCount} failed.`);
+      await showAlert(`Retried ${successCount} entries. ${errorCount} failed.`, 'Retry Results');
     } else {
-      alert(`Successfully retried ${successCount} entries.`);
+      await showAlert(`Successfully retried ${successCount} entries.`, 'Success');
     }
 
     await refreshQueue();
   } catch (error: any) {
     console.error('Failed to retry failed entries:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }
 }
 
 async function clearCompleted() {
-  if (!confirm('Clear completed published events from the store?')) return;
+  const confirmed = await showConfirm('Clear completed published events from the store?', 'Clear Completed');
+  if (!confirmed) return;
   loading.value = true;
   try {
     const api = (window as any)?.electronAPI;
@@ -283,12 +321,12 @@ async function clearCompleted() {
     const res = await api.clearCompletedQueue({ stages: ['store_out'], olderThanSeconds: 0 });
     if (res?.success) {
       await refreshQueue();
-      alert(`Removed ${res.removed} completed event(s).`);
+      await showAlert(`Removed ${res.removed} completed event(s).`, 'Success');
     } else {
-      alert(`Failed to clear: ${res?.error || 'Unknown error'}`);
+      await showAlert(`Failed to clear: ${res?.error || 'Unknown error'}`, 'Clear Failed');
     }
   } catch (e: any) {
-    alert(`Error clearing: ${e?.message || String(e)}`);
+    await showAlert(`Error clearing: ${e?.message || String(e)}`, 'Error');
   } finally {
     loading.value = false;
   }
@@ -318,11 +356,11 @@ async function handleRetry(entry: QueueEntry) {
     if (response?.success) {
       await refreshQueue();
     } else {
-      alert(`Failed to retry: ${response?.error || 'Unknown error'}`);
+      await showAlert(`Failed to retry: ${response?.error || 'Unknown error'}`, 'Retry Failed');
     }
   } catch (error: any) {
     console.error('Failed to retry entry:', error);
-    alert(`Error: ${error?.message || String(error)}`);
+    await showAlert(`Error: ${error?.message || String(error)}`, 'Error');
   } finally {
     loading.value = false;
   }

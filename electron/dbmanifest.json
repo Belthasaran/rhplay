@@ -5,11 +5,11 @@
   "uberasm_flips.txt": {
     "type": "appfiles",
     "version": "1",
-    "message": "This tracks additional executables that are downloaded and provisioned (UberASM and FLips)",
+    "message": "This provisioning tracks additional executables that are downloaded and provisioned (UberASM and FLips)",
     "base": {
       "file_name": "patchtools-20251204.tar.xz",
       "format": "tar+xz",
-      "install": "extracted_archive",
+      "install_files" : ["asar.dll", "asar.exe", "asar-linux", "asar-macos", "flips.exe", "flips-linux", "flips-macos", "UberASMTool21.zip", "Flips/*"],
       "sha256": "0ad6b7f8abf8d077bc3c55491431d6a61ca2723e1231aace68415f0c503a757f",
       "ipfs_cidv1": "bafybeif7uindxutfbnwsti27zhcy7a5cuupgw7epeygfgd6xm4tqpibiua",
       "ardrive_file_name": "patchtools-20251204.tar.xz",

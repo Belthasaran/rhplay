@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 673 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49, Batch 7: 11, Batch 8: 44, Batch 9: 40, Batch 10: 15)
+**Total Replacements Made**: 697 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49, Batch 7: 11, Batch 8: 44, Batch 9: 40, Batch 10: 23, Batch 11: 24)
 
 ## Testing Instructions
 
@@ -2231,7 +2231,7 @@ For each dialog replacement, verify:
 
 All instances of `alert()` and `confirm()` have been successfully replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`). The codebase now uses consistent, Electron-friendly dialogs throughout the application.
 
-**Final Count**: 574 total replacements across 7 batches in `App.vue`, plus 99 additional replacements in component files (Batches 8-10)
+**Final Count**: 598 total replacements across 8 batches in `App.vue` (including 24 prompt() replacements in Batch 11), plus 99 additional replacements in component files (Batches 8-10)
 
 ---
 
@@ -3368,4 +3368,280 @@ All instances of `alert()` and `confirm()` have been successfully replaced with 
 ✅ **ALL COMPONENT INSTANCES REPLACED!**
 
 All instances of `alert()`, `confirm()`, and `prompt()` have been successfully replaced with custom modal functions in all Vue components. The codebase now uses consistent, Electron-friendly dialogs throughout the entire application.
+
+---
+
+## Batch 11: Remaining prompt() Calls in App.vue
+
+**Date**: Final prompt() replacement in App.vue  
+**File Modified**: `electron/renderer/src/App.vue`
+
+**Total**: 24 instances replaced (all `prompt()` calls)
+
+### Profile Import/Export Replacements
+
+#### 11.1 Import Profile - Decryption Password
+- **Location**: Profile import function (line ~10285)
+- **Original**: `prompt('Enter decryption password for the profile:')`
+- **Replaced with**: `await showPrompt('Enter decryption password for the profile:', '', 'Decrypt Profile', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Profile management
+  - Click "Import Profile"
+  - Select an encrypted profile file
+  - Verify password prompt dialog appears with title "Decrypt Profile" and password input type
+
+#### 11.2 Export Profile - Encryption Password
+- **Location**: Profile export function (line ~10335)
+- **Original**: `prompt('Enter encryption password for the profile export:')`
+- **Replaced with**: `await showPrompt('Enter encryption password for the profile export:', '', 'Encrypt Profile Export', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Profile management
+  - Select a profile
+  - Click "Export Profile"
+  - Verify password prompt dialog appears with title "Encrypt Profile Export" and password input type
+
+#### 11.3 Export Profile - Confirm Password
+- **Location**: Profile export function (line ~10340)
+- **Original**: `prompt('Confirm encryption password:')`
+- **Replaced with**: `await showPrompt('Confirm encryption password:', '', 'Confirm Password', 'Confirm password', 'password')`
+- **How to test**: 
+  - Go to Profile management
+  - Select a profile
+  - Click "Export Profile"
+  - Enter encryption password
+  - Verify confirmation password prompt appears with title "Confirm Password" and password input type
+
+### Master Keypair Backup/Import Replacements
+
+#### 11.4 Backup Master Keypair - Encryption Password
+- **Location**: `backupSelectedMasterKeypair()` function (line ~10729)
+- **Original**: `prompt('Enter a password to encrypt the backup:')`
+- **Replaced with**: `await showPrompt('Enter a password to encrypt the backup:', '', 'Encrypt Backup', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select a Master keypair
+  - Click "Backup" → "Backup Secret Key"
+  - Verify password prompt dialog appears with title "Encrypt Backup" and password input type
+
+#### 11.5 Backup Master Keypair - Confirm Password
+- **Location**: `backupSelectedMasterKeypair()` function (line ~10734)
+- **Original**: `prompt('Confirm password:')`
+- **Replaced with**: `await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select a Master keypair
+  - Click "Backup" → "Backup Secret Key"
+  - Enter encryption password
+  - Verify confirmation password prompt appears with title "Confirm Password" and password input type
+
+#### 11.6 Import Master Keypair - Decryption Password
+- **Location**: Master keypair import function (line ~10771)
+- **Original**: `prompt('Enter the password to decrypt the backup:')`
+- **Replaced with**: `await showPrompt('Enter the password to decrypt the backup:', '', 'Decrypt Backup', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Click "Import" → "Import Master Keypair"
+  - Select an encrypted backup file
+  - Verify password prompt dialog appears with title "Decrypt Backup" and password input type
+
+### Keypair Storage Status - Secret Key Entry
+
+#### 11.7 Change Storage Status - Secret Key
+- **Location**: Keypair storage status change function (line ~11009)
+- **Original**: `prompt('Enter the secret/private key for this keypair (PEM format or hex):')`
+- **Replaced with**: `await showPrompt('Enter the secret/private key for this keypair (PEM format or hex):', '', 'Enter Secret Key', 'PEM format or hex', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Change storage status from "public-only" or "full-offline" to "full"
+  - Verify secret key prompt dialog appears with title "Enter Secret Key" and password input type
+
+### Encryption Key Export/Import Replacements
+
+#### 11.8 Export Encryption Key - Encryption Password
+- **Location**: Encryption key export function (line ~13862)
+- **Original**: `prompt('Enter a password to encrypt the export:')`
+- **Replaced with**: `await showPrompt('Enter a password to encrypt the export:', '', 'Encrypt Export', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Encryption Key management
+  - Click "Export"
+  - Verify password prompt dialog appears with title "Encrypt Export" and password input type
+
+#### 11.9 Export Encryption Key - Confirm Password
+- **Location**: Encryption key export function (line ~13867)
+- **Original**: `prompt('Confirm password:')`
+- **Replaced with**: `await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password')`
+- **How to test**: 
+  - Go to Encryption Key management
+  - Click "Export"
+  - Enter encryption password
+  - Verify confirmation password prompt appears with title "Confirm Password" and password input type
+
+#### 11.10 Import Encryption Key - Decryption Password
+- **Location**: Encryption key import function (line ~13922)
+- **Original**: `prompt('Enter the password to decrypt the import:')`
+- **Replaced with**: `await showPrompt('Enter the password to decrypt the import:', '', 'Decrypt Import', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Encryption Key management
+  - Click "Import"
+  - Select an encrypted key file
+  - Verify password prompt dialog appears with title "Decrypt Import" and password input type
+
+### User Op Keypair Backup/Import Replacements
+
+#### 11.11 Backup User Op Keypair - Encryption Password
+- **Location**: `backupSelectedUserOpKeypair()` function (line ~14138)
+- **Original**: `prompt('Enter a password to encrypt the backup:')`
+- **Replaced with**: `await showPrompt('Enter a password to encrypt the backup:', '', 'Encrypt Backup', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select a User Op keypair
+  - Click "Backup" → "Backup Secret Key"
+  - Verify password prompt dialog appears with title "Encrypt Backup" and password input type
+
+#### 11.12 Backup User Op Keypair - Confirm Password
+- **Location**: `backupSelectedUserOpKeypair()` function (line ~14143)
+- **Original**: `prompt('Confirm password:')`
+- **Replaced with**: `await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select a User Op keypair
+  - Click "Backup" → "Backup Secret Key"
+  - Enter encryption password
+  - Verify confirmation password prompt appears with title "Confirm Password" and password input type
+
+#### 11.13 Import User Op Keypair - Decryption Password
+- **Location**: User Op keypair import function (line ~14181)
+- **Original**: `prompt('Enter the password to decrypt the backup:')`
+- **Replaced with**: `await showPrompt('Enter the password to decrypt the backup:', '', 'Decrypt Backup', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Click "Import" → "Import User Op Keypair"
+  - Select an encrypted backup file
+  - Verify password prompt dialog appears with title "Decrypt Backup" and password input type
+
+### Admin Keypair Backup/Import Replacements
+
+#### 11.14 Backup Admin Keypair - Encryption Password
+- **Location**: `backupSelectedAdminKeypair()` function (line ~14391)
+- **Original**: `prompt('Enter a password to encrypt the backup:')`
+- **Replaced with**: `await showPrompt('Enter a password to encrypt the backup:', '', 'Encrypt Backup', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select an Admin keypair
+  - Click "Backup" → "Backup Secret Key"
+  - Verify password prompt dialog appears with title "Encrypt Backup" and password input type
+
+#### 11.15 Backup Admin Keypair - Confirm Password
+- **Location**: `backupSelectedAdminKeypair()` function (line ~14396)
+- **Original**: `prompt('Confirm password:')`
+- **Replaced with**: `await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select an Admin keypair
+  - Click "Backup" → "Backup Secret Key"
+  - Enter encryption password
+  - Verify confirmation password prompt appears with title "Confirm Password" and password input type
+
+#### 11.16 Import Admin Keypair - Decryption Password
+- **Location**: Admin keypair import function (line ~14440)
+- **Original**: `prompt('Enter the password to decrypt the backup:')`
+- **Replaced with**: `await showPrompt('Enter the password to decrypt the backup:', '', 'Decrypt Backup', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Click "Import" → "Import Admin Keypair"
+  - Select an encrypted backup file
+  - Verify password prompt dialog appears with title "Decrypt Backup" and password input type
+
+### Admin Keypair Secret Key Export/Import Replacements
+
+#### 11.17 Export Admin Keypair Secret - Encryption Password
+- **Location**: `exportAdminKeypairSecretPKCS()` function (line ~14550)
+- **Original**: `prompt('Enter a password to encrypt the secret key:')`
+- **Replaced with**: `await showPrompt('Enter a password to encrypt the secret key:', '', 'Encrypt Secret Key', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select an Admin keypair
+  - Click "Export" → "Export Secret Key (PKCS)"
+  - Verify password prompt dialog appears with title "Encrypt Secret Key" and password input type
+
+#### 11.18 Export Admin Keypair Secret - Confirm Password
+- **Location**: `exportAdminKeypairSecretPKCS()` function (line ~14555)
+- **Original**: `prompt('Confirm password:')`
+- **Replaced with**: `await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Select an Admin keypair
+  - Click "Export" → "Export Secret Key (PKCS)"
+  - Enter encryption password
+  - Verify confirmation password prompt appears with title "Confirm Password" and password input type
+
+#### 11.19 Import Admin Keypair Secret - Decryption Password
+- **Location**: Admin keypair secret import function (line ~14597)
+- **Original**: `prompt('Enter the password to decrypt the secret key:')`
+- **Replaced with**: `await showPrompt('Enter the password to decrypt the secret key:', '', 'Decrypt Secret Key', 'Enter password', 'password')`
+- **How to test**: 
+  - Go to Keypair management
+  - Click "Import" → "Import Secret Key (PKCS)"
+  - Select an encrypted secret key file
+  - Verify password prompt dialog appears with title "Decrypt Secret Key" and password input type
+
+### Game Notes and Ratings Replacements
+
+#### 11.20 Edit Notes
+- **Location**: `editNotes()` function (line ~16707)
+- **Original**: `window.prompt('Edit notes:', current)`
+- **Replaced with**: `await showPrompt('Edit notes:', current, 'Edit Notes', 'Enter notes')`
+- **How to test**: 
+  - Go to Games list
+  - Select a game
+  - Click "Edit Notes" (or similar action)
+  - Verify prompt dialog appears with title "Edit Notes" and text input type
+
+#### 11.21 Set My Rating
+- **Location**: `setMyRating()` function (line ~16715)
+- **Original**: `window.prompt('Set My rating (0-5):', String(current))`
+- **Replaced with**: `await showPrompt('Set My rating (0-5):', String(current), 'Set Rating', 'Enter rating (0-5)', 'number')`
+- **How to test**: 
+  - Go to Games list
+  - Select a game
+  - Click "Set Rating" (or similar action)
+  - Verify prompt dialog appears with title "Set Rating" and number input type
+
+#### 11.22 Edit Stage Notes
+- **Location**: `editStageNotes()` function (line ~17746)
+- **Original**: `window.prompt('Set notes for selected stages:')`
+- **Replaced with**: `await showPrompt('Set notes for selected stages:', '', 'Set Stage Notes', 'Enter notes')`
+- **How to test**: 
+  - Go to Game stages view
+  - Select one or more stages
+  - Click "Edit Notes" (or similar action)
+  - Verify prompt dialog appears with title "Set Stage Notes" and text input type
+
+#### 11.23 Set Stage Rating
+- **Location**: `setStageRating()` function (line ~17755)
+- **Original**: `window.prompt('Set ${label} rating (1-5) for selected stages:')`
+- **Replaced with**: `await showPrompt('Set ${label} rating (1-5) for selected stages:', '', 'Set ${label} Rating', 'Enter rating (1-5)', 'number')`
+- **How to test**: 
+  - Go to Game stages view
+  - Select one or more stages
+  - Click "Set Difficulty Rating" or "Set Review Rating"
+  - Verify prompt dialog appears with appropriate title and number input type
+
+#### 11.24 Edit Conditions
+- **Location**: `editConditions()` function (line ~21836)
+- **Original**: `window.prompt(message, current.length === 0 ? '' : 'current')`
+- **Replaced with**: `await showPrompt(message, current.length === 0 ? '' : 'current', 'Edit Conditions', 'Enter numbers (e.g., "1,3,5" or "all" or "none")')`
+- **How to test**: 
+  - Go to Run management
+  - Select a run entry
+  - Click "Edit Conditions" (or similar action)
+  - Verify prompt dialog appears with title "Edit Conditions" showing the conditions list and input field
+
+---
+
+**Total Replacements in Batch 11**: 24 instances (all prompt() calls)
+
+✅ **ALL SYSTEM DIALOG INSTANCES REPLACED!**
+
+All instances of `alert()`, `confirm()`, and `prompt()` have been successfully replaced with custom modal functions throughout the entire application. The codebase now uses consistent, Electron-friendly dialogs with proper z-index handling and improved UX.
 

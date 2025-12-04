@@ -10282,7 +10282,7 @@ async function importProfileFromDetails() {
     }
     
     const filePath = result.filePaths[0];
-    const password = prompt('Enter decryption password for the profile:');
+    const password = await showPrompt('Enter decryption password for the profile:', '', 'Decrypt Profile', 'Enter password', 'password');
     if (!password) {
       return;
     }
@@ -10332,12 +10332,12 @@ async function exportProfileFromDetails() {
   }
   
   try {
-    const password = prompt('Enter encryption password for the profile export:');
+    const password = await showPrompt('Enter encryption password for the profile export:', '', 'Encrypt Profile Export', 'Enter password', 'password');
     if (!password) {
       return;
     }
     
-    const passwordConfirm = prompt('Confirm encryption password:');
+    const passwordConfirm = await showPrompt('Confirm encryption password:', '', 'Confirm Password', 'Confirm password', 'password');
     if (password !== passwordConfirm) {
       await showAlert('Passwords do not match', 'Validation Error');
       return;
@@ -10726,12 +10726,12 @@ async function backupSelectedMasterKeypair() {
     return;
   }
   
-  const password = prompt('Enter a password to encrypt the backup:');
+  const password = await showPrompt('Enter a password to encrypt the backup:', '', 'Encrypt Backup', 'Enter password', 'password');
   if (!password) {
     return;
   }
   
-  const confirmPassword = prompt('Confirm password:');
+  const confirmPassword = await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password');
   if (password !== confirmPassword) {
     await showAlert('Passwords do not match', 'Validation Error');
     return;
@@ -10768,7 +10768,7 @@ async function importMasterKeypairBackup() {
     }
     
     const filePath = result.filePaths[0];
-    const password = prompt('Enter the password to decrypt the backup:');
+    const password = await showPrompt('Enter the password to decrypt the backup:', '', 'Decrypt Backup', 'Enter password', 'password');
     if (!password) {
       return;
     }
@@ -11006,7 +11006,7 @@ async function updateAdminKeypairStorageStatus(keypairUuid: string, newStatus: s
   
   // If changing to "full" from "full-offline" or "public-only", prompt for secret key
   if (newStatus === 'full' && previousStatus !== 'full') {
-    const secretKey = prompt('Enter the secret/private key for this keypair (PEM format or hex):');
+    const secretKey = await showPrompt('Enter the secret/private key for this keypair (PEM format or hex):', '', 'Enter Secret Key', 'PEM format or hex', 'password');
     if (!secretKey || !secretKey.trim()) {
       await showAlert('Secret key is required for full keypair storage. Storage status unchanged.', 'Storage Status');
       return;
@@ -13859,12 +13859,12 @@ async function exportEncryptionKey() {
     return;
   }
   
-  const password = prompt('Enter a password to encrypt the export:');
+  const password = await showPrompt('Enter a password to encrypt the export:', '', 'Encrypt Export', 'Enter password', 'password');
   if (!password) {
     return;
   }
   
-  const passwordConfirm = prompt('Confirm password:');
+  const passwordConfirm = await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password');
   if (password !== passwordConfirm) {
     await showAlert('Passwords do not match', 'Validation Error');
     return;
@@ -13919,7 +13919,7 @@ async function importEncryptionKeyBackup() {
     }
     const fileContent = readResult.content;
     
-    const password = prompt('Enter the password to decrypt the import:');
+    const password = await showPrompt('Enter the password to decrypt the import:', '', 'Decrypt Import', 'Enter password', 'password');
     if (!password) {
       return;
     }
@@ -14135,12 +14135,12 @@ async function backupSelectedUserOpKeypair() {
     return;
   }
   
-  const password = prompt('Enter a password to encrypt the backup:');
+  const password = await showPrompt('Enter a password to encrypt the backup:', '', 'Encrypt Backup', 'Enter password', 'password');
   if (!password) {
     return;
   }
   
-  const confirmPassword = prompt('Confirm password:');
+  const confirmPassword = await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password');
   if (password !== confirmPassword) {
     await showAlert('Passwords do not match', 'Validation Error');
     return;
@@ -14178,7 +14178,7 @@ async function importUserOpKeypairBackup() {
     }
     
     const filePath = result.filePaths[0];
-    const password = prompt('Enter the password to decrypt the backup:');
+    const password = await showPrompt('Enter the password to decrypt the backup:', '', 'Decrypt Backup', 'Enter password', 'password');
     if (!password) {
       return;
     }
@@ -14388,12 +14388,12 @@ async function backupSelectedAdminKeypair() {
   }
   
   // Prompt for password
-  const password = prompt('Enter a password to encrypt the backup:');
+  const password = await showPrompt('Enter a password to encrypt the backup:', '', 'Encrypt Backup', 'Enter password', 'password');
   if (!password) {
     return;
   }
   
-  const confirmPassword = prompt('Confirm password:');
+  const confirmPassword = await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password');
   if (password !== confirmPassword) {
     await showAlert('Passwords do not match', 'Validation Error');
     return;
@@ -14437,7 +14437,7 @@ async function importAdminKeypairBackup() {
     }
     
     const filePath = result.filePaths[0];
-    const password = prompt('Enter the password to decrypt the backup:');
+    const password = await showPrompt('Enter the password to decrypt the backup:', '', 'Decrypt Backup', 'Enter password', 'password');
     if (!password) {
       return;
     }
@@ -14547,12 +14547,12 @@ async function exportAdminKeypairSecretPKCS() {
     return;
   }
   
-  const password = prompt('Enter a password to encrypt the secret key:');
+  const password = await showPrompt('Enter a password to encrypt the secret key:', '', 'Encrypt Secret Key', 'Enter password', 'password');
   if (!password) {
     return;
   }
   
-  const confirmPassword = prompt('Confirm password:');
+  const confirmPassword = await showPrompt('Confirm password:', '', 'Confirm Password', 'Confirm password', 'password');
   if (password !== confirmPassword) {
     await showAlert('Passwords do not match', 'Validation Error');
     return;
@@ -14594,7 +14594,7 @@ async function importAdminKeypairSecretPKCS() {
     }
     
     const filePath = result.filePaths[0];
-    const password = prompt('Enter the password to decrypt the secret key:');
+    const password = await showPrompt('Enter the password to decrypt the secret key:', '', 'Decrypt Secret Key', 'Enter password', 'password');
     if (!password) {
       return;
     }
@@ -16700,19 +16700,19 @@ async function handleAdvancedPatchBuild(options: {
   }
 }
 
-function editNotes() {
+async function editNotes() {
   const it = getSingleSelected();
   if (!it) return;
   const current = it.Mynotes ?? '';
-  const next = window.prompt('Edit notes:', current);
+  const next = await showPrompt('Edit notes:', current, 'Edit Notes', 'Enter notes');
   if (next !== null) it.Mynotes = next;
 }
 
-function setMyRating() {
+async function setMyRating() {
   const it = getSingleSelected();
   if (!it) return;
   const current = it.Myrating ?? '';
-  const next = window.prompt('Set My rating (0-5):', String(current));
+  const next = await showPrompt('Set My rating (0-5):', String(current), 'Set Rating', 'Enter rating (0-5)', 'number');
   if (next === null) return;
   const n = Number(next);
   if (!Number.isNaN(n) && n >= 0 && n <= 5) it.Myrating = n;
@@ -17740,19 +17740,19 @@ async function addStagesToRun() {
   console.log(`Added ${addedCount} stages to run`);
 }
 
-function editStageNotes() {
+async function editStageNotes() {
   const ids = Array.from(selectedStageIds.value.values());
   if (ids.length === 0) return;
-  const next = window.prompt('Set notes for selected stages:');
+  const next = await showPrompt('Set notes for selected stages:', '', 'Set Stage Notes', 'Enter notes');
   if (next === null) return;
   for (const st of currentStages.value) if (selectedStageIds.value.has(st.key)) st.myNotes = next;
 }
 
-function setStageRating(type: 'difficulty' | 'review') {
+async function setStageRating(type: 'difficulty' | 'review') {
   const ids = Array.from(selectedStageIds.value.values());
   if (ids.length === 0) return;
   const label = type === 'difficulty' ? 'Difficulty' : 'Review';
-  const next = window.prompt(`Set ${label} rating (1-5) for selected stages:`);
+  const next = await showPrompt(`Set ${label} rating (1-5) for selected stages:`, '', `Set ${label} Rating`, 'Enter rating (1-5)', 'number');
   if (next === null) return;
   const n = Number(next);
   if (Number.isNaN(n) || n < 1 || n > 5) return;
@@ -21833,7 +21833,7 @@ function editConditions(entry: RunEntry) {
     allConditions.map((c, i) => `${i + 1}. ${c} ${current.includes(c) ? '✓' : ''}`).join('\n') +
     '\n\nEnter numbers to toggle (e.g., "1,3,5" or "all" or "none"):';
   
-  const input = window.prompt(message, current.length === 0 ? '' : 'current');
+  const input = await showPrompt(message, current.length === 0 ? '' : 'current', 'Edit Conditions', 'Enter numbers (e.g., "1,3,5" or "all" or "none")');
   if (input === null) return;
   
   const inputLower = input.toLowerCase().trim();

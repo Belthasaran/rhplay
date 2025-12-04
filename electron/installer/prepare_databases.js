@@ -58,6 +58,7 @@ Options:
   --verify-links            Verify all download sources (developer tool)
   --verify-build            Verify build process for all targets (developer tool)
   --target <name>           Limit verification to specific target (e.g., rhdata.db)
+  --ipfs-timeout <seconds>  Timeout for IPFS downloads in seconds (default: 20)
   --help                    Show this help message
 
 Examples:
@@ -150,6 +151,7 @@ function parseArgs(argv) {
     verifyLinks: false,
     verifyBuild: false,
     target: null,
+    ipfsTimeout: 20, // Default 20 seconds for IPFS downloads
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -211,6 +213,19 @@ function parseArgs(argv) {
       opts.target = argv[++i];
     } else if (arg.startsWith('--target=')) {
       opts.target = arg.substring('--target='.length);
+    } else if (arg === '--ipfs-timeout') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --ipfs-timeout');
+      const timeoutValue = parseInt(argv[++i], 10);
+      if (isNaN(timeoutValue) || timeoutValue <= 0) {
+        exitWithError('--ipfs-timeout must be a positive number (seconds)');
+      }
+      opts.ipfsTimeout = timeoutValue;
+    } else if (arg.startsWith('--ipfs-timeout=')) {
+      const timeoutValue = parseInt(arg.substring('--ipfs-timeout='.length), 10);
+      if (isNaN(timeoutValue) || timeoutValue <= 0) {
+        exitWithError('--ipfs-timeout must be a positive number (seconds)');
+      }
+      opts.ipfsTimeout = timeoutValue;
     } else if (arg.startsWith('--')) {
       exitWithError(`Unknown option "${arg}". Use --help for usage details.`);
     } else {
@@ -856,7 +871,7 @@ function parsePriority(priority, spec) {
   return sources;
 }
 
-async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
+async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ipfsTimeout = 20) {
   const destPath = path.join(workingDir, spec.file_name);
   if (downloadTracker) {
     downloadTracker.register(spec);
@@ -912,14 +927,14 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
 
         if (useParallel && spec.sha256) {
           // Parallel IPFS download for files < 180 MB
-          await downloadFromIpfsParallel(source.cid, destPath, spec.sha256, spec, downloadTracker);
+          await downloadFromIpfsParallel(source.cid, destPath, spec.sha256, spec, downloadTracker, ipfsTimeout);
           return destPath;
         } else {
           // Sequential IPFS download for larger files or when hash not available
           for (const gateway of IPFS_GATEWAYS) {
             const url = `${gateway}${source.cid}`;
             try {
-              await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`);
+              await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`, ipfsTimeout * 1000);
               return destPath;
             } catch (err) {
               lastError = err;
@@ -980,8 +995,9 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
 /**
  * Download from IPFS using parallel gateway testing (5 at a time)
  * Only for files < 180 MB with SHA256 hash available
+ * @param {number} ipfsTimeout - Timeout in seconds for each IPFS request
  */
-async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, downloadTracker) {
+async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, downloadTracker, ipfsTimeout = 20) {
   const tempDir = path.dirname(destPath);
   const batchSize = 5;
   const abortControllers = [];
@@ -999,6 +1015,11 @@ async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, dow
       const controller = new AbortController();
       abortControllers.push(controller);
       const tempPath = path.join(tempDir, `${spec.file_name}.ipfs.${i + batchIdx}`);
+
+      // Set timeout for this IPFS request
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, ipfsTimeout * 1000);
 
       return fetch(gatewayUrl, { signal: controller.signal })
         .then(async (response) => {
@@ -1036,9 +1057,11 @@ async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, dow
             }
           }
 
+          clearTimeout(timeout);
           return { success: true, path: tempPath, label: gatewayLabel };
         })
         .catch((err) => {
+          clearTimeout(timeout);
           // Clean up temp file on error
           if (fs.existsSync(tempPath)) {
             try {
@@ -1047,7 +1070,8 @@ async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, dow
               // Ignore cleanup errors
             }
           }
-          return { success: false, error: err.message, label: gatewayLabel };
+          const errorMsg = err.name === 'AbortError' ? `Timeout after ${ipfsTimeout}s` : err.message;
+          return { success: false, error: errorMsg, label: gatewayLabel };
         });
     });
 
@@ -1109,10 +1133,10 @@ async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, dow
   }
 }
 
-async function downloadFromUrl(url, destPath, expectedSha256, spec, downloadTracker, sourceLabel) {
+async function downloadFromUrl(url, destPath, expectedSha256, spec, downloadTracker, sourceLabel, timeoutMs = 4 * 60 * 1000) {
   console.log(`[download-attempt] ${spec.file_name} via ${sourceLabel || url}`);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4 * 60 * 1000); // 4 minutes
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response;
   try {
     response = await fetch(url, { signal: controller.signal });
@@ -1194,7 +1218,7 @@ async function extractFileFromTar(tarPath, extractFile, outputPath) {
   }
 }
 
-async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker, userDataDir) {
+async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker, userDataDir, ipfsTimeout = 20) {
   const { downloadsDir, stagingDir } = planPaths;
   ensureDirectory(stagingDir);
 
@@ -1203,7 +1227,7 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
     throw new Error(`Manifest entry missing base description.`);
   }
 
-  const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir);
+  const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
   console.log(`[extract] ${dbStatus.name}: decompressing base archive ${base.file_name}`);
   const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
   const tempDbPath = path.join(stagingDir, `${dbStatus.name}.tmp.db`);
@@ -1229,7 +1253,7 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
   let lastPatchFileName = null;
 
   for (const patch of patches) {
-    const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir);
+    const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
     console.log(`[patch-start] ${dbStatus.name}: applying ${patch.file_name}`);
     const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
     await decompressXz(patchArchivePath, sqlPath);
@@ -1325,7 +1349,7 @@ async function executeProvision(plan, manifest) {
         if (!manifestEntry) {
           throw new Error('Manifest entry missing.');
         }
-        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker, plan.userDataDir);
+        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker, plan.userDataDir, ipfsTimeout);
         result.executed.push({ name: db.name, action: 'provisioned', path: dest });
         console.log(`[provision] ${db.name}: provisioning completed -> ${dest}`);
       } else {
@@ -1368,7 +1392,7 @@ async function verifyLinks(manifest, opts) {
     // Verify base
     if (target.base) {
       console.log(`  Base: ${target.base.file_name}`);
-      const baseResult = await verifyFileSpec(target.base, `base for ${targetKey}`);
+      const baseResult = await verifyFileSpec(target.base, `base for ${targetKey}`, opts.ipfsTimeout);
       if (baseResult.success) {
         results.passed.push({ target: targetKey, type: 'base', file: target.base.file_name });
       } else {
@@ -1383,7 +1407,7 @@ async function verifyLinks(manifest, opts) {
     if (Array.isArray(target.sqlpatches)) {
       for (const patch of target.sqlpatches) {
         console.log(`  Patch: ${patch.file_name}`);
-        const patchResult = await verifyFileSpec(patch, `patch for ${targetKey}`);
+        const patchResult = await verifyFileSpec(patch, `patch for ${targetKey}`, opts.ipfsTimeout);
         if (patchResult.success) {
           results.passed.push({ target: targetKey, type: 'patch', file: patch.file_name });
         } else {
@@ -1703,7 +1727,7 @@ async function verifyBuild(manifest, opts) {
         for (const patch of patches) {
           console.log(`    Applying: ${patch.file_name}`);
           const patchPath = path.join(tempDir, patch.file_name);
-          await ensureArtifact(patch, tempDir, null, opts.userDataDir || detectUserDataDir());
+          await ensureArtifact(patch, tempDir, null, opts.userDataDir || detectUserDataDir(), opts.ipfsTimeout || 20);
 
           const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
           await decompressXz(patchPath, sqlPath);
@@ -1845,7 +1869,7 @@ async function run(argv) {
     }
 
     if (opts.provision) {
-      plan.provisionResult = await executeProvision(plan, manifest);
+      plan.provisionResult = await executeProvision(plan, manifest, opts.ipfsTimeout);
       const finalDbStatus = inspectDatabases(opts, manifest);
       plan.databases = finalDbStatus;
       plan.downloads = [];

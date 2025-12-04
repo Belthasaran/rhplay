@@ -26,7 +26,7 @@ For each dialog replacement, verify:
   - Click "Export" without selecting any games
   - Verify alert appears with title "Export Error"
 
-### 1.2 Export Games - Success
+### 1.2 Export Games - Success - tested
 - **Location**: `exportFull()` function (line ~8154)
 - **Original**: `alert('Successfully exported X games...')`
 - **Replaced with**: `showToastNotification('Successfully exported X games...', 'success', 3000)`
@@ -74,7 +74,7 @@ For each dialog replacement, verify:
   - While installation is in progress, attempt to open another RHPAK
   - Verify alert appears with title "Installation In Progress"
 
-### 2.2 Uninstall RHPAK Confirmation
+### 2.2 Uninstall RHPAK Confirmation - tested
 - **Location**: Uninstall function (line ~8412)
 - **Original**: `confirm('Uninstall X rhpak(s)?...')`
 - **Replaced with**: `await showConfirm('Uninstall X rhpak(s)?...', 'Uninstall RHPAK')`
@@ -124,13 +124,13 @@ For each dialog replacement, verify:
 - **Replaced with**: `await showAlert('USBFXP server requires Electron environment', 'Error')`
 - **How to test**: Access USBFXP features (if not in Electron)
 
-### 4.2 USB2SNES Connection Reset
+### 4.2 USB2SNES Connection Reseta - tested
 - **Location**: USB2SNES handler (line ~9069)
 - **Original**: `alert('USB2SNES connection reset')`
 - **Replaced with**: `showToastNotification('USB2SNES connection reset', 'info', 2000)`
 - **How to test**: Reset USB2SNES connection, verify toast appears
 
-### 4.3 Directory Creation
+### 4.3 Directory Creation - tested (errors)
 - **Location**: USB2SNES directory functions (lines ~9081, 9086, 9088)
 - **Original**: Various directory-related alerts
 - **Replaced with**: `showToastNotification()` for success, `await showAlert()` for errors
@@ -177,13 +177,13 @@ For each dialog replacement, verify:
 - **Replaced with**: `await showAlert('Failed to import profile: ...', 'Import Failed')`
 - **How to test**: Attempt to import invalid/corrupted profile files
 
-### 6.5 Export Profile - Password Mismatch
+### 6.5 Export Profile - Password Mismatch - tested
 - **Location**: `exportProfileFromDetails()` function (line ~10337)
 - **Original**: `alert('Passwords do not match')`
 - **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
 - **How to test**: Export profile with mismatched passwords
 
-### 6.6 Export Profile - Success
+### 6.6 Export Profile - Success - tested
 - **Location**: `exportProfileFromDetails()` function (line ~10349)
 - **Original**: `alert('Profile exported successfully!')`
 - **Replaced with**: `showToastNotification('Profile exported successfully!', 'success', 3000)`
@@ -263,13 +263,13 @@ For each dialog replacement, verify:
 - **Replaced with**: `await showAlert('Failed to add master keypair: ...', 'Add Failed')`
 - **How to test**: Attempt to add invalid keypair
 
-### 7.9 Export Master Keypair Backup - Success
+### 7.9 Export Master Keypair Backup - Success - 
 - **Location**: Export backup (line ~10737)
 - **Original**: `alert('Master keypair backup exported successfully')`
 - **Replaced with**: `showToastNotification('Master keypair backup exported successfully', 'success', 3000)`
 - **How to test**: Export master keypair backup
 
-### 7.10 Export Master Keypair Backup - Failure
+### 7.10 Export Master Keypair Backup - Failure - tested
 - **Location**: Export backup (lines ~10739, 10743)
 - **Original**: `alert('Failed to export backup: ...')`
 - **Replaced with**: `await showAlert('Failed to export backup: ...', 'Export Failed')`

@@ -59,6 +59,26 @@ export function handleAlertCancel() {
   }
 }
 
+/**
+ * Show an alert dialog synchronously (fire-and-forget, non-blocking)
+ * Use this when you don't need to wait for user response and don't want to make the calling function async
+ * @param message - The message to display
+ * @param title - Optional title for the dialog
+ */
+export function showAlertSync(message: string, title?: string): void {
+  const dialogTitle = title || 'Alert';
+  console.log(`[Alert Dialog Sync] ${dialogTitle}: ${message}`);
+  // If there's a pending async alert, resolve it first to avoid conflicts
+  if (alertDialogResolve) {
+    alertDialogResolve();
+    alertDialogResolve = null;
+  }
+  alertDialogTitle.value = dialogTitle;
+  alertDialogMessage.value = message;
+  alertDialogResolve = null; // No promise to resolve for sync calls
+  alertDialogVisible.value = true;
+}
+
 // ============================================================================
 // Confirm Dialog State
 // ============================================================================

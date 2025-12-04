@@ -7706,6 +7706,7 @@ import {
   handlePromptConfirm,
   handlePromptCancel,
   showAlert,
+  showAlertSync,
   showConfirm,
   showPrompt
 } from './utils/dialogs';
@@ -12357,11 +12358,11 @@ async function importTrustDeclarationBackup() {
   await importTrustDeclarations();
 }
 
-function openTrustSummaryModal() {
-  if (!onlinePrimaryPubkey.value) {
-    await showAlert('Select a profile with an active Nostr key to view trust summary.', 'Selection Required');
-    return;
-  }
+  async function openTrustSummaryModal() {
+    if (!onlinePrimaryPubkey.value) {
+      await showAlert('Select a profile with an active Nostr key to view trust summary.', 'Selection Required');
+      return;
+    }
   trustSummaryModalOpen.value = true;
 }
 
@@ -15397,7 +15398,7 @@ function nextWizardStep() {
   }
   
   if (!profileCreationData.value.displayName.trim()) {
-    await showAlert('Display name is required', 'Validation Error');
+    showAlertSync('Display name is required', 'Validation Error');
     return;
   }
   
@@ -16877,7 +16878,7 @@ async function refreshRhpakAssociation() {
 // Startup validation handling
 let startupValidationResults = null;
 
-function openSettingsModal(data) {
+async function openSettingsModal(data) {
   console.log('Opening settings modal due to:', data);
   settingsModalOpen.value = true;
   
@@ -19424,7 +19425,7 @@ async function loadExpandedRunResults() {
 }
 
 // Reopen staging window
-function reopenStagingWindow() {
+async function reopenStagingWindow() {
   runStatusDropdownOpen.value = false;
   if (stagingFolderPath.value) {
     stagingSuccessModalOpen.value = true;

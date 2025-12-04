@@ -9363,6 +9363,85 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Export admin keypair secret key in PKCS format
+   * Channel: online:admin-keypair:export-secret-pkcs
+   */
+  ipcMain.handle('online:admin-keypair:export-secret-pkcs', async (event, { keypairUuid, password }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypair = db.prepare(`
+        SELECT encrypted_private_key, private_key_format FROM admin_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+      
+      if (!keypair || !keypair.encrypted_private_key) {
+        return { success: false, error: 'Keypair not found or has no private key' };
+      }
+      
+      // Decrypt private key
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to export secret keys' };
+      }
+      
+      const parts = keypair.encrypted_private_key.split(':');
+      if (parts.length !== 2) {
+        return { success: false, error: 'Invalid encrypted private key format' };
+      }
+      
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = Buffer.from(parts[1], 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', keyguardKey, iv);
+      let decrypted = decipher.update(encrypted);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      
+      const privateKey = keypair.private_key_format === 'hex' ? decrypted.toString('hex') : decrypted.toString('utf8');
+      
+      // Encrypt with user-provided password using PBKDF2
+      const salt = crypto.randomBytes(16);
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      const exportIv = crypto.randomBytes(16);
+      const exportCipher = crypto.createCipheriv('aes-256-cbc', key, exportIv);
+      let passwordEncrypted = exportCipher.update(privateKey, 'utf8');
+      passwordEncrypted = Buffer.concat([passwordEncrypted, exportCipher.final()]);
+      
+      // Create PKCS-like JSON format
+      const pkcsData = {
+        format: 'RHTools-PKCS-v1',
+        keypairUuid: keypairUuid,
+        privateKeyFormat: keypair.private_key_format,
+        encryptedData: {
+          iv: exportIv.toString('hex'),
+          salt: salt.toString('hex'),
+          data: passwordEncrypted.toString('hex')
+        }
+      };
+      
+      // Save to file
+      const result = await dialog.showSaveDialog({
+        title: 'Export Admin Keypair Secret Key',
+        defaultPath: `admin-keypair-${keypairUuid.substring(0, 8)}.json`,
+        filters: [
+          { name: 'JSON Files', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] }
+        ]
+      });
+      
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: 'Export cancelled' };
+      }
+      
+      fs.writeFileSync(result.filePath, JSON.stringify(pkcsData, null, 2), 'utf8');
+      
+      return { success: true, filePath: result.filePath };
+    } catch (error) {
+      console.error('Error exporting admin keypair secret PKCS:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   /**
    * Add existing User Op keypair (public key only or full)
    * Channel: online:user-op-keypair:add

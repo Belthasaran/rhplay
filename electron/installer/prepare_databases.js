@@ -1218,6 +1218,174 @@ async function extractFileFromTar(tarPath, extractFile, outputPath) {
   }
 }
 
+/**
+ * Extract multiple files/directories from tar archive
+ * Supports wildcards like "Flips/*" to extract entire directories
+ */
+async function extractFilesFromTar(tarPath, installFiles, destDir) {
+  const extractedFiles = [];
+  const extractedPaths = new Set();
+
+  // First, list all files in the tar to find matches
+  const tarEntries = [];
+  await tar.list({
+    file: tarPath,
+    onentry: (entry) => {
+      tarEntries.push(entry.path);
+    },
+  });
+
+  // Process each install_files pattern
+  for (const pattern of installFiles) {
+    if (pattern.endsWith('/*')) {
+      // Wildcard pattern: extract entire directory
+      const dirPrefix = pattern.slice(0, -2); // Remove '/*'
+      const matchingEntries = tarEntries.filter((entry) => entry.startsWith(dirPrefix + '/') || entry === dirPrefix);
+      
+      if (matchingEntries.length === 0) {
+        throw new Error(`No files found matching pattern ${pattern} in archive`);
+      }
+
+      // Extract all matching entries
+      let extracted = false;
+      await tar.x({
+        file: tarPath,
+        cwd: destDir,
+        filter: (filePath) => {
+          if (filePath.startsWith(dirPrefix + '/') || filePath === dirPrefix) {
+            extracted = true;
+            return true;
+          }
+          return false;
+        },
+      });
+
+      if (!extracted) {
+        throw new Error(`No files extracted for pattern ${pattern}`);
+      }
+
+      // Track all extracted files (only files, not directories)
+      for (const entry of matchingEntries) {
+        const fullPath = path.join(destDir, entry);
+        if (fs.existsSync(fullPath)) {
+          const stats = fs.statSync(fullPath);
+          if (stats.isFile()) {
+            extractedFiles.push(entry);
+            extractedPaths.add(entry);
+          }
+        }
+      }
+    } else {
+      // Exact file match
+      if (!tarEntries.includes(pattern)) {
+        throw new Error(`File ${pattern} not found in archive`);
+      }
+
+      let extracted = false;
+      await tar.x({
+        file: tarPath,
+        cwd: destDir,
+        filter: (filePath) => {
+          if (filePath === pattern) {
+            extracted = true;
+            return true;
+          }
+          return false;
+        },
+      });
+
+      if (!extracted) {
+        throw new Error(`File ${pattern} was not extracted`);
+      }
+
+      const fullPath = path.join(destDir, pattern);
+      if (fs.existsSync(fullPath)) {
+        const stats = fs.statSync(fullPath);
+        if (stats.isFile()) {
+          extractedFiles.push(pattern);
+          extractedPaths.add(pattern);
+        }
+      }
+    }
+  }
+
+  return extractedFiles;
+}
+
+/**
+ * Build appfiles package from manifest
+ * Extracts files from tar archive and creates tracking file
+ */
+async function buildAppFilesFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker, userDataDir, ipfsTimeout = 20) {
+  const { downloadsDir, stagingDir } = planPaths;
+  ensureDirectory(stagingDir);
+
+  const base = manifestEntry.base;
+  if (!base) {
+    throw new Error(`Manifest entry missing base description.`);
+  }
+
+  if (!base.install_files || !Array.isArray(base.install_files) || base.install_files.length === 0) {
+    throw new Error(`Manifest entry missing install_files array.`);
+  }
+
+  // Download base archive
+  const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
+  console.log(`[extract] ${dbStatus.name}: extracting appfiles from ${base.file_name}`);
+
+  // Extract tar archive to staging
+  const format = base.format || 'tar+xz';
+  if (format !== 'tar+xz' && format !== 'tar.xz') {
+    throw new Error(`Unsupported format for appfiles: ${format}`);
+  }
+
+  const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
+  await decompressXz(baseArchivePath, baseTarPath);
+
+  // Extract specified files to userDataDir
+  const extractedFiles = await extractFilesFromTar(baseTarPath, base.install_files, userDataDir);
+  fs.unlinkSync(baseTarPath);
+
+  console.log(`[extract] ${dbStatus.name}: extracted ${extractedFiles.length} file(s)`);
+
+  // Calculate SHA256 for each extracted file
+  const installedFiles = [];
+  for (const file of extractedFiles) {
+    const filePath = path.join(userDataDir, file);
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      if (stats.isFile()) {
+        const fileSha256 = sha256File(filePath);
+        installedFiles.push({
+          file,
+          sha256: fileSha256,
+        });
+      }
+    }
+  }
+
+  // Create tracking file
+  const trackingFilePath = path.join(userDataDir, dbStatus.name);
+  const version = manifestEntry.version || '0';
+  const message = manifestEntry.message || '';
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+
+  const trackingContent = {
+    message,
+    version,
+    timestamp,
+    installed_files: installedFiles,
+  };
+
+  fs.writeFileSync(trackingFilePath, JSON.stringify(trackingContent, null, 2), 'utf8');
+  console.log(`[provision] ${dbStatus.name}: tracking file created at ${trackingFilePath}`);
+
+  // Update provisioned.json
+  updateProvisionedEntry(userDataDir, dbStatus.name, manifestEntry, base.sha256, null, null);
+
+  return trackingFilePath;
+}
+
 async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker, userDataDir, ipfsTimeout = 20) {
   const { downloadsDir, stagingDir } = planPaths;
   ensureDirectory(stagingDir);
@@ -1363,6 +1531,17 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
         const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker, plan.userDataDir, ipfsTimeout);
         result.executed.push({ name: db.name, action: 'provisioned', path: dest });
         console.log(`[provision] ${db.name}: provisioning completed -> ${dest}`);
+      } else if (db.action === 'provision-appfiles') {
+        const manifestEntry = manifest[db.name];
+        if (!manifestEntry) {
+          throw new Error(`Manifest entry missing for ${db.name}.`);
+        }
+        if (manifestEntry.type !== 'appfiles') {
+          throw new Error(`Entry ${db.name} is not of type appfiles.`);
+        }
+        const dest = await buildAppFilesFromManifest(db, manifestEntry, paths, downloadTracker, plan.userDataDir, ipfsTimeout);
+        result.executed.push({ name: db.name, action: 'provisioned-appfiles', path: dest });
+        console.log(`[provision] ${db.name}: appfiles provisioning completed -> ${dest}`);
       } else {
         result.skipped.push({ name: db.name, reason: `unknown action ${db.action}` });
         console.log(`[provision] ${db.name}: skipped (unknown action ${db.action})`);

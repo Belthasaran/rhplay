@@ -13462,7 +13462,7 @@ async function saveDraftTrustDeclaration() {
       trustDeclarationWizardData.value.status = 'Draft';
       return true;
     } else {
-      alert(`Failed to save draft: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to save draft: ${result.error || 'Unknown error'}`, 'Save Failed');
       return false;
     }
   } catch (error) {
@@ -13490,7 +13490,7 @@ async function finalizeTrustDeclaration() {
   }
   
   if (!canFinalizeDeclaration.value) {
-    alert('Please fix validation errors before finalizing');
+    await showAlert('Please fix validation errors before finalizing', 'Validation Error');
     return;
   }
   
@@ -13498,7 +13498,7 @@ async function finalizeTrustDeclaration() {
   if (trustDeclarationWizardData.value.content.mode === 'advanced') {
     validateTrustDeclarationAdvancedJson();
     if (trustDeclarationWizardData.value.content.validationErrors.length > 0) {
-      alert('Please fix validation errors before finalizing');
+      await showAlert('Please fix validation errors before finalizing', 'Validation Error');
       return;
     }
   }
@@ -13508,7 +13508,7 @@ async function finalizeTrustDeclaration() {
     // If no UUID, we need to save as draft first
     const saved = await saveDraftTrustDeclaration();
     if (!saved) {
-      alert('Failed to save declaration. Please try again.');
+      await showAlert('Failed to save declaration. Please try again.', 'Save Failed');
       return;
     }
   }
@@ -13522,9 +13522,9 @@ async function finalizeTrustDeclaration() {
     
     if (result.success) {
       trustDeclarationWizardData.value.status = 'Finalized';
-      alert('Declaration finalized. You can now sign and save it.');
+      showToastNotification('Declaration finalized. You can now sign and save it.', 'success', 3000);
     } else {
-      alert(`Failed to finalize declaration: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to finalize declaration: ${result.error || 'Unknown error'}`, 'Finalization Failed');
     }
   } catch (error) {
     console.error('Error finalizing declaration:', error);
@@ -13538,7 +13538,7 @@ async function saveTrustDeclaration() {
   }
   
   if (trustDeclarationWizardData.value.status !== 'Finalized') {
-    alert('Please finalize the declaration before saving');
+    await showAlert('Please finalize the declaration before saving', 'Save Error');
     return;
   }
   
@@ -13549,7 +13549,7 @@ async function saveTrustDeclaration() {
       const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
       contentJson = parsed.content || parsed;
     } catch (error: any) {
-      alert(`Invalid JSON: ${error.message}`);
+      await showAlert(`Invalid JSON: ${error.message}`, 'JSON Error');
       return;
     }
   } else {
@@ -13558,7 +13558,7 @@ async function saveTrustDeclaration() {
       const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
       contentJson = parsed.content || {};
     } catch (error: any) {
-      alert(`Error generating JSON from form: ${error.message}`);
+      await showAlert(`Error generating JSON from form: ${error.message}`, 'JSON Generation Error');
       return;
     }
   }
@@ -13605,7 +13605,7 @@ async function saveTrustDeclaration() {
         loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
       }
     } else {
-      alert(`Failed to save declaration: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to save declaration: ${result.error || 'Unknown error'}`, 'Save Failed');
     }
   } catch (error) {
     console.error('Error saving declaration:', error);
@@ -13742,7 +13742,7 @@ function toggleEncryptionKeyActionDropdown() {
 
 async function openEncryptionKeyDetailsModal() {
   if (!selectedEncryptionKeyUuid.value) {
-    alert('Please select an encryption key first');
+    await showAlert('Please select an encryption key first', 'Selection Required');
     return;
   }
   await loadSelectedEncryptionKey();
@@ -13769,7 +13769,7 @@ async function generateEncryptionKey() {
         JSON.parse(newEncryptionKeySelectionIdentifier.value.trim());
         selectionIdentifierJson = newEncryptionKeySelectionIdentifier.value.trim();
       } catch (error) {
-        alert('Selection Identifier must be valid JSON');
+        await showAlert('Selection Identifier must be valid JSON', 'Validation Error');
         return;
       }
     }
@@ -13808,11 +13808,11 @@ async function generateEncryptionKey() {
       newEncryptionKeyDescription.value = '';
       newEncryptionKeyEndDate.value = '';
       
-      alert('Encryption key generated successfully!');
+      showToastNotification('Encryption key generated successfully!', 'success', 3000);
       // Open details modal
       await openEncryptionKeyDetailsModal();
     } else {
-      alert(`Failed to generate encryption key: ${result.error}`);
+      await showAlert(`Failed to generate encryption key: ${result.error}`, 'Generation Failed');
     }
   } catch (error) {
     console.error('Error generating encryption key:', error);
@@ -13843,9 +13843,9 @@ async function saveEncryptionKeyMetadata() {
     if (result.success) {
       await loadEncryptionKeysList();
       await loadSelectedEncryptionKey();
-      alert('Metadata saved successfully');
+      showToastNotification('Metadata saved successfully', 'success', 2000);
     } else {
-      alert(`Failed to save metadata: ${result.error}`);
+      await showAlert(`Failed to save metadata: ${result.error}`, 'Save Failed');
     }
   } catch (error) {
     console.error('Error saving encryption key metadata:', error);
@@ -13855,7 +13855,7 @@ async function saveEncryptionKeyMetadata() {
 
 async function exportEncryptionKey() {
   if (!isElectronAvailable() || !selectedEncryptionKeyUuid.value) {
-    alert('Please select an encryption key first');
+    await showAlert('Please select an encryption key first', 'Selection Required');
     return;
   }
   
@@ -13866,7 +13866,7 @@ async function exportEncryptionKey() {
   
   const passwordConfirm = prompt('Confirm password:');
   if (password !== passwordConfirm) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -13877,9 +13877,9 @@ async function exportEncryptionKey() {
     });
     
     if (result.success) {
-      alert('Encryption key exported successfully!');
+      showToastNotification('Encryption key exported successfully!', 'success', 3000);
     } else {
-      alert(`Failed to export encryption key: ${result.error}`);
+      await showAlert(`Failed to export encryption key: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error exporting encryption key:', error);
@@ -13914,7 +13914,7 @@ async function importEncryptionKeyBackup() {
     // Read file via IPC
     const readResult = await (window as any).electronAPI.readFile({ filePath });
     if (!readResult.success) {
-      alert(`Failed to read file: ${readResult.error}`);
+      await showAlert(`Failed to read file: ${readResult.error}`, 'File Read Error');
       return;
     }
     const fileContent = readResult.content;
@@ -13925,7 +13925,7 @@ async function importEncryptionKeyBackup() {
     }
     
     // Ask if user wants to encrypt with Profile Guard
-    const encryptWithProfileGuard = confirm('Encrypt this key with Profile Guard? (Recommended for Group and Individual keys)');
+    const encryptWithProfileGuard = await showConfirm('Encrypt this key with Profile Guard? (Recommended for Group and Individual keys)', 'Encrypt with Profile Guard');
     
     const importResult = await (window as any).electronAPI.importEncryptionKey({
       encryptedData: fileContent,
@@ -13937,11 +13937,11 @@ async function importEncryptionKeyBackup() {
       await loadEncryptionKeysList();
       selectedEncryptionKeyUuid.value = importResult.keyUuid;
       showEncryptionKeyActionDropdown.value = false;
-      alert('Encryption key imported successfully!');
+      showToastNotification('Encryption key imported successfully!', 'success', 3000);
       // Open details modal
       await openEncryptionKeyDetailsModal();
     } else {
-      alert(`Failed to import encryption key: ${importResult.error}`);
+      await showAlert(`Failed to import encryption key: ${importResult.error}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing encryption key:', error);
@@ -13951,11 +13951,12 @@ async function importEncryptionKeyBackup() {
 
 async function deleteSelectedEncryptionKey() {
   if (!isElectronAvailable() || !selectedEncryptionKeyUuid.value) {
-    alert('Please select an encryption key first');
+    await showAlert('Please select an encryption key first', 'Selection Required');
     return;
   }
   
-  if (!confirm('Are you sure you want to delete this encryption key? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you sure you want to delete this encryption key? This action cannot be undone.', 'Delete Encryption Key');
+  if (!confirmed) {
     return;
   }
   
@@ -13967,9 +13968,9 @@ async function deleteSelectedEncryptionKey() {
       selectedEncryptionKeyUuid.value = null;
       selectedEncryptionKey.value = null;
       showEncryptionKeyActionDropdown.value = false;
-      alert('Encryption key deleted successfully');
+      showToastNotification('Encryption key deleted successfully', 'success', 3000);
     } else {
-      alert(`Failed to delete encryption key: ${result.error}`);
+      await showAlert(`Failed to delete encryption key: ${result.error}`, 'Delete Failed');
     }
   } catch (error) {
     console.error('Error deleting encryption key:', error);
@@ -14018,7 +14019,7 @@ async function loadSelectedUserOpKeypair() {
         comments: result.keypair.comments || ''
       };
     } else {
-      alert(`Failed to load User Op keypair: ${result.error}`);
+      await showAlert(`Failed to load User Op keypair: ${result.error}`, 'Load Failed');
       selectedUserOpKeypair.value = null;
     }
   } catch (error) {
@@ -14030,7 +14031,7 @@ async function loadSelectedUserOpKeypair() {
 
 async function openUserOpKeypairDetailsModal() {
   if (!selectedUserOpKeypairUuid.value) {
-    alert('Please select a User Op keypair first');
+    await showAlert('Please select a User Op keypair first', 'Selection Required');
     return;
   }
   await loadSelectedUserOpKeypair();
@@ -14043,7 +14044,7 @@ function toggleUserOpKeypairActionDropdown() {
 
 async function generateUserOpKeypair() {
   if (!isElectronAvailable() || !onlineProfile.value?.profileId) {
-    alert('Please select a profile first');
+    await showAlert('Please select a profile first', 'Selection Required');
     return;
   }
   
@@ -14064,11 +14065,11 @@ async function generateUserOpKeypair() {
       showUserOpKeypairActionDropdown.value = false;
       newAdminKeypairUsage.value = '';
       newKeypairType.value = 'ML-DSA-44';
-      alert('User Op keypair generated successfully!');
+      showToastNotification('User Op keypair generated successfully!', 'success', 3000);
       showAdminKeypairDetailsModal.value = true;
       await loadSelectedUserOpKeypair();
     } else {
-      alert(`Failed to generate User Op keypair: ${result.error}`);
+      await showAlert(`Failed to generate User Op keypair: ${result.error}`, 'Generation Failed');
     }
   } catch (error) {
     console.error('Error generating User Op keypair:', error);
@@ -14078,13 +14079,13 @@ async function generateUserOpKeypair() {
 
 async function addUserOpKeypair() {
   if (!isElectronAvailable() || !onlineProfile.value?.profileId) {
-    alert('Please select a profile first');
+    await showAlert('Please select a profile first', 'Selection Required');
     return;
   }
   
   try {
     if (!newAdminKeypairPublicKey.value.trim()) {
-      alert('Please provide a public key or use Generate new Keypair');
+      await showAlert('Please provide a public key or use Generate new Keypair', 'Input Required');
       return;
     }
     
@@ -14117,11 +14118,11 @@ async function addUserOpKeypair() {
       newKeypairType.value = 'ML-DSA-44';
       newAdminKeypairUsage.value = '';
       newAdminKeypairPublicKey.value = '';
-      alert('User Op keypair added successfully!');
+      showToastNotification('User Op keypair added successfully!', 'success', 3000);
       showAdminKeypairDetailsModal.value = true;
       await loadSelectedUserOpKeypair();
     } else {
-      alert(`Failed to add User Op keypair: ${result.error}`);
+      await showAlert(`Failed to add User Op keypair: ${result.error}`, 'Add Failed');
     }
   } catch (error) {
     console.error('Error adding User Op keypair:', error);
@@ -14148,9 +14149,9 @@ async function backupSelectedUserOpKeypair() {
   try {
     const result = await (window as any).electronAPI.exportUserOpKeypairSecretPKCS(selectedUserOpKeypairUuid.value, password);
     if (result.success) {
-      alert('User Op keypair backup exported successfully');
+      showToastNotification('User Op keypair backup exported successfully', 'success', 3000);
     } else {
-      alert(`Failed to export backup: ${result.error}`);
+      await showAlert(`Failed to export backup: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error backing up User Op keypair:', error);
@@ -14160,7 +14161,7 @@ async function backupSelectedUserOpKeypair() {
 
 async function importUserOpKeypairBackup() {
   if (!isElectronAvailable() || !onlineProfile.value?.profileId) {
-    alert('Please select a profile first');
+    await showAlert('Please select a profile first', 'Selection Required');
     return;
   }
   
@@ -14185,9 +14186,9 @@ async function importUserOpKeypairBackup() {
     const importResult = await (window as any).electronAPI.importUserOpKeypairSecretPKCS(null, filePath, password);
     if (importResult.success) {
       await loadUserOpKeypairsList(onlineProfile.value.profileId);
-      alert('User Op keypair imported successfully');
+      showToastNotification('User Op keypair imported successfully', 'success', 3000);
     } else {
-      alert(`Failed to import backup: ${importResult.error}`);
+      await showAlert(`Failed to import backup: ${importResult.error}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing User Op keypair backup:', error);
@@ -14200,7 +14201,8 @@ async function deleteSelectedUserOpKeypair() {
     return;
   }
   
-  if (!confirm('Are you sure you want to delete this User Op keypair? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you sure you want to delete this User Op keypair? This action cannot be undone.', 'Delete User Op Keypair');
+  if (!confirmed) {
     return;
   }
   
@@ -14210,8 +14212,9 @@ async function deleteSelectedUserOpKeypair() {
       await loadUserOpKeypairsList(onlineProfile.value.profileId);
       selectedUserOpKeypairUuid.value = null;
       selectedUserOpKeypair.value = null;
+      showToastNotification('User Op keypair deleted successfully', 'success', 3000);
     } else {
-      alert(`Failed to delete User Op keypair: ${result.error}`);
+      await showAlert(`Failed to delete User Op keypair: ${result.error}`, 'Delete Failed');
     }
   } catch (error) {
     console.error('Error deleting User Op keypair:', error);

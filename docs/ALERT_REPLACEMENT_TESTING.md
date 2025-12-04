@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 318 instances
+**Total Replacements Made**: 367 instances (Batch 1: 318, Batch 2: 49)
 
 ## Testing Instructions
 
@@ -652,6 +652,313 @@ For each dialog replacement, verify:
 - **Replaced with**: `await showAlert('Error generating JSON from form: ...', 'JSON Generation Error')`
 - **How to test**: Trigger JSON generation error
 
+### 10.37 Save Draft Trust Declaration - Save Failure
+- **Location**: `saveDraftTrustDeclaration()` function (line ~13465)
+- **Original**: `alert('Failed to save draft: ...')`
+- **Replaced with**: `await showAlert('Failed to save draft: ...', 'Save Failed')`
+- **How to test**: Simulate draft save failure
+
+### 10.38 Finalize Trust Declaration - Validation Error (First Check)
+- **Location**: `finalizeTrustDeclaration()` function (line ~13493)
+- **Original**: `alert('Please fix validation errors before finalizing')`
+- **Replaced with**: `await showAlert('Please fix validation errors before finalizing', 'Validation Error')`
+- **How to test**: Attempt to finalize declaration with validation errors
+
+### 10.39 Finalize Trust Declaration - Validation Error (Advanced Mode)
+- **Location**: `finalizeTrustDeclaration()` function (line ~13501)
+- **Original**: `alert('Please fix validation errors before finalizing')`
+- **Replaced with**: `await showAlert('Please fix validation errors before finalizing', 'Validation Error')`
+- **How to test**: Attempt to finalize in advanced mode with JSON validation errors
+
+### 10.40 Finalize Trust Declaration - Save Failed
+- **Location**: `finalizeTrustDeclaration()` function (line ~13511)
+- **Original**: `alert('Failed to save declaration. Please try again.')`
+- **Replaced with**: `await showAlert('Failed to save declaration. Please try again.', 'Save Failed')`
+- **How to test**: Simulate save failure during finalization
+
+### 10.41 Finalize Trust Declaration - Success
+- **Location**: `finalizeTrustDeclaration()` function (line ~13525)
+- **Original**: `alert('Declaration finalized. You can now sign and save it.')`
+- **Replaced with**: `showToastNotification('Declaration finalized. You can now sign and save it.', 'success', 3000)`
+- **How to test**: Successfully finalize a declaration
+
+### 10.42 Finalize Trust Declaration - Failure
+- **Location**: `finalizeTrustDeclaration()` function (line ~13527)
+- **Original**: `alert('Failed to finalize declaration: ...')`
+- **Replaced with**: `await showAlert('Failed to finalize declaration: ...', 'Finalization Failed')`
+- **How to test**: Simulate finalization failure
+
+### 10.43 Save Trust Declaration - Not Finalized
+- **Location**: `saveTrustDeclaration()` function (line ~13541)
+- **Original**: `alert('Please finalize the declaration before saving')`
+- **Replaced with**: `await showAlert('Please finalize the declaration before saving', 'Save Error')`
+- **How to test**: Attempt to save declaration that hasn't been finalized
+
+### 10.44 Save Trust Declaration - Invalid JSON
+- **Location**: `saveTrustDeclaration()` function (line ~13552)
+- **Original**: `alert('Invalid JSON: ...')`
+- **Replaced with**: `await showAlert('Invalid JSON: ...', 'JSON Error')`
+- **How to test**: Enter invalid JSON in advanced mode before saving
+
+### 10.45 Save Trust Declaration - JSON Generation Error
+- **Location**: `saveTrustDeclaration()` function (line ~13561)
+- **Original**: `alert('Error generating JSON from form: ...')`
+- **Replaced with**: `await showAlert('Error generating JSON from form: ...', 'JSON Generation Error')`
+- **How to test**: Trigger JSON generation error during save
+
+### 10.46 Save Trust Declaration - Success
+- **Location**: `saveTrustDeclaration()` function (line ~13596)
+- **Original**: `alert('Declaration saved successfully')`
+- **Replaced with**: `showToastNotification('Declaration saved successfully', 'success', 3000)`
+- **How to test**: Successfully save a finalized declaration
+
+### 10.47 Save Trust Declaration - Failure
+- **Location**: `saveTrustDeclaration()` function (line ~13608)
+- **Original**: `alert('Failed to save declaration: ...')`
+- **Replaced with**: `await showAlert('Failed to save declaration: ...', 'Save Failed')`
+- **How to test**: Simulate save failure
+
+---
+
+## 11. Encryption Key Management Functions
+
+### 11.1 Load Encryption Key - Failure
+- **Location**: `loadSelectedEncryptionKey()` function (line ~13722)
+- **Original**: `alert('Failed to load encryption key: ...')`
+- **Replaced with**: `await showAlert('Failed to load encryption key: ...', 'Load Failed')`
+- **How to test**: Attempt to load corrupted or missing encryption key
+
+### 11.2 Open Encryption Key Details - Selection Required
+- **Location**: `openEncryptionKeyDetailsModal()` function (line ~13745)
+- **Original**: `alert('Please select an encryption key first')`
+- **Replaced with**: `await showAlert('Please select an encryption key first', 'Selection Required')`
+- **How to test**: Attempt to open details modal without selecting a key
+
+### 11.3 Generate Encryption Key - Invalid Selection Identifier
+- **Location**: `generateEncryptionKey()` function (line ~13772)
+- **Original**: `alert('Selection Identifier must be valid JSON')`
+- **Replaced with**: `await showAlert('Selection Identifier must be valid JSON', 'Validation Error')`
+- **How to test**: Enter invalid JSON in Selection Identifier field when generating key
+
+### 11.4 Generate Encryption Key - Success
+- **Location**: `generateEncryptionKey()` function (line ~13811)
+- **Original**: `alert('Encryption key generated successfully!')`
+- **Replaced with**: `showToastNotification('Encryption key generated successfully!', 'success', 3000)`
+- **How to test**: Successfully generate a new encryption key
+
+### 11.5 Generate Encryption Key - Failure
+- **Location**: `generateEncryptionKey()` function (line ~13815)
+- **Original**: `alert('Failed to generate encryption key: ...')`
+- **Replaced with**: `await showAlert('Failed to generate encryption key: ...', 'Generation Failed')`
+- **How to test**: Simulate key generation failure
+
+### 11.6 Save Encryption Key Metadata - Success
+- **Location**: `saveEncryptionKeyMetadata()` function (line ~13846)
+- **Original**: `alert('Metadata saved successfully')`
+- **Replaced with**: `showToastNotification('Metadata saved successfully', 'success', 2000)`
+- **How to test**: Successfully save encryption key metadata changes
+
+### 11.7 Save Encryption Key Metadata - Failure
+- **Location**: `saveEncryptionKeyMetadata()` function (line ~13848)
+- **Original**: `alert('Failed to save metadata: ...')`
+- **Replaced with**: `await showAlert('Failed to save metadata: ...', 'Save Failed')`
+- **How to test**: Simulate metadata save failure
+
+### 11.8 Export Encryption Key - Selection Required
+- **Location**: `exportEncryptionKey()` function (line ~13858)
+- **Original**: `alert('Please select an encryption key first')`
+- **Replaced with**: `await showAlert('Please select an encryption key first', 'Selection Required')`
+- **How to test**: Attempt to export without selecting a key
+
+### 11.9 Export Encryption Key - Password Mismatch
+- **Location**: `exportEncryptionKey()` function (line ~13869)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting key
+
+### 11.10 Export Encryption Key - Success
+- **Location**: `exportEncryptionKey()` function (line ~13880)
+- **Original**: `alert('Encryption key exported successfully!')`
+- **Replaced with**: `showToastNotification('Encryption key exported successfully!', 'success', 3000)`
+- **How to test**: Successfully export an encryption key
+
+### 11.11 Export Encryption Key - Failure
+- **Location**: `exportEncryptionKey()` function (line ~13882)
+- **Original**: `alert('Failed to export encryption key: ...')`
+- **Replaced with**: `await showAlert('Failed to export encryption key: ...', 'Export Failed')`
+- **How to test**: Simulate export failure
+
+### 11.12 Import Encryption Key - File Read Error
+- **Location**: `importEncryptionKeyBackup()` function (line ~13917)
+- **Original**: `alert('Failed to read file: ...')`
+- **Replaced with**: `await showAlert('Failed to read file: ...', 'File Read Error')`
+- **How to test**: Attempt to import from unreadable file
+
+### 11.13 Import Encryption Key - Profile Guard Confirmation
+- **Location**: `importEncryptionKeyBackup()` function (line ~13928)
+- **Original**: `confirm('Encrypt this key with Profile Guard? (Recommended for Group and Individual keys)')`
+- **Replaced with**: `await showConfirm('Encrypt this key with Profile Guard? (Recommended for Group and Individual keys)', 'Encrypt with Profile Guard')`
+- **How to test**:
+  - Import an encryption key backup
+  - Verify confirmation dialog appears asking about Profile Guard encryption
+  - Test both "Yes" and "No" responses
+
+### 11.14 Import Encryption Key - Success
+- **Location**: `importEncryptionKeyBackup()` function (line ~13940)
+- **Original**: `alert('Encryption key imported successfully!')`
+- **Replaced with**: `showToastNotification('Encryption key imported successfully!', 'success', 3000)`
+- **How to test**: Successfully import an encryption key backup
+
+### 11.15 Import Encryption Key - Failure
+- **Location**: `importEncryptionKeyBackup()` function (line ~13944)
+- **Original**: `alert('Failed to import encryption key: ...')`
+- **Replaced with**: `await showAlert('Failed to import encryption key: ...', 'Import Failed')`
+- **How to test**: Attempt to import invalid or corrupted backup file
+
+### 11.16 Delete Encryption Key - Selection Required
+- **Location**: `deleteSelectedEncryptionKey()` function (line ~13954)
+- **Original**: `alert('Please select an encryption key first')`
+- **Replaced with**: `await showAlert('Please select an encryption key first', 'Selection Required')`
+- **How to test**: Attempt to delete without selecting a key
+
+### 11.17 Delete Encryption Key - Confirmation
+- **Location**: `deleteSelectedEncryptionKey()` function (line ~13958)
+- **Original**: `confirm('Are you sure you want to delete this encryption key? This action cannot be undone.')`
+- **Replaced with**: `await showConfirm('Are you sure you want to delete this encryption key? This action cannot be undone.', 'Delete Encryption Key')`
+- **How to test**:
+  - Select an encryption key
+  - Click delete
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 11.18 Delete Encryption Key - Success
+- **Location**: `deleteSelectedEncryptionKey()` function (line ~13970)
+- **Original**: `alert('Encryption key deleted successfully')`
+- **Replaced with**: `showToastNotification('Encryption key deleted successfully', 'success', 3000)`
+- **How to test**: Successfully delete an encryption key
+
+### 11.19 Delete Encryption Key - Failure
+- **Location**: `deleteSelectedEncryptionKey()` function (line ~13972)
+- **Original**: `alert('Failed to delete encryption key: ...')`
+- **Replaced with**: `await showAlert('Failed to delete encryption key: ...', 'Delete Failed')`
+- **How to test**: Simulate deletion failure
+
+---
+
+## 12. User Op Keypair Management Functions
+
+### 12.1 Load User Op Keypair - Failure
+- **Location**: `loadSelectedUserOpKeypair()` function (line ~14021)
+- **Original**: `alert('Failed to load User Op keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to load User Op keypair: ...', 'Load Failed')`
+- **How to test**: Attempt to load corrupted or missing User Op keypair
+
+### 12.2 Open User Op Keypair Details - Selection Required
+- **Location**: `openUserOpKeypairDetailsModal()` function (line ~14033)
+- **Original**: `alert('Please select a User Op keypair first')`
+- **Replaced with**: `await showAlert('Please select a User Op keypair first', 'Selection Required')`
+- **How to test**: Attempt to open details modal without selecting a keypair
+
+### 12.3 Generate User Op Keypair - Profile Required
+- **Location**: `generateUserOpKeypair()` function (line ~14046)
+- **Original**: `alert('Please select a profile first')`
+- **Replaced with**: `await showAlert('Please select a profile first', 'Selection Required')`
+- **How to test**: Attempt to generate keypair without selecting a profile
+
+### 12.4 Generate User Op Keypair - Success
+- **Location**: `generateUserOpKeypair()` function (line ~14067)
+- **Original**: `alert('User Op keypair generated successfully!')`
+- **Replaced with**: `showToastNotification('User Op keypair generated successfully!', 'success', 3000)`
+- **How to test**: Successfully generate a new User Op keypair
+
+### 12.5 Generate User Op Keypair - Failure
+- **Location**: `generateUserOpKeypair()` function (line ~14071)
+- **Original**: `alert('Failed to generate User Op keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to generate User Op keypair: ...', 'Generation Failed')`
+- **How to test**: Simulate keypair generation failure
+
+### 12.6 Add User Op Keypair - Profile Required
+- **Location**: `addUserOpKeypair()` function (line ~14081)
+- **Original**: `alert('Please select a profile first')`
+- **Replaced with**: `await showAlert('Please select a profile first', 'Selection Required')`
+- **How to test**: Attempt to add keypair without selecting a profile
+
+### 12.7 Add User Op Keypair - Public Key Required
+- **Location**: `addUserOpKeypair()` function (line ~14087)
+- **Original**: `alert('Please provide a public key or use Generate new Keypair')`
+- **Replaced with**: `await showAlert('Please provide a public key or use Generate new Keypair', 'Input Required')`
+- **How to test**: Attempt to add keypair without providing public key
+
+### 12.8 Add User Op Keypair - Success
+- **Location**: `addUserOpKeypair()` function (line ~14121)
+- **Original**: `alert('User Op keypair added successfully!')`
+- **Replaced with**: `showToastNotification('User Op keypair added successfully!', 'success', 3000)`
+- **How to test**: Successfully add a User Op keypair
+
+### 12.9 Add User Op Keypair - Failure
+- **Location**: `addUserOpKeypair()` function (line ~14125)
+- **Original**: `alert('Failed to add User Op keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to add User Op keypair: ...', 'Add Failed')`
+- **How to test**: Attempt to add invalid keypair
+
+### 12.10 Backup User Op Keypair - Password Mismatch
+- **Location**: `backupSelectedUserOpKeypair()` function (line ~14145)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when backing up keypair
+
+### 12.11 Backup User Op Keypair - Success
+- **Location**: `backupSelectedUserOpKeypair()` function (line ~14152)
+- **Original**: `alert('User Op keypair backup exported successfully')`
+- **Replaced with**: `showToastNotification('User Op keypair backup exported successfully', 'success', 3000)`
+- **How to test**: Successfully export User Op keypair backup
+
+### 12.12 Backup User Op Keypair - Failure
+- **Location**: `backupSelectedUserOpKeypair()` function (line ~14154)
+- **Original**: `alert('Failed to export backup: ...')`
+- **Replaced with**: `await showAlert('Failed to export backup: ...', 'Export Failed')`
+- **How to test**: Simulate backup export failure
+
+### 12.13 Import User Op Keypair - Profile Required
+- **Location**: `importUserOpKeypairBackup()` function (line ~14164)
+- **Original**: `alert('Please select a profile first')`
+- **Replaced with**: `await showAlert('Please select a profile first', 'Selection Required')`
+- **How to test**: Attempt to import keypair backup without selecting a profile
+
+### 12.14 Import User Op Keypair - Success
+- **Location**: `importUserOpKeypairBackup()` function (line ~14189)
+- **Original**: `alert('User Op keypair imported successfully')`
+- **Replaced with**: `showToastNotification('User Op keypair imported successfully', 'success', 3000)`
+- **How to test**: Successfully import User Op keypair backup
+
+### 12.15 Import User Op Keypair - Failure
+- **Location**: `importUserOpKeypairBackup()` function (line ~14191)
+- **Original**: `alert('Failed to import backup: ...')`
+- **Replaced with**: `await showAlert('Failed to import backup: ...', 'Import Failed')`
+- **How to test**: Attempt to import invalid or corrupted backup file
+
+### 12.16 Delete User Op Keypair - Confirmation
+- **Location**: `deleteSelectedUserOpKeypair()` function (line ~14204)
+- **Original**: `confirm('Are you sure you want to delete this User Op keypair? This action cannot be undone.')`
+- **Replaced with**: `await showConfirm('Are you sure you want to delete this User Op keypair? This action cannot be undone.', 'Delete User Op Keypair')`
+- **How to test**:
+  - Select a User Op keypair
+  - Click delete
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 12.17 Delete User Op Keypair - Success
+- **Location**: `deleteSelectedUserOpKeypair()` function (line ~14214)
+- **Original**: Success message (implicit, now explicit)
+- **Replaced with**: `showToastNotification('User Op keypair deleted successfully', 'success', 3000)`
+- **How to test**: Successfully delete a User Op keypair
+
+### 12.18 Delete User Op Keypair - Failure
+- **Location**: `deleteSelectedUserOpKeypair()` function (line ~14214)
+- **Original**: `alert('Failed to delete User Op keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to delete User Op keypair: ...', 'Delete Failed')`
+- **How to test**: Simulate deletion failure
+
 ---
 
 ## Notes
@@ -664,10 +971,12 @@ For each dialog replacement, verify:
 
 ## Remaining Instances
 
-There are still 49 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in a future pass, focusing on:
-- Encryption key management functions
-- User Op keypair functions
+There are still approximately 174 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
 - Nostr publishing functions
 - Profile Guard functions
-- Additional trust declaration wizard functions
+- Admin keypair management functions (additional instances)
+- Secret key management functions
+- Game staging and launch functions
+- Settings and configuration functions
+- Additional profile management functions
 

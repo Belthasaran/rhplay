@@ -906,15 +906,25 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
   for (const source of sources) {
     try {
       if (source.type === 'ipfs') {
-        // Try all IPFS gateways
-        for (const gateway of IPFS_GATEWAYS) {
-          const url = `${gateway}${source.cid}`;
-          try {
-            await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`);
-            return destPath;
-          } catch (err) {
-            lastError = err;
-            console.error(`[download-error] ${spec.file_name} via ipfs:${gateway} -> ${err.message}`);
+        // Check if we should use parallel downloads (file size < 180 MB)
+        const fileSizeMB = spec.size ? parseInt(spec.size, 10) / (1024 * 1024) : null;
+        const useParallel = fileSizeMB !== null && fileSizeMB < 180;
+
+        if (useParallel && spec.sha256) {
+          // Parallel IPFS download for files < 180 MB
+          await downloadFromIpfsParallel(source.cid, destPath, spec.sha256, spec, downloadTracker);
+          return destPath;
+        } else {
+          // Sequential IPFS download for larger files or when hash not available
+          for (const gateway of IPFS_GATEWAYS) {
+            const url = `${gateway}${source.cid}`;
+            try {
+              await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, `ipfs:${gateway}`);
+              return destPath;
+            } catch (err) {
+              lastError = err;
+              console.error(`[download-error] ${spec.file_name} via ipfs:${gateway} -> ${err.message}`);
+            }
           }
         }
       } else if (source.type === 'url') {
@@ -965,6 +975,138 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
   throw new Error(
     `Failed to download ${spec.file_name}: ${lastError ? lastError.message : 'no sources available'}`
   );
+}
+
+/**
+ * Download from IPFS using parallel gateway testing (5 at a time)
+ * Only for files < 180 MB with SHA256 hash available
+ */
+async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, downloadTracker) {
+  const tempDir = path.dirname(destPath);
+  const batchSize = 5;
+  const abortControllers = [];
+  let successfulDownload = null;
+  let lastError = null;
+
+  console.log(`[download-ipfs-parallel] ${spec.file_name}: testing ${IPFS_GATEWAYS.length} gateways (5 in parallel)`);
+
+  // Test gateways in batches of 5
+  for (let i = 0; i < IPFS_GATEWAYS.length; i += batchSize) {
+    const batch = IPFS_GATEWAYS.slice(i, i + batchSize);
+    const batchPromises = batch.map((gateway, batchIdx) => {
+      const gatewayUrl = `${gateway}${cid}`;
+      const gatewayLabel = `ipfs:${gateway}`;
+      const controller = new AbortController();
+      abortControllers.push(controller);
+      const tempPath = path.join(tempDir, `${spec.file_name}.ipfs.${i + batchIdx}`);
+
+      return fetch(gatewayUrl, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} ${response.statusText}`);
+          }
+
+          const totalBytes = Number(response.headers.get('content-length')) || 0;
+          if (downloadTracker && !successfulDownload) {
+            downloadTracker.start(spec, totalBytes);
+          }
+
+          const writeStream = fs.createWriteStream(tempPath);
+          const bodyStream = Readable.fromWeb(response.body);
+          let downloadedBytes = 0;
+          const tracker = new Transform({
+            transform(chunk, encoding, callback) {
+              downloadedBytes += chunk.length;
+              if (downloadTracker && !successfulDownload) {
+                downloadTracker.progress(spec, downloadedBytes, totalBytes);
+              }
+              callback(null, chunk);
+            },
+          });
+
+          await pipeline(bodyStream, tracker, writeStream);
+          writeStream.close();
+
+          // Verify hash before considering it successful
+          if (expectedSha256) {
+            const actualSha = sha256File(tempPath);
+            if (actualSha !== expectedSha256) {
+              fs.unlinkSync(tempPath);
+              throw new Error(`SHA-256 mismatch (expected ${expectedSha256}, got ${actualSha})`);
+            }
+          }
+
+          return { success: true, path: tempPath, label: gatewayLabel };
+        })
+        .catch((err) => {
+          // Clean up temp file on error
+          if (fs.existsSync(tempPath)) {
+            try {
+              fs.unlinkSync(tempPath);
+            } catch {
+              // Ignore cleanup errors
+            }
+          }
+          return { success: false, error: err.message, label: gatewayLabel };
+        });
+    });
+
+    // Wait for batch to complete
+    const batchResults = await Promise.allSettled(batchPromises);
+
+    // Check for successful download
+    for (const result of batchResults) {
+      if (result.status === 'fulfilled' && result.value.success && !successfulDownload) {
+        successfulDownload = result.value;
+        console.log(`[download-success] ${spec.file_name} via ${successfulDownload.label}`);
+
+        // Cancel all remaining requests
+        abortControllers.forEach((controller) => {
+          try {
+            controller.abort();
+          } catch {
+            // Ignore abort errors
+          }
+        });
+
+        // Copy successful download to destination
+        fs.copyFileSync(successfulDownload.path, destPath);
+        fs.unlinkSync(successfulDownload.path);
+
+        if (downloadTracker) {
+          downloadTracker.complete(spec);
+        }
+
+        return; // Success!
+      } else if (result.status === 'fulfilled' && !result.value.success) {
+        lastError = new Error(result.value.error);
+        console.error(`[download-error] ${spec.file_name} via ${result.value.label} -> ${result.value.error}`);
+      }
+    }
+
+    // If we got a successful download, stop testing remaining batches
+    if (successfulDownload) {
+      break;
+    }
+  }
+
+  // Clean up any remaining temp files
+  for (let i = 0; i < IPFS_GATEWAYS.length; i++) {
+    const tempPath = path.join(tempDir, `${spec.file_name}.ipfs.${i}`);
+    if (fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  if (!successfulDownload) {
+    throw new Error(
+      `All IPFS gateways failed. Last error: ${lastError ? lastError.message : 'unknown'}`
+    );
+  }
 }
 
 async function downloadFromUrl(url, destPath, expectedSha256, spec, downloadTracker, sourceLabel) {

@@ -11025,7 +11025,7 @@ async function updateAdminKeypairStorageStatus(keypairUuid: string, newStatus: s
       await loadSelectedAdminKeypair(); // Reload to get updated status
       await loadAdminKeypairsList(); // Refresh list
     } else {
-      alert(`Failed to update storage status: ${result.error}`);
+      await showAlert(`Failed to update storage status: ${result.error}`, 'Update Failed');
     }
   } catch (error) {
     console.error('Error updating admin keypair storage status:', error);
@@ -11202,17 +11202,17 @@ async function submitTrustAssignmentForm() {
     return;
   }
   if (!onlinePrimaryPubkey.value) {
-    alert('You must select a profile with a Nostr key to issue trust assignments.');
+    await showAlert('You must select a profile with a Nostr key to issue trust assignments.', 'Selection Required');
     return;
   }
   const subject = trustAssignmentForm.subjectPubkey.trim();
   if (!subject) {
-    alert('Subject public key is required.');
+    await showAlert('Subject public key is required.', 'Input Required');
     return;
   }
   const level = trustAssignmentForm.assignedLevel.trim();
   if (!level) {
-    alert('Assigned trust level is required.');
+    await showAlert('Assigned trust level is required.', 'Input Required');
     return;
   }
   const assignment: any = {
@@ -11228,7 +11228,7 @@ async function submitTrustAssignmentForm() {
   if (trustAssignmentForm.expiresAt.trim()) {
     const expires = Date.parse(trustAssignmentForm.expiresAt);
     if (Number.isNaN(expires)) {
-      alert('Expiration date is invalid.');
+      await showAlert('Expiration date is invalid.', 'Validation Error');
       return;
     }
     assignment.expires_at = Math.floor(expires / 1000);
@@ -11239,7 +11239,7 @@ async function submitTrustAssignmentForm() {
       assignment.scope = scopePayload;
     }
   } catch (error: any) {
-    alert(error?.message || 'Invalid scope configuration.');
+    await showAlert(error?.message || 'Invalid scope configuration.', 'Configuration Error');
     return;
   }
 
@@ -11259,7 +11259,7 @@ async function submitTrustAssignmentForm() {
     await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
   } catch (error: any) {
     console.error('Error creating trust assignment:', error);
-    alert(error?.message || String(error));
+    await showAlert(error?.message || String(error), 'Error');
   } finally {
     submittingTrustAssignment.value = false;
   }
@@ -11270,13 +11270,13 @@ async function deleteTrustAssignment(assignmentId: number) {
     return;
   }
   if (!onlinePrimaryPubkey.value) {
-    alert('You must select a profile with a Nostr key to revoke trust assignments.');
+    await showAlert('You must select a profile with a Nostr key to revoke trust assignments.', 'Selection Required');
     return;
   }
   if (!Number.isFinite(assignmentId)) {
     return;
   }
-  const confirmed = window.confirm('Revoke this trust assignment?');
+  const confirmed = await showConfirm('Revoke this trust assignment?', 'Revoke Trust Assignment');
   if (!confirmed) {
     return;
   }
@@ -11293,7 +11293,7 @@ async function deleteTrustAssignment(assignmentId: number) {
     await loadTrustAssignmentsList(trustAssignmentsFilter.pubkey);
   } catch (error: any) {
     console.error('Error deleting trust assignment:', error);
-    alert(error?.message || String(error));
+    await showAlert(error?.message || String(error), 'Error');
   } finally {
     deletingTrustAssignmentIds.delete(assignmentId);
   }
@@ -11742,7 +11742,7 @@ async function loadSelectedTrustDeclaration(declarationUuid?: string) {
 
       await loadTrustDeclarationQueueSummary(uuid);
     } else {
-      alert(`Failed to load trust declaration: ${result.error}`);
+      await showAlert(`Failed to load trust declaration: ${result.error}`, 'Load Failed');
       selectedTrustDeclaration.value = null;
       selectedTrustDeclarationQueueSummary.value = null;
       selectedTrustDeclarationQueueError.value = result.error || null;
@@ -11788,7 +11788,7 @@ function toggleTrustDeclarationActionDropdown() {
 
 async function openTrustDeclarationDetailsModal() {
   if (!selectedTrustDeclarationUuid.value) {
-    alert('Please select a trust declaration first');
+    await showAlert('Please select a trust declaration first', 'Selection Required');
     return;
   }
   await loadSelectedTrustDeclaration();
@@ -11857,7 +11857,7 @@ async function finalizeAndReloadDeclaration() {
   
   // Check validation
   if (!isValidDeclaration.value) {
-    alert('Validation failed. Please fix errors before finalizing.');
+    await showAlert('Validation failed. Please fix errors before finalizing.', 'Validation Error');
     return;
   }
   
@@ -11948,7 +11948,7 @@ async function signDeclaration() {
     }
     
     if (!keypair) {
-      alert('Issuer keypair not found. Please ensure the keypair exists and is accessible.');
+      await showAlert('Issuer keypair not found. Please ensure the keypair exists and is accessible.', 'Keypair Not Found');
       return;
     }
     
@@ -11962,9 +11962,9 @@ async function signDeclaration() {
     if (result.success) {
       // Reload the declaration from database
       await loadSelectedTrustDeclaration(selectedTrustDeclaration.value.declaration_uuid);
-      alert('Declaration signed successfully. Status changed to "Signed".');
+      showToastNotification('Declaration signed successfully. Status changed to "Signed".', 'success', 3000);
     } else {
-      alert(`Failed to sign declaration: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to sign declaration: ${result.error || 'Unknown error'}`, 'Signing Failed');
     }
   } catch (error) {
     console.error('Error signing declaration:', error);
@@ -11978,13 +11978,13 @@ async function addCountersignature() {
   }
   
   if (!canAddCountersignature.value) {
-    alert('Cannot add countersignature: No keypair available or private key not available.');
+    await showAlert('Cannot add countersignature: No keypair available or private key not available.', 'Countersignature Error');
     return;
   }
   
   // TODO: Implement countersignature logic
   // For now, show a message
-  alert('Countersignature functionality will be implemented in a future update.');
+  await showAlert('Countersignature functionality will be implemented in a future update.', 'Not Implemented');
 }
 
 
@@ -12068,7 +12068,7 @@ async function saveTrustDeclarationEdits() {
   }
   
   if (!isDraftDeclaration.value) {
-    alert('Only draft declarations can be edited');
+    await showAlert('Only draft declarations can be edited', 'Edit Error');
     return;
   }
   
@@ -12132,11 +12132,11 @@ async function saveTrustDeclarationEdits() {
     const result = await (window as any).electronAPI.saveAdminDeclaration(declarationData);
     
     if (result.success) {
-      alert('Declaration updated successfully');
+      showToastNotification('Declaration updated successfully', 'success', 3000);
       await loadSelectedTrustDeclaration();
       loadTrustDeclarationsList();
     } else {
-      alert(`Failed to update declaration: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to update declaration: ${result.error || 'Unknown error'}`, 'Update Failed');
     }
   } catch (error) {
     console.error('Error saving declaration edits:', error);
@@ -12252,27 +12252,27 @@ function formatDate(dateString: string | null | undefined): string {
 
 async function signTrustDeclaration() {
   if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
-    alert('Please select a trust declaration first');
+    await showAlert('Please select a trust declaration first', 'Selection Required');
     return;
   }
   
   // TODO: Implement signing logic
-  alert('Signing trust declarations is not yet implemented');
+  await showAlert('Signing trust declarations is not yet implemented', 'Not Implemented');
 }
 
 async function publishTrustDeclaration() {
   if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
-    alert('Please select a trust declaration first');
+    await showAlert('Please select a trust declaration first', 'Selection Required');
     return;
   }
   
   // TODO: Implement publishing logic
-  alert('Publishing trust declarations is not yet implemented');
+  await showAlert('Publishing trust declarations is not yet implemented', 'Not Implemented');
 }
 
 async function retryTrustDeclarationPublish() {
   if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
-    alert('Please select a trust declaration first');
+    await showAlert('Please select a trust declaration first', 'Selection Required');
     return;
   }
   retryTrustDeclarationMessage.value = null;
@@ -12302,12 +12302,12 @@ function toggleQueueStage(stageKey: string) {
 
 async function exportTrustDeclaration() {
   if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
-    alert('Please select a trust declaration first');
+    await showAlert('Please select a trust declaration first', 'Selection Required');
     return;
   }
   
   // TODO: Implement export logic
-  alert('Exporting trust declarations is not yet implemented');
+  await showAlert('Exporting trust declarations is not yet implemented', 'Not Implemented');
 }
 
 async function exportAllTrustDeclarations() {
@@ -12327,7 +12327,7 @@ async function exportAllTrustDeclarations() {
     alert(`Exported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations to ${result.filePath}`);
   } catch (error) {
     console.error('Error exporting trust declarations:', error);
-    alert(`Error exporting trust declarations: ${formatErrorMessage(error)}`);
+    await showAlert(`Error exporting trust declarations: ${formatErrorMessage(error)}`, 'Export Error');
   }
 }
 
@@ -12349,7 +12349,7 @@ async function importTrustDeclarations() {
     await loadTrustDeclarationsList();
   } catch (error) {
     console.error('Error importing trust declarations:', error);
-    alert(`Error importing trust declarations: ${formatErrorMessage(error)}`);
+    await showAlert(`Error importing trust declarations: ${formatErrorMessage(error)}`, 'Import Error');
   }
 }
 
@@ -12359,7 +12359,7 @@ async function importTrustDeclarationBackup() {
 
 function openTrustSummaryModal() {
   if (!onlinePrimaryPubkey.value) {
-    alert('Select a profile with an active Nostr key to view trust summary.');
+    await showAlert('Select a profile with an active Nostr key to view trust summary.', 'Selection Required');
     return;
   }
   trustSummaryModalOpen.value = true;
@@ -12376,13 +12376,13 @@ async function exportAllAdminPublicKeys() {
       return;
     }
     if (!result.success) {
-      alert(`Failed to export admin keys: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to export admin keys: ${result.error || 'Unknown error'}`, 'Export Failed');
       return;
     }
-    alert(`Exported ${result.masterCount || 0} master keys, ${result.adminCount || 0} admin keypairs, ${result.userOpCount || 0} user op keypairs, and ${result.encryptionCount || 0} shared preinstalled encryption keys to ${result.filePath}`);
+    showToastNotification(`Exported ${result.masterCount || 0} master keys, ${result.adminCount || 0} admin keypairs, ${result.userOpCount || 0} user op keypairs, and ${result.encryptionCount || 0} shared preinstalled encryption keys to ${result.filePath}`, 'success', 4000);
   } catch (error) {
     console.error('Error exporting admin public keys:', error);
-    alert(`Error exporting admin public keys: ${formatErrorMessage(error)}`);
+    await showAlert(`Error exporting admin public keys: ${formatErrorMessage(error)}`, 'Export Error');
   }
 }
 
@@ -12397,10 +12397,10 @@ async function importAllAdminPublicKeys() {
       return;
     }
     if (!result.success) {
-      alert(`Failed to import admin keys: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to import admin keys: ${result.error || 'Unknown error'}`, 'Import Failed');
       return;
     }
-    alert(`Imported ${result.masterCount || 0} master keys, ${result.adminCount || 0} admin keypairs, ${result.userOpCount || 0} user op keypairs, and ${result.encryptionCount || 0} shared preinstalled encryption keys${result.filePath ? ` from ${result.filePath}` : ''}.`);
+    showToastNotification(`Imported ${result.masterCount || 0} master keys, ${result.adminCount || 0} admin keypairs, ${result.userOpCount || 0} user op keypairs, and ${result.encryptionCount || 0} shared preinstalled encryption keys${result.filePath ? ` from ${result.filePath}` : ''}.`, 'success', 4000);
     await Promise.all([
       loadAdminKeypairsList(),
       loadUserOpKeypairsList(),
@@ -12408,17 +12408,18 @@ async function importAllAdminPublicKeys() {
     ]);
   } catch (error) {
     console.error('Error importing admin public keys:', error);
-    alert(`Error importing admin public keys: ${formatErrorMessage(error)}`);
+    await showAlert(`Error importing admin public keys: ${formatErrorMessage(error)}`, 'Import Error');
   }
 }
 
 async function deleteTrustDeclaration() {
   if (!isElectronAvailable() || !selectedTrustDeclarationUuid.value) {
-    alert('Please select a trust declaration first');
+    await showAlert('Please select a trust declaration first', 'Selection Required');
     return;
   }
   
-  if (!confirm('Are you sure you want to delete this trust declaration? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you sure you want to delete this trust declaration? This action cannot be undone.', 'Delete Trust Declaration');
+  if (!confirmed) {
     return;
   }
   
@@ -12430,9 +12431,9 @@ async function deleteTrustDeclaration() {
       selectedTrustDeclarationUuid.value = null;
       selectedTrustDeclaration.value = null;
       showTrustDeclarationActionDropdown.value = false;
-      alert('Trust declaration deleted successfully');
+      showToastNotification('Trust declaration deleted successfully', 'success', 3000);
     } else {
-      alert(`Failed to delete trust declaration: ${result.error}`);
+      await showAlert(`Failed to delete trust declaration: ${result.error}`, 'Delete Failed');
     }
   } catch (error) {
     console.error('Error deleting trust declaration:', error);
@@ -13383,8 +13384,9 @@ function nextTrustDeclarationWizardStep() {
   }
 }
 
-function cancelTrustDeclarationWizard() {
-  if (confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
+async function cancelTrustDeclarationWizard() {
+  const confirmed = await showConfirm('Are you sure you want to cancel? Any unsaved changes will be lost.', 'Cancel Wizard');
+  if (confirmed) {
     showCreateTrustDeclarationModal.value = false;
     trustDeclarationWizardStep.value = 1;
   }
@@ -13417,7 +13419,7 @@ async function saveDraftTrustDeclaration() {
       const parsed = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
       contentJson = parsed.content || {};
     } catch (error: any) {
-      alert(`Error generating JSON from form: ${error.message}`);
+      await showAlert(`Error generating JSON from form: ${error.message}`, 'JSON Generation Error');
       return false;
     }
   }

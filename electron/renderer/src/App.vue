@@ -16227,6 +16227,20 @@ function handleGlobalClick(e: MouseEvent) {
     return;
   }
   
+  // Don't close dropdowns if any custom modal dialogs are open
+  const modalBackdrop = target.closest('.modal-backdrop');
+  if (modalBackdrop) {
+    return; // Click is inside a modal, don't close dropdowns
+  }
+  
+  // Also check if target is inside any modal dialog
+  const alertDialog = target.closest('.alert-dialog');
+  const confirmDialog = target.closest('.confirm-dialog');
+  const promptDialog = target.closest('.prompt-dialog');
+  if (alertDialog || confirmDialog || promptDialog) {
+    return; // Click is inside a modal dialog, don't close dropdowns
+  }
+  
   // Close all dropdowns unless clicking inside them
   const allDropdowns = document.querySelectorAll('.filter-dropdown-container, .snes-contents-dropdown-container');
   
@@ -16260,7 +16274,9 @@ function handleGlobalClick(e: MouseEvent) {
     closeSelectDropdown();
     closeManageDropdown();
     closeSnesContentsDropdown();
-    closeOnlineDropdown();
+    // Don't close Online dropdown on outside clicks - user must explicitly close it
+    // to prevent losing unsaved work in forms
+    // closeOnlineDropdown();
     runStatusDropdownOpen.value = false;
     activeAdminKeypairDropdown.value = null;
     showAdminKeypairActionDropdown.value = false;

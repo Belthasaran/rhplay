@@ -74,10 +74,12 @@ let syncAlertDismissed = false;
  * 
  * @param message - The message to display
  * @param title - Optional title for the dialog
+ * @param options - Optional options object with `blocking: true` to enable blocking behavior (default: true)
  */
-export function showAlertSync(message: string, title?: string): void {
+export function showAlertSync(message: string, title?: string, options?: { blocking?: boolean }): void {
   const dialogTitle = title || 'Alert';
-  console.log(`[Alert Dialog Sync] ${dialogTitle}: ${message}`);
+  const blocking = options?.blocking !== false; // Default to blocking if not specified
+  console.log(`[Alert Dialog Sync] ${dialogTitle}: ${message} (blocking: ${blocking})`);
   
   // If there's a pending async alert, resolve it first to avoid conflicts
   if (alertDialogResolve) {
@@ -99,30 +101,36 @@ export function showAlertSync(message: string, title?: string): void {
   // Show the dialog
   alertDialogVisible.value = true;
   
-  // Block execution until dialog is dismissed
-  // Use a busy-wait loop that periodically checks the flag
-  // The flag will be set by handleAlertConfirm/handleAlertCancel when user dismisses
-  const startTime = Date.now();
-  const maxWaitTime = 5 * 60 * 1000; // 5 minutes max wait (safety timeout)
-  
-  // Check flag in a loop, with small delays to avoid 100% CPU usage
-  while (!syncAlertDismissed && (Date.now() - startTime) < maxWaitTime) {
-    // Small delay to avoid consuming 100% CPU
-    // This still blocks execution but allows the event loop to process UI updates
-    const checkStart = Date.now();
-    while (Date.now() - checkStart < 5) {
-      // Busy wait for ~5ms, then check flag again
-      // This is necessary because we can't use async/await in a sync function
+  // If blocking, wait for user response
+  if (blocking) {
+    // Block execution until dialog is dismissed
+    // Use a busy-wait loop that periodically checks the flag
+    // The flag will be set by handleAlertConfirm/handleAlertCancel when user dismisses
+    const startTime = Date.now();
+    const maxWaitTime = 5 * 60 * 1000; // 5 minutes max wait (safety timeout)
+    
+    // Check flag in a loop, with small delays to avoid 100% CPU usage
+    while (!syncAlertDismissed && (Date.now() - startTime) < maxWaitTime) {
+      // Small delay to avoid consuming 100% CPU
+      // This still blocks execution but allows the event loop to process UI updates
+      const checkStart = Date.now();
+      while (Date.now() - checkStart < 5) {
+        // Busy wait for ~5ms, then check flag again
+        // This is necessary because we can't use async/await in a sync function
+      }
     }
-  }
-  
-  // Clean up
-  alertDialogVisible.value = false;
-  syncAlertDismissed = false;
-  alertDialogResolve = null;
-  
-  if ((Date.now() - startTime) >= maxWaitTime) {
-    console.warn('[Alert Dialog Sync] Timeout waiting for user response');
+    
+    // Clean up
+    alertDialogVisible.value = false;
+    syncAlertDismissed = false;
+    alertDialogResolve = null;
+    
+    if ((Date.now() - startTime) >= maxWaitTime) {
+      console.warn('[Alert Dialog Sync] Timeout waiting for user response');
+    }
+  } else {
+    // Non-blocking: just show the dialog and return immediately
+    alertDialogResolve = null;
   }
 }
 

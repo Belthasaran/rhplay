@@ -6,6 +6,8 @@
  */
 
 import { ref, Ref } from 'vue';
+const { execSync } = require('child_process');
+
 
 // ============================================================================
 // Alert Dialog State
@@ -117,6 +119,12 @@ export function showAlertSync(message: string, title?: string, options?: { block
       while (Date.now() - checkStart < 5) {
         // Busy wait for ~5ms, then check flag again
         // This is necessary because we can't use async/await in a sync function
+	      //
+        if ( process.platform === "windows" ) {
+            execSync(`timeout /t 1`)
+	} else {
+            execSync(`sleep 1`)
+	}
       }
     }
     
@@ -362,6 +370,11 @@ export function showPromptSync(
       while (Date.now() - checkStart < 5) {
         // Busy wait for ~5ms, then check flag again
         // This is necessary because we can't use async/await in a sync function
+        if ( process.platform === "windows" ) {
+            execSync(`timeout /t 1`)
+        } else {
+            execSync(`sleep 1`)
+        }
       }
     }
     

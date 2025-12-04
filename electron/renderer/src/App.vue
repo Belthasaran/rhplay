@@ -14385,7 +14385,7 @@ async function confirmPublishKeypair() {
 }
 
 async function backupSelectedAdminKeypair() {
-  if (!isElectronAvailable() || !selectedAdminKeypair.value) {
+  if (!isElectronAvailable() || !selectedAdminKeypairUuid.value) {
     return;
   }
   
@@ -14402,12 +14402,7 @@ async function backupSelectedAdminKeypair() {
   }
   
   try {
-    const result = await (window as any).electronAPI.exportKeypair({
-      keypair: selectedAdminKeypair.value,
-      password: password,
-      context: 'admin-keypair'
-    });
-    
+    const result = await (window as any).electronAPI.exportAdminKeypairSecretPKCS(selectedAdminKeypairUuid.value, password);
     if (result.success) {
       showToastNotification('Admin keypair backup exported successfully', 'success', 3000);
     } else {

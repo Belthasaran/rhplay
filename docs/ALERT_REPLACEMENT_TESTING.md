@@ -1368,7 +1368,7 @@ For each dialog replacement, verify:
 - **Replaced with**: `await showAlert('Failed to build patched game: ...', 'Build Failed')`
 - **How to test**: Simulate build failure
 
-### 19.9 Handle Advanced Patch Build - Build Success
+### 19.9 Handle Advanced Patch Build - Build Success - tested
 - **Location**: `handleAdvancedPatchBuild()` function (line ~16548)
 - **Original**: `alert('Successfully built patched game: ...')`
 - **Replaced with**: `showToastNotification('Successfully built patched game: ...', 'success', 3000)`
@@ -1588,13 +1588,13 @@ For each dialog replacement, verify:
 - **Replaced with**: `await showAlert('Run saving requires Electron environment', 'Error')`
 - **How to test**: Attempt to save run outside Electron environment
 
-### 23.2 Save Run to Database - Run Name Required
+### 23.2 Save Run to Database - Run Name Required - na
 - **Location**: `saveRunToDatabase()` function (line ~19222)
 - **Original**: `alert('Run name is required')`
 - **Replaced with**: `await showAlert('Run name is required', 'Validation Error')`
 - **How to test**: Attempt to save run without entering a name
 
-### 23.3 Save Run to Database - No Match Count
+### 23.3 Save Run to Database - No Match Count - 
 - **Location**: `saveRunToDatabase()` function (line ~19233)
 - **Original**: `alert('Cannot stage run:\n\nRandom entry "..." has no match count...')`
 - **Replaced with**: `await showAlert('Cannot stage run:\n\nRandom entry "..." has no match count...', 'Validation Error')`
@@ -2086,7 +2086,7 @@ For each dialog replacement, verify:
 - **How to test**: Successfully import trust declarations
 
 ### 32.10 Save Declaration Draft - Validation Error
-- **Location**: `saveTrustDeclarationDraft()` function (line ~13406)
+- **Location**: `saveTrustDeclarationDraft()` fun ction (line ~13406)
 - **Original**: `alert('Please fix validation errors before saving draft')`
 - **Replaced with**: `await showAlert('Please fix validation errors before saving draft', 'Validation Error')`
 - **How to test**: Attempt to save draft with validation errors
@@ -2423,7 +2423,7 @@ All instances of `alert()` and `confirm()` have been successfully replaced with 
   - Click "Apply"
   - Verify error alert appears with title "Validation Error"
 
-#### 8.20 Apply Playlevel Patch - Invalid Code
+#### 8.20 Apply Playlevel Patch - Invalid Code - tested
 - **Location**: `applyPlaylevelPatch()` function (line ~2586)
 - **Original**: `alert('Patch code "..." not found. Please enter a valid patch code.')`
 - **Replaced with**: `await showAlert('Patch code "..." not found. Please enter a valid patch code.', 'Validation Error')`

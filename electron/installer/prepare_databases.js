@@ -1307,7 +1307,7 @@ async function applySqlPatch(dbPath, sqlPath, originName) {
   }
 }
 
-async function executeProvision(plan, manifest) {
+async function executeProvision(plan, manifest, ipfsTimeout = 20) {
   const result = {
     executed: [],
     skipped: [],

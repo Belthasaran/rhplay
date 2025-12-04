@@ -55,11 +55,16 @@ Options:
   --ensure-dirs             Create the user data and working directories if they do not exist
   --provision               Execute provisioning workflow (download/apply/copy)
   --write-plan <file>       Write action plan JSON to the specified file
+  --verify-links            Verify all download sources (developer tool)
+  --verify-build            Verify build process for all targets (developer tool)
+  --target <name>           Limit verification to specific target (e.g., rhdata.db)
   --help                    Show this help message
 
 Examples:
   prepare_databases.js
   prepare_databases.js --overwrite rhdata.db,patchbin.db --ensure-dirs
+  prepare_databases.js --verify-links --target=rhdata.db
+  prepare_databases.js --verify-build
 `.trim();
 
 let progressLogStream = null;
@@ -142,6 +147,9 @@ function parseArgs(argv) {
     writeSummaryPath: null,
     progressLogPath: null,
     progressDonePath: null,
+    verifyLinks: false,
+    verifyBuild: false,
+    target: null,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -194,6 +202,15 @@ function parseArgs(argv) {
       opts.progressDonePath = argv[++i];
     } else if (arg.startsWith('--progress-done=')) {
       opts.progressDonePath = arg.substring('--progress-done='.length);
+    } else if (arg === '--verify-links') {
+      opts.verifyLinks = true;
+    } else if (arg === '--verify-build') {
+      opts.verifyBuild = true;
+    } else if (arg === '--target') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --target');
+      opts.target = argv[++i];
+    } else if (arg.startsWith('--target=')) {
+      opts.target = arg.substring('--target='.length);
     } else if (arg.startsWith('--')) {
       exitWithError(`Unknown option "${arg}". Use --help for usage details.`);
     } else {
@@ -1173,6 +1190,348 @@ async function executeProvision(plan, manifest) {
   return result;
 }
 
+/**
+ * Verify all download links in manifest
+ */
+async function verifyLinks(manifest, opts) {
+  console.log('='.repeat(70));
+  console.log('Manifest Link Verification');
+  console.log('='.repeat(70));
+  console.log();
+
+  const targets = opts.target ? [opts.target] : Object.keys(manifest).filter((k) => k !== 'greetings');
+  const results = {
+    passed: [],
+    failed: [],
+    warnings: [],
+  };
+
+  for (const targetKey of targets) {
+    if (targetKey === 'greetings') continue;
+    const target = manifest[targetKey];
+    if (!target || typeof target !== 'object') continue;
+
+    console.log(`\n[${targetKey}]`);
+    console.log('-'.repeat(70));
+
+    // Verify base
+    if (target.base) {
+      console.log(`  Base: ${target.base.file_name}`);
+      const baseResult = await verifyFileSpec(target.base, `base for ${targetKey}`);
+      if (baseResult.success) {
+        results.passed.push({ target: targetKey, type: 'base', file: target.base.file_name });
+      } else {
+        results.failed.push({ target: targetKey, type: 'base', file: target.base.file_name, error: baseResult.error });
+      }
+      if (baseResult.warning) {
+        results.warnings.push({ target: targetKey, type: 'base', file: target.base.file_name, warning: baseResult.warning });
+      }
+    }
+
+    // Verify patches
+    if (Array.isArray(target.sqlpatches)) {
+      for (const patch of target.sqlpatches) {
+        console.log(`  Patch: ${patch.file_name}`);
+        const patchResult = await verifyFileSpec(patch, `patch for ${targetKey}`);
+        if (patchResult.success) {
+          results.passed.push({ target: targetKey, type: 'patch', file: patch.file_name });
+        } else {
+          results.failed.push({ target: targetKey, type: 'patch', file: patch.file_name, error: patchResult.error });
+        }
+        if (patchResult.warning) {
+          results.warnings.push({ target: targetKey, type: 'patch', file: patch.file_name, warning: patchResult.warning });
+        }
+      }
+    }
+  }
+
+  // Summary
+  console.log('\n' + '='.repeat(70));
+  console.log('Verification Summary');
+  console.log('='.repeat(70));
+  console.log(`Passed: ${results.passed.length}`);
+  console.log(`Failed: ${results.failed.length}`);
+  console.log(`Warnings: ${results.warnings.length}`);
+
+  if (results.failed.length > 0) {
+    console.log('\nFailed Downloads:');
+    results.failed.forEach((f) => {
+      console.log(`  [${f.target}] ${f.type}: ${f.file}`);
+      console.log(`    Error: ${f.error}`);
+    });
+  }
+
+  if (results.warnings.length > 0) {
+    console.log('\nWarnings:');
+    results.warnings.forEach((w) => {
+      console.log(`  [${w.target}] ${w.type}: ${w.file}`);
+      console.log(`    Warning: ${w.warning}`);
+    });
+  }
+
+  return results.failed.length === 0;
+}
+
+/**
+ * Verify a single file specification (download and hash check)
+ */
+async function verifyFileSpec(spec, context) {
+  const tempDir = path.join(os.tmpdir(), 'rhtools-verify-' + Date.now());
+  ensureDirectory(tempDir);
+  const tempPath = path.join(tempDir, spec.file_name);
+
+  try {
+    // Get all available download sources
+    const urlArray = getUrlsFromSpec(spec);
+    const sources = parsePriority(spec.priority || ['ipfs', 'url', 'ardrive'], spec);
+
+    let downloaded = false;
+    let lastError = null;
+    const sourceResults = [];
+
+    // Try each source
+    for (const source of sources) {
+      let sourceLabel = '';
+      let url = '';
+
+      try {
+        if (source.type === 'ipfs') {
+          // Try first IPFS gateway only for verification
+          url = `${IPFS_GATEWAYS[0]}${source.cid}`;
+          sourceLabel = `ipfs:${IPFS_GATEWAYS[0]}`;
+        } else if (source.type === 'url') {
+          url = source.url;
+          sourceLabel = `url:${source.index}`;
+        } else if (source.type === 'ardrive') {
+          if (source.txid) {
+            url = `https://arweave.net/${source.txid}`;
+            sourceLabel = 'arweave:data_txid';
+          } else if (source.path) {
+            url = `https://arweave.net${source.path}`;
+            sourceLabel = 'arweave:ardrive_path';
+          }
+        }
+
+        if (!url) continue;
+
+        console.log(`    Trying ${sourceLabel}...`);
+        // Download without hash verification first, we'll verify after
+        await downloadFromUrl(url, tempPath, null, spec, null, sourceLabel);
+        downloaded = true;
+        sourceResults.push({ source: sourceLabel, success: true });
+        break; // Success, stop trying
+      } catch (err) {
+        lastError = err;
+        sourceResults.push({ source: sourceLabel, success: false, error: err.message });
+        // Continue to next source
+      }
+    }
+
+    if (!downloaded) {
+      return {
+        success: false,
+        error: `All download sources failed. Last error: ${lastError ? lastError.message : 'unknown'}`,
+        sourceResults,
+      };
+    }
+
+    // Verify hash
+    if (!spec.sha256) {
+      return {
+        success: false,
+        error: 'No SHA256 hash specified in manifest',
+        warning: 'File downloaded but cannot verify hash',
+      };
+    }
+
+    const actualHash = sha256File(tempPath);
+    if (actualHash !== spec.sha256) {
+      return {
+        success: false,
+        error: `Hash mismatch: expected ${spec.sha256}, got ${actualHash}`,
+        sourceResults,
+      };
+    }
+
+    // Verify size if specified
+    if (spec.size) {
+      const stats = fs.statSync(tempPath);
+      const expectedSize = parseInt(spec.size, 10);
+      if (stats.size !== expectedSize) {
+        return {
+          success: true,
+          warning: `Size mismatch: expected ${expectedSize}, got ${stats.size}`,
+          sourceResults,
+        };
+      }
+    }
+
+    return { success: true, sourceResults };
+  } catch (err) {
+    return { success: false, error: err.message };
+  } finally {
+    // Cleanup
+    try {
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath);
+      }
+      if (fs.existsSync(tempDir)) {
+        fs.rmdirSync(tempDir);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+/**
+ * Verify build process for all targets
+ */
+async function verifyBuild(manifest, opts) {
+  console.log('='.repeat(70));
+  console.log('Manifest Build Verification');
+  console.log('='.repeat(70));
+  console.log();
+
+  const targets = opts.target ? [opts.target] : Object.keys(manifest).filter((k) => k !== 'greetings');
+  const results = {
+    passed: [],
+    failed: [],
+    warnings: [],
+  };
+
+  const tempDir = path.join(os.tmpdir(), 'rhtools-verify-build-' + Date.now());
+  ensureDirectory(tempDir);
+  const stagingDir = path.join(tempDir, 'staging');
+  ensureDirectory(stagingDir);
+
+  try {
+    for (const targetKey of targets) {
+      if (targetKey === 'greetings') continue;
+      const target = manifest[targetKey];
+      if (!target || typeof target !== 'object' || !target.base) continue;
+
+      console.log(`\n[${targetKey}]`);
+      console.log('-'.repeat(70));
+
+      try {
+        // Download base file
+        console.log(`  Downloading base: ${target.base.file_name}`);
+        const basePath = path.join(tempDir, target.base.file_name);
+        await ensureArtifact(target.base, tempDir, null, opts.userDataDir || detectUserDataDir());
+
+        // Extract base database
+        console.log(`  Extracting base database...`);
+        const baseTarPath = path.join(stagingDir, `${target.base.file_name.replace(/\.xz$/i, '')}.tar`);
+        const tempDbPath = path.join(stagingDir, `${targetKey}.tmp.db`);
+
+        await decompressXz(basePath, baseTarPath);
+        await extractFileFromTar(baseTarPath, target.base.extract_file || targetKey, tempDbPath);
+        fs.unlinkSync(baseTarPath);
+
+        // Apply patches
+        const patches = Array.isArray(target.sqlpatches) ? target.sqlpatches : [];
+        patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
+
+        if (patches.length === 0) {
+          console.log(`  No patches to apply`);
+        } else {
+          console.log(`  Applying ${patches.length} patch(es)...`);
+        }
+
+        for (const patch of patches) {
+          console.log(`    Applying: ${patch.file_name}`);
+          const patchPath = path.join(tempDir, patch.file_name);
+          await ensureArtifact(patch, tempDir, null, opts.userDataDir || detectUserDataDir());
+
+          const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
+          await decompressXz(patchPath, sqlPath);
+
+          // Apply patch (without wrapping in transaction, as patches may already contain transactions)
+          try {
+            await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
+            console.log(`      ✓ Applied successfully`);
+          } catch (err) {
+            // Check for common issues
+            const errorMsg = err.message.toLowerCase();
+            let issue = 'unknown';
+            if (errorMsg.includes('sqlite_sequence')) {
+              issue = 'sqlite_sequence table creation';
+            } else if (errorMsg.includes('syntax error')) {
+              issue = 'SQL syntax error';
+            } else if (errorMsg.includes('no such table')) {
+              issue = 'missing table';
+            } else if (errorMsg.includes('duplicate column')) {
+              issue = 'duplicate column';
+            }
+
+            results.failed.push({
+              target: targetKey,
+              patch: patch.file_name,
+              error: err.message,
+              issue,
+            });
+            console.log(`      ✗ Failed: ${err.message}`);
+            console.log(`        Issue type: ${issue}`);
+            throw err; // Stop processing this target
+          }
+
+          fs.unlinkSync(sqlPath);
+        }
+
+        // Verify final database is valid
+        const db = new Database(tempDbPath);
+        try {
+          // Try a simple query to verify database is valid
+          db.prepare('SELECT 1').get();
+          console.log(`  ✓ Build verification passed`);
+          results.passed.push({ target: targetKey, patches: patches.length });
+        } finally {
+          db.close();
+        }
+      } catch (err) {
+        results.failed.push({
+          target: targetKey,
+          error: err.message,
+        });
+        console.log(`  ✗ Build verification failed: ${err.message}`);
+      }
+    }
+  } finally {
+    // Cleanup
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+
+  // Summary
+  console.log('\n' + '='.repeat(70));
+  console.log('Build Verification Summary');
+  console.log('='.repeat(70));
+  console.log(`Passed: ${results.passed.length}`);
+  console.log(`Failed: ${results.failed.length}`);
+
+  if (results.failed.length > 0) {
+    console.log('\nFailed Builds:');
+    results.failed.forEach((f) => {
+      console.log(`  [${f.target}]`);
+      if (f.patch) {
+        console.log(`    Patch: ${f.patch}`);
+      }
+      console.log(`    Error: ${f.error}`);
+      if (f.issue) {
+        console.log(`    Issue: ${f.issue}`);
+      }
+    });
+  }
+
+  return results.failed.length === 0;
+}
+
 async function run(argv) {
   const opts = parseArgs(argv);
   initProgressLogging(opts);
@@ -1189,6 +1548,19 @@ async function run(argv) {
     opts.workingDir = opts.workingDir || defaultWorkingDir(opts.userDataDir);
 
     const manifest = loadManifest(opts.manifestPath);
+
+    // Handle verification modes
+    if (opts.verifyLinks) {
+      const success = await verifyLinks(manifest, opts);
+      process.exit(success ? 0 : 1);
+      return;
+    }
+
+    if (opts.verifyBuild) {
+      const success = await verifyBuild(manifest, opts);
+      process.exit(success ? 0 : 1);
+      return;
+    }
 
     if (opts.ensureDirs) {
       ensureDirectory(opts.userDataDir);

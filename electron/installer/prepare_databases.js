@@ -1228,8 +1228,7 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
   }
 
   const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
-  console.log(`[extract] ${dbStatus.name}: decompressing base archive ${base.file_name}`);
-  const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
+  const format = base.format || 'xz';
   const tempDbPath = path.join(stagingDir, `${dbStatus.name}.tmp.db`);
   const finalDbPath = path.join(planPaths.finalDir, dbStatus.name);
 
@@ -1237,10 +1236,22 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
     fs.unlinkSync(tempDbPath);
   }
 
-  await decompressXz(baseArchivePath, baseTarPath);
-  console.log(`[extract] ${dbStatus.name}: extracting ${base.extract_file || dbStatus.name}`);
-  await extractFileFromTar(baseTarPath, base.extract_file || dbStatus.name, tempDbPath);
-  fs.unlinkSync(baseTarPath);
+  if (format === 'tar+xz' || format === 'tar.xz') {
+    // Tar archive: decompress xz, then extract file from tar
+    console.log(`[extract] ${dbStatus.name}: decompressing tar archive ${base.file_name}`);
+    const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
+    await decompressXz(baseArchivePath, baseTarPath);
+    const extractFile = base.extract_file || dbStatus.name;
+    console.log(`[extract] ${dbStatus.name}: extracting ${extractFile} from tar`);
+    await extractFileFromTar(baseTarPath, extractFile, tempDbPath);
+    fs.unlinkSync(baseTarPath);
+  } else if (format === 'xz') {
+    // Direct xz-compressed file: just decompress
+    console.log(`[extract] ${dbStatus.name}: decompressing ${base.file_name}`);
+    await decompressXz(baseArchivePath, tempDbPath);
+  } else {
+    throw new Error(`Unsupported format: ${format} for ${dbStatus.name}`);
+  }
 
   console.log(
     `[plan] ${dbStatus.name}: extracted base archive (archive SHA already verified as ${base.sha256 || 'unknown'})`
@@ -1703,16 +1714,26 @@ async function verifyBuild(manifest, opts) {
         // Download base file
         console.log(`  Downloading base: ${target.base.file_name}`);
         const basePath = path.join(tempDir, target.base.file_name);
-        await ensureArtifact(target.base, tempDir, null, opts.userDataDir || detectUserDataDir());
+        await ensureArtifact(target.base, tempDir, null, opts.userDataDir || detectUserDataDir(), opts.ipfsTimeout || 20);
 
-        // Extract base database
+        // Extract base database based on format
         console.log(`  Extracting base database...`);
-        const baseTarPath = path.join(stagingDir, `${target.base.file_name.replace(/\.xz$/i, '')}.tar`);
         const tempDbPath = path.join(stagingDir, `${targetKey}.tmp.db`);
+        const format = target.base.format || 'xz';
 
-        await decompressXz(basePath, baseTarPath);
-        await extractFileFromTar(baseTarPath, target.base.extract_file || targetKey, tempDbPath);
-        fs.unlinkSync(baseTarPath);
+        if (format === 'tar+xz' || format === 'tar.xz') {
+          // Tar archive: decompress xz, then extract file from tar
+          const baseTarPath = path.join(stagingDir, `${target.base.file_name.replace(/\.xz$/i, '')}.tar`);
+          await decompressXz(basePath, baseTarPath);
+          const extractFile = target.base.extract_file || targetKey;
+          await extractFileFromTar(baseTarPath, extractFile, tempDbPath);
+          fs.unlinkSync(baseTarPath);
+        } else if (format === 'xz') {
+          // Direct xz-compressed file: just decompress
+          await decompressXz(basePath, tempDbPath);
+        } else {
+          throw new Error(`Unsupported format: ${format}`);
+        }
 
         // Apply patches
         const patches = Array.isArray(target.sqlpatches) ? target.sqlpatches : [];

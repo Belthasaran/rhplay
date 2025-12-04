@@ -6,10 +6,10 @@
         <button class="btn-secondary" @click="refreshStatus" :disabled="loading">
           {{ loading ? 'Refreshing...' : 'Refresh' }}
         </button>
-        <button class="btn-secondary" @click="retryAllFailed" :disabled="loading || stats.failed === 0">
+        <button class="btn-secondary" @click="retryAllFailed" :disabled="loading || !hasFailed">
           Retry All Failed
         </button>
-        <button class="btn-secondary" @click="clearCompleted" :disabled="loading || stats.completed === 0">
+        <button class="btn-secondary" @click="clearCompleted" :disabled="loading || !hasCompleted">
           Clear Completed
         </button>
         <button class="btn-secondary" @click="openHistory">

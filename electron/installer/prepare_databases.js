@@ -538,6 +538,7 @@ function inspectDatabases(opts, manifest) {
   const userDataDir = opts.userDataDir;
   const results = [];
 
+  // Check regular databases
   for (const db of DATABASES) {
     const filePath = path.join(userDataDir, db.name);
     const exists = fs.existsSync(filePath);
@@ -570,6 +571,44 @@ function inspectDatabases(opts, manifest) {
     }
 
     results.push(details);
+  }
+
+  // Check appfiles entries (pseudo-databases)
+  for (const [targetKey, manifestEntry] of Object.entries(manifest)) {
+    if (targetKey === 'greetings') continue;
+    if (manifestEntry.type === 'appfiles') {
+      const filePath = path.join(userDataDir, targetKey);
+      const exists = fs.existsSync(filePath);
+      const shouldOverwrite = opts.overwrite.has(targetKey);
+
+      const details = {
+        name: targetKey,
+        embedded: false,
+        path: filePath,
+        exists,
+        overwrite: shouldOverwrite,
+        action: null,
+        sizeBytes: null,
+        sha256: null,
+        manifestAvailable: true,
+        manifestSummary: summarizeManifest(manifestEntry),
+        type: 'appfiles',
+      };
+
+      if (exists) {
+        const stats = fs.statSync(filePath);
+        details.sizeBytes = stats.size;
+        details.sha256 = sha256File(filePath);
+      }
+
+      if (!exists || shouldOverwrite) {
+        details.action = 'provision-appfiles';
+      } else {
+        details.action = 'skip';
+      }
+
+      results.push(details);
+    }
   }
 
   return results;
@@ -607,6 +646,12 @@ function buildPlan(opts, dbStatus) {
       plan.downloads.push({
         database: db.name,
         manifestKey: manifestEntryKey,
+      });
+    } else if (db.action === 'provision-appfiles' && db.manifestSummary && db.manifestSummary.base) {
+      // Appfiles entries use their target name as the manifest key
+      plan.downloads.push({
+        database: db.name,
+        manifestKey: db.name,
       });
     }
   }

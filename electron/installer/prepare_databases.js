@@ -770,27 +770,31 @@ function decodeBaddr(b64) {
 
 /**
  * Get URLs from spec (from either 'url' or 'baddr' fields)
+ * Returns array with metadata about source type
  * @param {Object} spec - File specification
- * @returns {Array<string>} - Array of decoded URLs
+ * @returns {Array<{url: string, type: 'url'|'baddr', index: number}>} - Array of URL objects with metadata
  */
 function getUrlsFromSpec(spec) {
   const urls = [];
+  let index = 0;
   
   // Handle 'url' field (plain URLs)
   if (spec.url) {
     const urlArray = Array.isArray(spec.url) ? spec.url : [spec.url];
-    urls.push(...urlArray);
+    urlArray.forEach((url) => {
+      urls.push({ url, type: 'url', index: index++ });
+    });
   }
   
   // Handle 'baddr' field (base64-encoded URLs)
   if (spec.baddr) {
     const baddrArray = Array.isArray(spec.baddr) ? spec.baddr : [spec.baddr];
-    for (const b64 of baddrArray) {
+    baddrArray.forEach((b64) => {
       const decoded = decodeBaddr(b64);
       if (decoded) {
-        urls.push(decoded);
+        urls.push({ url: decoded, type: 'baddr', index: index++ });
       }
-    }
+    });
   }
   
   return urls;
@@ -814,8 +818,8 @@ function parsePriority(priority, spec) {
       sources.push({ type: 'ipfs', cid: spec.ipfs_cidv1 });
     }
     if (hasUrls) {
-      urlArray.forEach((url, idx) => {
-        sources.push({ type: 'url', url, index: idx });
+      urlArray.forEach((urlObj) => {
+        sources.push({ type: 'url', url: urlObj.url, urlType: urlObj.type, index: urlObj.index });
       });
     }
     if (spec.data_txid || spec.ardrive_file_path) {
@@ -833,14 +837,18 @@ function parsePriority(priority, spec) {
       sources.push({ type: 'ardrive', txid: spec.data_txid, path: spec.ardrive_file_path });
     } else if (token === 'url' || token === 'baddr') {
       // Expand to all URLs (from both url and baddr fields)
-      urlArray.forEach((url, idx) => {
-        sources.push({ type: 'url', url, index: idx });
+      urlArray.forEach((urlObj) => {
+        sources.push({ type: 'url', url: urlObj.url, urlType: urlObj.type, index: urlObj.index });
       });
     } else if (token.startsWith('url.') || token.startsWith('baddr.')) {
       // Support both url.0 and baddr.0 syntax
       const idx = parseInt(token.substring(token.indexOf('.') + 1), 10);
-      if (!isNaN(idx) && idx >= 0 && idx < urlArray.length) {
-        sources.push({ type: 'url', url: urlArray[idx], index: idx });
+      if (!isNaN(idx) && idx >= 0) {
+        // Find URL at this index (across both url and baddr)
+        const urlObj = urlArray.find((u) => u.index === idx);
+        if (urlObj) {
+          sources.push({ type: 'url', url: urlObj.url, urlType: urlObj.type, index: urlObj.index });
+        }
       }
     }
   }
@@ -888,7 +896,8 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
 
   // Parse priority and attempt downloads in order
   // Check if URLs are available (from either 'url' or 'baddr' fields)
-  const hasUrls = getUrlsFromSpec(spec).length > 0;
+  const urlArray = getUrlsFromSpec(spec);
+  const hasUrls = urlArray.length > 0;
   const priority = spec.priority || (hasUrls ? ['ipfs', 'url', 'ardrive'] : ['ipfs', 'ardrive']);
   const sources = parsePriority(priority, spec);
 
@@ -1282,26 +1291,103 @@ async function verifyFileSpec(spec, context) {
 
   try {
     // Get all available download sources
-    const urlArray = getUrlsFromSpec(spec);
     const sources = parsePriority(spec.priority || ['ipfs', 'url', 'ardrive'], spec);
 
     let downloaded = false;
+    let downloadedFromSource = null;
     let lastError = null;
     const sourceResults = [];
 
-    // Try each source
+    // Try each source - verify ALL sources, not just stop at first success
     for (const source of sources) {
       let sourceLabel = '';
       let url = '';
+      const tempPathForSource = path.join(tempDir, `${spec.file_name}.${sourceResults.length}`);
 
       try {
         if (source.type === 'ipfs') {
-          // Try first IPFS gateway only for verification
-          url = `${IPFS_GATEWAYS[0]}${source.cid}`;
-          sourceLabel = `ipfs:${IPFS_GATEWAYS[0]}`;
+          // Try IPFS gateways in parallel (5 at a time) for faster verification
+          console.log(`    Trying IPFS gateways (${IPFS_GATEWAYS.length} total, testing 5 in parallel)...`);
+          
+          const gatewayPromises = IPFS_GATEWAYS.map((gateway, idx) => {
+            const gatewayUrl = `${gateway}${source.cid}`;
+            const gatewayLabel = `ipfs:${gateway}`;
+            const gatewayTempPath = path.join(tempDir, `${spec.file_name}.ipfs.${idx}`);
+            
+            return downloadFromUrl(gatewayUrl, gatewayTempPath, null, spec, null, gatewayLabel)
+              .then(() => {
+                return { success: true, gateway, label: gatewayLabel, path: gatewayTempPath };
+              })
+              .catch((err) => {
+                return { success: false, gateway, label: gatewayLabel, error: err.message, path: gatewayTempPath };
+              });
+          });
+          
+          // Test 5 gateways at a time
+          const batchSize = 5;
+          let ipfsSuccess = false;
+          
+          for (let i = 0; i < gatewayPromises.length; i += batchSize) {
+            const batch = gatewayPromises.slice(i, i + batchSize);
+            const batchResults = await Promise.allSettled(batch);
+            
+            for (const result of batchResults) {
+              if (result.status === 'fulfilled') {
+                const gatewayResult = result.value;
+                sourceResults.push({
+                  source: gatewayResult.label,
+                  success: gatewayResult.success,
+                  error: gatewayResult.error,
+                });
+                
+                if (gatewayResult.success && !downloaded) {
+                  // Use first successful download for hash verification
+                  try {
+                    fs.copyFileSync(gatewayResult.path, tempPath);
+                    downloaded = true;
+                    downloadedFromSource = gatewayResult.label;
+                    ipfsSuccess = true;
+                  } catch (copyErr) {
+                    // If copy fails, continue to next gateway
+                  }
+                }
+                
+                // Clean up temp file
+                if (fs.existsSync(gatewayResult.path) && gatewayResult.path !== tempPath) {
+                  try {
+                    fs.unlinkSync(gatewayResult.path);
+                  } catch {
+                    // Ignore cleanup errors
+                  }
+                }
+              }
+            }
+            
+            // If we got a successful download, we can stop testing remaining gateways
+            // (but we've already queued them, so they'll complete in background)
+            if (ipfsSuccess && i + batchSize < gatewayPromises.length) {
+              console.log(`    IPFS download succeeded, skipping remaining gateways...`);
+              break;
+            }
+          }
+          
+          if (!ipfsSuccess) {
+            lastError = new Error('All IPFS gateways failed');
+          }
         } else if (source.type === 'url') {
           url = source.url;
-          sourceLabel = `url:${source.index}`;
+          // Distinguish between url and baddr sources
+          const urlType = source.urlType || 'url';
+          sourceLabel = `${urlType}:${source.index}`;
+          console.log(`    Trying ${sourceLabel}...`);
+          await downloadFromUrl(url, tempPathForSource, null, spec, null, sourceLabel);
+          sourceResults.push({ source: sourceLabel, success: true });
+          if (!downloaded) {
+            // Use first successful download for hash verification
+            fs.copyFileSync(tempPathForSource, tempPath);
+            downloaded = true;
+            downloadedFromSource = sourceLabel;
+          }
         } else if (source.type === 'ardrive') {
           if (source.txid) {
             url = `https://arweave.net/${source.txid}`;
@@ -1310,21 +1396,49 @@ async function verifyFileSpec(spec, context) {
             url = `https://arweave.net${source.path}`;
             sourceLabel = 'arweave:ardrive_path';
           }
+          if (url) {
+            console.log(`    Trying ${sourceLabel}...`);
+            await downloadFromUrl(url, tempPathForSource, null, spec, null, sourceLabel);
+            sourceResults.push({ source: sourceLabel, success: true });
+            if (!downloaded) {
+              // Use first successful download for hash verification
+              fs.copyFileSync(tempPathForSource, tempPath);
+              downloaded = true;
+              downloadedFromSource = sourceLabel;
+            }
+          }
         }
 
-        if (!url) continue;
-
-        console.log(`    Trying ${sourceLabel}...`);
-        // Download without hash verification first, we'll verify after
-        await downloadFromUrl(url, tempPath, null, spec, null, sourceLabel);
-        downloaded = true;
-        sourceResults.push({ source: sourceLabel, success: true });
-        break; // Success, stop trying
+        // Clean up temp file for this source
+        if (fs.existsSync(tempPathForSource) && tempPathForSource !== tempPath) {
+          fs.unlinkSync(tempPathForSource);
+        }
       } catch (err) {
         lastError = err;
-        sourceResults.push({ source: sourceLabel, success: false, error: err.message });
+        if (sourceLabel) {
+          sourceResults.push({ source: sourceLabel, success: false, error: err.message });
+        }
+        // Clean up temp file on error
+        if (fs.existsSync(tempPathForSource)) {
+          try {
+            fs.unlinkSync(tempPathForSource);
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
         // Continue to next source
       }
+    }
+
+    // Report on all sources tried
+    const successfulSources = sourceResults.filter((r) => r.success);
+    const failedSources = sourceResults.filter((r) => !r.success);
+
+    if (successfulSources.length > 0) {
+      console.log(`    ✓ ${successfulSources.length} source(s) succeeded: ${successfulSources.map((s) => s.source).join(', ')}`);
+    }
+    if (failedSources.length > 0) {
+      console.log(`    ✗ ${failedSources.length} source(s) failed: ${failedSources.map((s) => s.source).join(', ')}`);
     }
 
     if (!downloaded) {
@@ -1335,12 +1449,14 @@ async function verifyFileSpec(spec, context) {
       };
     }
 
-    // Verify hash
+    // Verify hash using the downloaded file
     if (!spec.sha256) {
       return {
         success: false,
         error: 'No SHA256 hash specified in manifest',
         warning: 'File downloaded but cannot verify hash',
+        sourceResults,
+        downloadedFrom: downloadedFromSource,
       };
     }
 
@@ -1350,6 +1466,7 @@ async function verifyFileSpec(spec, context) {
         success: false,
         error: `Hash mismatch: expected ${spec.sha256}, got ${actualHash}`,
         sourceResults,
+        downloadedFrom: downloadedFromSource,
       };
     }
 
@@ -1362,21 +1479,23 @@ async function verifyFileSpec(spec, context) {
           success: true,
           warning: `Size mismatch: expected ${expectedSize}, got ${stats.size}`,
           sourceResults,
+          downloadedFrom: downloadedFromSource,
         };
       }
     }
 
-    return { success: true, sourceResults };
+    return {
+      success: true,
+      sourceResults,
+      downloadedFrom: downloadedFromSource,
+    };
   } catch (err) {
     return { success: false, error: err.message };
   } finally {
     // Cleanup
     try {
-      if (fs.existsSync(tempPath)) {
-        fs.unlinkSync(tempPath);
-      }
       if (fs.existsSync(tempDir)) {
-        fs.rmdirSync(tempDir);
+        fs.rmSync(tempDir, { recursive: true, force: true });
       }
     } catch {
       // Ignore cleanup errors

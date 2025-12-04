@@ -3239,7 +3239,7 @@
             v-if="profileCreationWizardStep === 2"
             @click="completeProfileCreation" 
             class="btn-primary-small"
-            :disabled="!profileCreationData.keypairType">
+            :disabled="profileCreationData.keypairType !== 'Nostr'">
             Complete and Publish Profile
           </button>
           <button 
@@ -10189,12 +10189,17 @@ async function deleteProfileFromDetails() {
     return;
   }
   
-  if (!confirm(`Are you sure you want to delete this profile? This action cannot be undone.`)) {
+  const confirmed = await showConfirm(
+    'Are you sure you want to delete this profile? This action cannot be undone.',
+    'Delete Profile'
+  );
+  
+  if (!confirmed) {
     return;
   }
   
   if (!isElectronAvailable()) {
-    alert('Delete requires Electron environment');
+    await showAlert('Delete requires Electron environment', 'Error');
     return;
   }
   
@@ -10213,19 +10218,19 @@ async function deleteProfileFromDetails() {
         profileCreationWizardStep.value = 1;
         profileCreationWizardMode.value = 'create-first';
         initializeProfileCreationWizard('create-first');
-        alert('Last profile deleted. Please create a new profile.');
+        await showAlert('Last profile deleted. Please create a new profile.', 'Profile Deleted');
       } else {
         // Switch to the first available profile
         selectedProfileId.value = onlineProfilesList.value[0].profileId;
         await switchProfile();
-        alert('Profile deleted successfully');
+        showToastNotification('Profile deleted successfully', 'success', 3000);
       }
     } else {
-      alert(`Failed to delete profile: ${result.error}`);
+      await showAlert(`Failed to delete profile: ${result.error}`, 'Delete Failed');
     }
   } catch (error) {
     console.error('Error deleting profile:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -15580,22 +15585,22 @@ async function completeProfileCreation() {
           await publishRatingsToNostr();
         } else {
           console.error('[completeProfileCreation] Could not find item for saved gameId:', savedGameId);
-          alert('Could not find the game you were rating. Please reopen the rating sheet and try publishing again.');
+          await showAlert('Could not find the game you were rating. Please reopen the rating sheet and try publishing again.', 'Error');
         }
       } else {
         console.error('[completeProfileCreation] No saved gameId for resume publishing');
-        alert('Could not resume publishing. Please reopen the rating sheet and try publishing again.');
+        await showAlert('Could not resume publishing. Please reopen the rating sheet and try publishing again.', 'Error');
       }
     }
     
     if (wasNewProfileMode || hasExistingProfile) {
-      alert('New profile created successfully! You can switch to it in Profile Details. Make sure to export and backup your profile.');
+      await showAlert('New profile created successfully! You can switch to it in Profile Details. Make sure to export and backup your profile.', 'Profile Created');
     } else {
-      alert('Profile created and published successfully! Make sure to export and backup your profile.');
+      await showAlert('Profile created and published successfully! Make sure to export and backup your profile.', 'Profile Created');
     }
   } catch (error) {
     console.error('Error creating profile:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 

@@ -10484,7 +10484,7 @@ async function createNewProfile() {
     }
   } catch (error) {
     console.error('Error creating profile:', error);
-    alert(`Error creating profile: ${formatErrorMessage(error)}`);
+    await showAlert(`Error creating profile: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10520,7 +10520,8 @@ async function regeneratePrimaryKeypair() {
     return;
   }
   
-  if (!confirm('Are you sure you want to regenerate your primary keypair? This will invalidate your current keypair.')) {
+  const confirmed = await showConfirm('Are you sure you want to regenerate your primary keypair? This will invalidate your current keypair.', 'Regenerate Primary Keypair');
+  if (!confirmed) {
     return;
   }
   
@@ -10534,7 +10535,7 @@ async function regeneratePrimaryKeypair() {
       onlineProfile.value.primaryKeypair = result.keypair;
       await updateOnlineProfile();
     } else {
-      alert(`Failed to regenerate keypair: ${result.error}`);
+      await showAlert(`Failed to regenerate keypair: ${result.error}`, 'Regeneration Failed');
     }
   } catch (error) {
     console.error('Error regenerating keypair:', error);
@@ -10562,7 +10563,7 @@ async function addKeypair() {
       showAddKeypairModal.value = false;
       newKeypairType.value = 'Nostr'; // Reset to default (admin keypairs use ML-DSA-44, not Nostr) - This is wrong. Admins should be able to use Nostr.
     } else {
-      alert(`Failed to create keypair: ${result.error}`);
+      await showAlert(`Failed to create keypair: ${result.error}`, 'Keypair Creation Failed');
     }
   } catch (error) {
     console.error('Error creating keypair:', error);
@@ -10621,7 +10622,7 @@ async function loadSelectedMasterKeypair() {
         comments: result.keypair.comments || ''
       };
     } else {
-      alert(`Failed to load master keypair: ${result.error}`);
+      await showAlert(`Failed to load master keypair: ${result.error}`, 'Load Failed');
       selectedMasterKeypair.value = null;
       selectedAdminKeypair.value = null;
       selectedAdminKeypairUuid.value = null;
@@ -10637,7 +10638,7 @@ async function loadSelectedMasterKeypair() {
 
 async function openMasterKeypairDetailsModal() {
   if (!selectedMasterKeypairUuid.value) {
-    alert('Please select a master keypair first');
+    await showAlert('Please select a master keypair first', 'Selection Required');
     return;
   }
   await loadSelectedMasterKeypair();
@@ -10676,7 +10677,7 @@ async function generateMasterKeypair() {
       selectedMasterKeypairUuid.value = result.keypair.uuid;
       await openMasterKeypairDetailsModal();
     } else {
-      alert(`Failed to generate master keypair: ${result.error}`);
+      await showAlert(`Failed to generate master keypair: ${result.error}`, 'Generation Failed');
     }
   } catch (error) {
     console.error('Error generating master keypair:', error);
@@ -10690,7 +10691,7 @@ async function addMasterKeypair() {
   }
   
   if (!newAdminKeypairPublicKey.value.trim()) {
-    alert('Please provide a public key');
+    await showAlert('Please provide a public key', 'Input Required');
     return;
   }
   
@@ -10711,7 +10712,7 @@ async function addMasterKeypair() {
       selectedMasterKeypairUuid.value = result.keypair.uuid;
       await openMasterKeypairDetailsModal();
     } else {
-      alert(`Failed to add master keypair: ${result.error}`);
+      await showAlert(`Failed to add master keypair: ${result.error}`, 'Add Failed');
     }
   } catch (error) {
     console.error('Error adding master keypair:', error);
@@ -10721,7 +10722,7 @@ async function addMasterKeypair() {
 
 async function backupSelectedMasterKeypair() {
   if (!isElectronAvailable() || !selectedMasterKeypairUuid.value) {
-    alert('Please select a master keypair first');
+    await showAlert('Please select a master keypair first', 'Selection Required');
     return;
   }
   
@@ -10739,7 +10740,7 @@ async function backupSelectedMasterKeypair() {
   try {
     const result = await (window as any).electronAPI.exportAdminKeypairSecretPKCS(selectedMasterKeypairUuid.value, password);
     if (result.success) {
-      alert('Master keypair backup exported successfully');
+      showToastNotification('Master keypair backup exported successfully', 'success', 3000);
     } else {
       alert(`Failed to export backup: ${result.error}`);
     }
@@ -10778,7 +10779,7 @@ async function importMasterKeypairBackup() {
       // Update the keypair to have master-admin-signing usage
       // Note: This requires the keypair UUID from the import - we may need to adjust the import flow
       await loadAdminKeypairsList();
-      alert('Master keypair imported successfully');
+      showToastNotification('Master keypair imported successfully', 'success', 3000);
     } else {
       alert(`Failed to import backup: ${importResult.error}`);
     }
@@ -10790,11 +10791,12 @@ async function importMasterKeypairBackup() {
 
 async function deleteSelectedMasterKeypair() {
   if (!isElectronAvailable() || !selectedMasterKeypairUuid.value) {
-    alert('Please select a master keypair first');
+    await showAlert('Please select a master keypair first', 'Selection Required');
     return;
   }
   
-  if (!confirm('Are you sure you want to delete this master keypair? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you sure you want to delete this master keypair? This action cannot be undone.', 'Delete Master Keypair');
+  if (!confirmed) {
     return;
   }
   
@@ -10805,7 +10807,7 @@ async function deleteSelectedMasterKeypair() {
       selectedMasterKeypairUuid.value = null;
       selectedMasterKeypair.value = null;
     } else {
-      alert(`Failed to delete master keypair: ${result.error}`);
+      await showAlert(`Failed to delete master keypair: ${result.error}`, 'Delete Failed');
     }
   } catch (error) {
     console.error('Error deleting master keypair:', error);
@@ -10857,7 +10859,7 @@ async function loadSelectedAdminKeypair() {
         comments: result.keypair.comments || ''
       };
     } else {
-      alert(`Failed to load admin keypair: ${result.error}`);
+      await showAlert(`Failed to load admin keypair: ${result.error}`, 'Load Failed');
       selectedAdminKeypair.value = null;
     }
   } catch (error) {
@@ -10869,7 +10871,7 @@ async function loadSelectedAdminKeypair() {
 
 async function openAdminKeypairDetailsModal() {
   if (!selectedAdminKeypairUuid.value) {
-    alert('Please select a keypair first');
+    await showAlert('Please select a keypair first', 'Selection Required');
     return;
   }
   await loadSelectedAdminKeypair();
@@ -10903,7 +10905,7 @@ async function generateAdminKeypair() {
   }
   
   if (!newAdminKeypairUsage.value) {
-    alert('Please select a key usage');
+    await showAlert('Please select a key usage', 'Selection Required');
     return;
   }
   
@@ -10925,12 +10927,12 @@ async function generateAdminKeypair() {
       showAdminKeypairActionDropdown.value = false;
       newAdminKeypairUsage.value = '';
       newKeypairType.value = 'Nostr'; // 'ML-DSA-44';
-      alert('Admin keypair generated successfully!');
+      showToastNotification('Admin keypair generated successfully!', 'success', 3000);
       // Open details modal to allow setting name/label
       showAdminKeypairDetailsModal.value = true;
       await loadSelectedAdminKeypair();
     } else {
-      alert(`Failed to generate admin keypair: ${result.error}`);
+      await showAlert(`Failed to generate admin keypair: ${result.error}`, 'Generation Failed');
     }
   } catch (error) {
     console.error('Error generating admin keypair:', error);
@@ -10981,12 +10983,12 @@ async function addAdminKeypair() {
       newKeypairType.value = 'ML-DSA-44';
       newAdminKeypairUsage.value = '';
       newAdminKeypairPublicKey.value = '';
-      alert('Admin keypair added successfully!');
+      showToastNotification('Admin keypair added successfully!', 'success', 3000);
       // Open details modal to allow setting name/label
       showAdminKeypairDetailsModal.value = true;
       await loadSelectedAdminKeypair();
     } else {
-      alert(`Failed to add admin keypair: ${result.error}`);
+      await showAlert(`Failed to add admin keypair: ${result.error}`, 'Add Failed');
     }
   } catch (error) {
     console.error('Error adding admin keypair:', error);
@@ -11006,7 +11008,7 @@ async function updateAdminKeypairStorageStatus(keypairUuid: string, newStatus: s
   if (newStatus === 'full' && previousStatus !== 'full') {
     const secretKey = prompt('Enter the secret/private key for this keypair (PEM format or hex):');
     if (!secretKey || !secretKey.trim()) {
-      alert('Secret key is required for full keypair storage. Storage status unchanged.');
+      await showAlert('Secret key is required for full keypair storage. Storage status unchanged.', 'Storage Status');
       return;
     }
     privateKey = secretKey.trim();

@@ -7708,7 +7708,8 @@ import {
   showAlert,
   showAlertSync,
   showConfirm,
-  showPrompt
+  showPrompt,
+  showPromptSync
 } from './utils/dialogs';
 
 // Debounce utility
@@ -21834,7 +21835,7 @@ function editConditions(entry: RunEntry) {
     allConditions.map((c, i) => `${i + 1}. ${c} ${current.includes(c) ? '✓' : ''}`).join('\n') +
     '\n\nEnter numbers to toggle (e.g., "1,3,5" or "all" or "none"):';
   
-  const input = await showPrompt(message, current.length === 0 ? '' : 'current', 'Edit Conditions', 'Enter numbers (e.g., "1,3,5" or "all" or "none")');
+  const input = showPromptSync(message, current.length === 0 ? '' : 'current', 'Edit Conditions', 'Enter numbers (e.g., "1,3,5" or "all" or "none")', 'text', false, 'OK', 'Cancel', { blocking: true });
   if (input === null) return;
   
   const inputLower = input.toLowerCase().trim();

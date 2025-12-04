@@ -179,6 +179,7 @@ const isActionPending = ref(false);
 const moderationActions = ref<ModerationActionRow[]>([]);
 const listStatus = ref<'active' | 'revoked' | 'all'>('active');
 const isLoadingActions = ref(false);
+let removeTrustChangedListener: (() => void) | null = null;
 
 const resolvedActorPubkey = computed(() => props.actorPubkey || null);
 const minimumModerationLevel = 7;

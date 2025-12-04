@@ -8129,7 +8129,7 @@ function closeManageDropdown() {
 // Export and Import functions
 async function exportFull() {
   if (selectedIds.value.size === 0) {
-    alert('Please select games to export');
+    await showAlert('Please select games to export', 'Export Error');
     return;
   }
 
@@ -8151,14 +8151,14 @@ async function exportFull() {
       });
 
       if (exportResult.success) {
-        alert(`Successfully exported ${exportResult.exportedCount} games to ${exportDir}`);
+        showToastNotification(`Successfully exported ${exportResult.exportedCount} games to ${exportDir}`, 'success', 3000);
       } else {
-        alert(`Export failed: ${exportResult.error}`);
+        await showAlert(`Export failed: ${exportResult.error}`, 'Export Failed');
       }
     }
   } catch (error) {
     console.error('Export error:', error);
-    alert('Export failed: ' + (error as any).message);
+    await showAlert('Export failed: ' + (error as any).message, 'Export Error');
   }
 }
 
@@ -8183,16 +8183,16 @@ async function importGames() {
       });
 
       if (importResult.success) {
-        alert(`Successfully imported ${importResult.importedCount} games`);
+        showToastNotification(`Successfully imported ${importResult.importedCount} games`, 'success', 3000);
         // Refresh the game list
         await loadGames();
       } else {
-        alert(`Import failed: ${importResult.error}`);
+        await showAlert(`Import failed: ${importResult.error}`, 'Import Failed');
       }
     }
   } catch (error) {
     console.error('Import error:', error);
-    alert('Import failed: ' + (error as any).message);
+    await showAlert('Import failed: ' + (error as any).message, 'Import Error');
   }
 }
 
@@ -8335,7 +8335,7 @@ async function promptInstallRhpakFromOS(filePath: string) {
     return;
   }
   if (installRhpakBusy.value) {
-    alert('Another RHPAK installation is already running. Please wait for it to finish before opening a new package.');
+    await showAlert('Another RHPAK installation is already running. Please wait for it to finish before opening a new package.', 'Installation In Progress');
     return;
   }
   openInstallRhpakModal();
@@ -8409,7 +8409,11 @@ async function uninstallSelectedRhpaks() {
   if (selectedInstalledRhpaks.value.size === 0) {
     return;
   }
-  if (!confirm(`Uninstall ${selectedInstalledRhpaks.value.size} rhpak(s)? This will remove their records from the local databases.`)) {
+  const confirmed = await showConfirm(
+    `Uninstall ${selectedInstalledRhpaks.value.size} rhpak(s)? This will remove their records from the local databases.`,
+    'Uninstall RHPAK'
+  );
+  if (!confirmed) {
     return;
   }
   rhpakUninstallInProgress.value = true;
@@ -8717,7 +8721,7 @@ async function reconnectUsb2snes() {
 
 async function startUsb2snesSsh() {
   if (!isElectronAvailable()) {
-    alert('SSH control requires Electron environment');
+    await showAlert('SSH control requires Electron environment', 'Error');
     return;
   }
 
@@ -8776,7 +8780,7 @@ async function startUsb2snesSsh() {
 
 async function stopUsb2snesSsh() {
   if (!isElectronAvailable()) {
-    alert('SSH control requires Electron environment');
+    await showAlert('SSH control requires Electron environment', 'Error');
     return;
   }
 
@@ -8810,7 +8814,7 @@ async function stopUsb2snesSsh() {
 
 async function openSshConsoleModal() {
   if (!isElectronAvailable()) {
-    alert('SSH console requires Electron environment');
+    await showAlert('SSH console requires Electron environment', 'Error');
     return;
   }
 
@@ -8858,14 +8862,15 @@ async function clearSshConsoleHistory() {
     return;
   }
 
-  if (!confirm('Clear SSH console history? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Clear SSH console history? This action cannot be undone.', 'Clear Console History');
+  if (!confirmed) {
     return;
   }
 
   // Note: Currently the backend doesn't have a clear method, so we'll just clear the UI
   // In the future, we could add a clear endpoint to sshManager if needed
   sshConsoleHistory.value = [];
-  alert('Console history cleared from display');
+  showToastNotification('Console history cleared from display', 'success', 2000);
 }
 
 function formatHistoryTimestamp(timestamp: string): string {
@@ -9020,7 +9025,7 @@ async function restartUsb2snesFxp() {
 
 async function openUsb2snesFxpConsoleModal() {
   if (!isElectronAvailable()) {
-    alert('USBFXP console requires Electron environment');
+    await showAlert('USBFXP console requires Electron environment', 'Error');
     return;
   }
 
@@ -9066,7 +9071,7 @@ function resetUsb2snesConnection() {
   usb2snesStatus.romRunning = '';
   usb2snesStatus.lastError = '';
   usb2snesStatus.lastAttempt = '';
-  alert('USB2SNES connection reset');
+  showToastNotification('USB2SNES connection reset', 'info', 2000);
 }
 
 function openUsb2snesWebsite() {
@@ -9078,14 +9083,14 @@ async function createUploadDirectory() {
   try {
     const dirPath = settings.usb2snesUploadDir;
     await (window as any).electronAPI.usb2snesCreateDir(dirPath);
-    alert(`Directory created successfully: ${dirPath}`);
+    showToastNotification(`Directory created successfully: ${dirPath}`, 'success', 2000);
   } catch (error) {
     // Directory might already exist, which is fine
     const errorMsg = String(error);
     if (errorMsg.includes('exist')) {
-      alert(`Directory ${settings.usb2snesUploadDir} already exists (this is fine)`);
+      showToastNotification(`Directory ${settings.usb2snesUploadDir} already exists (this is fine)`, 'info', 2000);
     } else {
-      alert(`Create directory failed: ${error}`);
+      await showAlert(`Create directory failed: ${error}`, 'Error');
     }
   }
 }
@@ -9765,7 +9770,7 @@ async function selectFileToUpload() {
     }
   } catch (error) {
     console.error('[File Select] Error:', error);
-    alert(`File selection error: ${error}`);
+    await showAlert(`File selection error: ${error}`, 'File Selection Error');
   }
 }
 
@@ -9785,7 +9790,7 @@ function formatFileSize(bytes: number): string {
 
 async function uploadFile() {
   if (!selectedFile.value) {
-    alert('No file selected');
+    await showAlert('No file selected', 'File Selection Error');
     return;
   }
 
@@ -9800,7 +9805,7 @@ async function uploadFile() {
     console.log('[Upload] Extracted path:', filePath);
     
     if (!filePath) {
-      alert('Could not get file path. Please select the file using the Browse button.');
+      await showAlert('Could not get file path. Please select the file using the Browse button.', 'File Selection Error');
       return;
     }
     
@@ -10171,11 +10176,11 @@ async function switchProfile() {
         await loadUserOpKeypairsList(onlineProfile.value.profileId);
       }
     } else {
-      alert(`Failed to switch profile: ${result.error}`);
+      await showAlert(`Failed to switch profile: ${result.error}`, 'Profile Switch Failed');
     }
   } catch (error) {
     console.error('Error switching profile:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10257,7 +10262,7 @@ function cancelProfileCreationWizard() {
 
 async function importProfileFromDetails() {
   if (!isElectronAvailable()) {
-    alert('Import requires Electron environment');
+    await showAlert('Import requires Electron environment');
     return;
   }
   
@@ -10290,7 +10295,7 @@ async function importProfileFromDetails() {
     });
     
     if (!checkResult.success && checkResult.error?.includes('already exists')) {
-      const overwrite = confirm('This profile already exists. Overwrite it?');
+      const overwrite = await showConfirm('This profile already exists. Overwrite it?', 'Profile Already Exists');
       if (!overwrite) {
         return;
       }
@@ -10304,20 +10309,20 @@ async function importProfileFromDetails() {
       if (importResult.success) {
         await loadOnlineProfilesList();
         await loadOnlineProfile();
-        alert('Profile imported successfully!');
+        showToastNotification('Profile imported successfully!', 'success', 3000);
       } else {
-        alert(`Failed to import profile: ${importResult.error}`);
+        await showAlert(`Failed to import profile: ${importResult.error}`, 'Import Failed');
       }
     } else if (checkResult.success) {
       await loadOnlineProfilesList();
       await loadOnlineProfile();
       alert('Profile imported successfully!');
     } else {
-      alert(`Failed to import profile: ${checkResult.error}`);
+      await showAlert(`Failed to import profile: ${checkResult.error}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing profile:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10334,7 +10339,7 @@ async function exportProfileFromDetails() {
     
     const passwordConfirm = prompt('Confirm encryption password:');
     if (password !== passwordConfirm) {
-      alert('Passwords do not match');
+      await showAlert('Passwords do not match', 'Validation Error');
       return;
     }
     
@@ -10348,11 +10353,11 @@ async function exportProfileFromDetails() {
     if (exportResult.success) {
       alert('Profile exported successfully!');
     } else {
-      alert(`Failed to export profile: ${exportResult.error}`);
+      await showAlert(`Failed to export profile: ${exportResult.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error exporting profile:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10475,7 +10480,7 @@ async function createNewProfile() {
       onlineProfile.value = result.profile;
       await updateOnlineProfile();
     } else {
-      alert(`Failed to create profile: ${result.error}`);
+      await showAlert(`Failed to create profile: ${result.error}`, 'Profile Creation Failed');
     }
   } catch (error) {
     console.error('Error creating profile:', error);
@@ -10533,7 +10538,7 @@ async function regeneratePrimaryKeypair() {
     }
   } catch (error) {
     console.error('Error regenerating keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10561,7 +10566,7 @@ async function addKeypair() {
     }
   } catch (error) {
     console.error('Error creating keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10623,7 +10628,7 @@ async function loadSelectedMasterKeypair() {
     }
   } catch (error) {
     console.error('Error loading master keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     selectedMasterKeypair.value = null;
     selectedAdminKeypair.value = null;
     selectedAdminKeypairUuid.value = null;
@@ -10675,7 +10680,7 @@ async function generateMasterKeypair() {
     }
   } catch (error) {
     console.error('Error generating master keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10710,7 +10715,7 @@ async function addMasterKeypair() {
     }
   } catch (error) {
     console.error('Error adding master keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10740,7 +10745,7 @@ async function backupSelectedMasterKeypair() {
     }
   } catch (error) {
     console.error('Error backing up master keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10779,7 +10784,7 @@ async function importMasterKeypairBackup() {
     }
   } catch (error) {
     console.error('Error importing master keypair backup:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10804,7 +10809,7 @@ async function deleteSelectedMasterKeypair() {
     }
   } catch (error) {
     console.error('Error deleting master keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10857,7 +10862,7 @@ async function loadSelectedAdminKeypair() {
     }
   } catch (error) {
     console.error('Error loading admin keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     selectedAdminKeypair.value = null;
   }
 }
@@ -10929,7 +10934,7 @@ async function generateAdminKeypair() {
     }
   } catch (error) {
     console.error('Error generating admin keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -10985,7 +10990,7 @@ async function addAdminKeypair() {
     }
   } catch (error) {
     console.error('Error adding admin keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -11022,7 +11027,7 @@ async function updateAdminKeypairStorageStatus(keypairUuid: string, newStatus: s
     }
   } catch (error) {
     console.error('Error updating admin keypair storage status:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -11742,7 +11747,7 @@ async function loadSelectedTrustDeclaration(declarationUuid?: string) {
     }
   } catch (error) {
     console.error('Error loading trust declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     selectedTrustDeclaration.value = null;
     selectedTrustDeclarationQueueSummary.value = null;
     selectedTrustDeclarationQueueError.value = error instanceof Error ? error.message : String(error);
@@ -11870,7 +11875,7 @@ async function finalizeAndReloadDeclaration() {
     }
   } catch (error) {
     console.error('Error finalizing and reloading declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -11961,7 +11966,7 @@ async function signDeclaration() {
     }
   } catch (error) {
     console.error('Error signing declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -12133,7 +12138,7 @@ async function saveTrustDeclarationEdits() {
     }
   } catch (error) {
     console.error('Error saving declaration edits:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -12429,7 +12434,7 @@ async function deleteTrustDeclaration() {
     }
   } catch (error) {
     console.error('Error deleting trust declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13458,7 +13463,7 @@ async function saveDraftTrustDeclaration() {
     }
   } catch (error) {
     console.error('Error saving draft declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     return false;
   }
 }
@@ -13519,7 +13524,7 @@ async function finalizeTrustDeclaration() {
     }
   } catch (error) {
     console.error('Error finalizing declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13600,7 +13605,7 @@ async function saveTrustDeclaration() {
     }
   } catch (error) {
     console.error('Error saving declaration:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13715,7 +13720,7 @@ async function loadSelectedEncryptionKey() {
     }
   } catch (error) {
     console.error('Error loading encryption key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     selectedEncryptionKey.value = null;
   }
 }
@@ -13807,7 +13812,7 @@ async function generateEncryptionKey() {
     }
   } catch (error) {
     console.error('Error generating encryption key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13840,7 +13845,7 @@ async function saveEncryptionKeyMetadata() {
     }
   } catch (error) {
     console.error('Error saving encryption key metadata:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13874,7 +13879,7 @@ async function exportEncryptionKey() {
     }
   } catch (error) {
     console.error('Error exporting encryption key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13936,7 +13941,7 @@ async function importEncryptionKeyBackup() {
     }
   } catch (error) {
     console.error('Error importing encryption key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -13964,7 +13969,7 @@ async function deleteSelectedEncryptionKey() {
     }
   } catch (error) {
     console.error('Error deleting encryption key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14014,7 +14019,7 @@ async function loadSelectedUserOpKeypair() {
     }
   } catch (error) {
     console.error('Error loading User Op keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     selectedUserOpKeypair.value = null;
   }
 }
@@ -14063,7 +14068,7 @@ async function generateUserOpKeypair() {
     }
   } catch (error) {
     console.error('Error generating User Op keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14116,7 +14121,7 @@ async function addUserOpKeypair() {
     }
   } catch (error) {
     console.error('Error adding User Op keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14145,7 +14150,7 @@ async function backupSelectedUserOpKeypair() {
     }
   } catch (error) {
     console.error('Error backing up User Op keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14182,7 +14187,7 @@ async function importUserOpKeypairBackup() {
     }
   } catch (error) {
     console.error('Error importing User Op keypair backup:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14206,7 +14211,7 @@ async function deleteSelectedUserOpKeypair() {
     }
   } catch (error) {
     console.error('Error deleting User Op keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14279,7 +14284,7 @@ async function openPublishKeypairModal(keypairType: 'master' | 'admin' | 'user-o
     showPublishKeypairModal.value = true;
   } catch (error) {
     console.error('Error opening publish keypair modal:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14298,7 +14303,7 @@ async function loadAvailableNostrSigningKeypairs() {
     }
   } catch (error) {
     console.error('Error loading Nostr signing keypairs:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14325,7 +14330,7 @@ async function generateEventPreview() {
     }
   } catch (error) {
     console.error('Error generating event preview:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     publishKeypairEventPreview.value = null;
   }
 }
@@ -14365,7 +14370,7 @@ async function confirmPublishKeypair() {
     }
   } catch (error) {
     console.error('Error publishing keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14400,7 +14405,7 @@ async function backupSelectedAdminKeypair() {
     }
   } catch (error) {
     console.error('Error backing up admin keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
   
   showSelectedAdminKeypairDropdown.value = false;
@@ -14460,7 +14465,7 @@ async function importAdminKeypairBackup() {
     }
   } catch (error) {
     console.error('Error importing admin keypair backup:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14487,7 +14492,7 @@ async function deleteSelectedAdminKeypair() {
     }
   } catch (error) {
     console.error('Error deleting admin keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
   
   showSelectedAdminKeypairDropdown.value = false;
@@ -14524,7 +14529,7 @@ async function saveAdminKeypairMetadata() {
     }
   } catch (error) {
     console.error('Error saving admin keypair metadata:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14558,7 +14563,7 @@ async function exportAdminKeypairSecretPKCS() {
     }
   } catch (error) {
     console.error('Error exporting secret key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14600,7 +14605,7 @@ async function importAdminKeypairSecretPKCS() {
     }
   } catch (error) {
     console.error('Error importing secret key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14625,7 +14630,7 @@ async function removeAdminKeypairSecret() {
     }
   } catch (error) {
     console.error('Error removing secret key:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14851,7 +14856,7 @@ async function confirmSetupProfileGuard() {
     }
   } catch (error) {
     console.error('Error setting up Profile Guard:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -14891,7 +14896,7 @@ async function updateProfileGuardSecurityMode() {
     }
   } catch (error) {
     console.error('Error updating security mode:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     // Revert checkbox
     profileGuardHighSecurityMode.value = !profileGuardHighSecurityMode.value;
   }
@@ -14993,7 +14998,7 @@ async function deleteProfileGuardSecrets() {
     }
   } catch (error) {
     console.error('Error deleting secrets:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
     profileGuardForgotPassword.value = false;
   }
 }
@@ -15028,7 +15033,7 @@ async function removeProfileGuard() {
     }
   } catch (error) {
     console.error('Error removing Profile Guard:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -15065,7 +15070,7 @@ async function confirmExportProfile() {
     }
   } catch (error) {
     console.error('Error exporting profile:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -15119,7 +15124,7 @@ async function confirmExportKeypair() {
     }
   } catch (error) {
     console.error('Error exporting keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 
@@ -15186,7 +15191,7 @@ async function confirmImportKeypair() {
     }
   } catch (error) {
     console.error('Error importing keypair:', error);
-    alert(`Error: ${formatErrorMessage(error)}`);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
 }
 

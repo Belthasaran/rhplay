@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 367 instances (Batch 1: 318, Batch 2: 49)
+**Total Replacements Made**: 416 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49)
 
 ## Testing Instructions
 
@@ -961,6 +961,329 @@ For each dialog replacement, verify:
 
 ---
 
+## 13. Nostr Publishing Functions
+
+### 13.1 Open Publish Keypair Modal - Selection Required
+- **Location**: `openPublishKeypairModal()` function (line ~14281)
+- **Original**: `alert('Please select a keypair first.')`
+- **Replaced with**: `await showAlert('Please select a keypair first.', 'Selection Required')`
+- **How to test**: Attempt to open publish modal without selecting a keypair
+
+### 13.2 Load Nostr Signing Keypairs - Failure
+- **Location**: `loadAvailableNostrSigningKeypairs()` function (line ~14309)
+- **Original**: `alert('Failed to load Nostr signing keypairs: ...')`
+- **Replaced with**: `await showAlert('Failed to load Nostr signing keypairs: ...', 'Load Failed')`
+- **How to test**: Simulate failure loading Nostr signing keypairs
+
+### 13.3 Generate Event Preview - Failure
+- **Location**: `generateEventPreview()` function (line ~14335)
+- **Original**: `alert('Failed to generate event preview: ...')`
+- **Replaced with**: `await showAlert('Failed to generate event preview: ...', 'Preview Generation Failed')`
+- **How to test**: Simulate event preview generation failure
+
+### 13.4 Confirm Publish Keypair - Selection Required
+- **Location**: `confirmPublishKeypair()` function (line ~14347)
+- **Original**: `alert('Please select a Nostr signing keypair and generate an event preview first.')`
+- **Replaced with**: `await showAlert('Please select a Nostr signing keypair and generate an event preview first.', 'Selection Required')`
+- **How to test**: Attempt to publish without selecting keypair or generating preview
+
+### 13.5 Confirm Publish Keypair - Confirmation
+- **Location**: `confirmPublishKeypair()` function (line ~14351)
+- **Original**: `confirm('Are you sure you want to publish this keypair to Nostr? ...')`
+- **Replaced with**: `await showConfirm('Are you sure you want to publish this keypair to Nostr? ...', 'Publish Keypair to Nostr')`
+- **How to test**:
+  - Select keypair and generate preview
+  - Click publish
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 13.6 Publish Keypair - Success
+- **Location**: `confirmPublishKeypair()` function (line ~14364)
+- **Original**: `alert('Keypair published successfully! The event has been added to the outgoing cache.')`
+- **Replaced with**: `showToastNotification('Keypair published successfully! The event has been added to the outgoing cache.', 'success', 3000)`
+- **How to test**: Successfully publish a keypair to Nostr
+
+### 13.7 Publish Keypair - Failure
+- **Location**: `confirmPublishKeypair()` function (line ~14376)
+- **Original**: `alert('Failed to publish keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to publish keypair: ...', 'Publish Failed')`
+- **How to test**: Simulate publishing failure
+
+---
+
+## 14. Admin Keypair Backup/Import/Delete Functions
+
+### 14.1 Backup Admin Keypair - Password Mismatch
+- **Location**: `backupSelectedAdminKeypair()` function (line ~14397)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when backing up admin keypair
+
+### 14.2 Backup Admin Keypair - Success
+- **Location**: `backupSelectedAdminKeypair()` function (line ~14409)
+- **Original**: `alert('Admin keypair backup exported successfully')`
+- **Replaced with**: `showToastNotification('Admin keypair backup exported successfully', 'success', 3000)`
+- **How to test**: Successfully export admin keypair backup
+
+### 14.3 Backup Admin Keypair - Failure
+- **Location**: `backupSelectedAdminKeypair()` function (line ~14411)
+- **Original**: `alert('Failed to export backup: ...')`
+- **Replaced with**: `await showAlert('Failed to export backup: ...', 'Export Failed')`
+- **How to test**: Simulate backup export failure
+
+### 14.4 Import Admin Keypair - Success
+- **Location**: `importAdminKeypairBackup()` function (line ~14466)
+- **Original**: `alert('Admin keypair imported successfully')`
+- **Replaced with**: `showToastNotification('Admin keypair imported successfully', 'success', 3000)`
+- **How to test**: Successfully import admin keypair backup
+
+### 14.5 Import Admin Keypair - Add Failed
+- **Location**: `importAdminKeypairBackup()` function (line ~14468)
+- **Original**: `alert('Failed to add imported keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to add imported keypair: ...', 'Add Failed')`
+- **How to test**: Simulate failure adding imported keypair to database
+
+### 14.6 Import Admin Keypair - Import Failed
+- **Location**: `importAdminKeypairBackup()` function (line ~14471)
+- **Original**: `alert('Failed to import backup: ...')`
+- **Replaced with**: `await showAlert('Failed to import backup: ...', 'Import Failed')`
+- **How to test**: Attempt to import invalid or corrupted backup file
+
+### 14.7 Delete Admin Keypair - Confirmation
+- **Location**: `deleteSelectedAdminKeypair()` function (line ~14484)
+- **Original**: `confirm('Are you sure you want to delete this admin keypair? This action cannot be undone.')`
+- **Replaced with**: `await showConfirm('Are you sure you want to delete this admin keypair? This action cannot be undone.', 'Delete Admin Keypair')`
+- **How to test**:
+  - Select an admin keypair
+  - Click delete
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 14.8 Delete Admin Keypair - Success
+- **Location**: `deleteSelectedAdminKeypair()` function (line ~14496)
+- **Original**: `alert('Admin keypair deleted successfully')`
+- **Replaced with**: `showToastNotification('Admin keypair deleted successfully', 'success', 3000)`
+- **How to test**: Successfully delete an admin keypair
+
+### 14.9 Delete Admin Keypair - Failure
+- **Location**: `deleteSelectedAdminKeypair()` function (line ~14498)
+- **Original**: `alert('Failed to delete admin keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to delete admin keypair: ...', 'Delete Failed')`
+- **How to test**: Simulate deletion failure
+
+---
+
+## 15. Admin Keypair Metadata and Secret Key Management
+
+### 15.1 Save Admin Keypair Metadata - Selection Required
+- **Location**: `saveAdminKeypairMetadata()` function (line ~14515)
+- **Original**: `alert('No keypair selected')`
+- **Replaced with**: `await showAlert('No keypair selected', 'Selection Required')`
+- **How to test**: Attempt to save metadata without selecting a keypair
+
+### 15.2 Save Admin Keypair Metadata - Success
+- **Location**: `saveAdminKeypairMetadata()` function (line ~14535)
+- **Original**: `alert('Metadata saved successfully')`
+- **Replaced with**: `showToastNotification('Metadata saved successfully', 'success', 2000)`
+- **How to test**: Successfully save admin keypair metadata
+
+### 15.3 Save Admin Keypair Metadata - Failure
+- **Location**: `saveAdminKeypairMetadata()` function (line ~14537)
+- **Original**: `alert('Failed to save metadata: ...')`
+- **Replaced with**: `await showAlert('Failed to save metadata: ...', 'Save Failed')`
+- **How to test**: Simulate metadata save failure
+
+### 15.4 Export Secret Key - Password Mismatch
+- **Location**: `exportAdminKeypairSecretPKCS()` function (line ~14557)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting secret key
+
+### 15.5 Export Secret Key - Success
+- **Location**: `exportAdminKeypairSecretPKCS()` function (line ~14568)
+- **Original**: `alert('Secret key exported successfully to: ...')`
+- **Replaced with**: `showToastNotification('Secret key exported successfully to: ...', 'success', 3000)`
+- **How to test**: Successfully export secret key
+
+### 15.6 Export Secret Key - Failure
+- **Location**: `exportAdminKeypairSecretPKCS()` function (line ~14571)
+- **Original**: `alert('Failed to export secret key: ...')`
+- **Replaced with**: `await showAlert('Failed to export secret key: ...', 'Export Failed')`
+- **How to test**: Simulate secret key export failure
+
+### 15.7 Import Secret Key - Success
+- **Location**: `importAdminKeypairSecretPKCS()` function (line ~14609)
+- **Original**: `alert('Secret key imported successfully')`
+- **Replaced with**: `showToastNotification('Secret key imported successfully', 'success', 3000)`
+- **How to test**: Successfully import secret key
+
+### 15.8 Import Secret Key - Failure
+- **Location**: `importAdminKeypairSecretPKCS()` function (line ~14613)
+- **Original**: `alert('Failed to import secret key: ...')`
+- **Replaced with**: `await showAlert('Failed to import secret key: ...', 'Import Failed')`
+- **How to test**: Attempt to import invalid or corrupted secret key file
+
+### 15.9 Remove Secret Key - Confirmation
+- **Location**: `removeAdminKeypairSecret()` function (line ~14626)
+- **Original**: `confirm('Are you sure you want to remove the secret key? This action cannot be undone.')`
+- **Replaced with**: `await showConfirm('Are you sure you want to remove the secret key? This action cannot be undone.', 'Remove Secret Key')`
+- **How to test**:
+  - Select an admin keypair with a secret key
+  - Click remove secret key
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 15.10 Remove Secret Key - Success
+- **Location**: `removeAdminKeypairSecret()` function (line ~14634)
+- **Original**: `alert('Secret key removed successfully')`
+- **Replaced with**: `showToastNotification('Secret key removed successfully', 'success', 3000)`
+- **How to test**: Successfully remove secret key from keypair
+
+### 15.11 Remove Secret Key - Failure
+- **Location**: `removeAdminKeypairSecret()` function (line ~14638)
+- **Original**: `alert('Failed to remove secret key: ...')`
+- **Replaced with**: `await showAlert('Failed to remove secret key: ...', 'Remove Failed')`
+- **How to test**: Simulate removal failure
+
+---
+
+## 16. Profile Guard Functions
+
+### 16.1 Setup Profile Guard - Electron Required
+- **Location**: `confirmSetupProfileGuard()` function (line ~14829)
+- **Original**: `alert('Profile Guard setup requires Electron environment')`
+- **Replaced with**: `await showAlert('Profile Guard setup requires Electron environment', 'Error')`
+- **How to test**: Attempt to setup Profile Guard outside Electron environment
+
+### 16.2 Setup Profile Guard - Password Mismatch
+- **Location**: `confirmSetupProfileGuard()` function (line ~14834)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when setting up Profile Guard
+
+### 16.3 Setup Profile Guard - Password Too Short
+- **Location**: `confirmSetupProfileGuard()` function (line ~14839)
+- **Original**: `alert('Password must be at least 8 characters long')`
+- **Replaced with**: `await showAlert('Password must be at least 8 characters long', 'Validation Error')`
+- **How to test**: Enter password shorter than 8 characters
+
+### 16.4 Setup Profile Guard - Failure
+- **Location**: `confirmSetupProfileGuard()` function (line ~14865)
+- **Original**: `alert('Failed to set up Profile Guard: ...')`
+- **Replaced with**: `await showAlert('Failed to set up Profile Guard: ...', 'Setup Failed')`
+- **How to test**: Simulate Profile Guard setup failure
+
+### 16.5 Update Security Mode - Failure
+- **Location**: `updateProfileGuardSecurityMode()` function (line ~14903)
+- **Original**: `alert('Failed to update security mode: ...')`
+- **Replaced with**: `await showAlert('Failed to update security mode: ...', 'Update Failed')`
+- **How to test**: Simulate security mode update failure
+
+### 16.6 Delete Profile Guard Secrets - Confirmation
+- **Location**: `deleteProfileGuardSecrets()` function (line ~14983)
+- **Original**: `confirm('Are you absolutely sure? This will permanently delete:\n\n- Profile Guard keys\n- All encrypted secret keys\n- All protected keypairs\n\nThis action cannot be undone.')`
+- **Replaced with**: `await showConfirm('Are you absolutely sure? This will permanently delete:\n\n- Profile Guard keys\n- All encrypted secret keys\n- All protected keypairs\n\nThis action cannot be undone.', 'Delete Profile Guard')`
+- **How to test**:
+  - Attempt to delete Profile Guard (e.g., via "Forgot Password" flow)
+  - Verify confirmation dialog appears with warning
+  - Test both responses
+
+### 16.7 Delete Profile Guard Secrets - Success
+- **Location**: `deleteProfileGuardSecrets()` function (line ~15004)
+- **Original**: `alert('Profile Guard and all protected secrets have been deleted. You can now continue using the application.')`
+- **Replaced with**: `await showAlert('Profile Guard and all protected secrets have been deleted. You can now continue using the application.', 'Profile Guard Deleted')`
+- **How to test**: Successfully delete Profile Guard and all secrets
+
+### 16.8 Delete Profile Guard Secrets - Failure
+- **Location**: `deleteProfileGuardSecrets()` function (line ~15006)
+- **Original**: `alert('Failed to delete secrets: ...')`
+- **Replaced with**: `await showAlert('Failed to delete secrets: ...', 'Delete Failed')`
+- **How to test**: Simulate deletion failure
+
+### 16.9 Change Profile Guard Key - Confirmation
+- **Location**: `changeProfileGuardKey()` function (line ~15017)
+- **Original**: `confirm('Changing the Profile Guard key will require re-encrypting all your secret keys. Continue?')`
+- **Replaced with**: `await showConfirm('Changing the Profile Guard key will require re-encrypting all your secret keys. Continue?', 'Change Profile Guard Key')`
+- **How to test**:
+  - Click "Change Master Password" or similar
+  - Verify confirmation dialog appears
+  - Test both responses
+
+### 16.10 Remove Profile Guard - Confirmation
+- **Location**: `removeProfileGuard()` function (line ~15029)
+- **Original**: `confirm('Removing Profile Guard will decrypt all your secret keys. This is irreversible. Continue?')`
+- **Replaced with**: `await showConfirm('Removing Profile Guard will decrypt all your secret keys. This is irreversible. Continue?', 'Remove Profile Guard')`
+- **How to test**:
+  - Attempt to remove Profile Guard
+  - Verify confirmation dialog appears with warning
+  - Test both responses
+
+### 16.11 Remove Profile Guard - Failure
+- **Location**: `removeProfileGuard()` function (line ~15042)
+- **Original**: `alert('Failed to remove Profile Guard: ...')`
+- **Replaced with**: `await showAlert('Failed to remove Profile Guard: ...', 'Remove Failed')`
+- **How to test**: Simulate removal failure
+
+---
+
+## 17. Profile and Keypair Export/Import Functions
+
+### 17.1 Export Profile - Password Mismatch
+- **Location**: `confirmExportProfile()` function (line ~15066)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting profile
+
+### 17.2 Export Profile - Success
+- **Location**: `confirmExportProfile()` function (line ~15080)
+- **Original**: `alert('Profile exported successfully!')`
+- **Replaced with**: `showToastNotification('Profile exported successfully!', 'success', 3000)`
+- **How to test**: Successfully export a profile
+
+### 17.3 Export Profile - Failure
+- **Location**: `confirmExportProfile()` function (line ~15082)
+- **Original**: `alert('Failed to export profile: ...')`
+- **Replaced with**: `await showAlert('Failed to export profile: ...', 'Export Failed')`
+- **How to test**: Simulate profile export failure
+
+### 17.4 Export Keypair - Password Mismatch
+- **Location**: `confirmExportKeypair()` function (line ~15104)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting keypair
+
+### 17.5 Export Keypair - Keypair Not Found
+- **Location**: `confirmExportKeypair()` function (line ~15119)
+- **Original**: `alert('Keypair not found')`
+- **Replaced with**: `await showAlert('Keypair not found', 'Error')`
+- **How to test**: Attempt to export a keypair that no longer exists
+
+### 17.6 Export Keypair - Success
+- **Location**: `confirmExportKeypair()` function (line ~15134)
+- **Original**: `alert('Keypair exported successfully!')`
+- **Replaced with**: `showToastNotification('Keypair exported successfully!', 'success', 3000)`
+- **How to test**: Successfully export a keypair
+
+### 17.7 Export Keypair - Failure
+- **Location**: `confirmExportKeypair()` function (line ~15136)
+- **Original**: `alert('Failed to export keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to export keypair: ...', 'Export Failed')`
+- **How to test**: Simulate keypair export failure
+
+### 17.8 Import Keypair - Success
+- **Location**: `confirmImportKeypair()` function (line ~15201)
+- **Original**: `alert('Keypair imported successfully!')`
+- **Replaced with**: `showToastNotification('Keypair imported successfully!', 'success', 3000)`
+- **How to test**: Successfully import a keypair
+
+### 17.9 Import Keypair - Failure
+- **Location**: `confirmImportKeypair()` function (line ~15203)
+- **Original**: `alert('Failed to import keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to import keypair: ...', 'Import Failed')`
+- **How to test**: Attempt to import invalid or corrupted keypair file
+
+---
+
 ## Notes
 
 - **Blocking dialogs** (`showAlert`, `showConfirm`): These use `await` and block execution until user responds
@@ -971,12 +1294,11 @@ For each dialog replacement, verify:
 
 ## Remaining Instances
 
-There are still approximately 174 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
-- Nostr publishing functions
-- Profile Guard functions
-- Admin keypair management functions (additional instances)
-- Secret key management functions
+There are still approximately 137 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
 - Game staging and launch functions
 - Settings and configuration functions
 - Additional profile management functions
+- File association functions
+- USBFXP and USB2SNES functions
+- Additional validation and error messages
 

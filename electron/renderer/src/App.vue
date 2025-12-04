@@ -14278,7 +14278,7 @@ async function openPublishKeypairModal(keypairType: 'master' | 'admin' | 'user-o
     }
     
     if (!keypairUuid || !keypairData) {
-      alert('Please select a keypair first.');
+      await showAlert('Please select a keypair first.', 'Selection Required');
       return;
     }
     
@@ -14306,7 +14306,7 @@ async function loadAvailableNostrSigningKeypairs() {
       availableNostrSigningKeypairs.value = result.keypairs || [];
     } else {
       console.error('Error loading Nostr signing keypairs:', result.error);
-      alert(`Failed to load Nostr signing keypairs: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to load Nostr signing keypairs: ${result.error || 'Unknown error'}`, 'Load Failed');
     }
   } catch (error) {
     console.error('Error loading Nostr signing keypairs:', error);
@@ -14332,7 +14332,7 @@ async function generateEventPreview() {
       publishKeypairEventPreview.value = result.eventTemplate;
     } else {
       console.error('Error generating event preview:', result.error);
-      alert(`Failed to generate event preview: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to generate event preview: ${result.error || 'Unknown error'}`, 'Preview Generation Failed');
       publishKeypairEventPreview.value = null;
     }
   } catch (error) {
@@ -14344,11 +14344,12 @@ async function generateEventPreview() {
 
 async function confirmPublishKeypair() {
   if (!isElectronAvailable() || !selectedNostrSigningKeypairUuid.value || !publishKeypairEventPreview.value) {
-    alert('Please select a Nostr signing keypair and generate an event preview first.');
+    await showAlert('Please select a Nostr signing keypair and generate an event preview first.', 'Selection Required');
     return;
   }
   
-  if (!confirm('Are you sure you want to publish this keypair to Nostr? This will create a signed event and add it to the outgoing cache.')) {
+  const confirmed = await showConfirm('Are you sure you want to publish this keypair to Nostr? This will create a signed event and add it to the outgoing cache.', 'Publish Keypair to Nostr');
+  if (!confirmed) {
     return;
   }
   
@@ -14361,7 +14362,7 @@ async function confirmPublishKeypair() {
     );
     
     if (result.success) {
-      alert('Keypair published successfully! The event has been added to the outgoing cache.');
+      showToastNotification('Keypair published successfully! The event has been added to the outgoing cache.', 'success', 3000);
       showPublishKeypairModal.value = false;
       
       // Reload the keypair lists to update status
@@ -14373,7 +14374,7 @@ async function confirmPublishKeypair() {
         await loadUserOpKeypairsList(selectedProfileId.value!);
       }
     } else {
-      alert(`Failed to publish keypair: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to publish keypair: ${result.error || 'Unknown error'}`, 'Publish Failed');
     }
   } catch (error) {
     console.error('Error publishing keypair:', error);
@@ -14406,9 +14407,9 @@ async function backupSelectedAdminKeypair() {
     });
     
     if (result.success) {
-      alert('Admin keypair backup exported successfully');
+      showToastNotification('Admin keypair backup exported successfully', 'success', 3000);
     } else {
-      alert(`Failed to export backup: ${result.error}`);
+      await showAlert(`Failed to export backup: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error backing up admin keypair:', error);
@@ -14463,12 +14464,12 @@ async function importAdminKeypairBackup() {
         await loadAdminKeypairsList();
         selectedAdminKeypairUuid.value = addResult.keypair.uuid;
         await loadSelectedAdminKeypair();
-        alert('Admin keypair imported successfully');
+        showToastNotification('Admin keypair imported successfully', 'success', 3000);
       } else {
-        alert(`Failed to add imported keypair: ${addResult.error}`);
+        await showAlert(`Failed to add imported keypair: ${addResult.error}`, 'Add Failed');
       }
     } else {
-      alert(`Failed to import backup: ${importResult.error || 'Invalid password or file format'}`);
+      await showAlert(`Failed to import backup: ${importResult.error || 'Invalid password or file format'}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing admin keypair backup:', error);
@@ -14481,7 +14482,8 @@ async function deleteSelectedAdminKeypair() {
     return;
   }
   
-  if (!confirm('Are you sure you want to delete this admin keypair? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you sure you want to delete this admin keypair? This action cannot be undone.', 'Delete Admin Keypair');
+  if (!confirmed) {
     showSelectedAdminKeypairDropdown.value = false;
     return;
   }
@@ -14493,9 +14495,9 @@ async function deleteSelectedAdminKeypair() {
       selectedAdminKeypair.value = null;
       selectedAdminKeypairUuid.value = null;
       await loadAdminKeypairsList();
-      alert('Admin keypair deleted successfully');
+      showToastNotification('Admin keypair deleted successfully', 'success', 3000);
     } else {
-      alert(`Failed to delete admin keypair: ${result.error}`);
+      await showAlert(`Failed to delete admin keypair: ${result.error}`, 'Delete Failed');
     }
   } catch (error) {
     console.error('Error deleting admin keypair:', error);
@@ -14510,7 +14512,7 @@ async function saveAdminKeypairMetadata() {
   const keypairUuid = selectedAdminKeypairUuid.value || selectedMasterKeypairUuid.value;
   
   if (!isElectronAvailable() || !keypairUuid) {
-    alert('No keypair selected');
+    await showAlert('No keypair selected', 'Selection Required');
     return;
   }
   
@@ -14530,9 +14532,9 @@ async function saveAdminKeypairMetadata() {
       } else if (selectedAdminKeypairUuid.value) {
         await loadSelectedAdminKeypair();
       }
-      alert('Metadata saved successfully');
+      showToastNotification('Metadata saved successfully', 'success', 2000);
     } else {
-      alert(`Failed to save metadata: ${result.error}`);
+      await showAlert(`Failed to save metadata: ${result.error}`, 'Save Failed');
     }
   } catch (error) {
     console.error('Error saving admin keypair metadata:', error);
@@ -14552,7 +14554,7 @@ async function exportAdminKeypairSecretPKCS() {
   
   const confirmPassword = prompt('Confirm password:');
   if (password !== confirmPassword) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -14563,10 +14565,10 @@ async function exportAdminKeypairSecretPKCS() {
     );
     
     if (result.success) {
-      alert(`Secret key exported successfully to: ${result.filePath}`);
+      showToastNotification(`Secret key exported successfully to: ${result.filePath}`, 'success', 3000);
       await loadSelectedAdminKeypair();
     } else {
-      alert(`Failed to export secret key: ${result.error}`);
+      await showAlert(`Failed to export secret key: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error exporting secret key:', error);
@@ -14604,11 +14606,11 @@ async function importAdminKeypairSecretPKCS() {
     );
     
     if (importResult.success) {
-      alert('Secret key imported successfully');
+      showToastNotification('Secret key imported successfully', 'success', 3000);
       await loadSelectedAdminKeypair();
       await loadAdminKeypairsList();
     } else {
-      alert(`Failed to import secret key: ${importResult.error}`);
+      await showAlert(`Failed to import secret key: ${importResult.error}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing secret key:', error);
@@ -14621,7 +14623,8 @@ async function removeAdminKeypairSecret() {
     return;
   }
   
-  if (!confirm('Are you sure you want to remove the secret key? This action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you sure you want to remove the secret key? This action cannot be undone.', 'Remove Secret Key');
+  if (!confirmed) {
     return;
   }
   
@@ -14629,11 +14632,11 @@ async function removeAdminKeypairSecret() {
     const result = await (window as any).electronAPI.removeAdminKeypairSecret(selectedAdminKeypairUuid.value);
     
     if (result.success) {
-      alert('Secret key removed successfully');
+      showToastNotification('Secret key removed successfully', 'success', 3000);
       await loadSelectedAdminKeypair();
       await loadAdminKeypairsList();
     } else {
-      alert(`Failed to remove secret key: ${result.error}`);
+      await showAlert(`Failed to remove secret key: ${result.error}`, 'Remove Failed');
     }
   } catch (error) {
     console.error('Error removing secret key:', error);
@@ -14823,17 +14826,17 @@ function setupProfileGuard() {
 
 async function confirmSetupProfileGuard() {
   if (!isElectronAvailable()) {
-    alert('Profile Guard setup requires Electron environment');
+    await showAlert('Profile Guard setup requires Electron environment', 'Error');
     return;
   }
   
   if (profileGuardPassword.value !== profileGuardPasswordConfirm.value) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
   if (!profileGuardPassword.value || profileGuardPassword.value.length < 8) {
-    alert('Password must be at least 8 characters long');
+    await showAlert('Password must be at least 8 characters long', 'Validation Error');
     return;
   }
   
@@ -14859,7 +14862,7 @@ async function confirmSetupProfileGuard() {
       // Check if profile needs to be created after setup
       await checkAndCreateProfileIfNeeded();
     } else {
-      alert(`Failed to set up Profile Guard: ${result.error}`);
+      await showAlert(`Failed to set up Profile Guard: ${result.error}`, 'Setup Failed');
     }
   } catch (error) {
     console.error('Error setting up Profile Guard:', error);
@@ -14897,7 +14900,7 @@ async function updateProfileGuardSecurityMode() {
     });
     
     if (!result.success) {
-      alert(`Failed to update security mode: ${result.error}`);
+      await showAlert(`Failed to update security mode: ${result.error}`, 'Update Failed');
       // Revert checkbox
       profileGuardHighSecurityMode.value = !profileGuardHighSecurityMode.value;
     }
@@ -14977,7 +14980,8 @@ async function deleteProfileGuardSecrets() {
   }
   
   // Double confirmation
-  if (!confirm('Are you absolutely sure? This will permanently delete:\n\n- Profile Guard keys\n- All encrypted secret keys\n- All protected keypairs\n\nThis action cannot be undone.')) {
+  const confirmed = await showConfirm('Are you absolutely sure? This will permanently delete:\n\n- Profile Guard keys\n- All encrypted secret keys\n- All protected keypairs\n\nThis action cannot be undone.', 'Delete Profile Guard');
+  if (!confirmed) {
     profileGuardForgotPassword.value = false;
     return;
   }
@@ -14998,9 +15002,9 @@ async function deleteProfileGuardSecrets() {
       // Clear online profile if it exists
       onlineProfile.value = null;
       
-      alert('Profile Guard and all protected secrets have been deleted. You can now continue using the application.');
+      await showAlert('Profile Guard and all protected secrets have been deleted. You can now continue using the application.', 'Profile Guard Deleted');
     } else {
-      alert(`Failed to delete secrets: ${result.error}`);
+      await showAlert(`Failed to delete secrets: ${result.error}`, 'Delete Failed');
       profileGuardForgotPassword.value = false;
     }
   } catch (error) {
@@ -15011,7 +15015,8 @@ async function deleteProfileGuardSecrets() {
 }
 
 async function changeProfileGuardKey() {
-  if (!confirm('Changing the Profile Guard key will require re-encrypting all your secret keys. Continue?')) {
+  const confirmed = await showConfirm('Changing the Profile Guard key will require re-encrypting all your secret keys. Continue?', 'Change Profile Guard Key');
+  if (!confirmed) {
     return;
   }
   
@@ -15023,7 +15028,8 @@ async function changeProfileGuardKey() {
 }
 
 async function removeProfileGuard() {
-  if (!confirm('Removing Profile Guard will decrypt all your secret keys. This is irreversible. Continue?')) {
+  const confirmed = await showConfirm('Removing Profile Guard will decrypt all your secret keys. This is irreversible. Continue?', 'Remove Profile Guard');
+  if (!confirmed) {
     return;
   }
   
@@ -15036,7 +15042,7 @@ async function removeProfileGuard() {
     if (result.success) {
       profileGuardEnabled.value = false;
     } else {
-      alert(`Failed to remove Profile Guard: ${result.error}`);
+      await showAlert(`Failed to remove Profile Guard: ${result.error}`, 'Remove Failed');
     }
   } catch (error) {
     console.error('Error removing Profile Guard:', error);
@@ -15057,7 +15063,7 @@ async function confirmExportProfile() {
   }
   
   if (profileExportPassword.value !== profileExportPasswordConfirm.value) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -15071,9 +15077,9 @@ async function confirmExportProfile() {
       showProfileExportModal.value = false;
       profileExportPassword.value = '';
       profileExportPasswordConfirm.value = '';
-      alert('Profile exported successfully!');
+      showToastNotification('Profile exported successfully!', 'success', 3000);
     } else {
-      alert(`Failed to export profile: ${result.error}`);
+      await showAlert(`Failed to export profile: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error exporting profile:', error);
@@ -15095,7 +15101,7 @@ async function confirmExportKeypair() {
   }
   
   if (keypairExportPassword.value !== keypairExportPasswordConfirm.value) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -15110,7 +15116,7 @@ async function confirmExportKeypair() {
   }
   
   if (!keypair) {
-    alert('Keypair not found');
+    await showAlert('Keypair not found', 'Error');
     return;
   }
   
@@ -15125,9 +15131,9 @@ async function confirmExportKeypair() {
       keypairExportPassword.value = '';
       keypairExportPasswordConfirm.value = '';
       keypairExportContext.value = null;
-      alert('Keypair exported successfully!');
+      showToastNotification('Keypair exported successfully!', 'success', 3000);
     } else {
-      alert(`Failed to export keypair: ${result.error}`);
+      await showAlert(`Failed to export keypair: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error exporting keypair:', error);
@@ -15192,9 +15198,9 @@ async function confirmImportKeypair() {
       keypairImportPassword.value = '';
       selectedKeypairFile.value = null;
       keypairExportContext.value = null;
-      alert('Keypair imported successfully!');
+      showToastNotification('Keypair imported successfully!', 'success', 3000);
     } else {
-      alert(`Failed to import keypair: ${result.error || 'Invalid password or file format'}`);
+      await showAlert(`Failed to import keypair: ${result.error || 'Invalid password or file format'}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing keypair:', error);

@@ -17306,7 +17306,7 @@ async function handleLaunchProgramDrop(e: DragEvent) {
 
 async function browseAsarFile() {
   if (!isElectronAvailable()) {
-    alert('File selection requires Electron environment');
+    await showAlert('File selection requires Electron environment', 'Error');
     return;
   }
   
@@ -17325,13 +17325,13 @@ async function browseAsarFile() {
     }
   } catch (error: any) {
     console.error('Error browsing ASAR file:', error);
-    alert('Error selecting ASAR file: ' + error.message);
+    await showAlert('Error selecting ASAR file: ' + error.message, 'File Selection Error');
   }
 }
 
 async function browseLaunchProgram() {
   if (!isElectronAvailable()) {
-    alert('File selection requires Electron environment');
+    await showAlert('File selection requires Electron environment', 'Error');
     return;
   }
   
@@ -17351,13 +17351,13 @@ async function browseLaunchProgram() {
     }
   } catch (error: any) {
     console.error('Error browsing launch program:', error);
-    alert('Error selecting launch program: ' + error.message);
+    await showAlert('Error selecting launch program: ' + error.message, 'File Selection Error');
   }
 }
 
 async function browseUsb2snesIdentityFile() {
   if (!isElectronAvailable()) {
-    alert('File selection requires Electron environment');
+    await showAlert('File selection requires Electron environment', 'Error');
     return;
   }
 
@@ -17373,7 +17373,7 @@ async function browseUsb2snesIdentityFile() {
     }
   } catch (error: any) {
     console.error('Error browsing SSH identity file:', error);
-    alert('Error selecting SSH identity file: ' + error.message);
+    await showAlert('Error selecting SSH identity file: ' + error.message, 'File Selection Error');
   }
 }
 
@@ -17389,12 +17389,12 @@ async function validateAndSetAsar(filePath: string) {
       console.log('✓ Valid ASAR file set:', filePath);
     } else {
       settings.asarValid = false;
-      alert('Invalid ASAR file: ' + validation.error);
+      await showAlert('Invalid ASAR file: ' + validation.error, 'Invalid File');
     }
   } catch (error: any) {
     console.error('Error validating ASAR:', error);
     settings.asarValid = false;
-    alert('Error validating ASAR: ' + error.message);
+    await showAlert('Error validating ASAR: ' + error.message, 'Validation Error');
   }
 }
 
@@ -17409,7 +17409,7 @@ async function handleUberAsmDrop(e: DragEvent) {
 
 async function browseUberAsmFile() {
   if (!isElectronAvailable()) {
-    alert('File selection requires Electron environment');
+    await showAlert('File selection requires Electron environment', 'Error');
     return;
   }
   
@@ -17428,7 +17428,7 @@ async function browseUberAsmFile() {
     }
   } catch (error: any) {
     console.error('Error browsing UberASM file:', error);
-    alert('Error selecting UberASM file: ' + error.message);
+    await showAlert('Error selecting UberASM file: ' + error.message, 'File Selection Error');
   }
 }
 
@@ -17444,12 +17444,12 @@ async function validateAndSetUberAsm(filePath: string) {
       console.log('✓ Valid UberASM file set:', filePath);
     } else {
       settings.uberAsmValid = false;
-      alert('Invalid UberASM file: ' + validation.error);
+      await showAlert('Invalid UberASM file: ' + validation.error, 'Invalid File');
     }
   } catch (error: any) {
     console.error('Error validating UberASM:', error);
     settings.uberAsmValid = false;
-    alert('Error validating UberASM: ' + error.message);
+    await showAlert('Error validating UberASM: ' + error.message, 'Validation Error');
   }
 }
 
@@ -18402,11 +18402,11 @@ async function saveStageComment() {
       closeStageCommentDialog();
     } else {
       console.error('Error saving comment:', result.error);
-      alert('Error saving comment: ' + result.error);
+      await showAlert('Error saving comment: ' + result.error, 'Save Failed');
     }
   } catch (error) {
     console.error('Error saving comment:', error);
-    alert('Error saving comment');
+    await showAlert('Error saving comment', 'Save Error');
   }
 }
 
@@ -19230,12 +19230,12 @@ async function saveRunToDatabase() {
       const requiredCount = (entry.count || 1) + 2;
       
       if (matchCount === null || matchCount === undefined) {
-        alert(`Cannot stage run:\n\nRandom entry "${entry.name}" has no match count.\nThis entry may have been added before the match counting feature was implemented.\n\nPlease remove and re-add this entry.`);
+        await showAlert(`Cannot stage run:\n\nRandom entry "${entry.name}" has no match count.\nThis entry may have been added before the match counting feature was implemented.\n\nPlease remove and re-add this entry.`, 'Validation Error');
         return;
       }
       
       if (matchCount < requiredCount) {
-        alert(`Cannot stage run:\n\nRandom entry "${entry.name}" has insufficient matching games:\n${matchCount} games match the filters, but need at least ${requiredCount} (count + 2).\n\nPlease reduce the count or remove this entry.`);
+        await showAlert(`Cannot stage run:\n\nRandom entry "${entry.name}" has insufficient matching games:\n${matchCount} games match the filters, but need at least ${requiredCount} (count + 2).\n\nPlease reduce the count or remove this entry.`, 'Validation Error');
         return;
       }
     }
@@ -19254,7 +19254,7 @@ async function saveRunToDatabase() {
     );
     
     if (!result.success) {
-      alert('Failed to create run: ' + result.error);
+      await showAlert('Failed to create run: ' + result.error, 'Create Failed');
       return;
     }
     
@@ -19289,7 +19289,7 @@ async function saveRunToDatabase() {
     );
     
     if (!planResult.success) {
-      alert('Failed to save run plan: ' + planResult.error);
+      await showAlert('Failed to save run plan: ' + planResult.error, 'Save Failed');
       return;
     }
     
@@ -19300,9 +19300,9 @@ async function saveRunToDatabase() {
     // Now stage the run (generate SFC files)
     await stageRunGames(result.runUuid, runName);
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving run:', error);
-    alert('Error saving run: ' + error.message);
+    await showAlert('Error saving run: ' + error.message, 'Save Error');
   }
 }
 
@@ -19319,7 +19319,7 @@ async function stageRunGames(runUuid: string, runName: string) {
     
     if (!expandResult.success) {
       stagingProgressModalOpen.value = false;
-      alert('Failed to expand run plan: ' + expandResult.error);
+      await showAlert('Failed to expand run plan: ' + expandResult.error, 'Expand Failed');
       return;
     }
     
@@ -19352,7 +19352,7 @@ async function stageRunGames(runUuid: string, runName: string) {
     console.log('Staging result:', stagingResult);
     
     if (!stagingResult.success) {
-      alert('Failed to stage run games: ' + stagingResult.error);
+      await showAlert('Failed to stage run games: ' + stagingResult.error, 'Staging Failed');
       return;
     }
     
@@ -19369,10 +19369,10 @@ async function stageRunGames(runUuid: string, runName: string) {
     // Load expanded results to check sfcPath status
     await loadExpandedRunResults();
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error staging run games:', error);
     stagingProgressModalOpen.value = false;
-    alert('Error staging run games: ' + error.message);
+    await showAlert('Error staging run games: ' + error.message, 'Staging Error');
   }
 }
 
@@ -19429,7 +19429,7 @@ function reopenStagingWindow() {
   if (stagingFolderPath.value) {
     stagingSuccessModalOpen.value = true;
   } else {
-    alert('No staging folder found. Please stage the run again.');
+    await showAlert('No staging folder found. Please stage the run again.', 'Staging Required');
   }
 }
 
@@ -19649,13 +19649,13 @@ async function loadRestoreRun() {
   });
   
   if (!preparingRunUuid) {
-    alert('Please select a run in "preparing" status to restore');
+    await showAlert('Please select a run in "preparing" status to restore', 'Selection Required');
     return;
   }
   
   const run = pastRuns.value.find(r => r.run_uuid === preparingRunUuid);
   if (!run) {
-    alert('Run not found');
+    await showAlert('Run not found', 'Error');
     return;
   }
   
@@ -19675,7 +19675,7 @@ async function loadRestoreRun() {
     });
     
     if (!planEntries || planEntries.length === 0) {
-      alert('No plan entries found for this run');
+      await showAlert('No plan entries found for this run', 'No Plan Entries');
       return;
     }
     
@@ -19778,9 +19778,9 @@ async function loadRestoreRun() {
     runModalOpen.value = true;
     
     console.log(`Restored run "${run.run_name}" with ${restoredEntries.length} entries`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error loading/restoring run:', error);
-    alert(`Error loading run: ${error.message || error}`);
+    await showAlert(`Error loading run: ${error.message || error}`, 'Load Error');
   }
 }
 
@@ -20307,7 +20307,7 @@ async function launchSnesFile(file: any) {
           console.log('[SnesContents] ✓ USB2SNES connected successfully');
         } catch (connectError) {
           console.error('[SnesContents] Connection error:', connectError);
-          alert(`Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`);
+          await showAlert(`Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`, 'Connection Failed');
           return;
         }
       } else {
@@ -20324,9 +20324,9 @@ async function launchSnesFile(file: any) {
     await refreshSnesContentsList();
     
     console.log('[SnesContents] Launched:', file.filename);
-  } catch (error) {
+  } catch (error: any) {
     console.error('[SnesContents] Launch error:', error);
-    alert(`Launch failed: ${error}`);
+    await showAlert(`Launch failed: ${error}`, 'Launch Failed');
   }
 }
 
@@ -20371,15 +20371,15 @@ function findGameInList(file: any) {
   }
 }
 
-function uploadToUsb2Snes() {
+async function uploadToUsb2Snes() {
   // TODO: Implement USB2SNES upload
-  alert('USB2SNES upload - to be implemented');
+  await showAlert('USB2SNES upload - to be implemented', 'Not Implemented');
   // This will be implemented in a later phase
 }
 
-function manuallyUploadedConfirm() {
+async function manuallyUploadedConfirm() {
   // TODO: Implement USB2SNES launch after manual upload
-  alert('USB2SNES launch - to be implemented');
+  await showAlert('USB2SNES launch - to be implemented', 'Not Implemented');
   // This will be implemented in a later phase
 }
 
@@ -20422,7 +20422,7 @@ async function startRun() {
       console.log('[startRun] Expanded results:', expandedResults);
       
       if (!expandedResults || expandedResults.length === 0) {
-        alert('Failed to load run results - no challenges found');
+        await showAlert('Failed to load run results - no challenges found', 'No Challenges');
         return;
       }
       
@@ -20714,11 +20714,11 @@ async function startRun() {
         }
       }
     } else {
-      alert('Failed to start run: ' + result.error);
+      await showAlert('Failed to start run: ' + result.error, 'Start Failed');
     }
   } catch (error) {
     console.error('Error starting run:', error);
-    alert('Error starting run');
+    await showAlert('Error starting run', 'Start Error');
   }
 }
 
@@ -20738,7 +20738,7 @@ async function launchCurrentChallenge() {
         try {
           connectOptions = buildUsb2snesConnectOptions();
         } catch (configError: any) {
-          alert(`Launch failed: ${configError.message}`);
+          await showAlert(`Launch failed: ${configError.message}`, 'Launch Failed');
           return;
         }
 
@@ -20755,7 +20755,7 @@ async function launchCurrentChallenge() {
           console.log('[launchCurrentChallenge] ✓ USB2SNES connected successfully');
         } catch (connectError) {
           console.error('[launchCurrentChallenge] Connection error:', connectError);
-          alert(`Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`);
+          await showAlert(`Launch failed: Could not connect to USB2SNES - ${formatErrorMessage(connectError)}`, 'Connection Failed');
           return;
         }
       } else {
@@ -20771,9 +20771,9 @@ async function launchCurrentChallenge() {
     await (window as any).electronAPI.usb2snesBoot(fullPath);
     
     console.log(`✓ Launched challenge ${currentChallengeIndex.value + 1}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error launching challenge:', error);
-    alert(`Error launching game: ${error}`);
+    await showAlert(`Error launching game: ${error}`, 'Launch Error');
   }
 }
 
@@ -20877,16 +20877,16 @@ async function unpauseRun() {
         console.log('Run unpaused, total pause time:', runPauseSeconds.value);
       } else {
         console.error('Unpause failed:', result);
-        alert('Failed to unpause run: ' + (result?.error || 'Unknown error'));
+        await showAlert('Failed to unpause run: ' + (result?.error || 'Unknown error'), 'Unpause Failed');
       }
     } else {
       // If not in Electron, just update state
       isRunPaused.value = false;
       runPauseStartTime.value = null;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error unpausing run:', error);
-    alert('Error unpausing run: ' + error);
+    await showAlert('Error unpausing run: ' + error, 'Unpause Error');
   }
 }
 
@@ -21500,7 +21500,7 @@ async function completeRun() {
       
       if (!result.success) {
         console.error('Failed to complete run in database:', result.error);
-        alert('Error completing run: ' + result.error);
+        await showAlert('Error completing run: ' + result.error, 'Complete Failed');
         return;
       }
     }
@@ -21683,9 +21683,9 @@ async function completeRun() {
       selectedPastRunUuid.value = completedRunUuid;
       await selectPastRun(completedRunUuid);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error completing run:', error);
-    alert('Error completing run: ' + error.message);
+    await showAlert('Error completing run: ' + error.message, 'Complete Error');
   }
 }
 
@@ -21863,9 +21863,9 @@ async function openPastRunsModal() {
     const runs = await (window as any).electronAPI.getAllRuns();
     // Include all runs except active ones (preparing, completed, cancelled)
     pastRuns.value = runs.filter((run: any) => run.status !== 'active');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error loading past runs:', error);
-    alert('Error loading past runs: ' + (error as any).message);
+    await showAlert('Error loading past runs: ' + error.message, 'Load Error');
   }
 }
 
@@ -21995,9 +21995,9 @@ async function deleteCheckedPastRuns() {
       selectedPastRunResults.value = [];
       selectedPastRunPlanEntries.value = [];
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting runs:', error);
-    alert('Error deleting runs: ' + (error as any).message);
+    await showAlert('Error deleting runs: ' + error.message, 'Delete Error');
   }
 }
 
@@ -26139,13 +26139,13 @@ async function publishRatingsToNostr() {
     });
     
     if (result.success) {
-      alert('Ratings published successfully!');
+      showToastNotification('Ratings published successfully!', 'success', 3000);
     } else {
-      alert(`Failed to publish ratings: ${result.error}`);
+      await showAlert(`Failed to publish ratings: ${result.error}`, 'Publish Failed');
     }
   } catch (error: any) {
     console.error('Error publishing ratings:', error);
-    alert(`Error publishing ratings: ${error.message || error}`);
+    await showAlert(`Error publishing ratings: ${error.message || error}`, 'Publish Error');
   }
 }
 
@@ -26253,33 +26253,34 @@ function formatTagsForTooltip(tags: string[]): string {
 }
 
 // Version-specific rating
-function setVersionSpecificRating() {
+async function setVersionSpecificRating() {
   if (isVersionSpecific.value) {
-    alert('This version already has version-specific ratings.');
+    await showAlert('This version already has version-specific ratings.', 'Already Set');
     return;
   }
   
-  const confirmed = confirm(
+  const confirmed = await showConfirm(
     `Set ratings specifically for version ${selectedVersion.value}?\n\n` +
     'This will create a separate rating for this version only, ' +
-    'overriding the game-wide rating when viewing this version.'
+    'overriding the game-wide rating when viewing this version.',
+    'Set Version-Specific Rating'
   );
   
   if (confirmed) {
     // In real implementation, this would create a version-specific annotation
-    alert(`Version-specific rating enabled for version ${selectedVersion.value}`);
+    showToastNotification(`Version-specific rating enabled for version ${selectedVersion.value}`, 'success', 3000);
   }
 }
 
 // Export/Import Run
 async function exportRunToFile() {
   if (!currentRunUuid.value) {
-    alert('No run to export. Please save the run first.');
+    await showAlert('No run to export. Please save the run first.', 'No Run');
     return;
   }
   
   if (!isElectronAvailable()) {
-    alert('Export requires Electron environment');
+    await showAlert('Export requires Electron environment', 'Error');
     return;
   }
   
@@ -26297,18 +26298,19 @@ async function exportRunToFile() {
       URL.revokeObjectURL(url);
       
       console.log('Run exported successfully');
+      showToastNotification('Run exported successfully', 'success', 3000);
     } else {
-      alert('Failed to export run: ' + result.error);
+      await showAlert('Failed to export run: ' + result.error, 'Export Failed');
     }
   } catch (error) {
     console.error('Error exporting run:', error);
-    alert('Error exporting run');
+    await showAlert('Error exporting run', 'Export Error');
   }
 }
 
 async function importRunFromFile() {
   if (!isElectronAvailable()) {
-    alert('Import requires Electron environment');
+    await showAlert('Import requires Electron environment', 'Error');
     return;
   }
   
@@ -26331,16 +26333,16 @@ async function importRunFromFile() {
         if (result.warnings && result.warnings.length > 0) {
           message += `\n\nWarnings:\n${result.warnings.join('\n')}`;
         }
-        alert(message);
+        await showAlert(message, 'Import Successful');
         
         // Close modal and reload (could load the imported run)
         closeRunModal();
       } else {
-        alert('Failed to import run: ' + result.error);
+        await showAlert('Failed to import run: ' + result.error, 'Import Failed');
       }
     } catch (error) {
       console.error('Error importing run:', error);
-      alert('Error importing run: Invalid file or format');
+      await showAlert('Error importing run: Invalid file or format', 'Import Error');
     }
   };
   
@@ -26447,10 +26449,11 @@ async function resumeRunFromStartup() {
     if (!expandedResults || expandedResults.length === 0) {
       // The run is marked as active but has no results - this is a corrupted run
       // Offer to cancel it
-      if (confirm('This run appears to be corrupted (no results found). Would you like to cancel it and start fresh?')) {
+      const confirmed = await showConfirm('This run appears to be corrupted (no results found). Would you like to cancel it and start fresh?', 'Corrupted Run');
+      if (confirmed) {
         try {
           await (window as any).electronAPI.cancelRun({ runUuid: currentRunUuid.value });
-          alert('Run cancelled. You can now create a new run.');
+          await showAlert('Run cancelled. You can now create a new run.', 'Run Cancelled');
           resumeRunModalOpen.value = false;
           return;
         } catch (cancelError) {
@@ -26762,9 +26765,9 @@ async function resumeRunFromStartup() {
     scrollToActiveChallenge();
     
     console.log('Run modal opened, resume complete');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error resuming run:', error);
-    alert(`Error resuming run: ${error.message}`);
+    await showAlert(`Error resuming run: ${error.message}`, 'Resume Error');
     resumeRunModalOpen.value = false;
   }
 }

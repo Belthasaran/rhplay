@@ -732,21 +732,72 @@ const IPFS_GATEWAYS = [
 ];
 
 /**
+ * Decode base64-encoded URL
+ * @param {string} b64 - Base64-encoded string
+ * @returns {string|null} - Decoded URL or null if invalid
+ */
+function decodeBaddr(b64) {
+  try {
+    const decoded = Buffer.from(b64, 'base64').toString('utf8');
+    // Validate it looks like a URL
+    if (decoded.startsWith('http://') || decoded.startsWith('https://')) {
+      return decoded.trim();
+    }
+    console.warn(`[baddr] Decoded string does not appear to be a URL: ${decoded.substring(0, 50)}`);
+    return null;
+  } catch (err) {
+    console.warn(`[baddr] Failed to decode base64: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Get URLs from spec (from either 'url' or 'baddr' fields)
+ * @param {Object} spec - File specification
+ * @returns {Array<string>} - Array of decoded URLs
+ */
+function getUrlsFromSpec(spec) {
+  const urls = [];
+  
+  // Handle 'url' field (plain URLs)
+  if (spec.url) {
+    const urlArray = Array.isArray(spec.url) ? spec.url : [spec.url];
+    urls.push(...urlArray);
+  }
+  
+  // Handle 'baddr' field (base64-encoded URLs)
+  if (spec.baddr) {
+    const baddrArray = Array.isArray(spec.baddr) ? spec.baddr : [spec.baddr];
+    for (const b64 of baddrArray) {
+      const decoded = decodeBaddr(b64);
+      if (decoded) {
+        urls.push(decoded);
+      }
+    }
+  }
+  
+  return urls;
+}
+
+/**
  * Parse priority array and expand shorthand tokens
  * @param {Array<string>|undefined} priority - Priority array from manifest
  * @param {Object} spec - File specification
  * @returns {Array<Object>} - Array of download source objects
  */
 function parsePriority(priority, spec) {
+  // Get all URLs (from both 'url' and 'baddr' fields)
+  const urlArray = getUrlsFromSpec(spec);
+  const hasUrls = urlArray.length > 0;
+  
   if (!priority) {
     // Default priority based on available sources
     const sources = [];
     if (spec.ipfs_cidv1) {
       sources.push({ type: 'ipfs', cid: spec.ipfs_cidv1 });
     }
-    if (spec.url) {
-      const urls = Array.isArray(spec.url) ? spec.url : [spec.url];
-      urls.forEach((url, idx) => {
+    if (hasUrls) {
+      urlArray.forEach((url, idx) => {
         sources.push({ type: 'url', url, index: idx });
       });
     }
@@ -757,20 +808,20 @@ function parsePriority(priority, spec) {
   }
 
   const sources = [];
-  const urlArray = Array.isArray(spec.url) ? spec.url : spec.url ? [spec.url] : [];
 
   for (const token of priority) {
     if (token === 'ipfs' && spec.ipfs_cidv1) {
       sources.push({ type: 'ipfs', cid: spec.ipfs_cidv1 });
     } else if (token === 'ardrive' && (spec.data_txid || spec.ardrive_file_path)) {
       sources.push({ type: 'ardrive', txid: spec.data_txid, path: spec.ardrive_file_path });
-    } else if (token === 'url') {
-      // Expand to all URLs
+    } else if (token === 'url' || token === 'baddr') {
+      // Expand to all URLs (from both url and baddr fields)
       urlArray.forEach((url, idx) => {
         sources.push({ type: 'url', url, index: idx });
       });
-    } else if (token.startsWith('url.')) {
-      const idx = parseInt(token.substring(4), 10);
+    } else if (token.startsWith('url.') || token.startsWith('baddr.')) {
+      // Support both url.0 and baddr.0 syntax
+      const idx = parseInt(token.substring(token.indexOf('.') + 1), 10);
       if (!isNaN(idx) && idx >= 0 && idx < urlArray.length) {
         sources.push({ type: 'url', url: urlArray[idx], index: idx });
       }
@@ -819,7 +870,9 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir) {
   }
 
   // Parse priority and attempt downloads in order
-  const priority = spec.priority || (spec.url ? ['ipfs', 'url', 'ardrive'] : ['ipfs', 'ardrive']);
+  // Check if URLs are available (from either 'url' or 'baddr' fields)
+  const hasUrls = getUrlsFromSpec(spec).length > 0;
+  const priority = spec.priority || (hasUrls ? ['ipfs', 'url', 'ardrive'] : ['ipfs', 'ardrive']);
   const sources = parsePriority(priority, spec);
 
   let lastError = null;

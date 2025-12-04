@@ -1,3 +1,9 @@
+- P20251204
+
+- **TODO** - Delete of patch presets and patches are unavailable.  Implement appropriate delete logic that only makes sure the patch/patch reset is not used by other objects before allowing delete.
+
+- **TODO** - Add fitler for patchcodes, patch names and description in +Patch dialog
+
 - P20251203
 
 - **USB Polling Auto-Completion System**: Implemented comprehensive automatic challenge completion detection via USB2SNES memory polling. The system polls SNES memory addresses every second to detect goal events (level completion, boss defeat, keyhole entry, switch activation, etc.) and automatically advances to the next challenge. Features include: Condition A stability checks (10-second threshold), automatic game file verification, auto-reconnect on USB2SNES disconnection, visual status feedback (color-coded button: blue=good, red=slow, orange=wrong file), automatic challenge advancement and game launching, pause/unpause integration, and full lifecycle management. The polling system only runs when a challenge run is active and not paused, preventing unnecessary USB2SNES requests. Documented in `devdocs/USB_POLLING_AUTO_COMPLETE_IMPLEMENTATION_PLAN.md`.

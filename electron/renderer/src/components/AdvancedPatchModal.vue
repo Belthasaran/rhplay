@@ -537,12 +537,48 @@
       @close="showGameStagesDialog = false"
       @select="handleStageSelected"
     />
+
+    <!-- Custom Modal Dialogs -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogTitle"
+      :message="alertDialogMessage"
+      @confirm="handleAlertConfirm"
+      @cancel="handleAlertCancel"
+    />
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      :confirm-text="confirmDialogConfirmText"
+      :cancel-text="confirmDialogCancelText"
+      @confirm="handleConfirmConfirm"
+      @cancel="handleConfirmCancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import GameStagesDialog from './GameStagesDialog.vue';
+import AlertDialog from './AlertDialog.vue';
+import ConfirmDialog from './ConfirmDialog.vue';
+import {
+  showAlert,
+  showConfirm,
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+  confirmDialogVisible,
+  confirmDialogTitle,
+  confirmDialogMessage,
+  confirmDialogConfirmText,
+  confirmDialogCancelText,
+  handleConfirmConfirm,
+  handleConfirmCancel,
+} from '@/utils/dialogs';
 
 interface ParameterMapping {
   input: string; // Input parameter name (glevelnum, local1, rom_file, etc.)
@@ -1002,14 +1038,15 @@ function editPatch(patch: ExtraPatch) {
 }
 
 async function deletePatch(patch: ExtraPatch) {
-  if (!confirm(`Are you sure you want to delete patch "${patch.name}" (${patch.patch_code})?`)) {
+  const confirmed = await showConfirm(`Are you sure you want to delete patch "${patch.name}" (${patch.patch_code})?`, 'Delete Patch');
+  if (!confirmed) {
     return;
   }
   
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.deleteExtraPatch) {
-      alert('Delete functionality not available');
+      await showAlert('Delete functionality not available', 'Error');
       return;
     }
     
@@ -1026,10 +1063,10 @@ async function deletePatch(patch: ExtraPatch) {
         await loadAvailablePatches();
       }
     } else {
-      alert(`Failed to delete patch: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to delete patch: ${result?.error || 'Unknown error'}`, 'Delete Failed');
     }
   } catch (error: any) {
-    alert(`Error deleting patch: ${error?.message || String(error)}`);
+    await showAlert(`Error deleting patch: ${error?.message || String(error)}`, 'Error');
   }
 }
 
@@ -1068,7 +1105,7 @@ async function handleFileSelect(event: Event) {
     patchForm.value.fileData = arrayBuffer;
     patchForm.value.fileName = file.name;
   } catch (error: any) {
-    alert(`Error reading file: ${error?.message || String(error)}`);
+    await showAlert(`Error reading file: ${error?.message || String(error)}`, 'File Error');
   }
 }
 
@@ -1238,13 +1275,13 @@ function validateGameGenieCodes() {
 
 async function savePatch() {
   if (!canSavePatch.value) {
-    alert('Please fill in required fields (Patch Code, Name, Patch Type)');
+    await showAlert('Please fill in required fields (Patch Code, Name, Patch Type)', 'Validation Error');
     return;
   }
   
   // Validate parameter mappings format
   if (patchForm.value.parameter_mappings_json && !parameterMappingsValid.value) {
-    alert(`Invalid Parameter Mappings: ${parameterMappingsError.value}`);
+    await showAlert(`Invalid Parameter Mappings: ${parameterMappingsError.value}`, 'Validation Error');
     return;
   }
   
@@ -1252,11 +1289,11 @@ async function savePatch() {
   if (patchForm.value.patch_type === 'gamegenie') {
     validateGameGenieCodes();
     if (!gameGenieCodesValid.value) {
-      alert(`Invalid GameGenie Codes: ${gameGenieCodesError.value}`);
+      await showAlert(`Invalid GameGenie Codes: ${gameGenieCodesError.value}`, 'Validation Error');
       return;
     }
     if (!patchForm.value.template_text?.trim()) {
-      alert('Please provide GameGenie codes');
+      await showAlert('Please provide GameGenie codes', 'Validation Error');
       return;
     }
   }
@@ -1272,7 +1309,7 @@ async function savePatch() {
       try {
         parameterMappings = JSON.parse(patchForm.value.parameter_mappings_json);
       } catch (e) {
-        alert('Invalid JSON in Parameter Mappings');
+        await showAlert('Invalid JSON in Parameter Mappings', 'Validation Error');
         return;
       }
     }
@@ -1281,7 +1318,7 @@ async function savePatch() {
       try {
         restrictions = JSON.parse(patchForm.value.restrictions_json);
       } catch (e) {
-        alert('Invalid JSON in Restrictions');
+        await showAlert('Invalid JSON in Restrictions', 'Validation Error');
         return;
       }
     }
@@ -1290,7 +1327,7 @@ async function savePatch() {
       try {
         conflicts = JSON.parse(patchForm.value.conflicts_json);
       } catch (e) {
-        alert('Invalid JSON in Conflicts');
+        await showAlert('Invalid JSON in Conflicts', 'Validation Error');
         return;
       }
     }
@@ -1299,32 +1336,32 @@ async function savePatch() {
       try {
         dependencies = JSON.parse(patchForm.value.dependencies_json);
       } catch (e) {
-        alert('Invalid JSON in Dependencies');
+        await showAlert('Invalid JSON in Dependencies', 'Validation Error');
         return;
       }
     }
     
     // Validate file data for file-based patches (only required for new patches)
     if ((patchForm.value.patch_type === 'ips' || patchForm.value.patch_type === 'bps' || patchForm.value.patch_type === 'uberasmtree') && !editingPatch.value && !patchForm.value.fileData) {
-      alert('Please select a patch file');
+      await showAlert('Please select a patch file', 'Validation Error');
       return;
     }
     
     // Validate template text for ASAR
     if (patchForm.value.patch_type === 'asar' && !patchForm.value.template_text) {
-      alert('Please provide ASAR template text');
+      await showAlert('Please provide ASAR template text', 'Validation Error');
       return;
     }
     
     // Validate template text for GameGenie
     if (patchForm.value.patch_type === 'gamegenie' && !patchForm.value.template_text) {
-      alert('Please provide GameGenie codes');
+      await showAlert('Please provide GameGenie codes', 'Validation Error');
       return;
     }
     
     const api = (window as any)?.electronAPI;
     if (!api?.saveExtraPatch) {
-      alert('Save functionality not available');
+      await showAlert('Save functionality not available', 'Error');
       return;
     }
     
@@ -1353,10 +1390,10 @@ async function savePatch() {
         await loadAvailablePatches();
       }
     } else {
-      alert(`Failed to save patch: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to save patch: ${result?.error || 'Unknown error'}`, 'Save Failed');
     }
   } catch (error: any) {
-    alert(`Error saving patch: ${error?.message || String(error)}`);
+    await showAlert(`Error saving patch: ${error?.message || String(error)}`, 'Error');
   }
 }
 
@@ -1390,7 +1427,7 @@ async function loadPresets() {
   }
 }
 
-function loadPreset(preset: Preset) {
+async function loadPreset(preset: Preset) {
   try {
     selectedPatches.value = JSON.parse(preset.selected_patches || '[]');
     globalParams.value.gonoffv = JSON.parse(preset.global_onoffv || '[]');
@@ -1399,7 +1436,7 @@ function loadPreset(preset: Preset) {
     presetsDropdownOpen.value = false;
     saveState(); // Save the loaded preset state
   } catch (error) {
-    alert(`Error loading preset: ${error}`);
+    await showAlert(`Error loading preset: ${error}`, 'Error');
   }
 }
 
@@ -1531,14 +1568,14 @@ function handleStageSelected(stage: any) {
 
 async function savePreset() {
   if (!newPresetName.value.trim()) {
-    alert('Please enter a preset name');
+    await showAlert('Please enter a preset name', 'Validation Error');
     return;
   }
   
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.savePreset) {
-      alert('Save preset functionality not available');
+      await showAlert('Save preset functionality not available', 'Error');
       return;
     }
     
@@ -1556,22 +1593,23 @@ async function savePreset() {
       showSavePresetDialog.value = false;
       await loadPresets();
     } else {
-      alert(`Failed to save preset: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to save preset: ${result?.error || 'Unknown error'}`, 'Save Failed');
     }
   } catch (error: any) {
-    alert(`Error saving preset: ${error?.message || String(error)}`);
+    await showAlert(`Error saving preset: ${error?.message || String(error)}`, 'Error');
   }
 }
 
 async function deletePreset(preset: Preset) {
-  if (!confirm(`Are you sure you want to delete preset "${preset.preset_name}"?`)) {
+  const confirmed = await showConfirm(`Are you sure you want to delete preset "${preset.preset_name}"?`, 'Delete Preset');
+  if (!confirmed) {
     return;
   }
   
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.deletePreset) {
-      alert('Delete preset functionality not available');
+      await showAlert('Delete preset functionality not available', 'Error');
       return;
     }
     
@@ -1580,10 +1618,10 @@ async function deletePreset(preset: Preset) {
     if (result?.success) {
       await loadPresets();
     } else {
-      alert(`Failed to delete preset: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to delete preset: ${result?.error || 'Unknown error'}`, 'Delete Failed');
     }
   } catch (error: any) {
-    alert(`Error deleting preset: ${error?.message || String(error)}`);
+    await showAlert(`Error deleting preset: ${error?.message || String(error)}`, 'Error');
   }
 }
 </script>

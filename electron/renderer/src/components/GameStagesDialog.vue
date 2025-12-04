@@ -804,6 +804,26 @@
   <Teleport to="body">
     <ToastNotification ref="toastNotificationRef" />
   </Teleport>
+
+  <!-- Custom Modal Dialogs -->
+  <Teleport to="body">
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogTitle"
+      :message="alertDialogMessage"
+      @confirm="handleAlertConfirm"
+      @cancel="handleAlertCancel"
+    />
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      :confirm-text="confirmDialogConfirmText"
+      :cancel-text="confirmDialogCancelText"
+      @confirm="handleConfirmConfirm"
+      @cancel="handleConfirmCancel"
+    />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -811,6 +831,24 @@ import { ref, computed, watch, onMounted, nextTick, Teleport } from 'vue';
 import Papa from 'papaparse';
 import DetectedLevelsDialog from './DetectedLevelsDialog.vue';
 import ToastNotification from './ToastNotification.vue';
+import AlertDialog from './AlertDialog.vue';
+import ConfirmDialog from './ConfirmDialog.vue';
+import {
+  showAlert,
+  showConfirm,
+  alertDialogVisible,
+  alertDialogTitle,
+  alertDialogMessage,
+  handleAlertConfirm,
+  handleAlertCancel,
+  confirmDialogVisible,
+  confirmDialogTitle,
+  confirmDialogMessage,
+  confirmDialogConfirmText,
+  confirmDialogCancelText,
+  handleConfirmConfirm,
+  handleConfirmCancel,
+} from '@/utils/dialogs';
 
 interface GameStage {
   stage_uuid?: string;
@@ -1504,7 +1542,7 @@ function addNewStage() {
 
 async function testLevel(stage: GameStage) {
   if (!stage.levelnumber) {
-    alert('Level number is required to test this level');
+    await showAlert('Level number is required to test this level', 'Test Level');
     return;
   }
   
@@ -1804,7 +1842,7 @@ async function deleteStage(stage: GameStage) {
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.deleteGameStage) {
-      alert('Delete functionality not available');
+      await showAlert('Delete functionality not available', 'Error');
       return;
     }
     
@@ -1813,10 +1851,10 @@ async function deleteStage(stage: GameStage) {
     if (result?.success) {
       await loadStages();
     } else {
-      alert(`Failed to delete stage: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to delete stage: ${result?.error || 'Unknown error'}`, 'Delete Failed');
     }
   } catch (error: any) {
-    alert(`Error deleting stage: ${error?.message || String(error)}`);
+    await showAlert(`Error deleting stage: ${error?.message || String(error)}`, 'Error');
   }
 }
 
@@ -1832,7 +1870,7 @@ async function saveAll() {
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.saveGameStage) {
-      alert('Save functionality not available');
+      await showAlert('Save functionality not available', 'Error');
       return;
     }
     
@@ -1881,7 +1919,7 @@ async function saveAll() {
     }
     
     if (errors.length > 0) {
-      alert(`Some stages failed to save:\n${errors.join('\n')}`);
+      await showAlert(`Some stages failed to save:\n${errors.join('\n')}`, 'Save Warning');
       // Restore scroll after alert is dismissed
       await nextTick();
       setTimeout(() => {
@@ -1912,7 +1950,7 @@ async function saveAll() {
       }, 1000);
     }
   } catch (error: any) {
-    alert(`Error saving stages: ${error?.message || String(error)}`);
+    await showAlert(`Error saving stages: ${error?.message || String(error)}`, 'Error');
   } finally {
     saving.value = false;
   }
@@ -1979,14 +2017,14 @@ const CSV_COLUMNS = [
 
 async function exportStagesToCSV() {
   if (!props.gameId || stages.value.length === 0) {
-    alert('No stages to export');
+    await showAlert('No stages to export', 'Export Error');
     return;
   }
   
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.chooseSavePath) {
-      alert('File save functionality not available');
+      await showAlert('File save functionality not available', 'Error');
       return;
     }
     
@@ -2137,7 +2175,7 @@ async function exportStagesToCSV() {
     
     // Write file directly (chooseSavePath already showed the dialog)
     if (!api.writeFile) {
-      alert('File write functionality not available');
+      await showAlert('File write functionality not available', 'Error');
       return;
     }
     
@@ -2147,7 +2185,7 @@ async function exportStagesToCSV() {
     });
     
     if (!writeResult?.success) {
-      alert(`Error writing file: ${writeResult?.error || 'Unknown error'}`);
+      await showAlert(`Error writing file: ${writeResult?.error || 'Unknown error'}`, 'File Error');
       return;
     }
     
@@ -2162,10 +2200,10 @@ async function exportStagesToCSV() {
       );
     } else {
       // Fallback to alert if toast not available
-      alert(`Successfully exported ${stages.value.length} stage(s) to CSV`);
+      await showAlert(`Successfully exported ${stages.value.length} stage(s) to CSV`, 'Export Success');
     }
   } catch (error: any) {
-    alert(`Error exporting CSV: ${error?.message || String(error)}`);
+    await showAlert(`Error exporting CSV: ${error?.message || String(error)}`, 'Error');
   }
 }
 
@@ -2185,14 +2223,14 @@ const someCSVStagesSelected = computed(() => {
 
 async function importStagesFromCSV() {
   if (!props.gameId) {
-    alert('No game selected');
+    await showAlert('No game selected', 'Import Error');
     return;
   }
   
   try {
     const api = (window as any)?.electronAPI;
     if (!api?.selectFile || !api?.readFile) {
-      alert('File selection functionality not available');
+      await showAlert('File selection functionality not available', 'Error');
       return;
     }
     
@@ -2216,7 +2254,7 @@ async function importStagesFromCSV() {
     const readResult = await api.readFile({ filePath: selectResult.filePath });
     
     if (!readResult?.success) {
-      alert(`Error reading CSV file: ${readResult?.error || 'Unknown error'}`);
+      await showAlert(`Error reading CSV file: ${readResult?.error || 'Unknown error'}`, 'File Error');
       csvImportLoading.value = false;
       return;
     }
@@ -2308,7 +2346,7 @@ async function importStagesFromCSV() {
     csvImportLoading.value = false;
   } catch (error: any) {
     console.error('Error importing CSV:', error);
-    alert(`Error importing CSV: ${error?.message || String(error)}`);
+    await showAlert(`Error importing CSV: ${error?.message || String(error)}`, 'Error');
     csvImportLoading.value = false;
   }
 }
@@ -2363,9 +2401,9 @@ function toggleCSVStageSelection(stage: any) {
   }
 }
 
-function addSelectedCSVStages() {
+async function addSelectedCSVStages() {
   if (selectedCSVStages.value.size === 0) {
-    alert('No stages selected');
+    await showAlert('No stages selected', 'Validation Error');
     return;
   }
   
@@ -2535,7 +2573,7 @@ function deselectAllStagesForPlaylevelPatch() {
 async function applyPlaylevelPatch() {
   const patchCode = newPlaylevelPatchCode.value.trim();
   if (!patchCode) {
-    alert('Please enter a patch code');
+    await showAlert('Please enter a patch code', 'Validation Error');
     return;
   }
   
@@ -2545,7 +2583,7 @@ async function applyPlaylevelPatch() {
     // Allow '2lvno' as default even if not marked as playlevel
     const exists = availablePatches.value.some(p => p.patch_code === patchCode);
     if (!exists) {
-      alert(`Patch code "${patchCode}" not found. Please enter a valid patch code.`);
+      await showAlert(`Patch code "${patchCode}" not found. Please enter a valid patch code.`, 'Validation Error');
       return;
     }
   }
@@ -2599,7 +2637,7 @@ async function applyPlaylevelPatch() {
     }
   } catch (error) {
     console.error('Error saving playlevel patch codes:', error);
-    alert('Error saving playlevel patch codes. Some changes may not have been saved.');
+    await showAlert('Error saving playlevel patch codes. Some changes may not have been saved.', 'Save Error');
   }
   
   closeSetPlaylevelPatchDialog();

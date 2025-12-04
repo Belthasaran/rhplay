@@ -2231,5 +2231,402 @@ For each dialog replacement, verify:
 
 All instances of `alert()` and `confirm()` have been successfully replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`). The codebase now uses consistent, Electron-friendly dialogs throughout the application.
 
-**Final Count**: 574 total replacements across 7 batches
+**Final Count**: 574 total replacements across 7 batches in `App.vue`, plus 50 additional replacements in component files (Batch 8)
+
+---
+
+## Batch 8: Component Files (GameStagesDialog.vue and AdvancedPatchModal.vue)
+
+**Date**: Component dialog replacement  
+**Files Modified**: 
+- `electron/renderer/src/components/GameStagesDialog.vue` (24 instances)
+- `electron/renderer/src/components/AdvancedPatchModal.vue` (20 instances)
+
+**Total**: 44 instances replaced
+
+### GameStagesDialog.vue Replacements
+
+#### 8.1 Test Level - No Level Number
+- **Location**: `testLevel()` function (line ~1507)
+- **Original**: `alert('Level number is required to test this level')`
+- **Replaced with**: `await showAlert('Level number is required to test this level', 'Test Level')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode, DEVADMIN required)
+  - Try to test a stage that has no level number
+  - Verify alert appears with title "Test Level"
+
+#### 8.2 Delete Stage - Functionality Not Available
+- **Location**: `deleteStage()` function (line ~1807)
+- **Original**: `alert('Delete functionality not available')`
+- **Replaced with**: `await showAlert('Delete functionality not available', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode)
+  - Attempt to delete a stage when API is unavailable
+  - Verify error alert appears
+
+#### 8.3 Delete Stage - Failed
+- **Location**: `deleteStage()` function (line ~1816)
+- **Original**: `alert('Failed to delete stage: ...')`
+- **Replaced with**: `await showAlert('Failed to delete stage: ...', 'Delete Failed')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode)
+  - Delete a stage and simulate a failure
+  - Verify error alert appears with title "Delete Failed"
+
+#### 8.4 Delete Stage - Error
+- **Location**: `deleteStage()` function (line ~1819)
+- **Original**: `alert('Error deleting stage: ...')`
+- **Replaced with**: `await showAlert('Error deleting stage: ...', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode)
+  - Delete a stage and trigger an exception
+  - Verify error alert appears
+
+#### 8.5 Save All - Functionality Not Available
+- **Location**: `saveAll()` function (line ~1835)
+- **Original**: `alert('Save functionality not available')`
+- **Replaced with**: `await showAlert('Save functionality not available', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode)
+  - Make changes and attempt to save when API is unavailable
+  - Verify error alert appears
+
+#### 8.6 Save All - Some Failed
+- **Location**: `saveAll()` function (line ~1922)
+- **Original**: `alert('Some stages failed to save:\n...')`
+- **Replaced with**: `await showAlert('Some stages failed to save:\n...', 'Save Warning')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode)
+  - Modify multiple stages
+  - Save and simulate partial failures
+  - Verify warning alert appears with title "Save Warning"
+
+#### 8.7 Save All - Error
+- **Location**: `saveAll()` function (line ~1953)
+- **Original**: `alert('Error saving stages: ...')`
+- **Replaced with**: `await showAlert('Error saving stages: ...', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog (Edit mode)
+  - Make changes and save, trigger an exception
+  - Verify error alert appears
+
+#### 8.8 Export CSV - No Stages
+- **Location**: `exportStagesToCSV()` function (line ~1982)
+- **Original**: `alert('No stages to export')`
+- **Replaced with**: `await showAlert('No stages to export', 'Export Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Export" when no stages exist
+  - Verify error alert appears with title "Export Error"
+
+#### 8.9 Export CSV - File Save Not Available
+- **Location**: `exportStagesToCSV()` function (line ~1989)
+- **Original**: `alert('File save functionality not available')`
+- **Replaced with**: `await showAlert('File save functionality not available', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Export" when file API is unavailable
+  - Verify error alert appears
+
+#### 8.10 Export CSV - File Write Not Available
+- **Location**: `exportStagesToCSV()` function (line ~2178)
+- **Original**: `alert('File write functionality not available')`
+- **Replaced with**: `await showAlert('File write functionality not available', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Export" and select a file when write API is unavailable
+  - Verify error alert appears
+
+#### 8.11 Export CSV - Write Error
+- **Location**: `exportStagesToCSV()` function (line ~2188)
+- **Original**: `alert('Error writing file: ...')`
+- **Replaced with**: `await showAlert('Error writing file: ...', 'File Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Export" and select a file
+  - Simulate write failure
+  - Verify error alert appears with title "File Error"
+
+#### 8.12 Export CSV - Success (Fallback)
+- **Location**: `exportStagesToCSV()` function (line ~2203)
+- **Original**: `alert('Successfully exported X stage(s) to CSV')`
+- **Replaced with**: `await showAlert('Successfully exported X stage(s) to CSV', 'Export Success')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Export" and successfully export
+  - If toast notification is unavailable, verify success alert appears
+
+#### 8.13 Export CSV - Error
+- **Location**: `exportStagesToCSV()` function (line ~2206)
+- **Original**: `alert('Error exporting CSV: ...')`
+- **Replaced with**: `await showAlert('Error exporting CSV: ...', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Export" and trigger an exception
+  - Verify error alert appears
+
+#### 8.14 Import CSV - No Game Selected
+- **Location**: `importStagesFromCSV()` function (line ~2226)
+- **Original**: `alert('No game selected')`
+- **Replaced with**: `await showAlert('No game selected', 'Import Error')`
+- **How to test**: 
+  - Open Game Stages Dialog without a game selected
+  - Click "CSV: Import"
+  - Verify error alert appears with title "Import Error"
+
+#### 8.15 Import CSV - File Selection Not Available
+- **Location**: `importStagesFromCSV()` function (line ~2233)
+- **Original**: `alert('File selection functionality not available')`
+- **Replaced with**: `await showAlert('File selection functionality not available', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Import" when file API is unavailable
+  - Verify error alert appears
+
+#### 8.16 Import CSV - Read Error
+- **Location**: `importStagesFromCSV()` function (line ~2257)
+- **Original**: `alert('Error reading CSV file: ...')`
+- **Replaced with**: `await showAlert('Error reading CSV file: ...', 'File Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Import" and select a file
+  - Simulate read failure
+  - Verify error alert appears with title "File Error"
+
+#### 8.17 Import CSV - Error
+- **Location**: `importStagesFromCSV()` function (line ~2349)
+- **Original**: `alert('Error importing CSV: ...')`
+- **Replaced with**: `await showAlert('Error importing CSV: ...', 'Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "CSV: Import" and trigger an exception
+  - Verify error alert appears
+
+#### 8.18 Add Selected CSV Stages - No Selection
+- **Location**: `addSelectedCSVStages()` function (line ~2406)
+- **Original**: `alert('No stages selected')`
+- **Replaced with**: `await showAlert('No stages selected', 'Validation Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Import CSV file
+  - Click "Add Selected" without selecting any stages
+  - Verify error alert appears with title "Validation Error"
+
+#### 8.19 Apply Playlevel Patch - No Patch Code
+- **Location**: `applyPlaylevelPatch()` function (line ~2576)
+- **Original**: `alert('Please enter a patch code')`
+- **Replaced with**: `await showAlert('Please enter a patch code', 'Validation Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "Set Playlevel Patch"
+  - Select stages but leave patch code empty
+  - Click "Apply"
+  - Verify error alert appears with title "Validation Error"
+
+#### 8.20 Apply Playlevel Patch - Invalid Code
+- **Location**: `applyPlaylevelPatch()` function (line ~2586)
+- **Original**: `alert('Patch code "..." not found. Please enter a valid patch code.')`
+- **Replaced with**: `await showAlert('Patch code "..." not found. Please enter a valid patch code.', 'Validation Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "Set Playlevel Patch"
+  - Enter an invalid patch code
+  - Click "Apply"
+  - Verify error alert appears with title "Validation Error"
+
+#### 8.21 Apply Playlevel Patch - Save Error
+- **Location**: `applyPlaylevelPatch()` function (line ~2640)
+- **Original**: `alert('Error saving playlevel patch codes. Some changes may not have been saved.')`
+- **Replaced with**: `await showAlert('Error saving playlevel patch codes. Some changes may not have been saved.', 'Save Error')`
+- **How to test**: 
+  - Open Game Stages Dialog
+  - Click "Set Playlevel Patch"
+  - Select stages and enter a valid patch code
+  - Click "Apply" and trigger a save error
+  - Verify error alert appears with title "Save Error"
+
+### AdvancedPatchModal.vue Replacements
+
+#### 8.22 Delete Patch - Confirmation
+- **Location**: `deletePatch()` function (line ~1005)
+- **Original**: `if (!confirm('Are you sure you want to delete patch "..."?'))`
+- **Replaced with**: `const confirmed = await showConfirm('Are you sure you want to delete patch "..."?', 'Delete Patch')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Go to "Edit System Patch Definitions" tab
+  - Click "Delete" on a patch
+  - Verify confirmation dialog appears with title "Delete Patch"
+  - Test both "OK" and "Cancel" buttons
+
+#### 8.23 Delete Patch - Functionality Not Available
+- **Location**: `deletePatch()` function (line ~1012)
+- **Original**: `alert('Delete functionality not available')`
+- **Replaced with**: `await showAlert('Delete functionality not available', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Attempt to delete a patch when API is unavailable
+  - Verify error alert appears
+
+#### 8.24 Delete Patch - Failed
+- **Location**: `deletePatch()` function (line ~1029)
+- **Original**: `alert('Failed to delete patch: ...')`
+- **Replaced with**: `await showAlert('Failed to delete patch: ...', 'Delete Failed')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Delete a patch and simulate a failure
+  - Verify error alert appears with title "Delete Failed"
+
+#### 8.25 Delete Patch - Error
+- **Location**: `deletePatch()` function (line ~1032)
+- **Original**: `alert('Error deleting patch: ...')`
+- **Replaced with**: `await showAlert('Error deleting patch: ...', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Delete a patch and trigger an exception
+  - Verify error alert appears
+
+#### 8.26 File Select - Error
+- **Location**: `handleFileSelect()` function (line ~1071)
+- **Original**: `alert('Error reading file: ...')`
+- **Replaced with**: `await showAlert('Error reading file: ...', 'File Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Go to "Edit System Patch Definitions" tab
+  - Click "Add New Patch" or "Edit"
+  - Select a file and trigger a read error
+  - Verify error alert appears with title "File Error"
+
+#### 8.27 Save Patch - Validation Errors (Multiple)
+- **Location**: `savePatch()` function (lines ~1241, 1247, 1255, 1259, 1275, 1284, 1293, 1302, 1309, 1315, 1321)
+- **Original**: Multiple `alert()` calls for validation errors
+- **Replaced with**: All replaced with `await showAlert(..., 'Validation Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Go to "Edit System Patch Definitions" tab
+  - Click "Add New Patch"
+  - Try to save with various invalid inputs:
+    - Missing required fields (Patch Code, Name, Patch Type)
+    - Invalid Parameter Mappings JSON
+    - Invalid GameGenie Codes
+    - Missing GameGenie codes
+    - Invalid JSON in Restrictions/Conflicts/Dependencies
+    - Missing patch file for file-based patches
+    - Missing ASAR template text
+  - Verify each validation error shows appropriate alert with title "Validation Error"
+
+#### 8.28 Save Patch - Functionality Not Available
+- **Location**: `savePatch()` function (line ~1327)
+- **Original**: `alert('Save functionality not available')`
+- **Replaced with**: `await showAlert('Save functionality not available', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Attempt to save a patch when API is unavailable
+  - Verify error alert appears
+
+#### 8.29 Save Patch - Failed
+- **Location**: `savePatch()` function (line ~1356)
+- **Original**: `alert('Failed to save patch: ...')`
+- **Replaced with**: `await showAlert('Failed to save patch: ...', 'Save Failed')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Save a patch and simulate a failure
+  - Verify error alert appears with title "Save Failed"
+
+#### 8.30 Save Patch - Error
+- **Location**: `savePatch()` function (line ~1359)
+- **Original**: `alert('Error saving patch: ...')`
+- **Replaced with**: `await showAlert('Error saving patch: ...', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Save a patch and trigger an exception
+  - Verify error alert appears
+
+#### 8.31 Load Preset - Error
+- **Location**: `loadPreset()` function (line ~1402)
+- **Original**: `alert('Error loading preset: ...')`
+- **Replaced with**: `await showAlert('Error loading preset: ...', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Click "Presets" dropdown
+  - Select a preset and trigger a load error
+  - Verify error alert appears
+
+#### 8.32 Save Preset - No Name
+- **Location**: `savePreset()` function (line ~1534)
+- **Original**: `alert('Please enter a preset name')`
+- **Replaced with**: `await showAlert('Please enter a preset name', 'Validation Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Click "Presets" → "Save Current as Preset"
+  - Try to save without entering a name
+  - Verify error alert appears with title "Validation Error"
+
+#### 8.33 Save Preset - Functionality Not Available
+- **Location**: `savePreset()` function (line ~1541)
+- **Original**: `alert('Save preset functionality not available')`
+- **Replaced with**: `await showAlert('Save preset functionality not available', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Attempt to save a preset when API is unavailable
+  - Verify error alert appears
+
+#### 8.34 Save Preset - Failed
+- **Location**: `savePreset()` function (line ~1559)
+- **Original**: `alert('Failed to save preset: ...')`
+- **Replaced with**: `await showAlert('Failed to save preset: ...', 'Save Failed')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Save a preset and simulate a failure
+  - Verify error alert appears with title "Save Failed"
+
+#### 8.35 Save Preset - Error
+- **Location**: `savePreset()` function (line ~1562)
+- **Original**: `alert('Error saving preset: ...')`
+- **Replaced with**: `await showAlert('Error saving preset: ...', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Save a preset and trigger an exception
+  - Verify error alert appears
+
+#### 8.36 Delete Preset - Confirmation
+- **Location**: `deletePreset()` function (line ~1567)
+- **Original**: `if (!confirm('Are you sure you want to delete preset "..."?'))`
+- **Replaced with**: `const confirmed = await showConfirm('Are you sure you want to delete preset "..."?', 'Delete Preset')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Click "Presets" dropdown
+  - Click "Delete" on a user preset
+  - Verify confirmation dialog appears with title "Delete Preset"
+  - Test both "OK" and "Cancel" buttons
+
+#### 8.37 Delete Preset - Functionality Not Available
+- **Location**: `deletePreset()` function (line ~1574)
+- **Original**: `alert('Delete preset functionality not available')`
+- **Replaced with**: `await showAlert('Delete preset functionality not available', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Attempt to delete a preset when API is unavailable
+  - Verify error alert appears
+
+#### 8.38 Delete Preset - Failed
+- **Location**: `deletePreset()` function (line ~1583)
+- **Original**: `alert('Failed to delete preset: ...')`
+- **Replaced with**: `await showAlert('Failed to delete preset: ...', 'Delete Failed')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Delete a preset and simulate a failure
+  - Verify error alert appears with title "Delete Failed"
+
+#### 8.39 Delete Preset - Error
+- **Location**: `deletePreset()` function (line ~1586)
+- **Original**: `alert('Error deleting preset: ...')`
+- **Replaced with**: `await showAlert('Error deleting preset: ...', 'Error')`
+- **How to test**: 
+  - Open Advanced Patch Modal
+  - Delete a preset and trigger an exception
+  - Verify error alert appears
+
+---
+
+**Note**: One commented-out `confirm()` call remains in `GameStagesDialog.vue` at line 1837. This is intentionally disabled per the code comments and does not need to be replaced.
 

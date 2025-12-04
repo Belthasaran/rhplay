@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 514 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49)
+**Total Replacements Made**: 563 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49, Batch 5: 49, Batch 6: 49)
 
 ## Testing Instructions
 
@@ -1953,6 +1953,196 @@ For each dialog replacement, verify:
 
 ---
 
+## 28. USBFXP Server Functions
+
+### 28.1 Start USBFXP Server - Electron Required
+- **Location**: `startUsb2snesFxp()` function (line ~8928)
+- **Original**: `alert('USBFXP server requires Electron environment')`
+- **Replaced with**: `await showAlert('USBFXP server requires Electron environment', 'Error')`
+- **How to test**: Attempt to start USBFXP server outside Electron environment
+
+---
+
+## 29. Profile Management Functions
+
+### 29.1 Import Profile - Success
+- **Location**: `importProfileFromDetails()` function (line ~10319)
+- **Original**: `alert('Profile imported successfully!')`
+- **Replaced with**: `showToastNotification('Profile imported successfully!', 'success', 3000)`
+- **How to test**: Successfully import a profile
+
+### 29.2 Export Profile - Success
+- **Location**: `exportProfileFromDetails()` function (line ~10354)
+- **Original**: `alert('Profile exported successfully!')`
+- **Replaced with**: `showToastNotification('Profile exported successfully!', 'success', 3000)`
+- **How to test**: Successfully export a profile
+
+### 29.3 Create New Profile - Electron Required
+- **Location**: `createNewProfile()` function (line ~10469)
+- **Original**: `alert('Profile creation requires Electron environment')`
+- **Replaced with**: `await showAlert('Profile creation requires Electron environment', 'Error')`
+- **How to test**: Attempt to create profile outside Electron environment
+
+---
+
+## 30. Master Keypair Backup Functions
+
+### 30.1 Export Master Keypair Backup - Passwords Do Not Match
+- **Location**: `exportMasterKeypairBackup()` function (line ~10736)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting master keypair backup
+
+### 30.2 Export Master Keypair Backup - Export Failed
+- **Location**: `exportMasterKeypairBackup()` function (line ~10745)
+- **Original**: `alert('Failed to export backup: ...')`
+- **Replaced with**: `await showAlert('Failed to export backup: ...', 'Export Failed')`
+- **How to test**: Simulate export failure
+
+### 30.3 Import Master Keypair Backup - Import Failed
+- **Location**: `importMasterKeypairBackup()` function (line ~10784)
+- **Original**: `alert('Failed to import backup: ...')`
+- **Replaced with**: `await showAlert('Failed to import backup: ...', 'Import Failed')`
+- **How to test**: Simulate import failure
+
+---
+
+## 31. Admin Keypair Functions
+
+### 31.1 Add Admin Keypair - Validation Error
+- **Location**: `addAdminKeypair()` function (line ~10950)
+- **Original**: `alert('Please provide a public key or use Generate new Keypair')`
+- **Replaced with**: `await showAlert('Please provide a public key or use Generate new Keypair', 'Validation Error')`
+- **How to test**: Attempt to add admin keypair without providing public key
+
+### 31.2 Export Admin Keypair Backup - Passwords Do Not Match
+- **Location**: `exportAdminKeypairBackup()` function (line ~14145)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting admin keypair backup
+
+### 31.3 Export User-Op Keypair Backup - Passwords Do Not Match
+- **Location**: `exportUserOpKeypairBackup()` function (line ~14398)
+- **Original**: `alert('Passwords do not match')`
+- **Replaced with**: `await showAlert('Passwords do not match', 'Validation Error')`
+- **How to test**: Enter mismatched passwords when exporting user-op keypair backup
+
+---
+
+## 32. Trust Declaration Functions
+
+### 32.1 Finalize Declaration - Success
+- **Location**: `finalizeAndReloadDeclaration()` function (line ~11874)
+- **Original**: `alert('Declaration finalized successfully. All fields are now read-only.')`
+- **Replaced with**: `showToastNotification('Declaration finalized successfully. All fields are now read-only.', 'success', 3000)`
+- **How to test**: Successfully finalize a trust declaration
+
+### 32.2 Finalize Declaration - Failure
+- **Location**: `finalizeAndReloadDeclaration()` function (line ~11876)
+- **Original**: `alert('Failed to finalize declaration: ...')`
+- **Replaced with**: `await showAlert('Failed to finalize declaration: ...', 'Finalize Failed')`
+- **How to test**: Simulate finalization failure
+
+### 32.3 Sign Declaration - Validation Error (No Keypair)
+- **Location**: `signDeclaration()` function (line ~11927)
+- **Original**: `alert('Cannot sign declaration: Issuer keypair not found or private key not available.')`
+- **Replaced with**: `await showAlert('Cannot sign declaration: Issuer keypair not found or private key not available.', 'Validation Error')`
+- **How to test**: Attempt to sign declaration without issuer keypair
+
+### 32.4 Sign Declaration - Validation Error (No Issuer)
+- **Location**: `signDeclaration()` function (line ~11934)
+- **Original**: `alert('Declaration has no issuer keypair specified.')`
+- **Replaced with**: `await showAlert('Declaration has no issuer keypair specified.', 'Validation Error')`
+- **How to test**: Attempt to sign declaration with no issuer keypair specified
+
+### 32.5 Save Draft Declaration - Invalid JSON
+- **Location**: `saveTrustDeclarationDraft()` function (line ~12081)
+- **Original**: `alert('Invalid JSON in content: ...')`
+- **Replaced with**: `await showAlert('Invalid JSON in content: ...', 'Invalid JSON')`
+- **How to test**: Enter invalid JSON in advanced mode declaration content
+
+### 32.6 Export Trust Declarations - Failure
+- **Location**: `exportTrustDeclarations()` function (line ~12324)
+- **Original**: `alert('Failed to export trust declarations: ...')`
+- **Replaced with**: `await showAlert('Failed to export trust declarations: ...', 'Export Failed')`
+- **How to test**: Simulate export failure
+
+### 32.7 Export Trust Declarations - Success
+- **Location**: `exportTrustDeclarations()` function (line ~12327)
+- **Original**: `alert('Exported X admin declarations and Y legacy trust declarations to ...')`
+- **Replaced with**: `showToastNotification('Exported X admin declarations and Y legacy trust declarations to ...', 'success', 4000)`
+- **How to test**: Successfully export trust declarations
+
+### 32.8 Import Trust Declarations - Failure
+- **Location**: `importTrustDeclarations()` function (line ~12345)
+- **Original**: `alert('Failed to import trust declarations: ...')`
+- **Replaced with**: `await showAlert('Failed to import trust declarations: ...', 'Import Failed')`
+- **How to test**: Simulate import failure
+
+### 32.9 Import Trust Declarations - Success
+- **Location**: `importTrustDeclarations()` function (line ~12348)
+- **Original**: `alert('Imported X admin declarations and Y legacy trust declarations from ...')`
+- **Replaced with**: `showToastNotification('Imported X admin declarations and Y legacy trust declarations from ...', 'success', 4000)`
+- **How to test**: Successfully import trust declarations
+
+### 32.10 Save Declaration Draft - Validation Error
+- **Location**: `saveTrustDeclarationDraft()` function (line ~13406)
+- **Original**: `alert('Please fix validation errors before saving draft')`
+- **Replaced with**: `await showAlert('Please fix validation errors before saving draft', 'Validation Error')`
+- **How to test**: Attempt to save draft with validation errors
+
+### 32.11 Save Declaration Draft - Invalid JSON
+- **Location**: `saveTrustDeclarationDraft()` function (line ~13412)
+- **Original**: `alert('Invalid JSON: ...')`
+- **Replaced with**: `await showAlert('Invalid JSON: ...', 'Invalid JSON')`
+- **How to test**: Enter invalid JSON in advanced mode
+
+### 32.12 Save Declaration - Success
+- **Location**: `saveTrustDeclarationDraft()` function (line ~13596)
+- **Original**: `alert('Declaration saved successfully')`
+- **Replaced with**: `showToastNotification('Declaration saved successfully', 'success', 3000)`
+- **How to test**: Successfully save a declaration
+
+---
+
+## 33. Encryption Key Functions
+
+### 33.1 Load Encryption Key - Load Failed
+- **Location**: `loadEncryptionKey()` function (line ~13722)
+- **Original**: `alert('Failed to load encryption key: ...')`
+- **Replaced with**: `await showAlert('Failed to load encryption key: ...', 'Load Failed')`
+- **How to test**: Simulate encryption key load failure
+
+---
+
+## 34. Settings and File Selection Functions
+
+### 34.1 Save Settings - RHPAK Association Update Failed
+- **Location**: `saveSettings()` function (line ~17040)
+- **Original**: `alert('RHPAK association update failed: ...')`
+- **Replaced with**: `await showAlert('RHPAK association update failed: ...', 'Association Update Failed')`
+- **How to test**: Simulate RHPAK association update failure
+
+### 34.2 Save Settings - Association Update Error
+- **Location**: `saveSettings()` function (line ~17045)
+- **Original**: `alert('Failed to update RHPAK file association: ...')`
+- **Replaced with**: `await showAlert('Failed to update RHPAK file association: ...', 'Association Update Failed')`
+- **How to test**: Trigger exception during association update
+
+### 34.3 Browse ROM File - Electron Required
+- **Location**: `browseRomFile()` function (line ~17187)
+- **Original**: `alert('File selection requires Electron environment')`
+- **Replaced with**: `await showAlert('File selection requires Electron environment', 'Error')`
+- **How to test**: Attempt to browse ROM file outside Electron environment
+
+### 34.4 Browse ROM File - Selection Error
+- **Location**: `browseRomFile()` function (line ~17208)
+- **Original**: `alert('Error selecting ROM file: ...')`
+- **Replaced with**: `await showAlert('Error selecting ROM file: ...', 'File Selection Error')`
+- **How to test**: Trigger exception during ROM file selection
+
+---
+
 ## Notes
 
 - **Blocking dialogs** (`showAlert`, `showConfirm`): These use `await` and block execution until user responds
@@ -1963,9 +2153,8 @@ For each dialog replacement, verify:
 
 ## Remaining Instances
 
-There are still approximately 65 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
-- Additional profile import/export functions (duplicate instances)
-- Additional trust declaration functions (duplicate instances)
+There are still approximately 36 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
 - Additional validation and error messages
 - Edge cases and error handlers
+- Remaining duplicate instances
 

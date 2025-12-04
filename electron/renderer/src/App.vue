@@ -8925,7 +8925,7 @@ function updateUsb2snesFxpStatus(status: any) {
 
 async function startUsb2snesFxp() {
   if (!isElectronAvailable()) {
-    alert('USBFXP server requires Electron environment');
+    await showAlert('USBFXP server requires Electron environment', 'Error');
     return;
   }
 
@@ -10316,7 +10316,7 @@ async function importProfileFromDetails() {
     } else if (checkResult.success) {
       await loadOnlineProfilesList();
       await loadOnlineProfile();
-      alert('Profile imported successfully!');
+      showToastNotification('Profile imported successfully!', 'success', 3000);
     } else {
       await showAlert(`Failed to import profile: ${checkResult.error}`, 'Import Failed');
     }
@@ -10351,7 +10351,7 @@ async function exportProfileFromDetails() {
     });
     
     if (exportResult.success) {
-      alert('Profile exported successfully!');
+      showToastNotification('Profile exported successfully!', 'success', 3000);
     } else {
       await showAlert(`Failed to export profile: ${exportResult.error}`, 'Export Failed');
     }
@@ -10466,7 +10466,7 @@ function openProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'creat
 
 async function createNewProfile() {
   if (!isElectronAvailable()) {
-    alert('Profile creation requires Electron environment');
+    await showAlert('Profile creation requires Electron environment', 'Error');
     return;
   }
   
@@ -10733,7 +10733,7 @@ async function backupSelectedMasterKeypair() {
   
   const confirmPassword = prompt('Confirm password:');
   if (password !== confirmPassword) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -10742,7 +10742,7 @@ async function backupSelectedMasterKeypair() {
     if (result.success) {
       showToastNotification('Master keypair backup exported successfully', 'success', 3000);
     } else {
-      alert(`Failed to export backup: ${result.error}`);
+      await showAlert(`Failed to export backup: ${result.error}`, 'Export Failed');
     }
   } catch (error) {
     console.error('Error backing up master keypair:', error);
@@ -10781,7 +10781,7 @@ async function importMasterKeypairBackup() {
       await loadAdminKeypairsList();
       showToastNotification('Master keypair imported successfully', 'success', 3000);
     } else {
-      alert(`Failed to import backup: ${importResult.error}`);
+      await showAlert(`Failed to import backup: ${importResult.error}`, 'Import Failed');
     }
   } catch (error) {
     console.error('Error importing master keypair backup:', error);
@@ -10947,7 +10947,7 @@ async function addAdminKeypair() {
   
   try {
     if (!newAdminKeypairPublicKey.value.trim()) {
-      alert('Please provide a public key or use Generate new Keypair');
+      await showAlert('Please provide a public key or use Generate new Keypair', 'Validation Error');
       return;
     }
     
@@ -11871,9 +11871,9 @@ async function finalizeAndReloadDeclaration() {
     if (result.success) {
       // Reload the declaration from database
       await loadSelectedTrustDeclaration(selectedTrustDeclaration.value.declaration_uuid);
-      alert('Declaration finalized successfully. All fields are now read-only.');
+      showToastNotification('Declaration finalized successfully. All fields are now read-only.', 'success', 3000);
     } else {
-      alert(`Failed to finalize declaration: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to finalize declaration: ${result.error || 'Unknown error'}`, 'Finalize Failed');
     }
   } catch (error) {
     console.error('Error finalizing and reloading declaration:', error);
@@ -11924,14 +11924,14 @@ async function signDeclaration() {
   }
   
   if (!canSignDeclaration.value) {
-    alert('Cannot sign declaration: Issuer keypair not found or private key not available.');
+    await showAlert('Cannot sign declaration: Issuer keypair not found or private key not available.', 'Validation Error');
     return;
   }
   
   try {
     const issuerUuid = selectedTrustDeclaration.value.signing_keypair_uuid;
     if (!issuerUuid) {
-      alert('Declaration has no issuer keypair specified.');
+      await showAlert('Declaration has no issuer keypair specified.', 'Validation Error');
       return;
     }
     
@@ -12321,10 +12321,10 @@ async function exportAllTrustDeclarations() {
       return;
     }
     if (!result.success) {
-      alert(`Failed to export trust declarations: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to export trust declarations: ${result.error || 'Unknown error'}`, 'Export Failed');
       return;
     }
-    alert(`Exported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations to ${result.filePath}`);
+    showToastNotification(`Exported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations to ${result.filePath}`, 'success', 4000);
   } catch (error) {
     console.error('Error exporting trust declarations:', error);
     await showAlert(`Error exporting trust declarations: ${formatErrorMessage(error)}`, 'Export Error');
@@ -12342,10 +12342,10 @@ async function importTrustDeclarations() {
       return;
     }
     if (!result.success) {
-      alert(`Failed to import trust declarations: ${result.error || 'Unknown error'}`);
+      await showAlert(`Failed to import trust declarations: ${result.error || 'Unknown error'}`, 'Import Failed');
       return;
     }
-    alert(`Imported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations${result.filePath ? ` from ${result.filePath}` : ''}.`);
+    showToastNotification(`Imported ${result.adminCount || 0} admin declarations and ${result.trustCount || 0} legacy trust declarations${result.filePath ? ` from ${result.filePath}` : ''}.`, 'success', 4000);
     await loadTrustDeclarationsList();
   } catch (error) {
     console.error('Error importing trust declarations:', error);
@@ -13403,13 +13403,13 @@ async function saveDraftTrustDeclaration() {
     // Validate JSON if in advanced mode
     validateTrustDeclarationAdvancedJson();
     if (trustDeclarationWizardData.value.content.validationErrors.length > 0) {
-      alert('Please fix validation errors before saving draft');
+      await showAlert('Please fix validation errors before saving draft', 'Validation Error');
       return false;
     }
     try {
       contentJson = JSON.parse(trustDeclarationWizardData.value.content.advancedJson);
     } catch (error: any) {
-      alert(`Invalid JSON: ${error.message}`);
+      await showAlert(`Invalid JSON: ${error.message}`, 'Invalid JSON');
       return false;
     }
   } else {
@@ -13593,7 +13593,7 @@ async function saveTrustDeclaration() {
     const result = await (window as any).electronAPI.saveAdminDeclaration(declarationData);
     
     if (result.success) {
-      alert('Declaration saved successfully');
+      showToastNotification('Declaration saved successfully', 'success', 3000);
       showCreateTrustDeclarationModal.value = false;
       trustDeclarationWizardStep.value = 1;
       // Reset wizard data
@@ -13719,7 +13719,7 @@ async function loadSelectedEncryptionKey() {
         endDate: result.key.endDate || ''
       };
     } else {
-      alert(`Failed to load encryption key: ${result.error}`);
+      await showAlert(`Failed to load encryption key: ${result.error}`, 'Load Failed');
       selectedEncryptionKey.value = null;
     }
   } catch (error) {
@@ -14142,7 +14142,7 @@ async function backupSelectedUserOpKeypair() {
   
   const confirmPassword = prompt('Confirm password:');
   if (password !== confirmPassword) {
-    alert('Passwords do not match');
+    await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
@@ -17037,12 +17037,12 @@ async function saveSettings() {
           if (configureResult?.success) {
             rhpakAssociationEnabledAtLoad = settings.rhpakFileAssociationEnabled;
           } else if (configureResult?.error) {
-            alert(`RHPAK association update failed: ${configureResult.error}`);
+            await showAlert(`RHPAK association update failed: ${configureResult.error}`, 'Association Update Failed');
             settings.rhpakFileAssociationEnabled = rhpakAssociationEnabledAtLoad;
           }
         } catch (error) {
           console.error('Failed to update RHPAK file association:', error);
-          alert('Failed to update RHPAK file association: ' + (error as any).message);
+          await showAlert('Failed to update RHPAK file association: ' + (error as any).message, 'Association Update Failed');
           settings.rhpakFileAssociationEnabled = rhpakAssociationEnabledAtLoad;
         }
       }
@@ -17184,7 +17184,7 @@ async function handleRomDrop(e: DragEvent) {
 
 async function browseRomFile() {
   if (!isElectronAvailable()) {
-    alert('File selection requires Electron environment');
+    await showAlert('File selection requires Electron environment', 'Error');
     return;
   }
   
@@ -17205,7 +17205,7 @@ async function browseRomFile() {
     }
   } catch (error: any) {
     console.error('Error browsing ROM file:', error);
-    alert('Error selecting ROM file: ' + error.message);
+    await showAlert('Error selecting ROM file: ' + error.message, 'File Selection Error');
   }
 }
 

@@ -15397,7 +15397,7 @@ function nextWizardStep() {
   }
   
   if (!profileCreationData.value.displayName.trim()) {
-    alert('Display name is required');
+    await showAlert('Display name is required', 'Validation Error');
     return;
   }
   
@@ -15417,13 +15417,13 @@ function nextWizardStep() {
 
 async function completeProfileCreation() {
   if (!isElectronAvailable()) {
-    alert('Profile creation requires Electron environment');
+    await showAlert('Profile creation requires Electron environment', 'Error');
     return;
   }
   
   // If Profile Guard is enabled, it must be unlocked to encrypt the keypair
   if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
-    alert('Profile Guard must be unlocked to create profile (keys need to be encrypted)');
+    await showAlert('Profile Guard must be unlocked to create profile (keys need to be encrypted)', 'Profile Guard Locked');
     return;
   }
   
@@ -15459,7 +15459,7 @@ async function completeProfileCreation() {
     });
     
     if (!keypairResult.success) {
-      alert(`Failed to create keypair: ${keypairResult.error}`);
+      await showAlert(`Failed to create keypair: ${keypairResult.error}`, 'Keypair Creation Failed');
       return;
     }
     
@@ -15492,7 +15492,7 @@ async function completeProfileCreation() {
     }
     
     if (!saveResult.success) {
-      alert(`Failed to save profile: ${saveResult.error}`);
+      await showAlert(`Failed to save profile: ${saveResult.error}`, 'Save Failed');
       return;
     }
     
@@ -16313,24 +16313,24 @@ async function startSelected() {
   console.log('[QuickLaunch] Number of selected games:', selectedGameIds.length);
   
   if (selectedGameIds.length === 0 || selectedGameIds.length > 21) {
-    alert('Please select between 1 and 21 games to launch.');
+    await showAlert('Please select between 1 and 21 games to launch.', 'Selection Error');
     return;
   }
   
   if (!isElectronAvailable()) {
-    alert('Quick launch requires Electron environment');
+    await showAlert('Quick launch requires Electron environment', 'Error');
     return;
   }
   
   // Validate settings
   if (!settings.vanillaRomPath || !settings.vanillaRomValid) {
-    alert('Please configure a valid vanilla SMW ROM in Settings before staging games.');
+    await showAlert('Please configure a valid vanilla SMW ROM in Settings before staging games.', 'Configuration Required');
     openSettings();
     return;
   }
   
   if (!settings.flipsPath || !settings.flipsValid) {
-    alert('Please configure FLIPS executable in Settings before staging games.');
+    await showAlert('Please configure FLIPS executable in Settings before staging games.', 'Configuration Required');
     openSettings();
     return;
   }
@@ -16379,7 +16379,7 @@ async function startSelected() {
     console.log('Quick launch staging result:', stagingResult);
     
     if (!stagingResult.success) {
-      alert('Failed to stage games: ' + stagingResult.error);
+      await showAlert('Failed to stage games: ' + stagingResult.error, 'Staging Failed');
       return;
     }
     
@@ -16395,7 +16395,7 @@ async function startSelected() {
   } catch (error) {
     console.error('Error staging games for quick launch:', error);
     quickLaunchProgressModalOpen.value = false;
-    alert('Error staging games: ' + error.message);
+    await showAlert('Error staging games: ' + (error as any).message, 'Staging Error');
   }
 }
 
@@ -16520,7 +16520,7 @@ async function handleAdvancedPatchBuild(options: {
 }) {
   const api = (window as any)?.electronAPI;
   if (!api) {
-    alert('Electron API not available');
+    await showAlert('Electron API not available', 'Error');
     return;
   }
 
@@ -16539,13 +16539,13 @@ async function handleAdvancedPatchBuild(options: {
     });
 
     if (!result?.success) {
-      alert(`Failed to build patched game: ${result?.error || 'Unknown error'}`);
+      await showAlert(`Failed to build patched game: ${result?.error || 'Unknown error'}`, 'Build Failed');
       return;
     }
 
     // If just building, we're done
     if (options.action === 'build') {
-      alert(`Successfully built patched game: ${result.filename}`);
+      showToastNotification(`Successfully built patched game: ${result.filename}`, 'success', 3000);
       closeAdvancedPatchModal();
       return;
     }
@@ -16553,7 +16553,7 @@ async function handleAdvancedPatchBuild(options: {
     // For upload or boot actions, we need USB2SNES
     if (options.action === 'upload' || options.action === 'boot') {
       if (settings.usb2snesEnabled !== 'yes') {
-        alert('USB2SNES is not enabled. Please enable it in settings first.');
+        await showAlert('USB2SNES is not enabled. Please enable it in settings first.', 'USB2SNES Not Enabled');
         return;
       }
 
@@ -16572,7 +16572,7 @@ async function handleAdvancedPatchBuild(options: {
           usb2snesStatus.romRunning = connectResult.romRunning || 'N/A';
           startHealthMonitoring();
         } catch (connectError: any) {
-          alert(`Failed to connect to USB2SNES: ${formatErrorMessage(connectError)}`);
+          await showAlert(`Failed to connect to USB2SNES: ${formatErrorMessage(connectError)}`, 'Connection Failed');
           return;
         }
       }
@@ -16696,7 +16696,7 @@ async function handleAdvancedPatchBuild(options: {
       }
     }
   } catch (error: any) {
-    alert(`Error building patched game: ${error?.message || String(error)}`);
+    await showAlert(`Error building patched game: ${error?.message || String(error)}`, 'Build Error');
   }
 }
 
@@ -16843,11 +16843,11 @@ function handleRhpakOpenFromOS(filePath: string) {
 
 async function refreshRhpakAssociation() {
   if (!isElectronAvailable() || typeof (window as any).electronAPI.configureRhpakAssociation !== 'function') {
-    alert('File association changes are only available in the desktop build.');
+    await showAlert('File association changes are only available in the desktop build.', 'Not Available');
     return;
   }
   if (!settings.rhpakFileAssociationEnabled) {
-    alert('Enable the RHPAK association toggle before refreshing.');
+    await showAlert('Enable the RHPAK association toggle before refreshing.', 'Configuration Required');
     return;
   }
   try {
@@ -16883,7 +16883,7 @@ function openSettingsModal(data) {
   
   // Show a notification about missing critical paths
   if (data.reason === 'startup-validation') {
-    alert(`Critical paths need to be configured:\n\n${data.missingPaths.join('\n')}\n\nPlease configure these paths in the settings.`);
+    await showAlert(`Critical paths need to be configured:\n\n${data.missingPaths.join('\n')}\n\nPlease configure these paths in the settings.`, 'Configuration Required');
   }
 }
 
@@ -16925,13 +16925,13 @@ async function saveSettings() {
     try {
       const validation = await (window as any).electronAPI.validatePath(settings.tempDirOverride);
       if (!validation.exists || !validation.isDirectory) {
-        alert('Temporary directory override path does not exist or is not a directory. Please provide a valid path or leave blank.');
+        await showAlert('Temporary directory override path does not exist or is not a directory. Please provide a valid path or leave blank.', 'Invalid Path');
         settings.tempDirValid = false;
         return;
       }
       settings.tempDirValid = true;
-    } catch (error) {
-      alert('Error validating temporary directory path: ' + error.message);
+    } catch (error: any) {
+      await showAlert('Error validating temporary directory path: ' + error.message, 'Validation Error');
       settings.tempDirValid = false;
       return;
     }
@@ -17063,11 +17063,11 @@ async function saveSettings() {
       }
     } else {
       console.error('Failed to save settings:', result.error);
-      alert(`Error saving settings: ${result.error}`);
+      await showAlert(`Error saving settings: ${result.error}`, 'Save Failed');
     }
   } catch (error: any) {
     console.error('Error saving settings:', error);
-    alert(`Error saving settings: ${error.message}`);
+    await showAlert(`Error saving settings: ${error.message}`, 'Save Error');
   }
   
   closeSettings();
@@ -17101,7 +17101,7 @@ function cancelUsb2snesFxpStartModal() {
 async function startUsb2snesFxpAnyway() {
   // Start server without permission check (user acknowledged the warning)
   if (!isElectronAvailable()) {
-    alert('USBFXP server requires Electron environment');
+    await showAlert('USBFXP server requires Electron environment', 'Error');
     return;
   }
 
@@ -17129,7 +17129,7 @@ async function startUsb2snesFxpAnyway() {
 
 async function grantUsb2snesFxpPermission() {
   if (!isElectronAvailable()) {
-    alert('Permission grant requires Electron environment');
+    await showAlert('Permission grant requires Electron environment', 'Error');
     return;
   }
 
@@ -17221,12 +17221,12 @@ async function validateAndSetRom(filePath: string) {
       console.log('✓ Valid ROM file set:', filePath);
     } else {
       settings.vanillaRomValid = false;
-      alert('Invalid ROM file: ' + validation.error);
+      await showAlert('Invalid ROM file: ' + validation.error, 'Invalid File');
     }
   } catch (error: any) {
     console.error('Error validating ROM:', error);
     settings.vanillaRomValid = false;
-    alert('Error validating ROM: ' + error.message);
+    await showAlert('Error validating ROM: ' + error.message, 'Validation Error');
   }
 }
 
@@ -17241,7 +17241,7 @@ async function handleFlipsDrop(e: DragEvent) {
 
 async function browseFlipsFile() {
   if (!isElectronAvailable()) {
-    alert('File selection requires Electron environment');
+    await showAlert('File selection requires Electron environment', 'Error');
     return;
   }
   
@@ -17260,7 +17260,7 @@ async function browseFlipsFile() {
     }
   } catch (error: any) {
     console.error('Error browsing FLIPS file:', error);
-    alert('Error selecting FLIPS file: ' + error.message);
+    await showAlert('Error selecting FLIPS file: ' + error.message, 'File Selection Error');
   }
 }
 
@@ -17276,12 +17276,12 @@ async function validateAndSetFlips(filePath: string) {
       console.log('✓ Valid FLIPS file set:', filePath);
     } else {
       settings.flipsValid = false;
-      alert('Invalid FLIPS file: ' + validation.error);
+      await showAlert('Invalid FLIPS file: ' + validation.error, 'Invalid File');
     }
   } catch (error: any) {
     console.error('Error validating FLIPS:', error);
     settings.flipsValid = false;
-    alert('Error validating FLIPS: ' + error.message);
+    await showAlert('Error validating FLIPS: ' + error.message, 'Validation Error');
   }
 }
 

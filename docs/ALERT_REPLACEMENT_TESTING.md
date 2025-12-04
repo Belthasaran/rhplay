@@ -2,7 +2,7 @@
 
 This document lists all instances where system `alert()` and `confirm()` calls have been replaced with custom modal functions (`showAlert()`, `showConfirm()`, `showToastNotification()`) in `electron/renderer/src/App.vue`.
 
-**Total Replacements Made**: 416 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49)
+**Total Replacements Made**: 465 instances (Batch 1: 318, Batch 2: 49, Batch 3: 49, Batch 4: 49)
 
 ## Testing Instructions
 
@@ -1284,6 +1284,226 @@ For each dialog replacement, verify:
 
 ---
 
+## 18. Profile Creation Functions
+
+### 18.1 Next Wizard Step - Display Name Required
+- **Location**: `nextWizardStep()` function (line ~15400)
+- **Original**: `alert('Display name is required')`
+- **Replaced with**: `await showAlert('Display name is required', 'Validation Error')`
+- **How to test**: Attempt to proceed in profile creation wizard without entering display name
+
+### 18.2 Complete Profile Creation - Electron Required
+- **Location**: `completeProfileCreation()` function (line ~15420)
+- **Original**: `alert('Profile creation requires Electron environment')`
+- **Replaced with**: `await showAlert('Profile creation requires Electron environment', 'Error')`
+- **How to test**: Attempt to create profile outside Electron environment
+
+### 18.3 Complete Profile Creation - Profile Guard Locked
+- **Location**: `completeProfileCreation()` function (line ~15426)
+- **Original**: `alert('Profile Guard must be unlocked to create profile (keys need to be encrypted)')`
+- **Replaced with**: `await showAlert('Profile Guard must be unlocked to create profile (keys need to be encrypted)', 'Profile Guard Locked')`
+- **How to test**: Attempt to create profile when Profile Guard is enabled but locked
+
+### 18.4 Complete Profile Creation - Keypair Creation Failed
+- **Location**: `completeProfileCreation()` function (line ~15462)
+- **Original**: `alert('Failed to create keypair: ...')`
+- **Replaced with**: `await showAlert('Failed to create keypair: ...', 'Keypair Creation Failed')`
+- **How to test**: Simulate keypair creation failure during profile creation
+
+### 18.5 Complete Profile Creation - Save Failed
+- **Location**: `completeProfileCreation()` function (line ~15495)
+- **Original**: `alert('Failed to save profile: ...')`
+- **Replaced with**: `await showAlert('Failed to save profile: ...', 'Save Failed')`
+- **How to test**: Simulate profile save failure
+
+---
+
+## 19. Game Staging and Launch Functions
+
+### 19.1 Start Selected Games - Selection Error
+- **Location**: `startSelected()` function (line ~16316)
+- **Original**: `alert('Please select between 1 and 21 games to launch.')`
+- **Replaced with**: `await showAlert('Please select between 1 and 21 games to launch.', 'Selection Error')`
+- **How to test**: Attempt to launch with 0 games or more than 21 games selected
+
+### 19.2 Start Selected Games - Electron Required
+- **Location**: `startSelected()` function (line ~16321)
+- **Original**: `alert('Quick launch requires Electron environment')`
+- **Replaced with**: `await showAlert('Quick launch requires Electron environment', 'Error')`
+- **How to test**: Attempt quick launch outside Electron environment
+
+### 19.3 Start Selected Games - ROM Configuration Required
+- **Location**: `startSelected()` function (line ~16327)
+- **Original**: `alert('Please configure a valid vanilla SMW ROM in Settings before staging games.')`
+- **Replaced with**: `await showAlert('Please configure a valid vanilla SMW ROM in Settings before staging games.', 'Configuration Required')`
+- **How to test**: Attempt to stage games without configuring vanilla ROM path
+
+### 19.4 Start Selected Games - FLIPS Configuration Required
+- **Location**: `startSelected()` function (line ~16333)
+- **Original**: `alert('Please configure FLIPS executable in Settings before staging games.')`
+- **Replaced with**: `await showAlert('Please configure FLIPS executable in Settings before staging games.', 'Configuration Required')`
+- **How to test**: Attempt to stage games without configuring FLIPS path
+
+### 19.5 Start Selected Games - Staging Failed
+- **Location**: `startSelected()` function (line ~16382)
+- **Original**: `alert('Failed to stage games: ...')`
+- **Replaced with**: `await showAlert('Failed to stage games: ...', 'Staging Failed')`
+- **How to test**: Simulate staging failure
+
+### 19.6 Start Selected Games - Staging Error
+- **Location**: `startSelected()` function (line ~16398)
+- **Original**: `alert('Error staging games: ...')`
+- **Replaced with**: `await showAlert('Error staging games: ...', 'Staging Error')`
+- **How to test**: Trigger exception during staging process
+
+### 19.7 Handle Advanced Patch Build - Electron API Not Available
+- **Location**: `handleAdvancedPatchBuild()` function (line ~16523)
+- **Original**: `alert('Electron API not available')`
+- **Replaced with**: `await showAlert('Electron API not available', 'Error')`
+- **How to test**: Attempt to build patch when Electron API is unavailable
+
+### 19.8 Handle Advanced Patch Build - Build Failed
+- **Location**: `handleAdvancedPatchBuild()` function (line ~16542)
+- **Original**: `alert('Failed to build patched game: ...')`
+- **Replaced with**: `await showAlert('Failed to build patched game: ...', 'Build Failed')`
+- **How to test**: Simulate build failure
+
+### 19.9 Handle Advanced Patch Build - Build Success
+- **Location**: `handleAdvancedPatchBuild()` function (line ~16548)
+- **Original**: `alert('Successfully built patched game: ...')`
+- **Replaced with**: `showToastNotification('Successfully built patched game: ...', 'success', 3000)`
+- **How to test**: Successfully build a patched game
+
+### 19.10 Handle Advanced Patch Build - USB2SNES Not Enabled
+- **Location**: `handleAdvancedPatchBuild()` function (line ~16556)
+- **Original**: `alert('USB2SNES is not enabled. Please enable it in settings first.')`
+- **Replaced with**: `await showAlert('USB2SNES is not enabled. Please enable it in settings first.', 'USB2SNES Not Enabled')`
+- **How to test**: Attempt upload/boot action without enabling USB2SNES
+
+### 19.11 Handle Advanced Patch Build - USB2SNES Connection Failed
+- **Location**: `handleAdvancedPatchBuild()` function (line ~16575)
+- **Original**: `alert('Failed to connect to USB2SNES: ...')`
+- **Replaced with**: `await showAlert('Failed to connect to USB2SNES: ...', 'Connection Failed')`
+- **How to test**: Simulate USB2SNES connection failure
+
+### 19.12 Handle Advanced Patch Build - Build Error
+- **Location**: `handleAdvancedPatchBuild()` function (line ~16699)
+- **Original**: `alert('Error building patched game: ...')`
+- **Replaced with**: `await showAlert('Error building patched game: ...', 'Build Error')`
+- **How to test**: Trigger exception during build process
+
+---
+
+## 20. Settings and Configuration Functions
+
+### 20.1 Refresh RHPAK Association - Not Available
+- **Location**: `refreshRhpakAssociation()` function (line ~16846)
+- **Original**: `alert('File association changes are only available in the desktop build.')`
+- **Replaced with**: `await showAlert('File association changes are only available in the desktop build.', 'Not Available')`
+- **How to test**: Attempt to refresh association in non-desktop build
+
+### 20.2 Refresh RHPAK Association - Configuration Required
+- **Location**: `refreshRhpakAssociation()` function (line ~16850)
+- **Original**: `alert('Enable the RHPAK association toggle before refreshing.')`
+- **Replaced with**: `await showAlert('Enable the RHPAK association toggle before refreshing.', 'Configuration Required')`
+- **How to test**: Attempt to refresh association without enabling toggle
+
+### 20.3 Open Settings Modal - Configuration Required
+- **Location**: `openSettingsModal()` function (line ~16886)
+- **Original**: `alert('Critical paths need to be configured:\n\n...\n\nPlease configure these paths in the settings.')`
+- **Replaced with**: `await showAlert('Critical paths need to be configured:\n\n...\n\nPlease configure these paths in the settings.', 'Configuration Required')`
+- **How to test**: Trigger settings modal due to missing critical paths at startup
+
+### 20.4 Validate Temporary Directory - Invalid Path
+- **Location**: Temporary directory validation (line ~16928)
+- **Original**: `alert('Temporary directory override path does not exist or is not a directory. Please provide a valid path or leave blank.')`
+- **Replaced with**: `await showAlert('Temporary directory override path does not exist or is not a directory. Please provide a valid path or leave blank.', 'Invalid Path')`
+- **How to test**: Enter invalid temporary directory path in settings
+
+### 20.5 Validate Temporary Directory - Validation Error
+- **Location**: Temporary directory validation (line ~16934)
+- **Original**: `alert('Error validating temporary directory path: ...')`
+- **Replaced with**: `await showAlert('Error validating temporary directory path: ...', 'Validation Error')`
+- **How to test**: Trigger exception during temporary directory validation
+
+### 20.6 Save Settings - RHPAK Association Update Failed
+- **Location**: `saveSettings()` function (line ~17040)
+- **Original**: `alert('RHPAK association update failed: ...')`
+- **Replaced with**: `await showAlert('RHPAK association update failed: ...', 'Association Update Failed')`
+- **How to test**: Simulate RHPAK association update failure
+
+### 20.7 Save Settings - Association Update Error
+- **Location**: `saveSettings()` function (line ~17045)
+- **Original**: `alert('Failed to update RHPAK file association: ...')`
+- **Replaced with**: `await showAlert('Failed to update RHPAK file association: ...', 'Association Update Failed')`
+- **How to test**: Trigger exception during association update
+
+### 20.8 Save Settings - Save Failed
+- **Location**: `saveSettings()` function (line ~17066)
+- **Original**: `alert('Error saving settings: ...')`
+- **Replaced with**: `await showAlert('Error saving settings: ...', 'Save Failed')`
+- **How to test**: Simulate settings save failure
+
+### 20.9 Save Settings - Save Error
+- **Location**: `saveSettings()` function (line ~17070)
+- **Original**: `alert('Error saving settings: ...')`
+- **Replaced with**: `await showAlert('Error saving settings: ...', 'Save Error')`
+- **How to test**: Trigger exception during settings save
+
+---
+
+## 21. USBFXP and File Selection Functions
+
+### 21.1 Start USBFXP Server - Electron Required
+- **Location**: `startUsb2snesFxpAnyway()` function (line ~17104)
+- **Original**: `alert('USBFXP server requires Electron environment')`
+- **Replaced with**: `await showAlert('USBFXP server requires Electron environment', 'Error')`
+- **How to test**: Attempt to start USBFXP server outside Electron environment
+
+### 21.2 Grant USBFXP Permission - Electron Required
+- **Location**: `grantUsb2snesFxpPermission()` function (line ~17132)
+- **Original**: `alert('Permission grant requires Electron environment')`
+- **Replaced with**: `await showAlert('Permission grant requires Electron environment', 'Error')`
+- **How to test**: Attempt to grant permission outside Electron environment
+
+### 21.3 Validate ROM File - Invalid File
+- **Location**: `validateAndSetRom()` function (line ~17224)
+- **Original**: `alert('Invalid ROM file: ...')`
+- **Replaced with**: `await showAlert('Invalid ROM file: ...', 'Invalid File')`
+- **How to test**: Select an invalid ROM file in settings
+
+### 21.4 Validate ROM File - Validation Error
+- **Location**: `validateAndSetRom()` function (line ~17229)
+- **Original**: `alert('Error validating ROM: ...')`
+- **Replaced with**: `await showAlert('Error validating ROM: ...', 'Validation Error')`
+- **How to test**: Trigger exception during ROM validation
+
+### 21.5 Browse FLIPS File - Electron Required
+- **Location**: `browseFlipsFile()` function (line ~17244)
+- **Original**: `alert('File selection requires Electron environment')`
+- **Replaced with**: `await showAlert('File selection requires Electron environment', 'Error')`
+- **How to test**: Attempt to browse FLIPS file outside Electron environment
+
+### 21.6 Browse FLIPS File - Selection Error
+- **Location**: `browseFlipsFile()` function (line ~17263)
+- **Original**: `alert('Error selecting FLIPS file: ...')`
+- **Replaced with**: `await showAlert('Error selecting FLIPS file: ...', 'File Selection Error')`
+- **How to test**: Trigger exception during FLIPS file selection
+
+### 21.7 Validate FLIPS File - Invalid File
+- **Location**: `validateAndSetFlips()` function (line ~17279)
+- **Original**: `alert('Invalid FLIPS file: ...')`
+- **Replaced with**: `await showAlert('Invalid FLIPS file: ...', 'Invalid File')`
+- **How to test**: Select an invalid FLIPS executable in settings
+
+### 21.8 Validate FLIPS File - Validation Error
+- **Location**: `validateAndSetFlips()` function (line ~17284)
+- **Original**: `alert('Error validating FLIPS: ...')`
+- **Replaced with**: `await showAlert('Error validating FLIPS: ...', 'Validation Error')`
+- **How to test**: Trigger exception during FLIPS validation
+
+---
+
 ## Notes
 
 - **Blocking dialogs** (`showAlert`, `showConfirm`): These use `await` and block execution until user responds
@@ -1294,11 +1514,10 @@ For each dialog replacement, verify:
 
 ## Remaining Instances
 
-There are still approximately 137 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
-- Game staging and launch functions
-- Settings and configuration functions
-- Additional profile management functions
-- File association functions
-- USBFXP and USB2SNES functions
+There are still approximately 106 instances of `alert()` and `confirm()` remaining in the file. These should be replaced in future passes, focusing on:
+- Additional file selection and validation functions (ASAR, UberASM, SSH identity, launch program)
+- Run management functions (create, save, stage, restore)
+- Game launch and USB2SNES upload functions
+- Feedback and comment saving functions
 - Additional validation and error messages
 

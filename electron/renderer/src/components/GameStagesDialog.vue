@@ -1449,14 +1449,24 @@ async function checkDevAdmin() {
   }
 }
 
-// Filter stages based on mode - hide locked stages in view-only mode
+// Filter stages based on mode - only hide stages that are both locked AND secret
 const filteredStages = computed(() => {
   if (currentMode.value === 'edit' || canEdit.value) {
     // In edit mode or if dev admin, show all stages
     return stages.value;
   }
-  // In view-only mode, filter out locked stages
-  return stages.value.filter(stage => !stage.lock || stage.lock === 0);
+  // In view-only mode:
+  // - Locked-only stages should be visible (just disabled for selection/testing)
+  // - Secret-only stages should be visible (show "-" for values)
+  // - Only hide stages that are BOTH locked AND secret
+  return stages.value.filter(stage => {
+    // Hide only if it's both locked AND secret
+    if (stage.lock === 1 && stage.secret === 1) {
+      return false;
+    }
+    // Show all other stages
+    return true;
+  });
 });
 
 // Check if a stage can be tested (available in view-only mode)
@@ -1470,8 +1480,17 @@ function canTestStage(stage: GameStage): boolean {
 
 function selectStage(stage: GameStage) {
   if (currentMode.value === 'select') {
-    // Don't allow selection of locked stages in view-only mode
-    if (stage.lock === 1 && !isDevAdmin.value) {
+    // Don't allow selection of locked stages in view-only mode (not in edit mode)
+    if (stage.lock === 1 && currentMode.value !== 'edit') {
+      // If already selected, unselect it
+      const stageUuid = stage.stage_uuid || '';
+      if (selectedStageUuids.value.has(stageUuid)) {
+        selectedStageUuids.value.delete(stageUuid);
+      }
+      // Clear highlighted stage if it's this locked stage
+      if (selectedStageUuid.value === stage.stage_uuid) {
+        selectedStageUuid.value = null;
+      }
       return;
     }
     // Toggle selection in the set (for "Add Stages to Run" button)
@@ -1488,8 +1507,17 @@ function selectStage(stage: GameStage) {
 
 function toggleStageSelection(stage: GameStage) {
   if (currentMode.value === 'select') {
-    // Don't allow selection of locked stages in view-only mode
-    if (stage.lock === 1 && !isDevAdmin.value) {
+    // Don't allow selection of locked stages in view-only mode (not in edit mode)
+    if (stage.lock === 1 && currentMode.value !== 'edit') {
+      // If already selected, unselect it
+      const stageUuid = stage.stage_uuid || '';
+      if (selectedStageUuids.value.has(stageUuid)) {
+        selectedStageUuids.value.delete(stageUuid);
+      }
+      // Clear highlighted stage if it's this locked stage
+      if (selectedStageUuid.value === stage.stage_uuid) {
+        selectedStageUuid.value = null;
+      }
       return;
     }
     const stageUuid = stage.stage_uuid || '';

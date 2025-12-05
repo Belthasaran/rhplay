@@ -265,6 +265,8 @@ function parseArgs(args) {
     'check-updates': true,
     'update-stats-only': false,
     'use-js-blobs': false,
+    'new-only': false,
+    'target-folder': null,
     'log-mode': 'append',
     'log-baseline': null,
     'log-dir': path.join(__dirname, 'logs', 'game_deltas'),
@@ -294,6 +296,12 @@ function parseArgs(args) {
       parsed['update-stats-only'] = true;
     } else if (arg === '--use-js-blobs') {
       parsed['use-js-blobs'] = true;
+    } else if (arg === '--new-only') {
+      parsed['new-only'] = true;
+    } else if (arg.startsWith('--target-folder=')) {
+      parsed['target-folder'] = path.resolve(arg.split('=')[1]);
+    } else if (arg === '--target-folder') {
+      parsed['target-folder'] = path.resolve(args[++i]);
     } else if (arg.startsWith('--game-ids=')) {
       parsed['game-ids'] = arg.split('=')[1];
     } else if (arg === '--game-ids') {
@@ -347,6 +355,9 @@ Options:
   --resume                Resume from previous interrupted run
   --no-fetch-metadata     Skip fetching metadata from SMWC
   --no-process-new        Skip processing new games
+  --new-only              Only process new gameids (skip updates to existing games)
+  --target-folder=<path>  Export game data to folder instead of database
+                          Creates RHPAK-compatible structure for each gameid
   --game-ids=<ids>        Process specific game IDs (comma-separated)
   --limit=<n>             Limit number of games to process
   --use-js-blobs          Use JavaScript blob creator (faster, double base64)
@@ -366,6 +377,8 @@ Examples:
   node updategames.js --dry-run --limit=5
   node updategames.js --resume
   node updategames.js --use-js-blobs  # Use JavaScript instead of Python
+  node updategames.js --new-only  # Only process new gameids
+  node updategames.js --target-folder=games1  # Export to folder instead of database
 
 For full documentation, see docs/NEW_UPDATE_SCRIPT_SPEC.md
   `);
@@ -449,7 +462,9 @@ async function main() {
     runSummary.records = recordSummary;
     
     // Step 6: Check for updates to existing games (Phase 2)
-    if (argv['check-updates'] && gamesList.length > 0) {
+    if (argv['new-only']) {
+      console.log('[Step 6/6] Skipping update detection (--new-only mode)\n');
+    } else if (argv['check-updates'] && gamesList.length > 0) {
       console.log('[Step 6/6] Checking for updates to existing games...');
       
       // Apply game-ids filter if specified
@@ -740,6 +755,404 @@ async function createBlobs(dbManager, argv) {
 }
 
 /**
+ * Export game data to folder structure (RHPAK-compatible)
+ */
+async function exportGameToFolder(dbManager, recordCreator, queueItem, patchFiles, targetFolder) {
+  const gameid = queueItem.gameid;
+  const gameFolder = path.join(targetFolder, gameid);
+  
+  // Create game folder
+  if (!fs.existsSync(gameFolder)) {
+    fs.mkdirSync(gameFolder, { recursive: true });
+  }
+  
+  console.log(`  Exporting game ${gameid} to ${gameFolder}...`);
+  
+  // Parse metadata
+  const metadata = typeof queueItem.game_metadata === 'string'
+    ? JSON.parse(queueItem.game_metadata)
+    : queueItem.game_metadata;
+  
+  // Filter successful patches
+  const successfulPatches = patchFiles.filter(p => p.status === 'completed' && p.blob_data);
+  
+  if (successfulPatches.length === 0) {
+    console.log(`    ⚠ No successful patches with blobs, skipping export`);
+    return null;
+  }
+  
+  // Find primary patch
+  const primaryPatch = successfulPatches.find(p => p.is_primary === 1) || successfulPatches[0];
+  const primaryBlobData = JSON.parse(primaryPatch.blob_data);
+  
+  // Get previous version to determine next version number
+  const previousVersion = dbManager.getLatestVersionForGame(gameid);
+  const nextVersion = previousVersion ? (previousVersion.version || 0) + 1 : 1;
+  
+  // Prepare gameversion record data (without inserting)
+  const gvuuid = recordCreator.generateUUID();
+  
+  // Find changed attributes
+  let changedAttributes = null;
+  if (previousVersion) {
+    changedAttributes = recordCreator.findChangedFields(previousVersion, metadata);
+  }
+  
+  // Copy locked attributes from previous version if they exist
+  const lockedValues = {};
+  if (previousVersion) {
+    const LOCKED_ATTRIBUTES = ['legacy_type'];
+    LOCKED_ATTRIBUTES.forEach(attr => {
+      if (previousVersion[attr] !== undefined && previousVersion[attr] !== null) {
+        lockedValues[attr] = previousVersion[attr];
+      }
+    });
+  }
+  
+  // Extract schema fields
+  const fieldsType = metadata.fields && metadata.fields.type ? metadata.fields.type : null;
+  const rawDifficulty = metadata.raw_fields && metadata.raw_fields.difficulty ? metadata.raw_fields.difficulty : null;
+  const combinedType = computeCombinedType(metadata);
+  
+  // Build gameversion data
+  const gameVersionData = {
+    gvuuid: gvuuid,
+    gameid: gameid,
+    version: nextVersion,
+    section: metadata.section || null,
+    gametype: metadata.type || metadata.gametype || metadata.difficulty || null,
+    name: metadata.name || null,
+    time: metadata.time || null,
+    added: metadata.added || null,
+    moderated: metadata.moderated ? 1 : 0,
+    author: metadata.author || null,
+    authors: metadata.authors || null,
+    submitter: metadata.submitter || null,
+    demo: metadata.demo || null,
+    featured: metadata.featured ? 1 : 0,
+    length: metadata.length || null,
+    difficulty: metadata.difficulty || null,
+    url: metadata.url || null,
+    download_url: metadata.download_url || null,
+    name_href: metadata.name_href || null,
+    author_href: metadata.author_href || null,
+    obsoleted_by: metadata.obsoleted_by || null,
+    size: metadata.size || null,
+    description: metadata.description || null,
+    tags: Array.isArray(metadata.tags) ? JSON.stringify(metadata.tags) : metadata.tags,
+    tags_href: metadata.tags_href || null,
+    gvjsondata: JSON.stringify(metadata),
+    gvchange_attributes: changedAttributes ? JSON.stringify(changedAttributes) : null,
+    fields_type: fieldsType,
+    raw_difficulty: rawDifficulty,
+    combinedtype: combinedType,
+    patchblob1_name: primaryBlobData.patchblob1_name || null,
+    pat_sha224: primaryPatch.pat_sha224 || null,
+    removed: metadata.removed || 0,
+    obsoleted: metadata.obsoleted || 0,
+    local_resource_etag: null,
+    local_resource_lastmodified: null,
+    local_resource_filename: nextVersion === 1 ? `zips/${gameid}.zip` : `zips/${gameid}_${nextVersion}.zip`,
+    ...lockedValues
+  };
+  
+  // Export gameversions data
+  fs.writeFileSync(
+    path.join(gameFolder, 'gameversions.json'),
+    JSON.stringify([gameVersionData], null, 2)
+  );
+  
+  // Export gameversion_stats (empty for now, will be populated later)
+  fs.writeFileSync(
+    path.join(gameFolder, 'gameversion_stats.json'),
+    JSON.stringify([], null, 2)
+  );
+  
+  // Export patchblobs
+  const patchblobsExport = [];
+  const patchblobsExtendedExport = [];
+  
+  for (const patchFile of successfulPatches) {
+    const blobData = JSON.parse(patchFile.blob_data);
+    const pbuuid = recordCreator.generateUUID();
+    
+    const patchblobData = {
+      pbuuid: pbuuid,
+      gvuuid: gvuuid,
+      patch_name: patchFile.patch_filename || null,
+      pat_sha1: patchFile.pat_sha1 || null,
+      pat_sha224: patchFile.pat_sha224 || null,
+      pat_shake_128: patchFile.pat_shake_128 || null,
+      result_sha1: patchFile.result_sha1 || null,
+      result_sha224: patchFile.result_sha224 || null,
+      result_shake1: patchFile.result_shake1 || null,
+      patchblob1_key: blobData.patchblob1_key || null,
+      patchblob1_name: blobData.patchblob1_name || null,
+      patchblob1_sha224: blobData.patchblob1_sha224 || null,
+      pbjsondata: JSON.stringify({
+        ...patchFile,
+        ...blobData
+      })
+    };
+    
+    patchblobsExport.push(patchblobData);
+    
+    // Extended data
+    const extendedData = {
+      pbuuid: pbuuid,
+      patch_filename: patchFile.patch_filename || null,
+      patch_type: patchFile.patch_type || null,
+      is_primary: patchFile.is_primary || 0,
+      zip_source: patchFile.zip_path || null
+    };
+    patchblobsExtendedExport.push(extendedData);
+  }
+  
+  fs.writeFileSync(
+    path.join(gameFolder, 'patchblobs.json'),
+    JSON.stringify(patchblobsExport, null, 2)
+  );
+  
+  fs.writeFileSync(
+    path.join(gameFolder, 'patchblobs_extended.json'),
+    JSON.stringify(patchblobsExtendedExport, null, 2)
+  );
+  
+  // Export extrapatches (empty for now)
+  fs.writeFileSync(
+    path.join(gameFolder, 'extrapatches.json'),
+    JSON.stringify([], null, 2)
+  );
+  
+  // Export rhpatches
+  const rhpatchesExport = [];
+  for (const patchFile of successfulPatches) {
+    if (patchFile.pat_sha224) {
+      rhpatchesExport.push({
+        pat_sha224: patchFile.pat_sha224,
+        gameid: gameid,
+        patch_name: patchFile.patch_name || patchFile.filename
+      });
+    }
+  }
+  fs.writeFileSync(
+    path.join(gameFolder, 'rhpatches.json'),
+    JSON.stringify(rhpatchesExport, null, 2)
+  );
+  
+  // Export attachments (from patchbin.db) - prepare data structure
+  // Note: Actual attachment creation requires reading blob files and calculating hashes
+  // For export, we'll create a placeholder structure
+  const attachmentsExport = [];
+  for (const patchblob of patchblobsExport) {
+    const blobData = JSON.parse(successfulPatches.find(p => {
+      const bd = JSON.parse(p.blob_data);
+      return bd.patchblob1_name === patchblob.patchblob1_name;
+    }).blob_data);
+    
+    // Create attachment data structure (without actually reading files)
+    attachmentsExport.push({
+      auuid: recordCreator.generateUUID(),
+      pbuuid: patchblob.pbuuid,
+      gvuuid: gvuuid,
+      file_name: blobData.patchblob1_name || null,
+      file_hash_sha224: blobData.patchblob1_sha224 || null,
+      // Note: Other hash fields would need to be calculated from actual blob file
+      // This is a skeleton structure for RHPAK assembly
+    });
+  }
+  fs.writeFileSync(
+    path.join(gameFolder, 'attachments.json'),
+    JSON.stringify(attachmentsExport, null, 2)
+  );
+  
+  // Export res_attachments (from resource.db) - source zip file
+  // This would need to be queried from resource.db if available
+  fs.writeFileSync(
+    path.join(gameFolder, 'res_attachments.json'),
+    JSON.stringify([], null, 2)
+  );
+  
+  // Export res_screenshots (from screenshot.db)
+  // This would need to be queried from screenshot.db if available
+  fs.writeFileSync(
+    path.join(gameFolder, 'res_screenshots.json'),
+    JSON.stringify([], null, 2)
+  );
+  
+  // Export delta_records.json (from delta logger if available)
+  const deltaRecords = [];
+  if (deltaLogger && deltaLogger.enabled) {
+    // Collect relevant delta entries for this game
+    const gameDeltas = deltaLogger.entries.filter(entry => {
+      if (entry.primary_key && entry.primary_key.gameid === gameid) {
+        return true;
+      }
+      if (entry.context && entry.context.queueuuid === queueItem.queueuuid) {
+        return true;
+      }
+      return false;
+    });
+    
+    if (gameDeltas.length > 0) {
+      deltaRecords.push(...gameDeltas);
+    }
+  }
+  fs.writeFileSync(
+    path.join(gameFolder, 'delta_records.json'),
+    JSON.stringify(deltaRecords, null, 2)
+  );
+  
+  // Create combined skeleton JSON file for newgame.js
+  const primaryPatchblob = patchblobsExport[0] || {};
+  const primaryAttachment = attachmentsExport[0] || {};
+  
+  // Parse metadata for skeleton
+  const parsedMetadata = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+  
+  // Build skeleton structure matching newgame.js format
+  const skeleton = {
+    metadata: {
+      script: 'newgame.js',
+      version: '0.1.1', // SCRIPT_VERSION from newgame.js
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      prepared: false,
+      prepared_at: null,
+      added_at: null,
+      rhpakuuid: recordCreator.generateUUID(),
+      rhpakname: `${gameid} - ${parsedMetadata.author || parsedMetadata.submitter || 'unknown'} - ${parsedMetadata.name || 'Untitled'} - ${nextVersion}`,
+      rhpak_type: 'single',
+      gameids: [gameid],
+      has_detached_resources: false,
+      has_extrapatches: false
+    },
+    artifacts: {
+      patch: null // Will be set during --prepare
+    },
+    gameversion: {
+      gvuuid: gvuuid,
+      gameid: gameid,
+      section: gameVersionData.section || 'smwhacks',
+      based_against: 'SMW',
+      version: nextVersion,
+      removed: gameVersionData.removed || 0,
+      obsoleted: gameVersionData.obsoleted || 0,
+      moderated: gameVersionData.moderated || 0,
+      featured: gameVersionData.featured || 0,
+      name: gameVersionData.name || '',
+      gametype: gameVersionData.gametype || '',
+      difficulty: gameVersionData.difficulty || '',
+      raw_difficulty: gameVersionData.raw_difficulty || null,
+      fields_type: gameVersionData.fields_type || null,
+      combinedtype: gameVersionData.combinedtype || null,
+      type: gameVersionData.gametype || '',
+      warnings: [],
+      tags: parsedMetadata.tags ? (Array.isArray(parsedMetadata.tags) ? parsedMetadata.tags : JSON.parse(parsedMetadata.tags || '[]')) : [],
+      author: gameVersionData.author || '',
+      authors: gameVersionData.authors || '',
+      submitter: gameVersionData.submitter || '',
+      legacy_type: gameVersionData.legacy_type || '',
+      url: gameVersionData.url || '',
+      download_url: gameVersionData.download_url || '',
+      name_href: gameVersionData.name_href || '',
+      author_href: gameVersionData.author_href || '',
+      obsoleted_by: gameVersionData.obsoleted_by || '',
+      description: gameVersionData.description || '',
+      length: gameVersionData.length || '',
+      demo: gameVersionData.demo || 'No',
+      sa1: 'No',
+      collab: 'No',
+      screenshots: [],
+      patch_filename: primaryPatchblob.patch_name || null,
+      patch_local_path: null, // Will be set during --prepare
+      patch_notes: '',
+      submission_notes: ''
+    },
+    gameversion_stats: {
+      download_count: 0,
+      view_count: 0,
+      comment_count: 0,
+      rating_value: null,
+      rating_count: 0,
+      favorite_count: 0,
+      hof_status: null,
+      featured_status: null
+    },
+    patchblob: {
+      pbuuid: primaryPatchblob.pbuuid || recordCreator.generateUUID(),
+      patchblob1_name: primaryPatchblob.patchblob1_name || null,
+      patchblob1_sha224: primaryPatchblob.patchblob1_sha224 || null,
+      patchblob1_key: primaryPatchblob.patchblob1_key || null,
+      pat_sha1: primaryPatchblob.pat_sha1 || null,
+      pat_sha224: primaryPatchblob.pat_sha224 || null,
+      pat_shake_128: primaryPatchblob.pat_shake_128 || null,
+      result_sha1: primaryPatchblob.result_sha1 || null,
+      result_sha224: primaryPatchblob.result_sha224 || null,
+      result_shake1: primaryPatchblob.result_shake1 || null,
+      patch_name: primaryPatchblob.patch_name || null
+    },
+    attachment: {
+      auuid: primaryAttachment.auuid || recordCreator.generateUUID(),
+      file_name: primaryAttachment.file_name || null,
+      download_urls: []
+    },
+    resources: [],
+    screenshots: [],
+    gamestages: [],
+    extrapatches: []
+  };
+  
+  // Write combined skeleton JSON file
+  const skeletonPath = path.join(gameFolder, `${gameid}.json`);
+  fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
+  
+  console.log(`    ✓ Exported game data to ${gameFolder}`);
+  console.log(`    ✓ Created skeleton JSON: ${skeletonPath}`);
+  return { gameFolder, gvuuid, patchblobsExport, skeletonPath };
+}
+
+/**
+ * Compute combined type string (copied from record-creator.js)
+ */
+function computeCombinedType(record) {
+  const parts = [];
+  const fieldsType = record.fields && record.fields.type ? record.fields.type : null;
+  const difficulty = record.difficulty;
+  const rawDifficulty = record.raw_fields && record.raw_fields.difficulty ? record.raw_fields.difficulty : null;
+  let rawFieldsType = null;
+  if (record.raw_fields && record.raw_fields.type) {
+    if (Array.isArray(record.raw_fields.type)) {
+      rawFieldsType = record.raw_fields.type.join(', ');
+    } else {
+      rawFieldsType = record.raw_fields.type;
+    }
+  }
+  
+  let result = '';
+  if (fieldsType) {
+    result += fieldsType + ': ';
+  }
+  if (difficulty) {
+    result += difficulty;
+  }
+  if (rawDifficulty) {
+    result += ' (' + rawDifficulty + ')';
+  }
+  if (rawFieldsType) {
+    result += ' (' + rawFieldsType + ')';
+  }
+  result = result.trim();
+  if (!result) {
+    const fallbackType = record.type || record.gametype;
+    if (fallbackType) {
+      result = fallbackType;
+    }
+  }
+  return result || null;
+}
+
+/**
  * Create final database records
  */
 async function createDatabaseRecords(dbManager, recordCreator, argv) {
@@ -756,11 +1169,15 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
   }
   
   if (queueItems.length === 0) {
-    console.log(`  No games ready for record creation\n`);
+    console.log(`  No games ready for ${argv['target-folder'] ? 'export' : 'record creation'}\n`);
     return;
   }
   
-  console.log(`  Creating records for ${queueItems.length} games`);
+  if (argv['target-folder']) {
+    console.log(`  Exporting ${queueItems.length} games to ${argv['target-folder']}/`);
+  } else {
+    console.log(`  Creating records for ${queueItems.length} games`);
+  }
   
   let created = 0;
   let skipped = 0;
@@ -771,8 +1188,8 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
     console.log(`\nGame ${gameid}:`);
     
     try {
-      // Check if already created
-      if (dbManager.gameVersionExists(gameid)) {
+      // Check if already created (only if not exporting to folder)
+      if (!argv['target-folder'] && dbManager.gameVersionExists(gameid)) {
         console.log(`  ⓘ Game version already exists, skipping`);
         skipped++;
         continue;
@@ -782,10 +1199,30 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
       const patchFiles = dbManager.getPatchFilesByQueue(queueItem.queueuuid);
       
       if (CONFIG.DRY_RUN) {
-        console.log(`  [DRY RUN] Would create records for ${patchFiles.length} patches`);
+        if (argv['target-folder']) {
+          console.log(`  [DRY RUN] Would export to ${argv['target-folder']}/${gameid}/`);
+        } else {
+          console.log(`  [DRY RUN] Would create records for ${patchFiles.length} patches`);
+        }
         created++;
+      } else if (argv['target-folder']) {
+        // Export to folder instead of database
+        const result = await exportGameToFolder(
+          dbManager,
+          recordCreator,
+          queueItem,
+          patchFiles,
+          argv['target-folder']
+        );
+        
+        if (result) {
+          created++;
+          logGameCreationDelta(dbManager, queueItem, patchFiles);
+        } else {
+          skipped++;
+        }
       } else {
-        // Create records
+        // Create records in database
         const result = await recordCreator.createGameRecords(queueItem, patchFiles);
         
         if (result) {
@@ -797,13 +1234,14 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
       }
       
     } catch (error) {
-      console.error(`  ✗ Failed to create records: ${error.message}`);
+      console.error(`  ✗ Failed to ${argv['target-folder'] ? 'export' : 'create records'}: ${error.message}`);
       errors++;
     }
   }
   
-  console.log(`\n  Record Creation Summary:`);
-  console.log(`    Created: ${created}`);
+  const actionName = argv['target-folder'] ? 'Export' : 'Record Creation';
+  console.log(`\n  ${actionName} Summary:`);
+  console.log(`    ${argv['target-folder'] ? 'Exported' : 'Created'}: ${created}`);
   console.log(`    Skipped: ${skipped}`);
   console.log(`    Errors:  ${errors}\n`);
 

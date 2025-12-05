@@ -250,11 +250,17 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
   }
   
   const skeleton = JSON.parse(fs.readFileSync(skeletonPath, 'utf8'));
-  const metadata = skeleton.gameversion?.gvjsondata 
-    ? (typeof skeleton.gameversion.gvjsondata === 'string' 
-        ? JSON.parse(skeleton.gameversion.gvjsondata) 
-        : skeleton.gameversion.gvjsondata)
-    : skeleton.gameversion;
+  
+  // Try to get metadata from gvjsondata first (contains full SMWC metadata including images)
+  let metadata = null;
+  if (skeleton.gameversion?.gvjsondata) {
+    metadata = typeof skeleton.gameversion.gvjsondata === 'string' 
+      ? JSON.parse(skeleton.gameversion.gvjsondata) 
+      : skeleton.gameversion.gvjsondata;
+  } else {
+    // Fallback: use gameversion object directly (may not have images array)
+    metadata = skeleton.gameversion || {};
+  }
   
   const imageUrls = extractImageUrls(metadata);
   
@@ -298,28 +304,33 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
       // Calculate hashes
       const hashes = calculateHashes(destPath);
       
-      // Check for duplicate by hash (if we have database access)
+      // Check for duplicate by hash (if we have database access - for reference only in folder mode)
       let isDuplicate = false;
       let duplicateRecord = null;
       
       if (screenshotDb) {
-        const existingByHash = screenshotDb.prepare(`
-          SELECT * FROM res_screenshots 
-          WHERE decoded_sha256 = ? OR file_hash_sha256 = ? OR file_hash_sha224 = ?
-          LIMIT 1
-        `).get(hashes.sha256, hashes.sha256, hashes.sha224);
-        
-        if (existingByHash) {
-          isDuplicate = true;
-          duplicateRecord = existingByHash;
-          console.log(`      ⚠ Duplicate detected (hash matches existing screenshot)`);
+        try {
+          const existingByHash = screenshotDb.prepare(`
+            SELECT * FROM res_screenshots 
+            WHERE decoded_sha256 = ? OR file_sha256 = ?
+            LIMIT 1
+          `).get(hashes.sha256, hashes.sha256);
+          
+          if (existingByHash) {
+            isDuplicate = true;
+            duplicateRecord = existingByHash;
+            console.log(`      ⚠ Duplicate detected in database (hash matches existing screenshot)`);
+          }
+        } catch (error) {
+          // Database check failed - non-fatal in folder mode, just log and continue
+          console.log(`      ⓘ Database duplicate check skipped: ${error.message}`);
         }
       }
       
       // Also check in local skeleton screenshots
       const localDuplicate = screenshots.find(s => 
-        s.file_hash_sha256 === hashes.sha256 || 
-        s.file_hash_sha224 === hashes.sha224
+        (s.file_hash_sha256 || s.file_sha256) === hashes.sha256 || 
+        (s.file_hash_sha224 || s.decoded_sha256) === hashes.sha256
       );
       
       if (localDuplicate) {
@@ -328,7 +339,7 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
         console.log(`      ⚠ Duplicate detected (hash matches local screenshot)`);
       }
       
-      // Create screenshot record
+      // Create screenshot record for folder mode (not database)
       const screenshotRecord = {
         suuid: crypto.randomUUID(),
         gameid: gameid,
@@ -336,8 +347,11 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
         file_name: filename,
         file_path: `screenshots/${filename}`,
         file_size: hashes.size,
+        // Store all hashes for reference (even if DB schema doesn't have all)
         file_hash_sha224: hashes.sha224,
         file_hash_sha256: hashes.sha256,
+        file_sha256: hashes.sha256, // Also store in DB-compatible format
+        decoded_sha256: hashes.sha256, // For DB compatibility
         file_hash_sha1: hashes.sha1,
         file_hash_md5: hashes.md5,
         source_url: imageUrl,
@@ -347,7 +361,7 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
       if (isDuplicate && duplicateRecord) {
         // Add to alt_names instead of creating new record
         screenshotRecord.alt_source_urls = [imageUrl];
-        screenshotRecord.duplicate_of = duplicateRecord.suuid || duplicateRecord.ruuid;
+        screenshotRecord.duplicate_of = duplicateRecord.rsuuid || duplicateRecord.suuid || duplicateRecord.ruuid;
         console.log(`      → Linked as alternate name for existing screenshot`);
       }
       
@@ -420,9 +434,9 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       // Check for duplicate by hash
       const existingByHash = screenshotDb.prepare(`
         SELECT * FROM res_screenshots 
-        WHERE decoded_sha256 = ? OR file_hash_sha256 = ? OR file_hash_sha224 = ?
+        WHERE decoded_sha256 = ? OR file_sha256 = ?
         LIMIT 1
-      `).get(hashes.sha256, hashes.sha256, hashes.sha224);
+      `).get(hashes.sha256, hashes.sha256);
       
       if (existingByHash) {
         // Add to alt_names table
@@ -462,14 +476,13 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         continue;
       }
       
-      // Insert new screenshot record
+      // Insert new screenshot record (database mode only)
       const rsuuid = crypto.randomUUID();
       screenshotDb.prepare(`
         INSERT INTO res_screenshots (
           rsuuid, gameid, gvuuid, file_name, file_path, file_size,
-          file_hash_sha224, file_hash_sha256, file_hash_sha1, file_hash_md5,
-          source_url, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          file_sha256, decoded_sha256, source_url, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         rsuuid,
         gameid,
@@ -477,10 +490,8 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         filename,
         `screenshots/${filename}`,
         hashes.size,
-        hashes.sha224,
         hashes.sha256,
-        hashes.sha1,
-        hashes.md5,
+        hashes.sha256,
         imageUrl,
         new Date().toISOString()
       );

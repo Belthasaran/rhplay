@@ -1211,6 +1211,15 @@ const MIGRATIONS = {
       apply(db) {
         ensureColumn(db, 'res_attachments', 'rhpakuuid', 'TEXT');
       },
+    },
+    {
+      id: 'resource_003_create_res_alt_names',
+      description: 'Create res_alt_names table for duplicate URL tracking',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/resource_003_create_res_alt_names.sql'),
+      skipIf(db) {
+        return tableExists(db, 'res_alt_names');
+      },
     }
   ],
   screenshot: [
@@ -1226,6 +1235,15 @@ const MIGRATIONS = {
       type: 'function',
       apply(db) {
         ensureColumn(db, 'res_screenshots', 'rhpakuuid', 'TEXT');
+      },
+    },
+    {
+      id: 'screenshot_003_create_screenshot_alt_names',
+      description: 'Create screenshot_alt_names table for duplicate URL tracking',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/screenshot_003_create_screenshot_alt_names.sql'),
+      skipIf(db) {
+        return tableExists(db, 'screenshot_alt_names');
       },
     }
   ],

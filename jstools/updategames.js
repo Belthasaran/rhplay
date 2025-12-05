@@ -1103,13 +1103,70 @@ async function exportGameToFolder(dbManager, recordCreator, queueItem, patchFile
     extrapatches: []
   };
   
+  // Copy blob files to game folder
+  const blobsSubfolder = path.join(gameFolder, 'blobs');
+  if (!fs.existsSync(blobsSubfolder)) {
+    fs.mkdirSync(blobsSubfolder, { recursive: true });
+  }
+  
+  for (const patchblob of patchblobsExport) {
+    if (patchblob.patchblob1_name) {
+      const sourceBlobPath = path.join(CONFIG.BLOBS_DIR, patchblob.patchblob1_name);
+      if (fs.existsSync(sourceBlobPath)) {
+        const destBlobPath = path.join(blobsSubfolder, patchblob.patchblob1_name);
+        fs.copyFileSync(sourceBlobPath, destBlobPath);
+        console.log(`    ✓ Copied blob: ${patchblob.patchblob1_name}`);
+      } else {
+        console.log(`    ⚠ Blob file not found: ${sourceBlobPath}`);
+      }
+    }
+  }
+  
+  // Copy zip file to game folder and add as resource
+  const resourcesSubfolder = path.join(gameFolder, 'resources');
+  if (!fs.existsSync(resourcesSubfolder)) {
+    fs.mkdirSync(resourcesSubfolder, { recursive: true });
+  }
+  
+  let zipResource = null;
+  if (queueItem.zip_path && fs.existsSync(queueItem.zip_path)) {
+    const zipFilename = path.basename(queueItem.zip_path);
+    const destZipPath = path.join(resourcesSubfolder, zipFilename);
+    fs.copyFileSync(queueItem.zip_path, destZipPath);
+    console.log(`    ✓ Copied ZIP: ${zipFilename}`);
+    
+    // Calculate zip file hash
+    const zipData = fs.readFileSync(destZipPath);
+    const zipSha256 = crypto.createHash('sha256').update(zipData).digest('hex');
+    const zipSha224 = crypto.createHash('sha224').update(zipData).digest('hex');
+    
+    // Add zip as resource in skeleton
+    zipResource = {
+      ruuid: recordCreator.generateUUID(),
+      gameid: gameid,
+      gvuuid: gvuuid,
+      resource_type: 'source_zip',
+      file_name: zipFilename,
+      file_path: `resources/${zipFilename}`,
+      file_size: zipData.length,
+      file_hash_sha224: zipSha224,
+      file_hash_sha256: zipSha256,
+      source_url: metadata.download_url || metadata.name_href || null,
+      created_at: new Date().toISOString()
+    };
+    
+    skeleton.resources.push(zipResource);
+  } else {
+    console.log(`    ⚠ ZIP file not found: ${queueItem.zip_path || 'unknown'}`);
+  }
+  
   // Write combined skeleton JSON file
   const skeletonPath = path.join(gameFolder, `${gameid}.json`);
   fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
   
   console.log(`    ✓ Exported game data to ${gameFolder}`);
   console.log(`    ✓ Created skeleton JSON: ${skeletonPath}`);
-  return { gameFolder, gvuuid, patchblobsExport, skeletonPath };
+  return { gameFolder, gvuuid, patchblobsExport, skeletonPath, zipResource };
 }
 
 /**

@@ -320,7 +320,8 @@
         "AppImage",
         "deb"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "description" : "SMW Romhack Access Tool"
     },
     "mac": {
       "target": [

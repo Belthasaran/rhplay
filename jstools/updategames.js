@@ -1067,7 +1067,9 @@ async function exportGameToFolder(dbManager, recordCreator, queueItem, patchFile
       patch_filename: primaryPatchblob.patch_name || null,
       patch_local_path: null, // Will be set during --prepare
       patch_notes: '',
-      submission_notes: ''
+      submission_notes: '',
+      // Include full gvjsondata for access to original metadata (including images array)
+      gvjsondata: gameVersionData.gvjsondata || JSON.stringify(metadata)
     },
     gameversion_stats: {
       download_count: 0,

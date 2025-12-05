@@ -460,8 +460,11 @@
       :game-name="current?.meta?.name || 'Draft Submission'"
       :game-version="current?.meta?.version || 1"
       mode="edit"
+      :force-author-mode="true"
+      :draft-stages="current?.meta?.gamestages || []"
       @close="showStagesDialog = false"
       @saved="handleStagesSaved"
+      @draft-stages-saved="handleDraftStagesSaved"
     />
 
     <!-- Custom Modal Dialogs -->
@@ -732,109 +735,26 @@ async function openStagesEditor() {
     }
   }
   
-  // Clear existing stages in DB for this gameid to prevent duplicates
-  // (We'll sync draft stages fresh each time)
-  try {
-    const existingStages = await api.getGameStages({ 
-      gameid: current.value.meta.gameid,
-      version: current.value.meta.version || 1
-    });
-    if (existingStages?.success && existingStages?.stages && existingStages.stages.length > 0) {
-      // Delete all existing stages for this gameid
-      for (const stage of existingStages.stages) {
-        if (stage.stage_uuid && api.deleteGameStage) {
-          try {
-            await api.deleteGameStage({ stage_uuid: stage.stage_uuid });
-          } catch (e: any) {
-            console.warn('Failed to delete existing stage:', e);
-          }
-        }
-      }
-    }
-  } catch (e: any) {
-    console.warn('Failed to clear existing stages:', e);
-  }
-  
-  // If we have draft stages, temporarily save them to DB so the dialog can load them
-  if (current.value.meta.gamestages && current.value.meta.gamestages.length > 0) {
-    try {
-      for (const stage of current.value.meta.gamestages) {
-        // Save each stage to DB temporarily (they'll be cleaned up or kept based on submission approval)
-        // Note: saveGameStage expects individual fields, not a nested stage object
-        await api.saveGameStage({
-          gameid: current.value.meta.gameid,
-          levelnumber: stage.levelnumber || null,
-          levelname: stage.levelname || 'New Stage',
-          versions: stage.versions || '*',
-          submapid: stage.submapid || null,
-          translevel_13bf: stage.translevel_13bf || null,
-          tile_x: stage.tile_x || null,
-          tile_y: stage.tile_y || null,
-          requisites: stage.requisites || null,
-          playable: stage.playable ?? 1,
-          rando: stage.rando ?? 1,
-          difficulty: stage.difficulty ?? 0,
-          mainexit: stage.mainexit ?? 1,
-          keyhole: stage.keyhole ?? 0,
-          credits: stage.credits ?? 0,
-          water: stage.water ?? 0,
-          ghouse: stage.ghouse ?? 0,
-          spalace: stage.spalace ?? 0,
-          castle: stage.castle ?? 0,
-          boss: stage.boss ?? 0,
-          secret: stage.secret ?? 0,
-          troll: stage.troll ?? 0,
-          final: stage.final ?? 0,
-          lock: stage.lock ?? 0,
-          playlevel_patch_code: stage.playlevel_patch_code || null,
-          excluded_patchcodes: stage.excluded_patchcodes || null,
-          extradescription: stage.extradescription || null
-        });
-      }
-    } catch (e: any) {
-      console.warn('Failed to sync draft stages to DB:', e);
-      // Continue anyway - dialog will start with empty stages
-    }
-  }
-  
+  // No database interaction - stages are stored only in the draft
+  // The dialog will work directly with draft stages via the draftStages prop
   showStagesDialog.value = true;
 }
 
-async function handleStagesSaved() {
-  // Load the stages from the database and store them in the draft
-  // Keep the dialog open so user can continue editing
-  const api = (window as any)?.electronAPI;
-  if (!api || !current.value || !current.value.meta.gameid) {
-    return; // Don't close dialog on error
-  }
+function handleDraftStagesSaved(stages: any[]) {
+  // Stages were saved directly to draft (no database interaction)
+  // Store them in the draft and auto-save
+  if (!current.value) return;
   
-  try {
-    // Get stages for this gameid from the database (after dialog saved them)
-    const result = await api.getGameStages({ 
-      gameid: current.value.meta.gameid,
-      version: current.value.meta.version || 1
-    });
-    
-    if (result?.success && result?.stages) {
-      // Store stages in draft (without stage_uuid since they're draft data)
-      // Also remove rhpakuuid as it will be set when the RHPAK is packaged
-      current.value.meta.gamestages = result.stages.map((s: any) => {
-        const { stage_uuid, rhpakuuid, ...stageData } = s;
-        return stageData;
-      });
-    } else {
-      // No stages found, clear draft stages
-      current.value.meta.gamestages = [];
-    }
-    
-    // Auto-save draft to persist stages (but keep dialog open)
-    // Note: saveDraftToDb shows an alert which might reset scroll in the dialog
-    // The dialog's loadStages will handle scroll restoration after the alert
-    await saveDraftToDb();
-  } catch (e: any) {
-    console.warn('Failed to load stages after save:', e);
-  }
-  // Don't close the dialog - let user continue editing
+  current.value.meta.gamestages = stages;
+  
+  // Auto-save draft to persist stages (but keep dialog open)
+  saveDraftToDb();
+}
+
+async function handleStagesSaved() {
+  // This is called after the draft-stages-saved event
+  // Stages are already stored in the draft by handleDraftStagesSaved
+  // Just keep the dialog open so user can continue editing
 }
 
 async function pickPatch() {

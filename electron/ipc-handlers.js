@@ -4514,17 +4514,21 @@ function registerDatabaseHandlers(dbManager) {
         lock,
         playlevel_patch_code,
         extradescription,
-        stagetags
+        stagetags,
+        isDraftSubmission
       } = params;
 
       if (!gameid || !levelname) {
         return { success: false, error: 'Missing required fields: gameid, levelname' };
       }
 
-      // Check DEVADMIN mode
-      const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
-      if (!isDevAdmin) {
-        return { success: false, error: 'Gamestages can only be edited in DEVADMIN mode. Set DEVADMIN=1 or set csetting DEVADMIN=1' };
+      // Check DEVADMIN mode - only skip check if saving for a draft submission (though draft submissions
+      // should not be calling this handler anymore since they work exclusively with draft data)
+      if (1 || !isDraftSubmission) {
+        const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
+        if (!isDevAdmin) {
+          return { success: false, error: 'Gamestages can only be edited in DEVADMIN mode. Set DEVADMIN=1 or set csetting DEVADMIN=1' };
+        }
       }
 
       const db = dbManager.getConnection('rhdata');

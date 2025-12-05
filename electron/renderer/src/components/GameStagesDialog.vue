@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-backdrop" @click.self="close">
     <div class="modal large-modal game-stages-dialog">
       <header class="modal-header">
-        <h3>{{ currentMode === 'select' ? 'Select Game Stage' : (isDevAdmin ? 'Edit Game Stages' : 'Game Stages') }}</h3>
+        <h3>{{ dialogTitle }}</h3>
         <button class="close" @click="close">✕</button>
       </header>
 
@@ -16,8 +16,8 @@
             <div v-if="gameVersion !== null"><strong>Version:</strong> {{ gameVersion }}</div>
           </div>
 
-          <!-- Action Buttons (DEVADMIN only) -->
-          <div v-if="isDevAdmin && currentMode === 'edit'" class="action-buttons">
+          <!-- Action Buttons (Author mode only) -->
+          <div v-if="canEdit" class="action-buttons">
             <button @click="addNewStage" class="btn-primary btn-small">+ New Stage</button>
             <button @click="openDetectedLevelsDialog" class="btn-secondary btn-small">Detected Levels</button>
             <button @click="openSetPlaylevelPatchDialog" class="btn-secondary btn-small">Set Playlevel Patch</button>
@@ -63,7 +63,7 @@
                   <th>T</th>
                   <th class="col-final" title="Final level. This generally designates the last level of a game.">F</th>
                   <th class="col-lock" title="Lock - Level only accessible in Edit mode">L</th>
-                  <th v-if="isDevAdmin && currentMode === 'edit' || currentMode === 'select'">Actions</th>
+                  <th v-if="canEdit || currentMode === 'select'">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -88,7 +88,7 @@
                   </td>
                   <td>
                     <input 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       v-model="stage.levelnumber"
                       @input="handleLevelNumberInput($event, stage)"
                       @blur="handleLevelNumberBlur($event, stage)"
@@ -103,7 +103,7 @@
                   </td>
                   <td>
                     <input 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       v-model="stage.levelname" 
                       type="text"
                       class="input-medium"
@@ -117,7 +117,7 @@
                   </td>
                   <td>
                     <input 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       v-model="stage.submapid" 
                       type="text"
                       class="input-small"
@@ -130,7 +130,7 @@
                   </td>
                   <td>
                     <input 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       v-model="stage.tile_x" 
                       type="text"
                       class="input-tiny"
@@ -143,7 +143,7 @@
                   </td>
                   <td>
                     <input 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       v-model="stage.tile_y" 
                       type="text"
                       class="input-tiny"
@@ -155,7 +155,7 @@
                     <span v-else>-</span>
                   </td>
                   <td>
-                    <div v-if="isDevAdmin && currentMode === 'edit'" class="requisites-tag-selector">
+                    <div v-if="canEdit" class="requisites-tag-selector">
                       <div class="selected-tags" v-if="getRequisiteTags(stage).length > 0">
                         <span 
                           v-for="tag in getRequisiteTags(stage)" 
@@ -200,7 +200,7 @@
                     <span v-else>-</span>
                   </td>
                   <td>
-                    <div v-if="isDevAdmin && currentMode === 'edit'" class="excluded-patchcodes-tag-selector">
+                    <div v-if="canEdit" class="excluded-patchcodes-tag-selector">
                       <div class="selected-tags" v-if="getExcludedPatchCodes(stage).length > 0">
                         <span 
                           v-for="code in getExcludedPatchCodes(stage)" 
@@ -242,7 +242,7 @@
                   </td>
                   <td>
                     <input 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       v-model.number="stage.difficulty" 
                       type="number"
                       min="0"
@@ -256,7 +256,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.playable === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.playable = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -264,7 +264,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.rando === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.rando = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -272,7 +272,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.mainexit === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.mainexit = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -280,7 +280,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.keyhole === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.keyhole = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -288,7 +288,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.credits === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.credits = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -296,7 +296,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.water === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.water = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -304,7 +304,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.ghouse === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.ghouse = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -312,7 +312,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.spalace === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.spalace = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -320,7 +320,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.castle === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.castle = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -328,7 +328,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.boss === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.boss = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -336,7 +336,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.secret === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.secret = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -344,7 +344,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.troll === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.troll = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -352,7 +352,7 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.final === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.final = $event.target.checked ? 1 : 0"
                     />
                   </td>
@@ -360,13 +360,13 @@
                     <input 
                       type="checkbox" 
                       :checked="stage.lock === 1"
-                      :disabled="!(isDevAdmin && currentMode === 'edit')"
+                      :disabled="!canEdit"
                       @change="stage.lock = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td v-if="isDevAdmin && currentMode === 'edit' || (currentMode === 'select' && canTestStage(stage))" class="actions-cell">
+                  <td v-if="canEdit || (currentMode === 'select' && canTestStage(stage))" class="actions-cell">
                     <button 
-                      v-if="isDevAdmin && currentMode === 'edit' || (currentMode === 'select' && canTestStage(stage))"
+                      v-if="canEdit || (currentMode === 'select' && canTestStage(stage))"
                       @click.stop="testLevel(stage)" 
                       class="btn-icon btn-test"
                       title="Test level - Build and Boot with 2lvno patch"
@@ -389,7 +389,7 @@
                       🏷️
                     </button>
                     <button 
-                      v-if="isDevAdmin && currentMode === 'edit'"
+                      v-if="canEdit"
                       @click.stop="deleteStage(stage)" 
                       class="btn-icon btn-delete"
                       title="Delete stage"
@@ -399,7 +399,7 @@
                   </td>
                 </tr>
                 <tr v-if="stages.length === 0">
-                  <td :colspan="isDevAdmin && currentMode === 'edit' ? 22 : 21" class="empty-message">
+                  <td :colspan="canEdit ? 22 : 21" class="empty-message">
                     No stages found for this game
                   </td>
                 </tr>
@@ -412,7 +412,7 @@
       <footer class="modal-footer">
         <div class="modal-actions">
           <button 
-            v-if="isDevAdmin && currentMode === 'edit'" 
+            v-if="canEdit" 
             @click="saveAll" 
             class="btn-primary"
             :disabled="saving"
@@ -441,7 +441,7 @@
           >
             Edit
           </button>
-          <button @click="close" class="btn-secondary">{{ currentMode === 'edit' && isDevAdmin ? 'Cancel' : 'Close' }}</button>
+          <button @click="close" class="btn-secondary">{{ canEdit ? 'Cancel' : 'Close' }}</button>
         </div>
       </footer>
     </div>
@@ -537,15 +537,15 @@
             </div>
             <div class="stages-selection-list">
               <div 
-                v-for="stage in stages" 
-                :key="stage.stage_uuid || stage.levelname"
+                v-for="(stage, index) in stages" 
+                :key="getStageIdentifier(stage, index)"
                 class="stage-selection-item"
               >
                 <label>
                   <input 
                     type="checkbox"
-                    :checked="selectedStagesForPlaylevelPatch.has(stage.stage_uuid || '')"
-                    @change="toggleStageForPlaylevelPatch(stage.stage_uuid)"
+                    :checked="selectedStagesForPlaylevelPatch.has(getStageIdentifier(stage, index))"
+                    @change="toggleStageForPlaylevelPatch(stage, index)"
                   />
                   <span class="stage-selection-label">
                     {{ formatLevelNumberHex(stage.levelnumber) || '?' }} - {{ stage.levelname }}
@@ -585,16 +585,16 @@
               class="textarea" 
               rows="8" 
               placeholder="Enter optional free-form description for this stage..."
-              :readonly="!(isDevAdmin && currentMode === 'edit')"
+              :readonly="!canEdit"
             />
-            <div class="hint" v-if="!(isDevAdmin && currentMode === 'edit')">
+            <div class="hint" v-if="!canEdit">
               This field is read-only in view mode. Switch to edit mode to modify.
             </div>
           </div>
         </section>
         <footer class="modal-footer">
           <button 
-            v-if="isDevAdmin && currentMode === 'edit'"
+            v-if="canEdit"
             @click="saveExtraDescription" 
             class="btn-primary"
           >
@@ -622,20 +622,20 @@
               type="text"
               class="input" 
               placeholder="e.g., cape, autoscroller"
-              :readonly="!(isDevAdmin && currentMode === 'edit')"
+              :readonly="!canEdit"
             />
             <div class="hint">
               Enter comma-separated tags for this stage (e.g., "cape", "autoscroller", "cape,autoscroller").
               Tags are case-sensitive and should be lowercase for consistency.
             </div>
-            <div class="hint" v-if="!(isDevAdmin && currentMode === 'edit')" style="color: var(--text-secondary); margin-top: 8px;">
+            <div class="hint" v-if="!canEdit" style="color: var(--text-secondary); margin-top: 8px;">
               This field is read-only in view mode. Switch to edit mode to modify.
             </div>
           </div>
         </section>
         <footer class="modal-footer">
           <button 
-            v-if="isDevAdmin && currentMode === 'edit'"
+            v-if="canEdit"
             @click="saveTags" 
             class="btn-primary"
           >
@@ -891,6 +891,8 @@ interface Props {
   mode?: 'select' | 'edit'; // 'select' for selecting a level, 'edit' for editing stages
   initialLevelNumber?: string | null; // For selecting a specific level when opening (hex string)
   showAddToRunButton?: boolean;  // Show "Add Stage to Run" button in footer
+  forceAuthorMode?: boolean; // Force author/edit mode even without DEVADMIN (e.g., when editing from submission draft)
+  draftStages?: GameStage[] | null; // Draft stages for submission authoring (when forceAuthorMode is true, stages come from here instead of database)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -898,16 +900,41 @@ const props = withDefaults(defineProps<Props>(), {
   mode: 'select',
   initialLevelNumber: null,
   showAddToRunButton: false,
+  forceAuthorMode: false,
+  draftStages: null,
 });
 
 // Make mode reactive so we can switch it
 const currentMode = ref<'select' | 'edit'>(props.mode || 'select');
+
+// Computed property to determine if we should allow editing
+// Allow editing if: DEVADMIN is enabled OR forceAuthorMode is true AND mode is edit
+const canEdit = computed(() => {
+  return (isDevAdmin.value || props.forceAuthorMode) && currentMode.value === 'edit';
+});
+
+// Computed property for dialog title that shows the current mode
+const dialogTitle = computed(() => {
+  if (currentMode.value === 'select') {
+    return 'Select Game Stage';
+  }
+  if (canEdit.value) {
+    if (props.forceAuthorMode) {
+      return 'Edit Game Stages (Submission Draft Mode)';
+    } else if (isDevAdmin.value) {
+      return 'Edit Game Stages (Database Admin Mode)';
+    }
+    return 'Edit Game Stages';
+  }
+  return 'Game Stages';
+});
 
 const emit = defineEmits<{
   close: [];
   select: [stage: GameStage];
   saved: [];
   'add-to-run': [stage: GameStage];
+  'draft-stages-saved': [stages: GameStage[]]; // Emit draft stages when saving in submission author mode
 }>();
 
 const loading = ref(false);
@@ -930,7 +957,7 @@ const editingExcludedForStage = ref<string | null>(null); // stage_uuid being ed
 const newExcludedPatchCode = ref('');
 const showDetectedLevelsDialog = ref(false);
 const showSetPlaylevelPatchDialog = ref(false);
-const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage_uuid set
+const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage identifier (stage_uuid or index-based key)
 const newPlaylevelPatchCode = ref('2lvno');
 const showExtraDescriptionDialog = ref(false);
 const editingExtraDescriptionStage = ref<GameStage | null>(null);
@@ -1308,6 +1335,44 @@ async function loadStages() {
   
   loading.value = true;
   try {
+    // When in submission author mode, use draft stages from prop (no database interaction)
+    if (props.forceAuthorMode) {
+      stages.value = JSON.parse(JSON.stringify(props.draftStages || [])) || []; // Deep copy
+      
+      // Select initial level if provided
+      if (props.initialLevelNumber !== null && props.initialLevelNumber !== undefined) {
+        const initialHex = props.initialLevelNumber.toString(16).toUpperCase().padStart(3, '0');
+        const matchingStage = stages.value.find(s => {
+          if (!s.levelnumber) return false;
+          const stageHex = formatLevelNumberHex(s.levelnumber);
+          return stageHex === initialHex;
+        });
+        if (matchingStage) {
+          selectedStageUuid.value = matchingStage.stage_uuid || null;
+        }
+      }
+      
+      // Restore scroll position
+      await nextTick();
+      await nextTick();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+            stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+          }
+          setTimeout(() => {
+            if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+              stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+            }
+          }, 100);
+        });
+      });
+      
+      loading.value = false;
+      return;
+    }
+    
+    // Otherwise, load from database (normal mode)
     const api = (window as any)?.electronAPI;
     if (!api?.getGameStages) {
       console.error('getGameStages IPC not available');
@@ -1386,7 +1451,7 @@ async function checkDevAdmin() {
 
 // Filter stages based on mode - hide locked stages in view-only mode
 const filteredStages = computed(() => {
-  if (currentMode.value === 'edit' || isDevAdmin.value) {
+  if (currentMode.value === 'edit' || canEdit.value) {
     // In edit mode or if dev admin, show all stages
     return stages.value;
   }
@@ -1819,8 +1884,17 @@ async function testLevel(stage: GameStage) {
 }
 
 async function deleteStage(stage: GameStage) {
+  // When in submission author mode, just remove from local array (no database interaction)
+  if (props.forceAuthorMode) {
+    const index = stages.value.indexOf(stage);
+    if (index >= 0) {
+      stages.value.splice(index, 1);
+    }
+    return;
+  }
+  
+  // Normal mode: remove from local array if it's a new stage (no stage_uuid)
   if (!stage.stage_uuid) {
-    // Remove from local array if it's a new stage
     const index = stages.value.indexOf(stage);
     if (index >= 0) {
       stages.value.splice(index, 1);
@@ -1859,7 +1933,7 @@ async function deleteStage(stage: GameStage) {
 }
 
 async function saveAll() {
-  if (!isDevAdmin.value || currentMode.value !== 'edit') return;
+  if (!canEdit.value) return;
   
   // Save current scroll position before saving
   if (stagesTableWrapper.value) {
@@ -1868,6 +1942,34 @@ async function saveAll() {
   
   saving.value = true;
   try {
+    // When in submission author mode, save to draft only (no database interaction)
+    if (props.forceAuthorMode) {
+      // Calculate translevel for all stages
+      const draftStages = stages.value.map(stage => {
+        const stageCopy = { ...stage };
+        stageCopy.translevel_13bf = calculateTranslevel(stageCopy);
+        // Remove stage_uuid and other database-only fields for draft
+        const { stage_uuid, rhpakuuid, ...draftStage } = stageCopy;
+        return draftStage;
+      });
+      
+      // Emit stages back to parent to save in draft
+      emit('draft-stages-saved', draftStages);
+      emit('saved');
+      
+      // Restore scroll position
+      await nextTick();
+      setTimeout(() => {
+        if (stagesTableWrapper.value && savedScrollPosition.value > 0) {
+          stagesTableWrapper.value.scrollTop = savedScrollPosition.value;
+        }
+      }, 100);
+      
+      saving.value = false;
+      return;
+    }
+    
+    // Otherwise, save to database (normal mode)
     const api = (window as any)?.electronAPI;
     if (!api?.saveGameStage) {
       await showAlert('Save functionality not available', 'Error');
@@ -2541,9 +2643,21 @@ async function addSelectedCSVStages() {
   });
 }
 
+// Helper function to get a unique identifier for a stage
+function getStageIdentifier(stage: GameStage, index: number): string {
+  if (stage.stage_uuid) {
+    return stage.stage_uuid;
+  }
+  // For draft stages without stage_uuid, use a combination of levelname and levelnumber
+  return `${stage.levelname || 'stage'}_${stage.levelnumber || index}`;
+}
+
 function openSetPlaylevelPatchDialog() {
   // Initialize with all stages selected
-  selectedStagesForPlaylevelPatch.value = new Set(stages.value.map(s => s.stage_uuid || '').filter(Boolean));
+  // Use a unique identifier that works for both database and draft stages
+  selectedStagesForPlaylevelPatch.value = new Set(
+    stages.value.map((s, index) => getStageIdentifier(s, index))
+  );
   newPlaylevelPatchCode.value = '2lvno';
   showSetPlaylevelPatchDialog.value = true;
 }
@@ -2553,17 +2667,19 @@ function closeSetPlaylevelPatchDialog() {
   selectedStagesForPlaylevelPatch.value.clear();
 }
 
-function toggleStageForPlaylevelPatch(stageUuid: string | undefined) {
-  if (!stageUuid) return;
-  if (selectedStagesForPlaylevelPatch.value.has(stageUuid)) {
-    selectedStagesForPlaylevelPatch.value.delete(stageUuid);
+function toggleStageForPlaylevelPatch(stage: GameStage, index: number) {
+  const identifier = getStageIdentifier(stage, index);
+  if (selectedStagesForPlaylevelPatch.value.has(identifier)) {
+    selectedStagesForPlaylevelPatch.value.delete(identifier);
   } else {
-    selectedStagesForPlaylevelPatch.value.add(stageUuid);
+    selectedStagesForPlaylevelPatch.value.add(identifier);
   }
 }
 
 function selectAllStagesForPlaylevelPatch() {
-  selectedStagesForPlaylevelPatch.value = new Set(stages.value.map(s => s.stage_uuid || '').filter(Boolean));
+  selectedStagesForPlaylevelPatch.value = new Set(
+    stages.value.map((s, index) => getStageIdentifier(s, index))
+  );
 }
 
 function deselectAllStagesForPlaylevelPatch() {
@@ -2589,20 +2705,27 @@ async function applyPlaylevelPatch() {
   }
   
   // Apply to selected stages
-  for (const stageUuid of selectedStagesForPlaylevelPatch.value) {
-    const stage = stages.value.find(s => s.stage_uuid === stageUuid);
+  for (const stageIdentifier of selectedStagesForPlaylevelPatch.value) {
+    const stage = stages.value.find((s, index) => getStageIdentifier(s, index) === stageIdentifier);
     if (stage) {
       // Set to null if defaulting to '2lvno', otherwise set the patch code
       stage.playlevel_patch_code = patchCode === '2lvno' ? null : patchCode;
     }
   }
   
-  // Save all modified stages
+  // When in draft mode, don't save to database - just update local stages
+  // The changes will be saved to the draft when the main "Save" button is clicked
+  if (props.forceAuthorMode) {
+    closeSetPlaylevelPatchDialog();
+    return;
+  }
+  
+  // Save all modified stages to database (normal mode only)
   try {
     const api = (window as any)?.electronAPI;
     if (api?.saveGameStage) {
-      for (const stageUuid of selectedStagesForPlaylevelPatch.value) {
-        const stage = stages.value.find(s => s.stage_uuid === stageUuid);
+      for (const stageIdentifier of selectedStagesForPlaylevelPatch.value) {
+        const stage = stages.value.find((s, index) => getStageIdentifier(s, index) === stageIdentifier);
         if (stage && stage.stage_uuid) {
           await api.saveGameStage({
             stage_uuid: stage.stage_uuid,
@@ -2703,6 +2826,13 @@ watch(() => props.gameId, async () => {
     await loadStages();
   }
 });
+
+watch(() => props.draftStages, () => {
+  // Reload stages when draftStages prop changes (e.g., after parent saves draft)
+  if (props.isOpen && props.forceAuthorMode) {
+    loadStages();
+  }
+}, { deep: true });
 
 watch(() => props.initialLevelNumber, () => {
   if (props.isOpen && props.initialLevelNumber !== null && props.initialLevelNumber !== undefined) {

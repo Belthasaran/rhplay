@@ -364,7 +364,7 @@
                       @change="stage.lock = $event.target.checked ? 1 : 0"
                     />
                   </td>
-                  <td v-if="canEdit || (currentMode === 'select' && canTestStage(stage))" class="actions-cell">
+                  <td v-if="canEdit || (currentMode === 'select' && (canTestStage(stage) || canViewNotesAndTags(stage)))" class="actions-cell">
                     <button 
                       v-if="canEdit || (currentMode === 'select' && canTestStage(stage))"
                       @click.stop="testLevel(stage)" 
@@ -375,6 +375,7 @@
                       🧪
                     </button>
                     <button 
+                      v-if="canEdit || canViewNotesAndTags(stage)"
                       @click.stop="openExtraDescriptionDialog(stage)" 
                       class="btn-icon btn-memo"
                       title="Edit/View Extra Description"
@@ -382,6 +383,7 @@
                       📝
                     </button>
                     <button 
+                      v-if="canEdit || canViewNotesAndTags(stage)"
                       @click.stop="openTagsDialog(stage)" 
                       class="btn-icon btn-tags"
                       title="Edit/View Stage Tags"
@@ -1476,6 +1478,15 @@ function canTestStage(stage: GameStage): boolean {
   if (stage.lock === 1 && currentMode.value !== 'edit') return false;
   if ((stage.difficulty || 0) > 8) return false;
   return true;
+}
+
+// Check if Notes and Tags can be viewed for a stage
+// Can view if: in edit mode, or stage is not secret
+function canViewNotesAndTags(stage: GameStage): boolean {
+  // In edit mode, can always view
+  if (currentMode.value === 'edit' || canEdit.value) return true;
+  // In view-only mode, can view unless stage is secret
+  return stage.secret !== 1;
 }
 
 function selectStage(stage: GameStage) {

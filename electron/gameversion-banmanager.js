@@ -15,10 +15,32 @@ const HARDCODED_BANS = [
     sense: 'image_title,run_random_*,check_random,image_show_soft,details_soft',
     required_acknowledgments: 'Mature_Content,Suggestive_Content,Crude_Content_or_Language,Sexual_Content',
     starting_at: null,
-    reason: 'Super Fart World: Crude/Sexual',
-    warningtext: 'Contains cartoon butt images.',
+    warningtext: 'Super Fart World: Crude/Sexual',
+    reason: 'Contains cartoon butt images.',
     sequence_no: 0,
-    active: 1 }
+    active: 1 },
+  { gameid: null,
+    match_column: 'gameid',
+    match_pattern: 'exact:41022',
+    sense: 'run_random_*,check_random',
+    required_acknowledgments: '',
+    starting_at: null,
+    reason: 'Game excluded from random run feature',
+    warningtext: 'Game excluded from random run feature',
+    sequence_no: 2,
+    active: 1
+  },
+  { gameid: null,
+    match_column: 'author',
+    match_pattern: 'regex:/^(NaroGugul|levelengine)/',
+    sense: 'run_random_*,check_random',
+    required_acknowledgments: '',
+    starting_at: null,
+    reason: 'Author excluded from random run feature',
+    warningtext: 'Author excluded from random run feature',
+    sequence_no: 2,
+    active: 1
+  }
 
   // Example structure:
   // {
@@ -326,10 +348,16 @@ class GameVersionBanManager {
    */
   findMatchingBan(game, action) {
     const allBans = this.getAllBans();
+
+    if (action == null) {
+	    action = '';
+    }
     
     for (const ban of allBans) {
-      if (gameMatchesBan(ban, game) && matchesSense(ban.sense, action)) {
-        return ban;
+      if (gameMatchesBan(ban, game)) {
+        if ( action == '' || matchesSense(ban.sense, action) ) {
+            return ban;
+	}
       }
     }
     

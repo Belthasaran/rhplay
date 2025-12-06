@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execSync, spawnSync } = require('child_process');
+const Database = require('better-sqlite3');
 
 // Import modules
 const DatabaseManager = require('../lib/database');
@@ -267,6 +268,11 @@ function parseArgs(args) {
     'use-js-blobs': false,
     'new-only': false,
     'target-folder': null,
+    'source-folder': null,
+    'subfolders': null,
+    'changes-inplace': false,
+    'backup-folder': null,
+    'orphan-cleanup': false,
     'log-mode': 'append',
     'log-baseline': null,
     'log-dir': path.join(__dirname, 'logs', 'game_deltas'),
@@ -302,6 +308,22 @@ function parseArgs(args) {
       parsed['target-folder'] = path.resolve(arg.split('=')[1]);
     } else if (arg === '--target-folder') {
       parsed['target-folder'] = path.resolve(args[++i]);
+    } else if (arg.startsWith('--source-folder=')) {
+      parsed['source-folder'] = path.resolve(arg.split('=')[1]);
+    } else if (arg === '--source-folder') {
+      parsed['source-folder'] = path.resolve(args[++i]);
+    } else if (arg.startsWith('--subfolders=')) {
+      parsed['subfolders'] = arg.split('=')[1];
+    } else if (arg === '--subfolders') {
+      parsed['subfolders'] = args[++i];
+    } else if (arg === '--changes-inplace') {
+      parsed['changes-inplace'] = true;
+    } else if (arg.startsWith('--backup-folder=')) {
+      parsed['backup-folder'] = path.resolve(arg.split('=')[1]);
+    } else if (arg === '--backup-folder') {
+      parsed['backup-folder'] = path.resolve(args[++i]);
+    } else if (arg === '--orphan-cleanup') {
+      parsed['orphan-cleanup'] = true;
     } else if (arg.startsWith('--game-ids=')) {
       parsed['game-ids'] = arg.split('=')[1];
     } else if (arg === '--game-ids') {
@@ -358,6 +380,16 @@ Options:
   --new-only              Only process new gameids (skip updates to existing games)
   --target-folder=<path>  Export game data to folder instead of database
                           Creates RHPAK-compatible structure for each gameid
+  --source-folder=<path>  Import game data from folder (created by --target-folder)
+                          Requires --subfolders option
+  --subfolders=<ids|all>  Process specific game IDs (comma-separated) or 'all'
+                          Required when using --source-folder
+  --changes-inplace       Update existing games in-place (same version number)
+                          Instead of creating new version entries
+  --backup-folder=<path>  Backup SQL rows before updates (requires --changes-inplace)
+                          Backups saved to <backup-folder>/<gameid>/
+  --orphan-cleanup        Clean up orphaned resources (not referenced by any game)
+                          Use with --dry-run to preview what would be cleaned
   --game-ids=<ids>        Process specific game IDs (comma-separated)
   --limit=<n>             Limit number of games to process
   --use-js-blobs          Use JavaScript blob creator (faster, double base64)
@@ -379,6 +411,10 @@ Examples:
   node updategames.js --use-js-blobs  # Use JavaScript instead of Python
   node updategames.js --new-only  # Only process new gameids
   node updategames.js --target-folder=games1  # Export to folder instead of database
+  node updategames.js --source-folder=games --subfolders=all --changes-inplace --backup-folder=backups  # Import from folders
+  node updategames.js --source-folder=games --subfolders=41036,41037 --changes-inplace --backup-folder=backups  # Import specific games
+  node updategames.js --orphan-cleanup  # Clean up orphaned resources
+  node updategames.js --orphan-cleanup --dry-run  # Preview orphaned resources without cleaning
 
 For full documentation, see docs/NEW_UPDATE_SCRIPT_SPEC.md
   `);
@@ -420,6 +456,39 @@ async function main() {
     const expired = dbManager.clearExpiredCache();
     if (expired > 0) {
       console.log(`  ✓ Cleared ${expired} expired cache entries\n`);
+    }
+    
+    // Check if we're cleaning up orphaned resources
+    if (argv['orphan-cleanup']) {
+      console.log('[Orphan Cleanup Mode] Cleaning up orphaned resources...');
+      await cleanupOrphanedResources(argv);
+      console.log('\n==================================================');
+      console.log('              Cleanup Complete!                  ');
+      console.log('==================================================\n');
+      return;
+    }
+    
+    // Check if we're importing from folders
+    if (argv['source-folder']) {
+      if (!argv['subfolders']) {
+        console.error('Error: --source-folder requires --subfolders option');
+        console.error('Example: --source-folder=games --subfolders=all');
+        console.error('Example: --source-folder=games --subfolders=41036,41037');
+        process.exit(1);
+      }
+      
+      if (argv['changes-inplace'] && !argv['backup-folder']) {
+        console.error('Error: --changes-inplace requires --backup-folder option');
+        console.error('Example: --changes-inplace --backup-folder=backups');
+        process.exit(1);
+      }
+      
+      console.log('[Import Mode] Importing games from folders...');
+      await importFromFolders(dbManager, argv);
+      console.log('\n==================================================');
+      console.log('              Import Complete!                    ');
+      console.log('==================================================\n');
+      return;
     }
     
     let gamesList = [];
@@ -1480,6 +1549,408 @@ function logGameCreationDelta(dbManager, queueItem, patchFiles) {
     });
   } catch (error) {
     console.warn('[delta-log] Failed to capture game creation delta:', error.message);
+  }
+}
+
+/**
+ * Import games from folders created by --target-folder
+ */
+async function importFromFolders(dbManager, argv) {
+  const sourceFolder = argv['source-folder'];
+  const subfolders = argv['subfolders'];
+  const changesInplace = argv['changes-inplace'];
+  const backupFolder = argv['backup-folder'];
+  
+  if (!fs.existsSync(sourceFolder)) {
+    throw new Error(`Source folder does not exist: ${sourceFolder}`);
+  }
+  
+  // Find game folders
+  let gameFolders = [];
+  if (subfolders === 'all') {
+    const entries = fs.readdirSync(sourceFolder, { withFileTypes: true });
+    gameFolders = entries
+      .filter(entry => entry.isDirectory())
+      .map(entry => path.join(sourceFolder, entry.name));
+  } else {
+    const gameIds = subfolders.split(',').map(s => s.trim());
+    gameFolders = gameIds.map(gameid => path.join(sourceFolder, gameid));
+  }
+  
+  // Filter to only existing folders with skeleton JSON
+  gameFolders = gameFolders.filter(folder => {
+    const skeletonPath = path.join(folder, path.basename(folder) + '.json');
+    return fs.existsSync(folder) && fs.existsSync(skeletonPath);
+  });
+  
+  console.log(`  Found ${gameFolders.length} game folder(s) to process\n`);
+  
+  if (gameFolders.length === 0) {
+    console.log('  No game folders found to process.');
+    return;
+  }
+  
+  // Open all databases
+  const rhdataDb = new Database(CONFIG.DB_PATH);
+  const patchbinDb = new Database(CONFIG.PATCHBIN_DB_PATH);
+  const resourceDbPath = path.join(__dirname, '..', 'electron', 'resource.db');
+  const screenshotDbPath = path.join(__dirname, '..', 'electron', 'screenshot.db');
+  const resourceDb = fs.existsSync(resourceDbPath) ? new Database(resourceDbPath) : null;
+  const screenshotDb = fs.existsSync(screenshotDbPath) ? new Database(screenshotDbPath) : null;
+  
+  // Ensure resource and screenshot databases exist
+  if (!resourceDb) {
+    throw new Error(`Resource database not found: ${resourceDbPath}`);
+  }
+  if (!screenshotDb) {
+    throw new Error(`Screenshot database not found: ${screenshotDbPath}`);
+  }
+  
+  let processed = 0;
+  let skipped = 0;
+  let errors = 0;
+  
+  for (const gameFolder of gameFolders) {
+    const gameid = path.basename(gameFolder);
+    const skeletonPath = path.join(gameFolder, gameid + '.json');
+    
+    try {
+      console.log(`  [${gameid}] Processing...`);
+      
+      // Load skeleton
+      const skeleton = JSON.parse(fs.readFileSync(skeletonPath, 'utf8'));
+      
+      // Check if prepared
+      if (!skeleton.metadata || !skeleton.metadata.prepared) {
+        console.log(`    ⓘ Running --prepare...`);
+        // Run newgame.js --prepare
+        const prepareCmd = `enode.sh ${path.join(__dirname, 'newgame.js')} "${skeletonPath}" --prepare`;
+        try {
+          execSync(prepareCmd, { stdio: 'inherit', cwd: __dirname });
+          // Reload skeleton after prepare
+          const updatedSkeleton = JSON.parse(fs.readFileSync(skeletonPath, 'utf8'));
+          Object.assign(skeleton, updatedSkeleton);
+        } catch (error) {
+          console.error(`    ✗ Prepare failed: ${error.message}`);
+          errors++;
+          continue;
+        }
+      }
+      
+      // Check if there are changes (compare with latest version in DB)
+      const latestVersion = rhdataDb.prepare(`
+        SELECT * FROM gameversions 
+        WHERE gameid = ? 
+        ORDER BY version DESC 
+        LIMIT 1
+      `).get(gameid);
+      
+      if (latestVersion && changesInplace) {
+        // Compare to see if there are actual changes
+        const hasChanges = compareGameVersions(skeleton.gameversion, latestVersion);
+        if (!hasChanges) {
+          console.log(`    ⓘ No changes detected, skipping`);
+          skipped++;
+          continue;
+        }
+        
+        // Backup existing records if backup folder specified
+        if (backupFolder) {
+          await backupGameRecords(backupFolder, gameid, rhdataDb, patchbinDb, resourceDb, screenshotDb, latestVersion);
+        }
+        
+        // Update in-place (keep same version number)
+        skeleton.gameversion.version = latestVersion.version;
+        skeleton.gameversion.gvuuid = latestVersion.gvuuid;
+      } else if (latestVersion && !changesInplace) {
+        // Create new version
+        skeleton.gameversion.version = latestVersion.version + 1;
+      }
+      
+      // Import using newgame.js logic
+      // We'll need to call newgame.js's performAddOperation or replicate it
+      // For now, let's use a simplified approach that calls newgame.js --add
+      console.log(`    ⓘ Importing to database...`);
+      const addCmd = `enode.sh ${path.join(__dirname, 'newgame.js')} "${skeletonPath}" --add`;
+      try {
+        execSync(addCmd, { stdio: 'inherit', cwd: __dirname });
+        console.log(`    ✓ Imported successfully`);
+        processed++;
+      } catch (error) {
+        console.error(`    ✗ Import failed: ${error.message}`);
+        errors++;
+      }
+      
+    } catch (error) {
+      console.error(`  [${gameid}] ✗ Error: ${error.message}`);
+      errors++;
+    }
+  }
+  
+  rhdataDb.close();
+  patchbinDb.close();
+  resourceDb.close();
+  screenshotDb.close();
+  
+  console.log(`\n  Summary: ${processed} processed, ${skipped} skipped, ${errors} errors`);
+}
+
+/**
+ * Compare two game versions to detect changes
+ */
+function compareGameVersions(newVersion, existingVersion) {
+  // Compare key fields that indicate changes
+  const fieldsToCompare = [
+    'title', 'author', 'description', 'patch_filename', 'pat_sha224', 
+    'result_sha224', 'version', 'download_url'
+  ];
+  
+  for (const field of fieldsToCompare) {
+    if (newVersion[field] !== existingVersion[field]) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Backup SQL rows before updates
+ */
+async function backupGameRecords(backupFolder, gameid, rhdataDb, patchbinDb, resourceDb, screenshotDb, gameversion) {
+  const gameBackupDir = path.join(backupFolder, gameid);
+  fs.mkdirSync(gameBackupDir, { recursive: true });
+  
+  console.log(`    ⓘ Backing up existing records to ${gameBackupDir}...`);
+  
+  const gvuuid = gameversion.gvuuid;
+  const rhpakuuid = gameversion.rhpakuuid;
+  
+  // Backup gameversions
+  const gameversions = rhdataDb.prepare('SELECT * FROM gameversions WHERE gameid = ?').all(gameid);
+  if (gameversions.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'gameversions.json'),
+      JSON.stringify(gameversions, null, 2)
+    );
+  }
+  
+  // Backup gameversion_stats
+  const gameversionStats = rhdataDb.prepare('SELECT * FROM gameversion_stats WHERE gameid = ?').all(gameid);
+  if (gameversionStats.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'gameversion_stats.json'),
+      JSON.stringify(gameversionStats, null, 2)
+    );
+  }
+  
+  // Backup patchblobs
+  const patchblobs = rhdataDb.prepare('SELECT * FROM patchblobs WHERE gvuuid = ?').all(gvuuid);
+  if (patchblobs.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'patchblobs.json'),
+      JSON.stringify(patchblobs, null, 2)
+    );
+  }
+  
+  // Backup patchblobs_extended
+  const patchblobsExtended = rhdataDb.prepare('SELECT * FROM patchblobs_extended WHERE rhpakuuid = ?').all(rhpakuuid);
+  if (patchblobsExtended.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'patchblobs_extended.json'),
+      JSON.stringify(patchblobsExtended, null, 2)
+    );
+  }
+  
+  // Backup rhpatches
+  const rhpatches = rhdataDb.prepare('SELECT * FROM rhpatches WHERE gameid = ?').all(gameid);
+  if (rhpatches.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'rhpatches.json'),
+      JSON.stringify(rhpatches, null, 2)
+    );
+  }
+  
+  // Backup attachments
+  const attachments = patchbinDb.prepare('SELECT * FROM attachments WHERE gvuuid = ?').all(gvuuid);
+  if (attachments.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'attachments.json'),
+      JSON.stringify(attachments, null, 2)
+    );
+  }
+  
+  // Backup res_attachments
+  const resAttachments = resourceDb.prepare('SELECT * FROM res_attachments WHERE gameid = ? OR gvuuid = ?').all(gameid, gvuuid);
+  if (resAttachments.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'res_attachments.json'),
+      JSON.stringify(resAttachments, null, 2)
+    );
+  }
+  
+  // Backup res_screenshots
+  const resScreenshots = screenshotDb.prepare('SELECT * FROM res_screenshots WHERE gameid = ? OR gvuuid = ?').all(gameid, gvuuid);
+  if (resScreenshots.length > 0) {
+    fs.writeFileSync(
+      path.join(gameBackupDir, 'res_screenshots.json'),
+      JSON.stringify(resScreenshots, null, 2)
+    );
+  }
+  
+  console.log(`    ✓ Backup complete`);
+}
+
+/**
+ * Clean up orphaned resources (resources not referenced by any game)
+ * This is a separate operation that can be run with --orphan-cleanup
+ */
+async function cleanupOrphanedResources(argv) {
+  const dryRun = argv['dry-run'] || false;
+  
+  if (dryRun) {
+    console.log('  ⚠  DRY RUN MODE - No resources will be deleted\n');
+  }
+  
+  // Open all databases
+  const rhdataDb = new Database(CONFIG.DB_PATH);
+  const patchbinDb = new Database(CONFIG.PATCHBIN_DB_PATH);
+  const resourceDbPath = path.join(__dirname, '..', 'electron', 'resource.db');
+  const screenshotDbPath = path.join(__dirname, '..', 'electron', 'screenshot.db');
+  
+  if (!fs.existsSync(resourceDbPath)) {
+    throw new Error(`Resource database not found: ${resourceDbPath}`);
+  }
+  if (!fs.existsSync(screenshotDbPath)) {
+    throw new Error(`Screenshot database not found: ${screenshotDbPath}`);
+  }
+  
+  const resourceDb = new Database(resourceDbPath);
+  const screenshotDb = new Database(screenshotDbPath);
+  
+  try {
+    // Get ALL gameversions (not just latest - any version of any gameid is considered in use)
+    const allGameversions = rhdataDb.prepare(`
+      SELECT DISTINCT gvuuid, gameid, rhpakuuid 
+      FROM gameversions
+    `).all();
+    
+    const activeGvuuids = new Set(allGameversions.map(gv => gv.gvuuid).filter(Boolean));
+    const activeRhpakuuids = new Set(allGameversions.map(gv => gv.rhpakuuid).filter(Boolean));
+    const activeGameids = new Set(allGameversions.map(gv => gv.gameid).filter(Boolean));
+    
+    console.log(`  Found ${allGameversions.length} gameversion(s) in database`);
+    console.log(`    Active gameids: ${activeGameids.size}`);
+    console.log(`    Active gvuuids: ${activeGvuuids.size}`);
+    console.log(`    Active rhpakuuids: ${activeRhpakuuids.size}\n`);
+    
+    let cleaned = 0;
+    const orphanedResAttachments = [];
+    const orphanedResScreenshots = [];
+    const orphanedAttachments = [];
+    
+    // Find orphaned res_attachments (only those scoped to gameversion)
+    const allResAttachments = resourceDb.prepare(`
+      SELECT rauuid, gameid, gvuuid, rhpakuuid, resource_scope, linked_type, linked_uuid, file_name
+      FROM res_attachments
+      WHERE resource_scope = 'gameversion' AND linked_type = 'gameversion'
+    `).all();
+    
+    console.log(`  Checking ${allResAttachments.length} res_attachment(s) (gameversion-scoped)...`);
+    for (const attachment of allResAttachments) {
+      const isOrphaned = !(
+        (attachment.gameid && activeGameids.has(attachment.gameid)) ||
+        (attachment.gvuuid && activeGvuuids.has(attachment.gvuuid)) ||
+        (attachment.linked_uuid && activeGvuuids.has(attachment.linked_uuid)) ||
+        (attachment.rhpakuuid && activeRhpakuuids.has(attachment.rhpakuuid))
+      );
+      
+      if (isOrphaned) {
+        orphanedResAttachments.push(attachment);
+        if (!dryRun) {
+          resourceDb.prepare('DELETE FROM res_attachments WHERE rauuid = ?').run(attachment.rauuid);
+        }
+        cleaned++;
+      }
+    }
+    
+    if (orphanedResAttachments.length > 0) {
+      console.log(`    Found ${orphanedResAttachments.length} orphaned res_attachment(s):`);
+      for (const orphan of orphanedResAttachments) {
+        console.log(`      - ${orphan.file_name || orphan.rauuid} (gameid: ${orphan.gameid || 'N/A'}, gvuuid: ${orphan.gvuuid || orphan.linked_uuid || 'N/A'})`);
+      }
+    }
+    
+    // Find orphaned res_screenshots
+    const allResScreenshots = screenshotDb.prepare('SELECT rsuuid, gameid, gvuuid, rhpakuuid, file_name, source_url FROM res_screenshots').all();
+    
+    console.log(`\n  Checking ${allResScreenshots.length} res_screenshot(s)...`);
+    for (const screenshot of allResScreenshots) {
+      const isOrphaned = !(
+        (screenshot.gameid && activeGameids.has(screenshot.gameid)) ||
+        (screenshot.gvuuid && activeGvuuids.has(screenshot.gvuuid)) ||
+        (screenshot.rhpakuuid && activeRhpakuuids.has(screenshot.rhpakuuid))
+      );
+      
+      if (isOrphaned) {
+        orphanedResScreenshots.push(screenshot);
+        if (!dryRun) {
+          screenshotDb.prepare('DELETE FROM res_screenshots WHERE rsuuid = ?').run(screenshot.rsuuid);
+        }
+        cleaned++;
+      }
+    }
+    
+    if (orphanedResScreenshots.length > 0) {
+      console.log(`    Found ${orphanedResScreenshots.length} orphaned res_screenshot(s):`);
+      for (const orphan of orphanedResScreenshots) {
+        const identifier = orphan.file_name || orphan.source_url || orphan.rsuuid;
+        console.log(`      - ${identifier} (gameid: ${orphan.gameid || 'N/A'}, gvuuid: ${orphan.gvuuid || 'N/A'})`);
+      }
+    }
+    
+    // Find orphaned attachments (from patchbin.db)
+    const allAttachments = patchbinDb.prepare('SELECT auuid, gvuuid, file_name FROM attachments').all();
+    
+    console.log(`\n  Checking ${allAttachments.length} attachment(s)...`);
+    for (const attachment of allAttachments) {
+      const isOrphaned = !(attachment.gvuuid && activeGvuuids.has(attachment.gvuuid));
+      
+      if (isOrphaned) {
+        orphanedAttachments.push(attachment);
+        if (!dryRun) {
+          patchbinDb.prepare('DELETE FROM attachments WHERE auuid = ?').run(attachment.auuid);
+        }
+        cleaned++;
+      }
+    }
+    
+    if (orphanedAttachments.length > 0) {
+      console.log(`    Found ${orphanedAttachments.length} orphaned attachment(s):`);
+      for (const orphan of orphanedAttachments) {
+        console.log(`      - ${orphan.file_name || orphan.auuid} (gvuuid: ${orphan.gvuuid || 'N/A'})`);
+      }
+    }
+    
+    console.log(`\n  Summary:`);
+    if (dryRun) {
+      console.log(`    Would clean up ${cleaned} orphaned resource(s)`);
+      if (cleaned === 0) {
+        console.log(`    ⓘ No orphaned resources found`);
+      }
+    } else {
+      if (cleaned > 0) {
+        console.log(`    ✓ Cleaned up ${cleaned} orphaned resource(s)`);
+      } else {
+        console.log(`    ⓘ No orphaned resources found`);
+      }
+    }
+    
+  } finally {
+    rhdataDb.close();
+    patchbinDb.close();
+    resourceDb.close();
+    screenshotDb.close();
   }
 }
 

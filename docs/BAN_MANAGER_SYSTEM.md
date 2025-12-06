@@ -240,15 +240,17 @@ Senses define which application actions are banned. Multiple senses can be speci
 #### `details_soft`
 - **Type**: Soft ban
 - **Computed Column**: `details_soft` = 1
-- **Behavior**: Selecting just this game in the main view, and its details will be hidden behind a warning panel
-- **Integration Point**: Game details panel - show warning overlay, require acknowledgment to view details
-- **Required**: User acknowledgment before showing details
+- **Behavior**: Selecting just this game in the main view, and its details will be hidden behind a warning panel. The game details panel is limited to showing only a few basic details (gameid, name, author, and ban status) until the user acknowledges the warning.
+- **Integration Point**: Game details panel - show warning overlay, require acknowledgment to view full details
+- **Required**: User acknowledgment before showing full details
+- **Note**: The gameid detail and ban attributes will always be accessible, so the game details panel is mostly masked but not completely blocked
 
 #### `details_hard`
 - **Type**: Hard ban
 - **Computed Column**: `details_hard` = 1
-- **Behavior**: Selecting just this game in main view, then its details pages will be blocked from display and cannot be overridden
-- **Integration Point**: Game details panel - show blocking message, do not display any details
+- **Behavior**: Selecting just this game in main view, then its details pages will be limited to showing only a few basic details (gameid, name, author, and ban status). Full details cannot be displayed and cannot be overridden.
+- **Integration Point**: Game details panel - show blocking message, display only basic details (gameid, name, author, ban status)
+- **Note**: The gameid detail and ban attributes will always be accessible, so the game details panel is mostly masked but not completely blocked
 
 ### List Display Senses
 

@@ -20,6 +20,17 @@
           <tr><th>Type</th><td class="readonly-field">{{ game.Type }}</td></tr>
           <tr v-if="game.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ game.LegacyType }}</td></tr>
           <tr><th>Author</th><td class="readonly-field">{{ game.Author }}</td></tr>
+          
+          <!-- Ban Details Row -->
+          <tr v-if="hasBans">
+            <th>Bans</th>
+            <td class="readonly-field">
+              <span class="ban-details-link" @click="openBanDetailsModal">
+                click for block details
+              </span>
+            </td>
+          </tr>
+          
           <tr>
             <th>Length</th>
             <td class="readonly-field">
@@ -285,6 +296,17 @@
                 <tr><th>Type</th><td class="readonly-field">{{ game?.Type }}</td></tr>
                 <tr v-if="game?.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ game.LegacyType }}</td></tr>
                 <tr><th>Author</th><td class="readonly-field">{{ game?.Author }}</td></tr>
+                
+                <!-- Ban Details Row (Popout) -->
+                <tr v-if="hasBans">
+                  <th>Bans</th>
+                  <td class="readonly-field">
+                    <span class="ban-details-link" @click="openBanDetailsModal">
+                      click for block details
+                    </span>
+                  </td>
+                </tr>
+                
                 <tr>
                   <th>Length</th>
                   <td class="readonly-field">
@@ -521,12 +543,94 @@
     :game-name="game?.Name"
     @close="closeScreenshotGallery"
   />
+  
+  <!-- Acknowledgment Dialog -->
+  <AcknowledgmentDialog
+    :visible="acknowledgmentDialogVisible"
+    :title="acknowledgmentDialogTitle"
+    :game-id="game?.Id || ''"
+    :game-name="game?.Name || ''"
+    :game-author="game?.Author"
+    :warning-text="acknowledgmentDialogWarning"
+    :reason="acknowledgmentDialogReason"
+    :required-acknowledgments="acknowledgmentDialogRequired"
+    :hard-block="acknowledgmentDialogHardBlock"
+    @confirm="handleAcknowledgmentConfirm"
+    @cancel="handleAcknowledgmentCancel"
+  />
+  
+  <!-- Ban Details Modal -->
+  <Teleport to="body">
+    <div v-if="banDetailsModalOpen" class="modal-backdrop" @click.self="closeBanDetailsModal" style="z-index: 25000;">
+      <div class="modal ban-details-modal">
+        <header class="modal-header">
+          <h3>Ban Details</h3>
+          <button @click="closeBanDetailsModal" class="close">✕</button>
+        </header>
+        <section class="modal-body ban-details-body">
+          <div v-if="banDetailsLoading" class="loading">Loading ban details...</div>
+          <div v-else-if="banDetailsError" class="error">{{ banDetailsError }}</div>
+          <div v-else-if="banDetailsList.length === 0" class="no-bans">No active bans found for this game.</div>
+          <div v-else class="ban-details-content">
+            <div v-for="(banDetail, index) in banDetailsList" :key="index" class="ban-entry">
+              <div v-if="banDetail.starting_at" class="ban-start-time">
+                <strong>Ban of given features for game starts at:</strong> {{ formatTimestamp(banDetail.starting_at) }}
+              </div>
+              <div v-else class="ban-start-time">
+                <strong>Ban of given features for game is active.</strong>
+              </div>
+              
+              <div v-if="banDetail.warningtext" class="ban-warning">
+                <strong>Warning:</strong> {{ banDetail.warningtext }}
+              </div>
+              
+              <div v-if="banDetail.reason" class="ban-reason">
+                <strong>Reason:</strong> {{ banDetail.reason }}
+              </div>
+              
+              <div v-if="banDetail.required_acknowledgments" class="ban-acknowledgments">
+                <strong>Require acknowledgments:</strong>
+                <ul class="acknowledgment-list">
+                  <li v-for="ack in parseAcknowledgments(banDetail.required_acknowledgments)" :key="ack.name">
+                    {{ ack.name }}{{ ack.alwaysRequired ? '*' : '' }} - {{ ack.description }}
+                  </li>
+                </ul>
+              </div>
+              
+              <div class="ban-matches">
+                <strong>Matches</strong>
+                <div class="match-details">
+                  <div v-for="match in parseMatchPattern(banDetail.match_column, banDetail.match_pattern)" :key="match.key" class="match-item">
+                    <div class="match-column"><strong>Column:</strong> {{ match.column }}</div>
+                    <div class="match-rule"><strong>Rule:</strong> {{ match.rule }}</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="ban-senses">
+                <strong>Sense</strong>
+                <ul class="sense-list">
+                  <li v-for="sense in parseSenses(banDetail.sense)" :key="sense.key">
+                    <strong>{{ sense.name }}:</strong> {{ sense.description }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button @click="closeBanDetailsModal" class="btn-secondary">Close</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { Teleport } from 'vue';
 import ScreenshotGallery from './ScreenshotGallery.vue';
+import AcknowledgmentDialog from './AcknowledgmentDialog.vue';
 
 interface Props {
   game: any;
@@ -630,6 +734,7 @@ watch(() => props.game?.Id, () => {
   if (props.game?.Id) {
     loadGameStages();
     checkScreenshots();
+    checkForBans();
   }
 }, { immediate: true });
 
@@ -643,12 +748,22 @@ onMounted(() => {
   if (props.game?.Id) {
     loadGameStages();
     checkScreenshots();
+    checkForBans();
   }
 });
 
 const popoutModalOpen = ref(false);
 const screenshotGalleryVisible = ref(false);
 const hasScreenshots = ref(false);
+
+// Acknowledgment dialog state
+const acknowledgmentDialogVisible = ref(false);
+const acknowledgmentDialogTitle = ref('Content Warning');
+const acknowledgmentDialogWarning = ref('');
+const acknowledgmentDialogReason = ref('');
+const acknowledgmentDialogRequired = ref<string | null>(null);
+const acknowledgmentDialogHardBlock = ref(false);
+const pendingScreenshotAction = ref<(() => void) | null>(null);
 
 async function checkScreenshots() {
   if (!props.game?.Id) {
@@ -682,13 +797,331 @@ function closePopoutModal() {
   popoutModalOpen.value = false;
 }
 
-function openScreenshotGallery() {
-  screenshotGalleryVisible.value = true;
+async function openScreenshotGallery() {
+  if (!props.game?.Id) return;
+  
+  // Check for image_show_soft or image_show_hard bans
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getBanDetails) {
+      // No API available, proceed directly
+      screenshotGalleryVisible.value = true;
+      return;
+    }
+    
+    const gameidStr = String(props.game.Id);
+    const gameData = {
+      gameid: gameidStr,
+      Id: gameidStr,
+      Name: props.game.Name,
+      Author: props.game.Author,
+      Tags: props.game.Tags,
+      Type: props.game.Type
+    };
+    
+    // Check for image_show_hard first (hard ban)
+    const hardBanResult = await api.getBanDetails(gameidStr, 'image_show_hard', gameData);
+    
+    if (hardBanResult.success && hardBanResult.banDetails) {
+      // Hard ban - show dialog in hard block mode
+      const ban = hardBanResult.banDetails;
+      acknowledgmentDialogTitle.value = 'Image Gallery Blocked';
+      acknowledgmentDialogWarning.value = ban.warningtext || '';
+      acknowledgmentDialogReason.value = ban.reason || '';
+      acknowledgmentDialogRequired.value = ban.required_acknowledgments;
+      acknowledgmentDialogHardBlock.value = true;
+      acknowledgmentDialogVisible.value = true;
+      pendingScreenshotAction.value = null; // Don't open gallery for hard ban
+      return;
+    }
+    
+    // Check for image_show_soft (soft ban)
+    const softBanResult = await api.getBanDetails(gameidStr, 'image_show_soft', gameData);
+    
+    if (softBanResult.success && softBanResult.banDetails) {
+      // Soft ban - show dialog requiring acknowledgment
+      const ban = softBanResult.banDetails;
+      acknowledgmentDialogTitle.value = 'Content Warning';
+      acknowledgmentDialogWarning.value = ban.warningtext || '';
+      acknowledgmentDialogReason.value = ban.reason || '';
+      acknowledgmentDialogRequired.value = ban.required_acknowledgments;
+      acknowledgmentDialogHardBlock.value = false;
+      acknowledgmentDialogVisible.value = true;
+      pendingScreenshotAction.value = () => {
+        screenshotGalleryVisible.value = true;
+      };
+      return;
+    }
+    
+    // No ban - proceed directly
+    screenshotGalleryVisible.value = true;
+  } catch (error) {
+    console.error('[GameDetailsInspector] Error checking image bans:', error);
+    // On error, proceed anyway
+    screenshotGalleryVisible.value = true;
+  }
 }
 
 function closeScreenshotGallery() {
   screenshotGalleryVisible.value = false;
 }
+
+function handleAcknowledgmentConfirm() {
+  acknowledgmentDialogVisible.value = false;
+  
+  // Execute pending action if any (for soft bans)
+  if (pendingScreenshotAction.value) {
+    pendingScreenshotAction.value();
+    pendingScreenshotAction.value = null;
+  }
+}
+
+function handleAcknowledgmentCancel() {
+  acknowledgmentDialogVisible.value = false;
+  pendingScreenshotAction.value = null;
+}
+
+// Ban checking
+const banDetailsModalOpen = ref(false);
+const hasBans = ref(false);
+const banDetailsList = ref<any[]>([]);
+const banDetailsLoading = ref(false);
+const banDetailsError = ref<string | null>(null);
+
+async function checkForBans() {
+  if (!props.game?.Id) {
+    hasBans.value = false;
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.isGameBanned) {
+      hasBans.value = false;
+      return;
+    }
+    
+    const gameidStr = String(props.game.Id);
+    const gameData = {
+      gameid: gameidStr,
+      Id: gameidStr,
+      Name: props.game.Name,
+      Author: props.game.Author,
+      Tags: props.game.Tags,
+      Type: props.game.Type
+    };
+    
+    // Check if game has any ban (we'll check a few common senses)
+    const checks = await Promise.all([
+      api.isGameBanned(gameidStr, 'image_title', gameData),
+      api.isGameBanned(gameidStr, 'list_any', gameData),
+      api.isGameBanned(gameidStr, 'details_hard', gameData)
+    ]);
+    
+    hasBans.value = checks.some(result => result.success && result.isBanned);
+  } catch (error) {
+    console.warn('[GameDetailsInspector] Error checking bans:', error);
+    hasBans.value = false;
+  }
+}
+
+async function openBanDetailsModal() {
+  banDetailsModalOpen.value = true;
+  banDetailsLoading.value = true;
+  banDetailsError.value = null;
+  banDetailsList.value = [];
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getBanDetails) {
+      banDetailsError.value = 'Ban details API not available';
+      return;
+    }
+    
+    const gameidStr = String(props.game.Id);
+    const gameData = {
+      gameid: gameidStr,
+      Id: gameidStr,
+      Name: props.game.Name,
+      Author: props.game.Author,
+      Tags: props.game.Tags,
+      Type: props.game.Type,
+      FieldsType: props.game.FieldsType,
+      GameType: props.game.GameType,
+      CombinedType: props.game.CombinedType,
+      LegacyType: props.game.LegacyType
+    };
+    
+    // Get ban details for all possible senses
+    const allSenses = [
+      'image_title', 'image_preview', 'image_show_soft', 'image_show_hard',
+      'run_random_game', 'run_random_stage', 'check_random',
+      'run_pick_game', 'run_pick_stage',
+      'details_stages_soft', 'details_stages_hard', 'details_soft', 'details_hard',
+      'list_title', 'list_any',
+      'start_multi', 'start_patchplus', 'start_single'
+    ];
+    
+    const banChecks = await Promise.all(
+      allSenses.map(sense => api.getBanDetails(gameidStr, sense, gameData))
+    );
+    
+    // Collect unique bans (by banuuid or by matching all fields)
+    const banMap = new Map<string, any>();
+    
+    for (const result of banChecks) {
+      if (result.success && result.banDetails) {
+        const ban = result.banDetails;
+        const key = ban.banuuid || `${ban.match_column}_${ban.match_pattern}_${ban.sense}`;
+        
+        if (!banMap.has(key)) {
+          banMap.set(key, ban);
+        }
+      }
+    }
+    
+    banDetailsList.value = Array.from(banMap.values());
+  } catch (error) {
+    console.error('[GameDetailsInspector] Error loading ban details:', error);
+    banDetailsError.value = error instanceof Error ? error.message : 'Unknown error';
+  } finally {
+    banDetailsLoading.value = false;
+  }
+}
+
+function closeBanDetailsModal() {
+  banDetailsModalOpen.value = false;
+}
+
+function formatTimestamp(timestamp: string | null): string {
+  if (!timestamp) return 'Immediately';
+  try {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  } catch {
+    return timestamp;
+  }
+}
+
+function parseAcknowledgments(ackStr: string | null): Array<{name: string, alwaysRequired: boolean, description: string}> {
+  if (!ackStr) return [];
+  
+  const ackMap: Record<string, string> = {
+    'Photosensitivity_Triggers': 'Content may contain flashing lights, rapid color changes, or other visual effects that could trigger photosensitive epilepsy or seizures',
+    'Mature_Content': 'Content is intended for mature audiences and may contain adult themes',
+    'Violence': 'Content contains depictions of violence, combat, or graphic imagery',
+    'Suggestive_Content': 'Content contains suggestive themes, innuendo, or mild sexual references',
+    'Crude_Content_or_Language': 'Content contains crude humor, profanity, or offensive language',
+    'Sexual_Content': 'Content contains sexual themes, imagery, or explicit content',
+    'Extreme_Frustration_Warning': 'Game contains trolls or extreme time-consuming or frustrating content even for players of a grandmaster+ skill level',
+    'Extreme_Difficulty': 'Contains difficulty extremely higher than expected for its type/rating'
+  };
+  
+  return ackStr.split(',').map(a => a.trim()).filter(a => a).map(ack => {
+    const alwaysRequired = ack.endsWith('*');
+    const name = alwaysRequired ? ack.slice(0, -1) : ack;
+    return {
+      name,
+      alwaysRequired,
+      description: ackMap[name] || 'Content warning'
+    };
+  });
+}
+
+function parseMatchPattern(column: string, pattern: string): Array<{key: string, column: string, rule: string}> {
+  if (!pattern) return [];
+  
+  // Handle comma-separated list
+  if (pattern.includes(',') && !pattern.startsWith('exact:') && !pattern.startsWith('substring:') && !pattern.startsWith('regex:')) {
+    const items = pattern.split(',').map(p => p.trim());
+    return items.map((item, idx) => ({
+      key: `${column}_${idx}`,
+      column,
+      rule: item
+    }));
+  }
+  
+  // Handle prefixed patterns
+  if (pattern.startsWith('exact:')) {
+    return [{
+      key: `${column}_exact`,
+      column,
+      rule: `exact:${pattern.slice(6).trim()}`
+    }];
+  }
+  
+  if (pattern.startsWith('substring:')) {
+    return [{
+      key: `${column}_substring`,
+      column,
+      rule: `substring:${pattern.slice(10).trim()}`
+    }];
+  }
+  
+  if (pattern.startsWith('regex:')) {
+    return [{
+      key: `${column}_regex`,
+      column,
+      rule: `regex:${pattern.slice(6).trim()}`
+    }];
+  }
+  
+  // Default: exact match
+  return [{
+    key: `${column}_default`,
+    column,
+    rule: pattern
+  }];
+}
+
+function parseSenses(senseStr: string | null): Array<{key: string, name: string, description: string}> {
+  if (!senseStr) return [];
+  
+  const senseMap: Record<string, string> = {
+    'image_title': 'Title images are blocked from view',
+    'image_preview': 'Block game image content from previews',
+    'image_show_soft': 'Block game images without acknowledging warning',
+    'image_show_hard': "The game's images or screenshots are blocked from the UI",
+    'run_random_game': 'Game will not be chosen for random runs',
+    'run_random_stage': 'Game stages will not be used in random runs',
+    'check_random': 'Excluded from "check random" feature',
+    'run_pick_game': 'Game banned from manual add to a challenge run.',
+    'run_pick_stage': 'Game banned from manual stage selection.',
+    'details_stages_soft': 'Game stages page locked behind warning.',
+    'details_stages_hard': 'Game stages page banned.',
+    'details_soft': 'Game details page locked behind warning. If you do not acknowledge: you can only see gameid, name, author, and ban status. The gameid detail and ban attributes will always be accessible, so the game details panel is mostly masked but not completely blocked.',
+    'details_hard': 'Game details page limited. Only gameid, name, author, and ban status will display on details page. Full details cannot be displayed and cannot be overridden. The gameid detail and ban attributes will always be accessible, so the game details panel is mostly masked but not completely blocked.',
+    'list_title': 'Game title will be suppressed from list and shown as "<Blocked name>"',
+    'start_multi': 'Game is banned from Start" or "+Patch" button with multiple games. The game can only be staged individually.',
+    'start_patchplus': 'Game is banned from the "+Patch" button. You can only launch the game using Start. The game is excluded from runs that have any global conditions enabled.',
+    'start_single': 'Prevents use of the Start button with the game selected at all. This also blocks access to test stages on the matching games\' gameid from the Select Game Stage dialog in view mode.',
+    'list_any': 'The game will not show up in the main list view at all'
+  };
+  
+  return senseStr.split(',').map(s => s.trim()).filter(s => s).map((sense, idx) => {
+    // Handle wildcards
+    if (sense.endsWith('*')) {
+      const prefix = sense.slice(0, -1);
+      const matchingSenses = Object.keys(senseMap).filter(k => k.startsWith(prefix));
+      return matchingSenses.map((matchSense, matchIdx) => ({
+        key: `${sense}_${matchIdx}`,
+        name: matchSense,
+        description: senseMap[matchSense] || 'Banned action'
+      }));
+    }
+    
+    return {
+      key: `${sense}_${idx}`,
+      name: sense,
+      description: senseMap[sense] || 'Banned action'
+    };
+  }).flat();
+}
+
+// Watch for game changes to check bans
+watch(() => props.game?.Id, () => {
+  checkForBans();
+}, { immediate: true });
 
 function handleOpenRatingSheet() {
   // Close popout modal if open, so the ratecard modal is visible
@@ -779,6 +1212,119 @@ function formatRatingStat(value: number | null | undefined): string {
 
 .avail-stages-link:hover {
   color: var(--accent-hover, #45a049);
+}
+
+/* Ban details link styling */
+.ban-details-link {
+  color: #ff6b6b;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.ban-details-link:hover {
+  color: #ff9999;
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Ban details modal */
+.ban-details-modal {
+  max-width: 90vw;
+  width: 800px;
+  max-height: 90vh;
+}
+
+.ban-details-body {
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.ban-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ban-entry {
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 6px;
+  padding: 16px;
+  background: var(--bg-secondary, #f9f9f9);
+}
+
+.ban-start-time,
+.ban-warning,
+.ban-reason {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.ban-acknowledgments {
+  margin-bottom: 12px;
+}
+
+.acknowledgment-list {
+  margin: 8px 0 0 20px;
+  padding: 0;
+  list-style-type: disc;
+}
+
+.acknowledgment-list li {
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.ban-matches {
+  margin-bottom: 12px;
+}
+
+.match-details {
+  margin-top: 8px;
+  margin-left: 20px;
+}
+
+.match-item {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-secondary, #e0e0e0);
+  border-radius: 4px;
+}
+
+.match-column,
+.match-rule {
+  margin-bottom: 4px;
+}
+
+.ban-senses {
+  margin-bottom: 12px;
+}
+
+.sense-list {
+  margin: 8px 0 0 20px;
+  padding: 0;
+  list-style-type: disc;
+}
+
+.sense-list li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.loading,
+.error,
+.no-bans {
+  padding: 20px;
+  text-align: center;
+}
+
+.error {
+  color: #d32f2f;
 }
 
 .stages-actions {

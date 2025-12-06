@@ -3487,10 +3487,19 @@ function registerDatabaseHandlers(dbManager) {
       
       const banManager = new GameVersionBanManager(dbManager);
       
-      // If gameData is provided, use it; otherwise construct minimal game object
-      const game = gameData || { gameid, Id: gameid };
+      // Ensure gameid is a string for consistent matching
+      const gameidStr = String(gameid);
       
-      const isBanned = banManager.isGameBanned(gameid, action, game);
+      // If gameData is provided, use it; otherwise construct minimal game object
+      const game = gameData || { gameid: gameidStr, Id: gameidStr };
+      
+      // Ensure game object has gameid as string
+      if (game.gameid) game.gameid = String(game.gameid);
+      if (game.Id) game.Id = String(game.Id);
+      
+      console.log(`[db:ban:is-game-banned] Checking ban for gameid=${gameidStr}, action=${action}, gameData=`, game);
+      const isBanned = banManager.isGameBanned(gameidStr, action, game);
+      console.log(`[db:ban:is-game-banned] Result: isBanned=${isBanned}`);
       
       // Cache the result for image_title and image_preview (session-only, with timestamp)
       if (action === 'image_title' || action === 'image_preview') {

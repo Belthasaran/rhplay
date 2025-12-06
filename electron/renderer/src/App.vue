@@ -8801,19 +8801,48 @@ watch(filteredItems, async (newItems) => {
 // Check for image_title bans on visible tiles
 async function checkImageTitleBans(items: Item[]) {
   const api = (window as any).electronAPI;
-  if (!api || !api.isGameBanned) return;
+  if (!api || !api.isGameBanned) {
+    console.warn('[checkImageTitleBans] electronAPI.isGameBanned not available');
+    return;
+  }
   
   // Check bans for items that aren't already checked
   const toCheck = items.filter(item => !imageTitleBanned.has(item.Id));
   
   for (const item of toCheck) {
     try {
-      const result = await api.isGameBanned(item.Id, 'image_title', item);
-      if (result.success && result.isBanned) {
-        imageTitleBanned.add(item.Id);
+      // Ensure gameid is a string for consistent matching
+      const gameidStr = String(item.Id);
+      
+      // Serialize the item to a plain object for IPC (reactive Vue objects can't be cloned)
+      // Only include fields that might be needed for ban matching
+      const gameData = {
+        gameid: gameidStr,
+        Id: gameidStr,
+        Name: item.Name,
+        Author: item.Author,
+        Tags: item.Tags,
+        Type: item.Type,
+        FieldsType: item.FieldsType,
+        GameType: item.GameType,
+        CombinedType: item.CombinedType,
+        LegacyType: item.LegacyType
+      };
+      
+      const result = await api.isGameBanned(gameidStr, 'image_title', gameData);
+      
+      if (result.success) {
+        if (result.isBanned) {
+          console.log(`[checkImageTitleBans] Game ${gameidStr} is banned for image_title`);
+          imageTitleBanned.add(item.Id);
+        } else {
+          console.log(`[checkImageTitleBans] Game ${gameidStr} is NOT banned for image_title`);
+        }
+      } else {
+        console.warn(`[checkImageTitleBans] Ban check failed for game ${gameidStr}:`, result.error);
       }
     } catch (error) {
-      console.warn(`Error checking ban for game ${item.Id}:`, error);
+      console.warn(`[checkImageTitleBans] Error checking ban for game ${item.Id}:`, error);
     }
   }
 }

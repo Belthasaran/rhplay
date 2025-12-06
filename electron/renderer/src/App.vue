@@ -18993,15 +18993,15 @@ function formatStageDifficulty(diff: number | null): string {
   if (diff === null || diff === undefined) return '';
   const map: Record<number, string> = {
     0: 'Trivial',
-    1: 'Casual',
-    2: 'Ez',
-    3: 'Advanced',
-    4: 'Xpert',
-    5: 'Master',
-    6: 'GM',
-    7: 'GM+',
-    8: 'Unwinnable',
-    9: 'Unwinnable',
+    1: 'Newcomer',
+    2: 'Casual',
+    3: 'Intermediate',
+    4: 'Advanced',
+    5: 'Xpert',
+    6: 'Master',
+    7: 'GM',
+    8: 'GM+',
+    9: 'Tool-Only',
     10: 'Bugged'
   };
   return map[diff] || `Difficulty ${diff}`;
@@ -19010,16 +19010,16 @@ function formatStageDifficulty(diff: number | null): string {
 function getDifficultyLabel(diff: number): string {
   const map: Record<number, string> = {
     0: 'Trivial (Too easy)',
-    1: 'Casual',
-    2: 'Ez (Simple kaizo tutorial)',
-    3: 'Advanced (Beginner kaizo)',
-    4: 'Xpert',
-    5: 'Master (Expert)',
-    6: 'GM',
-    7: 'GM+',
-    8: 'Broken/Unwinnable',
-    9: 'Unwinnable',
-    10: 'Bugged (Needs fix)'
+    1: 'Newcomer',
+    2: 'Casual (Simple Kaizo Tutorial etc)',
+    3: 'Intermediate (Beginner kaizo)',
+    4: 'Advanced (Int. Kaizo)',
+    5: 'Xpert',
+    6: 'Master',
+    7: 'GM',
+    8: 'GM+',
+    9: 'Tool-Only',
+    10: 'Broken Unwinnable (Needs fix)'
   };
   return map[diff] || `Difficulty ${diff}`;
 }

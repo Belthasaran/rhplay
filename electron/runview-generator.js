@@ -85,14 +85,17 @@ function abbreviateText(text, maxLength = 15) {
 function getDifficultyMnemonic(difficulty) {
   if (difficulty === null || difficulty === undefined) return '';
   const map = {
-    0: 'Ne',
-    1: 'Casual',
-    2: 'Med',
-    3: 'Adv',
-    4: 'Exp',
-    5: 'Master',
-    6: 'GM',
-    7: 'GM+'
+    0: 'Tr',
+    1: 'Ne',
+    2: 'Casual',
+    3: 'Med',
+    4: 'Adv',
+    5: 'Exp',
+    6: 'Master',
+    7: 'GM',
+    8: 'GM+',
+    9: 'TAS',
+   10: '?'
   };
   return map[difficulty] || '';
 }
@@ -165,17 +168,19 @@ function mapDifficultyToNumber(difficulty) {
   if (!difficulty) return null;
   const lower = difficulty.toLowerCase();
   const map = {
-    'newcomer': 0,
-    'casual': 1,
-    'intermediate': 2,
-    'skilled': 2,
-    'advanced': 3,
-    'hard': 3,
-    'expert': 4,
-    'master': 5,
-    'grandmaster': 6,
-    'grandmaster plus': 7,
-    'tool-assisted': 8
+    'trivial' : 0,
+    'newcomer': 1,
+    'casual': 2,
+    'intermediate': 3,
+    'skilled': 3,
+    'advanced': 4,
+    'hard': 5,
+    'expert': 5,
+    'master': 6,
+    'grandmaster': 7,
+    'grandmaster plus': 8,
+    'tool-assisted': 9,
+    'bugged': 10
   };
   return map[lower] ?? null;
 }

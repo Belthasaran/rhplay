@@ -82,6 +82,7 @@ function printUsage() {
     `  --clientdata=PATH   Path to clientdata.db (default: electron/clientdata.db)\n` +
     `  --resourcedb=PATH   Path to resource.db (default: electron/resource.db)\n` +
     `  --screenshotdb=PATH Path to screenshot.db (default: electron/screenshot.db)\n` +
+    `  --thumbnailcachedb=PATH Path to thumbnail_cache.db (default: electron/thumbnail_cache.db)\n` +
     `  --verbose           Print detailed progress\n` +
     `  --help              Show this help text\n`);
 }
@@ -1196,6 +1197,17 @@ const MIGRATIONS = {
       },
     },
   ],
+  thumbnail_cache: [
+    {
+      id: 'thumbnail_cache_001_create_thumbnail_cache',
+      description: 'Create thumbnail_cache table for storing decoded game thumbnail images',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/thumbnail_cache_001_create_thumbnail_cache.sql'),
+      skipIf(db) {
+        return tableExists(db, 'thumbnail_cache');
+      },
+    },
+  ],
   patchbin: [
     {
       id: 'patchbin_001_add_rhpakuuid',
@@ -1428,12 +1440,14 @@ function main() {
     clientdata: resolveRelative('electron', 'clientdata.db'),
     resourcedb: resolveRelative('electron', 'resource.db'),
     screenshotdb: resolveRelative('electron', 'screenshot.db'),
+    thumbnailcachedb: resolveRelative('electron', 'thumbnail_cache.db'),
   } : {
     rhdatadb: resolveRelativeAppData('electron', 'rhdata.db'),
     patchbindb: resolveRelativeAppData('electron', 'patchbin.db'),
     clientdata: resolveRelativeAppData('electron', 'clientdata.db'),
     resourcedb: resolveRelativeAppData('electron', 'resource.db'),
     screenshotdb: resolveRelativeAppData('electron', 'screenshot.db'),
+    thumbnailcachedb: resolveRelativeAppData('electron', 'thumbnail_cache.db'),
   };
 
   const targets = {
@@ -1442,6 +1456,7 @@ function main() {
     clientdata: args.clientdata || defaults.clientdata,
     resource: args.resourcedb || defaults.resourcedb,
     screenshot: args.screenshotdb || defaults.screenshotdb,
+    thumbnail_cache: args.thumbnailcachedb || defaults.thumbnailcachedb,
   };
 
   try {
@@ -1451,6 +1466,7 @@ function main() {
 
     ensureDatabaseFile(targets.resource);
     ensureDatabaseFile(targets.screenshot);
+    ensureDatabaseFile(targets.thumbnail_cache);
 
     if (targets.rhdata) {
       applyMigrations(targets.rhdata, MIGRATIONS.rhdata, { verbose });
@@ -1470,6 +1486,10 @@ function main() {
 
     if (targets.screenshot) {
       applyMigrations(targets.screenshot, MIGRATIONS.screenshot, { verbose });
+    }
+
+    if (targets.thumbnail_cache) {
+      applyMigrations(targets.thumbnail_cache, MIGRATIONS.thumbnail_cache, { verbose });
     }
 
     console.log('\nAll done!');

@@ -67,6 +67,7 @@ class DatabaseManager {
       moderation: process.env.MODERATION_DB_PATH || path.join(basePath, 'moderation.db'),
       resource: process.env.RESOURCE_DB_PATH || path.join(basePath, 'resource.db'),
       screenshot: process.env.SCREENSHOT_DB_PATH || path.join(basePath, 'screenshot.db'),
+      thumbnail_cache: process.env.THUMBNAIL_CACHE_DB_PATH || path.join(basePath, 'thumbnail_cache.db'),
     };
     
     // In packaged environment, handle external databases

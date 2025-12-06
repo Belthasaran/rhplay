@@ -434,6 +434,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @returns {Promise<{success: boolean, dataUrl?: string, buffer?: Buffer, error?: string}>}
      */
     decryptScreenshot: (params) => ipcRenderer.invoke('db:screenshots:decrypt', params),
+    
+    /**
+     * Get thumbnail from cache
+     * @param {Object} params - Parameters { gameid }
+     * @returns {Promise<{success: boolean, dataUrl?: string, rsuuid?: string, sha256?: string, error?: string}>}
+     */
+    getThumbnail: (params) => ipcRenderer.invoke('db:thumbnail:get', params),
+    
+    /**
+     * Cache thumbnail for a gameid
+     * @param {Object} params - Parameters { gameid, dataUrl, screenshotRsuuid, screenshotSha256 }
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    setThumbnail: (params) => ipcRenderer.invoke('db:thumbnail:set', params),
+    
+    /**
+     * Get title screenshot metadata for a gameid
+     * @param {Object} params - Parameters { gameid }
+     * @returns {Promise<{success: boolean, rsuuid?: string, encryptedData?: Buffer, fernetKey?: string, screenshotType?: string, decodedSha256?: string, error?: string}>}
+     */
+    getTitleScreenshot: (params) => ipcRenderer.invoke('db:thumbnail:get-title-screenshot', params),
+    
+    /**
+     * Scan all gameids and precache thumbnails
+     * @returns {Promise<{success: boolean, cached?: number, skipped?: number, errors?: number, total?: number, error?: string}>}
+     */
+    scanAllThumbnails: () => ipcRenderer.invoke('db:thumbnail:scan-all'),
     saveGameStage: (params) => ipcRenderer.invoke('gamestages:save', params),
     deleteGameStage: (params) => ipcRenderer.invoke('gamestages:delete', params),
     getDetectedLevels: (params) => ipcRenderer.invoke('gamestages:get-detected-levels', params),

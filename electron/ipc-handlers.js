@@ -14076,6 +14076,233 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Get thumbnail from cache
+   * Channel: db:thumbnail:get
+   */
+  ipcMain.handle('db:thumbnail:get', async (_event, { gameid }) => {
+    try {
+      const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+      
+      const cached = thumbnailCacheDb.prepare(`
+        SELECT thumbnail_data_url, screenshot_rsuuid, screenshot_decoded_sha256
+        FROM thumbnail_cache
+        WHERE gameid = ?
+      `).get(gameid);
+      
+      if (cached) {
+        return { success: true, dataUrl: cached.thumbnail_data_url, rsuuid: cached.screenshot_rsuuid, sha256: cached.screenshot_decoded_sha256 };
+      }
+      
+      return { success: false, error: 'Not cached' };
+    } catch (error) {
+      console.error('[db:thumbnail:get] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Cache thumbnail for a gameid
+   * Channel: db:thumbnail:set
+   */
+  ipcMain.handle('db:thumbnail:set', async (_event, { gameid, dataUrl, screenshotRsuuid, screenshotSha256 }) => {
+    try {
+      const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+      
+      thumbnailCacheDb.prepare(`
+        INSERT OR REPLACE INTO thumbnail_cache (gameid, thumbnail_data_url, screenshot_rsuuid, screenshot_decoded_sha256, cached_at, updated_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).run(gameid, dataUrl, screenshotRsuuid || null, screenshotSha256 || null);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[db:thumbnail:set] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get title screenshot for a gameid (lowest sequence_no or title_screenshot_sha256 override)
+   * Channel: db:thumbnail:get-title-screenshot
+   */
+  ipcMain.handle('db:thumbnail:get-title-screenshot', async (_event, { gameid }) => {
+    try {
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const screenshotDb = dbManager.getConnection('screenshot');
+      
+      // Check for manual override
+      const gameVersion = rhdataDb.prepare(`
+        SELECT title_screenshot_sha256, gvuuid
+        FROM gameversions
+        WHERE gameid = ?
+        ORDER BY version DESC
+        LIMIT 1
+      `).get(gameid);
+      
+      let screenshot = null;
+      
+      if (gameVersion?.title_screenshot_sha256) {
+        // Use manual override
+        screenshot = screenshotDb.prepare(`
+          SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+          FROM res_screenshots
+          WHERE gameid = ? AND decoded_sha256 = ?
+          LIMIT 1
+        `).get(gameid, gameVersion.title_screenshot_sha256);
+      }
+      
+      if (!screenshot) {
+        // Use screenshot with lowest sequence_no
+        screenshot = screenshotDb.prepare(`
+          SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+          FROM res_screenshots
+          WHERE gameid = ? AND kind = 'file'
+          ORDER BY sequence_no ASC NULLS LAST, created_at ASC
+          LIMIT 1
+        `).get(gameid);
+      }
+      
+      if (!screenshot) {
+        return { success: false, error: 'No screenshot found' };
+      }
+      
+      return {
+        success: true,
+        rsuuid: screenshot.rsuuid,
+        encryptedData: screenshot.encrypted_data,
+        fernetKey: screenshot.fernet_key,
+        screenshotType: screenshot.screenshot_type,
+        decodedSha256: screenshot.decoded_sha256
+      };
+    } catch (error) {
+      console.error('[db:thumbnail:get-title-screenshot] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Scan all gameids and precache thumbnails
+   * Channel: db:thumbnail:scan-all
+   */
+  ipcMain.handle('db:thumbnail:scan-all', async (_event) => {
+    try {
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const screenshotDb = dbManager.getConnection('screenshot');
+      const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+      
+      // Get all gameids
+      const gameids = rhdataDb.prepare(`
+        SELECT DISTINCT gameid FROM gameversions ORDER BY gameid
+      `).all();
+      
+      const fernet = require('fernet');
+      let cached = 0;
+      let skipped = 0;
+      let errors = 0;
+      
+      for (const { gameid } of gameids) {
+        try {
+          // Check if already cached
+          const existing = thumbnailCacheDb.prepare(`
+            SELECT gameid FROM thumbnail_cache WHERE gameid = ?
+          `).get(gameid);
+          
+          if (existing) {
+            skipped++;
+            continue;
+          }
+          
+          // Get title screenshot
+          const gameVersion = rhdataDb.prepare(`
+            SELECT title_screenshot_sha256, gvuuid
+            FROM gameversions
+            WHERE gameid = ?
+            ORDER BY version DESC
+            LIMIT 1
+          `).get(gameid);
+          
+          let screenshot = null;
+          
+          if (gameVersion?.title_screenshot_sha256) {
+            screenshot = screenshotDb.prepare(`
+              SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+              FROM res_screenshots
+              WHERE gameid = ? AND decoded_sha256 = ?
+              LIMIT 1
+            `).get(gameid, gameVersion.title_screenshot_sha256);
+          }
+          
+          if (!screenshot) {
+            screenshot = screenshotDb.prepare(`
+              SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+              FROM res_screenshots
+              WHERE gameid = ? AND kind = 'file'
+              ORDER BY sequence_no ASC NULLS LAST, created_at ASC
+              LIMIT 1
+            `).get(gameid);
+          }
+          
+          if (!screenshot || !screenshot.encrypted_data || !screenshot.fernet_key) {
+            skipped++;
+            continue;
+          }
+          
+          // Decrypt screenshot
+          let encryptedBuffer = screenshot.encrypted_data;
+          if (encryptedBuffer instanceof Uint8Array) {
+            encryptedBuffer = Buffer.from(encryptedBuffer);
+          } else if (typeof encryptedBuffer === 'string') {
+            encryptedBuffer = Buffer.from(encryptedBuffer, 'base64');
+          }
+          
+          let fernetKeyString = screenshot.fernet_key;
+          if (Buffer.isBuffer(fernetKeyString)) {
+            fernetKeyString = fernetKeyString.toString('utf8');
+          } else if (typeof fernetKeyString === 'string') {
+            try {
+              const decoded = Buffer.from(fernetKeyString, 'base64').toString('utf8');
+              if (decoded.length === 44 && /^[A-Za-z0-9+/_-]+=*$/.test(decoded)) {
+                fernetKeyString = decoded;
+              }
+            } catch (e) {
+              // Use as-is
+            }
+          }
+          
+          const secret = new fernet.Secret(fernetKeyString);
+          const token = new fernet.Token({
+            secret: secret,
+            ttl: 0,
+            token: encryptedBuffer.toString('base64')
+          });
+          
+          const decrypted = token.decode();
+          const decryptedBuffer = Buffer.from(decrypted, 'base64');
+          
+          // Create data URL
+          const mimeType = screenshot.screenshot_type || 'image/png';
+          const dataUrl = `data:${mimeType};base64,${decryptedBuffer.toString('base64')}`;
+          
+          // Cache it
+          thumbnailCacheDb.prepare(`
+            INSERT OR REPLACE INTO thumbnail_cache (gameid, thumbnail_data_url, screenshot_rsuuid, screenshot_decoded_sha256, cached_at, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `).run(gameid, dataUrl, screenshot.rsuuid, screenshot.decoded_sha256);
+          
+          cached++;
+        } catch (error) {
+          console.error(`[db:thumbnail:scan-all] Error processing gameid ${gameid}:`, error.message);
+          errors++;
+        }
+      }
+      
+      return { success: true, cached, skipped, errors, total: gameids.length };
+    } catch (error) {
+      console.error('[db:thumbnail:scan-all] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 // Helper function to sanitize file names

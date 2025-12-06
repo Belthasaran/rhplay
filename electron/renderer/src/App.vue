@@ -854,6 +854,32 @@
         </div>
 
         <div class="filter-dropdown-container">
+          <button @click="toggleViewDropdown" class="filter-dropdown-btn">
+            <span>View</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+
+          <div v-if="viewDropdownOpen" class="filter-dropdown simple-dropdown" @click.stop>
+            <div class="simple-dropdown-body">
+              <div class="dropdown-section-label">Display Mode:</div>
+              <button @click="setViewMode('list'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': viewMode === 'list' }]">List Mode</button>
+              <button @click="setViewMode('tiles'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': viewMode === 'tiles' }]">Tiles Mode</button>
+              <div class="dropdown-separator"></div>
+              <div class="dropdown-section-label">Sort By:</div>
+              <button @click="setSortOption('fields_type'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'fields_type' }]">Sort: Fields_type</button>
+              <button @click="setSortOption('added_new_to_old'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'added_new_to_old' }]">Sort: Added date - new to old</button>
+              <button @click="setSortOption('added_old_to_new'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'added_old_to_new' }]">Sort: Added date - old to new</button>
+              <button @click="setSortOption('difficulty_high_to_low'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'difficulty_high_to_low' }]">Sort: Raw Difficulty - high to low</button>
+              <button @click="setSortOption('difficulty_low_to_high'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'difficulty_low_to_high' }]">Sort: Raw Difficulty - low to high</button>
+              <button @click="setSortOption('title_a_to_z'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'title_a_to_z' }]">Sort: Title name - A-Z</button>
+              <button @click="setSortOption('title_z_to_a'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'title_z_to_a' }]">Sort: Title name - Z-A</button>
+              <button @click="setSortOption('author_a_to_z'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'author_a_to_z' }]">Sort: Author name - A-Z</button>
+              <button @click="setSortOption('author_z_to_a'); closeViewDropdown()" :class="['dropdown-action-btn', { 'active': sortOption === 'author_z_to_a' }]">Sort: Author name - Z-A</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-dropdown-container">
           <button @click="toggleManageDropdown" class="filter-dropdown-btn">
             <span>Manage</span>
             <span class="dropdown-arrow">▼</span>
@@ -987,7 +1013,8 @@
           <button @click="loadGames">Retry</button>
         </div>
         
-        <table class="data-table">
+        <!-- List Mode -->
+        <table v-if="viewMode === 'list'" class="data-table">
           <thead>
             <tr>
               <th class="col-check">
@@ -1008,7 +1035,7 @@
           </thead>
           <tbody>
             <tr
-              v-for="row in filteredItems"
+              v-for="row in sortedAndFilteredItems"
               :key="row.Id"
               :class="{ hidden: row.Hidden, finished: row.Status === 'Finished' }"
               @click="rowClick(row)"
@@ -1028,11 +1055,47 @@
               <td>{{ row.Hidden ? 'Yes' : 'No' }}</td>
               <td class="notes">{{ row.Mynotes ?? '' }}</td>
             </tr>
-            <tr v-if="filteredItems.length === 0">
+            <tr v-if="sortedAndFilteredItems.length === 0">
               <td class="empty" colspan="11">No items match your filters.</td>
             </tr>
           </tbody>
         </table>
+        
+        <!-- Tiles Mode -->
+        <div v-else-if="viewMode === 'tiles'" class="tiles-container">
+          <div class="tiles-grid">
+            <div
+              v-for="row in visibleTiles"
+              :key="row.Id"
+              :class="['game-tile', { 'selected': selectedIds.has(row.Id), 'hidden': row.Hidden, 'finished': row.Status === 'Finished', 'in-run': isInRun(row.Id) }]"
+              @click="rowClick(row)"
+            >
+              <div class="tile-checkbox">
+                <input type="checkbox" :checked="selectedIds.has(row.Id)" @change="toggleMainSelection(row.Id, $event)" @click.stop />
+              </div>
+              <div class="tile-thumbnail">
+                <img
+                  v-if="row.thumbnailDataUrl"
+                  :src="row.thumbnailDataUrl"
+                  :alt="row.Name"
+                  @error="handleThumbnailError(row)"
+                />
+                <div v-else class="tile-placeholder">
+                  <span>No Image</span>
+                </div>
+              </div>
+              <div class="tile-caption">
+                {{ row.Id }} - {{ row.Name }} - {{ row.Author }}
+              </div>
+            </div>
+          </div>
+          <div v-if="visibleTiles.length === 0" class="tiles-empty">
+            No items match your filters.
+          </div>
+          <div v-if="hasMoreTiles" class="tiles-load-more">
+            <button @click="loadMoreTiles" class="btn-load-more">Load More</button>
+          </div>
+        </div>
       </div>
 
       <aside class="sidebar">
@@ -7853,6 +7916,15 @@ const onlineShowAdminOptions = ref(false);
 const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing' | 'submissions'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
+// View mode and sorting state
+const viewMode = ref<'list' | 'tiles'>('list');
+const viewDropdownOpen = ref(false);
+const sortOption = ref<string>('fields_type');
+const tilesPerPage = ref(50);
+const tilesPage = ref(0);
+const thumbnailCache = reactive<Map<string, string>>(new Map());
+const thumbnailLoading = reactive<Set<string>>(new Set());
+
 // Profile and Ratings Publishing state
 const profilePublishingInfo = ref<any>(null);
 const profilePublishStatus = ref<any>(null);
@@ -8003,6 +8075,77 @@ const filteredItems = computed(() => {
     if (hideFinished.value && it.Status === 'Finished') return false;
     return matchesFilter(it, q);
   });
+});
+
+// Sorted items based on sort option
+const sortedAndFilteredItems = computed(() => {
+  const filtered = [...filteredItems.value];
+  
+  switch (sortOption.value) {
+    case 'fields_type':
+      return filtered.sort((a, b) => (a.Type || '').localeCompare(b.Type || ''));
+    case 'added_new_to_old':
+      return filtered.sort((a, b) => {
+        const dateA = a.Added ? new Date(a.Added).getTime() : 0;
+        const dateB = b.Added ? new Date(b.Added).getTime() : 0;
+        return dateB - dateA;
+      });
+    case 'added_old_to_new':
+      return filtered.sort((a, b) => {
+        const dateA = a.Added ? new Date(a.Added).getTime() : 0;
+        const dateB = b.Added ? new Date(b.Added).getTime() : 0;
+        return dateA - dateB;
+      });
+    case 'difficulty_high_to_low':
+      return filtered.sort((a, b) => {
+        const diffA = getDifficultyValue(a);
+        const diffB = getDifficultyValue(b);
+        return diffB - diffA;
+      });
+    case 'difficulty_low_to_high':
+      return filtered.sort((a, b) => {
+        const diffA = getDifficultyValue(a);
+        const diffB = getDifficultyValue(b);
+        return diffA - diffB;
+      });
+    case 'title_a_to_z':
+      return filtered.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+    case 'title_z_to_a':
+      return filtered.sort((a, b) => (b.Name || '').localeCompare(a.Name || ''));
+    case 'author_a_to_z':
+      return filtered.sort((a, b) => (a.Author || '').localeCompare(b.Author || ''));
+    case 'author_z_to_a':
+      return filtered.sort((a, b) => (b.Author || '').localeCompare(a.Author || ''));
+    default:
+      return filtered;
+  }
+});
+
+// Helper to get difficulty value for sorting
+function getDifficultyValue(item: any): number {
+  // Try raw_difficulty first, then difficulty, then legacy_type mapping
+  if (item.raw_difficulty !== null && item.raw_difficulty !== undefined) {
+    return Number(item.raw_difficulty) || 0;
+  }
+  if (item.difficulty !== null && item.difficulty !== undefined) {
+    return Number(item.difficulty) || 0;
+  }
+  // TODO: Map legacy_type using game_difficulty_map table if needed
+  return 0;
+}
+
+// Visible tiles with pagination
+const visibleTiles = computed(() => {
+  const sorted = sortedAndFilteredItems.value;
+  const endIndex = (tilesPage.value + 1) * tilesPerPage.value;
+  return sorted.slice(0, endIndex).map(item => ({
+    ...item,
+    thumbnailDataUrl: thumbnailCache.get(item.Id) || null
+  }));
+});
+
+const hasMoreTiles = computed(() => {
+  return (tilesPage.value + 1) * tilesPerPage.value < sortedAndFilteredItems.value.length;
 });
 
 const hasActiveFilters = computed(() => searchQuery.value.trim().length > 0 || hideFinished.value || showHidden.value);
@@ -8178,6 +8321,122 @@ function toggleManageDropdown() {
 function closeManageDropdown() {
   manageDropdownOpen.value = false;
 }
+
+// View dropdown functions
+function toggleViewDropdown() {
+  viewDropdownOpen.value = !viewDropdownOpen.value;
+}
+
+function closeViewDropdown() {
+  viewDropdownOpen.value = false;
+}
+
+function setViewMode(mode: 'list' | 'tiles') {
+  viewMode.value = mode;
+  if (mode === 'tiles') {
+    // Reset pagination when switching to tiles
+    tilesPage.value = 0;
+    // Load thumbnails for visible tiles
+    loadThumbnailsForVisibleTiles();
+  }
+}
+
+function setSortOption(option: string) {
+  sortOption.value = option;
+  // Reset pagination when sorting changes
+  if (viewMode.value === 'tiles') {
+    tilesPage.value = 0;
+    loadThumbnailsForVisibleTiles();
+  }
+}
+
+function loadMoreTiles() {
+  tilesPage.value++;
+  loadThumbnailsForVisibleTiles();
+}
+
+// Thumbnail loading functions
+async function loadThumbnailsForVisibleTiles() {
+  const visible = visibleTiles.value;
+  for (const item of visible) {
+    if (!thumbnailCache.has(item.Id) && !thumbnailLoading.has(item.Id)) {
+      await loadThumbnail(item.Id);
+    }
+  }
+}
+
+async function loadThumbnail(gameid: string) {
+  if (thumbnailLoading.has(gameid)) return;
+  
+  thumbnailLoading.add(gameid);
+  
+  try {
+    const api = (window as any).electronAPI;
+    if (!api?.getThumbnail) {
+      console.warn('getThumbnail API not available');
+      return;
+    }
+    
+    // Try to get from cache first
+    const cached = await api.getThumbnail({ gameid });
+    if (cached.success && cached.dataUrl) {
+      thumbnailCache.set(gameid, cached.dataUrl);
+      return;
+    }
+    
+    // If not cached, get title screenshot and decrypt it
+    const titleScreenshot = await api.getTitleScreenshot({ gameid });
+    if (!titleScreenshot.success || !titleScreenshot.encryptedData || !titleScreenshot.fernetKey) {
+      return;
+    }
+    
+    // Decrypt screenshot
+    const decrypted = await api.decryptScreenshot({
+      encryptedData: titleScreenshot.encryptedData,
+      fernetKey: titleScreenshot.fernetKey,
+      screenshotType: titleScreenshot.screenshotType || 'image/png'
+    });
+    
+    if (decrypted.success && decrypted.dataUrl) {
+      // Cache it
+      await api.setThumbnail({
+        gameid,
+        dataUrl: decrypted.dataUrl,
+        screenshotRsuuid: titleScreenshot.rsuuid,
+        screenshotSha256: titleScreenshot.decodedSha256
+      });
+      
+      thumbnailCache.set(gameid, decrypted.dataUrl);
+    }
+  } catch (error) {
+    console.error(`Error loading thumbnail for gameid ${gameid}:`, error);
+  } finally {
+    thumbnailLoading.delete(gameid);
+  }
+}
+
+function handleThumbnailError(item: any) {
+  // Remove broken thumbnail from cache
+  thumbnailCache.delete(item.Id);
+  // Try to reload
+  loadThumbnail(item.Id);
+}
+
+// Watch for view mode changes to load thumbnails
+watch(viewMode, (newMode) => {
+  if (newMode === 'tiles') {
+    nextTick(() => {
+      loadThumbnailsForVisibleTiles();
+    });
+  }
+});
+
+// Watch for visible tiles changes to load thumbnails
+watch(visibleTiles, () => {
+  if (viewMode.value === 'tiles') {
+    loadThumbnailsForVisibleTiles();
+  }
+}, { deep: true });
 
 // Export and Import functions
 async function exportFull() {
@@ -25811,6 +26070,26 @@ onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown);
   window.addEventListener('click', handleGlobalClick);
   
+  // Start thumbnail precaching scan in background (non-blocking)
+  if (isElectronAvailable()) {
+    const api = (window as any).electronAPI;
+    if (api?.scanAllThumbnails) {
+      console.log('Starting thumbnail precaching scan...');
+      // Run in background without blocking UI
+      setTimeout(() => {
+        api.scanAllThumbnails().then((result: any) => {
+          if (result.success) {
+            console.log(`Thumbnail scan completed: ${result.cached} cached, ${result.skipped} skipped, ${result.errors} errors`);
+          } else {
+            console.error('Thumbnail scan failed:', result.error);
+          }
+        }).catch((error: any) => {
+          console.error('Thumbnail scan error:', error);
+        });
+      }, 2000); // Wait 2 seconds after app load to start scan
+    }
+  }
+  
   // Listen for USB2SNES operation success events to update health tracking
   if (isElectronAvailable()) {
     const ipcRenderer = (window as any).electronAPI.ipcRenderer;
@@ -34059,6 +34338,153 @@ button:disabled {
   line-height: 1.2;
   word-wrap: break-word;
   max-width: 100%;
+}
+
+/* Tiles Mode Styles */
+.tiles-container {
+  padding: 16px;
+}
+
+.tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.game-tile {
+  position: relative;
+  border: 2px solid var(--border-primary, #ccc);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary, #fff);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.game-tile:hover {
+  border-color: var(--border-hover, #999);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.game-tile.selected {
+  border-color: var(--accent-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.game-tile.hidden {
+  opacity: 0.6;
+}
+
+.game-tile.finished {
+  opacity: 0.8;
+}
+
+.game-tile.in-run {
+  border-color: var(--success-color, #28a745);
+}
+
+.tile-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.tile-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.tile-thumbnail {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-tertiary, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.tile-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary, #f5f5f5);
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  text-align: center;
+  padding: 16px;
+}
+
+.tile-caption {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-primary, #333);
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-word;
+  background: var(--bg-primary, #fff);
+  border-top: 1px solid var(--border-primary, #ccc);
+}
+
+.tiles-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary, #666);
+  font-size: 16px;
+}
+
+.tiles-load-more {
+  text-align: center;
+  padding: 20px;
+}
+
+.btn-load-more {
+  padding: 10px 24px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+  transition: all 0.2s ease;
+}
+
+.btn-load-more:hover {
+  background: var(--bg-hover, #e9e9e9);
+  border-color: var(--border-hover, #999);
+}
+
+/* View dropdown active state */
+.dropdown-action-btn.active {
+  background: var(--accent-color, #007bff);
+  color: white;
+  font-weight: 600;
+}
+
+.dropdown-section-label {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-primary, #ccc);
+  margin-bottom: 4px;
 }
 
 </style>

@@ -374,7 +374,30 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
   }
   
   // Update skeleton with screenshots
+  // Store in both locations:
+  // 1. skeleton.screenshots - detailed records with metadata
   skeleton.screenshots = screenshots;
+  
+  // 2. skeleton.gameversion.screenshots - array of file paths (strings) for newgame.js --prepare
+  // This is what buildScreenshotEntries reads to process and encrypt screenshots
+  if (!skeleton.gameversion) {
+    skeleton.gameversion = {};
+  }
+  if (!Array.isArray(skeleton.gameversion.screenshots)) {
+    skeleton.gameversion.screenshots = [];
+  }
+  
+  // Add file paths to gameversion.screenshots (as strings) for processing during --prepare
+  for (const screenshot of screenshots) {
+    if (screenshot.file_path && !screenshot.duplicate_of) {
+      // Add relative path to gameversion.screenshots if not already present
+      const pathStr = screenshot.file_path;
+      if (!skeleton.gameversion.screenshots.includes(pathStr)) {
+        skeleton.gameversion.screenshots.push(pathStr);
+      }
+    }
+  }
+  
   fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
   
   console.log(`  [${gameid}] ✓ Downloaded ${downloaded} screenshot(s)`);

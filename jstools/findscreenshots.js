@@ -27,6 +27,10 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 const Database = require('better-sqlite3');
+const fernet = require('fernet');
+const UrlBase64 = require('urlsafe-base64');
+const { CID } = require('multiformats/cid');
+const { sha256: multiformatsSha256 } = require('multiformats/hashes/sha2');
 
 // Configuration
 const CONFIG = {
@@ -47,7 +51,8 @@ function parseArgs(args) {
     'target-database': false,
     'gamefolders': null,
     'subfolders': null,
-    'limit': null
+    'limit': null,
+    'gameid': null
   };
   
   for (let i = 0; i < args.length; i++) {
@@ -74,6 +79,10 @@ function parseArgs(args) {
       parsed['limit'] = parseInt(arg.split('=')[1], 10);
     } else if (arg === '--limit') {
       parsed['limit'] = parseInt(args[++i], 10);
+    } else if (arg.startsWith('--gameid=')) {
+      parsed['gameid'] = arg.split('=')[1];
+    } else if (arg === '--gameid') {
+      parsed['gameid'] = args[++i];
     }
   }
   
@@ -97,6 +106,7 @@ Modes (one required):
 Options:
   --gamefolders=all         Process all game folders (target-folder mode)
   --subfolders=<ids>        Process specific game folders (comma-separated IDs)
+  --gameid=<ids>            Process specific game IDs (comma-separated, target-database mode)
   --limit=<n>               Stop after finding/downloading screenshots for N games
   --help, -h                Show this help message
 
@@ -194,7 +204,86 @@ function calculateHashes(filePath) {
     sha256: crypto.createHash('sha256').update(data).digest('hex'),
     sha1: crypto.createHash('sha1').update(data).digest('hex'),
     md5: crypto.createHash('md5').update(data).digest('hex'),
-    size: data.length
+    size: data.length,
+    buffer: data
+  };
+}
+
+/**
+ * Generate Fernet key
+ */
+function generateFernetKey() {
+  return UrlBase64.encode(crypto.randomBytes(32)).toString();
+}
+
+/**
+ * Convert Fernet token string to buffer
+ */
+function fernetTokenToBuffer(token) {
+  let base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  return Buffer.from(base64, 'base64');
+}
+
+/**
+ * Convert buffer to Fernet token string
+ */
+function bufferToFernetToken(buffer) {
+  return buffer.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+/**
+ * Encrypt buffer with Fernet
+ */
+function encryptBuffer(buffer, providedKey = null) {
+  const key = providedKey || generateFernetKey();
+  const secret = new fernet.Secret(key);
+  const token = new fernet.Token({ secret, ttl: 0 });
+  const payload = buffer.toString('base64');
+  const tokenString = token.encode(payload);
+  const tokenBuffer = fernetTokenToBuffer(tokenString);
+  return {
+    key,
+    tokenString,
+    tokenBuffer,
+    encodedSha256: crypto.createHash('sha256').update(tokenBuffer).digest('hex'),
+    decodedSha256: crypto.createHash('sha256').update(buffer).digest('hex')
+  };
+}
+
+/**
+ * Detect file type from extension
+ */
+function detectFileType(fileName) {
+  if (!fileName) return null;
+  const ext = path.extname(fileName).toLowerCase().replace('.', '');
+  const map = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    svg: 'image/svg+xml'
+  };
+  return map[ext] || ext || null;
+}
+
+/**
+ * Calculate IPFS CIDs
+ */
+async function computeIpfsCids(buffer) {
+  const hash = await multiformatsSha256.digest(buffer);
+  const cidV0 = CID.createV0(hash);
+  const cidV1 = CID.createV1(0x70, hash); // 0x70 is dag-pb codec
+  return {
+    cidV0: cidV0.toString(),
+    cidV1: cidV1.toString()
   };
 }
 
@@ -476,6 +565,7 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       
       // Calculate hashes
       const hashes = calculateHashes(destPath);
+      const imageBuffer = hashes.buffer;
       
       // Check for duplicate by hash
       const existingByHash = screenshotDb.prepare(`
@@ -522,28 +612,54 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         continue;
       }
       
+      // Encrypt the screenshot with Fernet (like newgame.js does)
+      console.log(`      Encrypting screenshot...`);
+      const encryption = encryptBuffer(imageBuffer);
+      
+      // Calculate IPFS CIDs
+      console.log(`      Calculating IPFS CIDs...`);
+      const ipfs = await computeIpfsCids(imageBuffer);
+      
+      // Determine file type and extension
+      const fileExt = path.extname(filename).replace('.', '').toLowerCase();
+      const screenshotType = detectFileType(filename) || 'image/png';
+      
       // Insert new screenshot record (database mode only)
       const rsuuid = crypto.randomUUID();
       screenshotDb.prepare(`
         INSERT INTO res_screenshots (
-          rsuuid, gameid, gvuuid, file_name, file_path, file_size,
-          file_sha256, decoded_sha256, source_url, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          rsuuid, gameid, gvuuid, file_name, file_ext, file_size,
+          file_sha256, decoded_sha256, encoded_sha256,
+          encrypted_data, fernet_key,
+          screenshot_type, kind,
+          source_url, ipfs_cid_v1, ipfs_cid_v0,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         rsuuid,
         gameid,
         gvuuid,
         filename,
-        `screenshots/${filename}`,
+        fileExt,
         hashes.size,
-        hashes.sha256,
-        hashes.sha256,
-        imageUrl,
+        hashes.sha256,  // file_sha256 (decoded)
+        hashes.sha256,  // decoded_sha256
+        encryption.encodedSha256,  // encoded_sha256 (encrypted)
+        encryption.tokenBuffer,  // encrypted_data (BLOB)
+        encryption.key,  // fernet_key
+        screenshotType,  // screenshot_type (e.g., "image/png")
+        'file',  // kind
+        imageUrl,  // source_url
+        ipfs.cidV1,  // ipfs_cid_v1
+        ipfs.cidV0,  // ipfs_cid_v0
         new Date().toISOString()
       );
       
+      // Delete the temporary downloaded file (we only need the encrypted version in DB)
+      fs.unlinkSync(destPath);
+      
       downloaded++;
-      console.log(`      ✓ Saved screenshot: ${rsuuid}`);
+      console.log(`      ✓ Saved encrypted screenshot: ${rsuuid}`);
       
     } catch (error) {
       console.error(`    [${i + 1}/${imageUrls.length}] ✗ Failed: ${error.message}`);
@@ -590,11 +706,24 @@ async function main() {
       console.log('Database mode: Processing games from rhdata.db\n');
       
       // Get games from database
-      const games = rhdataDb.prepare(`
-        SELECT gameid, gvuuid, gvjsondata 
-        FROM gameversions
-        ORDER BY gameid, version DESC
-      `).all();
+      let games;
+      if (argv['gameid']) {
+        const gameids = argv['gameid'].split(',').map(s => s.trim());
+        const placeholders = gameids.map(() => '?').join(',');
+        games = rhdataDb.prepare(`
+          SELECT gameid, gvuuid, gvjsondata 
+          FROM gameversions
+          WHERE gameid IN (${placeholders})
+          ORDER BY gameid, version DESC
+        `).all(...gameids);
+        console.log(`Filtering to specific game IDs: ${gameids.join(', ')}`);
+      } else {
+        games = rhdataDb.prepare(`
+          SELECT gameid, gvuuid, gvjsondata 
+          FROM gameversions
+          ORDER BY gameid, version DESC
+        `).all();
+      }
       
       console.log(`Found ${games.length} game version(s) to check\n`);
       

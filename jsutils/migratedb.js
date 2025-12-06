@@ -566,6 +566,15 @@ const MIGRATIONS = {
         return tableExists(db, 'game_difficulty_map');
       },
     },
+    {
+      id: 'rhdata_051_add_title_screenshot_sha256',
+      description: 'Add title_screenshot_sha256 column to gameversions for manual title screenshot override',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/051_rhdata_add_title_screenshot_sha256.sql'),
+      skipIf(db) {
+        return columnExists(db, 'gameversions', 'title_screenshot_sha256');
+      },
+    },
   ],
   clientdata: [
     {
@@ -1244,6 +1253,15 @@ const MIGRATIONS = {
       file: resolveRelative('electron/sql/migrations/screenshot_003_create_screenshot_alt_names.sql'),
       skipIf(db) {
         return tableExists(db, 'screenshot_alt_names');
+      },
+    },
+    {
+      id: 'screenshot_004_add_sequence_no',
+      description: 'Add sequence_no column to res_screenshots for screenshot ordering',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/screenshot_004_add_sequence_no.sql'),
+      skipIf(db) {
+        return columnExists(db, 'res_screenshots', 'sequence_no');
       },
     }
   ],

@@ -1,3 +1,43 @@
+- 2025-01-XX — Screenshot Sequence Number (screenshot)
+  - Purpose: Add sequence_no column to res_screenshots table to track screenshot ordering
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --screenshotdb=/path/to/screenshot.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --screenshotdb=/path/to/screenshot.db --verbose
+  - Applies:
+    - Migration ID: `screenshot_004_add_sequence_no`
+    - SQL: `electron/sql/migrations/screenshot_004_add_sequence_no.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `res_screenshots` table gains `sequence_no INTEGER` column
+    - Index created on `(gameid, sequence_no)` for efficient MAX queries
+    - Existing records are backfilled with sequence_no based on created_at order per gameid
+  - Notes:
+    - The sequence_no preserves the order screenshots appear in the source images array
+    - The first screenshot (lowest sequence_no) is typically the main/title screenshot
+    - New screenshots are inserted with `MAX(sequence_no)+1` for each gameid
+    - Safe to run multiple times; script skips applied migrations
+
+- 2025-01-XX — Title Screenshot Override (rhdata)
+  - Purpose: Add title_screenshot_sha256 column to gameversions table for manual title screenshot override
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_051_add_title_screenshot_sha256`
+    - SQL: `electron/sql/migrations/051_rhdata_add_title_screenshot_sha256.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `gameversions` table gains `title_screenshot_sha256 TEXT` column
+    - Index created on `title_screenshot_sha256` for efficient lookups
+  - Notes:
+    - If set, this overrides the default behavior of using the screenshot with the lowest sequence_no
+    - The value must match the `decoded_sha256` column in the `res_screenshots` table
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX — Win Rules Support (clientdata)
   - Purpose: Add win rules configuration to runs and win rule tracking to run_results
   - Command:

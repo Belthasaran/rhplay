@@ -1,3 +1,28 @@
+- 2025-01-XX: screenshot - Screenshot Sequence Number
+  - Description: Add sequence_no column to res_screenshots table to track screenshot ordering
+  - Rationale: The images array in source metadata has an ordering where the first entry is typically the main screenshot or title. This column preserves that ordering when screenshots are inserted into the database.
+  - Tables/columns:
+    - `res_screenshots`:
+      - `sequence_no INTEGER` - Order that screenshots were added to the database for a given gameid
+  - Migration: `screenshot_004_add_sequence_no` via `jsutils/migratedb.js`
+  - Notes:
+    - New screenshots are inserted with `MAX(sequence_no)+1` for each gameid
+    - Screenshots are processed in the order they appear in the images JSON array
+    - The first screenshot (lowest sequence_no) is typically the title/main screenshot
+    - An index on `(gameid, sequence_no)` enables efficient MAX queries
+
+- 2025-01-XX: rhdata - Title Screenshot Override
+  - Description: Add title_screenshot_sha256 column to gameversions table for manual title screenshot override
+  - Rationale: Allow manual override of the default title screenshot (which uses the screenshot with the lowest sequence_no). The SHA256 value matches the decoded_sha256 column of the correct title screenshot in res_screenshots.
+  - Tables/columns:
+    - `gameversions`:
+      - `title_screenshot_sha256 TEXT` - SHA256 hash matching decoded_sha256 of the title screenshot (overrides default lowest sequence_no behavior)
+  - Migration: `rhdata_051_add_title_screenshot_sha256` via `jsutils/migratedb.js`
+  - Notes:
+    - If set, this overrides the default behavior of using the screenshot with the lowest sequence_no
+    - The value must match the `decoded_sha256` column in the `res_screenshots` table
+    - An index on `title_screenshot_sha256` enables efficient lookups
+
 - 2025-12-01: clientdata - Fairness and Challenge Quality Ratings
   - Description: Add Player Fairness Rating and Challenge Quality Rating columns with comments to user_game_annotations and user_game_version_annotations tables
   - Rationale: Add two new gameplay-specific rating dimensions for SMW games:

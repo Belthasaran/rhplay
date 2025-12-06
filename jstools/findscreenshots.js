@@ -529,6 +529,12 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
   
   console.log(`  [${gameid}] Found ${imageUrls.length} image URL(s)`);
   
+  // Get the maximum sequence_no for this gameid to ensure new screenshots are added in order
+  const maxSequenceResult = screenshotDb.prepare(`
+    SELECT MAX(sequence_no) as max_seq FROM res_screenshots WHERE gameid = ?
+  `).get(gameid);
+  let nextSequenceNo = (maxSequenceResult?.max_seq ?? 0) + 1;
+  
   // Create screenshots directory if it doesn't exist
   const screenshotsDir = path.join(__dirname, 'screenshots');
   if (!fs.existsSync(screenshotsDir)) {
@@ -537,6 +543,8 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
   
   let downloaded = 0;
   
+  // Process screenshots in the order they appear in the images array
+  // This preserves the original ordering from the source metadata
   for (let i = 0; i < imageUrls.length; i++) {
     const imageUrl = imageUrls[i];
     
@@ -625,6 +633,8 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       const screenshotType = detectFileType(filename) || 'image/png';
       
       // Insert new screenshot record (database mode only)
+      // Assign sequence_no to preserve order from images array
+      const currentSequenceNo = nextSequenceNo++;
       const rsuuid = crypto.randomUUID();
       screenshotDb.prepare(`
         INSERT INTO res_screenshots (
@@ -633,8 +643,8 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
           encrypted_data, fernet_key,
           screenshot_type, kind,
           source_url, ipfs_cid_v1, ipfs_cid_v0,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          sequence_no, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         rsuuid,
         gameid,
@@ -652,6 +662,7 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         imageUrl,  // source_url
         ipfs.cidV1,  // ipfs_cid_v1
         ipfs.cidV0,  // ipfs_cid_v0
+        currentSequenceNo,  // sequence_no (preserves order from images array)
         new Date().toISOString()
       );
       
@@ -659,7 +670,7 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       fs.unlinkSync(destPath);
       
       downloaded++;
-      console.log(`      ✓ Saved encrypted screenshot: ${rsuuid}`);
+      console.log(`      ✓ Saved encrypted screenshot: ${rsuuid} (sequence_no: ${currentSequenceNo})`);
       
     } catch (error) {
       console.error(`    [${i + 1}/${imageUrls.length}] ✗ Failed: ${error.message}`);

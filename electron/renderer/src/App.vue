@@ -1083,6 +1083,14 @@
                 <div v-else class="tile-placeholder">
                   <span>No Image</span>
                 </div>
+                <!-- Type badge (bottom left) - only show if fields_type is known -->
+                <div v-if="row.FieldsType && getSimplifiedType(row)" class="tile-type-badge" :style="{ backgroundColor: getSimplifiedType(row)?.color }">
+                  {{ getSimplifiedType(row)?.label }}
+                </div>
+                <!-- Difficulty badge (top right) -->
+                <div class="tile-difficulty-badge" :style="{ backgroundColor: getDifficultyColor(getDifficultyValue(row)) }">
+                  {{ getDifficultyValue(row) }}
+                </div>
               </div>
               <div class="tile-caption">
                 {{ row.Id }} - {{ row.Name }} - {{ row.Author }}
@@ -7841,6 +7849,8 @@ type Item = {
   Name: string;
   Type: string;
   LegacyType?: string;
+  FieldsType?: string;
+  GameType?: string;
   Author: string;
   Length: string;
   PublicDifficulty?: string;
@@ -8221,6 +8231,124 @@ async function populateDifficultyCache(items: Item[]) {
   });
   
   await Promise.all(promises);
+}
+
+// Helper to simplify game type for display
+function getSimplifiedType(item: any): { label: string; color: string } | null {
+  // Collect all type strings
+  const typeStrings: string[] = [];
+  
+  // Add fields_type (comma-separated)
+  if (item.FieldsType) {
+    const fields = String(item.FieldsType).split(',').map(s => s.trim()).filter(s => s);
+    typeStrings.push(...fields);
+  }
+  
+  // Add gametype if different
+  if (item.GameType && !typeStrings.includes(item.GameType)) {
+    typeStrings.push(item.GameType);
+  }
+  
+  // Also check CombinedType/LegacyType for fallback
+  if (item.CombinedType) {
+    typeStrings.push(item.CombinedType);
+  }
+  if (item.LegacyType) {
+    typeStrings.push(item.LegacyType);
+  }
+  
+  if (typeStrings.length === 0) {
+    return null;
+  }
+  
+  // Combine all type strings into one for matching (case-insensitive)
+  const combinedTypeStr = typeStrings.join(', ').toLowerCase();
+  
+  // Priority order: Troll > Kaizo > Puzzle > Pit > Standard > Joke
+  // Check for Troll (highest priority) - includes "Misc.: Troll"
+  if (combinedTypeStr.includes('troll') || combinedTypeStr.includes('misc.: troll')) {
+    return { label: 'Troll', color: '#ffffff' }; // bold bright white
+  }
+  
+  // Check for Kaizo (many variations map to Kaizo)
+  if (combinedTypeStr.includes('kaizo') || 
+      combinedTypeStr.includes('intermediate intermediate kaizo') ||
+      combinedTypeStr.includes('intermediate advanced kaizo') ||
+      combinedTypeStr.includes('intermediate intro kaizo') ||
+      combinedTypeStr.includes('kaizo: intermediate') ||
+      combinedTypeStr.includes('kaizo: expert') ||
+      combinedTypeStr.includes('kaizo: beginner') ||
+      combinedTypeStr.includes('kaizo: advanced') ||
+      combinedTypeStr.includes('kaizo: master') ||
+      combinedTypeStr.includes('kaizo: grandmaster') ||
+      combinedTypeStr.includes('tool-assisted: kaizo') ||
+      combinedTypeStr.includes('standard: very hard, kaizo: expert') ||
+      combinedTypeStr.includes('kaizo: intermediate, standard: very hard') ||
+      combinedTypeStr.includes('standard: hard, kaizo: intermediate') ||
+      combinedTypeStr.includes('standard: hard, kaizo: beginner') ||
+      combinedTypeStr.includes('standard: very hard, kaizo: beginner') ||
+      combinedTypeStr.includes('standard: normal, kaizo: intermediate') ||
+      combinedTypeStr.includes('standard: very hard, kaizo: intermediate') ||
+      combinedTypeStr.includes('standard: easy, kaizo: intermediate')) {
+    return { label: 'Kaizo', color: '#ff6b6b' }; // light red
+  }
+  
+  // Check for Puzzle
+  if (combinedTypeStr.includes('puzzle') || combinedTypeStr.includes('misc.: puzzle')) {
+    return { label: 'Puzzle', color: '#ff9800' }; // Orange
+  }
+  
+  // Check for Pit (but not Pit Kaizo, which should map to Kaizo)
+  if (combinedTypeStr.includes('tool-assisted: pit') || 
+      (combinedTypeStr.includes('pit') && !combinedTypeStr.includes('pit kaizo') && !combinedTypeStr.includes('kaizo'))) {
+    return { label: 'Pit', color: '#ffffff' }; // white
+  }
+  
+  // Check for Joke
+  if (combinedTypeStr.includes('joke')) {
+    return { label: 'Joke', color: '#ff69b4' }; // pink
+  }
+  
+  // Check for Standard (many variations map to Standard)
+  if (combinedTypeStr.includes('standard') ||
+      combinedTypeStr.includes('standard: easy') ||
+      combinedTypeStr.includes('standard: normal') ||
+      combinedTypeStr.includes('standard: hard') ||
+      combinedTypeStr.includes('standard: very hard') ||
+      combinedTypeStr.includes('standard: advanced') ||
+      combinedTypeStr.includes('standard: casual') ||
+      combinedTypeStr.includes('standard: newcomer') ||
+      combinedTypeStr.includes('standard: skilled') ||
+      combinedTypeStr.includes('standard: hard, standard: very hard')) {
+    return { label: 'Std.', color: '#64b5f6' }; // light blue
+  }
+  
+  return null;
+}
+
+// Helper to get difficulty color (heat map: white/hot for high, cool for low)
+function getDifficultyColor(difficulty: number): string {
+  // Clamp difficulty to 0-10 range
+  const clamped = Math.max(0, Math.min(10, difficulty));
+  
+  // Heat map: 0 = cool blue, 10 = white hot
+  // Using HSL: hue goes from blue (240) to red (0) to white
+  if (clamped <= 2) {
+    // Cool blue for low difficulties (0-2)
+    return '#4fc3f7'; // light blue
+  } else if (clamped <= 4) {
+    // Green-blue for medium-low (3-4)
+    return '#66bb6a'; // light green
+  } else if (clamped <= 6) {
+    // Yellow for medium (5-6)
+    return '#ffd54f'; // light yellow
+  } else if (clamped <= 8) {
+    // Orange-red for high (7-8)
+    return '#ff7043'; // light orange-red
+  } else {
+    // White-hot for highest (9-10)
+    return '#ffffff'; // white
+  }
 }
 
 // Helper to get difficulty value for sorting (synchronous, uses cache)
@@ -34623,6 +34751,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
 }
 
 .tile-thumbnail img {
@@ -34653,6 +34782,66 @@ button:disabled {
   word-break: break-word;
   background: var(--bg-primary, #fff);
   border-top: 1px solid var(--border-primary, #ccc);
+}
+
+/* Tile badges */
+.tile-type-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #000;
+  border-radius: 4px;
+  z-index: 5;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+}
+
+.tile-type-badge[style*="ffffff"] {
+  /* White badges need dark text */
+  color: #000;
+  font-weight: 700;
+}
+
+.tile-type-badge[style*="ff6b6b"],
+.tile-type-badge[style*="ff9800"],
+.tile-type-badge[style*="64b5f6"],
+.tile-type-badge[style*="ff69b4"] {
+  /* Colored badges need white text for contrast */
+  color: #fff;
+}
+
+.tile-difficulty-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #000;
+  border-radius: 4px;
+  z-index: 5;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+  min-width: 24px;
+  text-align: center;
+}
+
+.tile-difficulty-badge[style*="ffffff"] {
+  /* White badges need dark text */
+  color: #000;
+}
+
+.tile-difficulty-badge[style*="4fc3f7"],
+.tile-difficulty-badge[style*="66bb6a"],
+.tile-difficulty-badge[style*="ffd54f"],
+.tile-difficulty-badge[style*="ff7043"] {
+  /* Colored badges need dark text for contrast */
+  color: #000;
 }
 
 .tiles-empty {

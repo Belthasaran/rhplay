@@ -38,6 +38,28 @@
     - The value must match the `decoded_sha256` column in the `res_screenshots` table
     - Safe to run multiple times; script skips applied migrations
 
+- 2025-01-XX — GameVersion Banlist (rhdata)
+  - Purpose: Create gameversion_banlist table for dynamic game bans
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_052_gameversion_banlist`
+    - SQL: `electron/sql/migrations/052_rhdata_gameversion_banlist.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - `gameversion_banlist` table created with all required columns
+    - Indexes created on gameid, match_column, active, sequence_no, and starting_at
+    - Trigger created to auto-update `updated_at` timestamp
+  - Notes:
+    - Table supports both hardcoded bans (in `electron/gameversion-banmanager.js`) and database-stored bans
+    - Hardcoded bans are evaluated before database bans (sequence_no 0)
+    - Supports pattern matching: exact strings, substrings, regex, and comma-separated lists
+    - Sense strings support wildcards for flexible action matching
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX — Win Rules Support (clientdata)
   - Purpose: Add win rules configuration to runs and win rule tracking to run_results
   - Command:

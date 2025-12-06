@@ -576,6 +576,15 @@ const MIGRATIONS = {
         return columnExists(db, 'gameversions', 'title_screenshot_sha256');
       },
     },
+    {
+      id: 'rhdata_052_gameversion_banlist',
+      description: 'Create gameversion_banlist table for dynamic game bans',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/052_rhdata_gameversion_banlist.sql'),
+      skipIf(db) {
+        return tableExists(db, 'gameversion_banlist');
+      },
+    },
   ],
   clientdata: [
     {

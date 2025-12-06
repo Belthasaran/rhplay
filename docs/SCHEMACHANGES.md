@@ -23,6 +23,33 @@
     - The value must match the `decoded_sha256` column in the `res_screenshots` table
     - An index on `title_screenshot_sha256` enables efficient lookups
 
+- 2025-01-XX: rhdata - GameVersion Banlist
+  - Description: Create gameversion_banlist table for dynamic game bans based on various criteria and actions (senses)
+  - Rationale: Support flexible banning system for games based on gameid, author, tags, url, or other criteria. Bans can target specific actions (senses) like image display, random selection, running games, etc. Supports both "soft" bans (with warnings) and "hard" bans (complete blocks).
+  - Tables/columns:
+    - `gameversion_banlist`:
+      - `banuuid TEXT PRIMARY KEY` - Unique UUID for each ban entry
+      - `gameid TEXT` - Game ID if match is based on gameid
+      - `match_column TEXT NOT NULL` - Field to match against (gameid, gvuuid, author, tags, url, name)
+      - `match_pattern TEXT NOT NULL` - Match pattern (exact:, substring:, regex:, or comma-separated list)
+      - `sense TEXT NOT NULL` - Comma-separated list of banned actions (supports wildcards like "run_random_*")
+      - `required_acknowledgments TEXT` - Comma-separated list of required acknowledgments for soft bans
+      - `starting_at TEXT` - Optional timestamp when ban becomes active
+      - `reason TEXT` - Reason for the ban
+      - `warningtext TEXT` - Warning text to display for soft bans
+      - `sequence_no INTEGER NOT NULL DEFAULT 0` - Order for ban evaluation (lower evaluated first)
+      - `active INTEGER NOT NULL DEFAULT 1` - Whether ban is active (0 or 1)
+      - `created_at TEXT DEFAULT CURRENT_TIMESTAMP` - Creation timestamp
+      - `updated_at TEXT DEFAULT CURRENT_TIMESTAMP` - Last update timestamp
+  - Migration: `rhdata_052_gameversion_banlist` via `jsutils/migratedb.js`
+  - Notes:
+    - Hardcoded bans in `electron/gameversion-banmanager.js` are evaluated before database bans
+    - Supports pattern matching: exact strings, substrings, regex, and comma-separated lists
+    - Sense strings support wildcards (e.g., "run_random_*" matches "run_random_game" and "run_random_stage")
+    - "Soft" senses require user acknowledgment; "hard" senses completely block actions
+    - Required acknowledgments can be suffixed with "*" to require confirmation every time
+    - Indexes created on gameid, match_column, active, sequence_no, and starting_at for performance
+
 - 2025-12-01: clientdata - Fairness and Challenge Quality Ratings
   - Description: Add Player Fairness Rating and Challenge Quality Rating columns with comments to user_game_annotations and user_game_version_annotations tables
   - Rationale: Add two new gameplay-specific rating dimensions for SMW games:

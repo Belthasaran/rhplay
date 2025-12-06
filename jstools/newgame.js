@@ -597,6 +597,21 @@ async function buildScreenshotEntries(skeleton, baseDir, blockedSha1s) {
     const relativeSource = normalizeRelativePath(path.relative(baseDir, absolutePath));
     const inBase = !relativeSource.startsWith('..');
 
+    // Check if we have source metadata for this screenshot (from findscreenshots.js)
+    // Match by hash (SHA256 or SHA224) or by file path
+    let sourceMetadata = null;
+    if (skeleton.screenshot_sources && Array.isArray(skeleton.screenshot_sources)) {
+      sourceMetadata = skeleton.screenshot_sources.find(s => {
+        // Match by SHA256 (primary)
+        if (s.file_sha256 && s.file_sha256 === fileSha256) return true;
+        // Match by SHA224 (fallback)
+        if (s.file_sha224 && s.file_sha224 === fileSha224) return true;
+        // Match by file path (fallback)
+        if (s.file_path && normalizeRelativePath(s.file_path) === relativeSource) return true;
+        return false;
+      });
+    }
+    
     entries.push({
       screenshot_uuid: generateUuid(),
       auto_generated: true,
@@ -622,6 +637,8 @@ async function buildScreenshotEntries(skeleton, baseDir, blockedSha1s) {
       ipfs_cid_v0: ipfs.cidV0,
       gameid: gv.gameid,
       gvuuid: gv.gvuuid,
+      // Map source_url from screenshot_sources if hash matches
+      source_url: sourceMetadata?.source_url || null,
       created_at: new Date().toISOString()
     });
   }

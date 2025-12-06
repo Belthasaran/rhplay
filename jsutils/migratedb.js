@@ -585,6 +585,20 @@ const MIGRATIONS = {
         return tableExists(db, 'gameversion_banlist');
       },
     },
+    {
+      id: 'rhdata_053_fix_change_detection_config',
+      description: 'Fix change detection config to ignore local processing fields',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/053_rhdata_fix_change_detection_config.sql'),
+      skipIf(db) {
+        // Check if local processing fields are already marked as ignored
+        const patSha224 = db.prepare(`
+          SELECT classification FROM change_detection_config 
+          WHERE field_name = 'pat_sha224' AND classification = 'ignored'
+        `).get();
+        return patSha224 !== undefined;
+      },
+    },
   ],
   clientdata: [
     {

@@ -61,6 +61,26 @@
     - The value must match the `decoded_sha256` column in the `res_screenshots` table
     - Safe to run multiple times; script skips applied migrations
 
+- 2025-01-XX — Fix Change Detection Configuration (rhdata)
+  - Purpose: Update change_detection_config to ignore local processing fields and handle URL additions correctly
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+  - Applies:
+    - Migration ID: `rhdata_053_fix_change_detection_config`
+    - SQL: `electron/sql/migrations/053_rhdata_fix_change_detection_config.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - Local processing fields (`pat_sha224`, `patchblob1_name`, etc.) are marked as `ignored` in `change_detection_config`
+    - SMWC metadata fields not in API response are marked as `ignored`
+    - URL additions are now treated as minor changes (metadata updates) rather than major changes
+  - Notes:
+    - This fixes false positives where local processing fields were marked as "removed" when comparing against SMWC data
+    - URL additions (when we didn't have a URL before) no longer trigger downloads
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX — GameVersion Banlist (rhdata)
   - Purpose: Create gameversion_banlist table for dynamic game bans
   - Command:

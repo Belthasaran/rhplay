@@ -45,6 +45,19 @@
     - The value must match the `decoded_sha256` column in the `res_screenshots` table
     - An index on `title_screenshot_sha256` enables efficient lookups
 
+- 2025-01-XX: rhdata - Fix Change Detection Configuration
+  - Description: Update change_detection_config to ignore local processing fields and handle URL additions correctly
+  - Rationale: Local processing fields (pat_sha224, patchblob1_name, etc.) are computed/stored locally and should not be compared against SMWC data. When these fields exist in old records but not in SMWC data, they were incorrectly marked as "removed", causing false positives for major updates. Also, URL additions (when we didn't have a URL before) should be treated as minor metadata updates, not major changes requiring downloads.
+  - Tables/columns:
+    - `change_detection_config`:
+      - Updated `pat_sha224`, `pat_sha1`, `pat_shake_128`, `patch`, `patchblob1_name`, `patchblob1_key`, `patchblob1_sha224`, `result_sha1`, `result_sha224`, `result_shake1` to `classification = 'ignored'`
+      - Added ignored entries for SMWC metadata fields not in API response: `author_href`, `comments_href`, `description_href`, `tags_href`, `url`, `section`, `fields`, `raw_fields`
+  - Migration: `rhdata_053_fix_change_detection_config` via `jsutils/migratedb.js`
+  - Notes:
+    - Local processing fields are now ignored during change detection, preventing false "removed" detections
+    - URL additions are now treated as minor changes (metadata updates) rather than major changes requiring downloads
+    - The change detector now skips comparison of fields that exist in old records but not in SMWC data if they're not in the configuration (likely local fields)
+
 - 2025-01-XX: rhdata - GameVersion Banlist
   - Description: Create gameversion_banlist table for dynamic game bans based on various criteria and actions (senses)
   - Rationale: Support flexible banning system for games based on gameid, author, tags, url, or other criteria. Bans can target specific actions (senses) like image display, random selection, running games, etc. Supports both "soft" bans (with warnings) and "hard" bans (complete blocks).

@@ -509,6 +509,7 @@ async function main() {
     
     if (newGames.length === 0 && argv['process-new']) {
       console.log('No new games to process.');
+	    //console.log(`argv: ${JSON.stringify(argv)}`)
       return;
     }
     
@@ -1703,6 +1704,8 @@ function compareGameVersions(newVersion, existingVersion) {
   const fieldsToCompare = [
     'title', 'author', 'description', 'patch_filename', 'pat_sha224', 
     'result_sha224', 'version', 'download_url'
+	  //
+	, 'fields_type', 'raw_difficulty'
   ];
   
   for (const field of fieldsToCompare) {

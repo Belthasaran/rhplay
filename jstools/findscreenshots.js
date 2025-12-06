@@ -32,6 +32,10 @@ const UrlBase64 = require('urlsafe-base64');
 const { CID } = require('multiformats/cid');
 const { sha256: multiformatsSha256 } = require('multiformats/hashes/sha2');
 
+function gsleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Configuration
 const CONFIG = {
   DOWNLOAD_RETRY_MAX: 3,
@@ -398,6 +402,7 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
       
       // Download image
       console.log(`    [${i + 1}/${imageUrls.length}] Downloading: ${imageUrl}`);
+      await gsleep(5000)
       await downloadFile(imageUrl, destPath);
       
       // Calculate hashes
@@ -569,6 +574,7 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       
       // Download image
       console.log(`    [${i + 1}/${imageUrls.length}] Downloading: ${imageUrl}`);
+      await gsleep(5000)
       await downloadFile(imageUrl, destPath);
       
       // Calculate hashes

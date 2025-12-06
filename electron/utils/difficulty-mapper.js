@@ -17,29 +17,45 @@
  */
 
 // Map difficulty string values to numeric levels
+// Correct mappings for gameversions difficulty (not game stage difficulty)
 const DIFFICULTY_STRING_MAP = {
-  'Newcomer': 0,
-  'Casual': 1,
-  'Intermediate': 2,
+  'Trivial': 0,
+  'trivial': 0,
+  'Newcomer': 1,
+  'newcomer': 1,
+  'Casual': 2,
+  'casual': 2,
+  'Intermediate': 3,
+  'intermediate': 3,
+  'Advanced': 4,
+  'advanced': 4,
+  'Expert': 5,
+  'expert': 5,
+  'Master': 6,
+  'master': 6,
+  'Grandmaster': 7,
+  'grandmaster': 7,
+  'Grandmaster Plus': 8,
+  'grandmaster plus': 8,
+  'grandmasterplus': 8,
+  'Tool-Only': 9,
+  'tool-only': 9,
+  'toolonly': 9,
+  'Pit Kaizo': 9,
+  'pit kaizo': 9,
+  'pitkaizo': 9,
+  'Impossible': 10,
+  'impossible': 10,
+  'Bugged': 10,
+  'bugged': 10,
+  'Impossible/Bugged': 10,
+  'impossible/bugged': 10,
+  // Legacy mappings (kept for backwards compatibility, but may need correction)
   'Skilled': 3,
-  'Advanced': 3,
-  'Hard': 3,
-  'Expert': 4,
-  'Master': 5,
-  'Grandmaster': 6,
-  'Grandmaster Plus': 7,
-  'Tool-Assisted': 8,
-  // Lowercase variants
-  'newcomer': 0,
-  'casual': 1,
-  'intermediate': 2,
   'skilled': 3,
-  'advanced': 3,
+  'Hard': 3,
   'hard': 3,
-  'expert': 4,
-  'master': 5,
-  'grandmaster': 6,
-  'grandmaster plus': 7,
+  'Tool-Assisted': 8,
   'tool-assisted': 8,
   'tool assisted': 8,
 };
@@ -92,16 +108,41 @@ const LEGACY_TYPE_MAP = {
   'Tutorial Example - Keep This!': 2,
 };
 
-// Default difficulty if unknown (Intermediate = 2)
-const DEFAULT_DIFFICULTY = 2;
+// Default difficulty if unknown (Intermediate = 3 per new mapping)
+const DEFAULT_DIFFICULTY = 3;
+
+/**
+ * Extract numeric value from raw_difficulty string (e.g., "diff_4" -> 4)
+ * @param {string} rawDifficulty - Raw difficulty string like "diff_4"
+ * @returns {number|null} Numeric difficulty or null if not parseable
+ */
+function parseRawDifficulty(rawDifficulty) {
+  if (!rawDifficulty || typeof rawDifficulty !== 'string') {
+    return null;
+  }
+  const match = rawDifficulty.trim().match(/^diff[_\s]*(\d+)$/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
 
 /**
  * Get numeric difficulty level for a game
  * @param {Object} game - Game object from database
- * @returns {number} Numeric difficulty level (0-8)
+ * @param {Function|null} dbQueryFn - Optional function to query game_difficulty_map table
+ * @returns {number} Numeric difficulty level (0-10)
  */
-function getGameDifficultyLevel(game) {
-  // First, try to get from difficulty field
+function getGameDifficultyLevel(game, dbQueryFn = null) {
+  // 1. First, try raw_difficulty (e.g., "diff_4" -> 4)
+  if (game.raw_difficulty) {
+    const parsed = parseRawDifficulty(game.raw_difficulty);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+  
+  // 2. Try difficulty string mapping
   if (game.difficulty) {
     const difficultyStr = String(game.difficulty).trim();
     if (DIFFICULTY_STRING_MAP.hasOwnProperty(difficultyStr)) {
@@ -109,7 +150,25 @@ function getGameDifficultyLevel(game) {
     }
   }
   
-  // If not found, try legacy_type
+  // 3. Try legacy_type or combinedtype via database lookup if available
+  if (dbQueryFn) {
+    if (game.legacy_type) {
+      const legacyTypeStr = String(game.legacy_type).trim();
+      const dbResult = dbQueryFn('legacytype', legacyTypeStr);
+      if (dbResult !== null) {
+        return dbResult;
+      }
+    }
+    if (game.combinedtype) {
+      const combinedTypeStr = String(game.combinedtype).trim();
+      const dbResult = dbQueryFn('legacytype', combinedTypeStr);
+      if (dbResult !== null) {
+        return dbResult;
+      }
+    }
+  }
+  
+  // 4. Fallback to in-memory legacy_type map
   if (game.legacy_type) {
     const legacyTypeStr = String(game.legacy_type).trim();
     if (LEGACY_TYPE_MAP.hasOwnProperty(legacyTypeStr)) {
@@ -117,7 +176,7 @@ function getGameDifficultyLevel(game) {
     }
   }
   
-  // Default to Intermediate (2)
+  // 5. Default to Intermediate (3) - note: changed from 2 to match new mapping
   return DEFAULT_DIFFICULTY;
 }
 
@@ -152,6 +211,7 @@ function matchesDifficultyFilter(game, minDifficulty, maxDifficulty) {
 module.exports = {
   getGameDifficultyLevel,
   matchesDifficultyFilter,
+  parseRawDifficulty,
   DIFFICULTY_STRING_MAP,
   LEGACY_TYPE_MAP,
   DEFAULT_DIFFICULTY

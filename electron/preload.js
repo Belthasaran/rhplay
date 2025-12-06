@@ -49,6 +49,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getVersions: (gameid) => ipcRenderer.invoke('db:rhdata:get:versions', { gameid }),
   
   /**
+   * Get difficulty number from game_difficulty_map table
+   * @param {string} mapType - 'difficulty' or 'legacytype'
+   * @param {string} mapString - The string to look up
+   * @returns {Promise<{success: boolean, difficultyNumber: number|null}>}
+   */
+  getDifficultyMap: (mapType, mapString) => ipcRenderer.invoke('db:difficulty-map:get', { mapType, mapString }),
+  
+  /**
    * Get specific game version with annotations
    * @param {string} gameid - Game ID
    * @param {number} version - Version number

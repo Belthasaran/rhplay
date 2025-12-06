@@ -307,8 +307,8 @@ function selectRandomGame(params) {
  * @param {string} params.filterType - Game type filter (optional)
  * @param {string} params.filterDifficulty - Game difficulty filter (optional)
  * @param {string} params.filterPattern - Game pattern filter (optional)
- * @param {number} params.stageMinDifficulty - Stage min difficulty (1-7, optional)
- * @param {number} params.stageMaxDifficulty - Stage max difficulty (1-7, optional)
+ * @param {number} params.stageMinDifficulty - Stage min difficulty (0-9, optional)
+ * @param {number} params.stageMaxDifficulty - Stage max difficulty (0-9, optional)
  * @param {Array} params.stageIncludeFlags - Array of flag codes to include (optional)
  * @param {Array} params.stageExcludeFlags - Array of flag codes to exclude (optional)
  * @param {Array} params.excludeGameids - Already used gameids to exclude (optional)
@@ -410,7 +410,7 @@ function selectRandomStage(params) {
       AND gs.playable = 1
       AND gs.rando = 1
       AND gs.difficulty >= 0
-      AND gs.difficulty <= 7
+      AND gs.difficulty <= 9
   `;
   const stageQueryParams = [...gameids];
   

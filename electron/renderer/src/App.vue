@@ -1539,17 +1539,17 @@
                 <div class="stage-limits-left-column">
                   <div class="stage-limits-section">
                     <label>
-                      Min Difficulty (0-7)
+                      Min Difficulty (0-9)
                       <select v-model="stageFilter.minDifficulty">
                         <option :value="null">(any)</option>
-                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]" :key="d" :value="d">{{ d }}</option>
                       </select>
                     </label>
                     <label>
-                      Max Difficulty (0-7)
+                      Max Difficulty (0-9)
                       <select v-model="stageFilter.maxDifficulty">
                         <option :value="null">(any)</option>
-                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7]" :key="d" :value="d">{{ d }}</option>
+                        <option v-for="d in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]" :key="d" :value="d">{{ d }}</option>
                       </select>
                     </label>
                   </div>
@@ -7844,6 +7844,8 @@ type Item = {
   Author: string;
   Length: string;
   PublicDifficulty?: string;
+  RawDifficulty?: string;
+  CombinedType?: string;
   Status: ItemStatus;
   MyDifficultyRating?: number | null;  // 0-5
   MyReviewRating?: number | null;      // 0-5
@@ -8126,17 +8128,138 @@ const sortedAndFilteredItems = computed(() => {
   }
 });
 
-// Helper to get difficulty value for sorting
+// Helper to parse raw_difficulty string (e.g., "diff_4" -> 4)
+function parseRawDifficulty(rawDifficulty: string | null | undefined): number | null {
+  if (!rawDifficulty || typeof rawDifficulty !== 'string') {
+    return null;
+  }
+  const match = rawDifficulty.trim().match(/^diff[_\s]*(\d+)$/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return null;
+}
+
+// Difficulty string to number mapping (for gameversions, not game stages)
+const DIFFICULTY_STRING_MAP: Record<string, number> = {
+  'Trivial': 0,
+  'trivial': 0,
+  'Newcomer': 1,
+  'newcomer': 1,
+  'Casual': 2,
+  'casual': 2,
+  'Intermediate': 3,
+  'intermediate': 3,
+  'Advanced': 4,
+  'advanced': 4,
+  'Expert': 5,
+  'expert': 5,
+  'Master': 6,
+  'master': 6,
+  'Grandmaster': 7,
+  'grandmaster': 7,
+  'Grandmaster Plus': 8,
+  'grandmaster plus': 8,
+  'grandmasterplus': 8,
+  'Tool-Only': 9,
+  'tool-only': 9,
+  'toolonly': 9,
+  'Pit Kaizo': 9,
+  'pit kaizo': 9,
+  'pitkaizo': 9,
+  'Impossible': 10,
+  'impossible': 10,
+  'Bugged': 10,
+  'bugged': 10,
+  'Impossible/Bugged': 10,
+  'impossible/bugged': 10,
+};
+
+// Cache for difficulty map lookups (populated asynchronously)
+const difficultyMapCache = reactive<Map<string, number | null>>(new Map());
+const difficultyMapLoading = reactive<Set<string>>(new Set());
+
+// Pre-populate difficulty cache for all items when they load
+async function populateDifficultyCache(items: Item[]) {
+  const api = (window as any).electronAPI;
+  if (!api || !api.getDifficultyMap) return;
+  
+  const toLoad: Array<{type: string, key: string, value: string}> = [];
+  
+  for (const item of items) {
+    if (item.LegacyType) {
+      const cacheKey = `legacytype:${item.LegacyType}`;
+      if (!difficultyMapCache.has(cacheKey) && !difficultyMapLoading.has(cacheKey)) {
+        toLoad.push({ type: 'legacytype', key: cacheKey, value: item.LegacyType });
+        difficultyMapLoading.add(cacheKey);
+      }
+    }
+    if (item.CombinedType) {
+      const cacheKey = `legacytype:${item.CombinedType}`;
+      if (!difficultyMapCache.has(cacheKey) && !difficultyMapLoading.has(cacheKey)) {
+        toLoad.push({ type: 'legacytype', key: cacheKey, value: item.CombinedType });
+        difficultyMapLoading.add(cacheKey);
+      }
+    }
+  }
+  
+  // Load all in parallel
+  const promises = toLoad.map(async ({ type, key, value }) => {
+    try {
+      const result = await api.getDifficultyMap(type, value);
+      if (result.success && result.difficultyNumber !== null) {
+        difficultyMapCache.set(key, result.difficultyNumber);
+      } else {
+        difficultyMapCache.set(key, null);
+      }
+    } catch (error) {
+      console.warn('Error querying difficulty map:', error);
+      difficultyMapCache.set(key, null);
+    } finally {
+      difficultyMapLoading.delete(key);
+    }
+  });
+  
+  await Promise.all(promises);
+}
+
+// Helper to get difficulty value for sorting (synchronous, uses cache)
 function getDifficultyValue(item: any): number {
-  // Try raw_difficulty first, then difficulty, then legacy_type mapping
-  if (item.raw_difficulty !== null && item.raw_difficulty !== undefined) {
-    return Number(item.raw_difficulty) || 0;
+  // 1. First, try raw_difficulty (e.g., "diff_4" -> 4)
+  if (item.RawDifficulty) {
+    const parsed = parseRawDifficulty(item.RawDifficulty);
+    if (parsed !== null) {
+      return parsed;
+    }
   }
-  if (item.difficulty !== null && item.difficulty !== undefined) {
-    return Number(item.difficulty) || 0;
+  
+  // 2. Try difficulty string mapping
+  if (item.PublicDifficulty) {
+    const difficultyStr = String(item.PublicDifficulty).trim();
+    if (DIFFICULTY_STRING_MAP.hasOwnProperty(difficultyStr)) {
+      return DIFFICULTY_STRING_MAP[difficultyStr];
+    }
   }
-  // TODO: Map legacy_type using game_difficulty_map table if needed
-  return 0;
+  
+  // 3. Try legacy_type or combinedtype from cache
+  if (item.LegacyType) {
+    const cacheKey = `legacytype:${item.LegacyType}`;
+    const cached = difficultyMapCache.get(cacheKey);
+    if (cached !== null && cached !== undefined) {
+      return cached;
+    }
+  }
+  
+  if (item.CombinedType) {
+    const cacheKey = `legacytype:${item.CombinedType}`;
+    const cached = difficultyMapCache.get(cacheKey);
+    if (cached !== null && cached !== undefined) {
+      return cached;
+    }
+  }
+  
+  // 4. Default to Intermediate (3)
+  return 3;
 }
 
 // Visible tiles with pagination
@@ -8520,6 +8643,13 @@ watch(visibleTiles, () => {
     });
   }
 }, { deep: true });
+
+// Watch for filtered items changes to populate difficulty cache
+watch(filteredItems, async (newItems) => {
+  if (newItems.length > 0) {
+    await populateDifficultyCache(newItems);
+  }
+}, { immediate: true });
 
 // Export and Import functions
 async function exportFull() {
@@ -18253,8 +18383,8 @@ type RunEntry = {
   gameFilterMinDifficulty?: number | null;  // 0-8, null = no filter
   gameFilterMaxDifficulty?: number | null;  // 0-8, null = no filter
   // Stage-specific filters (for random_stage entries)
-  stageFilterMinDifficulty?: number | null;  // 1-7, null = no filter
-  stageFilterMaxDifficulty?: number | null;  // 1-7, null = no filter
+  stageFilterMinDifficulty?: number | null;  // 0-9, null = no filter
+  stageFilterMaxDifficulty?: number | null;  // 0-9, null = no filter
   stageFilterIncludeFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
   stageFilterExcludeFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
   stageFilterIncludeAnyOfFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'

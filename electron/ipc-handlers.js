@@ -483,6 +483,26 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   // =============================
+  // Difficulty Mapping (rhdata)
+  // =============================
+  ipcMain.handle('db:difficulty-map:get', (_event, { mapType, mapString } = {}) => {
+    try {
+      const db = dbManager.getConnection('rhdata');
+      const result = db.prepare(`
+        SELECT difficulty_number
+        FROM game_difficulty_map
+        WHERE map_type = ? AND map_string = ?
+        LIMIT 1
+      `).get(mapType, mapString);
+      
+      return { success: true, difficultyNumber: result ? result.difficulty_number : null };
+    } catch (error) {
+      console.error('[db:difficulty-map:get] Failed:', error);
+      return { success: false, error: error.message, difficultyNumber: null };
+    }
+  });
+
+  // =============================
   // Submission Drafts (clientdata)
   // =============================
   function ensureSubmissionDraftsTable() {
@@ -1395,6 +1415,8 @@ function registerDatabaseHandlers(dbManager) {
             gv.combinedtype as Type,
             gv.legacy_type as LegacyType,
             gv.difficulty as PublicDifficulty,
+            gv.raw_difficulty as RawDifficulty,
+            gv.combinedtype as CombinedType,
             gv.version as CurrentVersion,
             gv.local_runexcluded as LocalRunExcluded,
             gv.gvjsondata as JsonData,
@@ -3480,7 +3502,7 @@ function registerDatabaseHandlers(dbManager) {
           AND gs.playable = 1
           AND gs.rando = 1
           AND gs.difficulty >= 0
-          AND gs.difficulty <= 7
+          AND gs.difficulty <= 9
       `;
       const stageQueryParams = [...gameids];
       

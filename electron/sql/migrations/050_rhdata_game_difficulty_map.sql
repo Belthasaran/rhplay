@@ -24,30 +24,39 @@ CREATE INDEX IF NOT EXISTS idx_game_difficulty_map_type_string ON game_difficult
 CREATE INDEX IF NOT EXISTS idx_game_difficulty_map_number ON game_difficulty_map(difficulty_number);
 
 -- Populate with difficulty string mappings
-INSERT OR IGNORE INTO game_difficulty_map (map_type, map_string, difficulty_number) VALUES
-  ('difficulty', 'Newcomer', 0),
-  ('difficulty', 'newcomer', 0),
-  ('difficulty', 'Casual', 1),
-  ('difficulty', 'casual', 1),
-  ('difficulty', 'Intermediate', 2),
-  ('difficulty', 'intermediate', 2),
-  ('difficulty', 'Skilled', 3),
-  ('difficulty', 'skilled', 3),
-  ('difficulty', 'Advanced', 3),
-  ('difficulty', 'advanced', 3),
-  ('difficulty', 'Hard', 3),
-  ('difficulty', 'hard', 3),
-  ('difficulty', 'Expert', 4),
-  ('difficulty', 'expert', 4),
-  ('difficulty', 'Master', 5),
-  ('difficulty', 'master', 5),
-  ('difficulty', 'Grandmaster', 6),
-  ('difficulty', 'grandmaster', 6),
-  ('difficulty', 'Grandmaster Plus', 7),
-  ('difficulty', 'grandmaster plus', 7),
-  ('difficulty', 'Tool-Assisted', 8),
-  ('difficulty', 'tool-assisted', 8),
-  ('difficulty', 'tool assisted', 8);
+-- Correct mappings for gameversions difficulty (not game stage difficulty)
+INSERT OR REPLACE INTO game_difficulty_map (map_type, map_string, difficulty_number) VALUES
+  ('difficulty', 'Trivial', 0),
+  ('difficulty', 'trivial', 0),
+  ('difficulty', 'Newcomer', 1),
+  ('difficulty', 'newcomer', 1),
+  ('difficulty', 'Casual', 2),
+  ('difficulty', 'casual', 2),
+  ('difficulty', 'Intermediate', 3),
+  ('difficulty', 'intermediate', 3),
+  ('difficulty', 'Advanced', 4),
+  ('difficulty', 'advanced', 4),
+  ('difficulty', 'Expert', 5),
+  ('difficulty', 'expert', 5),
+  ('difficulty', 'Master', 6),
+  ('difficulty', 'master', 6),
+  ('difficulty', 'Grandmaster', 7),
+  ('difficulty', 'grandmaster', 7),
+  ('difficulty', 'Grandmaster Plus', 8),
+  ('difficulty', 'grandmaster plus', 8),
+  ('difficulty', 'grandmasterplus', 8),
+  ('difficulty', 'Tool-Only', 9),
+  ('difficulty', 'tool-only', 9),
+  ('difficulty', 'toolonly', 9),
+  ('difficulty', 'Pit Kaizo', 9),
+  ('difficulty', 'pit kaizo', 9),
+  ('difficulty', 'pitkaizo', 9),
+  ('difficulty', 'Impossible', 10),
+  ('difficulty', 'impossible', 10),
+  ('difficulty', 'Bugged', 10),
+  ('difficulty', 'bugged', 10),
+  ('difficulty', 'Impossible/Bugged', 10),
+  ('difficulty', 'impossible/bugged', 10);
 
 -- Populate with legacytype string mappings
 INSERT OR IGNORE INTO game_difficulty_map (map_type, map_string, difficulty_number) VALUES

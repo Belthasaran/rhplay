@@ -130,7 +130,7 @@ const DEFAULT_SCREENSHOT_DB_PATH = process.env.SCREENSHOT_DB_PATH ||
   path.join(__dirname, '..', 'electron', 'screenshot.db');
 
 const ALLOWED_DIFFICULTIES = [
-  'Newcomer', 'Casual', 'Skilled', 'Advanced', 'Expert', 'Master', 'Grandmaster'
+  'Newcomer', 'Casual', 'Intermediate', 'Skilled', 'Advanced', 'Expert', 'Master', 'Grandmaster'
 ];
 
 const ALLOWED_RAW_DIFFICULTIES = [

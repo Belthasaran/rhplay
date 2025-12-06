@@ -3,3 +3,6 @@ Pleasefix  missing patchblob for 11374
 INSERT into patchblobs (pbuuid,gvuuid,patch_name,pat_sha1,pat_sha224,pat_shake_128,patchblob1_key,patchblob1_name,patchblob1_Sha224,result_sha1,result_sha224,result_shake1)
 VALUES("ed8616a1-dab4-41ff-8010-f55bdc04bc81","3d0d9834-ffe0-47a4-bde2-42a4e8aae3c5","patch/fS103JtJSMDmc195nfui9tOqvlz-WWtV","d53b4dd82295fa9765d2bf023b5cf113cfa1a8d2","7a815b5fe8591a7255de168232417cb3488d4161c0e79ac5a63e537f","fS103JtJSMDmc195nfui9tOqvlz-WWtV","bU9uR0NOSExLUzNVTUpDcHktZkhqM0pEMTl2bVRTZWN3dnI1REZjbGQ2WT0=","pblob_11374_7003deed8b","7003deed8bad89e4981fd92cd7dc4260ac9cd4fcab12f16dd8cbc803","e876453387f92f645ac58a42650c8ea0f06e71cf","9f0f600ba992cc421e128bd771fe72309e41572b9949cdadcec347d3","ei6vPa66P1H6dJjgLHqsL_JWmSeOD8v7");
 
+update attachments set gvuuid='3d0d9834-ffe0-47a4-bde2-42a4e8aae3c5' where gvuuid='c462d7e3-303b-497c-9924-3c96fda6eb42';
+
+

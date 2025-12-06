@@ -1414,6 +1414,8 @@ function registerDatabaseHandlers(dbManager) {
             gv.length as Length,
             gv.combinedtype as Type,
             gv.legacy_type as LegacyType,
+            gv.fields_type as FieldsType,
+            gv.gametype as GameType,
             gv.difficulty as PublicDifficulty,
             gv.raw_difficulty as RawDifficulty,
             gv.combinedtype as CombinedType,

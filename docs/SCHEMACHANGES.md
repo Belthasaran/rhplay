@@ -11,6 +11,28 @@
     - The first screenshot (lowest sequence_no) is typically the title/main screenshot
     - An index on `(gameid, sequence_no)` enables efficient MAX queries
 
+- 2025-01-XX: screenshot - GameVersion Screenshots Junction Table
+  - Description: Create gameversion_screenshots junction table to link multiple gameids to the same screenshot with per-gameid metadata
+  - Rationale: Different versions of the same game (different gameids) may share screenshots, but with different ordering (sequence_no) or source URLs. This table allows one screenshot (rsuuid) to be linked to multiple gameids while maintaining gameid-specific metadata like sequence_no and source_url. The actual screenshot data (encrypted_data, fernet_key, etc.) is stored once in res_screenshots, but multiple gameids can reference it.
+  - Tables/columns:
+    - `gameversion_screenshots` (new table):
+      - `id INTEGER PRIMARY KEY AUTOINCREMENT` - Unique ID for each link
+      - `gameid TEXT NOT NULL` - Game ID that uses this screenshot
+      - `rsuuid TEXT NOT NULL` - Foreign key to res_screenshots.rsuuid
+      - `sequence_no INTEGER` - Order of this screenshot within this gameid (can differ from other gameids using the same screenshot)
+      - `source_url TEXT` - Source URL for this screenshot within this gameid (can differ from other gameids)
+      - `file_name TEXT` - Filename for this screenshot within this gameid
+      - `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - When link was created
+      - `updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - When link was last updated
+      - `UNIQUE(gameid, rsuuid)` - Ensures one link per gameid-screenshot pair
+  - Migration: `screenshot_005_create_gameversion_screenshots` via `jsutils/migratedb.js`
+  - Notes:
+    - The migration automatically migrates existing data from res_screenshots to the junction table
+    - When findscreenshots.js detects a duplicate screenshot (by hash), it now links the existing screenshot to the new gameid via this table instead of creating a duplicate
+    - All queries for screenshots by gameid now use this junction table when available (with fallback to old schema)
+    - The res_screenshots.gameid column is retained for backwards compatibility but is no longer the primary way to link gameids to screenshots
+    - Indexes on (gameid), (rsuuid), (gameid, sequence_no), and (source_url) enable efficient queries
+
 - 2025-01-XX: rhdata - Title Screenshot Override
   - Description: Add title_screenshot_sha256 column to gameversions table for manual title screenshot override
   - Rationale: Allow manual override of the default title screenshot (which uses the screenshot with the lowest sequence_no). The SHA256 value matches the decoded_sha256 column of the correct title screenshot in res_screenshots.

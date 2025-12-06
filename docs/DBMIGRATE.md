@@ -19,6 +19,29 @@
     - New screenshots are inserted with `MAX(sequence_no)+1` for each gameid
     - Safe to run multiple times; script skips applied migrations
 
+- 2025-01-XX — GameVersion Screenshots Junction Table (screenshot)
+  - Purpose: Create gameversion_screenshots junction table to link multiple gameids to the same screenshot with per-gameid metadata
+  - Command:
+    - Run all migrations (recommended):
+      ./enode.sh jsutils/migratedb.js --screenshotdb=/path/to/screenshot.db
+    - Or target specifically (auto-detected by script):
+      ./enode.sh jsutils/migratedb.js --screenshotdb=/path/to/screenshot.db --verbose
+  - Applies:
+    - Migration ID: `screenshot_005_create_gameversion_screenshots`
+    - SQL: `electron/sql/migrations/screenshot_005_create_gameversion_screenshots.sql`
+  - Prerequisites: Ensure app is closed or DB not locked
+  - Expected outcome:
+    - New `gameversion_screenshots` table created with columns: id, gameid, rsuuid, sequence_no, source_url, file_name, created_at, updated_at
+    - Indexes created on (gameid), (rsuuid), (gameid, sequence_no), and (source_url)
+    - Unique constraint on (gameid, rsuuid) ensures one link per gameid-screenshot pair
+    - Existing data from res_screenshots is automatically migrated to the junction table
+  - Notes:
+    - This allows multiple gameids to share the same screenshot (rsuuid) while maintaining gameid-specific metadata
+    - When findscreenshots.js detects a duplicate screenshot (by hash), it now links the existing screenshot to the new gameid via this table
+    - All queries for screenshots by gameid now use this junction table when available (with fallback to old schema)
+    - The res_screenshots.gameid column is retained for backwards compatibility
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX — Title Screenshot Override (rhdata)
   - Purpose: Add title_screenshot_sha256 column to gameversions table for manual title screenshot override
   - Command:

@@ -913,9 +913,10 @@ async function checkForBans() {
     
     // Check if game has any ban (we'll check a few common senses)
     const checks = await Promise.all([
-      api.isGameBanned(gameidStr, 'image_title', gameData),
-      api.isGameBanned(gameidStr, 'list_any', gameData),
-      api.isGameBanned(gameidStr, 'details_hard', gameData)
+      api.isGameBanned(gameidStr, '', gameData),
+      //api.isGameBanned(gameidStr, 'image_title', gameData),
+      //api.isGameBanned(gameidStr, 'list_any', gameData),
+      //api.isGameBanned(gameidStr, 'details_hard', gameData)
     ]);
     
     hasBans.value = checks.some(result => result.success && result.isBanned);

@@ -14279,14 +14279,46 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       const screenshotDb = new Database(screenshotDbPath);
-      const screenshots = screenshotDb.prepare(`
-        SELECT rsuuid, gameid, gvuuid, rhpakuuid,
-               file_name, file_ext, source_url, screenshot_type,
-               encrypted_data, fernet_key, kind
-        FROM res_screenshots
-        WHERE gameid = ?
-        ORDER BY file_name ASC, created_at ASC
-      `).all(gameid);
+      
+      // Check if junction table exists (new schema)
+      const hasJunctionTable = screenshotDb.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='gameversion_screenshots'
+      `).get();
+      
+      let screenshots;
+      if (hasJunctionTable) {
+        // Use junction table to get screenshots for this gameid
+        screenshots = screenshotDb.prepare(`
+          SELECT 
+            rs.rsuuid, 
+            gvs.gameid,
+            rs.gvuuid, 
+            rs.rhpakuuid,
+            COALESCE(gvs.file_name, rs.file_name) as file_name,
+            rs.file_ext, 
+            COALESCE(gvs.source_url, rs.source_url) as source_url, 
+            rs.screenshot_type,
+            rs.encrypted_data, 
+            rs.fernet_key, 
+            rs.kind,
+            gvs.sequence_no
+          FROM gameversion_screenshots gvs
+          INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+          WHERE gvs.gameid = ?
+          ORDER BY gvs.sequence_no ASC NULLS LAST, rs.created_at ASC
+        `).all(gameid);
+      } else {
+        // Fallback to old schema (direct gameid in res_screenshots)
+        screenshots = screenshotDb.prepare(`
+          SELECT rsuuid, gameid, gvuuid, rhpakuuid,
+                 file_name, file_ext, source_url, screenshot_type,
+                 encrypted_data, fernet_key, kind, sequence_no
+          FROM res_screenshots
+          WHERE gameid = ?
+          ORDER BY sequence_no ASC NULLS LAST, created_at ASC
+        `).all(gameid);
+      }
       
       screenshotDb.close();
       
@@ -14424,6 +14456,12 @@ function registerDatabaseHandlers(dbManager) {
       const rhdataDb = dbManager.getConnection('rhdata');
       const screenshotDb = dbManager.getConnection('screenshot');
       
+      // Check if junction table exists (new schema)
+      const hasJunctionTable = screenshotDb.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='gameversion_screenshots'
+      `).get();
+      
       // Check for manual override
       const gameVersion = rhdataDb.prepare(`
         SELECT title_screenshot_sha256, gvuuid
@@ -14437,23 +14475,44 @@ function registerDatabaseHandlers(dbManager) {
       
       if (gameVersion?.title_screenshot_sha256) {
         // Use manual override
-        screenshot = screenshotDb.prepare(`
-          SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
-          FROM res_screenshots
-          WHERE gameid = ? AND decoded_sha256 = ?
-          LIMIT 1
-        `).get(gameid, gameVersion.title_screenshot_sha256);
+        if (hasJunctionTable) {
+          screenshot = screenshotDb.prepare(`
+            SELECT rs.rsuuid, rs.encrypted_data, rs.fernet_key, rs.screenshot_type, rs.decoded_sha256
+            FROM gameversion_screenshots gvs
+            INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+            WHERE gvs.gameid = ? AND rs.decoded_sha256 = ?
+            LIMIT 1
+          `).get(gameid, gameVersion.title_screenshot_sha256);
+        } else {
+          screenshot = screenshotDb.prepare(`
+            SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+            FROM res_screenshots
+            WHERE gameid = ? AND decoded_sha256 = ?
+            LIMIT 1
+          `).get(gameid, gameVersion.title_screenshot_sha256);
+        }
       }
       
       if (!screenshot) {
         // Use screenshot with lowest sequence_no
-        screenshot = screenshotDb.prepare(`
-          SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
-          FROM res_screenshots
-          WHERE gameid = ? AND kind = 'file'
-          ORDER BY sequence_no ASC NULLS LAST, created_at ASC
-          LIMIT 1
-        `).get(gameid);
+        if (hasJunctionTable) {
+          screenshot = screenshotDb.prepare(`
+            SELECT rs.rsuuid, rs.encrypted_data, rs.fernet_key, rs.screenshot_type, rs.decoded_sha256
+            FROM gameversion_screenshots gvs
+            INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+            WHERE gvs.gameid = ? AND rs.kind = 'file'
+            ORDER BY gvs.sequence_no ASC NULLS LAST, rs.created_at ASC
+            LIMIT 1
+          `).get(gameid);
+        } else {
+          screenshot = screenshotDb.prepare(`
+            SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+            FROM res_screenshots
+            WHERE gameid = ? AND kind = 'file'
+            ORDER BY sequence_no ASC NULLS LAST, created_at ASC
+            LIMIT 1
+          `).get(gameid);
+        }
       }
       
       if (!screenshot) {
@@ -14520,23 +14579,50 @@ function registerDatabaseHandlers(dbManager) {
           
           let screenshot = null;
           
+          // Check if junction table exists (new schema)
+          const hasJunctionTable = screenshotDb.prepare(`
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='gameversion_screenshots'
+          `).get();
+          
           if (gameVersion?.title_screenshot_sha256) {
-            screenshot = screenshotDb.prepare(`
-              SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
-              FROM res_screenshots
-              WHERE gameid = ? AND decoded_sha256 = ?
-              LIMIT 1
-            `).get(gameidStr, gameVersion.title_screenshot_sha256);
+            if (hasJunctionTable) {
+              screenshot = screenshotDb.prepare(`
+                SELECT rs.rsuuid, rs.encrypted_data, rs.fernet_key, rs.screenshot_type, rs.decoded_sha256
+                FROM gameversion_screenshots gvs
+                INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+                WHERE gvs.gameid = ? AND rs.decoded_sha256 = ?
+                LIMIT 1
+              `).get(gameidStr, gameVersion.title_screenshot_sha256);
+            } else {
+              screenshot = screenshotDb.prepare(`
+                SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+                FROM res_screenshots
+                WHERE gameid = ? AND decoded_sha256 = ?
+                LIMIT 1
+              `).get(gameidStr, gameVersion.title_screenshot_sha256);
+            }
           }
           
           if (!screenshot) {
-            screenshot = screenshotDb.prepare(`
-              SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
-              FROM res_screenshots
-              WHERE gameid = ? AND kind = 'file'
-              ORDER BY sequence_no ASC NULLS LAST, created_at ASC
-              LIMIT 1
-            `).get(gameidStr);
+            if (hasJunctionTable) {
+              screenshot = screenshotDb.prepare(`
+                SELECT rs.rsuuid, rs.encrypted_data, rs.fernet_key, rs.screenshot_type, rs.decoded_sha256
+                FROM gameversion_screenshots gvs
+                INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+                WHERE gvs.gameid = ? AND rs.kind = 'file'
+                ORDER BY gvs.sequence_no ASC NULLS LAST, rs.created_at ASC
+                LIMIT 1
+              `).get(gameidStr);
+            } else {
+              screenshot = screenshotDb.prepare(`
+                SELECT rsuuid, encrypted_data, fernet_key, screenshot_type, decoded_sha256
+                FROM res_screenshots
+                WHERE gameid = ? AND kind = 'file'
+                ORDER BY sequence_no ASC NULLS LAST, created_at ASC
+                LIMIT 1
+              `).get(gameidStr);
+            }
           }
           
           if (!screenshot || !screenshot.encrypted_data || !screenshot.fernet_key) {

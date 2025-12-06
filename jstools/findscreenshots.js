@@ -534,10 +534,23 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
   
   console.log(`  [${gameid}] Found ${imageUrls.length} image URL(s)`);
   
+  // Check if junction table exists (new schema)
+  const hasJunctionTable = screenshotDb.prepare(`
+    SELECT name FROM sqlite_master 
+    WHERE type='table' AND name='gameversion_screenshots'
+  `).get();
+  
   // Get the maximum sequence_no for this gameid to ensure new screenshots are added in order
-  const maxSequenceResult = screenshotDb.prepare(`
-    SELECT MAX(sequence_no) as max_seq FROM res_screenshots WHERE gameid = ?
-  `).get(gameid);
+  let maxSequenceResult;
+  if (hasJunctionTable) {
+    maxSequenceResult = screenshotDb.prepare(`
+      SELECT MAX(sequence_no) as max_seq FROM gameversion_screenshots WHERE gameid = ?
+    `).get(gameid);
+  } else {
+    maxSequenceResult = screenshotDb.prepare(`
+      SELECT MAX(sequence_no) as max_seq FROM res_screenshots WHERE gameid = ?
+    `).get(gameid);
+  }
   let nextSequenceNo = (maxSequenceResult?.max_seq ?? 0) + 1;
   
   // Create screenshots directory if it doesn't exist
@@ -554,12 +567,23 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
     const imageUrl = imageUrls[i];
     
     try {
-      // Check if we already have this screenshot by source_url
-      const existingByUrl = screenshotDb.prepare(`
-        SELECT * FROM res_screenshots 
-        WHERE source_url = ? AND gameid = ?
-        LIMIT 1
-      `).get(imageUrl, gameid);
+      // Check if we already have this screenshot by source_url for this gameid
+      let existingByUrl;
+      if (hasJunctionTable) {
+        existingByUrl = screenshotDb.prepare(`
+          SELECT rs.*, gvs.sequence_no, gvs.source_url as gvs_source_url
+          FROM gameversion_screenshots gvs
+          INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+          WHERE gvs.gameid = ? AND gvs.source_url = ?
+          LIMIT 1
+        `).get(gameid, imageUrl);
+      } else {
+        existingByUrl = screenshotDb.prepare(`
+          SELECT * FROM res_screenshots 
+          WHERE source_url = ? AND gameid = ?
+          LIMIT 1
+        `).get(imageUrl, gameid);
+      }
       
       if (existingByUrl) {
         console.log(`    [${i + 1}/${imageUrls.length}] Already have screenshot: ${imageUrl}`);
@@ -589,40 +613,63 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       `).get(hashes.sha256, hashes.sha256);
       
       if (existingByHash) {
-        // Add to alt_names table
-        console.log(`      ⚠ Duplicate detected, adding to alt_names`);
+        // Duplicate screenshot found - link it to this gameid via junction table
+        const existingRsuuid = existingByHash.rsuuid || existingByHash.suuid;
+        console.log(`      ⚠ Duplicate detected (hash match), linking to existing screenshot ${existingRsuuid}`);
         
-        // Check if alt_names table exists, create if not
-        // Migration will create the table, but ensure it exists for safety
-        screenshotDb.exec(`
-          CREATE TABLE IF NOT EXISTS screenshot_alt_names (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            suuid TEXT NOT NULL,
-            alt_source_url TEXT NOT NULL,
-            alt_file_name TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (suuid) REFERENCES res_screenshots(rsuuid),
-            UNIQUE(suuid, alt_source_url)
-          )
-        `);
-        
-        // Check if this alt_name already exists
-        const existingAlt = screenshotDb.prepare(`
-          SELECT * FROM screenshot_alt_names 
-          WHERE suuid = ? AND alt_source_url = ?
-        `).get(existingByHash.rsuuid || existingByHash.suuid, imageUrl);
-        
-        if (!existingAlt) {
-          screenshotDb.prepare(`
-            INSERT INTO screenshot_alt_names (suuid, alt_source_url, alt_file_name)
-            VALUES (?, ?, ?)
-          `).run(existingByHash.rsuuid || existingByHash.suuid, imageUrl, filename);
+        if (hasJunctionTable) {
+          // Check if this gameid already has this screenshot linked
+          const existingLink = screenshotDb.prepare(`
+            SELECT * FROM gameversion_screenshots 
+            WHERE gameid = ? AND rsuuid = ?
+          `).get(gameid, existingRsuuid);
+          
+          if (!existingLink) {
+            // Link the existing screenshot to this gameid with its own sequence_no and source_url
+            const currentSequenceNo = nextSequenceNo++;
+            screenshotDb.prepare(`
+              INSERT INTO gameversion_screenshots (gameid, rsuuid, sequence_no, source_url, file_name)
+              VALUES (?, ?, ?, ?, ?)
+            `).run(gameid, existingRsuuid, currentSequenceNo, imageUrl, filename);
+            console.log(`      → Linked existing screenshot to gameid ${gameid} (sequence_no: ${currentSequenceNo})`);
+          } else {
+            console.log(`      → Screenshot already linked to gameid ${gameid}`);
+          }
+        } else {
+          // Old schema - add to alt_names table
+          console.log(`      ⚠ Duplicate detected, adding to alt_names`);
+          
+          // Check if alt_names table exists, create if not
+          screenshotDb.exec(`
+            CREATE TABLE IF NOT EXISTS screenshot_alt_names (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              suuid TEXT NOT NULL,
+              alt_source_url TEXT NOT NULL,
+              alt_file_name TEXT,
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (suuid) REFERENCES res_screenshots(rsuuid),
+              UNIQUE(suuid, alt_source_url)
+            )
+          `);
+          
+          // Check if this alt_name already exists
+          const existingAlt = screenshotDb.prepare(`
+            SELECT * FROM screenshot_alt_names 
+            WHERE suuid = ? AND alt_source_url = ?
+          `).get(existingRsuuid, imageUrl);
+          
+          if (!existingAlt) {
+            screenshotDb.prepare(`
+              INSERT INTO screenshot_alt_names (suuid, alt_source_url, alt_file_name)
+              VALUES (?, ?, ?)
+            `).run(existingRsuuid, imageUrl, filename);
+          }
+          
+          console.log(`      → Linked as alternate name for existing screenshot ${existingRsuuid}`);
         }
         
         // Delete downloaded file since it's a duplicate
         fs.unlinkSync(destPath);
-        
-        console.log(`      → Linked as alternate name for existing screenshot ${existingByHash.rsuuid || existingByHash.suuid}`);
         continue;
       }
       
@@ -639,9 +686,12 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       const screenshotType = detectFileType(filename) || 'image/png';
       
       // Insert new screenshot record (database mode only)
-      // Assign sequence_no to preserve order from images array
+      // Note: gameid is stored in res_screenshots for backwards compatibility,
+      // but the junction table is the primary way to link gameids to screenshots
       const currentSequenceNo = nextSequenceNo++;
       const rsuuid = crypto.randomUUID();
+      
+      // Insert into res_screenshots (actual screenshot data)
       screenshotDb.prepare(`
         INSERT INTO res_screenshots (
           rsuuid, gameid, gvuuid, file_name, file_ext, file_size,
@@ -653,7 +703,7 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         rsuuid,
-        gameid,
+        gameid,  // Store gameid for backwards compatibility
         gvuuid,
         filename,
         fileExt,
@@ -668,9 +718,17 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         imageUrl,  // source_url
         ipfs.cidV1,  // ipfs_cid_v1
         ipfs.cidV0,  // ipfs_cid_v0
-        currentSequenceNo,  // sequence_no (preserves order from images array)
+        currentSequenceNo,  // sequence_no (for backwards compatibility)
         new Date().toISOString()
       );
+      
+      // If junction table exists, also insert into it with per-gameid metadata
+      if (hasJunctionTable) {
+        screenshotDb.prepare(`
+          INSERT INTO gameversion_screenshots (gameid, rsuuid, sequence_no, source_url, file_name)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(gameid, rsuuid, currentSequenceNo, imageUrl, filename);
+      }
       
       // Delete the temporary downloaded file (we only need the encrypted version in DB)
       fs.unlinkSync(destPath);

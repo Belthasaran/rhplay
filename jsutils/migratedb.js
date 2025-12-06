@@ -1332,6 +1332,15 @@ const MIGRATIONS = {
       skipIf(db) {
         return columnExists(db, 'res_screenshots', 'sequence_no');
       },
+    },
+    {
+      id: 'screenshot_005_create_gameversion_screenshots',
+      description: 'Create junction table to link gameids to screenshots with per-gameid metadata',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/screenshot_005_create_gameversion_screenshots.sql'),
+      skipIf(db) {
+        return tableExists(db, 'gameversion_screenshots');
+      },
     }
   ],
 };

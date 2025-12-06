@@ -59,6 +59,8 @@
               :src="currentScreenshot.dataUrl"
               :alt="currentScreenshot.file_name || 'Screenshot'"
               class="lightbox-image"
+              :style="{ transform: `scale(${imageScale})` }"
+              @load="handleImageLoad"
             />
             <div class="lightbox-info">
               <p class="lightbox-title">{{ currentScreenshot?.file_name || `Screenshot ${(currentImageIndex ?? 0) + 1}` }}</p>
@@ -109,11 +111,42 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const lightboxVisible = ref(false);
 const currentImageIndex = ref<number | null>(null);
+const imageScale = ref(1);
+const imageDimensions = ref<{ width: number; height: number } | null>(null);
 
 const currentScreenshot = computed(() => {
   if (currentImageIndex.value === null) return null;
   return screenshots.value[currentImageIndex.value] || null;
 });
+
+function calculateImageScale(width: number, height: number): number {
+  // For images 256x224 or smaller, use 400% zoom
+  if (width <= 256 && height <= 224) {
+    return 4.0;
+  }
+  
+  // For larger images, scale to fit within 1024x896 while maintaining aspect ratio
+  // Scale range: 1.01 to 4.0
+  const maxWidth = 1024;
+  const maxHeight = 896;
+  
+  const scaleX = maxWidth / width;
+  const scaleY = maxHeight / height;
+  const scale = Math.min(scaleX, scaleY);
+  
+  // Clamp between 1.01 and 4.0
+  return Math.max(1.01, Math.min(4.0, scale));
+}
+
+function handleImageLoad(event: Event) {
+  const img = event.target as HTMLImageElement;
+  if (img) {
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+    imageDimensions.value = { width, height };
+    imageScale.value = calculateImageScale(width, height);
+  }
+}
 
 async function loadScreenshots() {
   if (!props.gameId) return;
@@ -216,6 +249,9 @@ function handleImageError(index: number) {
 function openLightbox(index: number) {
   currentImageIndex.value = index;
   lightboxVisible.value = true;
+  // Reset scale when opening new image
+  imageScale.value = 1;
+  imageDimensions.value = null;
 }
 
 function closeLightbox() {
@@ -226,11 +262,17 @@ function closeLightbox() {
 function previousImage() {
   if (currentImageIndex.value === null || screenshots.value.length === 0) return;
   currentImageIndex.value = (currentImageIndex.value - 1 + screenshots.value.length) % screenshots.value.length;
+  // Reset scale when changing images
+  imageScale.value = 1;
+  imageDimensions.value = null;
 }
 
 function nextImage() {
   if (currentImageIndex.value === null || screenshots.value.length === 0) return;
   currentImageIndex.value = (currentImageIndex.value + 1) % screenshots.value.length;
+  // Reset scale when changing images
+  imageScale.value = 1;
+  imageDimensions.value = null;
 }
 
 function close() {
@@ -362,15 +404,18 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: auto;
 }
 
 .lightbox-container {
   position: relative;
-  max-width: 95vw;
-  max-height: 95vh;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 100vw;
+  min-height: 100vh;
 }
 
 .lightbox-close {
@@ -435,14 +480,23 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 95vw;
-  max-height: 95vh;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .lightbox-image {
-  max-width: 100%;
-  max-height: calc(95vh - 100px);
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
   object-fit: contain;
+  transform-origin: center center;
+  transition: transform 0.2s ease;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 .lightbox-info {

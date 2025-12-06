@@ -20,7 +20,20 @@
           <tr><th>Type</th><td class="readonly-field">{{ game.Type }}</td></tr>
           <tr v-if="game.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ game.LegacyType }}</td></tr>
           <tr><th>Author</th><td class="readonly-field">{{ game.Author }}</td></tr>
-          <tr><th>Length</th><td class="readonly-field">{{ game.Length }}</td></tr>
+          <tr>
+            <th>Length</th>
+            <td class="readonly-field">
+              {{ game.Length }}
+              <button
+                v-if="hasScreenshots"
+                @click="openScreenshotGallery"
+                class="screenshot-icon-btn"
+                title="View Screenshots"
+              >
+                🖼️
+              </button>
+            </td>
+          </tr>
           
           <!-- Public Difficulty / Rating on same row -->
           <tr>
@@ -272,7 +285,20 @@
                 <tr><th>Type</th><td class="readonly-field">{{ game?.Type }}</td></tr>
                 <tr v-if="game?.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ game.LegacyType }}</td></tr>
                 <tr><th>Author</th><td class="readonly-field">{{ game?.Author }}</td></tr>
-                <tr><th>Length</th><td class="readonly-field">{{ game?.Length }}</td></tr>
+                <tr>
+                  <th>Length</th>
+                  <td class="readonly-field">
+                    {{ game?.Length }}
+                    <button
+                      v-if="hasScreenshots"
+                      @click="openScreenshotGallery"
+                      class="screenshot-icon-btn"
+                      title="View Screenshots"
+                    >
+                      🖼️
+                    </button>
+                  </td>
+                </tr>
                 
                 <tr>
                   <th>Difficulty / Rating</th>
@@ -487,11 +513,20 @@
       </div>
     </div>
   </Teleport>
+  
+  <!-- Screenshot Gallery Modal -->
+  <ScreenshotGallery
+    :visible="screenshotGalleryVisible"
+    :game-id="game?.Id"
+    :game-name="game?.Name"
+    @close="closeScreenshotGallery"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { Teleport } from 'vue';
+import ScreenshotGallery from './ScreenshotGallery.vue';
 
 interface Props {
   game: any;
@@ -594,6 +629,7 @@ async function loadGameStages() {
 watch(() => props.game?.Id, () => {
   if (props.game?.Id) {
     loadGameStages();
+    checkScreenshots();
   }
 }, { immediate: true });
 
@@ -606,10 +642,37 @@ watch(() => props.selectedVersion, () => {
 onMounted(() => {
   if (props.game?.Id) {
     loadGameStages();
+    checkScreenshots();
   }
 });
 
 const popoutModalOpen = ref(false);
+const screenshotGalleryVisible = ref(false);
+const hasScreenshots = ref(false);
+
+async function checkScreenshots() {
+  if (!props.game?.Id) {
+    hasScreenshots.value = false;
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getGameScreenshots) {
+      hasScreenshots.value = false;
+      return;
+    }
+    
+    const result = await api.getGameScreenshots({
+      gameid: String(props.game.Id),
+    });
+    
+    hasScreenshots.value = result?.success && Array.isArray(result.screenshots) && result.screenshots.length > 0;
+  } catch (error) {
+    console.error('Error checking screenshots:', error);
+    hasScreenshots.value = false;
+  }
+}
 
 function openPopoutModal() {
   popoutModalOpen.value = true;
@@ -617,6 +680,14 @@ function openPopoutModal() {
 
 function closePopoutModal() {
   popoutModalOpen.value = false;
+}
+
+function openScreenshotGallery() {
+  screenshotGalleryVisible.value = true;
+}
+
+function closeScreenshotGallery() {
+  screenshotGalleryVisible.value = false;
 }
 
 function handleOpenRatingSheet() {
@@ -771,6 +842,23 @@ function formatRatingStat(value: number | null | undefined): string {
 /* Inherit styles from App.vue - these will need to be scoped properly */
 .clickable {
   cursor: pointer;
+}
+
+.screenshot-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  margin-left: 8px;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+  vertical-align: middle;
+}
+
+.screenshot-icon-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 </style>
 

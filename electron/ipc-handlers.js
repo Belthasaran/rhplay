@@ -13970,6 +13970,107 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Get screenshots for a game
+   * Channel: db:screenshots:get
+   */
+  ipcMain.handle('db:screenshots:get', async (_event, { gameid }) => {
+    try {
+      if (!gameid) {
+        return { success: false, error: 'gameid is required' };
+      }
+      
+      const Database = require('better-sqlite3');
+      const screenshotDbPath = getScreenshotDbPath();
+      const fs = require('fs');
+      
+      if (!fs.existsSync(screenshotDbPath)) {
+        return { success: true, screenshots: [] };
+      }
+      
+      const screenshotDb = new Database(screenshotDbPath);
+      const screenshots = screenshotDb.prepare(`
+        SELECT rsuuid, gameid, gvuuid, rhpakuuid,
+               file_name, file_ext, source_url, screenshot_type,
+               encrypted_data, fernet_key, kind
+        FROM res_screenshots
+        WHERE gameid = ?
+        ORDER BY file_name ASC, created_at ASC
+      `).all(gameid);
+      
+      screenshotDb.close();
+      
+      return { success: true, screenshots };
+    } catch (error) {
+      console.error('[db:screenshots:get] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Decrypt a screenshot
+   * Channel: db:screenshots:decrypt
+   */
+  ipcMain.handle('db:screenshots:decrypt', async (_event, { encryptedData, fernetKey, screenshotType }) => {
+    try {
+      if (!encryptedData || !fernetKey) {
+        return { success: false, error: 'encryptedData and fernetKey are required' };
+      }
+      
+      const fernet = require('fernet');
+      const UrlBase64 = require('urlsafe-base64');
+      
+      // Convert encrypted data to Buffer if it's a string
+      let encryptedBuffer;
+      if (Buffer.isBuffer(encryptedData)) {
+        encryptedBuffer = encryptedData;
+      } else if (typeof encryptedData === 'string') {
+        // Try to decode as base64
+        encryptedBuffer = Buffer.from(encryptedData, 'base64');
+      } else {
+        console.error(`db:screenshots:decrypt:Error:Invalid encryptedData format: ${Object.prototype.toString.call(encryptedData)}`)
+        return { success: false, error: 'Invalid encryptedData format' };
+      }
+      
+      // Convert fernet key from base64 if needed
+      let fernetKeyString = fernetKey;
+      if (Buffer.isBuffer(fernetKey)) {
+        fernetKeyString = fernetKey.toString('utf8');
+      } else if (typeof fernetKey === 'string') {
+        // Check if it's base64 encoded
+        try {
+          const decoded = Buffer.from(fernetKey, 'base64').toString('utf8');
+          // If decoded looks like a valid fernet key (32 bytes base64 = 44 chars)
+          if (decoded.length === 44 && /^[A-Za-z0-9+/_-]+=*$/.test(decoded)) {
+            fernetKeyString = decoded;
+          }
+        } catch (e) {
+          // Use as-is
+        }
+      }
+      
+      // Decrypt using Fernet
+      const secret = new fernet.Secret(fernetKeyString);
+      const token = new fernet.Token({
+        secret: secret,
+        ttl: 0,
+        token: encryptedBuffer.toString('base64')
+      });
+      
+      const decrypted = token.decode();
+      const decryptedBuffer = Buffer.from(decrypted, 'base64');
+      
+      // Create data URL for display
+      const mimeType = screenshotType || 'image/png';
+      const dataUrl = `data:${mimeType};base64,${decryptedBuffer.toString('base64')}`;
+      
+      return { success: true, dataUrl, buffer: decryptedBuffer };
+    } catch (error) {
+      console.error('[db:screenshots:decrypt] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 // Helper function to sanitize file names

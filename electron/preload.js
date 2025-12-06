@@ -420,6 +420,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Game Stages Operations
   // =============================
     getGameStages: (params) => ipcRenderer.invoke('gamestages:get', params),
+    
+    /**
+     * Get screenshots for a game
+     * @param {Object} params - Parameters { gameid }
+     * @returns {Promise<{success: boolean, screenshots?: Array, error?: string}>}
+     */
+    getGameScreenshots: (params) => ipcRenderer.invoke('db:screenshots:get', params),
+    
+    /**
+     * Decrypt a screenshot
+     * @param {Object} params - Parameters { encryptedData, fernetKey, screenshotType }
+     * @returns {Promise<{success: boolean, dataUrl?: string, buffer?: Buffer, error?: string}>}
+     */
+    decryptScreenshot: (params) => ipcRenderer.invoke('db:screenshots:decrypt', params),
     saveGameStage: (params) => ipcRenderer.invoke('gamestages:save', params),
     deleteGameStage: (params) => ipcRenderer.invoke('gamestages:delete', params),
     getDetectedLevels: (params) => ipcRenderer.invoke('gamestages:get-detected-levels', params),

@@ -14020,13 +14020,18 @@ function registerDatabaseHandlers(dbManager) {
       const fernet = require('fernet');
       const UrlBase64 = require('urlsafe-base64');
       
-      // Convert encrypted data to Buffer if it's a string
+      // Convert encrypted data to Buffer if it's a string, Uint8Array, or other type
       let encryptedBuffer;
       if (Buffer.isBuffer(encryptedData)) {
         encryptedBuffer = encryptedData;
+      } else if (encryptedData instanceof Uint8Array) {
+        encryptedBuffer = Buffer.from(encryptedData);
       } else if (typeof encryptedData === 'string') {
         // Try to decode as base64
         encryptedBuffer = Buffer.from(encryptedData, 'base64');
+      } else if (Array.isArray(encryptedData)) {
+        // Handle array of numbers
+        encryptedBuffer = Buffer.from(encryptedData);
       } else {
         console.error(`db:screenshots:decrypt:Error:Invalid encryptedData format: ${Object.prototype.toString.call(encryptedData)}`)
         return { success: false, error: 'Invalid encryptedData format' };

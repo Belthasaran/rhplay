@@ -570,13 +570,45 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       // Check if we already have this screenshot by source_url for this gameid
       let existingByUrl;
       if (hasJunctionTable) {
+        // First check if this URL is already linked to this specific gameid
         existingByUrl = screenshotDb.prepare(`
-          SELECT rs.*, gvs.sequence_no, gvs.source_url as gvs_source_url
+          SELECT rs.*, gvs.sequence_no, gvs.source_url as gvs_source_url, gvs.rsuuid
           FROM gameversion_screenshots gvs
           INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
           WHERE gvs.gameid = ? AND gvs.source_url = ?
           LIMIT 1
         `).get(gameid, imageUrl);
+        
+        // If not linked to this gameid, check if the URL exists anywhere in the database
+        // (could be linked to a different gameid or in res_screenshots directly)
+        if (!existingByUrl) {
+          const existingUrlAnywhere = screenshotDb.prepare(`
+            SELECT rs.rsuuid, rs.decoded_sha256, rs.file_sha256
+            FROM gameversion_screenshots gvs
+            INNER JOIN res_screenshots rs ON gvs.rsuuid = rs.rsuuid
+            WHERE gvs.source_url = ?
+            LIMIT 1
+          `).get(imageUrl);
+          
+          // Also check res_screenshots directly (for backwards compatibility)
+          if (!existingUrlAnywhere) {
+            const existingInResScreenshots = screenshotDb.prepare(`
+              SELECT rsuuid, decoded_sha256, file_sha256
+              FROM res_screenshots
+              WHERE source_url = ?
+              LIMIT 1
+            `).get(imageUrl);
+            
+            if (existingInResScreenshots) {
+              // URL exists in res_screenshots but not linked to this gameid yet
+              // We'll link it below after the hash check
+              existingByUrl = { ...existingInResScreenshots, needsLinking: true };
+            }
+          } else {
+            // URL exists linked to another gameid - we'll link it to this gameid below
+            existingByUrl = { ...existingUrlAnywhere, needsLinking: true };
+          }
+        }
       } else {
         existingByUrl = screenshotDb.prepare(`
           SELECT * FROM res_screenshots 
@@ -585,12 +617,43 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
         `).get(imageUrl, gameid);
       }
       
-      if (existingByUrl) {
+      if (existingByUrl && !existingByUrl.needsLinking) {
         console.log(`    [${i + 1}/${imageUrls.length}] Already have screenshot: ${imageUrl}`);
         continue;
       }
       
-      // Determine file extension from URL
+      // If URL exists but needs linking to this gameid, skip download and link it
+      if (existingByUrl && existingByUrl.needsLinking) {
+        const existingRsuuid = existingByUrl.rsuuid;
+        console.log(`    [${i + 1}/${imageUrls.length}] Screenshot URL already in database, linking to gameid ${gameid}: ${imageUrl}`);
+        
+        if (hasJunctionTable) {
+          // Check if already linked (shouldn't happen, but be safe)
+          const existingLink = screenshotDb.prepare(`
+            SELECT * FROM gameversion_screenshots 
+            WHERE gameid = ? AND rsuuid = ?
+          `).get(gameid, existingRsuuid);
+          
+          if (!existingLink) {
+            // Link the existing screenshot to this gameid with its own sequence_no and source_url
+            const currentSequenceNo = nextSequenceNo++;
+            const urlPath = new URL(imageUrl).pathname;
+            const ext = path.extname(urlPath) || '.png';
+            const filename = `screenshot_${gameid}_${Date.now()}_${i + 1}${ext}`;
+            
+            screenshotDb.prepare(`
+              INSERT INTO gameversion_screenshots (gameid, rsuuid, sequence_no, source_url, file_name)
+              VALUES (?, ?, ?, ?, ?)
+            `).run(gameid, existingRsuuid, currentSequenceNo, imageUrl, filename);
+            console.log(`      → Linked existing screenshot to gameid ${gameid} (sequence_no: ${currentSequenceNo})`);
+          } else {
+            console.log(`      → Screenshot already linked to gameid ${gameid}`);
+          }
+        }
+        continue;
+      }
+      
+      // Determine file extension from URL (needed for both download and linking)
       const urlPath = new URL(imageUrl).pathname;
       const ext = path.extname(urlPath) || '.png';
       const filename = `screenshot_${gameid}_${Date.now()}_${i + 1}${ext}`;
@@ -631,9 +694,19 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
               INSERT INTO gameversion_screenshots (gameid, rsuuid, sequence_no, source_url, file_name)
               VALUES (?, ?, ?, ?, ?)
             `).run(gameid, existingRsuuid, currentSequenceNo, imageUrl, filename);
-            console.log(`      → Linked existing screenshot to gameid ${gameid} (sequence_no: ${currentSequenceNo})`);
+            console.log(`      → Linked existing screenshot to gameid ${gameid} (sequence_no: ${currentSequenceNo}, source_url: ${imageUrl})`);
           } else {
-            console.log(`      → Screenshot already linked to gameid ${gameid}`);
+            // Check if we need to update the source_url if it's different
+            if (existingLink.source_url !== imageUrl) {
+              screenshotDb.prepare(`
+                UPDATE gameversion_screenshots 
+                SET source_url = ?, file_name = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE gameid = ? AND rsuuid = ?
+              `).run(imageUrl, filename, gameid, existingRsuuid);
+              console.log(`      → Updated source_url for existing link: ${imageUrl}`);
+            } else {
+              console.log(`      → Screenshot already linked to gameid ${gameid} with same source_url`);
+            }
           }
         } else {
           // Old schema - add to alt_names table

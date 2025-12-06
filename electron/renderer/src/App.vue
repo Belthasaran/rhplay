@@ -810,6 +810,15 @@
                 <button @click="clearFilters" :disabled="!hasActiveFilters" class="btn-clear-filter">Clear</button>
               </div>
 
+              <div class="filter-checkboxes-row">
+                <label class="toggle">
+                  <input type="checkbox" v-model="showHidden" /> Show hidden
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" v-model="hideFinished" /> Hide finished
+                </label>
+              </div>
+
               <div class="common-filters">
                 <div class="filter-section-label">Common Filters:</div>
                 <div class="filter-tags">
@@ -889,13 +898,6 @@
             <option value="In Progress">In Progress</option>
             <option value="Finished">Finished</option>
           </select>
-        </label>
-
-        <label class="toggle">
-          <input type="checkbox" v-model="showHidden" /> Show hidden
-        </label>
-        <label class="toggle">
-          <input type="checkbox" v-model="hideFinished" /> Hide finished
         </label>
       </div>
 
@@ -28691,6 +28693,26 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.filter-checkboxes-row {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color, #ddd);
+  margin-bottom: 12px;
+}
+
+.filter-checkboxes-row .toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.filter-checkboxes-row .toggle input[type="checkbox"] {
+  cursor: pointer;
 }
 
 .filter-search-row {

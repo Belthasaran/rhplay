@@ -176,9 +176,22 @@ function getMissingDatabases() {
         basePath = __dirname;
     }
     
+    // Databases that require provisioning (exclude thumbnail_cache.db - it's auto-created)
+    const PROVISIONING_REQUIRED_DB = ['clientdata.db', 'rhdata.db', 'patchbin.db', 'resource.db', 'screenshot.db'];
+    
     // Check each database, respecting environment variable overrides
     const missing = [];
     for (const dbName of DATABASE_FILES) {
+        // Skip thumbnail_cache.db - it's auto-created by the database manager, not provisioned
+        if (dbName === 'thumbnail_cache.db') {
+            continue;
+        }
+        
+        // Only check databases that require provisioning
+        if (!PROVISIONING_REQUIRED_DB.includes(dbName)) {
+            continue;
+        }
+        
         let dbPath;
         
         // Check for environment variable override

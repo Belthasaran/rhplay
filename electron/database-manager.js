@@ -390,6 +390,32 @@ class DatabaseManager {
     // Create empty database
     const db = new Database(dbPath);
     
+    // For thumbnail_cache, create the table immediately (migrations will handle it, but this ensures it exists)
+    if (dbName === 'thumbnail_cache') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS thumbnail_cache (
+          gameid INTEGER PRIMARY KEY,
+          thumbnail_data_url TEXT NOT NULL,
+          screenshot_rsuuid TEXT,
+          screenshot_decoded_sha256 TEXT,
+          cached_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_gameid ON thumbnail_cache(gameid);
+        CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_updated_at ON thumbnail_cache(updated_at);
+        CREATE TRIGGER IF NOT EXISTS trg_thumbnail_cache_updated
+          AFTER UPDATE ON thumbnail_cache
+        BEGIN
+          UPDATE thumbnail_cache
+          SET updated_at = CURRENT_TIMESTAMP
+          WHERE gameid = NEW.gameid;
+        END;
+      `);
+      console.log(`Created ${dbName} with thumbnail_cache schema`);
+      db.close();
+      return;
+    }
+    
     // Apply schema if available
     const schemaPath = path.join(__dirname, 'sql', `${dbName}.sql`);
     if (fs.existsSync(schemaPath)) {

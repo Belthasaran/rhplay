@@ -1062,7 +1062,7 @@
         </table>
         
         <!-- Tiles Mode -->
-        <div v-else-if="viewMode === 'tiles'" class="tiles-container">
+        <div v-else-if="viewMode === 'tiles'" class="tiles-container" ref="tilesContainerRef">
           <div class="tiles-grid">
             <div
               v-for="row in visibleTiles"
@@ -1092,8 +1092,11 @@
           <div v-if="visibleTiles.length === 0" class="tiles-empty">
             No items match your filters.
           </div>
-          <div v-if="hasMoreTiles" class="tiles-load-more">
-            <button @click="loadMoreTiles" class="btn-load-more">Load More</button>
+          <!-- Scroll sentinel for infinite scroll -->
+          <div v-if="hasMoreTiles" ref="tilesScrollSentinel" class="tiles-scroll-sentinel"></div>
+          <div v-if="tilesLoadingMore" class="tiles-loading-indicator">
+            <div class="loading-spinner-small"></div>
+            <span>Loading more tiles...</span>
           </div>
         </div>
       </div>
@@ -7920,10 +7923,12 @@ const filterSearchInput = ref<HTMLInputElement | null>(null);
 const viewMode = ref<'list' | 'tiles'>('list');
 const viewDropdownOpen = ref(false);
 const sortOption = ref<string>('fields_type');
-const tilesPerPage = ref(50);
+const tilesPerPage = ref(102); // Initial page size for tiles
 const tilesPage = ref(0);
 const thumbnailCache = reactive<Map<string, string>>(new Map());
 const thumbnailLoading = reactive<Set<string>>(new Set());
+const tilesContainerRef = ref<HTMLElement | null>(null);
+const tilesLoadingMore = ref(false);
 
 // Profile and Ratings Publishing state
 const profilePublishingInfo = ref<any>(null);
@@ -8337,7 +8342,13 @@ function setViewMode(mode: 'list' | 'tiles') {
     // Reset pagination when switching to tiles
     tilesPage.value = 0;
     // Load thumbnails for visible tiles
-    loadThumbnailsForVisibleTiles();
+    nextTick(() => {
+      loadThumbnailsForVisibleTiles();
+      setupTilesInfiniteScroll();
+    });
+  } else {
+    // Clean up scroll observer when switching away from tiles
+    cleanupTilesInfiniteScroll();
   }
 }
 
@@ -8346,13 +8357,79 @@ function setSortOption(option: string) {
   // Reset pagination when sorting changes
   if (viewMode.value === 'tiles') {
     tilesPage.value = 0;
-    loadThumbnailsForVisibleTiles();
+    nextTick(() => {
+      loadThumbnailsForVisibleTiles();
+      setupTilesInfiniteScroll();
+    });
   }
 }
 
-function loadMoreTiles() {
-  tilesPage.value++;
-  loadThumbnailsForVisibleTiles();
+// Infinite scroll setup
+let tilesScrollObserver: IntersectionObserver | null = null;
+const tilesScrollSentinel = ref<HTMLElement | null>(null);
+
+function setupTilesInfiniteScroll() {
+  // Clean up existing observer
+  cleanupTilesInfiniteScroll();
+  
+  if (viewMode.value !== 'tiles' || !hasMoreTiles.value) {
+    return;
+  }
+  
+  // Use Intersection Observer to detect when sentinel comes into view
+  // Use viewport as root since .table-wrapper is the scroll container
+  tilesScrollObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && hasMoreTiles.value && !tilesLoadingMore.value) {
+          loadMoreTiles();
+        }
+      });
+    },
+    {
+      root: null, // Use viewport as root
+      rootMargin: '300px', // Start loading 300px before sentinel reaches viewport
+      threshold: 0.1
+    }
+  );
+  
+  // Observe the sentinel element
+  nextTick(() => {
+    if (tilesScrollSentinel.value && tilesScrollObserver) {
+      tilesScrollObserver.observe(tilesScrollSentinel.value);
+    }
+  });
+}
+
+function cleanupTilesInfiniteScroll() {
+  if (tilesScrollObserver) {
+    tilesScrollObserver.disconnect();
+    tilesScrollObserver = null;
+  }
+}
+
+
+async function loadMoreTiles() {
+  if (tilesLoadingMore.value || !hasMoreTiles.value) {
+    return;
+  }
+  
+  tilesLoadingMore.value = true;
+  
+  try {
+    // Increment page to load more tiles
+    tilesPage.value++;
+    
+    // Load thumbnails for newly visible tiles
+    await loadThumbnailsForVisibleTiles();
+    
+    // Re-setup observer for next batch
+    nextTick(() => {
+      setupTilesInfiniteScroll();
+    });
+  } finally {
+    tilesLoadingMore.value = false;
+  }
 }
 
 // Thumbnail loading functions
@@ -8422,19 +8499,25 @@ function handleThumbnailError(item: any) {
   loadThumbnail(item.Id);
 }
 
-// Watch for view mode changes to load thumbnails
+// Watch for view mode changes to load thumbnails and setup infinite scroll
 watch(viewMode, (newMode) => {
   if (newMode === 'tiles') {
     nextTick(() => {
       loadThumbnailsForVisibleTiles();
+      setupTilesInfiniteScroll();
     });
+  } else {
+    cleanupTilesInfiniteScroll();
   }
 });
 
-// Watch for visible tiles changes to load thumbnails
+// Watch for visible tiles changes to load thumbnails and setup infinite scroll
 watch(visibleTiles, () => {
   if (viewMode.value === 'tiles') {
     loadThumbnailsForVisibleTiles();
+    nextTick(() => {
+      setupTilesInfiniteScroll();
+    });
   }
 }, { deep: true });
 
@@ -26236,6 +26319,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown);
   window.removeEventListener('click', handleGlobalClick);
+  cleanupTilesInfiniteScroll();
   if (removeUsb2snesSshStatusListener) {
     removeUsb2snesSshStatusListener();
     removeUsb2snesSshStatusListener = null;
@@ -34448,25 +34532,37 @@ button:disabled {
   font-size: 16px;
 }
 
-.tiles-load-more {
-  text-align: center;
+/* Scroll sentinel for infinite scroll */
+.tiles-scroll-sentinel {
+  height: 1px;
+  width: 100%;
+  margin: 20px 0;
+}
+
+/* Loading indicator for infinite scroll */
+.tiles-loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   padding: 20px;
-}
-
-.btn-load-more {
-  padding: 10px 24px;
-  background: var(--bg-secondary, #f5f5f5);
-  border: 1px solid var(--border-primary, #ccc);
-  border-radius: 4px;
-  cursor: pointer;
+  color: var(--text-secondary, #666);
   font-size: 14px;
-  color: var(--text-primary, #333);
-  transition: all 0.2s ease;
 }
 
-.btn-load-more:hover {
-  background: var(--bg-hover, #e9e9e9);
-  border-color: var(--border-hover, #999);
+.loading-spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-primary, #ccc);
+  border-top-color: var(--accent-color, #007bff);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* View dropdown active state */

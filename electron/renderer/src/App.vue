@@ -861,6 +861,8 @@
 
           <div v-if="manageDropdownOpen" class="filter-dropdown simple-dropdown" @click.stop>
             <div class="simple-dropdown-body">
+              <button @click="openBulkEditModal(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Bulk Edit checked</button>
+              <div class="dropdown-separator"></div>
               <button @click="hideChecked(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Hide checked</button>
               <button @click="unhideChecked(); closeManageDropdown()" :disabled="numChecked === 0" class="dropdown-action-btn">Unhide checked</button>
               <div class="dropdown-separator"></div>
@@ -889,16 +891,6 @@
         </div>
 
         <button @click="addSelectedToRun" :disabled="numChecked === 0">Add to Run</button>
-
-        <label class="status-setter">
-          Status for checked:
-          <select v-model="bulkStatus" @change="applyBulkStatus" :disabled="numChecked === 0">
-            <option value="">Select…</option>
-            <option value="Default">Default</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Finished">Finished</option>
-          </select>
-        </label>
       </div>
 
       <div class="right-actions">
@@ -1079,6 +1071,59 @@
       </aside>
     </section>
   </main>
+  
+  <!-- Bulk Edit Modal -->
+  <div v-if="bulkEditModalOpen" class="modal-backdrop" @click.self="closeBulkEditModal" style="z-index: 20000;">
+    <div class="modal bulk-edit-modal">
+      <header class="modal-header">
+        <h3>Bulk Edit Checked Items</h3>
+        <button @click="closeBulkEditModal" class="close">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="bulk-edit-content">
+          <p class="bulk-edit-info">{{ numChecked }} item(s) selected</p>
+          
+          <div class="bulk-edit-field">
+            <label>
+              <span class="field-label">Status:</span>
+              <select v-model="bulkEditStatus">
+                <option value="">No change</option>
+                <option value="Default">Default</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Finished">Finished</option>
+              </select>
+            </label>
+          </div>
+          
+          <div class="bulk-edit-field">
+            <label>
+              <span class="field-label">Hidden:</span>
+              <select v-model="bulkEditHidden">
+                <option value="">No change</option>
+                <option value="hide">Hide</option>
+                <option value="unhide">Unhide</option>
+              </select>
+            </label>
+          </div>
+          
+          <div class="bulk-edit-field">
+            <label>
+              <span class="field-label">Excluded from random:</span>
+              <select v-model="bulkEditExcludeFromRandom">
+                <option value="">No change</option>
+                <option value="set">Set as Excluded from Random</option>
+                <option value="clear">Clear Excluded from Random</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeBulkEditModal" class="btn-secondary">Cancel</button>
+        <button @click="applyBulkEdit" class="btn-primary">Apply and Close</button>
+      </footer>
+    </div>
+  </div>
   
   <!-- Prepare Run Modal -->
   <div v-if="runModalOpen" class="modal-backdrop">
@@ -7796,6 +7841,10 @@ const searchQuery = ref('');
 const showHidden = ref(false);
 const hideFinished = ref(false);
 const bulkStatus = ref('');
+const bulkEditModalOpen = ref(false);
+const bulkEditStatus = ref('');
+const bulkEditHidden = ref('');
+const bulkEditExcludeFromRandom = ref('');
 
 // Filter dropdown state
 const filterDropdownOpen = ref(false);
@@ -16312,6 +16361,67 @@ function applyBulkStatus() {
   if (!status) return;
   for (const it of items) if (selectedIds.value.has(it.Id)) it.Status = status;
   bulkStatus.value = '';
+}
+
+function openBulkEditModal() {
+  if (numChecked.value === 0) return;
+  bulkEditStatus.value = '';
+  bulkEditHidden.value = '';
+  bulkEditExcludeFromRandom.value = '';
+  bulkEditModalOpen.value = true;
+}
+
+function closeBulkEditModal() {
+  bulkEditModalOpen.value = false;
+  bulkEditStatus.value = '';
+  bulkEditHidden.value = '';
+  bulkEditExcludeFromRandom.value = '';
+}
+
+function applyBulkEdit() {
+  if (numChecked.value === 0) return;
+  
+  // Apply status change
+  if (bulkEditStatus.value) {
+    const status = bulkEditStatus.value as ItemStatus;
+    for (const it of items) {
+      if (selectedIds.value.has(it.Id)) {
+        it.Status = status;
+      }
+    }
+  }
+  
+  // Apply hidden change
+  if (bulkEditHidden.value === 'hide') {
+    for (const it of items) {
+      if (selectedIds.value.has(it.Id)) {
+        it.Hidden = true;
+      }
+    }
+  } else if (bulkEditHidden.value === 'unhide') {
+    for (const it of items) {
+      if (selectedIds.value.has(it.Id)) {
+        it.Hidden = false;
+      }
+    }
+  }
+  
+  // Apply ExcludeFromRandom change
+  if (bulkEditExcludeFromRandom.value === 'set') {
+    for (const it of items) {
+      if (selectedIds.value.has(it.Id)) {
+        it.ExcludeFromRandom = true;
+      }
+    }
+  } else if (bulkEditExcludeFromRandom.value === 'clear') {
+    for (const it of items) {
+      if (selectedIds.value.has(it.Id)) {
+        it.ExcludeFromRandom = false;
+      }
+    }
+  }
+  
+  closeBulkEditModal();
 }
 
 function getSingleSelected(): Item | null {
@@ -28537,6 +28647,58 @@ button:disabled {
   background: var(--bg-tertiary); 
   color: var(--accent-primary); 
 }
+.bulk-edit-modal {
+  max-width: 500px;
+  width: 90vw;
+}
+
+.bulk-edit-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bulk-edit-info {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: var(--text-secondary, #666);
+}
+
+.bulk-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bulk-edit-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bulk-edit-field .field-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+}
+
+.bulk-edit-field select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-secondary, #ddd);
+  border-radius: 4px;
+  background: var(--bg-primary, white);
+  color: var(--text-primary, #333);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bulk-edit-field select:focus {
+  outline: none;
+  border-color: var(--accent-primary, #4CAF50);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
 .modal-footer { 
   padding: 12px 20px; 
   border-top: 1px solid var(--border-primary); 

@@ -278,14 +278,24 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
   }
   
   let downloaded = 0;
-  const screenshots = skeleton.screenshots || [];
+  const screenshotSources = [];
+  
+  // Track existing screenshots to avoid duplicates
+  const existingScreenshots = skeleton.screenshots || [];
   
   for (let i = 0; i < imageUrls.length; i++) {
     const imageUrl = imageUrls[i];
     
     try {
-      // Check if we already have this screenshot by source_url
-      const existingByUrl = screenshots.find(s => s.source_url === imageUrl);
+      // Check if we already have this screenshot by source_url in screenshot_sources
+      const existingSourceByUrl = (skeleton.screenshot_sources || []).find(s => s.source_url === imageUrl);
+      if (existingSourceByUrl) {
+        console.log(`    [${i + 1}/${imageUrls.length}] Already have screenshot source: ${imageUrl}`);
+        continue;
+      }
+      
+      // Also check existing screenshots (from previous prepare runs)
+      const existingByUrl = existingScreenshots.find(s => s.source_url === imageUrl);
       if (existingByUrl) {
         console.log(`    [${i + 1}/${imageUrls.length}] Already have screenshot: ${imageUrl}`);
         continue;
@@ -327,45 +337,41 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
         }
       }
       
-      // Also check in local skeleton screenshots
-      const localDuplicate = screenshots.find(s => 
-        (s.file_hash_sha256 || s.file_sha256) === hashes.sha256 || 
-        (s.file_hash_sha224 || s.decoded_sha256) === hashes.sha256
+      // Also check in local skeleton screenshots and screenshot_sources
+      const localDuplicate = existingScreenshots.find(s => 
+        (s.file_hash_sha256 || s.file_sha256 || s.decoded_sha256) === hashes.sha256
       );
       
-      if (localDuplicate) {
+      const sourceDuplicate = (skeleton.screenshot_sources || []).find(s => 
+        s.file_sha256 === hashes.sha256 || s.file_sha224 === hashes.sha224
+      );
+      
+      if (localDuplicate || sourceDuplicate) {
         isDuplicate = true;
-        duplicateRecord = localDuplicate;
-        console.log(`      ⚠ Duplicate detected (hash matches local screenshot)`);
+        duplicateRecord = localDuplicate || sourceDuplicate;
+        console.log(`      ⚠ Duplicate detected (hash matches existing screenshot)`);
       }
       
-      // Create screenshot record for folder mode (not database)
-      const screenshotRecord = {
-        suuid: crypto.randomUUID(),
-        gameid: gameid,
-        gvuuid: skeleton.gameversion?.gvuuid || null,
-        file_name: filename,
-        file_path: `screenshots/${filename}`,
-        file_size: hashes.size,
-        // Store all hashes for reference (even if DB schema doesn't have all)
-        file_hash_sha224: hashes.sha224,
-        file_hash_sha256: hashes.sha256,
-        file_sha256: hashes.sha256, // Also store in DB-compatible format
-        decoded_sha256: hashes.sha256, // For DB compatibility
-        file_hash_sha1: hashes.sha1,
-        file_hash_md5: hashes.md5,
+      // Create screenshot source metadata (not full screenshot record - that's done by --prepare)
+      const screenshotSource = {
         source_url: imageUrl,
+        file_path: `screenshots/${filename}`,
+        file_name: filename,
+        file_sha256: hashes.sha256,
+        file_sha224: hashes.sha224,
+        file_sha1: hashes.sha1,
+        file_md5: hashes.md5,
+        file_size: hashes.size,
         created_at: new Date().toISOString()
       };
       
       if (isDuplicate && duplicateRecord) {
-        // Add to alt_names instead of creating new record
-        screenshotRecord.alt_source_urls = [imageUrl];
-        screenshotRecord.duplicate_of = duplicateRecord.rsuuid || duplicateRecord.suuid || duplicateRecord.ruuid;
-        console.log(`      → Linked as alternate name for existing screenshot`);
+        // Still add source metadata but mark as duplicate
+        screenshotSource.duplicate_of = duplicateRecord.rsuuid || duplicateRecord.suuid || duplicateRecord.ruuid;
+        console.log(`      → Source metadata added (duplicate of existing screenshot)`);
       }
       
-      screenshots.push(screenshotRecord);
+      screenshotSources.push(screenshotSource);
       downloaded++;
       
     } catch (error) {
@@ -373,10 +379,27 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
     }
   }
   
-  // Update skeleton with screenshots
-  // Store in both locations:
-  // 1. skeleton.screenshots - detailed records with metadata
-  skeleton.screenshots = screenshots;
+  // Update skeleton with screenshot sources
+  // Store screenshot sources metadata separately from skeleton.screenshots (which is managed by --prepare)
+  // 1. skeleton.screenshot_sources - metadata about externally sourced screenshots (URLs, hashes, etc.)
+  if (!skeleton.screenshot_sources) {
+    skeleton.screenshot_sources = [];
+  }
+  
+  // Add screenshot source metadata (for mapping source_url during --prepare)
+  for (const source of screenshotSources) {
+    if (source.file_path && !source.duplicate_of) {
+      // Check if this source already exists
+      const existingSource = skeleton.screenshot_sources.find(s => 
+        s.file_sha256 === source.file_sha256 || 
+        s.source_url === source.source_url
+      );
+      
+      if (!existingSource) {
+        skeleton.screenshot_sources.push(source);
+      }
+    }
+  }
   
   // 2. skeleton.gameversion.screenshots - array of file paths (strings) for newgame.js --prepare
   // This is what buildScreenshotEntries reads to process and encrypt screenshots
@@ -388,10 +411,10 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
   }
   
   // Add file paths to gameversion.screenshots (as strings) for processing during --prepare
-  for (const screenshot of screenshots) {
-    if (screenshot.file_path && !screenshot.duplicate_of) {
+  for (const source of screenshotSources) {
+    if (source.file_path && !source.duplicate_of) {
       // Add relative path to gameversion.screenshots if not already present
-      const pathStr = screenshot.file_path;
+      const pathStr = source.file_path;
       if (!skeleton.gameversion.screenshots.includes(pathStr)) {
         skeleton.gameversion.screenshots.push(pathStr);
       }

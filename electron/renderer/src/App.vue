@@ -1073,16 +1073,23 @@
               <div class="tile-checkbox">
                 <input type="checkbox" :checked="selectedIds.has(row.Id)" @change="toggleMainSelection(row.Id, $event)" @click.stop />
               </div>
-              <div class="tile-thumbnail">
-                <img
-                  v-if="row.thumbnailDataUrl"
-                  :src="row.thumbnailDataUrl"
-                  :alt="row.Name"
-                  @error="handleThumbnailError(row)"
-                />
-                <div v-else class="tile-placeholder">
-                  <span>No Image</span>
+              <div class="tile-thumbnail" :class="{ 'image-banned': row.imageTitleBanned }">
+                <!-- Blocked content banner (shown when image_title is banned) -->
+                <div v-if="row.imageTitleBanned" class="tile-blocked-banner">
+                  <span>Blocked Content</span>
                 </div>
+                <!-- Normal thumbnail (hidden when banned) -->
+                <template v-else>
+                  <img
+                    v-if="row.thumbnailDataUrl"
+                    :src="row.thumbnailDataUrl"
+                    :alt="row.Name"
+                    @error="handleThumbnailError(row)"
+                  />
+                  <div v-else class="tile-placeholder">
+                    <span>No Image</span>
+                  </div>
+                </template>
                 <!-- Type badge (bottom left) - show if type can be determined from any source -->
                 <div v-if="getSimplifiedType(row)" class="tile-type-badge" :style="{ backgroundColor: getSimplifiedType(row)?.color }">
                   {{ getSimplifiedType(row)?.label }}
@@ -7945,6 +7952,7 @@ const thumbnailCache = reactive<Map<string, string>>(new Map());
 const thumbnailLoading = reactive<Set<string>>(new Set());
 const tilesContainerRef = ref<HTMLElement | null>(null);
 const tilesLoadingMore = ref(false);
+const imageTitleBanned = reactive<Set<string>>(new Set()); // Cache of gameids banned from image_title
 
 // Profile and Ratings Publishing state
 const profilePublishingInfo = ref<any>(null);
@@ -8406,7 +8414,8 @@ const visibleTiles = computed(() => {
   const endIndex = (tilesPage.value + 1) * tilesPerPage.value;
   return sorted.slice(0, endIndex).map(item => ({
     ...item,
-    thumbnailDataUrl: thumbnailCache.get(item.Id) || null
+    thumbnailDataUrl: thumbnailCache.get(item.Id) || null,
+    imageTitleBanned: imageTitleBanned.has(item.Id)
   }));
 });
 
@@ -8786,6 +8795,33 @@ watch(visibleTiles, () => {
 watch(filteredItems, async (newItems) => {
   if (newItems.length > 0) {
     await populateDifficultyCache(newItems);
+  }
+}, { immediate: true });
+
+// Check for image_title bans on visible tiles
+async function checkImageTitleBans(items: Item[]) {
+  const api = (window as any).electronAPI;
+  if (!api || !api.isGameBanned) return;
+  
+  // Check bans for items that aren't already checked
+  const toCheck = items.filter(item => !imageTitleBanned.has(item.Id));
+  
+  for (const item of toCheck) {
+    try {
+      const result = await api.isGameBanned(item.Id, 'image_title', item);
+      if (result.success && result.isBanned) {
+        imageTitleBanned.add(item.Id);
+      }
+    } catch (error) {
+      console.warn(`Error checking ban for game ${item.Id}:`, error);
+    }
+  }
+}
+
+// Watch for visible tiles changes to check bans (only in tiles mode)
+watch([visibleTiles, viewMode], async ([newTiles, mode]) => {
+  if (mode === 'tiles' && newTiles.length > 0) {
+    await checkImageTitleBans(newTiles);
   }
 }, { immediate: true });
 
@@ -34764,6 +34800,10 @@ button:disabled {
   position: relative;
 }
 
+.tile-thumbnail.image-banned {
+  background: #36454f; /* Charcoal color */
+}
+
 .tile-thumbnail img {
   width: 100%;
   height: 100%;
@@ -34852,6 +34892,29 @@ button:disabled {
 .tile-difficulty-badge[style*="ff7043"] {
   /* Colored badges need dark text for contrast */
   color: #000;
+}
+
+/* Blocked content banner */
+.tile-blocked-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 20px;
+  background-color: #ffcccc; /* Pastel red */
+  border: 2px solid #ff9999;
+  border-radius: 6px;
+  z-index: 6;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.tile-blocked-banner span {
+  font-weight: 700;
+  font-size: 13px;
+  color: #000;
+  text-align: center;
+  display: block;
+  white-space: nowrap;
 }
 
 /* Race badge */

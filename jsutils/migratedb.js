@@ -1216,6 +1216,54 @@ const MIGRATIONS = {
         return tableExists(db, 'thumbnail_cache');
       },
     },
+    {
+      id: 'thumbnail_cache_002_add_ban_status',
+      description: 'Add columns for caching image_title and image_preview ban status (session-only)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/thumbnail_cache_002_add_ban_status.sql'),
+      skipIf(db) {
+        // Check if columns already exist
+        try {
+          const info = db.prepare("PRAGMA table_info(thumbnail_cache)").all();
+          return info.some(col => col.name === 'image_title_banned') && 
+                 info.some(col => col.name === 'image_preview_banned');
+        } catch {
+          return false;
+        }
+      },
+    },
+    {
+      id: 'thumbnail_cache_003_gameid_to_text',
+      description: 'Change gameid column from INTEGER to TEXT to support non-numeric gameids',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/thumbnail_cache_003_gameid_to_text.sql'),
+      skipIf(db) {
+        // Check if gameid is already TEXT
+        try {
+          const info = db.prepare("PRAGMA table_info(thumbnail_cache)").all();
+          const gameidCol = info.find(col => col.name === 'gameid');
+          return gameidCol && gameidCol.type.toUpperCase() === 'TEXT';
+        } catch {
+          return false;
+        }
+      },
+    },
+    {
+      id: 'thumbnail_cache_004_add_ban_cache_timestamp',
+      description: 'Add timestamp columns for tracking when ban status was cached (30-minute expiration)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/thumbnail_cache_004_add_ban_cache_timestamp.sql'),
+      skipIf(db) {
+        // Check if columns already exist
+        try {
+          const info = db.prepare("PRAGMA table_info(thumbnail_cache)").all();
+          return info.some(col => col.name === 'image_title_banned_at') && 
+                 info.some(col => col.name === 'image_preview_banned_at');
+        } catch {
+          return false;
+        }
+      },
+    },
   ],
   patchbin: [
     {

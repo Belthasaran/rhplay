@@ -394,15 +394,23 @@ class DatabaseManager {
     if (dbName === 'thumbnail_cache') {
       db.exec(`
         CREATE TABLE IF NOT EXISTS thumbnail_cache (
-          gameid INTEGER PRIMARY KEY,
+          gameid TEXT PRIMARY KEY,
           thumbnail_data_url TEXT NOT NULL,
           screenshot_rsuuid TEXT,
           screenshot_decoded_sha256 TEXT,
+          image_title_banned INTEGER DEFAULT 0,
+          image_preview_banned INTEGER DEFAULT 0,
+          image_title_banned_at TEXT,
+          image_preview_banned_at TEXT,
           cached_at TEXT DEFAULT CURRENT_TIMESTAMP,
           updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_gameid ON thumbnail_cache(gameid);
         CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_updated_at ON thumbnail_cache(updated_at);
+        CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_image_title_banned ON thumbnail_cache(image_title_banned);
+        CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_image_preview_banned ON thumbnail_cache(image_preview_banned);
+        CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_image_title_banned_at ON thumbnail_cache(image_title_banned_at);
+        CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_image_preview_banned_at ON thumbnail_cache(image_preview_banned_at);
         CREATE TRIGGER IF NOT EXISTS trg_thumbnail_cache_updated
           AFTER UPDATE ON thumbnail_cache
         BEGIN

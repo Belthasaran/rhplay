@@ -4,6 +4,7 @@
 
 const crypto = require('crypto');
 const { matchesFilter } = require('./shared-filter-utils');
+const GameVersionBanManager = require('./gameversion-banmanager');
 
 /**
  * Characters allowed in seeds (excluding confusing: 0, O, 1, l, I)
@@ -272,9 +273,15 @@ function selectRandomGame(params) {
   }
   
   // Apply advanced pattern filter using shared filter logic
-  const finalFilteredGames = filterPattern && filterPattern !== '' 
+  let finalFilteredGames = filterPattern && filterPattern !== '' 
     ? filteredGames.filter(game => matchesFilter(game, filterPattern))
     : filteredGames;
+  
+  // Apply ban filter - exclude games banned from random game selection
+  const banManager = new GameVersionBanManager(dbManager);
+  finalFilteredGames = finalFilteredGames.filter(game => {
+    return !banManager.isGameBanned(game.gameid, 'run_random_game', game);
+  });
   
   if (finalFilteredGames.length === 0) {
     throw new Error('No games match the filter criteria');
@@ -390,9 +397,24 @@ function selectRandomStage(params) {
   });
   
   // Apply advanced pattern filter using shared filter logic
-  const finalFilteredGames = filterPattern && filterPattern !== '' 
+  let finalFilteredGames = filterPattern && filterPattern !== '' 
     ? basicFilteredGames.filter(game => matchesFilter(game, filterPattern))
     : basicFilteredGames;
+  
+  // Apply ban filter - exclude games banned from random stage selection
+  // Also exclude games banned from random game selection (since stages come from games)
+  const banManager = new GameVersionBanManager(dbManager);
+  finalFilteredGames = finalFilteredGames.filter(game => {
+    // Exclude if banned from random game selection
+    if (banManager.isGameBanned(game.gameid, 'run_random_game', game)) {
+      return false;
+    }
+    // Exclude if banned from random stage selection
+    if (banManager.isGameBanned(game.gameid, 'run_random_stage', game)) {
+      return false;
+    }
+    return true;
+  });
   
   if (finalFilteredGames.length === 0) {
     throw new Error('No games match the filter criteria');

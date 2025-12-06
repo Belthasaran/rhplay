@@ -22,6 +22,7 @@ const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
 const { generateRunview } = require('./runview-generator');
 const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
+const GameVersionBanManager = require('./gameversion-banmanager');
 const { matchesFilter } = require('./shared-filter-utils');
 const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
 const sshManager = require('./main/usb2snes/sshManager');
@@ -3416,9 +3417,249 @@ function registerDatabaseHandlers(dbManager) {
         filteredGames = filteredGames.filter(game => matchesFilter(game, filterPattern));
       }
       
+      // Apply ban filter - exclude games banned from random game selection
+      const banManager = new GameVersionBanManager(dbManager);
+      filteredGames = filteredGames.filter(game => {
+        return !banManager.isGameBanned(game.gameid, 'run_random_game', game);
+      });
+      
       return { success: true, count: filteredGames.length };
     } catch (error) {
       console.error('Error counting random matches:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Check if a game is banned for a specific action
+   * Channel: db:ban:is-game-banned
+   * Uses session-only cache in thumbnail_cache.db for image_title and image_preview
+   * Cache expires after 30 minutes to allow real-time ban list updates
+   */
+  ipcMain.handle('db:ban:is-game-banned', async (event, { gameid, action, gameData = null }) => {
+    try {
+      const CACHE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+      const now = Date.now();
+      
+      // Check session cache for image_title and image_preview bans
+      if (action === 'image_title' || action === 'image_preview') {
+        try {
+          const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+          const cacheColumn = action === 'image_title' ? 'image_title_banned' : 'image_preview_banned';
+          const timestampColumn = action === 'image_title' ? 'image_title_banned_at' : 'image_preview_banned_at';
+          
+          // Check if cache columns exist (migration may not have run yet)
+          const tableInfo = thumbnailCacheDb.prepare("PRAGMA table_info(thumbnail_cache)").all();
+          const hasColumn = tableInfo.some(col => col.name === cacheColumn);
+          const hasTimestampColumn = tableInfo.some(col => col.name === timestampColumn);
+          
+          if (hasColumn) {
+            const gameidStr = String(gameid);
+            const cached = thumbnailCacheDb.prepare(`
+              SELECT ${cacheColumn}, ${hasTimestampColumn ? timestampColumn : 'NULL as ' + timestampColumn}
+              FROM thumbnail_cache WHERE gameid = ?
+            `).get(gameidStr);
+            
+            if (cached && cached[cacheColumn] === 1) {
+              // Check if cache is still valid (within 30 minutes)
+              if (hasTimestampColumn && cached[timestampColumn]) {
+                const cachedAt = new Date(cached[timestampColumn]).getTime();
+                const age = now - cachedAt;
+                
+                if (age < CACHE_EXPIRY_MS) {
+                  // Cache is still valid
+                  return { success: true, isBanned: true, cached: true };
+                }
+                // Cache expired, fall through to ban manager check
+              } else {
+                // No timestamp column yet, but ban is cached - return cached result
+                // (for backwards compatibility during migration)
+                return { success: true, isBanned: true, cached: true };
+              }
+            }
+            // If cached as 0 (not banned) or expired, we still check the ban manager to ensure accuracy
+          }
+        } catch (cacheError) {
+          // Cache check failed, fall through to ban manager check
+          console.warn('[db:ban:is-game-banned] Cache check failed:', cacheError);
+        }
+      }
+      
+      const banManager = new GameVersionBanManager(dbManager);
+      
+      // If gameData is provided, use it; otherwise construct minimal game object
+      const game = gameData || { gameid, Id: gameid };
+      
+      const isBanned = banManager.isGameBanned(gameid, action, game);
+      
+      // Cache the result for image_title and image_preview (session-only, with timestamp)
+      if (action === 'image_title' || action === 'image_preview') {
+        try {
+          const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+          const cacheColumn = action === 'image_title' ? 'image_title_banned' : 'image_preview_banned';
+          const timestampColumn = action === 'image_title' ? 'image_title_banned_at' : 'image_preview_banned_at';
+          
+          // Check if cache columns exist
+          const tableInfo = thumbnailCacheDb.prepare("PRAGMA table_info(thumbnail_cache)").all();
+          const hasColumn = tableInfo.some(col => col.name === cacheColumn);
+          const hasTimestampColumn = tableInfo.some(col => col.name === timestampColumn);
+          
+          if (hasColumn) {
+            // Ensure gameid is treated as TEXT
+            const gameidStr = String(gameid);
+            const timestamp = new Date(now).toISOString();
+            
+            if (hasTimestampColumn) {
+              // Update or insert cache entry with timestamp
+              thumbnailCacheDb.prepare(`
+                INSERT INTO thumbnail_cache (gameid, ${cacheColumn}, ${timestampColumn}, cached_at, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(gameid) DO UPDATE SET 
+                  ${cacheColumn} = ?,
+                  ${timestampColumn} = ?,
+                  updated_at = CURRENT_TIMESTAMP
+              `).run(gameidStr, isBanned ? 1 : 0, timestamp, isBanned ? 1 : 0, timestamp);
+            } else {
+              // Fallback for older schema (no timestamp column yet)
+              thumbnailCacheDb.prepare(`
+                INSERT INTO thumbnail_cache (gameid, ${cacheColumn}, cached_at, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(gameid) DO UPDATE SET ${cacheColumn} = ?, updated_at = CURRENT_TIMESTAMP
+              `).run(gameidStr, isBanned ? 1 : 0, isBanned ? 1 : 0);
+            }
+          }
+        } catch (cacheError) {
+          // Cache update failed, but ban check succeeded, so continue
+          console.warn('[db:ban:is-game-banned] Cache update failed:', cacheError);
+        }
+      }
+      
+      return { success: true, isBanned };
+    } catch (error) {
+      console.error('[db:ban:is-game-banned] Error:', error);
+      return { success: false, error: error.message, isBanned: false };
+    }
+  });
+
+  /**
+   * Get ban details for a game and action
+   * Channel: db:ban:get-details
+   */
+  ipcMain.handle('db:ban:get-details', async (event, { gameid, action, gameData = null }) => {
+    try {
+      const banManager = new GameVersionBanManager(dbManager);
+      
+      // If gameData is provided, use it; otherwise construct minimal game object
+      const game = gameData || { gameid, Id: gameid };
+      
+      const banDetails = banManager.getBanDetails(gameid, action, game);
+      return { success: true, banDetails };
+    } catch (error) {
+      console.error('[db:ban:get-details] Error:', error);
+      return { success: false, error: error.message, banDetails: null };
+    }
+  });
+
+  /**
+   * Invalidate ban cache for specific gameids or all games
+   * Channel: db:ban:invalidate-cache
+   * @param {Array<string>|null} gameids - Array of gameids to invalidate, or null to invalidate all
+   * @param {string|null} action - Specific action to invalidate ('image_title', 'image_preview'), or null for all
+   */
+  ipcMain.handle('db:ban:invalidate-cache', async (event, { gameids = null, action = null }) => {
+    try {
+      const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+      
+      // Check if timestamp columns exist
+      const tableInfo = thumbnailCacheDb.prepare("PRAGMA table_info(thumbnail_cache)").all();
+      const hasTitleTimestamp = tableInfo.some(col => col.name === 'image_title_banned_at');
+      const hasPreviewTimestamp = tableInfo.some(col => col.name === 'image_preview_banned_at');
+      
+      if (!hasTitleTimestamp && !hasPreviewTimestamp) {
+        // No timestamp columns yet, clear the ban status columns instead
+        if (gameids && Array.isArray(gameids) && gameids.length > 0) {
+          const placeholders = gameids.map(() => '?').join(',');
+          const gameidStrs = gameids.map(gid => String(gid));
+          
+          if (action === 'image_title' || action === null) {
+            thumbnailCacheDb.prepare(`
+              UPDATE thumbnail_cache 
+              SET image_title_banned = 0 
+              WHERE gameid IN (${placeholders})
+            `).run(...gameidStrs);
+          }
+          
+          if (action === 'image_preview' || action === null) {
+            thumbnailCacheDb.prepare(`
+              UPDATE thumbnail_cache 
+              SET image_preview_banned = 0 
+              WHERE gameid IN (${placeholders})
+            `).run(...gameidStrs);
+          }
+        } else {
+          // Invalidate all
+          if (action === 'image_title' || action === null) {
+            thumbnailCacheDb.prepare(`
+              UPDATE thumbnail_cache SET image_title_banned = 0
+            `).run();
+          }
+          
+          if (action === 'image_preview' || action === null) {
+            thumbnailCacheDb.prepare(`
+              UPDATE thumbnail_cache SET image_preview_banned = 0
+            `).run();
+          }
+        }
+      } else {
+        // Use timestamp columns - set to NULL to force expiration
+        if (gameids && Array.isArray(gameids) && gameids.length > 0) {
+          const placeholders = gameids.map(() => '?').join(',');
+          const gameidStrs = gameids.map(gid => String(gid));
+          
+          if (action === 'image_title' || action === null) {
+            if (hasTitleTimestamp) {
+              thumbnailCacheDb.prepare(`
+                UPDATE thumbnail_cache 
+                SET image_title_banned_at = NULL, image_title_banned = 0
+                WHERE gameid IN (${placeholders})
+              `).run(...gameidStrs);
+            }
+          }
+          
+          if (action === 'image_preview' || action === null) {
+            if (hasPreviewTimestamp) {
+              thumbnailCacheDb.prepare(`
+                UPDATE thumbnail_cache 
+                SET image_preview_banned_at = NULL, image_preview_banned = 0
+                WHERE gameid IN (${placeholders})
+              `).run(...gameidStrs);
+            }
+          }
+        } else {
+          // Invalidate all
+          if (action === 'image_title' || action === null) {
+            if (hasTitleTimestamp) {
+              thumbnailCacheDb.prepare(`
+                UPDATE thumbnail_cache 
+                SET image_title_banned_at = NULL, image_title_banned = 0
+              `).run();
+            }
+          }
+          
+          if (action === 'image_preview' || action === null) {
+            if (hasPreviewTimestamp) {
+              thumbnailCacheDb.prepare(`
+                UPDATE thumbnail_cache 
+                SET image_preview_banned_at = NULL, image_preview_banned = 0
+              `).run();
+            }
+          }
+        }
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[db:ban:invalidate-cache] Error:', error);
       return { success: false, error: error.message };
     }
   });
@@ -3488,6 +3729,21 @@ function registerDatabaseHandlers(dbManager) {
       if (filterPattern && filterPattern !== '') {
         filteredGames = filteredGames.filter(game => matchesFilter(game, filterPattern));
       }
+      
+      // Apply ban filter - exclude games banned from random stage selection
+      // Also exclude games banned from random game selection (since stages come from games)
+      const banManager = new GameVersionBanManager(dbManager);
+      filteredGames = filteredGames.filter(game => {
+        // Exclude if banned from random game selection
+        if (banManager.isGameBanned(game.gameid, 'run_random_game', game)) {
+          return false;
+        }
+        // Exclude if banned from random stage selection
+        if (banManager.isGameBanned(game.gameid, 'run_random_stage', game)) {
+          return false;
+        }
+        return true;
+      });
       
       if (filteredGames.length === 0) {
         return { success: true, count: 0 };
@@ -14109,11 +14365,13 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
       
+      // Ensure gameid is treated as TEXT
+      const gameidStr = String(gameid);
       const cached = thumbnailCacheDb.prepare(`
         SELECT thumbnail_data_url, screenshot_rsuuid, screenshot_decoded_sha256
         FROM thumbnail_cache
         WHERE gameid = ?
-      `).get(gameid);
+      `).get(gameidStr);
       
       if (cached) {
         return { success: true, dataUrl: cached.thumbnail_data_url, rsuuid: cached.screenshot_rsuuid, sha256: cached.screenshot_decoded_sha256 };
@@ -14134,10 +14392,12 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
       
+      // Ensure gameid is treated as TEXT
+      const gameidStr = String(gameid);
       thumbnailCacheDb.prepare(`
         INSERT OR REPLACE INTO thumbnail_cache (gameid, thumbnail_data_url, screenshot_rsuuid, screenshot_decoded_sha256, cached_at, updated_at)
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).run(gameid, dataUrl, screenshotRsuuid || null, screenshotSha256 || null);
+      `).run(gameidStr, dataUrl, screenshotRsuuid || null, screenshotSha256 || null);
       
       return { success: true };
     } catch (error) {
@@ -14227,10 +14487,13 @@ function registerDatabaseHandlers(dbManager) {
       
       for (const { gameid } of gameids) {
         try {
+          // Ensure gameid is treated as TEXT
+          const gameidStr = String(gameid);
+          
           // Check if already cached
           const existing = thumbnailCacheDb.prepare(`
             SELECT gameid FROM thumbnail_cache WHERE gameid = ?
-          `).get(gameid);
+          `).get(gameidStr);
           
           if (existing) {
             skipped++;
@@ -14244,7 +14507,7 @@ function registerDatabaseHandlers(dbManager) {
             WHERE gameid = ?
             ORDER BY version DESC
             LIMIT 1
-          `).get(gameid);
+          `).get(gameidStr);
           
           let screenshot = null;
           
@@ -14254,7 +14517,7 @@ function registerDatabaseHandlers(dbManager) {
               FROM res_screenshots
               WHERE gameid = ? AND decoded_sha256 = ?
               LIMIT 1
-            `).get(gameid, gameVersion.title_screenshot_sha256);
+            `).get(gameidStr, gameVersion.title_screenshot_sha256);
           }
           
           if (!screenshot) {
@@ -14264,7 +14527,7 @@ function registerDatabaseHandlers(dbManager) {
               WHERE gameid = ? AND kind = 'file'
               ORDER BY sequence_no ASC NULLS LAST, created_at ASC
               LIMIT 1
-            `).get(gameid);
+            `).get(gameidStr);
           }
           
           if (!screenshot || !screenshot.encrypted_data || !screenshot.fernet_key) {
@@ -14308,11 +14571,11 @@ function registerDatabaseHandlers(dbManager) {
           const mimeType = screenshot.screenshot_type || 'image/png';
           const dataUrl = `data:${mimeType};base64,${decryptedBuffer.toString('base64')}`;
           
-          // Cache it
+          // Cache it (gameid already converted to string above)
           thumbnailCacheDb.prepare(`
             INSERT OR REPLACE INTO thumbnail_cache (gameid, thumbnail_data_url, screenshot_rsuuid, screenshot_decoded_sha256, cached_at, updated_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          `).run(gameid, dataUrl, screenshot.rsuuid, screenshot.decoded_sha256);
+          `).run(gameidStr, dataUrl, screenshot.rsuuid, screenshot.decoded_sha256);
           
           cached++;
         } catch (error) {

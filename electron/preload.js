@@ -57,6 +57,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDifficultyMap: (mapType, mapString) => ipcRenderer.invoke('db:difficulty-map:get', { mapType, mapString }),
   
   /**
+   * Check if a game is banned for a specific action
+   * @param {string} gameid - Game ID to check
+   * @param {string} action - Action/sense to check (e.g., 'image_title', 'list_any')
+   * @param {Object} gameData - Optional full game object for matching on other fields
+   * @returns {Promise<{success: boolean, isBanned: boolean}>}
+   */
+  isGameBanned: (gameid, action, gameData) => ipcRenderer.invoke('db:ban:is-game-banned', { gameid, action, gameData }),
+  
+  /**
+   * Get ban details for a game and action
+   * @param {string} gameid - Game ID to check
+   * @param {string} action - Action/sense to check
+   * @param {Object} gameData - Optional full game object
+   * @returns {Promise<{success: boolean, banDetails: Object|null}>}
+   */
+  getBanDetails: (gameid, action, gameData) => ipcRenderer.invoke('db:ban:get-details', { gameid, action, gameData }),
+  
+  /**
+   * Invalidate ban cache for specific gameids or all games
+   * @param {Array<string>|null} gameids - Array of gameids to invalidate, or null to invalidate all
+   * @param {string|null} action - Specific action to invalidate ('image_title', 'image_preview'), or null for all
+   * @returns {Promise<{success: boolean}>}
+   */
+  invalidateBanCache: (gameids, action) => ipcRenderer.invoke('db:ban:invalidate-cache', { gameids, action }),
+  
+  /**
    * Get specific game version with annotations
    * @param {string} gameid - Game ID
    * @param {number} version - Version number

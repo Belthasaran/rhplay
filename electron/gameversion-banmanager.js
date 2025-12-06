@@ -9,6 +9,17 @@ const { v4: uuidv4 } = require('uuid');
 
 // Hardcoded ban entries (evaluated before database entries)
 const HARDCODED_BANS = [
+  { gameid: '19571', 
+    match_column: 'gameid',
+    match_pattern: 'exact:19571',
+    sense: 'image_title,run_random_*,check_random,image_show_soft,details_soft',
+    required_acknowledgments: 'Mature_Content,Suggestive_Content,Crude_Content_or_Language,Sexual_Content',
+    starting_at: null,
+    reason: 'Super Fart World: Crude/Sexual',
+    warningtext: 'Contains cartoon butt images.',
+    sequence_no: 0,
+    active: 1 }
+
   // Example structure:
   // {
   //   gameid: '12345',
@@ -130,7 +141,8 @@ function gameMatchesBan(ban, game) {
   let valueToMatch = null;
   switch (matchColumn) {
     case 'gameid':
-      valueToMatch = game.gameid || game.Id;
+      // Ensure gameid is converted to string for consistent matching
+      valueToMatch = String(game.gameid || game.Id || '');
       break;
     case 'gvuuid':
       valueToMatch = game.gvuuid;

@@ -1003,6 +1003,62 @@ async function exportGameToFolder(dbManager, recordCreator, queueItem, patchFile
     JSON.stringify(deltaRecords, null, 2)
   );
   
+  // Copy patch files to game folder (before creating skeleton so we can set patch_local_path)
+  const patchSubfolder = path.join(gameFolder, 'patch');
+  if (!fs.existsSync(patchSubfolder)) {
+    fs.mkdirSync(patchSubfolder, { recursive: true });
+  }
+  
+  let primaryPatchPath = null;
+  for (let i = 0; i < successfulPatches.length; i++) {
+    const patchFile = successfulPatches[i];
+    
+    // Get patch file path from patchFile record
+    const sourcePatchPath = patchFile.patch_file_path;
+    if (sourcePatchPath && fs.existsSync(sourcePatchPath)) {
+      const patchFilename = path.basename(sourcePatchPath);
+      const destPatchPath = path.join(patchSubfolder, patchFilename);
+      fs.copyFileSync(sourcePatchPath, destPatchPath);
+      console.log(`    ✓ Copied patch: ${patchFilename}`);
+      
+      // If this is the primary patch, store the path for skeleton
+      if (patchFile.is_primary === 1 || i === 0) {
+        primaryPatchPath = `patch/${patchFilename}`;
+      }
+    } else if (patchFile.patch_filename) {
+      // Fallback: try to find patch by filename in PATCH_DIR
+      // Patches are stored by shake128 hash, but we can try to find by filename
+      const fallbackPath = path.join(CONFIG.PATCH_DIR, patchFile.patch_filename);
+      if (fs.existsSync(fallbackPath)) {
+        const destPatchPath = path.join(patchSubfolder, patchFile.patch_filename);
+        fs.copyFileSync(fallbackPath, destPatchPath);
+        console.log(`    ✓ Copied patch (by filename): ${patchFile.patch_filename}`);
+        
+        if (patchFile.is_primary === 1 || i === 0) {
+          primaryPatchPath = `patch/${patchFile.patch_filename}`;
+        }
+      } else {
+        // Try to find by shake128 hash (patches are stored by hash)
+        if (patchFile.pat_shake_128) {
+          const hashPath = path.join(CONFIG.PATCH_DIR, patchFile.pat_shake_128);
+          if (fs.existsSync(hashPath)) {
+            const destPatchPath = path.join(patchSubfolder, patchFile.patch_filename || `${patchFile.pat_shake_128}.${patchFile.patch_type || 'bps'}`);
+            fs.copyFileSync(hashPath, destPatchPath);
+            console.log(`    ✓ Copied patch (by hash): ${path.basename(destPatchPath)}`);
+            
+            if (patchFile.is_primary === 1 || i === 0) {
+              primaryPatchPath = `patch/${path.basename(destPatchPath)}`;
+            }
+          } else {
+            console.log(`    ⚠ Patch file not found: ${sourcePatchPath || fallbackPath || hashPath}`);
+          }
+        } else {
+          console.log(`    ⚠ Patch file not found: ${sourcePatchPath || fallbackPath}`);
+        }
+      }
+    }
+  }
+  
   // Create combined skeleton JSON file for newgame.js
   const primaryPatchblob = patchblobsExport[0] || {};
   const primaryAttachment = attachmentsExport[0] || {};
@@ -1065,7 +1121,7 @@ async function exportGameToFolder(dbManager, recordCreator, queueItem, patchFile
       collab: 'No',
       screenshots: [],
       patch_filename: primaryPatchblob.patch_name || null,
-      patch_local_path: null, // Will be set during --prepare
+      patch_local_path: primaryPatchPath || null, // Set to relative path in patch/ subfolder
       patch_notes: '',
       submission_notes: '',
       // Include full gvjsondata for access to original metadata (including images array)

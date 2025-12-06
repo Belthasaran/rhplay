@@ -1083,9 +1083,13 @@
                 <div v-else class="tile-placeholder">
                   <span>No Image</span>
                 </div>
-                <!-- Type badge (bottom left) - only show if fields_type is known -->
-                <div v-if="row.FieldsType && getSimplifiedType(row)" class="tile-type-badge" :style="{ backgroundColor: getSimplifiedType(row)?.color }">
+                <!-- Type badge (bottom left) - show if type can be determined from any source -->
+                <div v-if="getSimplifiedType(row)" class="tile-type-badge" :style="{ backgroundColor: getSimplifiedType(row)?.color }">
                   {{ getSimplifiedType(row)?.label }}
+                </div>
+                <!-- Race badge (bottom left, below type badge if both present) -->
+                <div v-if="row.Racelevel && row.Racelevel.toLowerCase() === 'yes'" class="tile-race-badge">
+                  Race
                 </div>
                 <!-- Difficulty badge (top right) -->
                 <div class="tile-difficulty-badge" :style="{ backgroundColor: getDifficultyColor(getDifficultyValue(row)) }">
@@ -8238,7 +8242,7 @@ function getSimplifiedType(item: any): { label: string; color: string } | null {
   // Collect all type strings
   const typeStrings: string[] = [];
   
-  // Add fields_type (comma-separated)
+  // Add fields_type (comma-separated) - highest priority
   if (item.FieldsType) {
     const fields = String(item.FieldsType).split(',').map(s => s.trim()).filter(s => s);
     typeStrings.push(...fields);
@@ -8249,10 +8253,16 @@ function getSimplifiedType(item: any): { label: string; color: string } | null {
     typeStrings.push(item.GameType);
   }
   
-  // Also check CombinedType/LegacyType for fallback
+  // Check CombinedType (same as Type field)
   if (item.CombinedType) {
     typeStrings.push(item.CombinedType);
   }
+  // Also check Type field (which is mapped from combinedtype)
+  if (item.Type && item.Type !== item.CombinedType) {
+    typeStrings.push(item.Type);
+  }
+  
+  // Check LegacyType as fallback
   if (item.LegacyType) {
     typeStrings.push(item.LegacyType);
   }
@@ -34842,6 +34852,28 @@ button:disabled {
 .tile-difficulty-badge[style*="ff7043"] {
   /* Colored badges need dark text for contrast */
   color: #000;
+}
+
+/* Race badge */
+.tile-race-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background-color: #ff00ff; /* Magenta */
+  border-radius: 4px;
+  z-index: 5;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+}
+
+/* If both type and race badges are present, stack race badge above type badge */
+.tile-thumbnail .tile-type-badge ~ .tile-race-badge {
+  bottom: 28px; /* Position above type badge (type badge is ~24px tall) */
 }
 
 .tiles-empty {

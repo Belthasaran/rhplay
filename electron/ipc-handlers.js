@@ -1419,6 +1419,7 @@ function registerDatabaseHandlers(dbManager) {
             gv.difficulty as PublicDifficulty,
             gv.raw_difficulty as RawDifficulty,
             gv.combinedtype as CombinedType,
+            gv.racelevel as Racelevel,
             gv.version as CurrentVersion,
             gv.local_runexcluded as LocalRunExcluded,
             gv.gvjsondata as JsonData,

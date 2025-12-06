@@ -9,7 +9,7 @@ const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
 const { queueRhpakPath, drainRhpakQueue } = require('./rhpak-queue');
 
-const DATABASE_FILES = ['clientdata.db', 'rhdata.db', 'patchbin.db', 'resource.db', 'screenshot.db'];
+const DATABASE_FILES = ['clientdata.db', 'rhdata.db', 'patchbin.db', 'resource.db', 'screenshot.db', 'thumbnail_cache.db'];
 let handlersRegistered = false;
 let mainWindow = null;
 let currentMode = 'app';

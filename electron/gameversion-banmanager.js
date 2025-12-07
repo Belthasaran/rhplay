@@ -40,6 +40,18 @@ const HARDCODED_BANS = [
     warningtext: 'Author excluded from random run feature',
     sequence_no: 2,
     active: 1
+  },
+  {
+     gameid: 40470,
+    match_column: 'gameid',
+    match_pattern: 'exact:40470',
+    sense: 'run_random_*',
+    required_acknowledgments: '',
+    starting_at: null,
+    warningtext: 'Missing patch data',
+    reason: 'Missing patch data',
+    sequence_no: 0,
+    active: 1 
   }
 
   // Example structure:

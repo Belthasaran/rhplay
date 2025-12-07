@@ -3518,28 +3518,38 @@ function registerDatabaseHandlers(dbManager) {
             const gameidStr = String(gameid);
             const timestamp = new Date(now).toISOString();
             
-            if (hasTimestampColumn) {
-              // Update or insert cache entry with timestamp
-              thumbnailCacheDb.prepare(`
-                INSERT INTO thumbnail_cache (gameid, ${cacheColumn}, ${timestampColumn}, cached_at, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ON CONFLICT(gameid) DO UPDATE SET 
-                  ${cacheColumn} = ?,
-                  ${timestampColumn} = ?,
-                  updated_at = CURRENT_TIMESTAMP
-              `).run(gameidStr, isBanned ? 1 : 0, timestamp, isBanned ? 1 : 0, timestamp);
+            // Check if record exists first
+            const existing = thumbnailCacheDb.prepare(`
+              SELECT gameid FROM thumbnail_cache WHERE gameid = ?
+            `).get(gameidStr);
+            
+            if (existing) {
+              // Record exists - UPDATE only (don't require thumbnail_data_url)
+              if (hasTimestampColumn) {
+                thumbnailCacheDb.prepare(`
+                  UPDATE thumbnail_cache 
+                  SET ${cacheColumn} = ?,
+                      ${timestampColumn} = ?,
+                      updated_at = CURRENT_TIMESTAMP
+                  WHERE gameid = ?
+                `).run(isBanned ? 1 : 0, timestamp, gameidStr);
+              } else {
+                thumbnailCacheDb.prepare(`
+                  UPDATE thumbnail_cache 
+                  SET ${cacheColumn} = ?,
+                      updated_at = CURRENT_TIMESTAMP
+                  WHERE gameid = ?
+                `).run(isBanned ? 1 : 0, gameidStr);
+              }
             } else {
-              // Fallback for older schema (no timestamp column yet)
-              thumbnailCacheDb.prepare(`
-                INSERT INTO thumbnail_cache (gameid, ${cacheColumn}, cached_at, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ON CONFLICT(gameid) DO UPDATE SET ${cacheColumn} = ?, updated_at = CURRENT_TIMESTAMP
-              `).run(gameidStr, isBanned ? 1 : 0, isBanned ? 1 : 0);
+              // Record doesn't exist - skip cache update (can't INSERT without thumbnail_data_url)
+              // The ban check result is still returned, just not cached
+              // Cache will be populated when thumbnail is actually loaded
             }
           }
         } catch (cacheError) {
           // Cache update failed, but ban check succeeded, so continue
-          console.warn('[db:ban:is-game-banned] Cache update failed:', cacheError);
+          // Don't log - too noisy when checking many games
         }
       }
       
@@ -3547,6 +3557,131 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('[db:ban:is-game-banned] Error:', error);
       return { success: false, error: error.message, isBanned: false };
+    }
+  });
+
+  /**
+   * Batch check bans for multiple games
+   * Channel: db:ban:batch-check
+   * Optimized for checking many games at once (e.g., for list/tile views)
+   */
+  ipcMain.handle('db:ban:batch-check', async (event, { gameids, action, gamesData = [] }) => {
+    try {
+      const CACHE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+      const now = Date.now();
+      const results = {};
+      
+      // Only support image_title, image_preview, list_title, list_any for batch operations
+      if (action !== 'image_title' && action !== 'image_preview' && action !== 'list_title' && action !== 'list_any') {
+        return { success: false, error: 'Batch check only supports image_title, image_preview, list_title, list_any' };
+      }
+      
+      const banManager = new GameVersionBanManager(dbManager);
+      
+      // Check session cache for image_title and image_preview bans
+      if (action === 'image_title' || action === 'image_preview') {
+        try {
+          const thumbnailCacheDb = dbManager.getConnection('thumbnail_cache');
+          const cacheColumn = action === 'image_title' ? 'image_title_banned' : 'image_preview_banned';
+          const timestampColumn = action === 'image_title' ? 'image_title_banned_at' : 'image_preview_banned_at';
+          
+          const tableInfo = thumbnailCacheDb.prepare("PRAGMA table_info(thumbnail_cache)").all();
+          const hasColumn = tableInfo.some(col => col.name === cacheColumn);
+          const hasTimestampColumn = tableInfo.some(col => col.name === timestampColumn);
+          
+          if (hasColumn && gameids.length > 0) {
+            // Batch fetch cached results
+            const placeholders = gameids.map(() => '?').join(',');
+            const cached = thumbnailCacheDb.prepare(`
+              SELECT gameid, ${cacheColumn}, ${hasTimestampColumn ? timestampColumn : 'NULL as ' + timestampColumn}
+              FROM thumbnail_cache 
+              WHERE gameid IN (${placeholders})
+            `).all(...gameids.map(id => String(id)));
+            
+            const cachedMap = new Map();
+            const toCheck = [];
+            
+            for (const row of cached) {
+              const gameidStr = String(row.gameid);
+              if (row[cacheColumn] === 1) {
+                // Check if cache is still valid
+                if (hasTimestampColumn && row[timestampColumn]) {
+                  const cachedAt = new Date(row[timestampColumn]).getTime();
+                  const age = now - cachedAt;
+                  if (age < CACHE_EXPIRY_MS) {
+                    results[gameidStr] = true;
+                    cachedMap.set(gameidStr, true);
+                    continue;
+                  }
+                } else {
+                  results[gameidStr] = true;
+                  cachedMap.set(gameidStr, true);
+                  continue;
+                }
+              }
+              toCheck.push(gameidStr);
+            }
+            
+            // Add uncached gameids to check list
+            for (const gameidStr of gameids.map(id => String(id))) {
+              if (!cachedMap.has(gameidStr)) {
+                toCheck.push(gameidStr);
+              }
+            }
+            
+            // Batch check uncached games
+            for (const gameidStr of toCheck) {
+              const gameData = gamesData.find(g => String(g.gameid || g.Id) === gameidStr) || { gameid: gameidStr, Id: gameidStr };
+              const isBanned = banManager.isGameBanned(gameidStr, action, gameData);
+              results[gameidStr] = isBanned;
+              
+              // Cache the result (UPDATE only if record exists - don't require thumbnail_data_url)
+              try {
+                const existing = thumbnailCacheDb.prepare(`
+                  SELECT gameid FROM thumbnail_cache WHERE gameid = ?
+                `).get(gameidStr);
+                
+                if (existing) {
+                  const timestamp = new Date(now).toISOString();
+                  if (hasTimestampColumn) {
+                    thumbnailCacheDb.prepare(`
+                      UPDATE thumbnail_cache 
+                      SET ${cacheColumn} = ?,
+                          ${timestampColumn} = ?,
+                          updated_at = CURRENT_TIMESTAMP
+                      WHERE gameid = ?
+                    `).run(isBanned ? 1 : 0, timestamp, gameidStr);
+                  } else {
+                    thumbnailCacheDb.prepare(`
+                      UPDATE thumbnail_cache 
+                      SET ${cacheColumn} = ?,
+                          updated_at = CURRENT_TIMESTAMP
+                      WHERE gameid = ?
+                    `).run(isBanned ? 1 : 0, gameidStr);
+                  }
+                }
+              } catch (cacheError) {
+                // Cache update failed, but ban check succeeded - silently continue
+              }
+            }
+            
+            return { success: true, results };
+          }
+        } catch (cacheError) {
+          // Cache check failed, fall through to ban manager check
+        }
+      }
+      
+      // For list_title and list_any, or if cache check failed, check all games
+      for (const gameidStr of gameids.map(id => String(id))) {
+        const gameData = gamesData.find(g => String(g.gameid || g.Id) === gameidStr) || { gameid: gameidStr, Id: gameidStr };
+        results[gameidStr] = banManager.isGameBanned(gameidStr, action, gameData);
+      }
+      
+      return { success: true, results };
+    } catch (error) {
+      console.error('[db:ban:batch-check] Error:', error);
+      return { success: false, error: error.message, results: {} };
     }
   });
 

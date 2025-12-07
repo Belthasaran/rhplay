@@ -1045,7 +1045,7 @@
               </td>
               <td class="action">{{ isInRun(row.Id) ? '*' : '' }}</td>
               <td>{{ row.Id }}</td>
-              <td class="name" :class="{ 'in-run': isInRun(row.Id) }">{{ row.Name }}</td>
+              <td class="name" :class="{ 'in-run': isInRun(row.Id) }">{{ listTitleBanned.has(row.Id) ? '<censored>' : row.Name }}</td>
               <td>{{ row.Type }}</td>
               <td>{{ row.Author }}</td>
               <td>{{ row.Length }}</td>
@@ -1104,7 +1104,7 @@
                 </div>
               </div>
               <div class="tile-caption">
-                {{ row.Id }} - {{ row.Name }} - {{ row.Author }}
+                {{ row.Id }} - {{ listTitleBanned.has(row.Id) ? '<censored>' : row.Name }} - {{ row.Author }}
               </div>
             </div>
           </div>
@@ -7953,6 +7953,8 @@ const thumbnailLoading = reactive<Set<string>>(new Set());
 const tilesContainerRef = ref<HTMLElement | null>(null);
 const tilesLoadingMore = ref(false);
 const imageTitleBanned = reactive<Set<string>>(new Set()); // Cache of gameids banned from image_title
+const listTitleBanned = reactive<Set<string>>(new Set()); // Cache of gameids banned from list_title (title should be censored)
+const listAnyBanned = reactive<Set<string>>(new Set()); // Cache of gameids banned from list_any (should be hidden from list)
 
 // Profile and Ratings Publishing state
 const profilePublishingInfo = ref<any>(null);
@@ -8100,6 +8102,9 @@ const normalized = (s: string) => s.toLowerCase();
 const filteredItems = computed(() => {
   const q = searchQuery.value.trim();
   return items.filter((it) => {
+    // Filter out games banned from list_any (most restrictive - completely hide from list)
+    if (listAnyBanned.has(it.Id)) return false;
+    
     if (!showHidden.value && it.Hidden) return false;
     if (hideFinished.value && it.Status === 'Finished') return false;
     return matchesFilter(it, q);
@@ -8798,61 +8803,179 @@ watch(filteredItems, async (newItems) => {
   }
 }, { immediate: true });
 
-// Check for image_title bans on visible tiles
+// Debounce timer for ban checks
+let banCheckDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const BAN_CHECK_DEBOUNCE_MS = 300; // Debounce ban checks by 300ms
+const BAN_CHECK_BATCH_SIZE = 50; // Check up to 50 games at a time
+
+// Check for image_title bans on visible tiles (optimized with batching and debouncing)
 async function checkImageTitleBans(items: Item[]) {
   const api = (window as any).electronAPI;
-  if (!api || !api.isGameBanned) {
-    console.warn('[checkImageTitleBans] electronAPI.isGameBanned not available');
+  if (!api || !api.batchCheckBans) {
+    console.warn('[checkImageTitleBans] electronAPI.batchCheckBans not available');
     return;
   }
   
-  // Check bans for items that aren't already checked
+  // Filter to items that aren't already checked
   const toCheck = items.filter(item => !imageTitleBanned.has(item.Id));
   
-  for (const item of toCheck) {
-    try {
-      // Ensure gameid is a string for consistent matching
-      const gameidStr = String(item.Id);
+  if (toCheck.length === 0) {
+    return; // All items already checked
+  }
+  
+  try {
+    // Prepare gameids and gameData arrays for batch check
+    const gameids = toCheck.map(item => String(item.Id));
+    const gamesData = toCheck.map(item => ({
+      gameid: String(item.Id),
+      Id: String(item.Id),
+      Name: item.Name,
+      Author: item.Author,
+      Tags: item.Tags,
+      Type: item.Type,
+      FieldsType: item.FieldsType,
+      GameType: item.GameType,
+      CombinedType: item.CombinedType,
+      LegacyType: item.LegacyType
+    }));
+    
+    // Process in batches to avoid overwhelming IPC
+    for (let i = 0; i < gameids.length; i += BAN_CHECK_BATCH_SIZE) {
+      const batchGameids = gameids.slice(i, i + BAN_CHECK_BATCH_SIZE);
+      const batchGamesData = gamesData.slice(i, i + BAN_CHECK_BATCH_SIZE);
       
-      // Serialize the item to a plain object for IPC (reactive Vue objects can't be cloned)
-      // Only include fields that might be needed for ban matching
-      const gameData = {
-        gameid: gameidStr,
-        Id: gameidStr,
-        Name: item.Name,
-        Author: item.Author,
-        Tags: item.Tags,
-        Type: item.Type,
-        FieldsType: item.FieldsType,
-        GameType: item.GameType,
-        CombinedType: item.CombinedType,
-        LegacyType: item.LegacyType
-      };
-      
-      const result = await api.isGameBanned(gameidStr, 'image_title', gameData);
-      
-      if (result.success) {
-        if (result.isBanned) {
-          // console.log(`[checkImageTitleBans] Game ${gameidStr} is banned for image_title`);
-          imageTitleBanned.add(item.Id);
-        } else {
-          // console.log(`[checkImageTitleBans] Game ${gameidStr} is NOT banned for image_title`);
+      try {
+        const result = await api.batchCheckBans(batchGameids, 'image_title', batchGamesData);
+        
+        if (result.success && result.results) {
+          // Update cache with results
+          for (const [gameidStr, isBanned] of Object.entries(result.results)) {
+            if (isBanned) {
+              imageTitleBanned.add(gameidStr);
+            }
+          }
         }
-      } else {
-        console.warn(`[checkImageTitleBans] Ban check failed for game ${gameidStr}:`, result.error);
+      } catch (error) {
+        // Silently continue - don't spam console with errors
+        // Individual failures won't block the UI
       }
-    } catch (error) {
-      console.warn(`[checkImageTitleBans] Error checking ban for game ${item.Id}:`, error);
     }
+  } catch (error) {
+    // Silently handle errors - don't spam console
   }
 }
 
+// Debounced ban check function
+function debouncedCheckImageTitleBans(items: Item[]) {
+  if (banCheckDebounceTimer) {
+    clearTimeout(banCheckDebounceTimer);
+  }
+  
+  banCheckDebounceTimer = setTimeout(() => {
+    checkImageTitleBans(items);
+    banCheckDebounceTimer = null;
+  }, BAN_CHECK_DEBOUNCE_MS);
+}
+
+// Batch check bans for list views (optimized with batching and debouncing)
+async function checkListBans(items: Item[]) {
+  const api = (window as any).electronAPI;
+  if (!api || !api.batchCheckBans) {
+    return;
+  }
+  
+  // Filter to items that aren't already checked
+  const toCheck = items.filter(item => 
+    !listTitleBanned.has(item.Id) && !listAnyBanned.has(item.Id)
+  );
+  
+  if (toCheck.length === 0) {
+    return; // All items already checked
+  }
+  
+  try {
+    // Prepare gameids and gameData arrays for batch check
+    const gameids = toCheck.map(item => String(item.Id));
+    const gamesData = toCheck.map(item => ({
+      gameid: String(item.Id),
+      Id: String(item.Id),
+      Name: item.Name,
+      Author: item.Author,
+      Tags: item.Tags,
+      Type: item.Type,
+      FieldsType: item.FieldsType,
+      GameType: item.GameType,
+      CombinedType: item.CombinedType,
+      LegacyType: item.LegacyType
+    }));
+    
+    // Process in batches to avoid overwhelming IPC
+    for (let i = 0; i < gameids.length; i += BAN_CHECK_BATCH_SIZE) {
+      const batchGameids = gameids.slice(i, i + BAN_CHECK_BATCH_SIZE);
+      const batchGamesData = gamesData.slice(i, i + BAN_CHECK_BATCH_SIZE);
+      
+      try {
+        // Check list_any and list_title in parallel
+        const [listAnyResult, listTitleResult] = await Promise.all([
+          api.batchCheckBans(batchGameids, 'list_any', batchGamesData).catch(() => ({ success: false, results: {} })),
+          api.batchCheckBans(batchGameids, 'list_title', batchGamesData).catch(() => ({ success: false, results: {} }))
+        ]);
+        
+        // Update caches with results
+        if (listAnyResult.success && listAnyResult.results) {
+          for (const [gameidStr, isBanned] of Object.entries(listAnyResult.results)) {
+            if (isBanned) {
+              listAnyBanned.add(gameidStr);
+            }
+          }
+        }
+        
+        if (listTitleResult.success && listTitleResult.results) {
+          for (const [gameidStr, isBanned] of Object.entries(listTitleResult.results)) {
+            if (isBanned) {
+              listTitleBanned.add(gameidStr);
+            }
+          }
+        }
+      } catch (error) {
+        // Silently continue - don't spam console with errors
+        // Individual failures won't block the UI
+      }
+    }
+  } catch (error) {
+    // Silently handle errors - don't spam console
+  }
+}
+
+// Debounced list ban check function
+let listBanCheckDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedCheckListBans(items: Item[]) {
+  if (listBanCheckDebounceTimer) {
+    clearTimeout(listBanCheckDebounceTimer);
+  }
+  
+  listBanCheckDebounceTimer = setTimeout(() => {
+    checkListBans(items);
+    listBanCheckDebounceTimer = null;
+  }, BAN_CHECK_DEBOUNCE_MS);
+}
+
+// Watch for filtered items changes to check list bans (debounced)
+watch(filteredItems, (newItems) => {
+  if (newItems.length > 0) {
+    // Check list_any and list_title bans for filtered items
+    debouncedCheckListBans(newItems);
+  }
+}, { immediate: false }); // Don't run immediately - wait for user interaction
+
 // Watch for visible tiles changes to check bans (only in tiles mode)
+// Use debouncing to avoid excessive IPC calls during scrolling
 watch([visibleTiles, viewMode], async ([newTiles, mode]) => {
   if (mode === 'tiles' && newTiles.length > 0) {
-    await checkImageTitleBans(newTiles);
+    // Only check bans for newly visible items, debounced
+    debouncedCheckImageTitleBans(newTiles);
   }
-}, { immediate: true });
+}, { immediate: false }); // Don't run immediately - wait for user interaction
 
 // Export and Import functions
 async function exportFull() {

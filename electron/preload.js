@@ -66,6 +66,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isGameBanned: (gameid, action, gameData) => ipcRenderer.invoke('db:ban:is-game-banned', { gameid, action, gameData }),
   
   /**
+   * Batch check bans for multiple games (optimized for list/tile views)
+   * @param {string[]} gameids - Array of game IDs to check
+   * @param {string} action - Ban action to check (image_title, image_preview, list_title, list_any)
+   * @param {Array} gamesData - Optional array of game data objects
+   * @returns {Promise<{success: boolean, results: Record<string, boolean>}>}
+   */
+  batchCheckBans: (gameids, action, gamesData) => ipcRenderer.invoke('db:ban:batch-check', { gameids, action, gamesData }),
+  
+  /**
    * Get ban details for a game and action
    * @param {string} gameid - Game ID to check
    * @param {string} action - Action/sense to check

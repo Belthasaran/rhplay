@@ -510,7 +510,7 @@ async function main() {
     if (newGames.length === 0 && argv['process-new']) {
       console.log('No new games to process.');
 	    //console.log(`argv: ${JSON.stringify(argv)}`)
-      return;
+      //return;
     }
     
     // Step 3: Download and process games

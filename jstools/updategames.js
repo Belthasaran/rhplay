@@ -258,6 +258,7 @@ function parseArgs(args) {
   const parsed = {
     'fetch-metadata': true,
     'process-new': true,
+    'process-updates': false,
     'all-patches': false,
     'resume': false,
     'dry-run': false,
@@ -296,6 +297,8 @@ function parseArgs(args) {
       parsed['fetch-metadata'] = false;
     } else if (arg === '--no-process-new') {
       parsed['process-new'] = false;
+    } else if (arg === '--process-updates') {
+      parsed['process-updates'] = true;
     } else if (arg === '--no-check-updates') {
       parsed['check-updates'] = false;
     } else if (arg === '--update-stats-only') {
@@ -377,6 +380,7 @@ Options:
   --resume                Resume from previous interrupted run
   --no-fetch-metadata     Skip fetching metadata from SMWC
   --no-process-new        Skip processing new games
+  --process-updates       Process games that need updates (download and reprocess)
   --new-only              Only process new gameids (skip updates to existing games)
   --target-folder=<path>  Export game data to folder instead of database
                           Creates RHPAK-compatible structure for each gameid
@@ -1478,10 +1482,118 @@ async function checkExistingGameUpdates(dbManager, gamesList, argv) {
       console.log(`    - ${item.gameid}: ${item.metadata.name}`);
     }
     
-    console.log('\n  ⓘ These games will be processed in a future run or manually.');
-    console.log('    Use --process-new flag or add to queue manually.\n');
+    if (argv['process-updates']) {
+      console.log('\n  Processing games that need updates...\n');
+      // Process each game that needs an update
+      await processGamesNeedingUpdates(dbManager, results.downloadNeeded, argv);
+    } else {
+      console.log('\n  ⓘ These games will be processed in a future run or manually.');
+      console.log('    Use --process-updates flag to download and reprocess them.\n');
+    }
   }
   return results;
+}
+
+/**
+ * Process games that need updates (download and reprocess)
+ */
+async function processGamesNeedingUpdates(dbManager, downloadNeeded, argv) {
+  const downloader = new GameDownloader(dbManager, CONFIG);
+  const processor = new PatchProcessor(dbManager, CONFIG);
+  const blobCreator = new BlobCreator(dbManager, CONFIG);
+  const recordCreator = new RecordCreator(dbManager, CONFIG.PATCHBIN_DB_PATH, CONFIG);
+  
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  
+  for (const item of downloadNeeded) {
+    const gameid = item.gameid;
+    const metadata = item.metadata;
+    processed++;
+    
+    console.log(`\n[${processed}/${downloadNeeded.length}] Updating game ${gameid}: ${metadata.name}`);
+    
+    try {
+      // Get latest version to determine next version number
+      const latestVersion = dbManager.getLatestVersionForGame(gameid);
+      if (!latestVersion) {
+        throw new Error(`No existing version found for game ${gameid}`);
+      }
+      
+      const nextVersion = (latestVersion.version || 0) + 1;
+      
+      // Download ZIP
+      console.log(`  Downloading ZIP (version ${nextVersion})...`);
+      const downloadUrl = metadata.download_url || metadata.name_href;
+      if (!downloadUrl) {
+        throw new Error('No download URL available');
+      }
+      
+      // Create a queue item for downloading
+      const queueuuid = dbManager.addToFetchQueue(gameid, metadata, downloadUrl);
+      const queueItem = dbManager.getQueueItem(queueuuid);
+      
+      dbManager.updateQueueStatus(queueuuid, 'downloading');
+      const downloadResult = await downloader.downloadGame(queueItem, nextVersion);
+      const zipPath = typeof downloadResult === 'string' ? downloadResult : downloadResult.zipPath;
+      dbManager.updateQueueZipPath(queueuuid, zipPath);
+      
+      // Process patches
+      console.log(`  Processing patches...`);
+      dbManager.updateQueueStatus(queueuuid, 'processing');
+      const patchResults = await processor.processZipPatches(queueuuid, gameid, zipPath);
+      
+      // Filter successful patches
+      const successfulPatches = patchResults.filter(r => r.success);
+      if (successfulPatches.length === 0) {
+        throw new Error('No patches could be processed');
+      }
+      
+      // Get primary patch
+      const primaryPatch = successfulPatches[0];
+      
+      // Create blob for primary patch
+      console.log(`  Creating encrypted blob...`);
+      const blobData = await blobCreator.createPatchBlob(gameid, primaryPatch);
+      
+      // Create game records
+      console.log(`  Creating database records...`);
+      const patchFiles = successfulPatches.map(p => ({
+        ...p,
+        pat_sha224: p.sha224,
+        pat_sha1: p.sha1,
+        pat_shake_128: p.shake128,
+        result_sha1: p.resultSha1,
+        result_sha224: p.resultSha224,
+        result_shake1: p.resultShake1
+      }));
+      
+      const result = await recordCreator.createGameRecords(
+        { ...queueItem, metadata, zip_path: zipPath },
+        patchFiles
+      );
+      
+      if (result) {
+        dbManager.updateQueueStatus(queueuuid, 'completed');
+        console.log(`  ✓ Successfully updated game ${gameid} to version ${nextVersion}`);
+        succeeded++;
+      } else {
+        throw new Error('Failed to create records');
+      }
+      
+    } catch (error) {
+        console.error(`  ✗ Failed to update game ${gameid}: ${error.message}`);
+        failed++;
+      }
+  }
+  
+  console.log(`\n  Update Processing Summary:`);
+  console.log(`    Processed:  ${processed}`);
+  console.log(`    Succeeded:  ${succeeded}`);
+  console.log(`    Failed:     ${failed}\n`);
+  
+  return { processed, succeeded, failed };
 }
 
 // Execute main
@@ -1660,9 +1772,64 @@ async function importFromFolders(dbManager, argv) {
           await backupGameRecords(backupFolder, gameid, rhdataDb, patchbinDb, resourceDb, screenshotDb, latestVersion);
         }
         
-        // Update in-place (keep same version number)
+        // Update in-place (keep same version number and gvuuid)
+        // This will update the existing gameversion record without creating a new version
         skeleton.gameversion.version = latestVersion.version;
         skeleton.gameversion.gvuuid = latestVersion.gvuuid;
+        
+        // Preserve ALL local fields from existing record that are not in SMWC metadata
+        // This ensures any custom/local attributes (like "Xyz") are preserved
+        // 
+        // Rules:
+        // 1. If field is known local field (not from SMWC), always preserve it
+        // 2. If field exists in existing record but is MISSING from skeleton (omitted by SMWC),
+        //    preserve it (SMWC must explicitly provide empty/null to clear it)
+        // 3. If skeleton explicitly provides the field (even if empty/null), use skeleton value
+        const skeletonFields = new Set(Object.keys(skeleton.gameversion || {}));
+        
+        // Known local fields that should always be preserved
+        const knownLocalFields = new Set([
+          'gvuuid', 'gameid', 'version', 'rhpakuuid',
+          'patchblob1_name', 'patchblob1_key', 'patchblob1_sha224',
+          'pat_sha224', 'pat_sha1', 'pat_shake_128', 'patch',
+          'result_sha1', 'result_sha224', 'result_shake1',
+          'fields_type', 'raw_difficulty', 'combinedtype', 'legacy_type',
+          'local_resource_etag', 'local_resource_lastmodified', 'local_resource_filename',
+          'gvjsondata', 'gvchange_attributes', 'gvchanges',
+          'gvimport_time', 'siglistuuid'
+        ]);
+        
+        const localFieldsToPreserve = [];
+        
+        // Get all fields from existing record
+        for (const field in latestVersion) {
+          // Always preserve known local fields
+          if (knownLocalFields.has(field)) {
+            if (latestVersion[field] !== undefined && latestVersion[field] !== null) {
+              if (!skeleton.gameversion[field]) {
+                skeleton.gameversion[field] = latestVersion[field];
+                localFieldsToPreserve.push(field);
+              }
+            }
+            continue;
+          }
+          
+          // For SMWC fields: preserve if skeleton OMITS the field (SMWC must explicitly provide it to update)
+          if (!skeletonFields.has(field)) {
+            // Field exists in existing record but skeleton doesn't have it
+            // This means SMWC omitted it - preserve existing value
+            if (latestVersion[field] !== undefined && latestVersion[field] !== null) {
+              skeleton.gameversion[field] = latestVersion[field];
+              localFieldsToPreserve.push(field);
+            }
+          }
+          // If skeletonFields.has(field), skeleton explicitly provided it, so we'll use skeleton value
+        }
+        
+        if (localFieldsToPreserve.length > 0) {
+          console.log(`    ℹ️  Preserving ${localFieldsToPreserve.length} local field(s) from existing record`);
+          console.log(`      Preserved fields: ${localFieldsToPreserve.join(', ')}`);
+        }
       } else if (latestVersion && !changesInplace) {
         // Create new version
         skeleton.gameversion.version = latestVersion.version + 1;

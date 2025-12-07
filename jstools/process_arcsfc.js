@@ -1,0 +1,859 @@
+#!/usr/bin/env node
+
+/**
+ * process_arcsfc.js - Process SNES ROM files and create BPS patches
+ * 
+ * Usage:
+ *   node process_arcsfc.js <sfcsource_filename> [sfcarchive_filename]
+ *   node process_arcsfc.js --help
+ * 
+ * This script is designed to be run from a subdirectory of /home/steamu/smwdb/
+ * It processes SNES ROM files, detects headers, creates standardized versions,
+ * calculates hashes, and generates BPS patches.
+ * 
+ * Requirements:
+ * - Linux platform
+ * - Wine installed
+ * - K:\snesheader.exe available via wine
+ * - flips utility available
+ * - 7z utility available
+ */
+
+const fs = require('fs').promises;
+const fsSync = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { spawnSync, execSync } = require('child_process');
+
+// Constants
+const SMW_BASE_ROM = '/home/steamu/smwdb/smw.sfc';
+const SNESHEADER_EXE = "K:\\snesheader.exe";
+const LOCK_FILE = 'temp/lock.txt';
+
+// Helper function to calculate SHA1 hash
+async function calculateSHA1(filePath) {
+  const buffer = await fs.readFile(filePath);
+  return crypto.createHash('sha1').update(buffer).digest('hex');
+}
+
+// Helper function to calculate SHA256 hash
+async function calculateSHA256(filePath) {
+  const buffer = await fs.readFile(filePath);
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+// Helper function to ensure directory exists
+async function ensureDir(dirPath) {
+  try {
+    await fs.mkdir(dirPath, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+  }
+}
+
+// Helper function to acquire exclusive lock with retry
+async function acquireLock(lockPath, maxRetries = 10, retryDelay = 500) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const fd = await fs.open(lockPath, 'wx');
+      // Keep the file descriptor open to maintain the lock
+      return fd;
+    } catch (error) {
+      if (error.code === 'EEXIST') {
+        if (attempt < maxRetries - 1) {
+          // Lock file exists, wait and retry
+          console.log(`Lock file exists, waiting ${retryDelay}ms before retry ${attempt + 1}/${maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          continue;
+        } else {
+          // Final attempt failed
+          throw new Error(`Lock file exists: ${lockPath}. Another process may be running. Failed after ${maxRetries} attempts.`);
+        }
+      }
+      throw error;
+    }
+  }
+}
+
+// Helper function to release lock
+async function releaseLock(lockFd, lockPath) {
+  if (lockFd) {
+    try {
+      await lockFd.close();
+    } catch (e) {
+      // Ignore close errors
+    }
+  }
+  try {
+    await fs.unlink(lockPath);
+  } catch (e) {
+    // Ignore if already removed
+  }
+}
+
+// Helper function to check if a number is a power of 2 in kilobytes
+function isPowerOf2KB(size) {
+  const sizeKB = size / 1024;
+  // Check if sizeKB is a power of 2 (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192)
+  return sizeKB > 0 && (sizeKB & (sizeKB - 1)) === 0;
+}
+
+// Helper function to determine ROM type
+async function determineROMType(filePath) {
+  const stats = await fs.stat(filePath);
+  const size = stats.size;
+  const sizeMod1024 = size % 1024;
+  
+  if (isPowerOf2KB(size) && sizeMod1024 === 0) {
+    return 'unheadered';
+  } else if (sizeMod1024 === 512 && isPowerOf2KB(size - 512)) {
+    return 'headered';
+  } else {
+    return 'exception';
+  }
+}
+
+// Helper function to execute wine command
+function executeWine(command, args, cwd) {
+  const result = spawnSync('wine', [command, ...args], {
+    cwd: cwd || process.cwd(),
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+  
+  return {
+    exitCode: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    output: result.output
+  };
+}
+
+// Helper function to execute flips command
+function executeFlips(args) {
+  const result = spawnSync('flips', args, {
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+  
+  return {
+    exitCode: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    output: result.output
+  };
+}
+
+// Helper function to append to log file
+async function appendLog(message) {
+  const logPath = 'output/log.txt';
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${message}\n`;
+  await fs.appendFile(logPath, logEntry);
+}
+
+// Helper function to parse filename for metadata
+function parseFilenameMetadata(filename) {
+  const metadata = {
+    title: null,
+    author: null,
+    series_name: null,
+    sequence_number: null,
+    versioninfo: null,
+    additional_version_info: null,
+    date: null,
+    language: null
+  };
+  
+  if (!filename) return metadata;
+  
+  // Extract date in brackets [YYYY-MM-DD] or [YYYY-YYYY]
+  const dateMatch = filename.match(/\[(\d{4}(?:-\d{2}-\d{2})?)\]/);
+  if (dateMatch) {
+    metadata.date = dateMatch[1];
+  }
+  
+  // Extract language in parentheses (English), (French), etc.
+  const languageMatch = filename.match(/\(([A-Z][a-z]+)\)/);
+  if (languageMatch) {
+    metadata.language = languageMatch[1];
+  }
+  
+  // Extract author - look for "by AuthorName" pattern
+  // Handle complex cases like "by Author (Alias)" or "by Author1 + Author2"
+  const authorMatch = filename.match(/by\s+([^[\]()]+?)(?:\s*\[|\s*\(|$)/);
+  if (authorMatch) {
+    let authorStr = authorMatch[1].trim();
+    // Extract alias if present: "Author (Alias)" -> "Alias"
+    const aliasMatch = authorStr.match(/\(([^)]+)\)/);
+    if (aliasMatch) {
+      metadata.author = aliasMatch[1];
+    } else {
+      // Remove trailing spaces and clean up
+      authorStr = authorStr.replace(/\s*\+\s*.*$/, '').trim();
+      metadata.author = authorStr;
+    }
+  }
+  
+  // Extract series and sequence number - look for patterns like "#2", "#6", "Quest #2"
+  const seriesMatch = filename.match(/([^#]+?)\s*#(\d+)/);
+  if (seriesMatch) {
+    metadata.series_name = seriesMatch[1].trim();
+    metadata.sequence_number = parseInt(seriesMatch[2], 10);
+  }
+  
+  // Extract version info - look for patterns like "(Demo)", "(V1.0)", "(C3 Demo)", "(SoEN Early Beta)"
+  const versionPatterns = [
+    /\(Demo(?:\s+V?\d+\.?\d*)?\)/i,
+    /\(V\d+\.\d+\)/,
+    /\(C3\s+(?:Demo|Release)\)/i,
+    /\(SoEN\s+Early\s+Beta\)/i,
+    /\(Early\s+Beta\)/i,
+    /\(Beta\)/i,
+    /\(Release\)/i
+  ];
+  
+  for (const pattern of versionPatterns) {
+    const match = filename.match(pattern);
+    if (match) {
+      metadata.versioninfo = match[0].replace(/[()]/g, '');
+      break;
+    }
+  }
+  
+  // Extract additional version info - look for "(alt)", "(Debug)", "(God Mode)", "(Fixed)", "(New)"
+  const additionalPatterns = [
+    /\(alt\)/i,
+    /\(Debug\)/i,
+    /\(God\s+Mode\)/i,
+    /\(Fixed\)/i,
+    /\(New\)/i
+  ];
+  
+  for (const pattern of additionalPatterns) {
+    const match = filename.match(pattern);
+    if (match) {
+      metadata.additional_version_info = match[0].replace(/[()]/g, '');
+      break;
+    }
+  }
+  
+  // Extract title - everything before "by" or first parenthesis/bracket, cleaned up
+  const titleMatch = filename.match(/^(.+?)(?:\s+by\s|\[|\(|\.sfc|\.7z)/);
+  if (titleMatch) {
+    let title = titleMatch[1].trim();
+    // Remove common prefixes
+    title = title.replace(/^\[Super Mario World Hacks\]\s*/, '');
+    title = title.replace(/^SMW-Adventures\/\s*/, '');
+    metadata.title = title;
+  }
+  
+  return metadata;
+}
+
+// Helper function to get 7z file metadata
+async function get7zMetadata(archivePath, logCallback = null) {
+  try {
+    const result = execSync(`7z l -slt "${archivePath}"`, { encoding: 'utf8' });
+    const lines = result.split('\n');
+    
+    if (logCallback) {
+      logCallback(`7z l -slt output (full, ${lines.length} lines):\n${result}`);
+    }
+    
+    const metadata = {
+      content_filename: null,
+      content_timestamp: null,
+      content_attr: null,
+      file_count: 0
+    };
+    
+    const files = [];
+    let currentFile = null;
+    let inFileBlock = false;
+    let isArchiveEntry = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // Look for file block start - "Path = " indicates start of an entry
+      if (trimmed.startsWith('Path = ')) {
+        // If we had a previous file, save it (but only if it's not the archive entry)
+        if (currentFile && currentFile.path && !isArchiveEntry) {
+          files.push(currentFile);
+          if (logCallback) {
+            logCallback(`Saving file entry: ${currentFile.path}`);
+          }
+        }
+        // Start new entry
+        const pathValue = trimmed.replace('Path = ', '').trim();
+        currentFile = {
+          path: pathValue
+        };
+        inFileBlock = true;
+        isArchiveEntry = false; // Reset flag, will be set if Type = 7z
+        if (logCallback) {
+          logCallback(`Found entry: Path = ${pathValue}`);
+        }
+        continue;
+      }
+      
+      // If we're in a file block, collect metadata
+      if (inFileBlock && currentFile) {
+        if (trimmed.startsWith('Type = ')) {
+          const typeValue = trimmed.replace('Type = ', '').trim();
+          currentFile.type = typeValue;
+          // If this is the archive itself (Type = 7z), mark it to skip
+          if (typeValue === '7z') {
+            isArchiveEntry = true;
+            if (logCallback) {
+              logCallback(`  Entry is archive itself (Type = 7z), will skip: ${currentFile.path}`);
+            }
+          }
+        } else if (trimmed.startsWith('Modified = ')) {
+          currentFile.modified = trimmed.replace('Modified = ', '').trim();
+          if (logCallback) {
+            logCallback(`  Modified = ${currentFile.modified}`);
+          }
+        } else if (trimmed.startsWith('Attributes = ')) {
+          currentFile.attributes = trimmed.replace('Attributes = ', '').trim();
+          if (logCallback) {
+            logCallback(`  Attributes = ${currentFile.attributes}`);
+          }
+        } else if (trimmed.startsWith('Size = ')) {
+          currentFile.size = trimmed.replace('Size = ', '').trim();
+        } else if (trimmed.startsWith('----------')) {
+          // Separator line - entry block is complete
+          // Save the file if it's not the archive entry itself
+          if (currentFile && currentFile.path && !isArchiveEntry) {
+            files.push(currentFile);
+            if (logCallback) {
+              logCallback(`Entry block complete (saved): ${currentFile.path}`);
+            }
+          } else if (logCallback && isArchiveEntry) {
+            logCallback(`Entry block complete (skipped archive entry): ${currentFile.path}`);
+          }
+          currentFile = null;
+          inFileBlock = false;
+          isArchiveEntry = false;
+        } else if (trimmed === '') {
+          // Empty line - might indicate end of block, but continue collecting
+          // until we see separator or next Path
+        }
+      }
+    }
+    
+    // Save the last file if we have one (and it's not the archive entry)
+    if (currentFile && currentFile.path && !isArchiveEntry) {
+      files.push(currentFile);
+      if (logCallback) {
+        logCallback(`Final entry (saved): ${currentFile.path}`);
+      }
+    } else if (logCallback && currentFile && isArchiveEntry) {
+      logCallback(`Final entry (skipped archive entry): ${currentFile.path}`);
+    }
+    
+    // Filter out directories (files with path ending in /) and archive entries
+    const actualFiles = files.filter(f => {
+      if (!f.path) return false;
+      if (f.path.endsWith('/')) return false; // Directory
+      if (f.type === '7z') return false; // Archive entry itself
+      return true;
+    });
+    
+    metadata.file_count = actualFiles.length;
+    
+    if (actualFiles.length > 0) {
+      metadata.content_filename = actualFiles[0].path;
+      metadata.content_timestamp = actualFiles[0].modified || null;
+      metadata.content_attr = actualFiles[0].attributes || null;
+    }
+    
+    if (logCallback) {
+      logCallback(`Parsed 7z metadata: total_entries=${files.length}, actual_files=${actualFiles.length}, file_count=${metadata.file_count}`);
+      logCallback(`First file: filename=${metadata.content_filename}, timestamp=${metadata.content_timestamp}, attr=${metadata.content_attr}`);
+      if (files.length > 0) {
+        logCallback(`All file paths: ${files.map(f => f.path).join(', ')}`);
+      }
+    }
+    
+    return metadata;
+  } catch (error) {
+    const errorMsg = `Failed to extract 7z metadata: ${error.message}`;
+    if (logCallback) {
+      logCallback(`ERROR: ${errorMsg}`);
+      logCallback(`ERROR Stack: ${error.stack || 'N/A'}`);
+    }
+    throw new Error(errorMsg);
+  }
+}
+
+// Helper function to extract and hash file from 7z
+async function extractAndHash7zFile(archivePath) {
+  try {
+    // Extract to temp location
+    const tempExtract = 'temp/extract_temp';
+    await ensureDir(tempExtract);
+    
+    execSync(`7z x -y -o"${tempExtract}" "${archivePath}"`, { stdio: 'pipe' });
+    
+    // Find the extracted file
+    const files = await fs.readdir(tempExtract);
+    if (files.length !== 1) {
+      throw new Error(`Expected 1 file in archive, found ${files.length}`);
+    }
+    
+    const extractedFile = path.join(tempExtract, files[0]);
+    const hash = await calculateSHA256(extractedFile);
+    
+    // Cleanup
+    await fs.unlink(extractedFile);
+    await fs.rmdir(tempExtract);
+    
+    return hash;
+  } catch (error) {
+    throw new Error(`Failed to extract and hash 7z file: ${error.message}`);
+  }
+}
+
+// Main processing function
+async function processROM(sfcsourceFilename, sfcarchiveFilename) {
+  let lockFd = null;
+  let lockAcquired = false;
+  
+  // Set up exit handlers to ensure lock is released
+  const cleanup = async () => {
+    if (lockAcquired && lockFd) {
+      try {
+        await releaseLock(lockFd, LOCK_FILE);
+        lockAcquired = false;
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+  };
+  
+  // Synchronous cleanup for exit handler (exit doesn't support async)
+  const cleanupSync = () => {
+    if (lockAcquired && lockFd) {
+      try {
+        lockFd.closeSync();
+        fsSync.unlinkSync(LOCK_FILE);
+        lockAcquired = false;
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+  };
+  
+  process.on('SIGINT', async () => {
+    await cleanup();
+    process.exit(130); // Standard exit code for SIGINT
+  });
+  
+  process.on('SIGTERM', async () => {
+    await cleanup();
+    process.exit(143); // Standard exit code for SIGTERM
+  });
+  
+  process.on('exit', () => {
+    cleanupSync();
+  });
+  
+  process.on('uncaughtException', async (error) => {
+    await cleanup();
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+  });
+  
+  process.on('unhandledRejection', async (reason, promise) => {
+    await cleanup();
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
+  });
+  
+  try {
+    // Step 1: Ensure directories exist
+    console.log('Step 1: Creating directories...');
+    await ensureDir('done');
+    await ensureDir('output');
+    await ensureDir('error');
+    await ensureDir('temp');
+    
+    // Step 2: Copy source to temp and acquire lock
+    console.log('Step 2: Copying source and acquiring lock...');
+    await fs.copyFile(sfcsourceFilename, 'temp/source.sfc');
+    lockFd = await acquireLock(LOCK_FILE);
+    lockAcquired = true;
+    console.log('Lock acquired');
+    
+    // Step 3: Clean up existing temp files
+    console.log('Step 3: Cleaning up temp files...');
+    try {
+      await fs.unlink('temp/source.sfc');
+    } catch (e) {
+      // Ignore if doesn't exist
+    }
+    try {
+      await fs.unlink('temp/source.7z');
+    } catch (e) {
+      // Ignore if doesn't exist
+    }
+    
+    // Step 4: Copy archive if specified
+    if (sfcarchiveFilename) {
+      console.log('Step 4: Copying archive...');
+      await fs.copyFile(sfcarchiveFilename, 'temp/source.7z');
+    }
+    
+    // Step 5: Copy source
+    console.log('Step 5: Copying source file...');
+    await fs.copyFile(sfcsourceFilename, 'temp/source.sfc');
+    
+    // Step 6: Check ROM type
+    console.log('Step 6: Determining ROM type...');
+    const romType = await determineROMType('temp/source.sfc');
+    
+    if (romType === 'exception') {
+      const stats = await fs.stat('temp/source.sfc');
+      const errorMsg = `ROM file size exception: ${stats.size} bytes (not a valid SNES ROM size)`;
+      await appendLog(errorMsg);
+      console.error(errorMsg);
+      process.exit(1);
+    }
+    
+    console.log(`ROM type: ${romType}`);
+    
+    // Step 7: Process ROM header
+    console.log('Step 7: Processing ROM header...');
+    let sourceUnhPath = 'temp/source_unh.sfc';
+    let sourceHdrPath = 'temp/source_hdr.smc';
+    let sourceRehdrPath = null;
+    
+    if (romType === 'unheadered') {
+      // 7.A: Unheadered ROM - add header
+      console.log('  Adding header to unheadered ROM...');
+      await fs.copyFile('temp/source.sfc', './source_temp_hdr.smc');
+      
+      const wineResult = executeWine(SNESHEADER_EXE, ['source_temp_hdr.smc', '1'], process.cwd());
+      
+      if (wineResult.exitCode === 1) {
+        await fs.unlink('./source_temp_hdr.smc');
+        const errorMsg = `snesheader.exe failed to add header: ${wineResult.stderr}`;
+        await appendLog(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
+      
+      await fs.rename('temp/source.sfc', 'temp/source_unh.sfc');
+      await fs.rename('./source_temp_hdr.smc', 'temp/source_hdr.smc');
+      
+    } else if (romType === 'headered') {
+      // 7.B: Headered ROM - remove header, then re-add
+      console.log('  Removing header from headered ROM...');
+      await fs.copyFile('temp/source.sfc', './source_temp_unhdr.sfc');
+      
+      const wineResult1 = executeWine(SNESHEADER_EXE, ['source_temp_unhdr.sfc', '0'], process.cwd());
+      
+      if (wineResult1.exitCode === 1) {
+        await fs.unlink('./source_temp_unhdr.sfc');
+        const errorMsg = `snesheader.exe failed to remove header: ${wineResult1.stderr}`;
+        await appendLog(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
+      
+      await fs.rename('temp/source.sfc', 'temp/source_hdr.smc');
+      await fs.rename('./source_temp_unhdr.sfc', 'temp/source_unh.sfc');
+      
+      // Now re-add header to create standardized version
+      console.log('  Re-adding header to create standardized version...');
+      await fs.copyFile('temp/source_unh.sfc', './source_temp_hdr2.smc');
+      
+      const wineResult2 = executeWine(SNESHEADER_EXE, ['source_temp_hdr2.smc', '1'], process.cwd());
+      
+      if (wineResult2.exitCode === 1) {
+        await fs.unlink('./source_temp_hdr2.smc');
+        const errorMsg = `snesheader.exe failed to re-add header: ${wineResult2.stderr}`;
+        await appendLog(errorMsg);
+        console.error(errorMsg);
+        process.exit(1);
+      }
+      
+      await fs.rename('./source_temp_hdr2.smc', 'temp/source_rehdr.smc');
+      sourceRehdrPath = 'temp/source_rehdr.smc';
+    }
+    
+    // Step 8: Calculate hashes
+    console.log('Step 8: Calculating hashes...');
+    const sfc_rom_sha1_hash = await calculateSHA1('temp/source_unh.sfc');
+    const smc_rom_sha1_hash = await calculateSHA1('temp/source_hdr.smc');
+    const sfc_rom_sha256_hash = await calculateSHA256('temp/source_unh.sfc');
+    
+    let smc2_rom_sha1_hash;
+    let smc2_rom_sha256_hash;
+    
+    if (sourceRehdrPath) {
+      try {
+        await fs.access(sourceRehdrPath);
+        smc2_rom_sha1_hash = await calculateSHA1(sourceRehdrPath);
+        smc2_rom_sha256_hash = await calculateSHA256(sourceRehdrPath);
+      } catch (e) {
+        smc2_rom_sha1_hash = await calculateSHA1('temp/source_hdr.smc');
+        smc2_rom_sha256_hash = await calculateSHA256('temp/source_hdr.smc');
+      }
+    } else {
+      smc2_rom_sha1_hash = await calculateSHA1('temp/source_hdr.smc');
+      smc2_rom_sha256_hash = await calculateSHA256('temp/source_hdr.smc');
+    }
+    
+    console.log(`  SFC SHA1: ${sfc_rom_sha1_hash}`);
+    console.log(`  SMC SHA1: ${smc_rom_sha1_hash}`);
+    console.log(`  SMC2 SHA1: ${smc2_rom_sha1_hash}`);
+    
+    // Step 9: Create BPS patch
+    console.log('Step 9: Creating BPS patch...');
+    const bpsPath = `temp/${sfc_rom_sha1_hash}.bps`;
+    const flipsResult = executeFlips(['--create', '--bps', SMW_BASE_ROM, 'temp/source_unh.sfc', bpsPath]);
+    
+    if (flipsResult.exitCode === 1) {
+      const errorMsg = `flips failed to create BPS patch: ${flipsResult.stderr}`;
+      await appendLog(errorMsg);
+      console.error(errorMsg);
+      process.exit(1);
+    }
+    
+    const bpsFilename = path.basename(bpsPath);
+    console.log(`  BPS patch created: ${bpsFilename}`);
+    
+    // Step 11: Create metadata JSON
+    console.log('Step 11: Creating metadata JSON...');
+    const metadata = {
+      sfcsource_filename: path.basename(sfcsourceFilename),
+      sfcarchive_filename: sfcarchiveFilename ? path.basename(sfcarchiveFilename) : null,
+      sfc_rom_sha1_hash,
+      smc_rom_sha1_hash,
+      sfc_rom_sha256_hash,
+      smc2_rom_sha1_hash,
+      smc2_rom_sha256_hash,
+      bps_filename: bpsFilename
+    };
+    
+    // Parse filename metadata
+    const sfcMetadata = parseFilenameMetadata(path.basename(sfcsourceFilename));
+    const archiveMetadata = sfcarchiveFilename ? parseFilenameMetadata(path.basename(sfcarchiveFilename)) : null;
+    
+    // Add SFC filename attributes
+    for (const [key, value] of Object.entries(sfcMetadata)) {
+      if (value !== null) {
+        metadata[`sfc_filename_${key}`] = value;
+      }
+    }
+    
+    // Add 7z filename attributes
+    if (archiveMetadata) {
+      for (const [key, value] of Object.entries(archiveMetadata)) {
+        if (value !== null) {
+          metadata[`7z_filename_${key}`] = value;
+        }
+      }
+    }
+    
+    // Get file timestamps
+    const sfcStats = await fs.stat(sfcsourceFilename);
+    metadata.sfc_upload_estimate = sfcStats.mtime.toISOString();
+    
+    const dirStats = await fs.stat(path.dirname(path.resolve(sfcsourceFilename)));
+    metadata.dir_upload_estimate = dirStats.mtime.toISOString();
+    
+    // Get 7z metadata if archive specified
+    if (sfcarchiveFilename) {
+      const archiveStats = await fs.stat(sfcarchiveFilename);
+      metadata['7z_upload_estimate'] = archiveStats.mtime.toISOString();
+      
+      try {
+        const archiveMetadata = await get7zMetadata('temp/source.7z');
+        if (archiveMetadata.content_filename) {
+          metadata['7z_content_filename'] = archiveMetadata.content_filename;
+        }
+        if (archiveMetadata.content_timestamp) {
+          metadata['7z_content_timestamp'] = archiveMetadata.content_timestamp;
+        }
+        if (archiveMetadata.content_attr) {
+          metadata['7z_content_attr'] = archiveMetadata.content_attr;
+        }
+      } catch (error) {
+        console.warn(`Warning: Could not extract 7z metadata: ${error.message}`);
+      }
+    }
+    
+    // Write metadata JSON
+    const metadataPath = `temp/${sfc_rom_sha1_hash}.json`;
+    await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+    console.log(`  Metadata JSON created: ${path.basename(metadataPath)}`);
+    
+    // Step 12: Verify and move archive if specified
+    if (sfcarchiveFilename) {
+      console.log('Step 12: Verifying archive...');
+      await appendLog(`[Step 12] Starting archive verification for: ${path.basename(sfcarchiveFilename)}`);
+      try {
+        // Create log callback for 7z debugging
+        const log7zDebug = async (message) => {
+          await appendLog(`[7z Debug] ${message}`);
+        };
+        
+        await appendLog(`[Step 12] Running: 7z l -slt on temp/source.7z`);
+        const archiveMetadata = await get7zMetadata('temp/source.7z', log7zDebug);
+        
+        await appendLog(`[Step 12] Archive verification result: file_count=${archiveMetadata.file_count}, content_filename=${archiveMetadata.content_filename || 'null'}`);
+        await appendLog(`[Step 12] Archive metadata: timestamp=${archiveMetadata.content_timestamp || 'null'}, attr=${archiveMetadata.content_attr || 'null'}`);
+        
+        if (archiveMetadata.file_count !== 1) {
+          const errorMsg = `Archive contains ${archiveMetadata.file_count} files (expected 1), moving to error/`;
+          console.log(`  ${errorMsg}`);
+          await appendLog(`[Step 12] ERROR: ${errorMsg}`);
+          await fs.rename(sfcarchiveFilename, `error/${path.basename(sfcarchiveFilename)}`);
+        } else {
+          await appendLog('[Step 12] Archive file count verified (1 file), proceeding with hash verification...');
+          await appendLog('[Step 12] Extracting and hashing file from archive...');
+          const archiveHash = await extractAndHash7zFile('temp/source.7z');
+          await appendLog(`[Step 12] Archive file SHA256: ${archiveHash}`);
+          await appendLog(`[Step 12] Expected SHA256 (sfc_unh): ${sfc_rom_sha256_hash}`);
+          await appendLog(`[Step 12] Expected SHA256 (smc2): ${smc2_rom_sha256_hash}`);
+          
+          if (archiveHash === sfc_rom_sha256_hash || archiveHash === smc2_rom_sha256_hash) {
+            console.log('  Archive verified, moving to done/');
+            await appendLog('[Step 12] SUCCESS: Archive hash verified successfully, moving to done/');
+            await fs.rename(sfcarchiveFilename, `done/${path.basename(sfcarchiveFilename)}`);
+          } else {
+            const errorMsg = `Archive hash mismatch (got ${archiveHash}, expected ${sfc_rom_sha256_hash} or ${smc2_rom_sha256_hash}), moving to error/`;
+            console.log(`  ${errorMsg}`);
+            await appendLog(`[Step 12] ERROR: ${errorMsg}`);
+            await fs.rename(sfcarchiveFilename, `error/${path.basename(sfcarchiveFilename)}`);
+          }
+        }
+      } catch (error) {
+        const errorMsg = `Could not verify archive: ${error.message}, moving to error/`;
+        console.warn(`Warning: ${errorMsg}`);
+        await appendLog(`[Step 12] EXCEPTION: ${errorMsg}`);
+        await appendLog(`[Step 12] Exception Stack: ${error.stack || 'N/A'}`);
+        try {
+          await fs.rename(sfcarchiveFilename, `error/${path.basename(sfcarchiveFilename)}`);
+        } catch (renameError) {
+          await appendLog(`[Step 12] Failed to move archive to error/: ${renameError.message}`);
+        }
+      }
+    }
+    
+    // Step 13: Move output files
+    console.log('Step 13: Moving output files...');
+    await fs.rename(bpsPath, `output/${bpsFilename}`);
+    await fs.rename(metadataPath, `output/${path.basename(metadataPath)}`);
+    
+    // Step 14: Move source to done and log success
+    console.log('Step 14: Finalizing...');
+    await fs.rename(sfcsourceFilename, `done/${path.basename(sfcsourceFilename)}`);
+    
+    const successMsg = `Successfully processed: ${path.basename(sfcsourceFilename)} -> ${bpsFilename}`;
+    await appendLog(successMsg);
+    console.log(successMsg);
+    
+    // Cleanup lock
+    await releaseLock(lockFd, LOCK_FILE);
+    lockAcquired = false;
+    
+    process.exit(0);
+    
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    
+    // Cleanup lock on error
+    await releaseLock(lockFd, LOCK_FILE);
+    lockAcquired = false;
+    
+    await appendLog(`Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+// Main entry point
+async function main() {
+  const args = process.argv.slice(2);
+  
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+    console.log(`
+Usage: node process_arcsfc.js <sfcsource_filename> [sfcarchive_filename]
+
+Process SNES ROM files and create BPS patches.
+
+Arguments:
+  sfcsource_filename    Required. Path to the source .sfc ROM file
+  sfcarchive_filename   Optional. Path to the .7z archive file
+
+This script:
+  - Detects whether ROM is headered or unheadered
+  - Standardizes ROM headers using snesheader.exe via wine
+  - Calculates SHA1 and SHA256 hashes
+  - Creates BPS patches against /home/steamu/smwdb/smw.sfc
+  - Extracts metadata from filenames
+  - Verifies archive contents if archive is provided
+  - Moves processed files to done/ directory
+  - Moves output files (BPS and JSON) to output/ directory
+
+Requirements:
+  - Linux platform
+  - Wine installed
+  - K:\\snesheader.exe available via wine
+  - flips utility in PATH
+  - 7z utility in PATH
+
+The script must be run from a subdirectory of /home/steamu/smwdb/
+
+Examples:
+  node process_arcsfc.js example.sfc example.7z
+  node process_arcsfc.js game.sfc
+`);
+    process.exit(0);
+  }
+  
+  const sfcsourceFilename = args[0];
+  const sfcarchiveFilename = args[1] || null;
+  
+  // Validate source file exists
+  try {
+    await fs.access(sfcsourceFilename);
+  } catch (e) {
+    console.error(`Error: Source file not found: ${sfcsourceFilename}`);
+    process.exit(1);
+  }
+  
+  // Validate archive file if specified
+  if (sfcarchiveFilename) {
+    try {
+      await fs.access(sfcarchiveFilename);
+    } catch (e) {
+      console.error(`Error: Archive file not found: ${sfcarchiveFilename}`);
+      process.exit(1);
+    }
+  }
+  
+  // Run processing
+  try {
+    await processROM(sfcsourceFilename, sfcarchiveFilename);
+  } catch (error) {
+    console.error(`Fatal error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+if (require.main === module) {
+  main().catch(error => {
+    console.error(`Fatal error: ${error.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = { processROM, parseFilenameMetadata };

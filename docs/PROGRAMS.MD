@@ -399,6 +399,55 @@ enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json 
 
 ---
 
+### process_arcsfc.js
+**Purpose**: Process SNES ROM files, standardize headers, and create BPS patches
+
+**Usage**:
+```bash
+node process_arcsfc.js <sfcsource_filename> [sfcarchive_filename]
+node process_arcsfc.js --help
+```
+
+**Arguments**:
+- `sfcsource_filename` (required): Path to the source .sfc ROM file
+- `sfcarchive_filename` (optional): Path to the .7z archive file
+
+**What it does**:
+- Detects whether ROM is headered or unheadered
+- Standardizes ROM headers using snesheader.exe via Wine
+- Creates standardized versions (both headered and unheadered)
+- Calculates SHA1 and SHA256 hashes for all ROM variants
+- Generates BPS patches against `/home/steamu/smwdb/smw.sfc`
+- Extracts metadata from filenames (title, author, version, date, language, etc.)
+- Verifies archive contents if archive is provided
+- Organizes processed files into `done/`, `output/`, and `error/` directories
+
+**Requirements**:
+- Linux platform
+- Wine installed
+- `K:\snesheader.exe` available via wine
+- `flips` utility in PATH
+- `7z` utility in PATH
+- Must be run from a subdirectory of `/home/steamu/smwdb/`
+
+**Output Files**:
+- `output/<sha1_hash>.bps` - BPS patch file
+- `output/<sha1_hash>.json` - Metadata JSON with extracted information
+- `output/log.txt` - Operation log
+
+**Documentation**: See `docs/PROCESS_ARCSFC.md` for complete documentation
+
+**Examples**:
+```bash
+# Process a ROM file with an archive
+node process_arcsfc.js example.sfc example.7z
+
+# Process a ROM file without an archive
+node process_arcsfc.js game.sfc
+```
+
+---
+
 ### prepare_databases.js
 **Purpose**: Produce a provisioning plan for installer builds by inspecting `dbmanifest.json`, evaluating existing databases in the user settings directory, and staging manifest resources.
 

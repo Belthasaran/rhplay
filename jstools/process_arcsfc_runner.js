@@ -8,58 +8,69 @@
  *   node process_arcsfc_runner.js --help
  * 
  * This script scans the current working directory for .sfc files that have
- * matching .7z archive files (same name, different extension) and runs
- * process_arcsfc.js for each pair sequentially.
+ * matching .7z archives (same base name) and processes them sequentially using
+ * process_arcsfc.js.
  * 
- * All output (stdout and stderr) is captured and appended to output/log2.txt
+ * Features:
+ * - Handles special characters in filenames correctly (no shell expansion)
+ * - Sequential processing to avoid file lock conflicts
+ * - Comprehensive logging of all operations
+ * - Summary report at the end
  */
 
 const fs = require('fs').promises;
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const PROCESS_ARCSFC_SCRIPT = path.join(__dirname, 'process_arcsfc.js');
+const PROCESS_SCRIPT = path.join(__dirname, 'process_arcsfc.js');
 const LOG_FILE = 'output/log2.txt';
-
-// Helper function to ensure output directory exists
-async function ensureOutputDir() {
-  try {
-    await fs.mkdir('output', { recursive: true });
-  } catch (error) {
-    if (error.code !== 'EEXIST') {
-      throw error;
-    }
-  }
-}
 
 // Helper function to append to log file
 async function appendLog(message) {
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] ${message}\n`;
-  await fs.appendFile(LOG_FILE, logEntry);
+  try {
+    await fs.appendFile(LOG_FILE, logEntry);
+  } catch (error) {
+    // If log file doesn't exist, try to create directory first
+    try {
+      await fs.mkdir('output', { recursive: true });
+      await fs.appendFile(LOG_FILE, logEntry);
+    } catch (e) {
+      console.error(`Failed to write to log file: ${e.message}`);
+      console.log(message); // Fallback to console
+    }
+  }
 }
 
-// Helper function to find matching .sfc and .7z files
+// Helper function to get base name without extension
+function getBaseName(filename) {
+  const ext = path.extname(filename);
+  return filename.slice(0, -(ext.length));
+}
+
+// Helper function to find matching file pairs
 async function findMatchingPairs() {
   try {
     const files = await fs.readdir('.');
     const sfcFiles = files.filter(f => /\.sfc$/i.test(f));
+    const archiveFiles = new Set(files.filter(f => /\.7z$/i.test(f)).map(f => getBaseName(f)));
+    
     const pairs = [];
     
     for (const sfcFile of sfcFiles) {
-      // Get base name without extension
-      const baseName = path.basename(sfcFile, path.extname(sfcFile));
-      // Look for matching .7z file
-      const archiveFile = files.find(f => {
-        const fBase = path.basename(f, path.extname(f));
-        return fBase === baseName && /\.7z$/i.test(f);
-      });
-      
-      if (archiveFile) {
-        pairs.push({
-          sfc: sfcFile,
-          archive: archiveFile
-        });
+      const baseName = getBaseName(sfcFile);
+      if (archiveFiles.has(baseName)) {
+        // Find the matching .7z file
+        const archiveFile = files.find(f => 
+          /\.7z$/i.test(f) && getBaseName(f) === baseName
+        );
+        if (archiveFile) {
+          pairs.push({
+            sfc: sfcFile,
+            archive: archiveFile
+          });
+        }
       }
     }
     
@@ -69,49 +80,47 @@ async function findMatchingPairs() {
   }
 }
 
-// Helper function to run process_arcsfc.js for a file pair
-async function runProcessArcsfc(sfcFile, archiveFile) {
-  await appendLog(`\n=== Processing pair: ${sfcFile} + ${archiveFile} ===\n`);
+// Helper function to execute process_arcsfc.js
+async function processPair(sfcFile, archiveFile) {
+  await appendLog(`\n${'='.repeat(80)}`);
+  await appendLog(`Processing pair: ${sfcFile} + ${archiveFile}`);
+  await appendLog(`${'='.repeat(80)}`);
   
-  // Use spawnSync with array of arguments to avoid shell expansion
-  // This ensures special characters in filenames are handled correctly
-  const result = spawnSync('node', [PROCESS_ARCSFC_SCRIPT, sfcFile, archiveFile], {
+  const command = 'node';
+  const args = [PROCESS_SCRIPT, sfcFile, archiveFile];
+  
+  await appendLog(`Command: ${command} ${args.join(' ')}`);
+  
+  // Use spawnSync to avoid shell expansion - this handles special characters correctly
+  const result = spawnSync(command, args, {
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: process.cwd()
   });
   
-  // Log the command that was run
-  await appendLog(`Command: node ${PROCESS_ARCSFC_SCRIPT} "${sfcFile}" "${archiveFile}"`);
-  await appendLog(`Exit code: ${result.status || 0}\n`);
-  
-  // Log stdout if present
+  // Log stdout
   if (result.stdout) {
-    await appendLog('--- STDOUT ---');
+    await appendLog(`\n--- STDOUT ---`);
     await appendLog(result.stdout);
-    await appendLog('--- END STDOUT ---\n');
   }
   
-  // Log stderr if present
+  // Log stderr
   if (result.stderr) {
-    await appendLog('--- STDERR ---');
+    await appendLog(`\n--- STDERR ---`);
     await appendLog(result.stderr);
-    await appendLog('--- END STDERR ---\n');
   }
   
-  // Log output if present (combined)
-  if (result.output) {
-    const output = result.output.filter(Boolean).join('\n');
-    if (output && output !== result.stdout && output !== result.stderr) {
-      await appendLog('--- OUTPUT ---');
-      await appendLog(output);
-      await appendLog('--- END OUTPUT ---\n');
-    }
-  }
+  // Log exit code
+  const exitCode = result.status !== null ? result.status : -1;
+  await appendLog(`\n--- EXIT CODE: ${exitCode} ---`);
   
-  await appendLog(`=== Finished processing: ${sfcFile} + ${archiveFile} (exit code: ${result.status || 0}) ===\n`);
-  
-  return result.status || 0;
+  return {
+    sfcFile,
+    archiveFile,
+    exitCode,
+    stdout: result.stdout || '',
+    stderr: result.stderr || ''
+  };
 }
 
 // Main function
@@ -122,97 +131,130 @@ async function main() {
     console.log(`
 Usage: node process_arcsfc_runner.js
 
-Scans the current working directory for .sfc files that have matching .7z
-archive files (same base name, different extension) and runs process_arcsfc.js
-for each pair sequentially.
+Batch runner for process_arcsfc.js that processes matching .sfc/.7z file pairs.
 
-All output (stdout and stderr) from each run is captured and appended to
-output/log2.txt with timestamps.
+This script:
+  - Scans the current working directory for .sfc files
+  - For each .sfc file, looks for a matching .7z archive (same base name)
+  - Runs process_arcsfc.js for each matching pair sequentially
+  - Captures all stdout and stderr from each run
+  - Appends all output to output/log2.txt with timestamps
+  - Processes files one at a time to avoid conflicts
 
-The script processes files in the order they are found, one pair at a time.
-Special characters in filenames are handled correctly by passing arguments
-directly to Node.js without shell expansion.
+Features:
+  - Handles special characters in filenames correctly (no shell expansion)
+  - Sequential processing to avoid file lock conflicts
+  - Comprehensive logging of all operations
+  - Summary report at the end
+
+Output:
+  - All processing results appended to output/log2.txt
+  - Each run includes command, exit code, stdout, and stderr
+  - Summary statistics at the end
 
 Examples:
+  # Run from a directory containing .sfc and .7z files
   cd /path/to/roms
   node ~/rhplay/jstools/process_arcsfc_runner.js
+
+Note: This script is designed to work with process_arcsfc.js and must be run
+from a directory where both .sfc and .7z files are present.
 `);
     process.exit(0);
   }
   
   try {
     // Ensure output directory exists
-    await ensureOutputDir();
+    await fs.mkdir('output', { recursive: true });
     
-    // Log start
-    await appendLog('='.repeat(80));
+    await appendLog(`\n${'='.repeat(80)}`);
     await appendLog(`process_arcsfc_runner.js started`);
     await appendLog(`Working directory: ${process.cwd()}`);
-    await appendLog(`Script path: ${PROCESS_ARCSFC_SCRIPT}`);
-    await appendLog('='.repeat(80) + '\n');
+    await appendLog(`Process script: ${PROCESS_SCRIPT}`);
+    await appendLog(`${'='.repeat(80)}\n`);
     
     // Find matching pairs
-    console.log('Scanning for matching .sfc and .7z file pairs...');
+    console.log('Scanning for matching .sfc/.7z file pairs...');
     const pairs = await findMatchingPairs();
     
     if (pairs.length === 0) {
-      await appendLog('No matching .sfc/.7z file pairs found in current directory.\n');
-      console.log('No matching file pairs found.');
+      await appendLog('No matching .sfc/.7z file pairs found.');
+      console.log('No matching .sfc/.7z file pairs found.');
       process.exit(0);
     }
     
-    await appendLog(`Found ${pairs.length} matching file pair(s):\n`);
-    pairs.forEach((pair, index) => {
-      console.log(`  ${index + 1}. ${pair.sfc} + ${pair.archive}`);
-      appendLog(`  ${index + 1}. ${pair.sfc} + ${pair.archive}`);
-    });
-    await appendLog('\n');
+    await appendLog(`Found ${pairs.length} matching file pair(s):`);
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i];
+      console.log(`  ${i + 1}. ${pair.sfc} + ${pair.archive}`);
+      await appendLog(`  ${i + 1}. ${pair.sfc} + ${pair.archive}`);
+    }
+    await appendLog('');
     
     // Process each pair sequentially
-    let successCount = 0;
-    let failureCount = 0;
-    
+    const results = [];
     for (let i = 0; i < pairs.length; i++) {
       const pair = pairs[i];
       console.log(`\n[${i + 1}/${pairs.length}] Processing: ${pair.sfc} + ${pair.archive}`);
       
-      const exitCode = await runProcessArcsfc(pair.sfc, pair.archive);
+      const result = await processPair(pair.sfc, pair.archive);
+      results.push(result);
       
-      if (exitCode === 0) {
-        successCount++;
-        console.log(`  ✓ Success (exit code: ${exitCode})`);
+      if (result.exitCode === 0) {
+        console.log(`  ✓ Success`);
       } else {
-        failureCount++;
-        console.log(`  ✗ Failed (exit code: ${exitCode})`);
+        console.log(`  ✗ Failed with exit code ${result.exitCode}`);
       }
     }
     
-    // Log summary
-    await appendLog('\n' + '='.repeat(80));
-    await appendLog(`Summary: ${pairs.length} pair(s) processed`);
-    await appendLog(`  Success: ${successCount}`);
-    await appendLog(`  Failed: ${failureCount}`);
-    await appendLog('='.repeat(80) + '\n');
+    // Generate summary
+    await appendLog(`\n${'='.repeat(80)}`);
+    await appendLog('SUMMARY');
+    await appendLog(`${'='.repeat(80)}`);
     
-    console.log(`\nCompleted: ${successCount} succeeded, ${failureCount} failed`);
+    const successful = results.filter(r => r.exitCode === 0).length;
+    const failed = results.filter(r => r.exitCode !== 0).length;
+    
+    await appendLog(`Total pairs processed: ${results.length}`);
+    await appendLog(`Successful: ${successful}`);
+    await appendLog(`Failed: ${failed}`);
+    
+    console.log(`\n${'='.repeat(80)}`);
+    console.log('SUMMARY');
+    console.log(`${'='.repeat(80)}`);
+    console.log(`Total pairs processed: ${results.length}`);
+    console.log(`Successful: ${successful}`);
+    console.log(`Failed: ${failed}`);
+    
+    if (failed > 0) {
+      await appendLog('\nFailed pairs:');
+      const failedResults = results.filter(r => r.exitCode !== 0);
+      for (const r of failedResults) {
+        console.log(`  - ${r.sfc} + ${r.archive} (exit code: ${r.exitCode})`);
+        await appendLog(`  - ${r.sfc} + ${r.archive} (exit code: ${r.exitCode})`);
+      }
+    }
+    
+    await appendLog(`\n${'='.repeat(80)}`);
+    await appendLog(`process_arcsfc_runner.js completed`);
+    await appendLog(`${'='.repeat(80)}\n`);
     
     // Exit with non-zero if any failed
-    process.exit(failureCount > 0 ? 1 : 0);
+    process.exit(failed > 0 ? 1 : 0);
     
   } catch (error) {
     const errorMsg = `Fatal error: ${error.message}`;
     console.error(errorMsg);
-    await appendLog(`\nFATAL ERROR: ${errorMsg}\n`);
-    await appendLog(`Stack: ${error.stack || 'N/A'}\n`);
+    await appendLog(`\n${'='.repeat(80)}`);
+    await appendLog(`FATAL ERROR: ${errorMsg}`);
+    await appendLog(`Stack: ${error.stack || 'N/A'}`);
+    await appendLog(`${'='.repeat(80)}\n`);
     process.exit(1);
   }
 }
 
 if (require.main === module) {
-  main().catch(error => {
-    console.error(`Fatal error: ${error.message}`);
-    process.exit(1);
-  });
+  main();
 }
 
-module.exports = { findMatchingPairs, runProcessArcsfc };
+module.exports = { findMatchingPairs, processPair };

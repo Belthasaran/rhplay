@@ -275,6 +275,7 @@ function parseArgs(args) {
     'backup-folder': null,
     'orphan-cleanup': false,
     'force-rebuild-patch': null,
+    'update-metadata-only': false,
     'log-mode': 'append',
     'log-baseline': null,
     'log-dir': path.join(__dirname, 'logs', 'game_deltas'),
@@ -336,6 +337,8 @@ function parseArgs(args) {
       parsed['force-rebuild-patch'] = arg.split('=')[1];
     } else if (arg === '--force-rebuild-patch') {
       parsed['force-rebuild-patch'] = args[++i];
+    } else if (arg === '--update-metadata-only') {
+      parsed['update-metadata-only'] = true;
     } else if (arg.startsWith('--limit=')) {
       parsed['limit'] = parseInt(arg.split('=')[1]);
     } else if (arg === '--limit') {
@@ -387,6 +390,8 @@ Options:
   --no-process-new        Skip processing new games
   --process-updates       Process games that need updates (download and reprocess)
   --force-rebuild-patch=ID Force rebuild patch, blob, and records for specific game ID
+  --update-metadata-only  Force in-place metadata update even for minor changes
+                          (no download/patch/blob rebuild, metadata only)
   --new-only              Only process new gameids (skip updates to existing games)
   --target-folder=<path>  Export game data to folder instead of database
                           Creates RHPAK-compatible structure for each gameid
@@ -1476,6 +1481,39 @@ async function checkExistingGameUpdates(dbManager, gamesList, argv) {
   
   // Process existing games
   const results = await updateProcessor.processExistingGames(gamesList);
+  
+  // If --update-metadata-only is set, collect all games with changes (minor or major) for metadata update
+  let metadataUpdateNeeded = [];
+  if (argv['update-metadata-only']) {
+    // Get all games that had changes (both minor and major)
+    // Filter by game-ids if specified
+    const existingIds = new Set(dbManager.getExistingGameIds());
+    let gamesToCheck = gamesList.filter(game => 
+      existingIds.has(String(game.id))
+    );
+    
+    if (argv['game-ids']) {
+      const requestedIds = argv['game-ids'].split(',').map(s => s.trim());
+      gamesToCheck = gamesToCheck.filter(game => 
+        requestedIds.includes(String(game.id))
+      );
+    }
+    
+    // Collect games with any changes (minor or major) - reuse results from processExistingGames if possible
+    // But we need to re-check to get the full result objects
+    for (const game of gamesToCheck) {
+      const gameid = String(game.id);
+      try {
+        const result = await updateProcessor.processGameUpdate(gameid, game);
+        if (result.type === 'minor' || result.type === 'major') {
+          metadataUpdateNeeded.push({ gameid, metadata: game, result });
+        }
+      } catch (error) {
+        console.error(`  [${gameid}] ✗ Error: ${error.message}`);
+      }
+    }
+  }
+  
   if (deltaLogger && deltaLogger.enabled && results) {
     deltaLogger.logEntry({
       table: 'game_updates_scan',
@@ -1485,10 +1523,28 @@ async function checkExistingGameUpdates(dbManager, gamesList, argv) {
         before: null,
         after: {
           processed: gamesList.length,
-          downloadNeeded: results.downloadNeeded?.map(item => item.gameid) || []
+          downloadNeeded: results.downloadNeeded?.map(item => item.gameid) || [],
+          metadataUpdateNeeded: metadataUpdateNeeded?.map(item => item.gameid) || []
         }
       }
     });
+  }
+  
+  // Handle metadata-only updates (when --update-metadata-only is set)
+  if (argv['update-metadata-only'] && metadataUpdateNeeded.length > 0) {
+    console.log(`\n  ${metadataUpdateNeeded.length} game(s) will have metadata updated in-place:`);
+    
+    for (const item of metadataUpdateNeeded) {
+      console.log(`    - ${item.gameid}: ${item.metadata.name} (${item.result.type} changes)`);
+    }
+    
+    if (argv['changes-inplace']) {
+      console.log('\n  Updating metadata in-place...\n');
+      recordCreator = new RecordCreator(dbManager, CONFIG.PATCHBIN_DB_PATH, CONFIG);
+      await updateMetadataOnly(dbManager, recordCreator, metadataUpdateNeeded, argv);
+    } else {
+      console.log('\n  ⓘ Use --changes-inplace with --update-metadata-only to apply updates.\n');
+    }
   }
   
   // Handle games that need downloads
@@ -1656,6 +1712,59 @@ async function processGamesNeedingUpdates(dbManager, downloadNeeded, argv) {
   }
   
   console.log(`\n  Update Processing Summary:`);
+  console.log(`    Processed:  ${processed}`);
+  console.log(`    Succeeded:  ${succeeded}`);
+  console.log(`    Failed:     ${failed}\n`);
+  
+  return { processed, succeeded, failed };
+}
+
+/**
+ * Update metadata only (no download/patch/blob rebuild)
+ */
+async function updateMetadataOnly(dbManager, recordCreator, metadataUpdateNeeded, argv) {
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  
+  for (const item of metadataUpdateNeeded) {
+    const gameid = item.gameid;
+    const metadata = item.metadata;
+    processed++;
+    
+    console.log(`\n[${processed}/${metadataUpdateNeeded.length}] Updating metadata for ${gameid}: ${metadata.name}`);
+    
+    try {
+      // Get latest version
+      const latestVersion = dbManager.getLatestVersionForGame(gameid);
+      if (!latestVersion) {
+        throw new Error(`No existing version found for game ${gameid}`);
+      }
+      
+      console.log(`  Updating metadata in-place (version ${latestVersion.version})...`);
+      
+      // Update metadata only (preserves all patch/blob information)
+      const result = await recordCreator.updateMetadataOnly(
+        gameid,
+        latestVersion.gvuuid,
+        metadata,
+        latestVersion
+      );
+      
+      if (result) {
+        console.log(`  ✓ Successfully updated metadata for game ${gameid}`);
+        succeeded++;
+      } else {
+        throw new Error('Failed to update metadata');
+      }
+      
+    } catch (error) {
+      console.error(`  ✗ Failed to update metadata for game ${gameid}: ${error.message}`);
+      failed++;
+    }
+  }
+  
+  console.log(`\n  Metadata Update Summary:`);
   console.log(`    Processed:  ${processed}`);
   console.log(`    Succeeded:  ${succeeded}`);
   console.log(`    Failed:     ${failed}\n`);

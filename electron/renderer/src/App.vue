@@ -8833,10 +8833,10 @@ async function checkImageTitleBans(items: Item[]) {
       
       if (result.success) {
         if (result.isBanned) {
-          console.log(`[checkImageTitleBans] Game ${gameidStr} is banned for image_title`);
+          // console.log(`[checkImageTitleBans] Game ${gameidStr} is banned for image_title`);
           imageTitleBanned.add(item.Id);
         } else {
-          console.log(`[checkImageTitleBans] Game ${gameidStr} is NOT banned for image_title`);
+          // console.log(`[checkImageTitleBans] Game ${gameidStr} is NOT banned for image_title`);
         }
       } else {
         console.warn(`[checkImageTitleBans] Ban check failed for game ${gameidStr}:`, result.error);

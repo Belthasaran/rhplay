@@ -3497,9 +3497,9 @@ function registerDatabaseHandlers(dbManager) {
       if (game.gameid) game.gameid = String(game.gameid);
       if (game.Id) game.Id = String(game.Id);
       
-      console.log(`[db:ban:is-game-banned] Checking ban for gameid=${gameidStr}, action=${action}, gameData=`, game);
+      //console.log(`[db:ban:is-game-banned] Checking ban for gameid=${gameidStr}, action=${action}, gameData=`, game);
       const isBanned = banManager.isGameBanned(gameidStr, action, game);
-      console.log(`[db:ban:is-game-banned] Result: isBanned=${isBanned}`);
+      //console.log(`[db:ban:is-game-banned] Result: isBanned=${isBanned}`);
       
       // Cache the result for image_title and image_preview (session-only, with timestamp)
       if (action === 'image_title' || action === 'image_preview') {

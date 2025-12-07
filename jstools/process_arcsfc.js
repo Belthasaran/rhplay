@@ -750,6 +750,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
           await fs.copyFile('temp/temp.json', lmfilterOutputPath);
           await appendLog(`[Step 10.5] SUCCESS: try_lmfilter.py completed, output saved to ${lmfilterOutputPath}`);
           console.log(`  try_lmfilter.py output saved: ${path.basename(lmfilterOutputPath)}`);
+          await fs.unlink('temp/temp.json');
         } catch (copyError) {
           await appendLog(`[Step 10.5] WARNING: Could not copy temp/temp.json: ${copyError.message}`);
           console.warn(`  Warning: Could not copy temp/temp.json: ${copyError.message}`);

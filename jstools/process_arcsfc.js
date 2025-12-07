@@ -160,6 +160,7 @@ function parseFilenameMetadata(filename) {
     title: null,
     author: null,
     series_name: null,
+    entry_name: null,
     sequence_number: null,
     versioninfo: null,
     additional_version_info: null,
@@ -169,85 +170,156 @@ function parseFilenameMetadata(filename) {
   
   if (!filename) return metadata;
   
-  // Extract date in brackets [YYYY-MM-DD] or [YYYY-YYYY]
-  const dateMatch = filename.match(/\[(\d{4}(?:-\d{2}-\d{2})?)\]/);
+  // Remove file extension
+  let cleanName = filename.replace(/\.(sfc|7z|smc)$/i, '');
+  
+  // Extract date in brackets [YYYY-MM-DD] or [YYYY-YYYY] - remove it from processing
+  const dateMatch = cleanName.match(/\[(\d{4}(?:-\d{2}-\d{2})?)\]/);
   if (dateMatch) {
     metadata.date = dateMatch[1];
+    cleanName = cleanName.replace(/\[\d{4}(?:-\d{2}-\d{2})?\]/, '').trim();
   }
   
-  // Extract language in parentheses (English), (French), etc.
-  const languageMatch = filename.match(/\(([A-Z][a-z]+)\)/);
-  if (languageMatch) {
-    metadata.language = languageMatch[1];
+  // Remove (SMW Hack) or [BAD-emu] or [BAD] tags - these are not part of the title
+  cleanName = cleanName.replace(/\(SMW\s+Hack\)/gi, '').trim();
+  cleanName = cleanName.replace(/\[BAD(?:-emu)?\]/gi, '').trim();
+  
+  // Extract language in parentheses (English), (French), etc. - but not if it's part of version info
+  // Language usually appears before "by" and after version info
+  const languagePattern = /\(([A-Z][a-z]+)\)/g;
+  const languageMatches = [];
+  let match;
+  while ((match = languagePattern.exec(cleanName)) !== null) {
+    languageMatches.push(match);
+  }
+  // Find language that appears before "by" keyword
+  for (const match of languageMatches) {
+    const beforeBy = cleanName.substring(0, cleanName.indexOf(' by '));
+    if (beforeBy.includes(match[0])) {
+      // Check if it's not part of version info
+      const commonLanguages = ['English', 'French', 'Spanish', 'German', 'Italian', 'Japanese', 'Portuguese'];
+      if (commonLanguages.includes(match[1])) {
+        metadata.language = match[1];
+        cleanName = cleanName.replace(match[0], '').trim();
+        break;
+      }
+    }
   }
   
   // Extract author - look for "by AuthorName" pattern
-  // Handle complex cases like "by Author (Alias)" or "by Author1 + Author2"
-  const authorMatch = filename.match(/by\s+([^[\]()]+?)(?:\s*\[|\s*\(|$)/);
-  if (authorMatch) {
-    let authorStr = authorMatch[1].trim();
-    // Extract alias if present: "Author (Alias)" -> "Alias"
-    const aliasMatch = authorStr.match(/\(([^)]+)\)/);
-    if (aliasMatch) {
-      metadata.author = aliasMatch[1];
+  // The author comes after "by" and before the date bracket or end
+  const byIndex = cleanName.indexOf(' by ');
+  if (byIndex !== -1) {
+    const authorPart = cleanName.substring(byIndex + 4).trim();
+    // Author ends at date bracket, or at end, or at another parenthetical that's not version info
+    let authorStr = authorPart;
+    
+    // Remove date if present
+    authorStr = authorStr.replace(/\[\d{4}(?:-\d{2}-\d{2})?\]/, '').trim();
+    
+    // Extract author - handle cases like "Author (Alias)" or "Author1 + Author2"
+    // Take everything up to the first space followed by + or end
+    const authorMatch = authorStr.match(/^([^+]+?)(?:\s*\+\s*|$)/);
+    if (authorMatch) {
+      authorStr = authorMatch[1].trim();
+      // Extract alias if present: "Author (Alias)" -> prefer alias, otherwise use author
+      const aliasMatch = authorStr.match(/^(.+?)\s*\(([^)]+)\)$/);
+      if (aliasMatch) {
+        // If alias looks like a name (not version info), use it
+        const alias = aliasMatch[2];
+        if (!/^(alt|Debug|God Mode|Fixed|New|Demo|Beta|Release|V\d)/i.test(alias)) {
+          metadata.author = alias;
+        } else {
+          metadata.author = aliasMatch[1].trim();
+        }
+      } else {
+        metadata.author = authorStr;
+      }
+    }
+    
+    // Title is everything before " by "
+    const titlePart = cleanName.substring(0, byIndex).trim();
+    
+    // Extract version info from title part - look for patterns in parentheses
+    const versionPatterns = [
+      /\(Demo\s+(\d+)\)/i,  // (Demo 1), (Demo 2)
+      /\(Demo(?:\s+V?\d+\.?\d*)?\)/i,  // (Demo), (Demo V1.0)
+      /\(V\d+\.\d+\)/,  // (V1.0), (V1.3)
+      /\(C3\s+(?:Demo|Release)\)/i,  // (C3 Demo), (C3 Release)
+      /\(SoEN\s+Early\s+Beta\)/i,  // (SoEN Early Beta)
+      /\(Early\s+Beta\)/i,  // (Early Beta)
+      /\(Beta\)/i,  // (Beta)
+      /\(Release\)/i,  // (Release)
+      /\(World\s+\d+\s+Demo\)/i  // (World 1 Demo)
+    ];
+    
+    for (const pattern of versionPatterns) {
+      const match = titlePart.match(pattern);
+      if (match) {
+        metadata.versioninfo = match[0].replace(/[()]/g, '');
+        break;
+      }
+    }
+    
+    // Extract additional version info - look for "(alt)", "(Debug)", "(God Mode)", "(Fixed)", "(New)"
+    const additionalPatterns = [
+      /\(alt\)/i,
+      /\(Debug\)/i,
+      /\(God\s+Mode\)/i,
+      /\(Fixed\)/i,
+      /\(New\)/i,
+      /\(Canceled\)/i,
+      /\(Pre-Beta\)/i,
+      /\(Tech\s+Demo\)/i
+    ];
+    
+    for (const pattern of additionalPatterns) {
+      const match = titlePart.match(pattern);
+      if (match) {
+        metadata.additional_version_info = match[0].replace(/[()]/g, '');
+        break;
+      }
+    }
+    
+    // Remove version info from title for processing
+    let title = titlePart;
+    if (metadata.versioninfo) {
+      title = title.replace(`(${metadata.versioninfo})`, '').trim();
+    }
+    if (metadata.additional_version_info) {
+      title = title.replace(`(${metadata.additional_version_info})`, '').trim();
+    }
+    if (metadata.language) {
+      title = title.replace(`(${metadata.language})`, '').trim();
+    }
+    
+    // Check for series pattern: "Series Name - Entry Name"
+    const seriesMatch = title.match(/^(.+?)\s+-\s+(.+)$/);
+    if (seriesMatch) {
+      metadata.series_name = seriesMatch[1].trim();
+      metadata.entry_name = seriesMatch[2].trim();
+      metadata.title = title; // Full title
     } else {
-      // Remove trailing spaces and clean up
-      authorStr = authorStr.replace(/\s*\+\s*.*$/, '').trim();
-      metadata.author = authorStr;
+      metadata.title = title;
     }
-  }
-  
-  // Extract series and sequence number - look for patterns like "#2", "#6", "Quest #2"
-  const seriesMatch = filename.match(/([^#]+?)\s*#(\d+)/);
-  if (seriesMatch) {
-    metadata.series_name = seriesMatch[1].trim();
-    metadata.sequence_number = parseInt(seriesMatch[2], 10);
-  }
-  
-  // Extract version info - look for patterns like "(Demo)", "(V1.0)", "(C3 Demo)", "(SoEN Early Beta)"
-  const versionPatterns = [
-    /\(Demo(?:\s+V?\d+\.?\d*)?\)/i,
-    /\(V\d+\.\d+\)/,
-    /\(C3\s+(?:Demo|Release)\)/i,
-    /\(SoEN\s+Early\s+Beta\)/i,
-    /\(Early\s+Beta\)/i,
-    /\(Beta\)/i,
-    /\(Release\)/i
-  ];
-  
-  for (const pattern of versionPatterns) {
-    const match = filename.match(pattern);
-    if (match) {
-      metadata.versioninfo = match[0].replace(/[()]/g, '');
-      break;
+    
+    // Extract sequence number - look for patterns like "#2", "#6", "Quest #2", or "Adventurer Mario 1"
+    const sequencePatterns = [
+      /#(\d+)/,  // #2, #6
+      /\s+(\d+)\s*$/,  // "Adventurer Mario 1", "Adventurer Mario 2"
+      /\s+(\d+)\s+-\s+/  // "Adventurer Mario 2 - The Time Travel"
+    ];
+    
+    for (const pattern of sequencePatterns) {
+      const match = title.match(pattern);
+      if (match) {
+        metadata.sequence_number = parseInt(match[1], 10);
+        break;
+      }
     }
-  }
-  
-  // Extract additional version info - look for "(alt)", "(Debug)", "(God Mode)", "(Fixed)", "(New)"
-  const additionalPatterns = [
-    /\(alt\)/i,
-    /\(Debug\)/i,
-    /\(God\s+Mode\)/i,
-    /\(Fixed\)/i,
-    /\(New\)/i
-  ];
-  
-  for (const pattern of additionalPatterns) {
-    const match = filename.match(pattern);
-    if (match) {
-      metadata.additional_version_info = match[0].replace(/[()]/g, '');
-      break;
-    }
-  }
-  
-  // Extract title - everything before "by" or first parenthesis/bracket, cleaned up
-  const titleMatch = filename.match(/^(.+?)(?:\s+by\s|\[|\(|\.sfc|\.7z)/);
-  if (titleMatch) {
-    let title = titleMatch[1].trim();
-    // Remove common prefixes
-    title = title.replace(/^\[Super Mario World Hacks\]\s*/, '');
-    title = title.replace(/^SMW-Adventures\/\s*/, '');
-    metadata.title = title;
+  } else {
+    // No "by" found - just extract what we can
+    metadata.title = cleanName;
   }
   
   return metadata;
@@ -629,6 +701,93 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
     const bpsFilename = path.basename(bpsPath);
     console.log(`  BPS patch created: ${bpsFilename}`);
     
+    // Step 10: Run level_reader program
+    console.log('Step 10: Running level_reader...');
+    const levelreadOutputPath = `temp/${sfc_rom_sha1_hash}_levelread.json`;
+    try {
+      const levelReaderPath = path.join(process.env.HOME || '/home/steamu', 'smwdb', 'level_reader');
+      await appendLog(`[Step 10] Running: ${levelReaderPath} temp/source_unh.sfc > ${levelreadOutputPath}`);
+      const levelreadResult = spawnSync(levelReaderPath, ['temp/source_unh.sfc'], {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      if (levelreadResult.status === 0) {
+        await fs.writeFile(levelreadOutputPath, levelreadResult.stdout);
+        await fs.rename(levelreadOutputPath, `output/${path.basename(levelreadOutputPath)}`);
+        await appendLog(`[Step 10] SUCCESS: level_reader completed, output saved to output/${path.basename(levelreadOutputPath)}`);
+        console.log(`  level_reader output saved: ${path.basename(levelreadOutputPath)}`);
+      } else {
+        await appendLog(`[Step 10] WARNING: level_reader exited with status ${levelreadResult.status}: ${levelreadResult.stderr || levelreadResult.stdout}`);
+        console.warn(`  level_reader exited with status ${levelreadResult.status}`);
+      }
+    } catch (error) {
+      await appendLog(`[Step 10] ERROR: level_reader failed: ${error.message}`);
+      console.warn(`  Warning: level_reader failed: ${error.message}`);
+    }
+    
+    // Step 10.5: Run try_lmfilter.py
+    console.log('Step 10.5: Running try_lmfilter.py...');
+    try {
+      const env = {
+        ...process.env,
+        GAMETAG: sfc_rom_sha1_hash,
+        GAMEVER: '1',
+        ROMFILE: 'temp/source_unh.sfc'
+      };
+      
+      await appendLog(`[Step 10.5] Running: python3 try_lmfilter.py (GAMETAG=${sfc_rom_sha1_hash}, GAMEVER=1, ROMFILE=temp/source_unh.sfc)`);
+      const lmfilterResult = spawnSync('python3', ['try_lmfilter.py'], {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: env,
+        cwd: process.cwd()
+      });
+      
+      if (lmfilterResult.status === 0) {
+        const lmfilterOutputPath = `output/${sfc_rom_sha1_hash}_lmfilter.json`;
+        try {
+          await fs.copyFile('temp/temp.json', lmfilterOutputPath);
+          await appendLog(`[Step 10.5] SUCCESS: try_lmfilter.py completed, output saved to ${lmfilterOutputPath}`);
+          console.log(`  try_lmfilter.py output saved: ${path.basename(lmfilterOutputPath)}`);
+        } catch (copyError) {
+          await appendLog(`[Step 10.5] WARNING: Could not copy temp/temp.json: ${copyError.message}`);
+          console.warn(`  Warning: Could not copy temp/temp.json: ${copyError.message}`);
+        }
+      } else {
+        await appendLog(`[Step 10.5] WARNING: try_lmfilter.py exited with status ${lmfilterResult.status}: ${lmfilterResult.stderr || lmfilterResult.stdout}`);
+        console.warn(`  try_lmfilter.py exited with status ${lmfilterResult.status}`);
+      }
+    } catch (error) {
+      await appendLog(`[Step 10.5] ERROR: try_lmfilter.py failed: ${error.message}`);
+      console.warn(`  Warning: try_lmfilter.py failed: ${error.message}`);
+    }
+    
+    // Step 10.6: Run find_translevels.py
+    console.log('Step 10.6: Running find_translevels.py...');
+    try {
+      const translevelsOutputPath = `temp/${sfc_rom_sha1_hash}_translevel.json`;
+      const translevelsFinalPath = `output/${sfc_rom_sha1_hash}_translevel.json`;
+      await appendLog(`[Step 10.6] Running: python3 findtranslevels/find_translevels.py --romfile=temp/source_unh.sfc --output=${translevelsOutputPath}`);
+      const translevelsResult = spawnSync('python3', ['findtranslevels/find_translevels.py', '--romfile=temp/source_unh.sfc', `--output=${translevelsOutputPath}`], {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: process.cwd()
+      });
+      
+      if (translevelsResult.status === 0) {
+        await fs.rename(translevelsOutputPath, translevelsFinalPath);
+        await appendLog(`[Step 10.6] SUCCESS: find_translevels.py completed, output saved to ${translevelsFinalPath}`);
+        console.log(`  find_translevels.py output saved: ${path.basename(translevelsFinalPath)}`);
+      } else {
+        await appendLog(`[Step 10.6] WARNING: find_translevels.py exited with status ${translevelsResult.status}: ${translevelsResult.stderr || translevelsResult.stdout}`);
+        console.warn(`  find_translevels.py exited with status ${translevelsResult.status}`);
+      }
+    } catch (error) {
+      await appendLog(`[Step 10.6] ERROR: find_translevels.py failed: ${error.message}`);
+      console.warn(`  Warning: find_translevels.py failed: ${error.message}`);
+    }
+    
     // Step 11: Create metadata JSON
     console.log('Step 11: Creating metadata JSON...');
     const metadata = {
@@ -662,12 +821,20 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       }
     }
     
-    // Get file timestamps
+    // Get file timestamps and parent directory name
     const sfcStats = await fs.stat(sfcsourceFilename);
     metadata.sfc_upload_estimate = sfcStats.mtime.toISOString();
     
-    const dirStats = await fs.stat(path.dirname(path.resolve(sfcsourceFilename)));
+    const sfcDir = path.dirname(path.resolve(sfcsourceFilename));
+    const dirStats = await fs.stat(sfcDir);
     metadata.dir_upload_estimate = dirStats.mtime.toISOString();
+    metadata.sfc_parent_directory = path.basename(sfcDir);
+    
+    // Add parent directory for archive if specified
+    if (sfcarchiveFilename) {
+      const archiveDir = path.dirname(path.resolve(sfcarchiveFilename));
+      metadata['7z_parent_directory'] = path.basename(archiveDir);
+    }
     
     // Get 7z metadata if archive specified
     if (sfcarchiveFilename) {

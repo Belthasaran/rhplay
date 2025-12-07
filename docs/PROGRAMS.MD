@@ -448,6 +448,45 @@ node process_arcsfc.js game.sfc
 
 ---
 
+### process_arcsfc_runner.js
+**Purpose**: Batch runner that scans for matching .sfc/.7z file pairs and processes them sequentially
+
+**Usage**:
+```bash
+node process_arcsfc_runner.js
+node process_arcsfc_runner.js --help
+```
+
+**What it does**:
+- Scans the current working directory for .sfc files
+- For each .sfc file, looks for a matching .7z archive (same base name, different extension)
+- Runs `process_arcsfc.js` for each matching pair sequentially
+- Captures all stdout and stderr from each run
+- Appends all output to `output/log2.txt` with timestamps
+- Processes files one at a time to avoid conflicts
+
+**Features**:
+- Handles special characters in filenames correctly (no shell expansion)
+- Sequential processing to avoid file lock conflicts
+- Comprehensive logging of all operations
+- Summary report at the end
+
+**Output**:
+- All processing results appended to `output/log2.txt`
+- Each run includes command, exit code, stdout, and stderr
+- Summary statistics at the end
+
+**Examples**:
+```bash
+# Run from a directory containing .sfc and .7z files
+cd /path/to/roms
+node ~/rhplay/jstools/process_arcsfc_runner.js
+```
+
+**Note**: This script is designed to work with `process_arcsfc.js` and must be run from a directory where both .sfc and .7z files are present.
+
+---
+
 ### prepare_databases.js
 **Purpose**: Produce a provisioning plan for installer builds by inspecting `dbmanifest.json`, evaluating existing databases in the user settings directory, and staging manifest resources.
 

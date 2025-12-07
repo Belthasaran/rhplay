@@ -30,15 +30,15 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
-const DatabaseManager = require('./lib/database');
-const RecordCreator = require('./lib/record-creator');
-const { getFlipsPath, getSmwRomPath } = require('./lib/binary-finder');
+const DatabaseManager = require('../lib/database');
+const RecordCreator = require('../lib/record-creator');
+const { getFlipsPath, getSmwRomPath } = require('../lib/binary-finder');
 
 const CONFIG = {
-  DB_PATH: path.join(__dirname, 'electron', 'rhdata.db'),
-  PATCHBIN_DB_PATH: path.join(__dirname, 'electron', 'patchbin.db'),
+  DB_PATH: path.join(__dirname, '..', 'electron', 'rhdata.db'),
+  PATCHBIN_DB_PATH: path.join(__dirname, '..', 'electron', 'patchbin.db'),
   BLOBS_DIR: path.join(__dirname, 'blobs'),
-  TEMP_DIR: path.join(__dirname, 'temp'),
+  TEMP_DIR: path.join(__dirname, '..', 'temp'),
   LOG_FILE: 'verification_results.log',
   FAILED_FILE: 'failed_blobs.json',
   VERIFY_SOURCE: 'files',  // 'files' or 'db'

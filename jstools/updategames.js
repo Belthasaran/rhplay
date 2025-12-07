@@ -274,6 +274,7 @@ function parseArgs(args) {
     'changes-inplace': false,
     'backup-folder': null,
     'orphan-cleanup': false,
+    'force-rebuild-patch': null,
     'log-mode': 'append',
     'log-baseline': null,
     'log-dir': path.join(__dirname, 'logs', 'game_deltas'),
@@ -331,6 +332,10 @@ function parseArgs(args) {
       parsed['game-ids'] = arg.split('=')[1];
     } else if (arg === '--game-ids') {
       parsed['game-ids'] = args[++i];
+    } else if (arg.startsWith('--force-rebuild-patch=')) {
+      parsed['force-rebuild-patch'] = arg.split('=')[1];
+    } else if (arg === '--force-rebuild-patch') {
+      parsed['force-rebuild-patch'] = args[++i];
     } else if (arg.startsWith('--limit=')) {
       parsed['limit'] = parseInt(arg.split('=')[1]);
     } else if (arg === '--limit') {
@@ -381,6 +386,7 @@ Options:
   --no-fetch-metadata     Skip fetching metadata from SMWC
   --no-process-new        Skip processing new games
   --process-updates       Process games that need updates (download and reprocess)
+  --force-rebuild-patch=ID Force rebuild patch, blob, and records for specific game ID
   --new-only              Only process new gameids (skip updates to existing games)
   --target-folder=<path>  Export game data to folder instead of database
                           Creates RHPAK-compatible structure for each gameid
@@ -460,6 +466,17 @@ async function main() {
     const expired = dbManager.clearExpiredCache();
     if (expired > 0) {
       console.log(`  ✓ Cleared ${expired} expired cache entries\n`);
+    }
+    
+    // Check if we're forcing a patch rebuild
+    if (argv['force-rebuild-patch']) {
+      console.log('[Force Rebuild Patch Mode] Rebuilding patch for game ID...');
+      recordCreator = new RecordCreator(dbManager, CONFIG.PATCHBIN_DB_PATH, CONFIG);
+      await forceRebuildPatch(dbManager, recordCreator, argv);
+      console.log('\n==================================================');
+      console.log('            Force Rebuild Complete!                ');
+      console.log('==================================================\n');
+      return;
     }
     
     // Check if we're cleaning up orphaned resources
@@ -1515,13 +1532,15 @@ async function processGamesNeedingUpdates(dbManager, downloadNeeded, argv) {
     console.log(`\n[${processed}/${downloadNeeded.length}] Updating game ${gameid}: ${metadata.name}`);
     
     try {
-      // Get latest version to determine next version number
+      // Get latest version
       const latestVersion = dbManager.getLatestVersionForGame(gameid);
       if (!latestVersion) {
         throw new Error(`No existing version found for game ${gameid}`);
       }
       
-      const nextVersion = (latestVersion.version || 0) + 1;
+      // Determine version number based on --changes-inplace flag
+      const changesInplace = argv['changes-inplace'];
+      const nextVersion = changesInplace ? latestVersion.version : (latestVersion.version || 0) + 1;
       
       // Download ZIP
       console.log(`  Downloading ZIP (version ${nextVersion})...`);
@@ -1550,36 +1569,84 @@ async function processGamesNeedingUpdates(dbManager, downloadNeeded, argv) {
         throw new Error('No patches could be processed');
       }
       
-      // Get primary patch
-      const primaryPatch = successfulPatches[0];
+      // Get patch files from database (they have patch_file_path)
+      const patchFilesFromDb = dbManager.getPatchFilesByQueue(queueuuid);
+      const successfulPatchFiles = patchFilesFromDb.filter(pf => 
+        pf.status === 'completed' && successfulPatches.some(sp => sp.pfuuid === pf.pfuuid)
+      );
+      
+      if (successfulPatchFiles.length === 0) {
+        throw new Error('No patch files found in database after processing');
+      }
+      
+      // Get primary patch (first successful one)
+      const primaryPatchFile = successfulPatchFiles.find(pf => pf.is_primary) || successfulPatchFiles[0];
       
       // Create blob for primary patch
       console.log(`  Creating encrypted blob...`);
-      const blobData = await blobCreator.createPatchBlob(gameid, primaryPatch);
+      const blobData = await blobCreator.createPatchBlob(gameid, primaryPatchFile);
       
-      // Create game records
-      console.log(`  Creating database records...`);
-      const patchFiles = successfulPatches.map(p => ({
-        ...p,
-        pat_sha224: p.sha224,
-        pat_sha1: p.sha1,
-        pat_shake_128: p.shake128,
-        result_sha1: p.resultSha1,
-        result_sha224: p.resultSha224,
-        result_shake1: p.resultShake1
-      }));
+      // Create blobs for all successful patches
+      const patchFilesWithBlobs = [];
+      for (const patchFile of successfulPatchFiles) {
+        try {
+          console.log(`    Creating blob for ${patchFile.patch_filename}...`);
+          const blobData = await blobCreator.createPatchBlob(gameid, patchFile);
+          
+          // Store blob data in working table
+          dbManager.updatePatchFileBlobData(patchFile.pfuuid, blobData);
+          
+          // Get updated patch file with blob_data
+          const updatedPatchFiles = dbManager.getPatchFilesByQueue(queueuuid);
+          const updatedPatchFile = updatedPatchFiles.find(pf => pf.pfuuid === patchFile.pfuuid);
+          
+          if (updatedPatchFile && updatedPatchFile.blob_data) {
+            patchFilesWithBlobs.push(updatedPatchFile);
+          } else {
+            throw new Error(`Failed to store blob data for ${patchFile.patch_filename}`);
+          }
+        } catch (error) {
+          console.error(`      ✗ Failed to create blob for ${patchFile.patch_filename}: ${error.message}`);
+          // Continue with other patches
+        }
+      }
       
-      const result = await recordCreator.createGameRecords(
-        { ...queueItem, metadata, zip_path: zipPath },
-        patchFiles
-      );
+      if (patchFilesWithBlobs.length === 0) {
+        throw new Error('Failed to create any blobs');
+      }
       
-      if (result) {
-        dbManager.updateQueueStatus(queueuuid, 'completed');
-        console.log(`  ✓ Successfully updated game ${gameid} to version ${nextVersion}`);
-        succeeded++;
+      // Create or update game records (expects patch files with blob_data already set)
+      if (changesInplace) {
+        console.log(`  Updating existing record in-place (version ${nextVersion})...`);
+        const result = await recordCreator.updateGameRecordsInPlace(
+          gameid,
+          latestVersion.gvuuid,
+          { ...queueItem, metadata, zip_path: zipPath },
+          patchFilesWithBlobs,
+          latestVersion
+        );
+        
+        if (result) {
+          dbManager.updateQueueStatus(queueuuid, 'completed');
+          console.log(`  ✓ Successfully updated game ${gameid} in-place (version ${nextVersion})`);
+          succeeded++;
+        } else {
+          throw new Error('Failed to update records');
+        }
       } else {
-        throw new Error('Failed to create records');
+        console.log(`  Creating new version record (version ${nextVersion})...`);
+        const result = await recordCreator.createGameRecords(
+          { ...queueItem, metadata, zip_path: zipPath },
+          patchFilesWithBlobs
+        );
+        
+        if (result) {
+          dbManager.updateQueueStatus(queueuuid, 'completed');
+          console.log(`  ✓ Successfully updated game ${gameid} to version ${nextVersion}`);
+          succeeded++;
+        } else {
+          throw new Error('Failed to create records');
+        }
       }
       
     } catch (error) {
@@ -1594,6 +1661,53 @@ async function processGamesNeedingUpdates(dbManager, downloadNeeded, argv) {
   console.log(`    Failed:     ${failed}\n`);
   
   return { processed, succeeded, failed };
+}
+
+/**
+ * Force rebuild patch, blob, and records for a specific game ID
+ */
+async function forceRebuildPatch(dbManager, recordCreator, argv) {
+  const gameid = argv['force-rebuild-patch'].trim();
+  
+  if (!gameid) {
+    console.error('Error: --force-rebuild-patch requires a game ID');
+    process.exit(1);
+  }
+  
+  console.log(`\nForcing rebuild for game ID: ${gameid}\n`);
+  
+  // Check if game exists in database
+  const existingVersion = dbManager.getLatestVersionForGame(gameid);
+  if (!existingVersion) {
+    console.error(`Error: Game ${gameid} not found in database`);
+    process.exit(1);
+  }
+  
+  console.log(`Found game: ${existingVersion.name} (version ${existingVersion.version})\n`);
+  
+  // Fetch metadata from SMWC for this specific game
+  console.log('Fetching latest metadata from SMWC...');
+  const fetcher = new SMWCFetcher(dbManager, CONFIG);
+  
+  // Fetch complete game list and find our game
+  const gamesList = await fetcher.fetchCompleteGameList();
+  const gameMetadata = gamesList.find(game => String(game.id) === String(gameid));
+  
+  if (!gameMetadata) {
+    console.error(`Error: Game ${gameid} not found in SMWC metadata`);
+    process.exit(1);
+  }
+  
+  console.log(`Found metadata: ${gameMetadata.name}\n`);
+  
+  // Create a downloadNeeded entry to reuse processGamesNeedingUpdates logic
+  const downloadNeeded = [{
+    gameid: gameid,
+    metadata: gameMetadata
+  }];
+  
+  // Reuse the existing function to process this game
+  await processGamesNeedingUpdates(dbManager, downloadNeeded, argv);
 }
 
 // Execute main

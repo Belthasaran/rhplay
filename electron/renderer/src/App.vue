@@ -875,6 +875,7 @@
                   <button @click="addFilterTag('author:Morsel')" class="filter-tag">author:Morsel</button>
                   <button @click="addFilterTag('author:MargotS')" class="filter-tag">author:Margots</button>
                   <button @click="addFilterTag('author:juz')" class="filter-tag">author:juz</button>
+                  <button @click="addFilterTag('author:Glitchcat7')" class="filter-tag">author:Glitch</button>
                   <button @click="addFilterTag('author:orka')" class="filter-tag">author:orka</button>
                   <button @click="addFilterTag('author:Nexus15')" class="filter-tag">author:NeXus15</button>
                   <button @click="addFilterTag('author:ChrisG')" class="filter-tag">author:Chrisg</button>

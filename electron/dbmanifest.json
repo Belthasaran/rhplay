@@ -633,13 +633,18 @@
       {
         "file_name": "patchbin-schema-3-to-10.sql.xz",
         "source_path": "packed_db/patchbin-schema-3-to-10.sql.xz",
-        "file_name": "patchbin-schema-3-to-10.sql.xz",
-	"url" : "./db/patchbin-schema-3-to-10.sql.xz",
+        "url": "./db/patchbin-schema-3-to-10.sql.xz",
         "format": "xz",
         "type": "sql",
         "sha256": "b55cd73c82f46c96caee735faab476e70469278969c6b68636281bbc9f081d69",
         "ipfs_cidv1": "bafkreifvltltzaxunslmv3ttl6vli5xharuspcljy23imnrido6j6ca5ne",
-        "size": "288"
+        "size": "288",
+        "ardrive_file_name": "patchbin-schema-3-to-10.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/patchbin-schema-3-to-10.sql.xz",
+        "ardrive_file_id": "2336201b-4446-4c4c-a0a7-6d21b46d5b70",
+        "data_txid": "htHs_OGhopi3d9bOAN7c5_yxkVhDVw-EysNG_feAu2M",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
       },
       {
         "file_name": "patchbin-diff-003upto010.sql.xz",

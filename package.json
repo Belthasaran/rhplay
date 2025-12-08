@@ -175,6 +175,10 @@
         "to": "twitch-config.json"
       },
       {
+	      "from": "electron/packed_db/patchbin-schema-3-to-10.sql.xz",
+	      "db" : "db/patchbin-schema-3-to-10.sql.xz"
+      },
+      {
         "from": "electron/packed_db/clientdata.db.initial.xz",
         "to": "db/clientdata.db.initial.xz"
       },

@@ -1964,7 +1964,7 @@ async function verifyBuild(manifest, opts) {
 
         // Apply patches
         const patches = Array.isArray(target.sqlpatches) ? target.sqlpatches : [];
-        patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
+        // patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
 
         if (patches.length === 0) {
           console.log(`  No patches to apply`);

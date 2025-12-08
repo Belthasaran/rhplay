@@ -1539,7 +1539,16 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
     const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
     console.log(`[patch-start] ${dbStatus.name}: applying ${patch.file_name}`);
     const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
-    await decompressXz(patchArchivePath, sqlPath);
+    
+    // Decompress if format is xz (or file ends with .xz)
+    const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
+    if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
+      await decompressXz(patchArchivePath, sqlPath);
+    } else {
+      // Assume uncompressed SQL file
+      fs.copyFileSync(patchArchivePath, sqlPath);
+    }
+    
     await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
     fs.unlinkSync(sqlPath);
     console.log(`[patch-complete] ${dbStatus.name}: applied ${patch.file_name}`);
@@ -2030,11 +2039,18 @@ async function verifyBuild(manifest, opts) {
 
         for (const patch of patches) {
           console.log(`    Applying: ${patch.file_name}`);
-          const patchPath = path.join(tempDir, patch.file_name);
-          await ensureArtifact(patch, tempDir, null, opts.userDataDir || detectUserDataDir(), opts.ipfsTimeout || 20);
+          const patchPath = await ensureArtifact(patch, tempDir, null, opts.userDataDir || detectUserDataDir(), opts.ipfsTimeout || 20);
 
           const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
-          await decompressXz(patchPath, sqlPath);
+          
+          // Decompress if format is xz (or file ends with .xz)
+          const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
+          if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
+            await decompressXz(patchPath, sqlPath);
+          } else {
+            // Assume uncompressed SQL file
+            fs.copyFileSync(patchPath, sqlPath);
+          }
 
           // Apply patch (without wrapping in transaction, as patches may already contain transactions)
           try {

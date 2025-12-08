@@ -1560,7 +1560,8 @@ function registerDatabaseHandlers(dbManager) {
             COALESCE(uga.exclude_from_random, 0) as ExcludeFromRandom,
             COALESCE(ugva.user_notes, uga.user_notes) as Mynotes,
             -- Flag if this has version-specific annotations
-            CASE WHEN ugva.annotation_key IS NOT NULL THEN 1 ELSE 0 END as HasVersionSpecific
+            -- Check gameid instead of annotation_key since ugva could be NULL from LEFT JOIN
+            CASE WHEN ugva.gameid IS NOT NULL THEN 1 ELSE 0 END as HasVersionSpecific
           FROM gameversions gv
           LEFT JOIN clientdata.user_game_annotations uga ON gv.gameid = uga.gameid
           LEFT JOIN clientdata.user_game_version_annotations ugva 
@@ -1818,11 +1819,12 @@ function registerDatabaseHandlers(dbManager) {
         throw new Error('Invalid gameid or version');
       }
       
-      const annotationKey = `${gameid}-${version}`;
+      // Note: annotation_key column was removed in migration 027
+      // The table now uses (gameid, version) as the primary key
       
       db.prepare(`
         INSERT OR REPLACE INTO user_game_version_annotations
-          (annotation_key, gameid, version, status, 
+          (gameid, version, status, 
            user_difficulty_rating, user_review_rating, user_skill_rating, user_skill_rating_when_beat,
            user_recommendation_rating, user_importance_rating, user_technical_quality_rating,
            user_gameplay_design_rating, user_fairness_rating, user_challenge_quality_rating,
@@ -1833,9 +1835,8 @@ function registerDatabaseHandlers(dbManager) {
            user_challenge_quality_comment, user_originality_comment,
            user_visual_aesthetics_comment, user_story_comment, user_soundtrack_graphics_comment,
            user_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        annotationKey,
         gameid,
         version,
         status,

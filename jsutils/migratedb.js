@@ -635,6 +635,41 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'rhdata_055_fix_patch_files_working_fk',
+      description: 'Fix patch_files_working foreign key - add ON DELETE CASCADE and clean orphaned records',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/055_rhdata_fix_patch_files_working_fk.sql'),
+      skipIf(db) {
+        // Check if migration has already run by examining the CREATE TABLE statement
+        // If ON DELETE CASCADE is present, the migration has already been applied
+        if (!tableExists(db, 'patch_files_working')) {
+          return false; // Table doesn't exist, run migration
+        }
+        try {
+          // Get the CREATE TABLE statement from sqlite_master
+          const createStmt = db.prepare(`
+            SELECT sql FROM sqlite_master 
+            WHERE type='table' AND name='patch_files_working'
+          `).get();
+          
+          if (!createStmt || !createStmt.sql) {
+            return false; // Can't determine, run migration to be safe
+          }
+          
+          const sql = createStmt.sql;
+          // Check if the CREATE statement contains ON DELETE CASCADE
+          const hasCascade = /on\s+delete\s+cascade/i.test(sql);
+          
+          // If CASCADE exists, skip (return true = migration already applied)
+          // If CASCADE doesn't exist, don't skip (return false = run migration)
+          return hasCascade;
+        } catch (e) {
+          // Error checking, run migration to be safe
+          return false;
+        }
+      },
+    },
   ],
   clientdata: [
     {

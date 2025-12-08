@@ -905,6 +905,38 @@ WHERE queueuuid NOT IN (SELECT queueuuid FROM game_fetch_queue);
 
 ---
 
+### Fix patch_files_working Foreign Key Constraint
+
+**Date:** 2025-01-XX  
+**Database:** rhdata.db  
+**Migration ID:** `rhdata_055_fix_patch_files_working_fk`
+
+**Purpose:** Add `ON DELETE CASCADE` to `patch_files_working.queueuuid` foreign key and clean up existing orphaned records.
+
+**Command:**
+```bash
+./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+```
+
+**Applies:**
+- Migration ID: `rhdata_055_fix_patch_files_working_fk`
+- SQL: `electron/sql/migrations/055_rhdata_fix_patch_files_working_fk.sql`
+
+**Prerequisites:** Ensure app is closed or DB not locked
+
+**Expected outcome:**
+- Existing orphaned `patch_files_working` records (with invalid `queueuuid` references) are deleted
+- Foreign key constraint changed from `NO ACTION` to `ON DELETE CASCADE`
+- When a `game_fetch_queue` record is deleted, all related `patch_files_working` records are automatically deleted
+- No more foreign key constraint violations for `patch_files_working`
+
+**Notes:**
+- The migration is idempotent and will skip if already applied (detects `ON DELETE CASCADE` in table definition)
+- The `cleanupOrphanedResources` function in `updategames.js` now also checks for orphaned `patch_files_working` records
+- Safe to run multiple times; script skips applied migrations
+
+---
+
 ## Database Statistics
 
 ### Check Database Size

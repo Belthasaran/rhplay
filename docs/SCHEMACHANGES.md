@@ -45,6 +45,19 @@
     - The value must match the `decoded_sha256` column in the `res_screenshots` table
     - An index on `title_screenshot_sha256` enables efficient lookups
 
+- 2025-01-XX: rhdata - Fix patch_files_working Foreign Key Constraint
+  - Description: Add ON DELETE CASCADE to patch_files_working.queueuuid foreign key and clean up orphaned records
+  - Rationale: When game_fetch_queue records are deleted (after processing, cleanup, or manual deletion), the corresponding patch_files_working records were left as orphans, causing foreign key constraint violations. The foreign key had NO ACTION on delete, which prevented automatic cleanup. Adding ON DELETE CASCADE ensures that when a queue item is deleted, its related patch_files_working records are automatically deleted as well.
+  - Tables/columns:
+    - `patch_files_working`:
+      - Foreign key `queueuuid REFERENCES game_fetch_queue(queueuuid) ON DELETE CASCADE` - Changed from `NO ACTION` to `CASCADE`
+  - Migration: `rhdata_055_fix_patch_files_working_fk` via `jsutils/migratedb.js`
+  - Notes:
+    - The migration cleans up existing orphaned records (those with queueuuid not in game_fetch_queue)
+    - After migration, deleting a game_fetch_queue record will automatically delete all related patch_files_working records
+    - The cleanupOrphanedResources function in updategames.js now also checks for and cleans orphaned patch_files_working records
+    - Safe to run multiple times; script skips applied migrations
+
 - 2025-01-XX: rhdata - Fix Change Detection Configuration
   - Description: Update change_detection_config to ignore local processing fields and handle URL additions correctly
   - Rationale: Local processing fields (pat_sha224, patchblob1_name, etc.) are computed/stored locally and should not be compared against SMWC data. When these fields exist in old records but not in SMWC data, they were incorrectly marked as "removed", causing false positives for major updates. Also, URL additions (when we didn't have a URL before) should be treated as minor metadata updates, not major changes requiring downloads.

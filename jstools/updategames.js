@@ -2241,6 +2241,7 @@ async function cleanupOrphanedResources(argv) {
     const orphanedResAttachments = [];
     const orphanedResScreenshots = [];
     const orphanedAttachments = [];
+    const orphanedPatchFilesWorking = [];
     
     // Find orphaned res_attachments (only those scoped to gameversion)
     const allResAttachments = resourceDb.prepare(`
@@ -2322,6 +2323,36 @@ async function cleanupOrphanedResources(argv) {
       console.log(`    Found ${orphanedAttachments.length} orphaned attachment(s):`);
       for (const orphan of orphanedAttachments) {
         console.log(`      - ${orphan.file_name || orphan.auuid} (gvuuid: ${orphan.gvuuid || 'N/A'})`);
+      }
+    }
+    
+    // Find orphaned patch_files_working records (queueuuid doesn't exist in game_fetch_queue)
+    const allPatchFilesWorking = rhdataDb.prepare(`
+      SELECT pfuuid, queueuuid, gameid, patch_filename, status 
+      FROM patch_files_working
+    `).all();
+    
+    console.log(`\n  Checking ${allPatchFilesWorking.length} patch_files_working record(s)...`);
+    const validQueueUuids = new Set(
+      rhdataDb.prepare('SELECT queueuuid FROM game_fetch_queue').all().map(r => r.queueuuid)
+    );
+    
+    for (const patchFile of allPatchFilesWorking) {
+      const isOrphaned = !validQueueUuids.has(patchFile.queueuuid);
+      
+      if (isOrphaned) {
+        orphanedPatchFilesWorking.push(patchFile);
+        if (!dryRun) {
+          rhdataDb.prepare('DELETE FROM patch_files_working WHERE pfuuid = ?').run(patchFile.pfuuid);
+        }
+        cleaned++;
+      }
+    }
+    
+    if (orphanedPatchFilesWorking.length > 0) {
+      console.log(`    Found ${orphanedPatchFilesWorking.length} orphaned patch_files_working record(s):`);
+      for (const orphan of orphanedPatchFilesWorking) {
+        console.log(`      - ${orphan.patch_filename || orphan.pfuuid} (gameid: ${orphan.gameid || 'N/A'}, queueuuid: ${orphan.queueuuid || 'N/A'}, status: ${orphan.status || 'N/A'})`);
       }
     }
     

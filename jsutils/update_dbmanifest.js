@@ -200,7 +200,13 @@ async function addSqlPatchEntries(entry, filePaths) {
     return { added: 0, updated: 0 };
   }
 
+  // Preserve original order of patches in manifest
+  // Use a Map to track patches by filename for quick lookup
   const currentByName = new Map(entry.sqlpatches.map((patch) => [patch.file_name, patch]));
+  // Keep original order by maintaining an array of filenames in manifest order
+  const originalOrder = entry.sqlpatches.map((patch) => patch.file_name);
+  const seenInOriginal = new Set(originalOrder);
+  
   let added = 0;
   let updated = 0;
 
@@ -209,18 +215,21 @@ async function addSqlPatchEntries(entry, filePaths) {
     const current = currentByName.get(metadata.file_name);
 
     if (current) {
+      // Update existing patch metadata while preserving its position
       const merged = mergePatchMetadata(current, metadata);
       currentByName.set(metadata.file_name, merged);
       updated += 1;
     } else {
+      // New patch - add to end of list (preserves order of existing patches)
       currentByName.set(metadata.file_name, metadata);
+      originalOrder.push(metadata.file_name);
       added += 1;
     }
   }
 
-  entry.sqlpatches = Array.from(currentByName.values()).sort((a, b) =>
-    a.file_name.localeCompare(b.file_name, 'en', { sensitivity: 'base' })
-  );
+  // Reconstruct sqlpatches array in original order (with new patches appended)
+  // This preserves the manifest order and only appends new patches
+  entry.sqlpatches = originalOrder.map((fileName) => currentByName.get(fileName));
 
   return { added, updated };
 }

@@ -91,6 +91,7 @@
         "sha256": "011f44f522d498b978ce6e3164aed71f532f73481c6bfc3916a5967aaf359125",
         "ipfs_cidv1": "bafybeihyelq5pfwovcptib3s6sfkgw2cyk4iwgt4r75f3a3potmyfvq534",
         "size": "5722636",
+	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZS9ZSEhERjQ1OQo=",
         "ardrive_file_name": "ssinitial-to-s010b.sql.xz",
         "ardrive_file_path": "/SMWRH/db/patch/ssinitial-to-s010b.sql.xz",
         "ardrive_file_id": "c2add720-3483-45ef-abcb-69afcbc72e48",

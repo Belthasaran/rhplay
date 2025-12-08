@@ -824,16 +824,26 @@
                 <div class="filter-tags">
                   <button @click="addFilterTag('demo:No')" class="filter-tag">demo:No</button>
                   <button @click="addFilterTag('demo:Yes')" class="filter-tag">demo:Yes</button>
+                  <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
+                  <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
+                  <button @click="addFilterTag('author:Blueribbon')" class="filter-tag">author:Blueribbon</button>
+                  <button @click="addFilterTag('tags:beginner')" class="filter-tag">tags:beginner</button>
+                  <button @click="addFilterTag('tags:moon')" class="filter-tag">tags:moon</button>
                   <button @click="addFilterTag('Kaizo')" class="filter-tag">Kaizo</button>
                   <button @click="addFilterTag('Standard')" class="filter-tag">Standard</button>
                   <button @click="addFilterTag('Puzzle')" class="filter-tag">Puzzle</button>
                   <button @click="addFilterTag('Troll')" class="filter-tag">Troll</button>
+                  <button @click="addFilterTag('-tags:puzzle')" class="filter-tag">-tags:puzzle</button>
+                  <button @click="addFilterTag('type:hard')" class="filter-tag">type:hard</button>
                   <button @click="addFilterTag('Vanilla')" class="filter-tag">Vanilla</button>
+                  <button @click="addFilterTag('Intermediate')" class="filter-tag">intermediate</button>
+                  <button @click="addFilterTag('difficulty:Newcomer')" class="filter-tag">difficulty:Newcomer</button>
+                  <button @click="addFilterTag('difficulty:Casual')" class="filter-tag">difficulty:Casual</button>
+                  <button @click="addFilterTag('-difficulty:Newcomer')" class="filter-tag">-difficulty:Newcomer</button>
+                  <button @click="addFilterTag('-difficulty:Casual')" class="filter-tag">-difficulty:Casual</button>
                   <button @click="addFilterTag('added:2025')" class="filter-tag">Added: 2025</button>
                   <button @click="addFilterTag('added:2024')" class="filter-tag">Added: 2024</button>
-                  <button @click="addFilterTag('rating:>3')" class="filter-tag">Rating > 3</button>
-                  <button @click="addFilterTag('rating:5')" class="filter-tag">Rating: 5</button>
-                  <button @click="addFilterTag('rating:4')" class="filter-tag">Rating: 4</button>
+                  <button @click="addFilterTag('added:2015-08')" class="filter-tag">Added: 2015-08</button>
                 </div>
               </div>
 

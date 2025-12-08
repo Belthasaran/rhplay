@@ -743,6 +743,40 @@ function locateEmbeddedSeed(dbName) {
 }
 
 /**
+ * Locate an embedded patch file based on source_path from manifest.
+ * Searches in packed_db directory and app resources (similar to embedded seeds).
+ * 
+ * @param {string} sourcePath - Source path from manifest (e.g., 'packed_db/patchbin-schema-3-to-10.sql.xz')
+ * @param {string} fileName - Expected filename (e.g., 'patchbin-schema-3-to-10.sql.xz')
+ * @returns {string|null} - Path to the embedded patch file, or null if not found
+ */
+function locateEmbeddedPatch(sourcePath, fileName) {
+  if (!sourcePath) {
+    return null;
+  }
+
+  // Extract just the filename from source_path (e.g., 'packed_db/file.sql.xz' -> 'file.sql.xz')
+  const sourceFileName = path.basename(sourcePath);
+  
+  // Build candidate paths similar to embedded seeds
+  const candidates = [
+    // Development mode: relative to electron/installer
+    path.resolve(__dirname, '..', sourcePath),
+    path.resolve(__dirname, '..', 'packed_db', sourceFileName),
+    path.resolve(__dirname, '..', 'db', sourceFileName),
+  ];
+
+  if (process.resourcesPath) {
+    // Packaged app: check in resources/db and unpacked locations
+    candidates.push(path.join(process.resourcesPath, 'db', sourceFileName));
+    candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', sourcePath));
+    candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'packed_db', sourceFileName));
+  }
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+/**
  * Stage an embedded database seed file to the user data directory.
  * Handles both compressed (.xz) and uncompressed database files.
  * 
@@ -935,7 +969,29 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
     console.warn(`[download-retry] ${spec.file_name} present but hash mismatch, re-downloading.`);
   }
 
-  // Search local paths first (before any downloads)
+  // Check for embedded patch first (if source_path is specified)
+  // Embedded patches are included in the project and should be used before remote downloads
+  if (spec.source_path && spec.type === 'sql') {
+    const embeddedPatch = locateEmbeddedPatch(spec.source_path, spec.file_name);
+    if (embeddedPatch) {
+      console.log(`[download-embedded] Found embedded patch ${spec.file_name} at ${embeddedPatch}`);
+      // Copy to working directory
+      fs.copyFileSync(embeddedPatch, destPath);
+      // Verify hash if provided
+      if (spec.sha256 && sha256File(destPath) !== spec.sha256) {
+        fs.unlinkSync(destPath);
+        throw new Error(`Embedded patch hash mismatch for ${spec.file_name}`);
+      }
+      if (downloadTracker) {
+        downloadTracker.skip(spec);
+      }
+      return destPath;
+    } else {
+      console.warn(`[download-embedded] Embedded patch ${spec.file_name} with source_path "${spec.source_path}" not found in expected locations. Falling back to remote download.`);
+    }
+  }
+
+  // Search local paths (before any downloads)
   // SHA256 is required for local search
   if (spec.sha256) {
     const searchPaths = getSearchPaths(userDataDir, workingDir);

@@ -1639,16 +1639,74 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
     try {
       console.log(`[provision] ${db.name}: action=${db.action}`);
       if (db.action === 'copy-embedded') {
+        const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name)?.manifestKey];
+        if (!manifestEntry) {
+          throw new Error(`Manifest entry missing for embedded database ${db.name}.`);
+        }
+        
+        // Copy embedded seed database
         const dest = await stageEmbeddedDb(db.name, paths.finalDir, true);
-        result.executed.push({ name: db.name, action: 'copied-embedded', path: dest });
         console.log(`[provision] ${db.name}: embedded seed copied to ${dest}`);
+        
+        // Apply SQL patches if any exist in the manifest
+        const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
+        let lastPatchSha256 = null;
+        let lastPatchFileName = null;
+        
+        if (patches.length > 0) {
+          console.log(`[provision] ${db.name}: applying ${patches.length} SQL patch(es) to embedded database`);
+          
+          // Use a temporary copy for patching, then replace the final file
+          const tempDbPath = path.join(paths.stagingDir, `${db.name}.tmp.db`);
+          fs.copyFileSync(dest, tempDbPath);
+          
+          for (const patch of patches) {
+            const patchArchivePath = await ensureArtifact(patch, paths.downloadsDir, downloadTracker, plan.userDataDir, ipfsTimeout);
+            console.log(`[patch-start] ${db.name}: applying ${patch.file_name}`);
+            const sqlPath = path.join(paths.stagingDir, patch.file_name.replace(/\.xz$/i, ''));
+            
+            // Decompress if format is xz (or file ends with .xz)
+            const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
+            if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
+              try {
+                await decompressXz(patchArchivePath, sqlPath);
+                // Verify decompressed file exists and is not empty
+                if (!fs.existsSync(sqlPath)) {
+                  throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
+                }
+                const stats = fs.statSync(sqlPath);
+                if (stats.size === 0) {
+                  throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
+                }
+              } catch (decompressErr) {
+                throw new Error(`Failed to decompress ${patch.file_name}: ${decompressErr.message}`);
+              }
+            } else {
+              // Assume uncompressed SQL file
+              fs.copyFileSync(patchArchivePath, sqlPath);
+            }
+            
+            await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
+            fs.unlinkSync(sqlPath);
+            console.log(`[patch-complete] ${db.name}: applied ${patch.file_name}`);
+            
+            // Track last applied patch
+            lastPatchSha256 = patch.sha256;
+            lastPatchFileName = patch.file_name;
+          }
+          
+          // Replace the final database with the patched version
+          fs.copyFileSync(tempDbPath, dest);
+          fs.unlinkSync(tempDbPath);
+          console.log(`[provision] ${db.name}: patches applied, database finalized at ${dest}`);
+        }
+        
+        result.executed.push({ name: db.name, action: 'copied-embedded', path: dest });
+        
         // Update provisioned.json for embedded databases
         // For embedded databases, compute SHA256 from final database file
-        const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name)?.manifestKey];
-        if (manifestEntry) {
-          const finalDbSha256 = sha256File(dest);
-          updateProvisionedEntry(plan.userDataDir, db.name, manifestEntry, finalDbSha256, null, null);
-        }
+        const finalDbSha256 = sha256File(dest);
+        updateProvisionedEntry(plan.userDataDir, db.name, manifestEntry, finalDbSha256, lastPatchSha256, lastPatchFileName);
       } else if (db.action === 'provision-from-manifest') {
         const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name).manifestKey];
         if (!manifestEntry) {

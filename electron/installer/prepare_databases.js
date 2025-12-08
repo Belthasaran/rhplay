@@ -1543,7 +1543,19 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
     // Decompress if format is xz (or file ends with .xz)
     const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
     if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-      await decompressXz(patchArchivePath, sqlPath);
+      try {
+        await decompressXz(patchArchivePath, sqlPath);
+        // Verify decompressed file exists and is not empty
+        if (!fs.existsSync(sqlPath)) {
+          throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
+        }
+        const stats = fs.statSync(sqlPath);
+        if (stats.size === 0) {
+          throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
+        }
+      } catch (decompressErr) {
+        throw new Error(`Failed to decompress ${patch.file_name}: ${decompressErr.message}`);
+      }
     } else {
       // Assume uncompressed SQL file
       fs.copyFileSync(patchArchivePath, sqlPath);
@@ -1574,6 +1586,7 @@ async function applySqlPatch(dbPath, sqlPath, originName) {
   const db = new Database(dbPath);
   try {
     //db.exec('BEGIN;');
+    db.exec('PRAGMA foreign_keys = OFF;');
     db.exec(sql);
     //db.exec('COMMIT;');
   } catch (err) {
@@ -2046,7 +2059,21 @@ async function verifyBuild(manifest, opts) {
           // Decompress if format is xz (or file ends with .xz)
           const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
           if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-            await decompressXz(patchPath, sqlPath);
+            console.log(`    Decompressing ${patch.file_name} to ${path.basename(sqlPath)}...`);
+            try {
+              await decompressXz(patchPath, sqlPath);
+              // Verify decompressed file exists and is not empty
+              if (!fs.existsSync(sqlPath)) {
+                throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
+              }
+              const stats = fs.statSync(sqlPath);
+              if (stats.size === 0) {
+                throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
+              }
+              console.log(`    ✓ Decompressed successfully (${stats.size} bytes)`);
+            } catch (decompressErr) {
+              throw new Error(`Failed to decompress ${patch.file_name}: ${decompressErr.message}`);
+            }
           } else {
             // Assume uncompressed SQL file
             fs.copyFileSync(patchPath, sqlPath);

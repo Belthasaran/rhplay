@@ -826,6 +826,8 @@
                   <button @click="addFilterTag('demo:Yes')" class="filter-tag">demo:Yes</button>
                   <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
                   <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
+                  <button @click="addFilterTag('sa1:yes')" class="filter-tag">sa1:yes</button>
+                  <button @click="addFilterTag('sa1:no')" class="filter-tag">sa1:no</button>
                   <button @click="addFilterTag('author:Blueribbon')" class="filter-tag">author:Blueribbon</button>
                   <button @click="addFilterTag('tags:beginner')" class="filter-tag">tags:beginner</button>
                   <button @click="addFilterTag('tags:moon')" class="filter-tag">tags:moon</button>

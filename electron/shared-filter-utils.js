@@ -106,6 +106,14 @@ function evaluateTerm(game, term) {
       return numValue === targetValue;
     }
     
+    // Handle sa1 with exact case-insensitive matching
+    if (attr === 'sa1') {
+      const gameValue = getGameAttribute(game, attr);
+      if (gameValue === null) return false;
+      // Exact case-insensitive match for "yes" or "no"
+      return gameValue.toLowerCase() === value.toLowerCase();
+    }
+    
     // Handle other attribute searches
     const gameValue = getGameAttribute(game, attr);
     if (gameValue === null) return false;
@@ -171,6 +179,8 @@ function getGameAttribute(game, attr) {
     obsoleted: game.obsoleted,
     removed: game.removed,
     moderated: game.moderated,
+    racelevel: game.racelevel ?? game.Racelevel,
+    sa1: game.sa1 ?? game.Sa1,
     // JSON data fields
     tags: game.tags,
     section: game.section,

@@ -1421,6 +1421,7 @@ function registerDatabaseHandlers(dbManager) {
             gv.raw_difficulty as RawDifficulty,
             gv.combinedtype as CombinedType,
             gv.racelevel as Racelevel,
+            gv.sa1 as Sa1,
             gv.version as CurrentVersion,
             gv.local_runexcluded as LocalRunExcluded,
             gv.gvjsondata as JsonData,
@@ -1524,6 +1525,7 @@ function registerDatabaseHandlers(dbManager) {
             gv.demo as Demo,
             gv.contest as Contest,
             gv.racelevel as Racelevel,
+            gv.sa1 as Sa1,
             gv.tags as Tags,
             gv.description as Description,
             -- Check for version-specific annotation first, fall back to game-wide

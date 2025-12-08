@@ -106,6 +106,14 @@ function evaluateTerm(item: any, term: string): boolean {
       return numValue === targetValue;
     }
     
+    // Handle sa1 with exact case-insensitive matching
+    if (attr === 'sa1') {
+      const itemValue = getItemAttribute(item, attr);
+      if (itemValue === null) return false;
+      // Exact case-insensitive match for "yes" or "no"
+      return itemValue.toLowerCase() === value.toLowerCase();
+    }
+    
     // Handle other attribute searches
     const itemValue = getItemAttribute(item, attr);
     if (itemValue === null) return false;
@@ -160,6 +168,8 @@ export function getItemAttribute(item: any, attr: string): string | null {
     rating: item.Publicrating,
     notes: item.Mynotes,
     version: item.CurrentVersion,
+    racelevel: item.Racelevel,
+    sa1: item.Sa1,
   };
   
   if (directProps[attr] !== undefined) {

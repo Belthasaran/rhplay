@@ -670,6 +670,21 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'rhdata_056_add_sa1',
+      description: 'Add sa1 column to gameversions',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/056_rhdata_add_fields_sa1.sql'),
+      skipIf(db) {
+        return columnExists(db, 'gameversions', 'sa1');
+      },
+    },
+    {
+      id: 'rhdata_057_populate_sa1',
+      description: 'Populate sa1 from gvjsondata JSON',
+      type: 'js',
+      file: resolveRelative('electron/sql/migrations/057_rhdata_populate_fields_sa1_from_json.js'),
+    },
   ],
   clientdata: [
     {

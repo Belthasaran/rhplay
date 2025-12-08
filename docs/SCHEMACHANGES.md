@@ -45,6 +45,19 @@
     - The value must match the `decoded_sha256` column in the `res_screenshots` table
     - An index on `title_screenshot_sha256` enables efficient lookups
 
+- 2025-01-XX: rhdata - Add sa1 Column to gameversions
+  - Description: Add sa1 column to gameversions table for SA1 chip requirement tracking
+  - Rationale: Track whether a game requires the SA1 chip, which is already present in the raw JSON data from SMWC. This field is extracted from multiple sources in the JSON: tags array (if "sa1" is present), fields.sa1 (as "Yes"/"No" string), or raw_fields.sa1 (as true/false boolean). The field defaults to blank (NULL) if no value is found.
+  - Tables/columns:
+    - `gameversions`:
+      - `sa1 VARCHAR(255)` - SA1 chip requirement: "yes", "no", or NULL (blank)
+  - Migration: `rhdata_056_add_sa1` and `rhdata_057_populate_sa1` via `jsutils/migratedb.js`
+  - Notes:
+    - The field is populated from gvjsondata JSON in priority order: 1) tags array contains "sa1" -> "yes", 2) fields.sa1 as "Yes"/"No" -> "yes"/"no", 3) raw_fields.sa1 as true/false -> "yes"/"no"
+    - An index on `sa1` enables efficient queries
+    - The field is also populated by `updategames.js` when processing new or updated games
+    - RHPAK submissions can reference this field as `sa1` directly
+
 - 2025-01-XX: rhdata - Fix patch_files_working Foreign Key Constraint
   - Description: Add ON DELETE CASCADE to patch_files_working.queueuuid foreign key and clean up orphaned records
   - Rationale: When game_fetch_queue records are deleted (after processing, cleanup, or manual deletion), the corresponding patch_files_working records were left as orphans, causing foreign key constraint violations. The foreign key had NO ACTION on delete, which prevented automatic cleanup. Adding ON DELETE CASCADE ensures that when a queue item is deleted, its related patch_files_working records are automatically deleted as well.

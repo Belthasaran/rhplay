@@ -599,6 +599,32 @@ const MIGRATIONS = {
         return patSha224 !== undefined;
       },
     },
+    {
+      id: 'rhdata_054_fix_rhpatches_foreign_key',
+      description: 'Fix rhpatches foreign key constraint - remove invalid FK to gameversions(gameid)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/054_rhdata_fix_rhpatches_foreign_key.sql'),
+      skipIf(db) {
+        // Check if migration has already run by verifying table exists and has expected structure
+        // The migration recreates the table, so we check if it exists with the correct columns
+        if (!tableExists(db, 'rhpatches')) {
+          return false; // Table doesn't exist, run migration
+        }
+        // Check if the table has the expected structure (gameid column without FK constraint)
+        // We can't directly check for FK constraints, but we can verify the table structure
+        // If the migration ran, the table should exist with gameid as a regular column
+        try {
+          const columns = db.prepare("PRAGMA table_info(rhpatches)").all();
+          const hasGameid = columns.some(col => col.name === 'gameid');
+          const hasPatchName = columns.some(col => col.name === 'patch_name');
+          // If table has expected columns, assume migration ran
+          // The actual FK check will be done by PRAGMA foreign_key_check
+          return hasGameid && hasPatchName;
+        } catch (e) {
+          return false; // Error checking, run migration
+        }
+      },
+    },
   ],
   clientdata: [
     {

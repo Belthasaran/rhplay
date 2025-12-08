@@ -317,6 +317,8 @@ function getSearchPaths(userDataDir, workingDir) {
   } else {
     // Development mode: use __dirname
     paths.push(path.dirname(__dirname));
+    // Also include packed_db directory for files with source_path
+    paths.push(path.resolve(__dirname, '..', 'packed_db'));
   }
 
   // OS Downloads directory
@@ -1471,7 +1473,8 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
   );
 
   const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
-  patches.sort((a, b) => a.file_name.localeCompare(b.file_name, 'en', { numeric: true }));
+  // Apply patches in manifest order (do not sort alphabetically)
+  // The manifest order is critical for schema migrations and dependencies
 
   let lastPatchSha256 = null;
   let lastPatchFileName = null;

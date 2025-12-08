@@ -68,7 +68,7 @@
     "sqlpatches": []
   },
   "screenshot.db": {
-    "version": "6",
+    "version": "10",
     "base": {
       "source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
@@ -342,7 +342,7 @@
     ]
   },
   "rhdata.db": {
-    "version": "7",
+    "version": "10",
     "base": {
       "file_name": "rhdata-f010-20251208.tar.xz",
       "format": "tar+xz",
@@ -365,7 +365,7 @@
     "sqlpatches": []
   },
   "patchbin.db": {
-    "version": "6",
+    "version": "10",
     "base": {
       "file_name": "bare_patchbin_2025_11_01.tar.xz",
       "format": "tar+xz",

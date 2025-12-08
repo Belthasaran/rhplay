@@ -822,13 +822,15 @@
               <div class="common-filters">
                 <div class="filter-section-label">Common Filters:</div>
                 <div class="filter-tags">
+                  <button @click="addFilterTag('sa1:no')" class="filter-tag">sa1:no</button>
                   <button @click="addFilterTag('demo:No')" class="filter-tag">demo:No</button>
                   <button @click="addFilterTag('demo:Yes')" class="filter-tag">demo:Yes</button>
                   <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
                   <button @click="addFilterTag('racelevel:No')" class="filter-tag">racelevel:Yes</button>
-                  <button @click="addFilterTag('sa1:yes')" class="filter-tag">sa1:yes</button>
-                  <button @click="addFilterTag('sa1:no')" class="filter-tag">sa1:no</button>
+                  <button @click="addFilterTag('Akogare')" class="filter-tag">Akogare</button>
                   <button @click="addFilterTag('author:Blueribbon')" class="filter-tag">author:Blueribbon</button>
+                  <button @click="addFilterTag('author:Sio_kedelic')" class="filter-tag">author:sio_kedelic</button>
+                  <button @click="addFilterTag('author:Ampersam')" class="filter-tag">author:Ampersam</button>
                   <button @click="addFilterTag('tags:beginner')" class="filter-tag">tags:beginner</button>
                   <button @click="addFilterTag('tags:moon')" class="filter-tag">tags:moon</button>
                   <button @click="addFilterTag('Kaizo')" class="filter-tag">Kaizo</button>
@@ -846,6 +848,37 @@
                   <button @click="addFilterTag('added:2025')" class="filter-tag">Added: 2025</button>
                   <button @click="addFilterTag('added:2024')" class="filter-tag">Added: 2024</button>
                   <button @click="addFilterTag('added:2015-08')" class="filter-tag">Added: 2015-08</button>
+                  <button @click="addFilterTag('author:Firstn')" class="filter-tag">author:Firstname</button>
+                  <button @click="addFilterTag('author:Easy')" class="filter-tag">author:Easy</button>
+                  <button @click="addFilterTag('author:Green')" class="filter-tag">author:Green</button>
+                  <button @click="addFilterTag('author:Gold')" class="filter-tag">author:Gold</button>
+                  <button @click="addFilterTag('author:Gamma')" class="filter-tag">author:Gamma</button>
+                  <button @click="addFilterTag('author:Lush')" class="filter-tag">author:Lush_</button>
+                  <button @click="addFilterTag('author:Brawl')" class="filter-tag">author:Brawl</button>
+                  <button @click="addFilterTag('author:ageVer')" class="filter-tag">author:ageVer</button>
+                  <button @click="addFilterTag('author:bandi')" class="filter-tag">author:bandi</button>
+                  <button @click="addFilterTag('author:NewP')" class="filter-tag">author:NewP</button>
+                  <button @click="addFilterTag('author:Rus')" class="filter-tag">author:RussianMan</button>
+                  <button @click="addFilterTag('author:Saph')" class="filter-tag">author:Saph</button>
+                  <button @click="addFilterTag('author:FYRE150')" class="filter-tag">author:FYRE150</button>
+                  <button @click="addFilterTag('author:OEO6')" class="filter-tag">author:OEO6</button>
+                  <button @click="addFilterTag('author:Valdio')" class="filter-tag">author:Valdio</button>
+                  <button @click="addFilterTag('author:Shoujo')" class="filter-tag">author:Shoujo</button>
+                  <button @click="addFilterTag('author:Shovda')" class="filter-tag">author:Shovda</button>
+                  <button @click="addFilterTag('author:Binavik')" class="filter-tag">author:Binavik</button>
+                  <button @click="addFilterTag('author:Cur_')" class="filter-tag">author:Cur_</button>
+                  <button @click="addFilterTag('author:Darkan')" class="filter-tag">author:Darkan</button>
+                  <button @click="addFilterTag('author:Dtothe')" class="filter-tag">author:Dtothe</button>
+                  <button @click="addFilterTag('author:Thirdwall')" class="filter-tag">author:Thirdwall</button>
+                  <button @click="addFilterTag('author:Fedora')" class="filter-tag">author:Fedora</button>
+                  <button @click="addFilterTag('author:Furyful')" class="filter-tag">author:Furyful</button>
+                  <button @click="addFilterTag('author:Morsel')" class="filter-tag">author:Morsel</button>
+                  <button @click="addFilterTag('author:MargotS')" class="filter-tag">author:Margots</button>
+                  <button @click="addFilterTag('author:juz')" class="filter-tag">author:juz</button>
+                  <button @click="addFilterTag('author:orka')" class="filter-tag">author:orka</button>
+                  <button @click="addFilterTag('author:Nexus15')" class="filter-tag">author:NeXus15</button>
+                  <button @click="addFilterTag('author:ChrisG')" class="filter-tag">author:Chrisg</button>
+                  <button @click="addFilterTag('author:White_moth')" class="filter-tag">author:White_moth</button>
                 </div>
               </div>
 

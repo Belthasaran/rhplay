@@ -822,11 +822,10 @@
               <div class="common-filters">
                 <div class="filter-section-label">Common Filters:</div>
                 <div class="filter-tags">
-                  <button @click="addFilterTag('-sa1:yes')" class="filter-tag">-sa1:yes</button>
                   <button @click="addFilterTag('demo:No')" class="filter-tag">demo:No</button>
                   <button @click="addFilterTag('demo:Yes')" class="filter-tag">demo:Yes</button>
                   <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
-                  <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
+                  <button @click="addFilterTag('racelevel:No')" class="filter-tag">racelevel:Yes</button>
                   <button @click="addFilterTag('sa1:yes')" class="filter-tag">sa1:yes</button>
                   <button @click="addFilterTag('sa1:no')" class="filter-tag">sa1:no</button>
                   <button @click="addFilterTag('author:Blueribbon')" class="filter-tag">author:Blueribbon</button>

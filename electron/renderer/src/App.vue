@@ -829,7 +829,7 @@
                   <button @click="addFilterTag('racelevel:No')" class="filter-tag">racelevel:Yes</button>
                   <button @click="addFilterTag('Akogare')" class="filter-tag">Akogare</button>
                   <button @click="addFilterTag('author:Blueribbon')" class="filter-tag">author:Blueribbon</button>
-                  <button @click="addFilterTag('author:Sio_kedelic')" class="filter-tag">author:sio_kedelic</button>
+                  <button @click="addFilterTag('author:Sio_kedelic')" class="filter-tag">author:Sio_</button>
                   <button @click="addFilterTag('author:Ampersam')" class="filter-tag">author:Ampersam</button>
                   <button @click="addFilterTag('tags:beginner')" class="filter-tag">tags:beginner</button>
                   <button @click="addFilterTag('tags:moon')" class="filter-tag">tags:moon</button>
@@ -845,41 +845,49 @@
                   <button @click="addFilterTag('difficulty:Casual')" class="filter-tag">difficulty:Casual</button>
                   <button @click="addFilterTag('-difficulty:Newcomer')" class="filter-tag">-difficulty:Newcomer</button>
                   <button @click="addFilterTag('-difficulty:Casual')" class="filter-tag">-difficulty:Casual</button>
-                  <button @click="addFilterTag('added:2025')" class="filter-tag">Added: 2025</button>
-                  <button @click="addFilterTag('added:2024')" class="filter-tag">Added: 2024</button>
-                  <button @click="addFilterTag('added:2015-08')" class="filter-tag">Added: 2015-08</button>
-                  <button @click="addFilterTag('author:Firstn')" class="filter-tag">author:Firstname</button>
-                  <button @click="addFilterTag('author:Easy')" class="filter-tag">author:Easy</button>
-                  <button @click="addFilterTag('author:Green')" class="filter-tag">author:Green</button>
-                  <button @click="addFilterTag('author:Gold')" class="filter-tag">author:Gold</button>
-                  <button @click="addFilterTag('author:Gamma')" class="filter-tag">author:Gamma</button>
-                  <button @click="addFilterTag('author:Lush')" class="filter-tag">author:Lush_</button>
-                  <button @click="addFilterTag('author:Brawl')" class="filter-tag">author:Brawl</button>
-                  <button @click="addFilterTag('author:ageVer')" class="filter-tag">author:ageVer</button>
-                  <button @click="addFilterTag('author:bandi')" class="filter-tag">author:bandi</button>
-                  <button @click="addFilterTag('author:NewP')" class="filter-tag">author:NewP</button>
-                  <button @click="addFilterTag('author:Rus')" class="filter-tag">author:RussianMan</button>
-                  <button @click="addFilterTag('author:Saph')" class="filter-tag">author:Saph</button>
-                  <button @click="addFilterTag('author:FYRE150')" class="filter-tag">author:FYRE150</button>
-                  <button @click="addFilterTag('author:OEO6')" class="filter-tag">author:OEO6</button>
-                  <button @click="addFilterTag('author:Valdio')" class="filter-tag">author:Valdio</button>
-                  <button @click="addFilterTag('author:Shoujo')" class="filter-tag">author:Shoujo</button>
-                  <button @click="addFilterTag('author:Shovda')" class="filter-tag">author:Shovda</button>
-                  <button @click="addFilterTag('author:Binavik')" class="filter-tag">author:Binavik</button>
-                  <button @click="addFilterTag('author:Cur_')" class="filter-tag">author:Cur_</button>
-                  <button @click="addFilterTag('author:Darkan')" class="filter-tag">author:Darkan</button>
-                  <button @click="addFilterTag('author:Dtothe')" class="filter-tag">author:Dtothe</button>
-                  <button @click="addFilterTag('author:Thirdwall')" class="filter-tag">author:Thirdwall</button>
-                  <button @click="addFilterTag('author:Fedora')" class="filter-tag">author:Fedora</button>
-                  <button @click="addFilterTag('author:Furyful')" class="filter-tag">author:Furyful</button>
-                  <button @click="addFilterTag('author:Morsel')" class="filter-tag">author:Morsel</button>
-                  <button @click="addFilterTag('author:MargotS')" class="filter-tag">author:Margots</button>
-                  <button @click="addFilterTag('author:juz')" class="filter-tag">author:juz</button>
-                  <button @click="addFilterTag('author:Glitchcat7')" class="filter-tag">author:Glitch</button>
-                  <button @click="addFilterTag('author:orka')" class="filter-tag">author:orka</button>
-                  <button @click="addFilterTag('author:Nexus15')" class="filter-tag">author:NeXus15</button>
-                  <button @click="addFilterTag('author:ChrisG')" class="filter-tag">author:Chrisg</button>
-                  <button @click="addFilterTag('author:White_moth')" class="filter-tag">author:White_moth</button>
+                  <button @click="addFilterTag('added:2025')" class="filter-tag">Added:2025</button>
+                  <button @click="addFilterTag('added:2024')" class="filter-tag">Added:2024</button>
+                  <button @click="addFilterTag('added:2015-08')" class="filter-tag">Added:2015-08</button>
+                  <button @click="addFilterTag('author:Firstnamebutt')" class="filter-tag">author:First</button>
+                  <button @click="addFilterTag('author:Tomato')" class="filter-tag">author:Tomato</button>
+                  <button @click="addFilterTag('author:Easy')" class="filter-tag">Easy</button>
+                  <button @click="addFilterTag('author:Green')" class="filter-tag">Green</button>
+                  <button @click="addFilterTag('author:Gold')" class="filter-tag">Gold</button>
+                  <button @click="addFilterTag('author:MarkAlarm')" class="filter-tag">MarkAlarm</button>
+                  <button @click="addFilterTag('author:SweetDude')" class="filter-tag">SweetDude</button>
+                  <button @click="addFilterTag('author:Gamma')" class="filter-tag">Gamma</button>
+                  <button @click="addFilterTag('author:Lush_50')" class="filter-tag">Lush_50</button>
+                  <button @click="addFilterTag('author:Brawler')" class="filter-tag">Brawler</button>
+                  <button @click="addFilterTag('author:ageVer')" class="filter-tag">ageVer</button>
+                  <button @click="addFilterTag('author:bandi')" class="filter-tag">bandicoot</button>
+                  <button @click="addFilterTag('author:NewPointless')" class="filter-tag">NewP</button>
+                  <button @click="addFilterTag('author:RussianMan')" class="filter-tag">Rus</button>
+                  <button @click="addFilterTag('author:Saph')" class="filter-tag">Saph</button>
+                  <button @click="addFilterTag('author:FYRE150')" class="filter-tag">FYRE150</button>
+                  <button @click="addFilterTag('author:OEO6')" class="filter-tag">OEO6</button>
+                  <button @click="addFilterTag('author:Valdio')" class="filter-tag">Valdio</button>
+                  <button @click="addFilterTag('author:Shoujo')" class="filter-tag">Shoujo</button>
+                  <button @click="addFilterTag('author:Shovda')" class="filter-tag">Shovda</button>
+                  <button @click="addFilterTag('author:Binavik')" class="filter-tag">Binavik</button>
+                  <button @click="addFilterTag('author:Cur_')" class="filter-tag">Cur_</button>
+                  <button @click="addFilterTag('author:Darkanine')" class="filter-tag">Darkanine</button>
+                  <button @click="addFilterTag('author:Dtothefourth')" class="filter-tag">Dtothefour</button>
+                  <button @click="addFilterTag('author:Thirdwall')" class="filter-tag">ThirdWall</button>
+                  <button @click="addFilterTag('author:Fedora')" class="filter-tag">Fedora</button>
+                  <button @click="addFilterTag('author:Furyful')" class="filter-tag">Furyful</button>
+                  <button @click="addFilterTag('author:Morsel')" class="filter-tag">Morsel</button>
+                  <button @click="addFilterTag('author:MargotSimone')" class="filter-tag">Margots</button>
+                  <button @click="addFilterTag('author:juz')" class="filter-tag">Juz</button>
+                  <button @click="addFilterTag('author:Glitchcat7')" class="filter-tag">Glitchcat7</button>
+                  <button @click="addFilterTag('author:orka')" class="filter-tag">orka</button>
+                  <button @click="addFilterTag('author:Nexus15')" class="filter-tag">NeXus15</button>
+                  <button @click="addFilterTag('author:ChrisG')" class="filter-tag">Chrisg</button>
+                  <button @click="addFilterTag('author:White_moth')" class="filter-tag">White_moth</button>
+<!-- sholmes|6 MarioFan1337|7 PopCorn181|8 fanfan21 xMANGRAVYx|5 51690 Gamet2004 Apple Boy|5
+Mr. MS|5 arantes|5 tfpivman|5 Insanit|4 JonnyManjiro|4 StayAtHomeStegosaurus|4 ageVerrly|4 Deivid Borba|6
+TheMURAmatsu|7 Romhack Races Team|4 dtothefourth|4 ft029|4 Atomic-Citrus|5 Kr00mmi|5 Green Jerry|6
+OEO6|6 westslasher2|4 sqlite> select author,COUNT(*) as g from gameversions where added like '%2017%' group by author  having count(*)>2 order by g; Andyana Jonseph|3 Gamma V|3 HoorayForJay|3 T. Takemoto|3 Wieus96|3 Vamperumbra|4 sqlite> 
+-->
                 </div>
               </div>
 

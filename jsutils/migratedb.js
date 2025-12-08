@@ -605,23 +605,33 @@ const MIGRATIONS = {
       type: 'sql',
       file: resolveRelative('electron/sql/migrations/054_rhdata_fix_rhpatches_foreign_key.sql'),
       skipIf(db) {
-        // Check if migration has already run by verifying table exists and has expected structure
-        // The migration recreates the table, so we check if it exists with the correct columns
+        // Check if migration has already run by examining the CREATE TABLE statement
+        // If the FK constraint is gone, the migration has already been applied
         if (!tableExists(db, 'rhpatches')) {
           return false; // Table doesn't exist, run migration
         }
-        // Check if the table has the expected structure (gameid column without FK constraint)
-        // We can't directly check for FK constraints, but we can verify the table structure
-        // If the migration ran, the table should exist with gameid as a regular column
         try {
-          const columns = db.prepare("PRAGMA table_info(rhpatches)").all();
-          const hasGameid = columns.some(col => col.name === 'gameid');
-          const hasPatchName = columns.some(col => col.name === 'patch_name');
-          // If table has expected columns, assume migration ran
-          // The actual FK check will be done by PRAGMA foreign_key_check
-          return hasGameid && hasPatchName;
+          // Get the CREATE TABLE statement from sqlite_master
+          const createStmt = db.prepare(`
+            SELECT sql FROM sqlite_master 
+            WHERE type='table' AND name='rhpatches'
+          `).get();
+          
+          if (!createStmt || !createStmt.sql) {
+            return false; // Can't determine, run migration to be safe
+          }
+          
+          const sql = createStmt.sql;
+          // Check if the CREATE statement contains a foreign key reference to gameversions
+          // Use case-insensitive search and look for the pattern
+          const hasFkToGameversions = /references\s+gameversions\s*\(/i.test(sql);
+          
+          // If FK constraint exists, don't skip (return false = run migration)
+          // If FK constraint doesn't exist, skip (return true = migration already applied)
+          return !hasFkToGameversions;
         } catch (e) {
-          return false; // Error checking, run migration
+          // Error checking, run migration to be safe
+          return false;
         }
       },
     },

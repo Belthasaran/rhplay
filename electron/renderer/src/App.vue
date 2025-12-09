@@ -819,75 +819,64 @@
                 </label>
               </div>
 
+              <div class="authors-by-year-section">
+                <div class="authors-by-year-header">
+                  <span>Authors (by year):</span>
+                  <button 
+                    v-for="year in ['All', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017']"
+                    :key="year"
+                    @click="toggleAuthorsByYear(year === 'All' ? 'all' : year)"
+                    :class="['year-button', { 'active': selectedYear === (year === 'All' ? 'all' : year) && authorsByYearOpen }]"
+                  >
+                    {{ year }}
+                  </button>
+                </div>
+                
+                <div v-if="authorsByYearOpen" class="authors-panel">
+                  <div v-if="authorsLoading" class="authors-loading">Loading authors...</div>
+                  <div v-else-if="authorsList.length === 0" class="authors-empty">No authors found</div>
+                  <div v-else class="authors-content">
+                    <select 
+                      class="authors-dropdown"
+                      @change="selectAuthor(($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="" disabled selected>Select an author...</option>
+                      <option 
+                        v-for="author in authorsList" 
+                        :key="author.author" 
+                        :value="author.author"
+                      >
+                        {{ author.author }} - {{ author.game_count }} game{{ author.game_count !== 1 ? 's' : '' }}
+                      </option>
+                    </select>
+                    
+                    <div v-if="authorsList.length > 0" class="top-authors-buttons">
+                      <div class="top-authors-label">Top 10 Authors:</div>
+                      <button
+                        v-for="author in authorsList.slice(0, 10)"
+                        :key="author.author"
+                        @click="toggleTopAuthor(author.author)"
+                        :class="['top-author-button', { 'active': activeFilterTags.has(`author:${author.author}`) }]"
+                      >
+                        {{ author.author }} ({{ author.game_count }})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="common-filters">
                 <div class="filter-section-label">Common Filters:</div>
                 <div class="filter-tags">
-                  <button @click="addFilterTag('sa1:no')" class="filter-tag">sa1:no</button>
-                  <button @click="addFilterTag('demo:No')" class="filter-tag">demo:No</button>
-                  <button @click="addFilterTag('demo:Yes')" class="filter-tag">demo:Yes</button>
-                  <button @click="addFilterTag('racelevel:Yes')" class="filter-tag">racelevel:Yes</button>
-                  <button @click="addFilterTag('racelevel:No')" class="filter-tag">racelevel:Yes</button>
-                  <button @click="addFilterTag('Akogare')" class="filter-tag">Akogare</button>
-                  <button @click="addFilterTag('author:Blueribbon')" class="filter-tag">author:Blueribbon</button>
-                  <button @click="addFilterTag('author:Sio_kedelic')" class="filter-tag">author:Sio_</button>
-                  <button @click="addFilterTag('author:Ampersam')" class="filter-tag">author:Ampersam</button>
-                  <button @click="addFilterTag('tags:beginner')" class="filter-tag">tags:beginner</button>
-                  <button @click="addFilterTag('tags:moon')" class="filter-tag">tags:moon</button>
-                  <button @click="addFilterTag('Kaizo')" class="filter-tag">Kaizo</button>
-                  <button @click="addFilterTag('Standard')" class="filter-tag">Standard</button>
-                  <button @click="addFilterTag('Puzzle')" class="filter-tag">Puzzle</button>
-                  <button @click="addFilterTag('Troll')" class="filter-tag">Troll</button>
-                  <button @click="addFilterTag('-tags:puzzle')" class="filter-tag">-tags:puzzle</button>
-                  <button @click="addFilterTag('type:hard')" class="filter-tag">type:hard</button>
-                  <button @click="addFilterTag('Vanilla')" class="filter-tag">Vanilla</button>
-                  <button @click="addFilterTag('Intermediate')" class="filter-tag">intermediate</button>
-                  <button @click="addFilterTag('difficulty:Newcomer')" class="filter-tag">difficulty:Newcomer</button>
-                  <button @click="addFilterTag('difficulty:Casual')" class="filter-tag">difficulty:Casual</button>
-                  <button @click="addFilterTag('-difficulty:Newcomer')" class="filter-tag">-difficulty:Newcomer</button>
-                  <button @click="addFilterTag('-difficulty:Casual')" class="filter-tag">-difficulty:Casual</button>
-                  <button @click="addFilterTag('added:2025')" class="filter-tag">Added:2025</button>
-                  <button @click="addFilterTag('added:2024')" class="filter-tag">Added:2024</button>
-                  <button @click="addFilterTag('added:2015-08')" class="filter-tag">Added:2015-08</button>
-                  <button @click="addFilterTag('author:Firstnamebutt')" class="filter-tag">author:First</button>
-                  <button @click="addFilterTag('author:Tomato')" class="filter-tag">author:Tomato</button>
-                  <button @click="addFilterTag('author:Easy')" class="filter-tag">Easy</button>
-                  <button @click="addFilterTag('author:Green')" class="filter-tag">Green</button>
-                  <button @click="addFilterTag('author:Gold')" class="filter-tag">Gold</button>
-                  <button @click="addFilterTag('author:MarkAlarm')" class="filter-tag">MarkAlarm</button>
-                  <button @click="addFilterTag('author:SweetDude')" class="filter-tag">SweetDude</button>
-                  <button @click="addFilterTag('author:Gamma')" class="filter-tag">Gamma</button>
-                  <button @click="addFilterTag('author:Lush_50')" class="filter-tag">Lush_50</button>
-                  <button @click="addFilterTag('author:Brawler')" class="filter-tag">Brawler</button>
-                  <button @click="addFilterTag('author:ageVer')" class="filter-tag">ageVer</button>
-                  <button @click="addFilterTag('author:bandi')" class="filter-tag">bandicoot</button>
-                  <button @click="addFilterTag('author:NewPointless')" class="filter-tag">NewP</button>
-                  <button @click="addFilterTag('author:RussianMan')" class="filter-tag">Rus</button>
-                  <button @click="addFilterTag('author:Saph')" class="filter-tag">Saph</button>
-                  <button @click="addFilterTag('author:FYRE150')" class="filter-tag">FYRE150</button>
-                  <button @click="addFilterTag('author:OEO6')" class="filter-tag">OEO6</button>
-                  <button @click="addFilterTag('author:Valdio')" class="filter-tag">Valdio</button>
-                  <button @click="addFilterTag('author:Shoujo')" class="filter-tag">Shoujo</button>
-                  <button @click="addFilterTag('author:Shovda')" class="filter-tag">Shovda</button>
-                  <button @click="addFilterTag('author:Binavik')" class="filter-tag">Binavik</button>
-                  <button @click="addFilterTag('author:Cur_')" class="filter-tag">Cur_</button>
-                  <button @click="addFilterTag('author:Darkanine')" class="filter-tag">Darkanine</button>
-                  <button @click="addFilterTag('author:Dtothefourth')" class="filter-tag">Dtothefour</button>
-                  <button @click="addFilterTag('author:Thirdwall')" class="filter-tag">ThirdWall</button>
-                  <button @click="addFilterTag('author:Fedora')" class="filter-tag">Fedora</button>
-                  <button @click="addFilterTag('author:Furyful')" class="filter-tag">Furyful</button>
-                  <button @click="addFilterTag('author:Morsel')" class="filter-tag">Morsel</button>
-                  <button @click="addFilterTag('author:MargotSimone')" class="filter-tag">Margots</button>
-                  <button @click="addFilterTag('author:juz')" class="filter-tag">Juz</button>
-                  <button @click="addFilterTag('author:Glitchcat7')" class="filter-tag">Glitchcat7</button>
-                  <button @click="addFilterTag('author:orka')" class="filter-tag">orka</button>
-                  <button @click="addFilterTag('author:Nexus15')" class="filter-tag">NeXus15</button>
-                  <button @click="addFilterTag('author:ChrisG')" class="filter-tag">Chrisg</button>
-                  <button @click="addFilterTag('author:White_moth')" class="filter-tag">White_moth</button>
-<!-- sholmes|6 MarioFan1337|7 PopCorn181|8 fanfan21 xMANGRAVYx|5 51690 Gamet2004 Apple Boy|5
-Mr. MS|5 arantes|5 tfpivman|5 Insanit|4 JonnyManjiro|4 StayAtHomeStegosaurus|4 ageVerrly|4 Deivid Borba|6
-TheMURAmatsu|7 Romhack Races Team|4 dtothefourth|4 ft029|4 Atomic-Citrus|5 Kr00mmi|5 Green Jerry|6
-OEO6|6 westslasher2|4 sqlite> select author,COUNT(*) as g from gameversions where added like '%2017%' group by author  having count(*)>2 order by g; Andyana Jonseph|3 Gamma V|3 HoorayForJay|3 T. Takemoto|3 Wieus96|3 Vamperumbra|4 sqlite> 
--->
+                  <button @click="addFilterTag('sa1:no')" :class="['filter-tag', { 'active': activeFilterTags.has('sa1:no') }]">sa1:no</button>
+                  <button 
+                    v-for="tag in ['demo:No', 'demo:Yes', 'tutorial', 'racelevel:Yes', 'racelevel:No', 'Akogare', 'author:Blueribbon', 'Sio_kedelic', 'Ampersam', 'Arobam', 'tags:beginner', 'tags:moon', 'Kaizo', 'Standard', 'Puzzle', 'Troll', '-tags:puzzle', 'type:hard', 'Vanilla', 'Intermediate', 'difficulty:Newcomer', 'difficulty:Casual', '-difficulty:Newcomer', '-difficulty:Casual', 'added:2025', 'added:2024', 'added:2015-08', 'author:Shovda', 'author:Dtothefourth', 'author:Thirdwall', 'author:orka', 'author:ChrisG']"
+                    :key="tag"
+                    @click="addFilterTag(tag)"
+                    :class="['filter-tag', { 'active': activeFilterTags.has(tag) }]"
+                  >
+                    {{ tag === 'author:Firstnamebutt' ? 'author:First' : tag === 'author:Sio_kedelic' ? 'author:Sio_' : tag === 'author:bandi' ? 'bandicoot' : tag === 'author:NewPointless' ? 'NewP' : tag === 'author:RussianMan' ? 'Rus' : tag === 'author:MargotSimone' ? 'Margots' : tag === 'author:Easy' ? 'Easy' : tag === 'author:Green' ? 'Green' : tag === 'author:Gold' ? 'Gold' : tag === 'author:MarkAlarm' ? 'MarkAlarm' : tag === 'author:SweetDude' ? 'SweetDude' : tag === 'author:Gamma' ? 'Gamma' : tag === 'author:Lush_50' ? 'Lush_50' : tag === 'author:Brawler' ? 'Brawler' : tag === 'author:ageVer' ? 'ageVer' : tag === 'author:Saph' ? 'Saph' : tag === 'author:FYRE150' ? 'FYRE150' : tag === 'author:OEO6' ? 'OEO6' : tag === 'author:Valdio' ? 'Valdio' : tag === 'author:Shoujo' ? 'Shoujo' : tag === 'author:Shovda' ? 'Shovda' : tag === 'author:Binavik' ? 'Binavik' : tag === 'author:Cur_' ? 'Cur_' : tag === 'author:Darkanine' ? 'Darkanine' : tag === 'author:Dtothefourth' ? 'Dtothefour' : tag === 'author:Thirdwall' ? 'ThirdWall' : tag === 'author:Fedora' ? 'Fedora' : tag === 'author:Furyful' ? 'Furyful' : tag === 'author:Morsel' ? 'Morsel' : tag === 'author:juz' ? 'Juz' : tag === 'author:Glitchcat7' ? 'Glitchcat7' : tag === 'author:orka' ? 'orka' : tag === 'author:Nexus15' ? 'NeXus15' : tag === 'author:ChrisG' ? 'Chrisg' : tag === 'author:White_moth' ? 'White_moth' : tag === 'added:2025' ? 'Added:2025' : tag === 'added:2024' ? 'Added:2024' : tag === 'added:2015-08' ? 'Added:2015-08' : tag }}
+                  </button>
                 </div>
               </div>
 
@@ -7996,6 +7985,13 @@ const onlineShowAdminOptions = ref(false);
 const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing' | 'submissions'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
+// Authors by year state
+const authorsByYearOpen = ref(false);
+const selectedYear = ref<string | null>(null);
+const authorsList = ref<Array<{author: string, game_count: number}>>([]);
+const authorsLoading = ref(false);
+const activeFilterTags = ref<Set<string>>(new Set()); // Track which filter tags are active
+
 // View mode and sorting state
 const viewMode = ref<'list' | 'tiles'>('list');
 const viewDropdownOpen = ref(false);
@@ -8625,17 +8621,99 @@ function closeFilterDropdown() {
 }
 
 function addFilterTag(tag: string) {
-  // Append tag to search query
-  const current = searchQuery.value.trim();
-  if (current) {
-    searchQuery.value = current + ' ' + tag;
+  // Check if tag is already active (toggleable)
+  if (activeFilterTags.value.has(tag)) {
+    // Remove the tag from the query
+    removeFilterTag(tag);
+    activeFilterTags.value.delete(tag);
   } else {
-    searchQuery.value = tag;
+    // Append tag to search query
+    const current = searchQuery.value.trim();
+    if (current) {
+      searchQuery.value = current + ' ' + tag;
+    } else {
+      searchQuery.value = tag;
+    }
+    activeFilterTags.value.add(tag);
   }
   // Keep dropdown open and refocus input
   setTimeout(() => {
     filterSearchInput.value?.focus();
   }, 50);
+}
+
+function removeFilterTag(tag: string) {
+  // Remove the tag from the search query
+  const current = searchQuery.value.trim();
+  if (!current) return;
+  
+  // Split into terms and remove the matching one (exact match)
+  const terms = current.split(/\s+/).filter(t => t.trim() !== tag.trim());
+  searchQuery.value = terms.join(' ').trim();
+  activeFilterTags.value.delete(tag);
+  
+  // Also check if the tag appears as part of a larger term and remove it
+  // This handles cases where the tag might be embedded in other text
+  if (searchQuery.value.includes(tag)) {
+    // Replace the tag with empty string, then clean up extra spaces
+    searchQuery.value = searchQuery.value
+      .replace(new RegExp(`\\b${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+}
+
+// Authors by year functions
+async function loadAuthorsByYear(year: string | null) {
+  if (!year) {
+    authorsList.value = [];
+    return;
+  }
+  
+  authorsLoading.value = true;
+  try {
+    const api = (window as any).electronAPI;
+    if (!api || !api.getAuthorsByYear) {
+      console.error('getAuthorsByYear API not available');
+      return;
+    }
+    
+    const result = await api.getAuthorsByYear(year);
+    if (result.success) {
+      authorsList.value = result.authors || [];
+    } else {
+      console.error('Error loading authors:', result.error);
+      authorsList.value = [];
+    }
+  } catch (error) {
+    console.error('Error loading authors by year:', error);
+    authorsList.value = [];
+  } finally {
+    authorsLoading.value = false;
+  }
+}
+
+function toggleAuthorsByYear(year: string | null) {
+  if (selectedYear.value === year && authorsByYearOpen.value) {
+    // Close if clicking the same year
+    authorsByYearOpen.value = false;
+    selectedYear.value = null;
+    authorsList.value = [];
+  } else {
+    // Open/switch year
+    selectedYear.value = year;
+    authorsByYearOpen.value = true;
+    loadAuthorsByYear(year);
+  }
+}
+
+function selectAuthor(author: string) {
+  addFilterTag(`author:${author}`);
+}
+
+function toggleTopAuthor(author: string) {
+  const tag = `author:${author}`;
+  addFilterTag(tag);
 }
 
 // Select dropdown functions
@@ -29808,6 +29886,137 @@ button:disabled {
 
 .filter-tag:hover {
   background: var(--accent-primary);
+}
+
+.filter-tag.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  font-weight: bold;
+}
+
+/* Authors by year section */
+.authors-by-year-section {
+  margin: 15px 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-primary);
+}
+
+.authors-by-year-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.authors-by-year-header > span {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.year-button {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.year-button:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+.year-button.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+  font-weight: bold;
+}
+
+.authors-panel {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+}
+
+.authors-loading,
+.authors-empty {
+  padding: 10px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.authors-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.authors-dropdown {
+  /* width: 100%; */
+  width: 400px;
+  padding: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 21px;
+  cursor: pointer;
+}
+
+.authors-dropdown option {
+  width: 400px;
+}
+
+.authors-dropdown:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.top-authors-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.top-authors-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+.top-author-button {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.top-author-button:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+.top-author-button.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+  font-weight: bold;
   border-color: var(--accent-primary);
   color: white;
   transform: translateY(-1px);

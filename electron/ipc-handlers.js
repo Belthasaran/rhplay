@@ -1401,6 +1401,65 @@ function registerDatabaseHandlers(dbManager) {
   // ===========================================================================
   
   /**
+   * Get authors by year with game counts
+   * Channel: db:rhdata:get:authors-by-year
+   */
+  ipcMain.handle('db:rhdata:get:authors-by-year', async (event, { year }) => {
+    try {
+      return dbManager.withClientData('rhdata', (db) => {
+        let query;
+        if (year === 'all' || !year) {
+          // Get all authors across all years, sorted by total game count
+          query = db.prepare(`
+            SELECT 
+              gv.author as author,
+              COUNT(*) as game_count
+            FROM gameversions gv
+            WHERE gv.removed = 0
+              AND gv.author IS NOT NULL
+              AND gv.author != ''
+              AND gv.version = (
+                SELECT MAX(version) FROM gameversions gv2 
+                WHERE gv2.gameid = gv.gameid
+              )
+            GROUP BY gv.author
+            ORDER BY game_count DESC, gv.author ASC
+          `);
+        } else {
+          // Get authors for a specific year
+          query = db.prepare(`
+            SELECT 
+              gv.author as author,
+              COUNT(*) as game_count
+            FROM gameversions gv
+            WHERE gv.removed = 0
+              AND gv.author IS NOT NULL
+              AND gv.author != ''
+              AND gv.added LIKE ?
+              AND gv.version = (
+                SELECT MAX(version) FROM gameversions gv2 
+                WHERE gv2.gameid = gv.gameid
+              )
+            GROUP BY gv.author
+            ORDER BY game_count DESC, gv.author ASC
+          `);
+        }
+        
+        var results = year === 'all' || !year 
+          ? query.all()
+          : query.all(`${year}%`);
+
+        results = results.filter(r => r.author && r.author.length <= 30);
+        
+        return { success: true, authors: results };
+      });
+    } catch (error) {
+      console.error('Error getting authors by year:', error);
+      return { success: false, error: error.message, authors: [] };
+    }
+  });
+
+  /**
    * Get all games (latest versions only) with user annotations
    * Channel: db:rhdata:get:games
    */

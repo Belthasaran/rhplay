@@ -42,6 +42,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getGames: () => ipcRenderer.invoke('db:rhdata:get:games'),
   
   /**
+   * Get authors by year with game counts
+   * @param {string} year - Year to filter by, or 'all' for all years
+   * @returns {Promise<{success: boolean, authors: Array<{author: string, game_count: number}>}>}
+   */
+  getAuthorsByYear: (year) => ipcRenderer.invoke('db:rhdata:get:authors-by-year', { year }),
+  
+  /**
    * Get all available versions for a specific game
    * @param {string} gameid - Game ID
    * @returns {Promise<Array<number>>} Array of version numbers

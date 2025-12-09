@@ -42,6 +42,13 @@ async function calculateSHA256(filePath) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
+
+async function calculateFileSize(filePath) {
+  const buffer = await fs.readFile(filePath);
+  return buffer.length;
+}
+
+
 // Helper function to ensure directory exists
 async function ensureDir(dirPath) {
   try {
@@ -106,7 +113,7 @@ async function determineROMType(filePath) {
   const size = stats.size;
   const sizeMod1024 = size % 1024;
   
-  if (isPowerOf2KB(size) && sizeMod1024 === 0) {
+  if ((isPowerOf2KB(size) && sizeMod1024 === 0) || (size === 3145728) || (size === 2097152) || (size === 4194304) || (size === 2621440) || (size === 1048576) || (size === 1179648)) {
     return 'unheadered';
   } else if (sizeMod1024 === 512 && isPowerOf2KB(size - 512)) {
     return 'headered';
@@ -664,6 +671,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
     const sfc_rom_sha1_hash = await calculateSHA1('temp/source_unh.sfc');
     const smc_rom_sha1_hash = await calculateSHA1('temp/source_hdr.smc');
     const sfc_rom_sha256_hash = await calculateSHA256('temp/source_unh.sfc');
+    const sfc_rom_size = await calculateFileSize('temp/source_unh.sfc');
     
     let smc2_rom_sha1_hash;
     let smc2_rom_sha256_hash;
@@ -682,6 +690,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       smc2_rom_sha256_hash = await calculateSHA256('temp/source_hdr.smc');
     }
     
+    console.log(`  SFC SIZE: ${sfc_rom_size}`);
     console.log(`  SFC SHA1: ${sfc_rom_sha1_hash}`);
     console.log(`  SMC SHA1: ${smc_rom_sha1_hash}`);
     console.log(`  SMC2 SHA1: ${smc2_rom_sha1_hash}`);
@@ -799,7 +808,8 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       sfc_rom_sha256_hash,
       smc2_rom_sha1_hash,
       smc2_rom_sha256_hash,
-      bps_filename: bpsFilename
+      bps_filename: bpsFilename,
+      sfc_rom_size: sfc_rom_size
     };
     
     // Parse filename metadata

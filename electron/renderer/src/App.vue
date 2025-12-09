@@ -823,7 +823,7 @@
                 <div class="authors-by-year-header">
                   <span>Authors (by year):</span>
                   <button 
-                    v-for="year in ['All', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017']"
+                    v-for="year in ['All', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015', '2014', '2013']"
                     :key="year"
                     @click="toggleAuthorsByYear(year === 'All' ? 'all' : year)"
                     :class="['year-button', { 'active': selectedYear === (year === 'All' ? 'all' : year) && authorsByYearOpen }]"

@@ -31,56 +31,57 @@ for f in glob.glob("*.mwl"):
       if re.match("^.*\.mwl$", f):
           os.remove(f)
 
-result = os.system("timeout 3  wine ../lm361/lm361.exe -ExpandROM temp_lm361.sfc 4MB")
+result =os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -DeleteLevels temp_lm361.sfc -AllLevels -ClearOrigLevelArea")
 if not(result==0):
-   raise Exception("lm333.exe -ExpandRom 4MB failed")
+   raise Exception("lm333.exe -DeleteLevels temp_lm361.sfc failed")
 
-result =os.system("timeout 3 wine ../lm361/lm361.exe -DeleteLevels temp_lm361.sfc -AllLevels -ClearOrigLevelArea")
-if not(result==0):
-   raise Exception("lm333.exe -DeleteLEvels temp_lm361.sfc failed")
+result = os.system("timeout -k 7 3  winetowrap ../lm361/lm361.exe -ExpandROM temp_lm361.sfc 4MB")
+#if not(result==064):
+#   raise Exception("lm333.exe -ExpandRom 2MB failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ExportGFX temp_analyze.sfc")
-if not(result==0):
-   raise Exception("ExoprtGFX temp_analyze.sfc failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ExportGFX temp_analyze.sfc")
+#if not(result==0):
+#   raise Exception("ExoprtGFX temp_analyze.sfc failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ExportExGFX temp_analyze.sfc")
-if not(result==0):
-   raise Exception("ExoprtExGFX temp_analyze.sfc failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ExportExGFX temp_analyze.sfc")
+#if not(result==0):
+#   raise Exception("ExoprtExGFX temp_analyze.sfc failed")
 
-os.remove("temp.map16")
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ExportAllMap16 temp_analyze.sfc temp.map16")
-if not(result==0):
-   raise Exception("ExoprtAllMap16 temp_analyze.sfc failed")
+if os.path.exists("temp.map16"):
+    os.remove("temp.map16")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ExportAllMap16 temp_analyze.sfc temp.map16")
+#if not(result==0):
+#   raise Exception("ExoprtAllMap16 temp_analyze.sfc failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ImportAllMap16 temp.sfc temp.map16")
-if not(result==0):
-   raise Exception("ImportMap16 failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ImportAllMap16 temp.sfc temp.map16")
+#if not(result==0):
+#   raise Exception("ImportMap16 failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ExportSharedPalette temp_analyze.sfc temp.smwpal")
-if not(result==0):
-   raise Exception("ExoprtSharedPalette Failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ExportSharedPalette temp_analyze.sfc temp.smwpal")
+#if not(result==0):
+#   raise Exception("ExoprtSharedPalette Failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ImportSharedPalette temp.sfc temp.smwpal")
-if not(result==0):
-   raise Exception("ImportSharedPalette Failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ImportSharedPalette temp.sfc temp.smwpal")
+#if not(result==0):
+#   raise Exception("ImportSharedPalette Failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -ImportAllGraphics temp.sfc")
-if not(result==0):
-   raise Exception("ImportAllGraphics Failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -ImportAllGraphics temp.sfc")
+#if not(result==0):
+#   raise Exception("ImportAllGraphics Failed")
 
-result = os.system("timeout 3 wine ../lm361/lm361.exe -TransferLevelGlobalExAnim temp.sfc temp_analyze.sfc")
-if not(result==0):
-   raise Exception("TransferLevelGlobalExAnim Failed")
+result = os.system("timeout -k 7 3 winetowrap ../lm361/lm361.exe -TransferLevelGlobalExAnim temp.sfc temp_analyze.sfc")
+#if not(result==0):
+#   raise Exception("TransferLevelGlobalExAnim Failed")
 
-print("timeout 4 wine ../lm361/lm361.exe -TransferOverworld temp_lm361.sfc temp_analyze.sfc")
+print("timeout -k 7 4 winetowrap ../lm361/lm361.exe -TransferOverworld temp_lm361.sfc temp_analyze.sfc")
 result = os.system('timeout 4 wine ../lm361/lm361.exe -TransferOverworld temp_lm361.sfc temp_analyze.sfc')
-if not(result==0):
-   raise Exception("TransferOverWorld Failed")
+#if not(result==0):
+#   raise Exception("TransferOverWorld Failed")
 
-result = os.system('timeout 4 wine ../lm361/lm361.exe -ExportMultLevels temp_analyze.sfc MWL 1')
+result = os.system('timeout -k 7 4 winetowrap ../lm361/lm361.exe -ExportMultLevels temp_analyze.sfc MWL 1')
 if not(result==0):
    raise Exception("ExoprtMultLevels Failed")
-result = os.system('timeout 4 wine ../lm361/lm361.exe -ImportMultLevels temp_lm361.sfc "./"')
+result = os.system('timeout -k 7 4 winetowrap ../lm361/lm361.exe -ImportMultLevels temp_lm361.sfc "./"')
 if not(result==0):
    raise Exception("ImportMultLevels Failed")
 
@@ -101,7 +102,8 @@ dict = {
 with open('temp/temp.json', 'a') as file:
     file.write( "\"levels\": " + json.dumps(dict["levels"]) + ",\n")
 
-
+os.system("/usr/bin/wineserver -k")
+print("lmfilter finishing")
 
 
 

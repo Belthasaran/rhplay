@@ -1,0 +1,8 @@
+#!/bin/bash
+trap "wineserver -k;exit" 15
+wine64 $@
+#G=$@
+#timeout -k 20 15 bash -c "wine64 ${G}"
+
+
+

@@ -2098,7 +2098,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">My Difficulty</label>
+              <label class="rating-label">My Difficulty (Review)</label>
               <span class="rating-label-text">{{ difficultyLabel(ratingSheetData.MyDifficultyRating) }}</span>
             </div>
             <div class="rating-row">
@@ -2188,7 +2188,8 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Recommendation <span class="rating-description-inline">(Level to which you would recommend the game, regardless of its qualities)</span></label>
+              <label class="rating-label">Recommend? <span class="rating-description-inline">(
+Do you recommend the title? 0=Never, 1=About as much as SMW, 1=Recommend over few games, 2=Recommend over some games, 3=Recommend over 50% of games, 4=Recommend over 90% of games, 5=Recommend over almost all games)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2213,7 +2214,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Importance <span class="rating-description-inline">(Whether the game is considered Influential or Important regardless of its review qualities)</span></label>
+              <label class="rating-label">Importance <span class="rating-description-inline">(Whether the game is especially Influential or Important regardless of its review qualities, 0=Probably not, 1=Slightly, 2=Some importance, 3=Very important, 4=Extremely important, 5=Renowned, example: Kaizo Mario World)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2238,7 +2239,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Technical Quality <span class="rating-description-inline">(How fully functional, free of major bugs/glitches - crashes, visual glitches, object colors blending with background)</span></label>
+              <label class="rating-label">Technical Quality <span class="rating-description-inline">(How fully functional? 0=Below Average, 1=I haven't checked the game much, or Found the game of about average technical quality. The game could crash or corrupt data while playing normally in places any normal player would access; I found or have not completed the game ruling out major bugs or glitches likely to punish the player or prevent with expected gameplay completing the game, Example: Invictus 1.0 final level start+select, 2=Contains one or more major bugs/glitches - crashes, visual glitches, object colors blending with background, 3=All issues are minor and unlikely to affect most players, 4=Game is almost entirely free of even minor quirks, 5=I checked the game thoroughly and found zero notable glitches)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2263,7 +2264,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Gameplay Design <span class="rating-description-inline">(Enjoyable gameplay, interesting mechanics, free of obstacles that impede player for reasons other than skill - e.g., blind jumps)</span></label>
+              <label class="rating-label">Design: Gameplay<span class="rating-description-inline">(0=About Average, 1=Excellent gameplay for 50% of the game, 2=Above excellent for 80% of the game, 3=Above 90%, 4=Extremely superior gameplay design compared to other titles over almost the whole game, 5=Maximally Enjoyable gameplay, interesting mechanics, completely free of obstacles that impede player for reasons other than skill - e.g., blind jumps)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2288,8 +2289,13 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Design Factors: Player Fairness <span class="rating-description-inline">(Star rating for non-skill Progression barriers:
- To what degree in your opinion - the rate of progression in this title is heavily limited by player skill level at SMW, and almost nothing else.  A rating of 0 is average; while a rating of 5 indicates a player at a skill corresponding to the game's difficulty would spend 90% or greater of play time only as a result of challenges of skill (And not repetitive attempts caused due to non-skill barriers): 5 is minimal obstruction by non SMW-skill-based challenges - e.g. RNG-related tricks, frame-rule dependent obstacles; or spawns; heavily edited Mario movement/customized non-SMW physics or mechanics; Surprize hazards, such as kaizo blocks; long runs of obstacles b/w midways; long series of unobivous/trial-and-error obstacles; required yumps; block grabs; or repeated placement of such tricks above 10 seconds from a starting point or midway. While 0 to 3 suggests half or more average gameplay time spent on such items.)</span></label>
+              <label class="rating-label">Design: Player Fairness <span class="rating-description-inline">(Star rating for non-skill Progression barriers:
+How much does this game’s progress depend mainly on SMW player skill rather than anything else?
+0 stars means a typical amount of non-skill obstacles. 5 stars means that 90% or more of a skilled player’s time is spent due to pure skill challenges, not on repeating sections because of unrelated barriers.
+
+A 5-star game has minimal non-skill blockers—very little RNG, frame-rule quirks, odd or custom physics, surprise hazards (like kaizo blocks), long stretches without midways, trial-and-error setups, or required advanced tricks (yumps, block grabs) far from a checkpoint.
+Ratings 0–3 mean that half or more of the average playtime comes from these non-skill barriers rather than SMW skill itself.
+                 </span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2314,7 +2320,11 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Design: Challenge Qualities<span class="rating-description-inline">(In your view: To what extent does the game create many high-quality challenges that test players' fundamental SMW platforming skills in line with the game's target or listed difficulty (plus trick skills at shown level) to complete this. It's a question of how much does the game provide tests of skill you look for at this game type and level. How well does the game push the player. And a score of 5 implies 80% of play time is spent due to High-Quality, Adequate challenges.)</span></label>
+              <label class="rating-label">Design: Challenge Quality<span class="rating-description-inline">
+(How well does the game provide high-quality challenges that test the player’s core SMW platforming skills at the game’s intended difficulty level (including any expected tricks)? Any score above 0 stars means the game is at least average in this regard.
+A 5-star rating means the game is almost entirely made of strong, appropriate challenges—around 95% of playtime comes from fair, well-designed tests of SMW skill that match the game’s difficulty.
+Lower scores mean fewer such challenges and more time spent on obstacles that don’t meaningfully push or develop the player’s SMW platforming skill.)
+</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2339,7 +2349,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Originality / Creativity <span class="rating-description-inline">(The game is significantly unique and interesting)</span></label>
+              <label class="rating-label">Originality / Creativity <span class="rating-description-inline">(0=The game is about average, 1=The game has an element that is unique and interesting, 2=The game has many elements that are more original or creative than most games, 3=Every level has many such elements; the game is above most titles in this element; 4=The game is above excellent and above 90% of games in this area; 5=The game has creative unique features to the maximal level, and moreso then 99% of games</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2364,7 +2374,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Visual Aesthetics <span class="rating-description-inline">(Overworld and levels well designed visually - free of floating muncher stacks, naked pipes, etc.)</span></label>
+              <label class="rating-label">Visual Aesthetics and Graphics <span class="rating-description-inline">(0=About average or less, might have issues. 1=Above average. Overworld and levels well designed visually - basically free of floating muncher stacks, naked pipes, throughout the game, etc. 2=Very good visual aesthetics throughout at least 80% of the game. 3=Extremely good visual aesthetics within 90% or more. 4=The aesthetics are mind-blowing. 5=The aesthetics are out of this world for 99% of the game and exceed 99% of other SMW games.)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2389,7 +2399,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Story <span class="rating-description-inline">(Does the game have a compelling or interesting story?)</span></label>
+              <label class="rating-label">Story <span class="rating-description-inline">(Does the game have a compelling or interesting story? 0=About average for SMW games, Story is not a typical element. 1=Notable story elements. 2=The game contains a complete story with character development and world building. 3=Pervasive dialog and storytelling, to the extent this could be considered an RPG. 4=High quality story. Highly immersive interesting story integration.  5=The story is a major draw for the game, and is almost the entire game.)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2414,7 +2424,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Soundtrack and Graphics <span class="rating-description-inline">(Quality of soundtrack and graphics presentation)</span></label>
+              <label class="rating-label">Soundtrack<span class="rating-description-inline">(Quality of soundtrack and graphics presentation, 0=Poorer than vanilla SMW, or seems more like noise than music (example: Casio); 1=Average soundtrack or graphics; 2=Good soundtrack and graphics - better than vanilla; 3=Above very good soundtrack and graphics; 4=Highly excellent soundtrack and graphics throughout the entire game, better than 90% of games; 5=Better than 99% of games in this area)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -33715,7 +33725,7 @@ button:disabled {
 
 .rating-sheet-modal .rating-label {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 24px;
   color: var(--text-primary);
   display: inline;
   line-height: 1.4;
@@ -33723,14 +33733,14 @@ button:disabled {
 
 .rating-sheet-modal .rating-description-inline {
   font-weight: normal;
-  font-size: 12px;
+  font-size: 22px;
   color: var(--text-secondary);
   font-style: italic;
 }
 
 .rating-sheet-modal .rating-label-text {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 24px;
   font-weight: normal;
   white-space: nowrap;
 }
@@ -33754,7 +33764,7 @@ button:disabled {
   border-radius: 4px;
   background: var(--input-bg);
   color: var(--text-color);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
 }
 

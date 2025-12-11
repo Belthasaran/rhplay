@@ -2189,7 +2189,8 @@
           <div class="rating-component">
             <div class="rating-header">
               <label class="rating-label">Recommend? <span class="rating-description-inline">(
-Do you recommend the title? 0=Never, 1=About as much as SMW, 1=Recommend over few games, 2=Recommend over some games, 3=Recommend over 50% of games, 4=Recommend over 90% of games, 5=Recommend over almost all games)</span></label>
+Do you recommend the title?</span></label>
+               <span class="rating-label-text">{{ recommendLabel(ratingSheetData.MyRecommendationRating) }}</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2214,7 +2215,8 @@ Do you recommend the title? 0=Never, 1=About as much as SMW, 1=Recommend over fe
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Importance <span class="rating-description-inline">(Whether the game is especially Influential or Important regardless of its review qualities, 0=Probably not, 1=Slightly, 2=Some importance, 3=Very important, 4=Extremely important, 5=Renowned, example: Kaizo Mario World)</span></label>
+              <label class="rating-label">Renown <span class="rating-description-inline">(Whether the game is especially Influential or famous in your view; regardless of its review qualities)</span></label>
+              <span class="rating-label-text">{{ importanceLabel(ratingSheetData.MyImportanceRating) }}</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2239,7 +2241,9 @@ Do you recommend the title? 0=Never, 1=About as much as SMW, 1=Recommend over fe
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Technical Quality <span class="rating-description-inline">(How fully functional? 0=Below Average, 1=I haven't checked the game much, or Found the game of about average technical quality. The game could crash or corrupt data while playing normally in places any normal player would access; I found or have not completed the game ruling out major bugs or glitches likely to punish the player or prevent with expected gameplay completing the game, Example: Invictus 1.0 final level start+select, 2=Contains one or more major bugs/glitches - crashes, visual glitches, object colors blending with background, 3=All issues are minor and unlikely to affect most players, 4=Game is almost entirely free of even minor quirks, 5=I checked the game thoroughly and found zero notable glitches)</span></label>
+              <label class="rating-label">Technical Quality <span class="rating-description-inline">(How fully functional? </span></label>
+              <span class="rating-label-text">{{ techQualityLabel(ratingSheetData.MyTechnicalQualityRating) }}</span>
+
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2264,7 +2268,8 @@ Do you recommend the title? 0=Never, 1=About as much as SMW, 1=Recommend over fe
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Design: Gameplay<span class="rating-description-inline">(0=About Average, 1=Excellent gameplay for 50% of the game, 2=Above excellent for 80% of the game, 3=Above 90%, 4=Extremely superior gameplay design compared to other titles over almost the whole game, 5=Maximally Enjoyable gameplay, interesting mechanics, completely free of obstacles that impede player for reasons other than skill - e.g., blind jumps)</span></label>
+              <label class="rating-label">Design: Gameplay<span class="rating-description-inline"></span></label>
+              <span class="rating-label-text">{{ designGameplayLabel(ratingSheetData.MyGameplayDesignRating) }}</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2291,11 +2296,10 @@ Do you recommend the title? 0=Never, 1=About as much as SMW, 1=Recommend over fe
             <div class="rating-header">
               <label class="rating-label">Design: Player Fairness <span class="rating-description-inline">(Star rating for non-skill Progression barriers:
 How much does this game’s progress depend mainly on SMW player skill rather than anything else?
-0 stars means a typical amount of non-skill obstacles. 5 stars means that 90% or more of a skilled player’s time is spent due to pure skill challenges, not on repeating sections because of unrelated barriers.
-
-A 5-star game has minimal non-skill blockers—very little RNG, frame-rule quirks, odd or custom physics, surprise hazards (like kaizo blocks), long stretches without midways, trial-and-error setups, or required advanced tricks (yumps, block grabs) far from a checkpoint.
-Ratings 0–3 mean that half or more of the average playtime comes from these non-skill barriers rather than SMW skill itself.
-                 </span></label>
+                 </span>
+                <span class="rating-label-text" style="white-space: wrap;">{{ designFairnessLabel(ratingSheetData.MyFairnessRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2321,10 +2325,11 @@ Ratings 0–3 mean that half or more of the average playtime comes from these no
           <div class="rating-component">
             <div class="rating-header">
               <label class="rating-label">Design: Challenge Quality<span class="rating-description-inline">
-(How well does the game provide high-quality challenges that test the player’s core SMW platforming skills at the game’s intended difficulty level (including any expected tricks)? Any score above 0 stars means the game is at least average in this regard.
-A 5-star rating means the game is almost entirely made of strong, appropriate challenges—around 95% of playtime comes from fair, well-designed tests of SMW skill that match the game’s difficulty.
-Lower scores mean fewer such challenges and more time spent on obstacles that don’t meaningfully push or develop the player’s SMW platforming skill.)
-</span></label>
+
+(How well does the game provide high-quality challenges that test the player’s core SMW platforming skills at the game’s intended difficulty level (including any expected tricks)?)
+</span><span class="rating-label-text" style="white-space: wrap;">{{ designChallengeQualityLabel(ratingSheetData.MyChallengeQualityRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2349,7 +2354,9 @@ Lower scores mean fewer such challenges and more time spent on obstacles that do
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Originality / Creativity <span class="rating-description-inline">(0=The game is about average, 1=The game has an element that is unique and interesting, 2=The game has many elements that are more original or creative than most games, 3=Every level has many such elements; the game is above most titles in this element; 4=The game is above excellent and above 90% of games in this area; 5=The game has creative unique features to the maximal level, and moreso then 99% of games</span></label>
+              <label class="rating-label">Originality / Creativity <span class="rating-description-inline"></span><span class="rating-label-text" style="white-space: wrap;">{{ originalityLabel(ratingSheetData.MyOriginalityRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2374,7 +2381,9 @@ Lower scores mean fewer such challenges and more time spent on obstacles that do
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Visual Aesthetics and Graphics <span class="rating-description-inline">(0=About average or less, might have issues. 1=Above average. Overworld and levels well designed visually - basically free of floating muncher stacks, naked pipes, throughout the game, etc. 2=Very good visual aesthetics throughout at least 80% of the game. 3=Extremely good visual aesthetics within 90% or more. 4=The aesthetics are mind-blowing. 5=The aesthetics are out of this world for 99% of the game and exceed 99% of other SMW games.)</span></label>
+              <label class="rating-label">Visual Aesthetics and Graphics <span class="rating-description-inline"></span><span class="rating-label-text" style="white-space: wrap;">{{ visualAestheticsLabel(ratingSheetData.MyVisualAestheticsRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2399,7 +2408,9 @@ Lower scores mean fewer such challenges and more time spent on obstacles that do
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Story <span class="rating-description-inline">(Does the game have a compelling or interesting story? 0=About average for SMW games, Story is not a typical element. 1=Notable story elements. 2=The game contains a complete story with character development and world building. 3=Pervasive dialog and storytelling, to the extent this could be considered an RPG. 4=High quality story. Highly immersive interesting story integration.  5=The story is a major draw for the game, and is almost the entire game.)</span></label>
+              <label class="rating-label">Story <span class="rating-description-inline">(Does the game have a compelling or interesting story? igh quality story. Highly immersive interesting story integration.</span><span class="rating-label-text" style="white-space: wrap;">{{ designStoryLabel(ratingSheetData.MyStoryRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2424,7 +2435,11 @@ Lower scores mean fewer such challenges and more time spent on obstacles that do
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Soundtrack<span class="rating-description-inline">(Quality of soundtrack and graphics presentation, 0=Poorer than vanilla SMW, or seems more like noise than music (example: Casio); 1=Average soundtrack or graphics; 2=Good soundtrack and graphics - better than vanilla; 3=Above very good soundtrack and graphics; 4=Highly excellent soundtrack and graphics throughout the entire game, better than 90% of games; 5=Better than 99% of games in this area)</span></label>
+              <label class="rating-label">Soundtrack<span class="rating-description-inline">()</span><span class="rating-label-text" style="white-space: wrap;">{{ designSoundtrackLabel(ratingSheetData.MySoundtrackGraphicsRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+
+<!-- //designStoryLabel designSoundtrackLabel -->
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -26993,6 +27008,19 @@ function formatRatings(difficulty?: number | null, review?: number | null): stri
   return `${d} ${r}`;
 }
 
+function recommendLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Never Recommend',      // 0
+    'Recommend over few games, About as much as SMW',        // 1
+    'Recommend over some games',       // 2
+    'Recommend over 50% of games', // 3
+    'Recommend over 90% of games',            // 4
+    'Recommend over almost all games',       // 5
+  ];
+  return labels[rating] || '';
+}
+
 function difficultyLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
@@ -27013,9 +27041,132 @@ function difficultyLabel(rating?: number | null): string {
 
 function reviewLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
-  const labels = ['Terrible', 'Not Recommended', 'Below Average', 'Average', 'Good', 'Excellent'];
+  const labels = ['Not exceptional', 'Okay, but Not Recommended', 'About Average', 'Good', 'Extremely Great', 'Superior to 99% of games'];
   return labels[rating] || '';
 }
+
+function importanceLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+   'Not a popularly known title',
+   'Slight influence',
+   'Title is of some influence',
+   'Title has substantial renown',
+   'Title is a major influence to many games',
+   'Famed title, example: Kaizo Mario World'
+  ];
+  return labels[rating] || '';
+}
+
+function techQualityLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+   'Less than Average',
+   'Found the game of about average technical quality.',
+   'The game could crash or corrupt data while playing normally.',
+   'Contains a major bug, visual artifact, etc',
+   'All issues are few, minor, and rare',
+   'Zero notable glitches'
+  ];
+  return labels[rating] || '';
+}
+
+function designGameplayLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+   'About Average',
+  'Excellent gameplay >=50% of the game',
+  'Above excellent for 80% of the game. All trolls easily avoidable after 1 try.',
+  'Above 90%. 80% free of blind jumps; kaizo trolls; all trolls easily avoidable.',
+  'Extremely superior gameplay design vs other titles. 90% of sections free of blind jumps, kaizo trolls, etc',
+  'Maximally Enjoyable interesting gameplay. 100% free of blind jumps, kaizo trolls, etc'
+  ];
+  return labels[rating] || '';
+}
+
+
+function designFairnessLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+   'Poor, Even an Expert player is greatly hindered by challenges of not SMW skills. RNG. Non-SMW custom mechanics or physics (example: Casio water). Unforseeable trolls, Frame Rules, or Frame-perfect tricks, etc.',
+   'Below average. Game might have long retry sections or long series of obstacles that cannot be played blind at pace of level. The game might have a one-frame trick, such as required Yump or block grab a few obstacles after the start or midway.',
+   'About average. Game has well-placed midways. Rarely imposes retry based on obstacles a maximally skilled player would not first-time win. Might contain some easily-avoidable trolls. There are zero chains of frame-perfect tricks, or frame-perfect tricks more than 5 seconds away from start or checkpoint.',
+   'Above Average. Gameplay never punishes a skilled player for not having seen the level yet. There are almost zero trolls; all easy to avoid.',
+   '10% or less of skilled player time is spent ever repeating sections due to a non-skill challenge.',
+   '5%/less time is spent due to non-skill obstacles.'
+  ];
+  return labels[rating] || '';
+}
+
+function designChallengeQualityLabel(rating?: number | NULL): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+     'Below Average. The game difficulty rating may be too high for its game type, or else the game does not push the player to have or develop SMW-related skills.  The challenge emphasis might be not towards SMW skills at the difficulty level selected.',
+    'About average. The game is like other games in its type.',
+    'The game has above average quality, better than 80% of games. In skill-related challenges that seem in line with the rated difficulty.',
+    'The game is excellent, and in the top 10% of games one should play for skill-based challenges representative of the games targeted difficulty.',
+    'Game is made almost entirely of strong, SMW skill-related challenges at appropriate difficulty. 95% of playtime comes from fair, well-designed testse of SMW skill which correspond to the gam difficulty rating.'
+  ];
+  return labels[rating] || '';
+
+}
+
+function originalityLabel(rating?: number | NULL): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+   'The game is about average.',
+   'The game is mostly original; is not a clone or remake. Has an element that is unique and interesting.',
+  'The game has many elements that are more original or creative than half of games',
+  'Every level has entirely new elements; the game is above most titles in this element',
+  'The game is above excellent and above 90% of games in this area',
+  'The game has creative unique features to the maximal level, and moreso then 99% of games.'
+  ];
+  return labels[rating] || '';
+}
+
+function visualAestheticsLabel(rating?: number | NULL): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'About average or less, might have issues.',
+    'Above average. Overworld and levels well designed visually - basically free of floating muncher stacks, naked pipes, throughout the game, etc',
+    'Very good visual aesthetics throughout at least 80% of the game. May have custom graphics..',
+    'Has custom graphics. Extremely good visual aesthetics within 90% or more.',
+    'The aesthetics are mind-blowing.',
+    'The aesthetics are out of this world for 99% of the game and exceed 99% of other SMW games.'
+  ];
+ 
+  return labels[rating] || '';
+}
+
+function designStoryLabel(rating?: number | NULL) : string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+   '0=About average for SMW games, Story is not a typical element.',
+   '1=Notable story elements.',
+   '2=The game contains a complete story with character development and world building.',
+   '3=Pervasive dialog and storytelling, to the extent this could be considered an RPG.',
+   '4=High quality story. Highly immersive interesting story integration.',
+   '5=The story is a major draw for the game, and is almost the entire game.'
+  ];
+
+  return labels[rating] || '';
+}
+
+
+function designSoundtrackLabel(rating?: number | NULL) : string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    '0=Poorer than vanilla SMW, or seems more like noise than music (example: Casio)',
+   '1=Average soundtrack or graphics',
+   '2=Good soundtrack and graphics - better than vanilla',
+   '3=Above very good soundtrack and graphics',
+   '4=Highly excellent soundtrack and graphics throughout the entire game. Better than 90% of games.',
+   '5=Better than 99% of games in this area)'
+  ];
+  
+  return labels[rating] || '';
+}
+
 
 function skillLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
@@ -33751,9 +33902,12 @@ button:disabled {
 }
 
 .rating-sheet-modal .rating-label-text {
-  color: var(--text-secondary);
+  /* color: var(--text-secondary); */
+  color: magenta;
+  font-weight: bold;
+  background: black;
   font-size: 24px;
-  font-weight: normal;
+  /* font-weight: normal; */
   white-space: nowrap;
 }
 

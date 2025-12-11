@@ -2288,7 +2288,8 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Player Fairness <span class="rating-description-inline">(Star rating for progression barriers - whether they are highly related to player skill level, and not artificial imposed barriers unrelated to player skill at SMW. A rating of 5 indicates all challenges are reasonable, and a player at the general skill level the game is intended for would spend 99% of their gameplay time tackling challenges of skill, and not being impeded by obstacles or sequence of challenges that a human of any skill level would usually fail at least once - e.g., hazards or trolls which cannot be anticipated, or very long runs of obstacles between checkpoints)</span></label>
+              <label class="rating-label">Design Factors: Player Fairness <span class="rating-description-inline">(Star rating for non-skill Progression barriers:
+ To what degree in your opinion - the rate of progression in this title is heavily limited by player skill level at SMW, and almost nothing else.  A rating of 0 is average; while a rating of 5 indicates a player at a skill corresponding to the game's difficulty would spend 90% or greater of play time only as a result of challenges of skill (And not repetitive attempts caused due to non-skill barriers): 5 is minimal obstruction by non SMW-skill-based challenges - e.g. RNG-related tricks, frame-rule dependent obstacles; or spawns; heavily edited Mario movement/customized non-SMW physics or mechanics; Surprize hazards, such as kaizo blocks; long runs of obstacles b/w midways; long series of unobivous/trial-and-error obstacles; required yumps; block grabs; or repeated placement of such tricks above 10 seconds from a starting point or midway. While 0 to 3 suggests half or more average gameplay time spent on such items.)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">
@@ -2313,7 +2314,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Challenge Quality <span class="rating-description-inline">(Whether players actually need valid skill to complete this, or the game has mostly challenges where a player at the defined skill level simply wins with enough trial and error. A score of 0 suggests the hack contains many trial and error challenges that any player with enough time could clear. A score of 5 indicates that only by developing meaningful skills at SMW gameplay, native SMW mechanics, or understanding of SMW, can the player overcome these challenges. High challenge quality means there is high transferability of skills required to beat the hack to SMW in general)</span></label>
+              <label class="rating-label">Design: Challenge Qualities<span class="rating-description-inline">(In your view: To what extent does the game create many high-quality challenges that test players' fundamental SMW platforming skills in line with the game's target or listed difficulty (plus trick skills at shown level) to complete this. It's a question of how much does the game provide tests of skill you look for at this game type and level. How well does the game push the player. And a score of 5 implies 80% of play time is spent due to High-Quality, Adequate challenges.)</span></label>
             </div>
             <div class="rating-row">
               <div class="star-rating">

@@ -1305,6 +1305,73 @@ const MIGRATIONS = {
           && columnExists(db, 'user_game_version_annotations', 'user_challenge_quality_comment');
       },
     },
+    {
+      id: 'clientdata_057_difficulty_rating_0_to_10',
+      description: 'Update CHECK constraints to allow 0-10 range for user_difficulty_rating (instead of 0-5)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/057_clientdata_difficulty_rating_0_to_10.sql'),
+      skipIf(db) {
+        // CRITICAL: Check if constraints already allow 0-10 to avoid unnecessary table recreation
+        // This is important because:
+        // 1. Large tables would take a long time to recreate
+        // 2. Users may have custom columns not in the migration
+        // 3. Table recreation is risky and should be avoided if possible
+        
+        try {
+          // Test if we can insert a 10 value into user_difficulty_rating
+          // This will fail if the constraint doesn't allow 10 (i.e., still limited to 0-5)
+          const testGameId = '__migration_test_057';
+          
+          // Check if test row already exists (from previous failed migration attempt)
+          const existingTest = db.prepare('SELECT gameid FROM user_game_annotations WHERE gameid = ?').get(testGameId);
+          if (existingTest) {
+            // Clean up any leftover test row
+            db.prepare('DELETE FROM user_game_annotations WHERE gameid = ?').run(testGameId);
+          }
+          
+          // Try to insert a row with 10 rating - this will fail if constraint doesn't allow 10
+          const insertStmt = db.prepare(`
+            INSERT INTO user_game_annotations (gameid, user_difficulty_rating)
+            VALUES (?, 10)
+          `);
+          
+          insertStmt.run(testGameId);
+          
+          // If we get here, the constraint allows 10 - migration already applied
+          // Clean up test row
+          db.prepare('DELETE FROM user_game_annotations WHERE gameid = ?').run(testGameId);
+          
+          // Also test user_game_version_annotations if it exists
+          if (tableExists(db, 'user_game_version_annotations')) {
+            const existingTestVersion = db.prepare('SELECT gameid, version FROM user_game_version_annotations WHERE gameid = ? AND version = ?').get(testGameId, 999);
+            if (existingTestVersion) {
+              db.prepare('DELETE FROM user_game_version_annotations WHERE gameid = ? AND version = ?').run(testGameId, 999);
+            }
+            
+            const insertVersionStmt = db.prepare(`
+              INSERT INTO user_game_version_annotations (gameid, version, user_difficulty_rating)
+              VALUES (?, 999, 10)
+            `);
+            
+            insertVersionStmt.run(testGameId);
+            db.prepare('DELETE FROM user_game_version_annotations WHERE gameid = ? AND version = ?').run(testGameId, 999);
+          }
+          
+          // Constraints already allow 0-10 - skip migration
+          return true;
+        } catch (err) {
+          // If insert fails, constraint doesn't allow 10 - migration needed
+          // Clean up any partial test row just in case
+          try {
+            db.prepare('DELETE FROM user_game_annotations WHERE gameid = ?').run('__migration_test_057');
+            db.prepare('DELETE FROM user_game_version_annotations WHERE gameid = ? AND version = ?').run('__migration_test_057', 999);
+          } catch (cleanupErr) {
+            // Ignore cleanup errors
+          }
+          return false;
+        }
+      },
+    },
   ],
   thumbnail_cache: [
     {

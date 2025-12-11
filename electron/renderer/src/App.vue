@@ -2096,22 +2096,22 @@
             </div>
           </div>
           
-          <div class="rating-component">
-            <div class="rating-header">
-              <label class="rating-label">My Difficulty (Review)</label>
-              <span class="rating-label-text">{{ difficultyLabel(ratingSheetData.MyDifficultyRating) }}</span>
-            </div>
-            <div class="rating-row">
-              <div class="star-rating">
-                <span 
-                  v-for="n in 6" 
-                  :key="'diff-' + (n-1)"
-                  @click="updateRating('MyDifficultyRating', n - 1)"
-                  :class="{ filled: (n - 1) <= (ratingSheetData.MyDifficultyRating ?? -1) }"
-                  class="star"
-                >★</span>
-                <button @click="updateRating('MyDifficultyRating', null)" class="btn-clear-rating">✕</button>
+            <div class="rating-component">
+              <div class="rating-header">
+                <label class="rating-label">My Difficulty (Review)</label>
+                <span class="rating-label-text">{{ difficultyLabel(ratingSheetData.MyDifficultyRating) }}</span>
               </div>
+              <div class="rating-row">
+                <div class="star-rating">
+                  <span 
+                    v-for="n in 11" 
+                    :key="'diff-' + (n-1)"
+                    @click="updateRating('MyDifficultyRating', n - 1)"
+                    :class="{ filled: (n - 1) <= (ratingSheetData.MyDifficultyRating ?? -1) }"
+                    class="star star-small"
+                  >★</span>
+                  <button @click="updateRating('MyDifficultyRating', null)" class="btn-clear-rating">✕</button>
+                </div>
               <input 
                 type="text" 
                 v-model="ratingSheetData.MyDifficultyComment"
@@ -2124,7 +2124,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">My Skill (At time I rated this)</label>
+              <label class="rating-label">My Skill (At this game type, At time I rated this)</label>
               <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRating) }}</span>
             </div>
             <div class="rating-row">
@@ -2156,7 +2156,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">My Skill (At time I beat this game)</label>
+              <label class="rating-label">My Skill (At time I actually beat this game)</label>
               <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRatingWhenBeat) }}</span>
             </div>
             <div class="rating-row">
@@ -7922,7 +7922,7 @@ type Item = {
   RawDifficulty?: string;
   CombinedType?: string;
   Status: ItemStatus;
-  MyDifficultyRating?: number | null;  // 0-5
+  MyDifficultyRating?: number | null;  // 0-10
   MyReviewRating?: number | null;      // 0-5
   MySkillRating?: number | null;       // 0-10
   MySkillRatingWhenBeat?: number | null;  // 0-10
@@ -26995,7 +26995,19 @@ function formatRatings(difficulty?: number | null, review?: number | null): stri
 
 function difficultyLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
-  const labels = ['Super Easy', 'Very Easy', 'Easy', 'Normal', 'Hard', 'Very Hard'];
+  const labels = [
+    'Trivial (Difficulty zero)',      // 0
+    'Newcomer',        // 1
+    'Casual Standard or Kaizo Tutorial',       // 2
+    'Intermediate Standard or Kaizo Beginner', // 3
+    'Advanced',            // 4
+    'Expert',       // 5
+    'Master',  // 6
+    'Grandmaster',          // 7
+    'Grandmaster Plus',          // 8
+    'TAS-Only',       // 9
+    'Impossible'          // 10
+  ];
   return labels[rating] || '';
 }
 
@@ -27008,17 +27020,17 @@ function reviewLabel(rating?: number | null): string {
 function skillLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
-    'Observer',      // 0
-    'Casual',        // 1
-    'Apprentice',    // 2
-    'Advanced',      // 3
-    'Expert',        // 4
-    'Master',        // 5
-    'Legend',        // 6
-    'Champion',      // 7
-    'Deity',         // 8
-    'Speedrunner',   // 9
-    'Pro Speedrunner' // 10
+    'Observer',          // 0
+    'Newcomer',          // 1
+    'Casual/Apprentice', // 2
+    'Intermediate Stdandard/Kaizo Beginner Player',     // 3
+    'Advanced Standard/Kaizo Intermediate',   // 4
+    'Expert Standard/Expert Kaizo Player',  // 5
+    'Master Std Player/Kaizo Master', // 6
+    'Grandmaster/Kaizo Grandmaster',    // 7
+    'Grandmaster+/Legend', // 8
+    'Deity',         // 9
+    'TAS'            // 10
   ];
   return labels[rating] || '';
 }

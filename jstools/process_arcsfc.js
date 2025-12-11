@@ -113,9 +113,19 @@ async function determineROMType(filePath) {
   const size = stats.size;
   const sizeMod1024 = size % 1024;
   
-  if ((isPowerOf2KB(size) && sizeMod1024 === 0) || (size === 3145728) || (size === 2097152) || (size === 4194304) || (size === 2621440) || (size === 1048576) || (size === 1179648)) {
+	//
+	//The power of 2 thing is just a suggestion, apparently.
+	//We have a lot of exceptions.
+	//
+	//Still i'm just looking to pare them down to a small enough number, so the rest of the files can be looked at manually.
+	//
+	//
+	// these 1081344-byte files  might be headered despite not being a power of 2.. it does have  n mod 1024==512., hmm.
+	////  What is this 786432 size?
+	//
+  if (sizeMod1024==0 && ((isPowerOf2KB(size) && sizeMod1024 === 0) || (size === 3145728) || (size === 2097152) || (size === 4194304) || (size === 2621440) || (size === 1048576) || (size === 1179648) || (size === 2097152) || (size === 4194304) || (size === 6291456)  || (size == 1310720) || (size === 3145728) || (size === 1572864) || (size === 3276800) || (size === 2621440) ))  {
     return 'unheadered';
-  } else if (sizeMod1024 === 512 && isPowerOf2KB(size - 512)) {
+  } else if (sizeMod1024 === 512 && (isPowerOf2KB(size - 512) || (0)  )) {
     return 'headered';
   } else {
     return 'exception';
@@ -746,7 +756,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       };
       
       await appendLog(`[Step 10.5] Running: python3 try_lmfilter.py (GAMETAG=${sfc_rom_sha1_hash}, GAMEVER=1, ROMFILE=temp/source_unh.sfc)`);
-      const lmfilterResult = spawnSync('python3', ['try_lmfilter.py'], {
+      const lmfilterResult = spawnSync('/usr/bin/timeout', ['-k', '20', '15', '/usr/bin/python3', 'try_lmfilter.py'], {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
         env: env,

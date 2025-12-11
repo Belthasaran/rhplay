@@ -12,7 +12,7 @@ const HARDCODED_BANS = [
   { gameid: 'test001',
     match_column: 'gameid',
     match_pattern: 'exact:test001',
-    sense: '*',
+    sense: '*run*,*start*,*details*,*soft*',
     required_acknowledgments: 'Extreme_Difficulty',
     starting_at: null,
     warningtext: 'Test ban for test game',

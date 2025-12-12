@@ -134,7 +134,7 @@ async function determineROMType(filePath) {
 
 // Helper function to execute wine command
 function executeWine(command, args, cwd) {
-  const result = spawnSync('wine', [command, ...args], {
+  const result = spawnSync('wine64', [command, ...args], {
     cwd: cwd || process.cwd(),
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe']
@@ -761,12 +761,17 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       };
       
       await appendLog(`[Step 10.5] Running: python3 try_lmfilter.py (GAMETAG=${sfc_rom_sha1_hash}, GAMEVER=1, ROMFILE=temp/source_unh.sfc)`);
-      const lmfilterResult = spawnSync('/usr/bin/timeout', ['-k', '20', '15', '/usr/bin/python3', 'try_lmfilter.py'], {
+      const lmfilterResult = spawnSync('/usr/bin/timeout', ['--foreground', '-k', '20', '15', '/usr/bin/python3', 'try_lmfilter.py'], {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
         env: env,
-        cwd: process.cwd()
+        cwd: process.cwd(),
+        maxBuffer: 1024 * 1024 * 200
       });
+      await appendLog('finish spawnsync:')
+
+      await appendLog(lmfilterResult.stdout)
+      await appendLog(lmfilterResult.stderr)
       
       if (lmfilterResult.status === 0) {
         const lmfilterOutputPath = `output/${sfc_rom_sha1_hash}_lmfilter.json`;

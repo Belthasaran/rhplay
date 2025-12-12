@@ -2098,7 +2098,7 @@
           
             <div class="rating-component">
               <div class="rating-header">
-                <label class="rating-label">My Difficulty (Review)</label>
+                <label class="rating-label">Peak Difficulty (My Review)</label>
                 <span class="rating-label-text">{{ difficultyLabel(ratingSheetData.MyDifficultyRating) }}</span>
               </div>
               <div class="rating-row">
@@ -2324,9 +2324,9 @@ How much does this game’s progress depend mainly on SMW player skill rather th
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Design: Challenge Quality<span class="rating-description-inline">
+              <label class="rating-label">Design: Challenge Quality / Engagement<span class="rating-description-inline">
 
-(How well does the game provide high-quality challenges that test the player’s core SMW platforming skills at the game’s intended difficulty level (including any expected tricks)?)
+(How well does the game provide high-quality challenges that test or engage the player’s core SMW skills at the game’s intended difficulty level (including any expected tricks)?)
 </span><span class="rating-label-text" style="white-space: wrap;">{{ designChallengeQualityLabel(ratingSheetData.MyChallengeQualityRating) }}</span>
               </label>
               <span class="rating-label-text">-</span>
@@ -27061,7 +27061,7 @@ function importanceLabel(rating?: number | null): string {
 function techQualityLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
-   'The game is almost unplayable.',
+   'The game is almost unplayable. Serious bugs; incompatibility with console or emulator; etc.',
    'The game could crash or corrupt data while playing normally; Or contain soft locks or soft lock trolls.',
    'Average technical quality. There are zero softlock trolls, or zero softlocks players would often encounter. May be mostly stable with a few bugs that aren't serious.',
    'Contains few major bugs of any kind, deminimis impact, no data loss, no visual artifact, etc',
@@ -27115,7 +27115,7 @@ function designChallengeQualityLabel(rating?: number | NULL): string {
 function originalityLabel(rating?: number | NULL): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
-   'The game is below average. It might be just a vanilla edit, or something.',
+   'The game is below average originality. It may be repetitive or limited in substance.',
    'The game is about average. Original levels. It might be a clone or remake, but is not simply one.',
   'Above average. The game has many elements that are more original or creative than half of games',
   'Every level has entirely new elements; the game is above most titles in the element of originality or novelty.',

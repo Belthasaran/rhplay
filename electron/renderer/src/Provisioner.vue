@@ -1,7 +1,7 @@
 <template>
   <div class="provisioner">
     <!-- ROM Check Modal -->
-    <div v-if="romCheckModalOpen" class="modal-backdrop" @click.self="romCheckModalOpen = false">
+    <div v-if="romCheckModalOpen" class="modal-backdrop">
       <div class="modal-content rom-check-modal">
         <h2>Super Mario World ROM Required</h2>
         <div class="rom-check-explanation">
@@ -28,7 +28,6 @@
         </div>
         <div class="rom-check-actions">
           <button @click="browseRomFile" class="primary">Browse Files</button>
-          <button @click="romCheckModalOpen = false" :disabled="!romFound">Cancel</button>
         </div>
       </div>
     </div>
@@ -465,6 +464,9 @@ async function browseRomFile() {
     romFound.value = true;
     romCheckModalOpen.value = false;
     romValidationError.value = null;
+    
+    // Refresh plan after successful ROM copy
+    await refreshPlan();
   } catch (err) {
     romValidationError.value = err instanceof Error ? err.message : 'Failed to select ROM file';
   }

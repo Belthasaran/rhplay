@@ -27198,7 +27198,7 @@ function skillRatingHoverText(rating: number): string {
     'I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.', // 7
     'I could speedrun Master++ hacks like DRAM3 RTA: I dont find it difficult. I want longer levels with harder tricks; more trolls.',  // 8
     'I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these', // 9
-    '???'       // 10
+    'You probably set this value too high, since 10 is literally above (8) TAS-Only difficulty.'       // 10
   ];
   return texts[rating] || '';
 }

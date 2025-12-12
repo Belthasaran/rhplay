@@ -1,3 +1,11 @@
+- P202501XX
+
+- **Migration 057 Fix**: Thoroughly reviewed and fixed `057_clientdata_difficulty_rating_0_to_10.sql` to ensure zero adverse effects. The migration now correctly preserves all columns (including `user_fairness_rating`, `user_fairness_comment`, `user_challenge_quality_rating`, `user_challenge_quality_comment`), all indexes, all triggers, and all views. Added missing `created_at` and `updated_at` columns to `user_game_version_annotations_new` table, recreated all 12 indexes for `user_game_version_annotations`, recreated the `trigger_user_game_version_updated` trigger (using `(gameid, version)` instead of deprecated `annotation_key`), and recreated the `v_stages_with_annotations` view that was dropped but not restored. The migration now only changes the `user_difficulty_rating` CHECK constraint from 0-5 to 0-10 for both `user_game_annotations` and `user_game_version_annotations` tables, with all other schema elements preserved.
+
+- **ROM Modal Improvements**: Enhanced the Super Mario World ROM requirement modal in the Provisioner assistant. The modal can no longer be dismissed by clicking outside the modal backdrop, and the Cancel button has been removed, ensuring users must complete the ROM file selection step before proceeding. Additionally, the provisioning plan now automatically refreshes after a valid ROM file is successfully selected and copied, providing immediate feedback on the provisioning requirements.
+
+- **IPC Handler Schema Enforcement**: Removed conditional column handling from `electron/ipc-handlers.js` for `user_fairness_rating`, `user_fairness_comment`, `user_challenge_quality_rating`, and `user_challenge_quality_comment` columns. These columns are now always included in all SELECT and INSERT statements. If these columns are missing from the database schema (which should never happen after migrations are applied), SQLite will throw an error that will be caught and reported as a critical error, ensuring schema integrity issues are immediately brought to attention rather than silently handled.
+
 - P20251204
 
 - **TODO** - Delete of patch presets and patches are unavailable.  Implement appropriate delete logic that only makes sure the patch/patch reset is not used by other objects before allowing delete.

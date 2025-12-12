@@ -719,6 +719,11 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
     
     const bpsFilename = path.basename(bpsPath);
     console.log(`  BPS patch created: ${bpsFilename}`);
+
+    var bps_sha1_hash = await calculateSHA1(bpsPath);
+    var bps_sha256_hash = await calculateSHA256(bpsPath);
+
+
     
     // Step 10: Run level_reader program
     console.log('Step 10: Running level_reader...');
@@ -819,6 +824,8 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       smc2_rom_sha1_hash,
       smc2_rom_sha256_hash,
       bps_filename: bpsFilename,
+      bps_sha1_hash,
+      bps_sha256_hash,
       sfc_rom_size: sfc_rom_size
     };
     

@@ -32,6 +32,8 @@ CREATE TABLE user_game_annotations_new (
     user_importance_rating INTEGER CHECK (user_importance_rating IS NULL OR (user_importance_rating >= 0 AND user_importance_rating <= 5)),
     user_technical_quality_rating INTEGER CHECK (user_technical_quality_rating IS NULL OR (user_technical_quality_rating >= 0 AND user_technical_quality_rating <= 5)),
     user_gameplay_design_rating INTEGER CHECK (user_gameplay_design_rating IS NULL OR (user_gameplay_design_rating >= 0 AND user_gameplay_design_rating <= 5)),
+    user_fairness_rating INTEGER CHECK (user_fairness_rating IS NULL OR (user_fairness_rating >= 0 AND user_fairness_rating <= 5)),
+    user_challenge_quality_rating INTEGER CHECK (user_challenge_quality_rating IS NULL OR (user_challenge_quality_rating >= 0 AND user_challenge_quality_rating <= 5)),
     user_originality_rating INTEGER CHECK (user_originality_rating IS NULL OR (user_originality_rating >= 0 AND user_originality_rating <= 5)),
     user_visual_aesthetics_rating INTEGER CHECK (user_visual_aesthetics_rating IS NULL OR (user_visual_aesthetics_rating >= 0 AND user_visual_aesthetics_rating <= 5)),
     user_story_rating INTEGER CHECK (user_story_rating IS NULL OR (user_story_rating >= 0 AND user_story_rating <= 5)),
@@ -44,6 +46,8 @@ CREATE TABLE user_game_annotations_new (
     user_importance_comment TEXT,
     user_technical_quality_comment TEXT,
     user_gameplay_design_comment TEXT,
+    user_fairness_comment TEXT,
+    user_challenge_quality_comment TEXT,
     user_originality_comment TEXT,
     user_visual_aesthetics_comment TEXT,
     user_story_comment TEXT,
@@ -69,6 +73,8 @@ SELECT
     user_importance_rating,
     user_technical_quality_rating,
     user_gameplay_design_rating,
+    user_fairness_rating,
+    user_challenge_quality_rating,
     user_originality_rating,
     user_visual_aesthetics_rating,
     user_story_rating,
@@ -81,6 +87,8 @@ SELECT
     user_importance_comment,
     user_technical_quality_comment,
     user_gameplay_design_comment,
+    user_fairness_comment,
+    user_challenge_quality_comment,
     user_originality_comment,
     user_visual_aesthetics_comment,
     user_story_comment,
@@ -139,6 +147,22 @@ SELECT
     updated_at
 FROM user_game_annotations;
 
+CREATE VIEW v_stages_with_annotations AS
+SELECT 
+    gs.stage_key,
+    gs.gameid,
+    gs.exit_number,
+    gs.description,
+    gs.public_rating,
+    usa.user_difficulty_rating,
+    usa.user_review_rating,
+    usa.user_skill_rating,
+    usa.user_notes,
+    gs.created_at as stage_created_at,
+    usa.created_at as annotation_created_at
+FROM game_stages gs
+LEFT JOIN user_stage_annotations usa ON gs.stage_key = usa.stage_key;
+
 -- =============================================================================
 -- Update user_game_version_annotations table
 -- =============================================================================
@@ -156,6 +180,8 @@ CREATE TABLE user_game_version_annotations_new (
     user_importance_rating INTEGER CHECK (user_importance_rating IS NULL OR (user_importance_rating >= 0 AND user_importance_rating <= 5)),
     user_technical_quality_rating INTEGER CHECK (user_technical_quality_rating IS NULL OR (user_technical_quality_rating >= 0 AND user_technical_quality_rating <= 5)),
     user_gameplay_design_rating INTEGER CHECK (user_gameplay_design_rating IS NULL OR (user_gameplay_design_rating >= 0 AND user_gameplay_design_rating <= 5)),
+    user_fairness_rating INTEGER CHECK (user_fairness_rating IS NULL OR (user_fairness_rating >= 0 AND user_fairness_rating <= 5)),
+    user_challenge_quality_rating INTEGER CHECK (user_challenge_quality_rating IS NULL OR (user_challenge_quality_rating >= 0 AND user_challenge_quality_rating <= 5)),
     user_originality_rating INTEGER CHECK (user_originality_rating IS NULL OR (user_originality_rating >= 0 AND user_originality_rating <= 5)),
     user_visual_aesthetics_rating INTEGER CHECK (user_visual_aesthetics_rating IS NULL OR (user_visual_aesthetics_rating >= 0 AND user_visual_aesthetics_rating <= 5)),
     user_story_rating INTEGER CHECK (user_story_rating IS NULL OR (user_story_rating >= 0 AND user_story_rating <= 5)),
@@ -168,11 +194,15 @@ CREATE TABLE user_game_version_annotations_new (
     user_importance_comment TEXT,
     user_technical_quality_comment TEXT,
     user_gameplay_design_comment TEXT,
+    user_fairness_comment TEXT,
+    user_challenge_quality_comment TEXT,
     user_originality_comment TEXT,
     user_visual_aesthetics_comment TEXT,
     user_story_comment TEXT,
     user_soundtrack_graphics_comment TEXT,
     user_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (gameid, version)
 );
 
@@ -190,6 +220,8 @@ SELECT
     user_importance_rating,
     user_technical_quality_rating,
     user_gameplay_design_rating,
+    user_fairness_rating,
+    user_challenge_quality_rating,
     user_originality_rating,
     user_visual_aesthetics_rating,
     user_story_rating,
@@ -202,11 +234,15 @@ SELECT
     user_importance_comment,
     user_technical_quality_comment,
     user_gameplay_design_comment,
+    user_fairness_comment,
+    user_challenge_quality_comment,
     user_originality_comment,
     user_visual_aesthetics_comment,
     user_story_comment,
     user_soundtrack_graphics_comment,
-    user_notes
+    user_notes,
+    created_at,
+    updated_at
 FROM user_game_version_annotations;
 
 -- Step 3: Drop old table
@@ -214,6 +250,29 @@ DROP TABLE user_game_version_annotations;
 
 -- Step 4: Rename new table to original name
 ALTER TABLE user_game_version_annotations_new RENAME TO user_game_version_annotations;
+
+-- Step 5: Recreate indexes for user_game_version_annotations
+CREATE INDEX IF NOT EXISTS idx_user_gv_gameid ON user_game_version_annotations(gameid);
+CREATE INDEX IF NOT EXISTS idx_user_gv_version ON user_game_version_annotations(version);
+CREATE INDEX IF NOT EXISTS idx_user_gv_status ON user_game_version_annotations(status);
+CREATE INDEX IF NOT EXISTS idx_user_gv_recommendation ON user_game_version_annotations(user_recommendation_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_importance ON user_game_version_annotations(user_importance_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_technical_quality ON user_game_version_annotations(user_technical_quality_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_gameplay_design ON user_game_version_annotations(user_gameplay_design_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_originality ON user_game_version_annotations(user_originality_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_visual_aesthetics ON user_game_version_annotations(user_visual_aesthetics_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_story ON user_game_version_annotations(user_story_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_soundtrack_graphics ON user_game_version_annotations(user_soundtrack_graphics_rating);
+CREATE INDEX IF NOT EXISTS idx_user_gv_skill_when_beat ON user_game_version_annotations(user_skill_rating_when_beat);
+
+-- Step 6: Recreate trigger for updated_at timestamp on user_game_version_annotations
+CREATE TRIGGER IF NOT EXISTS trigger_user_game_version_updated 
+AFTER UPDATE ON user_game_version_annotations
+BEGIN
+    UPDATE user_game_version_annotations 
+    SET updated_at = CURRENT_TIMESTAMP 
+    WHERE gameid = NEW.gameid AND version = NEW.version;
+END;
 
 -- =============================================================================
 -- Recreate v_run_results_timing_compat view (if run_results table exists)

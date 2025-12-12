@@ -47,6 +47,118 @@ function getKeyguardKey(event) {
  * Register all IPC handlers with the database manager
  * @param {DatabaseManager} dbManager - Database manager instance
  */
+/**
+ * Check if a column exists in a table
+ */
+function columnExists(db, tableName, columnName) {
+  try {
+    const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+    return columns.some(col => col.name === columnName);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Build INSERT statement for user_game_annotations with conditional columns
+ */
+function buildUserGameAnnotationsInsert(db, includeFairness = false) {
+  const baseColumns = [
+    'gameid', 'status', 'user_difficulty_rating', 'user_review_rating', 
+    'user_skill_rating', 'user_skill_rating_when_beat',
+    'user_recommendation_rating', 'user_importance_rating', 
+    'user_technical_quality_rating', 'user_gameplay_design_rating'
+  ];
+  
+  const optionalColumns = includeFairness 
+    ? ['user_fairness_rating', 'user_challenge_quality_rating']
+    : [];
+  
+  const remainingColumns = [
+    'user_originality_rating', 'user_visual_aesthetics_rating',
+    'user_story_rating', 'user_soundtrack_graphics_rating',
+    'user_difficulty_comment', 'user_skill_comment', 'user_skill_comment_when_beat',
+    'user_review_comment', 'user_recommendation_comment', 'user_importance_comment',
+    'user_technical_quality_comment', 'user_gameplay_design_comment'
+  ];
+  
+  const optionalCommentColumns = includeFairness
+    ? ['user_fairness_comment', 'user_challenge_quality_comment']
+    : [];
+  
+  const finalColumns = [
+    'user_originality_comment', 'user_visual_aesthetics_comment',
+    'user_story_comment', 'user_soundtrack_graphics_comment',
+    'hidden', 'exclude_from_random', 'user_notes'
+  ];
+  
+  const allColumns = [
+    ...baseColumns,
+    ...optionalColumns,
+    ...remainingColumns,
+    ...optionalCommentColumns,
+    ...finalColumns
+  ];
+  
+  const placeholders = allColumns.map(() => '?').join(', ');
+  
+  return {
+    columns: allColumns.join(', '),
+    placeholders,
+    columnCount: allColumns.length
+  };
+}
+
+/**
+ * Build INSERT statement for user_game_version_annotations with conditional columns
+ */
+function buildUserGameVersionAnnotationsInsert(db, includeFairness = false) {
+  const baseColumns = [
+    'gameid', 'version', 'status',
+    'user_difficulty_rating', 'user_review_rating', 
+    'user_skill_rating', 'user_skill_rating_when_beat',
+    'user_recommendation_rating', 'user_importance_rating',
+    'user_technical_quality_rating', 'user_gameplay_design_rating'
+  ];
+  
+  const optionalColumns = includeFairness
+    ? ['user_fairness_rating', 'user_challenge_quality_rating']
+    : [];
+  
+  const remainingColumns = [
+    'user_originality_rating', 'user_visual_aesthetics_rating',
+    'user_story_rating', 'user_soundtrack_graphics_rating',
+    'user_review_comment', 'user_recommendation_comment', 'user_importance_comment',
+    'user_technical_quality_comment', 'user_gameplay_design_comment'
+  ];
+  
+  const optionalCommentColumns = includeFairness
+    ? ['user_fairness_comment', 'user_challenge_quality_comment']
+    : [];
+  
+  const finalColumns = [
+    'user_originality_comment', 'user_visual_aesthetics_comment',
+    'user_story_comment', 'user_soundtrack_graphics_comment',
+    'user_notes'
+  ];
+  
+  const allColumns = [
+    ...baseColumns,
+    ...optionalColumns,
+    ...remainingColumns,
+    ...optionalCommentColumns,
+    ...finalColumns
+  ];
+  
+  const placeholders = allColumns.map(() => '?').join(', ');
+  
+  return {
+    columns: allColumns.join(', '),
+    placeholders,
+    columnCount: allColumns.length
+  };
+}
+
 function registerDatabaseHandlers(dbManager) {
   // Initialize default runview settings if not set
   try {
@@ -1466,6 +1578,18 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('db:rhdata:get:games', async () => {
     try {
       return dbManager.withClientData('rhdata', (db) => {
+        // Check if fairness and challenge quality columns exist (added in migration 056)
+        const hasFairnessRating = columnExists(db, 'user_game_annotations', 'user_fairness_rating');
+        const hasChallengeQualityRating = columnExists(db, 'user_game_annotations', 'user_challenge_quality_rating');
+        const hasFairnessComment = columnExists(db, 'user_game_annotations', 'user_fairness_comment');
+        const hasChallengeQualityComment = columnExists(db, 'user_game_annotations', 'user_challenge_quality_comment');
+        
+        // Build SELECT clause conditionally
+        const fairnessRatingSelect = hasFairnessRating ? 'uga.user_fairness_rating as MyFairnessRating,' : 'NULL as MyFairnessRating,';
+        const challengeQualityRatingSelect = hasChallengeQualityRating ? 'uga.user_challenge_quality_rating as MyChallengeQualityRating,' : 'NULL as MyChallengeQualityRating,';
+        const fairnessCommentSelect = hasFairnessComment ? 'uga.user_fairness_comment as MyFairnessComment,' : 'NULL as MyFairnessComment,';
+        const challengeQualityCommentSelect = hasChallengeQualityComment ? 'uga.user_challenge_quality_comment as MyChallengeQualityComment,' : 'NULL as MyChallengeQualityComment,';
+        
         const games = db.prepare(`
           SELECT 
             gv.gameid as Id,
@@ -1493,8 +1617,8 @@ function registerDatabaseHandlers(dbManager) {
             uga.user_importance_rating as MyImportanceRating,
             uga.user_technical_quality_rating as MyTechnicalQualityRating,
             uga.user_gameplay_design_rating as MyGameplayDesignRating,
-            uga.user_fairness_rating as MyFairnessRating,
-            uga.user_challenge_quality_rating as MyChallengeQualityRating,
+            ${fairnessRatingSelect}
+            ${challengeQualityRatingSelect}
             uga.user_originality_rating as MyOriginalityRating,
             uga.user_visual_aesthetics_rating as MyVisualAestheticsRating,
             uga.user_story_rating as MyStoryRating,
@@ -1507,8 +1631,8 @@ function registerDatabaseHandlers(dbManager) {
             uga.user_importance_comment as MyImportanceComment,
             uga.user_technical_quality_comment as MyTechnicalQualityComment,
             uga.user_gameplay_design_comment as MyGameplayDesignComment,
-            uga.user_fairness_comment as MyFairnessComment,
-            uga.user_challenge_quality_comment as MyChallengeQualityComment,
+            ${fairnessCommentSelect}
+            ${challengeQualityCommentSelect}
             uga.user_originality_comment as MyOriginalityComment,
             uga.user_visual_aesthetics_comment as MyVisualAestheticsComment,
             uga.user_story_comment as MyStoryComment,
@@ -1570,6 +1694,30 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('db:rhdata:get:game', async (event, { gameid, version }) => {
     try {
       return dbManager.withClientData('rhdata', (db) => {
+        // Check if fairness and challenge quality columns exist (added in migration 056)
+        const hasFairnessRating = columnExists(db, 'user_game_annotations', 'user_fairness_rating');
+        const hasChallengeQualityRating = columnExists(db, 'user_game_annotations', 'user_challenge_quality_rating');
+        const hasFairnessComment = columnExists(db, 'user_game_annotations', 'user_fairness_comment');
+        const hasChallengeQualityComment = columnExists(db, 'user_game_annotations', 'user_challenge_quality_comment');
+        const hasVersionFairnessRating = columnExists(db, 'user_game_version_annotations', 'user_fairness_rating');
+        const hasVersionChallengeQualityRating = columnExists(db, 'user_game_version_annotations', 'user_challenge_quality_rating');
+        const hasVersionFairnessComment = columnExists(db, 'user_game_version_annotations', 'user_fairness_comment');
+        const hasVersionChallengeQualityComment = columnExists(db, 'user_game_version_annotations', 'user_challenge_quality_comment');
+        
+        // Build SELECT clause conditionally
+        const fairnessRatingSelect = (hasFairnessRating || hasVersionFairnessRating) 
+          ? 'COALESCE(ugva.user_fairness_rating, uga.user_fairness_rating) as MyFairnessRating,'
+          : 'NULL as MyFairnessRating,';
+        const challengeQualityRatingSelect = (hasChallengeQualityRating || hasVersionChallengeQualityRating)
+          ? 'COALESCE(ugva.user_challenge_quality_rating, uga.user_challenge_quality_rating) as MyChallengeQualityRating,'
+          : 'NULL as MyChallengeQualityRating,';
+        const fairnessCommentSelect = (hasFairnessComment || hasVersionFairnessComment)
+          ? 'COALESCE(ugva.user_fairness_comment, uga.user_fairness_comment) as MyFairnessComment,'
+          : 'NULL as MyFairnessComment,';
+        const challengeQualityCommentSelect = (hasChallengeQualityComment || hasVersionChallengeQualityComment)
+          ? 'COALESCE(ugva.user_challenge_quality_comment, uga.user_challenge_quality_comment) as MyChallengeQualityComment,'
+          : 'NULL as MyChallengeQualityComment,';
+        
         const game = db.prepare(`
           SELECT 
             gv.gameid as Id,
@@ -1597,8 +1745,8 @@ function registerDatabaseHandlers(dbManager) {
             COALESCE(ugva.user_importance_rating, uga.user_importance_rating) as MyImportanceRating,
             COALESCE(ugva.user_technical_quality_rating, uga.user_technical_quality_rating) as MyTechnicalQualityRating,
             COALESCE(ugva.user_gameplay_design_rating, uga.user_gameplay_design_rating) as MyGameplayDesignRating,
-            COALESCE(ugva.user_fairness_rating, uga.user_fairness_rating) as MyFairnessRating,
-            COALESCE(ugva.user_challenge_quality_rating, uga.user_challenge_quality_rating) as MyChallengeQualityRating,
+            ${fairnessRatingSelect}
+            ${challengeQualityRatingSelect}
             COALESCE(ugva.user_originality_rating, uga.user_originality_rating) as MyOriginalityRating,
             COALESCE(ugva.user_visual_aesthetics_rating, uga.user_visual_aesthetics_rating) as MyVisualAestheticsRating,
             COALESCE(ugva.user_story_rating, uga.user_story_rating) as MyStoryRating,
@@ -1611,8 +1759,8 @@ function registerDatabaseHandlers(dbManager) {
             COALESCE(ugva.user_importance_comment, uga.user_importance_comment) as MyImportanceComment,
             COALESCE(ugva.user_technical_quality_comment, uga.user_technical_quality_comment) as MyTechnicalQualityComment,
             COALESCE(ugva.user_gameplay_design_comment, uga.user_gameplay_design_comment) as MyGameplayDesignComment,
-            COALESCE(ugva.user_fairness_comment, uga.user_fairness_comment) as MyFairnessComment,
-            COALESCE(ugva.user_challenge_quality_comment, uga.user_challenge_quality_comment) as MyChallengeQualityComment,
+            ${fairnessCommentSelect}
+            ${challengeQualityCommentSelect}
             COALESCE(ugva.user_originality_comment, uga.user_originality_comment) as MyOriginalityComment,
             COALESCE(ugva.user_visual_aesthetics_comment, uga.user_visual_aesthetics_comment) as MyVisualAestheticsComment,
             COALESCE(ugva.user_story_comment, uga.user_story_comment) as MyStoryComment,

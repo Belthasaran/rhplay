@@ -27101,11 +27101,12 @@ function designFairnessLabel(rating?: number | null): string {
 function designChallengeQualityLabel(rating?: number | NULL): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
+     'Unchallenging in player skill at SMW. Difficulty rating should be lower, or game contains minimal skill challenges. Might be an entirely novel game that replaces SMW physics and does not use SMW skills. May be RNG-focused, or focused on challenges orthoganol to SMW.',
      'Below Average. The game difficulty rating may be too high for its game type, or else the game does not push the player to have or develop SMW-related skills.  The challenge emphasis might be not towards SMW skills at the difficulty level selected.',
     'About average. The game is like other games in its type.',
     'The game has above average quality, better than 80% of games. In skill-related challenges that seem in line with the rated difficulty.',
     'The game is excellent, and in the top 10% of games one should play for skill-based challenges representative of the games targeted difficulty.',
-    'Game is made almost entirely of strong, SMW skill-related challenges at appropriate difficulty. 95% of playtime comes from fair, well-designed testse of SMW skill which correspond to the gam difficulty rating.'
+    'Game is made almost entirely of strong, SMW skill-related challenges at appropriate difficulty. 95% of playtime comes from fair, well-designed tests of SMW skill which correspond to the gam difficulty rating.'
   ];
   return labels[rating] || '';
 
@@ -27114,10 +27115,10 @@ function designChallengeQualityLabel(rating?: number | NULL): string {
 function originalityLabel(rating?: number | NULL): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
-   'The game is about average.',
-   'The game is mostly original; is not a clone or remake. Has an element that is unique and interesting.',
-  'The game has many elements that are more original or creative than half of games',
-  'Every level has entirely new elements; the game is above most titles in this element',
+   'The game is below average. It might be just a vanilla edit, or something.',
+   'The game is about average. Original levels. It might be a clone or remake, but is not simply one.',
+  'Above average. The game has many elements that are more original or creative than half of games',
+  'Every level has entirely new elements; the game is above most titles in the element of originality or novelty.',
   'The game is above excellent and above 90% of games in this area',
   'The game has creative unique features to the maximal level, and moreso then 99% of games.'
   ];

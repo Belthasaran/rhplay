@@ -27061,12 +27061,12 @@ function importanceLabel(rating?: number | null): string {
 function techQualityLabel(rating?: number | null): string {
   if (rating === null || rating === undefined) return '';
   const labels = [
-   'Less than Average',
-   'Found the game of about average technical quality.',
+   'The game is almost unplayable.',
    'The game could crash or corrupt data while playing normally.',
-   'Contains a major bug, visual artifact, etc',
+   'Average technical quality. May be mostly stable with a few bugs that aren't serious.',
+   'Contains few major bugs of any kind, deminimis impact, no data loss, no visual artifact, etc',
    'All issues are few, minor, and rare',
-   'Zero notable glitches'
+   'Zero notable glitches found'
   ];
   return labels[rating] || '';
 }

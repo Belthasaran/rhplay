@@ -27063,7 +27063,7 @@ function techQualityLabel(rating?: number | null): string {
   const labels = [
    'The game is almost unplayable. Serious bugs; incompatibility with console or emulator; etc.',
    'The game could crash or corrupt data while playing normally; Or contain soft locks or soft lock trolls.',
-   'Average technical quality. There are zero softlock trolls, or zero softlocks players would often encounter. May be mostly stable with a few bugs that aren't serious.',
+   'Average technical quality. There are zero softlock trolls, or zero softlocks players would often encounter. May be mostly stable with a few bugs that are not serious.',
    'Contains few major bugs of any kind, deminimis impact, no data loss, no visual artifact, etc',
    'All issues are few, minor, and rare',
    'Zero notable glitches found'

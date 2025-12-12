@@ -1219,6 +1219,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     runProvision: () => ipcRenderer.invoke('provisioner:run-provision'),
     launchMain: () => ipcRenderer.invoke('provisioner:launch-main'),
     openArDrive: () => ipcRenderer.invoke('provisioner:open-ardrive'),
+    checkRom: () => ipcRenderer.invoke('provisioner:check-rom'),
+    selectRomFile: () => ipcRenderer.invoke('provisioner:select-rom-file'),
+    copyRom: (sourcePath) => ipcRenderer.invoke('provisioner:copy-rom', sourcePath),
     onLog: (callback) => {
       if (typeof callback !== 'function') {
         return () => {};

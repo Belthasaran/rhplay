@@ -12,8 +12,11 @@
 -- =============================================================================
 
 -- Step 0: Drop dependent views before dropping tables
+-- Note: Also drop v_run_results_timing_compat to avoid SQLite validation errors
+-- during table recreation, even though we're not modifying run_results
 DROP VIEW IF EXISTS v_games_with_annotations;
 DROP VIEW IF EXISTS v_stages_with_annotations;
+DROP VIEW IF EXISTS v_run_results_timing_compat;
 
 -- Step 1: Create temporary table with updated constraints
 CREATE TABLE user_game_annotations_new (
@@ -211,6 +214,38 @@ DROP TABLE user_game_version_annotations;
 
 -- Step 4: Rename new table to original name
 ALTER TABLE user_game_version_annotations_new RENAME TO user_game_version_annotations;
+
+-- =============================================================================
+-- Recreate v_run_results_timing_compat view (if run_results table exists)
+-- This view was dropped at the start to avoid SQLite validation errors
+-- during table recreation operations
+-- =============================================================================
+
+-- Check if run_results table exists and has the required columns before recreating the view
+-- This view definition matches migration 052_clientdata_win_rules_rename_columns.sql
+CREATE VIEW IF NOT EXISTS v_run_results_timing_compat AS
+SELECT 
+    result_uuid,
+    -- Milliseconds columns (primary)
+    started_at_ms,
+    completed_at_ms,
+    pause_start_ms,
+    pause_end_ms,
+    pause_milliseconds,
+    duration_milliseconds,
+    -- Seconds columns (for backwards compatibility, rounded)
+    CAST(COALESCE(started_at_ms, 0) / 1000 AS INTEGER) as started_at_seconds,
+    CAST(COALESCE(completed_at_ms, 0) / 1000 AS INTEGER) as completed_at_seconds,
+    CAST(COALESCE(pause_milliseconds, 0) / 1000 AS INTEGER) as pause_seconds_rounded,
+    CAST(COALESCE(duration_milliseconds, 0) / 1000 AS INTEGER) as duration_seconds_rounded,
+    -- Original columns (for backwards compatibility)
+    started_at,
+    completed_at,
+    pause_start,
+    pause_end,
+    pause_seconds,
+    duration_seconds
+FROM run_results;
 
 -- =============================================================================
 -- Migration complete

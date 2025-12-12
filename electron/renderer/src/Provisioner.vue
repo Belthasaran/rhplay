@@ -1,5 +1,38 @@
 <template>
   <div class="provisioner">
+    <!-- ROM Check Modal -->
+    <div v-if="romCheckModalOpen" class="modal-backdrop" @click.self="romCheckModalOpen = false">
+      <div class="modal-content rom-check-modal">
+        <h2>Super Mario World ROM Required</h2>
+        <div class="rom-check-explanation">
+          <p>
+            This software requires a valid Super Mario World ROM file (smw.sfc) to function.
+            The ROM file is used as a base for applying patches to create playable ROM hacks.
+          </p>
+          <p>
+            <strong>Important Legal Notice:</strong>
+          </p>
+          <ul>
+            <li>You must already have your own legally acquired copy of Super Mario World</li>
+            <li>Do not distribute commercial ROM files</li>
+            <li>Do not request commercial ROM files from others</li>
+            <li>This software does not distribute commercial base ROM data</li>
+            <li>This software does not distribute standalone games based on commercial ROMs</li>
+          </ul>
+          <p>
+            <strong>This software will not function after provisioning if you fail to complete this step successfully.</strong>
+          </p>
+        </div>
+        <div v-if="romValidationError" class="rom-error">
+          {{ romValidationError }}
+        </div>
+        <div class="rom-check-actions">
+          <button @click="browseRomFile" class="primary">Browse Files</button>
+          <button @click="romCheckModalOpen = false" :disabled="!romFound">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <header class="header">
       <h1>RHTools Database Provisioner</h1>
       <p>
@@ -52,7 +85,7 @@
     </section>
 
     <section class="controls">
-      <button :disabled="isLoadingPlan || isProvisioning" @click="refreshPlan">
+      <button :disabled="isLoadingPlan || isProvisioning || !canProvision" @click="refreshPlan">
         {{ isLoadingPlan ? 'Refreshing…' : 'Refresh Plan' }}
       </button>
       <button :disabled="isProvisioning" @click="openDownloadFolder">
@@ -60,7 +93,7 @@
       </button>
       <button
         class="primary"
-        :disabled="isProvisioning || !provisionRequired"
+        :disabled="isProvisioning || !provisionRequired || !canProvision"
         @click="startProvision"
       >
         {{ isProvisioning ? 'Provisioning…' : 'Run Automatic Provisioning' }}
@@ -164,6 +197,9 @@ const activeDownload = ref<{ name: string; index: number; total: number; percent
 const completedDownloads = ref(0);
 const currentTask = ref<string | null>(null);
 const logView = ref<HTMLTextAreaElement | null>(null);
+const romCheckModalOpen = ref(false);
+const romFound = ref(false);
+const romValidationError = ref<string | null>(null);
 let unsubscribeLog: (() => void) | null = null;
 let unsubscribeStatus: (() => void) | null = null;
 let currentOperation: 'idle' | 'plan' | 'provision' = 'idle';
@@ -173,6 +209,9 @@ const planDatabases = computed(() => plan.value?.databases ?? []);
 const provisionRequired = computed(() =>
   planDatabases.value.some((db) => db.action !== 'skip')
 );
+
+// Block provisioning if ROM is not found
+const canProvision = computed(() => romFound.value);
 
 const totalDownloadCount = computed(() => {
   return planDatabases.value.reduce((sum, db) => {
@@ -292,7 +331,7 @@ async function loadInitialState() {
 }
 
 async function refreshPlan() {
-  if (!provisionerApi) return;
+  if (!provisionerApi || !romFound.value) return;
   isLoadingPlan.value = true;
   errorMessage.value = null;
   currentOperation = 'plan';
@@ -380,6 +419,57 @@ function openDownloadFolder() {
   window.electronAPI?.shell?.openPath(provisionerState.value.workingDir);
 }
 
+async function checkRomFile() {
+  if (!provisionerApi) return;
+  try {
+    const result = await provisionerApi.checkRom();
+    if (result.found || result.skipped) {
+      romFound.value = true;
+      romCheckModalOpen.value = false;
+    } else {
+      romFound.value = false;
+      romCheckModalOpen.value = true;
+    }
+  } catch (err) {
+    console.error('Failed to check ROM:', err);
+    romFound.value = false;
+    romCheckModalOpen.value = true;
+  }
+}
+
+async function browseRomFile() {
+  if (!provisionerApi) return;
+  romValidationError.value = null;
+  
+  try {
+    const result = await provisionerApi.selectRomFile();
+    
+    if (result.canceled) {
+      return;
+    }
+    
+    if (!result.success) {
+      romValidationError.value = result.error || 'ROM file validation failed';
+      return;
+    }
+    
+    // Copy ROM to program data directory
+    const copyResult = await provisionerApi.copyRom(result.path);
+    
+    if (!copyResult.success) {
+      romValidationError.value = copyResult.error || 'Failed to copy ROM file';
+      return;
+    }
+    
+    // Success - ROM is now in place
+    romFound.value = true;
+    romCheckModalOpen.value = false;
+    romValidationError.value = null;
+  } catch (err) {
+    romValidationError.value = err instanceof Error ? err.message : 'Failed to select ROM file';
+  }
+}
+
 function handleStatus(payload: { state: string; provision?: boolean; missing?: string[] | undefined }) {
   switch (payload.state) {
     case 'starting':
@@ -415,7 +505,14 @@ function handleStatus(payload: { state: string; provision?: boolean; missing?: s
 
 onMounted(async () => {
   await loadInitialState();
-  await refreshPlan();
+  
+  // Check for ROM file before proceeding
+  await checkRomFile();
+  
+  // Only proceed with plan refresh if ROM is found
+  if (romFound.value) {
+    await refreshPlan();
+  }
 
   if (provisionerApi) {
     unsubscribeLog = provisionerApi.onLog((line: string) => {
@@ -673,5 +770,93 @@ onBeforeUnmount(() => {
   .status-panel {
     flex-direction: column;
   }
+}
+
+/* ROM Check Modal Styles */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.rom-check-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 32px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.rom-check-modal h2 {
+  margin: 0 0 20px;
+  font-size: 24px;
+  color: #1f2933;
+}
+
+.rom-check-explanation {
+  margin-bottom: 24px;
+  line-height: 1.6;
+  color: #52606d;
+}
+
+.rom-check-explanation p {
+  margin: 12px 0;
+}
+
+.rom-check-explanation ul {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.rom-check-explanation li {
+  margin: 8px 0;
+}
+
+.rom-check-explanation strong {
+  color: #1f2933;
+}
+
+.rom-error {
+  padding: 12px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.rom-check-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.rom-check-actions button {
+  padding: 10px 18px;
+  border: 1px solid #3e4c59;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.rom-check-actions button.primary {
+  background: #2563eb;
+  color: white;
+  border-color: #1d4ed8;
+}
+
+.rom-check-actions button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 </style>

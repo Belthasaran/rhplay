@@ -1,10 +1,31 @@
 - P202501XX
 
+- **Version Bump**: Updated version from 0.1.12beta to 0.1.15beta to reflect major fixes and improvements.
+
 - **Migration 057 Fix**: Thoroughly reviewed and fixed `057_clientdata_difficulty_rating_0_to_10.sql` to ensure zero adverse effects. The migration now correctly preserves all columns (including `user_fairness_rating`, `user_fairness_comment`, `user_challenge_quality_rating`, `user_challenge_quality_comment`), all indexes, all triggers, and all views. Added missing `created_at` and `updated_at` columns to `user_game_version_annotations_new` table, recreated all 12 indexes for `user_game_version_annotations`, recreated the `trigger_user_game_version_updated` trigger (using `(gameid, version)` instead of deprecated `annotation_key`), and recreated the `v_stages_with_annotations` view that was dropped but not restored. The migration now only changes the `user_difficulty_rating` CHECK constraint from 0-5 to 0-10 for both `user_game_annotations` and `user_game_version_annotations` tables, with all other schema elements preserved.
 
-- **ROM Modal Improvements**: Enhanced the Super Mario World ROM requirement modal in the Provisioner assistant. The modal can no longer be dismissed by clicking outside the modal backdrop, and the Cancel button has been removed, ensuring users must complete the ROM file selection step before proceeding. Additionally, the provisioning plan now automatically refreshes after a valid ROM file is successfully selected and copied, providing immediate feedback on the provisioning requirements.
+- **ROM Requirement in Provisioner**: Added SMW ile requirement check to the Provisioner assistant. The provisioner now validates that a valid `smw.sfc` ROM file is provided by the user before allowing provisioning to proceed. ROM validation includes SHA224 hash verification against the expected SMW ROM hash. Users can select a ROM file through a file dialog, and the system will validate and place it to the program data directory.
+
+- **ROM Modal Improvements**: Enhanced the SMW ROM requirement modal in the Provisioner assistant. The modal can no longer be dismissed by clicking outside the modal backdrop, and the Cancel button has been removed, ensuring users must complete the ROM file selection step before proceeding. Additionally, the provisioning plan now automatically refreshes after a valid ROM file is successfully selected and copied, providing immediate feedback on the provisioning requirements.
 
 - **IPC Handler Schema Enforcement**: Removed conditional column handling from `electron/ipc-handlers.js` for `user_fairness_rating`, `user_fairness_comment`, `user_challenge_quality_rating`, and `user_challenge_quality_comment` columns. These columns are now always included in all SELECT and INSERT statements. If these columns are missing from the database schema (which should never happen after migrations are applied), SQLite will throw an error that will be caught and reported as a critical error, ensuring schema integrity issues are immediately brought to attention rather than silently handled.
+
+- **Difficulty Rating UI Update**: Updated the "My Difficulty (Review)" rating component in the Electron app to support 0-10 stars (previously 0-5). The rating label was changed to "Peak Difficulty (My Review)" and the star display was updated to show 11 stars (0-10) with smaller star styling. Updated the `difficultyLabel` function to provide appropriate labels for the expanded range (Trivial, Super Easy, Very Easy, Easy, Normal, Hard, Very Hard, Extremely Hard, Expert, Master, Legendary, Extreme).
+
+- **Rating Label and Description Improvements**: Enhanced rating labels and descriptions throughout the rating sheet UI for better clarity and user understanding. Changes include: "My Skill" labels clarified to specify "At this game type" and "At time I actually beat this game", "Recommendation" simplified to "Recommend?", "Importance" renamed to "Renown" with updated description, "Technical Quality" description shortened, "Gameplay Design" renamed to "Design: Gameplay", "Player Fairness" renamed to "Design: Player Fairness" with improved description, "Challenge Quality" renamed to "Design: Challenge Quality / Engagement" with enhanced description, "Originality / Creativity" description updated, "Visual Aesthetics" expanded to "Visual Aesthetics and Graphics", "Story" description enhanced, and "Soundtrack and Graphics" simplified to "Soundtrack". Added label text display functions for all rating types to show descriptive text based on the selected rating value.
+
+- **BPS Patch Hash Calculation**: Enhanced `jstools/process_arcsfc.js` to calculate and log SHA1 and SHA256 hashes for BPS patch files in addition to ROM files. The BPS hash values are now included in the processing results output.
+
+- **ROM Size Validation Improvements**: Updated ROM size validation logic in `jstools/process_arcsfc.js` to accept additional valid ROM sizes beyond power-of-2 multiples. Added support for common ROM sizes including 3145728, 2097152, 4194304, 2621440, 1048576, 1179648, 6291456, 1310720, 1572864, and 3276800 bytes. The ROM size is now calculated and logged during processing.
+
+- **Lunar Magic Filter Timeout**: Added timeout wrapper to the `try_lmfilter.py` execution in `jstools/process_arcsfc.js` to prevent the process from hanging indefinitely. The timeout is set to 15 seconds with a 20-second kill timeout.
+
+- **Wine Wrapper for Lunar Magic Filter**: Added `lmlevelnames/winetowrap` script to provide Wine64 execution wrapper for Lunar Magic filter operations on Linux systems. The wrapper includes proper cleanup handling via trap signals.
+
+- **Note on Migration 058**: A migration 058 file (`058_clientdata_restore_fairness_challenge_quality.js`) was created during development but is not registered in `migratedb.js` and is not needed since migration 057 was fixed to preserve all columns. This file can be considered for cleanup in a future commit.
+
+- **Quality Issues Identified**:
+  - **ROM Size Validation Logic**: The ROM size validation in `jstools/process_arcsfc.js` (line 126) contains duplicate size checks (2097152, 4194304, and 2621440 appear twice in the condition) and redundant `sizeMod1024 === 0` checks. While functionally correct, this should be cleaned up for maintainability. The condition also uses `==` instead of `===` for one comparison (size == 1310720), which should be standardized to `===` for consistency.
 
 - P20251204
 
@@ -1096,7 +1117,7 @@ This is a **complete, practical solution** given the constraints of proprietary 
 ### New Features
 
 **SMW ROM Analysis Tools**
-- Added `smw_level_analyzer.py`: Extract and compare level data from Super Mario World ROM files
+- Added `smw_level_analyzer.py`: Extract and compare level data from SMW ROM files
   - NEW: `--show-names` flag to display English level names alongside level IDs
   - Automatically includes level names in JSON export
 - Added `smw_level_names.py`: Extract level names from SMW ROM files  
@@ -1303,7 +1324,7 @@ and try to have a similar module system
 - Foundation for Phase 4.3 (ROM research) and 4.4 (asset injection)
 
 **SMW Helper Library - Phase 4.1 Complete** ✅
-- Implemented comprehensive Super Mario World helper functions library
+- Implemented comprehensive SMW helper functions library
 - **40+ high-level functions** for manipulating SMW game state via USB2SNES
 - No more manual RAM address manipulation - use intuitive helper functions!
 - **Player State Helpers:**

@@ -27195,7 +27195,7 @@ function skillRatingHoverText(rating: number): string {
     'Expert - I confidently beat expert level hacks (DRAM, Kaizo 1 Any%, POO World, etc)',                  // 4
     'Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years', //5
     'Master - I beat any of the above and harder unassisted without breaking a sweat. Maybe got world record or top 3 once on  Master+ level hacks',  // 6
-    'I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hacks Dream, or JUMP, Responsible World 1.0, Casio, and Fruit Dealer RTA.', // 7
+    'I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.', // 7
     'I could speedrun Master++ hacks like DRAM3 RTA: I dont find it difficult. I want longer levels with harder tricks; more trolls.',  // 8
     'I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these', // 9
     '???'       // 10

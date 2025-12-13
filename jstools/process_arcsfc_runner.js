@@ -95,7 +95,8 @@ async function processPair(sfcFile, archiveFile) {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: process.cwd()
+    cwd: process.cwd(),
+    maxBuffer: 1024 * 1024 * 100
   });
   
   // Log stdout

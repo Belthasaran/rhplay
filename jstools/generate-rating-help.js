@@ -18,6 +18,21 @@ const TEMPLATE_PATH = path.join(__dirname, '../docs/rating-factors-template.json
 const OUTPUT_JSON_PATH = path.join(__dirname, '../docs/rating-factors.json');
 const OUTPUT_COMPONENT_PATH = path.join(__dirname, '../electron/renderer/src/components/RatingFactorsHelp.vue');
 const OUTPUT_JSON_RENDERER_PATH = path.join(__dirname, '../electron/renderer/src/data/rating-factors.json');
+const OUTPUT_HTML_PATH = path.join(__dirname, '../docs/SMW_RATING_CARD.html');
+const OUTPUT_MARKDOWN_PATH = path.join(__dirname, '../docs/SMW_RATING_CARD.md');
+
+// Default descriptions for factors that don't have them in the UI
+const DEFAULT_DESCRIPTIONS = {
+  'user_review_rating': 'Your overall review rating for this game. This is your general assessment of the game\'s quality and your enjoyment of it.',
+  'user_difficulty_rating': 'The peak difficulty level of this game. This measures the hardest challenges in the game, not the average difficulty.',
+  'user_skill_rating': 'Your self-evaluated skill level at this game type at the time you rated this game. This helps contextualize your other ratings.',
+  'user_skill_rating_when_beat': 'Your self-evaluated skill level at the time you actually beat this game. This may differ from your skill level when you rated it.',
+  'user_gameplay_design_rating': 'Evaluation of the game\'s core gameplay design, mechanics, and how well they work together.',
+  'user_originality_rating': 'How original and creative the game is. Does it bring new ideas or unique takes on familiar concepts?',
+  'user_visual_aesthetics_rating': 'Assessment of the game\'s visual presentation, graphics quality, and aesthetic appeal.',
+  'user_story_rating': 'Evaluation of the game\'s narrative, story quality, and how well it integrates with gameplay.',
+  'user_soundtrack_graphics_rating': 'Assessment of the game\'s soundtrack, music quality, and audio design.'
+};
 
 // Mapping of internal names to their label functions and UI info
 const RATING_FACTOR_MAP = {
@@ -294,16 +309,37 @@ function extractDescriptionFromUI(appVueContent, dataKey) {
   // We need to find the specific rating component block that contains this dataKey
   // Pattern: Find the rating-component div that contains updateRating('dataKey')
   
-  // First, find all rating-component blocks
-  const componentBlocks = appVueContent.match(/<div[^>]*class="rating-component"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/g);
+  // First, find all rating-component blocks - use a more robust pattern
+  const componentBlocks = appVueContent.match(/<div[^>]*class="rating-component"[^>]*>([\s\S]*?)(?=<div[^>]*class="rating-component"|<\/div>\s*<\/div>\s*<\/div>\s*<\/div>)/g);
   if (!componentBlocks) {
+    // Fallback: try simpler pattern
+    const simpleBlocks = appVueContent.split(/<div[^>]*class="rating-component"/);
+    for (let i = 1; i < simpleBlocks.length; i++) {
+      const block = simpleBlocks[i];
+      if (block.includes(`updateRating('${dataKey}'`)) {
+        // Extract description from this specific block
+        const descMatch = block.match(/<span[^>]*class="rating-description-inline"[^>]*>([\s\S]*?)<\/span>/);
+        if (descMatch && descMatch[1]) {
+          let desc = descMatch[1].trim();
+          // Remove HTML tags
+          desc = desc.replace(/<[^>]+>/g, '');
+          // Remove leading/trailing parentheses and newlines
+          desc = desc.replace(/^\s*\(|\s*\)\s*$/g, '').trim();
+          // Normalize whitespace
+          desc = desc.replace(/\s+/g, ' ').trim();
+          if (desc && desc !== '()' && desc.length > 0) {
+            return desc;
+          }
+        }
+      }
+    }
     return null;
   }
   
   // Find the block that contains this dataKey
   for (const block of componentBlocks) {
     if (block.includes(`updateRating('${dataKey}'`)) {
-      // Extract description from this specific block
+      // Extract description from this specific block - handle multi-line
       const descMatch = block.match(/<span[^>]*class="rating-description-inline"[^>]*>([\s\S]*?)<\/span>/);
       if (descMatch && descMatch[1]) {
         let desc = descMatch[1].trim();
@@ -311,8 +347,8 @@ function extractDescriptionFromUI(appVueContent, dataKey) {
         desc = desc.replace(/<[^>]+>/g, '');
         // Remove leading/trailing parentheses and newlines
         desc = desc.replace(/^\s*\(|\s*\)\s*$/g, '').trim();
-        // Normalize whitespace
-        desc = desc.replace(/\s+/g, ' ').trim();
+        // Normalize whitespace but preserve sentence structure
+        desc = desc.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
         if (desc && desc !== '()' && desc.length > 0) {
           return desc;
         }
@@ -392,8 +428,14 @@ function main() {
     if (description && description !== 'AUTO_EXTRACT') {
       factor.description = description;
     } else if (factor.description === 'AUTO_EXTRACT') {
-      // Keep AUTO_EXTRACT if extraction failed - user can fill in manually
-      console.warn(`  ⚠ Could not extract description for ${factor.internalName}`);
+      // Try default description if available
+      if (DEFAULT_DESCRIPTIONS[factor.internalName]) {
+        factor.description = DEFAULT_DESCRIPTIONS[factor.internalName];
+        console.log(`  ✓ Using default description for ${factor.internalName}`);
+      } else {
+        // Keep AUTO_EXTRACT if extraction failed and no default - user can fill in manually
+        console.warn(`  ⚠ Could not extract description for ${factor.internalName} (no default available)`);
+      }
     }
     
     // Extract display name
@@ -425,10 +467,18 @@ function main() {
   console.log('Generating Vue component...');
   generateVueComponent(template);
   
+  console.log('Generating HTML...');
+  generateHTML(template);
+  
+  console.log('Generating Markdown...');
+  generateMarkdown(template);
+  
   console.log('Done!');
   console.log(`  - JSON: ${OUTPUT_JSON_PATH}`);
   console.log(`  - JSON (renderer): ${OUTPUT_JSON_RENDERER_PATH}`);
   console.log(`  - Component: ${OUTPUT_COMPONENT_PATH}`);
+  console.log(`  - HTML: ${OUTPUT_HTML_PATH}`);
+  console.log(`  - Markdown: ${OUTPUT_MARKDOWN_PATH}`);
 }
 
 function generateVueComponent(template) {
@@ -654,6 +704,268 @@ function hasHoverText(factor: any): boolean {
 `;
 
   fs.writeFileSync(OUTPUT_COMPONENT_PATH, componentContent);
+}
+
+function generateHTML(template) {
+  let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${template.introduction.title}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header h1 {
+      margin: 0 0 10px 0;
+      color: #2c3e50;
+    }
+    .factor-section {
+      background: white;
+      padding: 25px;
+      margin-bottom: 30px;
+      border-radius: 8px;
+      border-left: 4px solid #3498db;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .factor-title {
+      margin: 0 0 15px 0;
+      color: #2c3e50;
+      font-size: 1.5em;
+    }
+    .factor-meta {
+      margin: 15px 0;
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 4px;
+    }
+    .factor-meta strong {
+      color: #555;
+    }
+    .factor-description {
+      margin: 15px 0;
+      padding: 15px;
+      background: #f0f8ff;
+      border-left: 3px solid #3498db;
+      border-radius: 4px;
+    }
+    .factor-guidelines {
+      margin: 15px 0;
+      padding: 15px;
+      background: #fff9e6;
+      border-left: 3px solid #f39c12;
+      border-radius: 4px;
+    }
+    .labels-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    .labels-table th {
+      background: #3498db;
+      color: white;
+      padding: 12px;
+      text-align: left;
+    }
+    .labels-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .labels-table tr:hover {
+      background: #f5f5f5;
+    }
+    .rating-value {
+      font-weight: bold;
+      color: #3498db;
+      width: 80px;
+    }
+    .hover-text {
+      color: #666;
+      font-style: italic;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>${template.introduction.title}</h1>
+    <p>${template.introduction.description}</p>
+    ${template.introduction.customContent && template.introduction.customContent !== '<!-- Add custom introduction content here -->' ? template.introduction.customContent : ''}
+  </div>
+`;
+
+  template.ratingFactors.forEach((factor, index) => {
+    const hasHoverText = factor.hoverText && Object.keys(factor.hoverText).length > 0;
+    
+    html += `  <div class="factor-section">
+    <h2 class="factor-title">${index + 1}. ${escapeHtml(factor.displayName)}</h2>
+    
+    <div class="factor-meta">
+      <div><strong>Internal Name:</strong> <code>${escapeHtml(factor.internalName)}</code></div>
+      <div><strong>Range:</strong> ${factor.range.min} to ${factor.range.max} stars</div>
+    </div>
+`;
+
+    if (factor.description && factor.description !== 'AUTO_EXTRACT') {
+      html += `    <div class="factor-description">
+      <strong>Description:</strong>
+      <p>${escapeHtml(factor.description)}</p>
+    </div>
+`;
+    }
+
+    if (factor.extraGuidelines && factor.extraGuidelines !== '<!-- Add extra guidelines here -->') {
+      html += `    <div class="factor-guidelines">
+      <strong>Additional Guidelines:</strong>
+      <div>${factor.extraGuidelines}</div>
+    </div>
+`;
+    }
+
+    if (factor.labels && factor.labels.length > 0) {
+      html += `    <div>
+      <strong>Rating Labels:</strong>
+      <table class="labels-table">
+        <thead>
+          <tr>
+            <th>Rating</th>
+            <th>Label</th>
+            ${hasHoverText ? '<th>Additional Context</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+`;
+      factor.labels.forEach(label => {
+        html += `          <tr>
+            <td class="rating-value">${label.value}</td>
+            <td>${escapeHtml(label.text)}</td>
+            ${hasHoverText ? `<td class="hover-text">${factor.hoverText && factor.hoverText[label.value] ? escapeHtml(factor.hoverText[label.value]) : ''}</td>` : ''}
+          </tr>
+`;
+      });
+      html += `        </tbody>
+      </table>
+    </div>
+`;
+    }
+
+    html += `  </div>
+`;
+  });
+
+  if (template.footer.customContent && template.footer.customContent !== '<!-- Add custom footer content here -->') {
+    html += `  <div class="footer">
+    ${template.footer.customContent}
+  </div>
+`;
+  }
+
+  html += `</body>
+</html>`;
+
+  fs.writeFileSync(OUTPUT_HTML_PATH, html);
+}
+
+function generateMarkdown(template) {
+  let md = `# ${template.introduction.title}\n\n`;
+  md += `${template.introduction.description}\n\n`;
+  
+  if (template.introduction.customContent && template.introduction.customContent !== '<!-- Add custom introduction content here -->') {
+    // Convert HTML to Markdown (basic)
+    let customContent = template.introduction.customContent
+      .replace(/<p>/g, '')
+      .replace(/<\/p>/g, '\n\n')
+      .replace(/<strong>/g, '**')
+      .replace(/<\/strong>/g, '**')
+      .replace(/<em>/g, '*')
+      .replace(/<\/em>/g, '*')
+      .replace(/<[^>]+>/g, '');
+    md += `${customContent}\n\n`;
+  }
+
+  template.ratingFactors.forEach((factor, index) => {
+    const hasHoverText = factor.hoverText && Object.keys(factor.hoverText).length > 0;
+    
+    md += `## ${index + 1}. ${factor.displayName}\n\n`;
+    md += `**Internal Name:** \`${factor.internalName}\`  \n`;
+    md += `**Range:** ${factor.range.min} to ${factor.range.max} stars\n\n`;
+
+    if (factor.description && factor.description !== 'AUTO_EXTRACT') {
+      md += `**Description:**\n\n${factor.description}\n\n`;
+    }
+
+    if (factor.extraGuidelines && factor.extraGuidelines !== '<!-- Add extra guidelines here -->') {
+      let guidelines = factor.extraGuidelines
+        .replace(/<p>/g, '')
+        .replace(/<\/p>/g, '\n\n')
+        .replace(/<strong>/g, '**')
+        .replace(/<\/strong>/g, '**')
+        .replace(/<em>/g, '*')
+        .replace(/<\/em>/g, '*')
+        .replace(/<[^>]+>/g, '');
+      md += `**Additional Guidelines:**\n\n${guidelines}\n\n`;
+    }
+
+    if (factor.labels && factor.labels.length > 0) {
+      md += `**Rating Labels:**\n\n`;
+      md += `| Rating | Label${hasHoverText ? ' | Additional Context' : ''} |\n`;
+      md += `|--------|------${hasHoverText ? '|-------------------' : ''}|\n`;
+      
+      factor.labels.forEach(label => {
+        const labelText = label.text.replace(/\|/g, '\\|');
+        const hoverText = hasHoverText && factor.hoverText && factor.hoverText[label.value] 
+          ? factor.hoverText[label.value].replace(/\|/g, '\\|') 
+          : '';
+        md += `| ${label.value} | ${labelText}${hasHoverText ? ` | ${hoverText}` : ''} |\n`;
+      });
+      md += '\n';
+    }
+
+    md += '\n';
+  });
+
+  if (template.footer.customContent && template.footer.customContent !== '<!-- Add custom footer content here -->') {
+    let footer = template.footer.customContent
+      .replace(/<p>/g, '')
+      .replace(/<\/p>/g, '\n\n')
+      .replace(/<strong>/g, '**')
+      .replace(/<\/strong>/g, '**')
+      .replace(/<em>/g, '*')
+      .replace(/<\/em>/g, '*')
+      .replace(/<[^>]+>/g, '');
+    md += `---\n\n${footer}\n`;
+  }
+
+  fs.writeFileSync(OUTPUT_MARKDOWN_PATH, md);
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 if (require.main === module) {

@@ -10,7 +10,7 @@
   "introduction": {
     "title": "Rating Factors Guide",
     "description": "This guide explains all the rating factors available in the rating card. Each rating factor includes a range, description, and labels for each rating level.",
-    "customContent": "<!-- Add custom introduction content here -->"
+    "customContent": "The below are the rating facts you can choose star ratings for.   Note that the rating factors intentionally overlap, and all items are optional.   Broader rating factors are on top, and it is suggested to rate romhacks based on those first.  More detailed factors such as Puzzle Quality follow.  Skip the rating factor if it is not relevant to the current game.   For example: leave Overworld star rating and comments field blank if the romhack has no overworld."
   },
   "ratingFactors": [
     {

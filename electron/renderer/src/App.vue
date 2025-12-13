@@ -27673,12 +27673,12 @@ function skillLabel(rating?: number | null): string {
   const labels = [
     'Observer',          // 0
     'Newcomer',          // 1
-    'Casual/Apprentice', // 2
-    'Intermediate Stdandard/Kaizo Beginner Player',     // 3
-    'Advanced Standard/Kaizo Intermediate',   // 4
-    'Expert Standard/Expert Kaizo Player',  // 5
-    'Master Std Player/Kaizo Master', // 6
-    'Grandmaster/Kaizo Grandmaster',    // 7
+    'Apprentice', // 2
+    'Medium',     // 3
+    'Advanced/Kaizo Intermediate',   // 4
+    'Expert',  // 5
+    'Master', // 6
+    'Grandmaster',    // 7
     'Grandmaster+/Legend', // 8
     'Deity',         // 9
     'TAS'            // 10
@@ -27688,16 +27688,16 @@ function skillLabel(rating?: number | null): string {
 
 function skillRatingHoverText(rating: number): string {
   const texts = [
-    'I saw someone play Mario once - "Will you play my level?"',  // 0
-    'Casual - I beat Vanilla SMW 96 exits, or similar', // 1
-    'Apprentice - Vanilla is too easy for me, I look for more challenging things',  // 2
-    'Advanced - Some Kaizo or Advanced hacks even, are too easy for me', // 3
-    'Expert - I confidently beat expert level hacks (DRAM, Kaizo 1 Any%, POO World, etc)',                  // 4
-    'Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years', //5
-    'Master - I beat any of the above and harder unassisted without breaking a sweat. Maybe got world record or top 3 once on  Master+ level hacks',  // 6
-    'I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.', // 7
-    'I could speedrun Master++ hacks like DRAM3 RTA: I dont find it difficult. I want longer levels with harder tricks; more trolls.',  // 8
-    'I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these', // 9
+    'I saw someone play Mario once - "Will you play my level?"',  // 0-Observer
+    'Newcomer - I beat Vanilla SMW 96 exits, or similar', // 1-Newcomer
+    'Casual/Apprentice - Vanilla is too easy for me, I look for more challenging things',  // 2-Casual
+    'Intermediate - For standard: I cleared multiple Standard Normal hacks. If reviewing Kaizo: I completed beginner Kaizo hacks numerous times and find them easy.', // 3
+    'Advanced - Most Standard Intermediate hacks or Kaizo Beginner are a breeze for me. I completed multiple Intermediate Kaizo hacks.', // 4
+    'Expert - I confidently beat expert level standard or Advanced level kaizo (DRAM Any%, etc); cleared many Advanced level hacks of this type.', // 5
+    'Master - I cleared multiple expert level hacks of this type. I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years', //6
+    'I have 100+ hours experience in hacks above Expert level. Cleared numerous hacks directly below or adjacent to this difficulty. I can clear DRAM3 RTA less than 50 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.', // 7-GM
+    'I cleared 10+ Grandmaster hacks.I could speedrun Master++ hacks like DRAM3 RTA. I want longer levels with harder tricks; more trolls. Maximum of human possibility.',  // 8-GM
+    'I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these. Unless this is a TAS: you set this value too high.', // 9
     'You probably set this value too high, since 10 is literally above (8) TAS-Only difficulty.'       // 10
   ];
   return texts[rating] || '';

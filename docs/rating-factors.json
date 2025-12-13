@@ -4,13 +4,13 @@
   "description": "Template for rating factors documentation. Auto-extracted fields are marked with AUTO_EXTRACT comments.",
   "version": "1.0.0",
   "metadata": {
-    "lastUpdated": "2025-12-13T17:44:36.407Z",
+    "lastUpdated": "2025-12-13T18:36:13.607Z",
     "generatedBy": "generate-rating-help.js"
   },
   "introduction": {
     "title": "Rating Factors Guide",
     "description": "This guide explains all the rating factors available in the rating card. Each rating factor includes a range, description, and labels for each rating level.",
-    "customContent": "<!-- Add custom introduction content here -->"
+    "customContent": "The below are the rating facts you can choose star ratings for.   Note that the rating factors intentionally overlap, and all items are optional.   Broader rating factors are on top, and it is suggested to rate romhacks based on those first.  More detailed factors such as Puzzle Quality follow.  Skip the rating factor if it is not relevant to the current game.   For example: leave Overworld star rating and comments field blank if the romhack has no overworld."
   },
   "ratingFactors": [
     {
@@ -21,7 +21,7 @@
         "max": 5,
         "description": "0 to 5 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "Your overall review rating for this game. This is your general assessment of the game's quality and your enjoyment of it.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -60,7 +60,7 @@
         "max": 10,
         "description": "0 to 10 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "The peak difficulty level of this game. This measures the hardest challenges in the game, not the average difficulty.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -119,7 +119,7 @@
         "max": 10,
         "description": "0 to 10 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "Your self-evaluated skill level at this game type at the time you rated this game. This helps contextualize your other ratings.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -132,27 +132,27 @@
         },
         {
           "value": 2,
-          "text": "Casual/Apprentice"
+          "text": "Apprentice"
         },
         {
           "value": 3,
-          "text": "Intermediate Stdandard/Kaizo Beginner Player"
+          "text": "Medium"
         },
         {
           "value": 4,
-          "text": "Advanced Standard/Kaizo Intermediate"
+          "text": "Advanced/Kaizo Intermediate"
         },
         {
           "value": 5,
-          "text": "Expert Standard/Expert Kaizo Player"
+          "text": "Expert"
         },
         {
           "value": 6,
-          "text": "Master Std Player/Kaizo Master"
+          "text": "Master"
         },
         {
           "value": 7,
-          "text": "Grandmaster/Kaizo Grandmaster"
+          "text": "Grandmaster"
         },
         {
           "value": 8,
@@ -169,15 +169,15 @@
       ],
       "hoverText": {
         "0": "I saw someone play Mario once - \"Will you play my level?\"",
-        "1": "Casual - I beat Vanilla SMW 96 exits, or similar",
-        "2": "Apprentice - Vanilla is too easy for me, I look for more challenging things",
-        "3": "Advanced - Some Kaizo or Advanced hacks even, are too easy for me",
-        "4": "Expert - I confidently beat expert level hacks (DRAM, Kaizo 1 Any%, POO World, etc)",
-        "5": "Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years",
-        "6": "Master - I beat any of the above and harder unassisted without breaking a sweat. Maybe got world record or top 3 once on  Master+ level hacks",
-        "7": "I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.",
-        "8": "I could speedrun Master++ hacks like DRAM3 RTA: I dont find it difficult. I want longer levels with harder tricks; more trolls.",
-        "9": "I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these",
+        "1": "Newcomer - I beat Vanilla SMW 96 exits, or similar",
+        "2": "Casual/Apprentice - Vanilla is too easy for me, I look for more challenging things",
+        "3": "Intermediate - For standard: I cleared multiple Standard Normal hacks. If reviewing Kaizo: I completed beginner Kaizo hacks numerous times and find them easy.",
+        "4": "Advanced - Most Standard Intermediate hacks or Kaizo Beginner are a breeze for me. I completed multiple Intermediate Kaizo hacks.",
+        "5": "Expert - I confidently beat expert level standard or Advanced level kaizo (DRAM Any%, etc); cleared many Advanced level hacks of this type.",
+        "6": "Master - I cleared multiple expert level hacks of this type. I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years",
+        "7": "I have 100+ hours experience in hacks above Expert level. Cleared numerous hacks directly below or adjacent to this difficulty. I can clear DRAM3 RTA less than 50 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.",
+        "8": "I cleared 10+ Grandmaster hacks.I could speedrun Master++ hacks like DRAM3 RTA. I want longer levels with harder tricks; more trolls. Maximum of human possibility.",
+        "9": "I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these. Unless this is a TAS: you set this value too high.",
         "10": "You probably set this value too high, since 10 is literally above (8) TAS-Only difficulty."
       },
       "commentField": "user_skill_comment"
@@ -190,7 +190,7 @@
         "max": 10,
         "description": "0 to 10 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "Your self-evaluated skill level at the time you actually beat this game. This may differ from your skill level when you rated it.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -203,27 +203,27 @@
         },
         {
           "value": 2,
-          "text": "Casual/Apprentice"
+          "text": "Apprentice"
         },
         {
           "value": 3,
-          "text": "Intermediate Stdandard/Kaizo Beginner Player"
+          "text": "Medium"
         },
         {
           "value": 4,
-          "text": "Advanced Standard/Kaizo Intermediate"
+          "text": "Advanced/Kaizo Intermediate"
         },
         {
           "value": 5,
-          "text": "Expert Standard/Expert Kaizo Player"
+          "text": "Expert"
         },
         {
           "value": 6,
-          "text": "Master Std Player/Kaizo Master"
+          "text": "Master"
         },
         {
           "value": 7,
-          "text": "Grandmaster/Kaizo Grandmaster"
+          "text": "Grandmaster"
         },
         {
           "value": 8,
@@ -240,15 +240,15 @@
       ],
       "hoverText": {
         "0": "I saw someone play Mario once - \"Will you play my level?\"",
-        "1": "Casual - I beat Vanilla SMW 96 exits, or similar",
-        "2": "Apprentice - Vanilla is too easy for me, I look for more challenging things",
-        "3": "Advanced - Some Kaizo or Advanced hacks even, are too easy for me",
-        "4": "Expert - I confidently beat expert level hacks (DRAM, Kaizo 1 Any%, POO World, etc)",
-        "5": "Expert Plus - I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years",
-        "6": "Master - I beat any of the above and harder unassisted without breaking a sweat. Maybe got world record or top 3 once on  Master+ level hacks",
-        "7": "I can clear DRAM3 RTA less than 80 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.",
-        "8": "I could speedrun Master++ hacks like DRAM3 RTA: I dont find it difficult. I want longer levels with harder tricks; more trolls.",
-        "9": "I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these",
+        "1": "Newcomer - I beat Vanilla SMW 96 exits, or similar",
+        "2": "Casual/Apprentice - Vanilla is too easy for me, I look for more challenging things",
+        "3": "Intermediate - For standard: I cleared multiple Standard Normal hacks. If reviewing Kaizo: I completed beginner Kaizo hacks numerous times and find them easy.",
+        "4": "Advanced - Most Standard Intermediate hacks or Kaizo Beginner are a breeze for me. I completed multiple Intermediate Kaizo hacks.",
+        "5": "Expert - I confidently beat expert level standard or Advanced level kaizo (DRAM Any%, etc); cleared many Advanced level hacks of this type.",
+        "6": "Master - I cleared multiple expert level hacks of this type. I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years",
+        "7": "I have 100+ hours experience in hacks above Expert level. Cleared numerous hacks directly below or adjacent to this difficulty. I can clear DRAM3 RTA less than 50 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.",
+        "8": "I cleared 10+ Grandmaster hacks.I could speedrun Master++ hacks like DRAM3 RTA. I want longer levels with harder tricks; more trolls. Maximum of human possibility.",
+        "9": "I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these. Unless this is a TAS: you set this value too high.",
         "10": "You probably set this value too high, since 10 is literally above (8) TAS-Only difficulty."
       },
       "commentField": "user_skill_comment_when_beat"
@@ -378,7 +378,7 @@
         "max": 5,
         "description": "0 to 5 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "Evaluation of the game's core gameplay design, mechanics, and how well they work together.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -495,7 +495,7 @@
         "max": 5,
         "description": "0 to 5 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "How original and creative the game is. Does it bring new ideas or unique takes on familiar concepts?",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -534,7 +534,7 @@
         "max": 5,
         "description": "0 to 5 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "Assessment of the game's visual presentation, graphics quality, and aesthetic appeal.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {
@@ -612,7 +612,7 @@
         "max": 5,
         "description": "0 to 5 stars"
       },
-      "description": "AUTO_EXTRACT",
+      "description": "Assessment of the game's soundtrack, music quality, and audio design.",
       "extraGuidelines": "<!-- Add extra guidelines here -->",
       "labels": [
         {

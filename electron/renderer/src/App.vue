@@ -2124,7 +2124,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">My Skill (At this game type, At time I rated this)</label>
+              <label class="rating-label">Self-Eval: My Skill (At this game type, At time I rated this)</label>
               <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRating) }}</span>
             </div>
             <div class="rating-row">
@@ -2156,7 +2156,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">My Skill (At time I actually beat this game)</label>
+              <label class="rating-label">Self-Eval: My Skill (At time I actually beat this game)</label>
               <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRatingWhenBeat) }}</span>
             </div>
             <div class="rating-row">
@@ -2294,8 +2294,7 @@ Do you recommend the title?</span></label>
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Design: Player Fairness <span class="rating-description-inline">(Star rating for non-skill Progression barriers:
-How much does this game’s progress depend mainly on SMW player skill rather than anything else?
+              <label class="rating-label">Design: Player Fairness <span class="rating-description-inline">(Star rating for non-SMW-skill Progression barriers: How fair is the game’s design independent of raw difficulty? Does the game teach mechanics before testing them? How much does this game’s progress depend mainly on SMW player skill rather than anything else, including unforseeable hazards, forced trial-and-error, unfair setups?  
                  </span>
                 <span class="rating-label-text" style="white-space: wrap;">{{ designFairnessLabel(ratingSheetData.MyFairnessRating) }}</span>
               </label>

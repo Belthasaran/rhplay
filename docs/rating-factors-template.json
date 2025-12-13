@@ -1,0 +1,357 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rating Factors Documentation Template",
+  "description": "Template for rating factors documentation. Auto-extracted fields are marked with AUTO_EXTRACT comments.",
+  "version": "1.0.0",
+  "metadata": {
+    "lastUpdated": "AUTO_EXTRACT",
+    "generatedBy": "generate-rating-help.js"
+  },
+  "introduction": {
+    "title": "Rating Factors Guide",
+    "description": "This guide explains all the rating factors available in the rating card. Each rating factor includes a range, description, and labels for each rating level.",
+    "customContent": "<!-- Add custom introduction content here -->"
+  },
+  "ratingFactors": [
+    {
+      "internalName": "user_review_rating",
+      "displayName": "Overall (My Review)",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_review_comment"
+    },
+    {
+      "internalName": "user_difficulty_rating",
+      "displayName": "Peak Difficulty (My Review)",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_difficulty_comment"
+    },
+    {
+      "internalName": "user_skill_rating",
+      "displayName": "Self-Eval: My Experience Level (At this game type, At time I rated this)",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": "AUTO_EXTRACT",
+      "commentField": "user_skill_comment"
+    },
+    {
+      "internalName": "user_skill_rating_when_beat",
+      "displayName": "Self-Eval: My Experience Level (At time I actually beat this game)",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": "AUTO_EXTRACT",
+      "commentField": "user_skill_comment_when_beat"
+    },
+    {
+      "internalName": "user_recommendation_rating",
+      "displayName": "Recommend?",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_recommendation_comment"
+    },
+    {
+      "internalName": "user_importance_rating",
+      "displayName": "Renown",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_importance_comment"
+    },
+    {
+      "internalName": "user_technical_quality_rating",
+      "displayName": "Technical Quality",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_technical_quality_comment"
+    },
+    {
+      "internalName": "user_gameplay_design_rating",
+      "displayName": "Design: Gameplay",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_gameplay_design_comment"
+    },
+    {
+      "internalName": "user_fairness_rating",
+      "displayName": "Design: Player Fairness",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_fairness_comment"
+    },
+    {
+      "internalName": "user_challenge_quality_rating",
+      "displayName": "Design: Challenge Quality / Engagement",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_challenge_quality_comment"
+    },
+    {
+      "internalName": "user_originality_rating",
+      "displayName": "Originality / Creativity",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_originality_comment"
+    },
+    {
+      "internalName": "user_visual_aesthetics_rating",
+      "displayName": "Visual Aesthetics and Graphics",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_visual_aesthetics_comment"
+    },
+    {
+      "internalName": "user_story_rating",
+      "displayName": "Story",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_story_comment"
+    },
+    {
+      "internalName": "user_soundtrack_graphics_rating",
+      "displayName": "Soundtrack",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_soundtrack_graphics_comment"
+    },
+    {
+      "internalName": "user_accessibility_rating",
+      "displayName": "Design: Accessibility",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_accessibility_comment"
+    },
+    {
+      "internalName": "user_length_pacing",
+      "displayName": "Design: Length, Value, and Pacing",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_length_pacing_comment"
+    },
+    {
+      "internalName": "user_progression_rating",
+      "displayName": "Design: Difficulty Curve and Progression",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_progression_comment"
+    },
+    {
+      "internalName": "user_consistency_rating",
+      "displayName": "Design: Consistency, length and checkpointing",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_consistency_comment"
+    },
+    {
+      "internalName": "user_overworld_rating",
+      "displayName": "Design: Overworld",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_overworld_comment"
+    },
+    {
+      "internalName": "user_education_rating",
+      "displayName": "Design: Player Education and Communication",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_education_comment"
+    },
+    {
+      "internalName": "user_custom_rating",
+      "displayName": "Design: Custom Mechanics Evaluation",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_custom_comment"
+    },
+    {
+      "internalName": "user_puzzle_rating",
+      "displayName": "Design: Puzzle Quality Evaluation",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_puzzle_comment"
+    },
+    {
+      "internalName": "user_polish_rating",
+      "displayName": "Design: Polish and Quality of Life Rating",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_polish_comment"
+    },
+    {
+      "internalName": "user_boss_rating",
+      "displayName": "Design: Boss Rating",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "AUTO_EXTRACT"
+      },
+      "description": "AUTO_EXTRACT",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": "AUTO_EXTRACT",
+      "hoverText": null,
+      "commentField": "user_boss_comment"
+    }
+  ],
+  "footer": {
+    "customContent": "<!-- Add custom footer content here -->"
+  }
+}
+

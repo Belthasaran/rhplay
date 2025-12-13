@@ -2066,7 +2066,10 @@
     <div class="modal rating-sheet-modal">
       <header class="modal-header">
         <h3>Rating Sheet - {{ selectedItem?.Name }}</h3>
-        <button class="close" @click="closeRatingSheetModal">✕</button>
+        <div class="header-actions">
+          <button class="help-button" @click="openRatingHelpModal" title="View Rating Factors Help">?</button>
+          <button class="close" @click="closeRatingSheetModal">✕</button>
+        </div>
       </header>
       <section class="modal-body rating-sheet-body">
         <div class="rating-components">
@@ -2124,7 +2127,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Self-Eval: My Skill (At this game type, At time I rated this)</label>
+              <label class="rating-label">Self-Eval: My Experience Level (At this game type, At time I rated this)</label>
               <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRating) }}</span>
             </div>
             <div class="rating-row">
@@ -2156,7 +2159,7 @@
           
           <div class="rating-component">
             <div class="rating-header">
-              <label class="rating-label">Self-Eval: My Skill (At time I actually beat this game)</label>
+              <label class="rating-label">Self-Eval: My Experience Level (At time I actually beat this game)</label>
               <span class="rating-label-text">{{ skillLabel(ratingSheetData.MySkillRatingWhenBeat) }}</span>
             </div>
             <div class="rating-row">
@@ -2460,6 +2463,276 @@ Do you recommend the title?</span></label>
               />
             </div>
           </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Accessibility<span class="rating-description-inline">(Consider: Visual clarity issues, Audio cues required for progress are an issue, Flashing lights, Overly tight timers, Colorblind-unfriendly setups)</span><span class="rating-label-text" style="white-space: wrap;">{{ accessibilityLabel(ratingSheetData.MyAccessibilityRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'access-' + (n-1)"
+                  @click="updateRating('MyAccessibilityRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyAccessibilityRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyAccessibilityRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyAccessibilityComment"
+                @input="updateComment('MyAccessibilityComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Length, Value, and Pacing <span class="rating-description-inline">(How is the game's overall length and pacing? Not enough levels? Levels too short? Game too long? Overstays its welcome? Does each level have purpose and engage you in a fresh way, or does it become a slog?)</span><span class="rating-label-text" style="white-space: wrap;">{{ lengthPacingLabel(ratingSheetData.MyLengthPacing) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'length-' + (n-1)"
+                  @click="updateRating('MyLengthPacing', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyLengthPacing ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyLengthPacing', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyLengthPacingComment"
+                @input="updateComment('MyLengthPacingComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Difficulty Curve and Progression <span class="rating-description-inline">(How smoothly does the hack scale its difficulty? Does the challenge ramp up reasonably, or spike unpredictably? Are the level sizes a good length for the game type?)</span><span class="rating-label-text" style="white-space: wrap;">{{ progressionLabel(ratingSheetData.MyProgressionRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'prog-' + (n-1)"
+                  @click="updateRating('MyProgressionRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyProgressionRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyProgressionRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyProgressionComment"
+                @input="updateComment('MyProgressionComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Consistency, length and checkpointing <span class="rating-description-inline">(Are sections within a level consistently difficult, fairly checkpointed, and not of excessive length? Checkpoint distance should be 20 seconds or less for Advanced or higher difficulty games to reach 3 stars.)</span><span class="rating-label-text" style="white-space: wrap;">{{ consistencyLabel(ratingSheetData.MyConsistencyRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'consist-' + (n-1)"
+                  @click="updateRating('MyConsistencyRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyConsistencyRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyConsistencyRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyConsistencyComment"
+                @input="updateComment('MyConsistencyComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Overworld<span class="rating-description-inline"></span><span class="rating-label-text" style="white-space: wrap;">{{ overworldLabel(ratingSheetData.MyOverworldRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'overworld-' + (n-1)"
+                  @click="updateRating('MyOverworldRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyOverworldRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyOverworldRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyOverworldComment"
+                @input="updateComment('MyOverworldComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Player Education and Communication <span class="rating-description-inline">(Does the game teach new mechanics properly? Do setups make intentions clear including any necessary coin guides? Are custom blocks, sprites, or physics changes explained?)</span><span class="rating-label-text" style="white-space: wrap;">{{ educationLabel(ratingSheetData.MyEducationRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'educ-' + (n-1)"
+                  @click="updateRating('MyEducationRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyEducationRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyEducationRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyEducationComment"
+                @input="updateComment('MyEducationComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Custom Mechanics Evaluation <span class="rating-description-inline">(Applies for some hacks that alter Mario's physics or add new mobility mechanics. Evaluate: Responsiveness, Clarity, Intuitive for skilled SMW players VS difficult or awkward)</span><span class="rating-label-text" style="white-space: wrap;">{{ customLabel(ratingSheetData.MyCustomRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'custom-' + (n-1)"
+                  @click="updateRating('MyCustomRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyCustomRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyCustomRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyCustomComment"
+                @input="updateComment('MyCustomComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Puzzle Quality Evaluation <span class="rating-description-inline">(If the game contains puzzle elements: Are puzzles logical? Do they respect the player's time? Are solutions satisfying rather than obscure or janky?)</span><span class="rating-label-text" style="white-space: wrap;">{{ puzzleLabel(ratingSheetData.MyPuzzleRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'puzzle-' + (n-1)"
+                  @click="updateRating('MyPuzzleRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyPuzzleRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyPuzzleRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyPuzzleComment"
+                @input="updateComment('MyPuzzleComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Polish and Quality of Life Rating <span class="rating-description-inline">(Example: Features like Retry system / fast resets, Consistent Indicators, Smooth transitions, Avoid tedious enemy reuse)</span><span class="rating-label-text" style="white-space: wrap;">{{ polishLabel(ratingSheetData.MyPolishRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'polish-' + (n-1)"
+                  @click="updateRating('MyPolishRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyPolishRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyPolishRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyPolishComment"
+                @input="updateComment('MyPolishComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
+          
+          <div class="rating-component">
+            <div class="rating-header">
+              <label class="rating-label">Design: Boss Rating <span class="rating-description-inline">(For hacks that use custom bosses. Are they good and fun to play, more annoying than vanilla, or with boring/tedious unnecessary extra phases or hits required, etc?)</span><span class="rating-label-text" style="white-space: wrap;">{{ bossLabel(ratingSheetData.MyBossRating) }}</span>
+              </label>
+              <span class="rating-label-text">-</span>
+            </div>
+            <div class="rating-row">
+              <div class="star-rating">
+                <span 
+                  v-for="n in 6" 
+                  :key="'boss-' + (n-1)"
+                  @click="updateRating('MyBossRating', n - 1)"
+                  :class="{ filled: (n - 1) <= (ratingSheetData.MyBossRating ?? -1) }"
+                  class="star"
+                >★</span>
+                <button @click="updateRating('MyBossRating', null)" class="btn-clear-rating">✕</button>
+              </div>
+              <input 
+                type="text" 
+                v-model="ratingSheetData.MyBossComment"
+                @input="updateComment('MyBossComment')"
+                placeholder="Add comment..."
+                class="rating-comment-input"
+              />
+            </div>
+          </div>
         </div>
       </section>
       <footer class="modal-footer">
@@ -2472,6 +2745,22 @@ Do you recommend the title?</span></label>
           Publish My Ratings or Ratings Update
         </button>
         <button @click="closeRatingSheetModal">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Rating Factors Help Modal -->
+  <div v-if="ratingHelpModalOpen" class="modal-backdrop" @click.self="closeRatingHelpModal">
+    <div class="modal rating-help-modal" style="max-width: 90vw; max-height: 90vh; overflow: auto;">
+      <header class="modal-header">
+        <h3>Rating Factors Help</h3>
+        <button class="close" @click="closeRatingHelpModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <RatingFactorsHelp />
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeRatingHelpModal">Close</button>
       </footer>
     </div>
   </div>
@@ -7881,6 +8170,7 @@ import ToastNotification from './components/ToastNotification.vue';
 import WinRulesDropdown from './components/WinRulesDropdown.vue';
 import TwitchIntegrationSetup from './components/TwitchIntegrationSetup.vue';
 import PredictionConflictDialog from './components/PredictionConflictDialog.vue';
+import RatingFactorsHelp from './components/RatingFactorsHelp.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -7948,6 +8238,16 @@ type Item = {
   MyVisualAestheticsRating?: number | null;  // 0-5
   MyStoryRating?: number | null;  // 0-5
   MySoundtrackGraphicsRating?: number | null;  // 0-5
+  MyAccessibilityRating?: number | null;  // 0-5
+  MyLengthPacing?: number | null;  // 0-5
+  MyProgressionRating?: number | null;  // 0-5
+  MyConsistencyRating?: number | null;  // 0-5
+  MyOverworldRating?: number | null;  // 0-5
+  MyEducationRating?: number | null;  // 0-5
+  MyCustomRating?: number | null;  // 0-5
+  MyPuzzleRating?: number | null;  // 0-5
+  MyPolishRating?: number | null;  // 0-5
+  MyBossRating?: number | null;  // 0-5
   Publicrating?: number;
   Hidden: boolean;
   ExcludeFromRandom?: boolean;
@@ -16573,6 +16873,16 @@ async function completeProfileCreation() {
             MyVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
             MyStoryRating: item.MyStoryRating ?? null,
             MySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating ?? null,
+            MyAccessibilityRating: (item as any).MyAccessibilityRating ?? null,
+            MyLengthPacing: (item as any).MyLengthPacing ?? null,
+            MyProgressionRating: (item as any).MyProgressionRating ?? null,
+            MyConsistencyRating: (item as any).MyConsistencyRating ?? null,
+            MyOverworldRating: (item as any).MyOverworldRating ?? null,
+            MyEducationRating: (item as any).MyEducationRating ?? null,
+            MyCustomRating: (item as any).MyCustomRating ?? null,
+            MyPuzzleRating: (item as any).MyPuzzleRating ?? null,
+            MyPolishRating: (item as any).MyPolishRating ?? null,
+            MyBossRating: (item as any).MyBossRating ?? null,
             MyDifficultyComment: (item as any).MyDifficultyComment || '',
             MySkillComment: (item as any).MySkillComment || '',
             MySkillCommentWhenBeat: (item as any).MySkillCommentWhenBeat || '',
@@ -16585,6 +16895,16 @@ async function completeProfileCreation() {
             MyVisualAestheticsComment: (item as any).MyVisualAestheticsComment || '',
             MyStoryComment: (item as any).MyStoryComment || '',
             MySoundtrackGraphicsComment: (item as any).MySoundtrackGraphicsComment || '',
+            MyAccessibilityComment: (item as any).MyAccessibilityComment || '',
+            MyLengthPacingComment: (item as any).MyLengthPacingComment || '',
+            MyProgressionComment: (item as any).MyProgressionComment || '',
+            MyConsistencyComment: (item as any).MyConsistencyComment || '',
+            MyOverworldComment: (item as any).MyOverworldComment || '',
+            MyEducationComment: (item as any).MyEducationComment || '',
+            MyCustomComment: (item as any).MyCustomComment || '',
+            MyPuzzleComment: (item as any).MyPuzzleComment || '',
+            MyPolishComment: (item as any).MyPolishComment || '',
+            MyBossComment: (item as any).MyBossComment || '',
           };
           ratingSheetModalOpen.value = true;
           
@@ -26572,6 +26892,16 @@ async function saveAnnotation() {
       MyVisualAestheticsRating: ratingData.MyVisualAestheticsRating ?? null,
       MyStoryRating: ratingData.MyStoryRating ?? null,
       MySoundtrackGraphicsRating: ratingData.MySoundtrackGraphicsRating ?? null,
+      MyAccessibilityRating: ratingData.MyAccessibilityRating ?? null,
+      MyLengthPacing: ratingData.MyLengthPacing ?? null,
+      MyProgressionRating: ratingData.MyProgressionRating ?? null,
+      MyConsistencyRating: ratingData.MyConsistencyRating ?? null,
+      MyOverworldRating: ratingData.MyOverworldRating ?? null,
+      MyEducationRating: ratingData.MyEducationRating ?? null,
+      MyCustomRating: ratingData.MyCustomRating ?? null,
+      MyPuzzleRating: ratingData.MyPuzzleRating ?? null,
+      MyPolishRating: ratingData.MyPolishRating ?? null,
+      MyBossRating: ratingData.MyBossRating ?? null,
       MyDifficultyComment: ratingData.MyDifficultyComment || null,
       MySkillComment: ratingData.MySkillComment || null,
       MySkillCommentWhenBeat: ratingData.MySkillCommentWhenBeat || null,
@@ -26584,6 +26914,16 @@ async function saveAnnotation() {
       MyVisualAestheticsComment: ratingData.MyVisualAestheticsComment || null,
       MyStoryComment: ratingData.MyStoryComment || null,
       MySoundtrackGraphicsComment: ratingData.MySoundtrackGraphicsComment || null,
+      MyAccessibilityComment: ratingData.MyAccessibilityComment || null,
+      MyLengthPacingComment: ratingData.MyLengthPacingComment || null,
+      MyProgressionComment: ratingData.MyProgressionComment || null,
+      MyConsistencyComment: ratingData.MyConsistencyComment || null,
+      MyOverworldComment: ratingData.MyOverworldComment || null,
+      MyEducationComment: ratingData.MyEducationComment || null,
+      MyCustomComment: ratingData.MyCustomComment || null,
+      MyPuzzleComment: ratingData.MyPuzzleComment || null,
+      MyPolishComment: ratingData.MyPolishComment || null,
+      MyBossComment: ratingData.MyBossComment || null,
     };
     
     // Deep clone to ensure we have a plain object, not a reactive proxy
@@ -26659,6 +26999,16 @@ async function saveAnnotationDirect(item: Item) {
       MyVisualAestheticsRating: item.MyVisualAestheticsRating,
       MyStoryRating: item.MyStoryRating,
       MySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating,
+      MyAccessibilityRating: (item as any).MyAccessibilityRating,
+      MyLengthPacing: (item as any).MyLengthPacing,
+      MyProgressionRating: (item as any).MyProgressionRating,
+      MyConsistencyRating: (item as any).MyConsistencyRating,
+      MyOverworldRating: (item as any).MyOverworldRating,
+      MyEducationRating: (item as any).MyEducationRating,
+      MyCustomRating: (item as any).MyCustomRating,
+      MyPuzzleRating: (item as any).MyPuzzleRating,
+      MyPolishRating: (item as any).MyPolishRating,
+      MyBossRating: (item as any).MyBossRating,
     });
     
     const annotation = {
@@ -26678,6 +27028,16 @@ async function saveAnnotationDirect(item: Item) {
       myVisualAestheticsComment: (item as any).MyVisualAestheticsComment || null,
       myStoryComment: (item as any).MyStoryComment || null,
       mySoundtrackGraphicsComment: (item as any).MySoundtrackGraphicsComment || null,
+      myAccessibilityComment: (item as any).MyAccessibilityComment || null,
+      myLengthPacingComment: (item as any).MyLengthPacingComment || null,
+      myProgressionComment: (item as any).MyProgressionComment || null,
+      myConsistencyComment: (item as any).MyConsistencyComment || null,
+      myOverworldComment: (item as any).MyOverworldComment || null,
+      myEducationComment: (item as any).MyEducationComment || null,
+      myCustomComment: (item as any).MyCustomComment || null,
+      myPuzzleComment: (item as any).MyPuzzleComment || null,
+      myPolishComment: (item as any).MyPolishComment || null,
+      myBossComment: (item as any).MyBossComment || null,
       myDifficultyRating: item.MyDifficultyRating ?? null,
       myReviewRating: item.MyReviewRating ?? null,
       mySkillRating: item.MySkillRating ?? null,
@@ -26692,6 +27052,16 @@ async function saveAnnotationDirect(item: Item) {
       myVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
       myStoryRating: item.MyStoryRating ?? null,
       mySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating ?? null,
+      myAccessibilityRating: (item as any).MyAccessibilityRating ?? null,
+      myLengthPacing: (item as any).MyLengthPacing ?? null,
+      myProgressionRating: (item as any).MyProgressionRating ?? null,
+      myConsistencyRating: (item as any).MyConsistencyRating ?? null,
+      myOverworldRating: (item as any).MyOverworldRating ?? null,
+      myEducationRating: (item as any).MyEducationRating ?? null,
+      myCustomRating: (item as any).MyCustomRating ?? null,
+      myPuzzleRating: (item as any).MyPuzzleRating ?? null,
+      myPolishRating: (item as any).MyPolishRating ?? null,
+      myBossRating: (item as any).MyBossRating ?? null,
       hidden: item.Hidden,
       excludeFromRandom: item.ExcludeFromRandom,
       mynotes: item.Mynotes
@@ -27163,6 +27533,136 @@ function designSoundtrackLabel(rating?: number | NULL) : string {
    '4=Highly excellent soundtrack and graphics throughout the entire game. Better than 90% of games.',
    '5=Better than 99% of games in this area)'
   ];
+  return labels[rating] || '';
+}
+
+function accessibilityLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'At most one minor occurence',
+    'No issues found'
+  ];
+  return labels[rating] || '';
+}
+
+function lengthPacingLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'Very good',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function progressionLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Below average Progression, level size, or number levels is too long/short',
+    'About average for progression and length',
+    'Better than most',
+    'Better than 80%',
+    'Better than 90%',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function consistencyLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'Very good',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function overworldLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Below average',
+    'Above average, Detailed and well-made overworld',
+    'Highly excellent, Beautiful overworld surpassing 50% of games',
+    'Overworld superior to 80% of games',
+    'Overworld in top 90% of games',
+    'Overworld in the top 1%'
+  ];
+  return labels[rating] || '';
+}
+
+function educationLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor; Nothing is explained accurately.',
+    'Below Average',
+    'About Average',
+    'Better than most',
+    'Above 80%; Very good',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function customLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'Very good',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function puzzleLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'Very good',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function polishLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'Very good',
+    'Top 1%.'
+  ];
+  return labels[rating] || '';
+}
+
+function bossLabel(rating?: number | null): string {
+  if (rating === null || rating === undefined) return '';
+  const labels = [
+    'Poor, Worse or more annoying for players than stock bosses',
+    'Below Average',
+    'About Average',
+    'Better than Average',
+    'Very good',
+    'Top 1%.'
+  ];
   
   return labels[rating] || '';
 }
@@ -27272,6 +27772,16 @@ function openRatingSheetModal() {
     MyVisualAestheticsRating: item.MyVisualAestheticsRating ?? null,
     MyStoryRating: item.MyStoryRating ?? null,
     MySoundtrackGraphicsRating: item.MySoundtrackGraphicsRating ?? null,
+    MyAccessibilityRating: (item as any).MyAccessibilityRating ?? null,
+    MyLengthPacing: (item as any).MyLengthPacing ?? null,
+    MyProgressionRating: (item as any).MyProgressionRating ?? null,
+    MyConsistencyRating: (item as any).MyConsistencyRating ?? null,
+    MyOverworldRating: (item as any).MyOverworldRating ?? null,
+    MyEducationRating: (item as any).MyEducationRating ?? null,
+    MyCustomRating: (item as any).MyCustomRating ?? null,
+    MyPuzzleRating: (item as any).MyPuzzleRating ?? null,
+    MyPolishRating: (item as any).MyPolishRating ?? null,
+    MyBossRating: (item as any).MyBossRating ?? null,
     MyDifficultyComment: item.MyDifficultyComment || '',
     MySkillComment: item.MySkillComment || '',
     MySkillCommentWhenBeat: item.MySkillCommentWhenBeat || '',
@@ -27286,6 +27796,16 @@ function openRatingSheetModal() {
     MyVisualAestheticsComment: item.MyVisualAestheticsComment || '',
     MyStoryComment: item.MyStoryComment || '',
     MySoundtrackGraphicsComment: item.MySoundtrackGraphicsComment || '',
+    MyAccessibilityComment: (item as any).MyAccessibilityComment || '',
+    MyLengthPacingComment: (item as any).MyLengthPacingComment || '',
+    MyProgressionComment: (item as any).MyProgressionComment || '',
+    MyConsistencyComment: (item as any).MyConsistencyComment || '',
+    MyOverworldComment: (item as any).MyOverworldComment || '',
+    MyEducationComment: (item as any).MyEducationComment || '',
+    MyCustomComment: (item as any).MyCustomComment || '',
+    MyPuzzleComment: (item as any).MyPuzzleComment || '',
+    MyPolishComment: (item as any).MyPolishComment || '',
+    MyBossComment: (item as any).MyBossComment || '',
   };
   ratingSheetModalOpen.value = true;
   
@@ -27295,6 +27815,14 @@ function openRatingSheetModal() {
 function closeRatingSheetModal() {
   ratingSheetModalOpen.value = false;
   ratingSheetGameId.value = null;
+}
+
+function openRatingHelpModal() {
+  ratingHelpModalOpen.value = true;
+}
+
+function closeRatingHelpModal() {
+  ratingHelpModalOpen.value = false;
 }
 
 // Computed property to check if at least one rating is set
@@ -28972,7 +29500,39 @@ button:disabled {
 .modal-header { 
   display: flex; 
   align-items: center; 
-  justify-content: space-between; 
+  justify-content: space-between;
+}
+
+.modal-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-header .help-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color, #ccc);
+  background: var(--bg-secondary, #f5f5f5);
+  color: var(--text-primary, #333);
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.modal-header .help-button:hover {
+  background: var(--accent-color, #007bff);
+  color: white;
+  border-color: var(--accent-color, #007bff);
+}
+
+.modal-header .help-button:active {
+  transform: scale(0.95); 
   gap: 8px; 
   padding: 10px; 
   background: var(--bg-tertiary); 

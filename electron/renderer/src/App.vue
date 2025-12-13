@@ -27748,6 +27748,9 @@ const ratingSheetData = ref<any>({});
 const ratingSheetGameId = ref<string | null>(null); // Track which game the modal is for
 const pendingPublishAfterProfileCreation = ref(false); // Track if we need to publish after profile creation
 
+// Rating Help Modal
+const ratingHelpModalOpen = ref(false);
+
 function openRatingSheetModal() {
   if (!selectedItem.value) return;
   

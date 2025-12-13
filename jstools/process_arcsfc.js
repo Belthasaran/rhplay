@@ -23,7 +23,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { spawnSync, execSync } = require('child_process');
+const { spawnSync, execSync, spawn } = require('child_process');
 
 // Constants
 const SMW_BASE_ROM = '/home/steamu/smwdb/smw.sfc';
@@ -130,6 +130,107 @@ async function determineROMType(filePath) {
   } else {
     return 'exception';
   }
+}
+
+/**
+ * Execute a command with spawn and timeout, ensuring the process is killed if it hangs
+ * @param {string} command - Command to execute
+ * @param {string[]} args - Command arguments
+ * @param {Object} options - spawn options (cwd, env, stdio, etc.)
+ * @param {number} timeoutMs - Timeout in milliseconds (default: 20000)
+ * @returns {Promise<{status: number, stdout: string, stderr: string}>}
+ */
+function spawnWithTimeout(command, args, options = {}, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    let timeoutId;
+    let killed = false;
+    let stdout = '';
+    let stderr = '';
+    
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    // Collect stdout
+    if (child.stdout) {
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (data) => {
+        stdout += data;
+      });
+    }
+    
+    // Collect stderr
+    if (child.stderr) {
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (data) => {
+        stderr += data;
+      });
+    }
+    
+    // Set up timeout
+    timeoutId = setTimeout(() => {
+      if (!killed && !child.killed) {
+        killed = true;
+        console.warn(`[spawnWithTimeout] Process ${command} exceeded timeout of ${timeoutMs}ms, killing...`);
+        
+        // Try to kill the process
+        try {
+          // First, try graceful termination
+          child.kill('SIGTERM');
+          
+          // If it doesn't die quickly, force kill
+          const forceKillTimeout = setTimeout(() => {
+            if (!child.killed) {
+              console.warn(`[spawnWithTimeout] Process ${command} did not respond to SIGTERM, force killing with SIGKILL...`);
+              try {
+                child.kill('SIGKILL');
+              } catch (forceKillError) {
+                console.error(`[spawnWithTimeout] Error force killing process: ${forceKillError.message}`);
+              }
+            }
+          }, 2000);
+          
+          // Clear the force kill timeout if process exits
+          child.once('exit', () => {
+            clearTimeout(forceKillTimeout);
+          });
+        } catch (killError) {
+          console.error(`[spawnWithTimeout] Error killing process: ${killError.message}`);
+        }
+        
+        reject(new Error(`Process ${command} exceeded timeout of ${timeoutMs}ms and was killed`));
+      }
+    }, timeoutMs);
+    
+    // Handle process exit
+    child.on('exit', (code, signal) => {
+      clearTimeout(timeoutId);
+      
+      if (killed) {
+        // Already handled by timeout
+        return;
+      }
+      
+      if (signal) {
+        reject(new Error(`Process ${command} was killed by signal: ${signal}`));
+      } else {
+        resolve({
+          status: code,
+          stdout: stdout,
+          stderr: stderr
+        });
+      }
+    });
+    
+    // Handle process errors
+    child.on('error', (error) => {
+      clearTimeout(timeoutId);
+      if (!killed) {
+        reject(error);
+      }
+    });
+  });
 }
 
 // Helper function to execute wine command
@@ -761,17 +862,21 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       };
       
       await appendLog(`[Step 10.5] Running: python3 try_lmfilter.py (GAMETAG=${sfc_rom_sha1_hash}, GAMEVER=1, ROMFILE=temp/source_unh.sfc)`);
-      const lmfilterResult = spawnSync('/usr/bin/timeout', ['--foreground', '-k', '20', '15', '/usr/bin/python3', 'try_lmfilter.py'], {
-        encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: env,
-        cwd: process.cwd(),
-        maxBuffer: 1024 * 1024 * 200
-      });
-      await appendLog('finish spawnsync:')
-
-      await appendLog(lmfilterResult.stdout)
-      await appendLog(lmfilterResult.stderr)
+      
+      // Use spawnWithTimeout to prevent hanging - 20 second timeout with 2 second kill grace period
+      const lmfilterResult = await spawnWithTimeout(
+        '/usr/bin/python3',
+        ['try_lmfilter.py'],
+        {
+          env: env,
+          cwd: process.cwd()
+        },
+        20000 // 20 second timeout
+      );
+      
+      await appendLog('finish spawnWithTimeout:');
+      await appendLog(lmfilterResult.stdout || '');
+      await appendLog(lmfilterResult.stderr || '');
       
       if (lmfilterResult.status === 0) {
         const lmfilterOutputPath = `output/${sfc_rom_sha1_hash}_lmfilter.json`;
@@ -789,8 +894,16 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
         console.warn(`  try_lmfilter.py exited with status ${lmfilterResult.status}`);
       }
     } catch (error) {
-      await appendLog(`[Step 10.5] ERROR: try_lmfilter.py failed: ${error.message}`);
-      console.warn(`  Warning: try_lmfilter.py failed: ${error.message}`);
+      // Handle timeout and other errors
+      const errorMsg = error.message || String(error);
+      await appendLog(`[Step 10.5] ERROR: try_lmfilter.py failed: ${errorMsg}`);
+      console.warn(`  Warning: try_lmfilter.py failed: ${errorMsg}`);
+      
+      // If it was a timeout, log additional info
+      if (errorMsg.includes('exceeded timeout')) {
+        await appendLog(`[Step 10.5] The process was killed due to timeout. This may indicate a hang in try_lmfilter.py.`);
+        console.warn(`  try_lmfilter.py was killed due to timeout - process may have hung`);
+      }
     }
     
     // Step 10.6: Run find_translevels.py

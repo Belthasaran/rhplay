@@ -1372,6 +1372,55 @@ const MIGRATIONS = {
         }
       },
     },
+    {
+      id: 'clientdata_059_add_extended_design_ratings',
+      description: 'Add 10 extended design rating columns (accessibility, length_pacing, progression, consistency, overworld, education, custom, puzzle, polish, boss)',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/059_clientdata_add_extended_design_ratings.sql'),
+      skipIf(db) {
+        // Skip if all columns already exist (ratings and comments)
+        return columnExists(db, 'user_game_annotations', 'user_accessibility_rating')
+          && columnExists(db, 'user_game_annotations', 'user_accessibility_comment')
+          && columnExists(db, 'user_game_annotations', 'user_length_pacing')
+          && columnExists(db, 'user_game_annotations', 'user_length_pacing_comment')
+          && columnExists(db, 'user_game_annotations', 'user_progression_rating')
+          && columnExists(db, 'user_game_annotations', 'user_progression_comment')
+          && columnExists(db, 'user_game_annotations', 'user_consistency_rating')
+          && columnExists(db, 'user_game_annotations', 'user_consistency_comment')
+          && columnExists(db, 'user_game_annotations', 'user_overworld_rating')
+          && columnExists(db, 'user_game_annotations', 'user_overworld_comment')
+          && columnExists(db, 'user_game_annotations', 'user_education_rating')
+          && columnExists(db, 'user_game_annotations', 'user_education_comment')
+          && columnExists(db, 'user_game_annotations', 'user_custom_rating')
+          && columnExists(db, 'user_game_annotations', 'user_custom_comment')
+          && columnExists(db, 'user_game_annotations', 'user_puzzle_rating')
+          && columnExists(db, 'user_game_annotations', 'user_puzzle_comment')
+          && columnExists(db, 'user_game_annotations', 'user_polish_rating')
+          && columnExists(db, 'user_game_annotations', 'user_polish_comment')
+          && columnExists(db, 'user_game_annotations', 'user_boss_rating')
+          && columnExists(db, 'user_game_annotations', 'user_boss_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_accessibility_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_accessibility_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_length_pacing')
+          && columnExists(db, 'user_game_version_annotations', 'user_length_pacing_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_progression_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_progression_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_consistency_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_consistency_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_overworld_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_overworld_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_education_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_education_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_custom_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_custom_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_puzzle_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_puzzle_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_polish_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_polish_comment')
+          && columnExists(db, 'user_game_version_annotations', 'user_boss_rating')
+          && columnExists(db, 'user_game_version_annotations', 'user_boss_comment');
+      },
+    },
   ],
   thumbnail_cache: [
     {

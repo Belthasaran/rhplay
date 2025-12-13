@@ -2192,7 +2192,7 @@
           <div class="rating-component">
             <div class="rating-header">
               <label class="rating-label">Recommend? <span class="rating-description-inline">(
-Do you recommend the title?</span></label>
+Do you recommend; is the game fun and worthwhile?</span></label>
                <span class="rating-label-text">{{ recommendLabel(ratingSheetData.MyRecommendationRating) }}</span>
             </div>
             <div class="rating-row">

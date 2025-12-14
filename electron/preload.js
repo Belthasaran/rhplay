@@ -886,6 +886,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getOnlineProfile: () => ipcRenderer.invoke('online:profile:get'),
   
   /**
+   * Get profile's did:pkh and Ethereum address
+   * @returns {Promise<{success: boolean, didPkh?: string, ethereumAddress?: string, error?: string}>}
+   */
+  getProfileDidEthereum: () => ipcRenderer.invoke('online:profile:get-did-ethereum'),
+  
+  /**
+   * Get master seed as Bip39 mnemonic (requires password verification)
+   * @param {Object} params - {password: string}
+   * @returns {Promise<{success: boolean, mnemonic?: string, error?: string}>}
+   */
+  getMasterSeedMnemonic: (params) => ipcRenderer.invoke('online:profile:get-master-seed-mnemonic', params),
+  
+  /**
    * List all profiles
    * @returns {Promise<Array>} Array of profile metadata
    */

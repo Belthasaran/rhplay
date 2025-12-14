@@ -9561,28 +9561,132 @@ function registerDatabaseHandlers(dbManager) {
    * Set up Profile Guard
    * Channel: profile-guard:setup
    */
-  ipcMain.handle('profile-guard:setup', async (event, { password, highSecurityMode, changePassword }) => {
+  /**
+   * Set up Profile Guard
+   * Channel: profile-guard:setup
+   * 
+   * If changePassword is true, this will:
+   * 1. Verify the old password to get the old keyguard key
+   * 2. Generate new keyguard key from new password
+   * 3. Atomically re-encrypt ALL secrets with the new key in a single transaction
+   * 4. Update Keyguard settings
+   * 
+   * The operation is fully atomic - either all secrets are re-encrypted or none are.
+   */
+  ipcMain.handle('profile-guard:setup', async (event, { password, highSecurityMode, changePassword, oldPassword }) => {
     try {
       const crypto = require('crypto');
       const { safeStorage } = require('electron');
       const db = dbManager.getConnection('clientdata');
       
-      // Generate random 32-byte salt
-      const salt = crypto.randomBytes(32);
+      // Ensure WAL mode is enabled for transaction safety
+      db.pragma('journal_mode = WAL');
       
-      // Derive encryption key from password using PBKDF2
-      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      let oldKeyguardKey = null;
       
-      // Create SHA512 hash of the derived key for verification
-      const keyHash = crypto.createHash('sha512').update(key).digest('hex');
+      // If changing password, verify old password and get old key
+      if (changePassword) {
+        if (!oldPassword) {
+          return { success: false, error: 'Old password is required when changing password' };
+        }
+        
+        // Get old salt and hash
+        const oldSaltRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('keyguardsalt');
+        
+        const oldHashRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('keyguard_key_hash');
+        
+        if (!oldSaltRow || !oldHashRow) {
+          return { success: false, error: 'Profile Guard not set up - cannot change password' };
+        }
+        
+        const oldSalt = Buffer.from(oldSaltRow.csetting_value, 'hex');
+        const oldStoredHash = oldHashRow.csetting_value;
+        
+        // Derive old key from old password
+        oldKeyguardKey = crypto.pbkdf2Sync(oldPassword, oldSalt, 100000, 32, 'sha256');
+        
+        // Verify old password
+        const oldComputedHash = crypto.createHash('sha512').update(oldKeyguardKey).digest('hex');
+        if (oldComputedHash !== oldStoredHash) {
+          return { success: false, error: 'Invalid old password' };
+        }
+      }
       
+      // Generate new salt and key
+      const newSalt = crypto.randomBytes(32);
+      const newKeyguardKey = crypto.pbkdf2Sync(password, newSalt, 100000, 32, 'sha256');
+      const newKeyHash = crypto.createHash('sha512').update(newKeyguardKey).digest('hex');
+      
+      // Prepare safeStorage key if not in high security mode
+      let newEncryptedKey = null;
+      if (!highSecurityMode && safeStorage.isEncryptionAvailable()) {
+        try {
+          newEncryptedKey = safeStorage.encryptString(newKeyguardKey.toString('hex')).toString('base64');
+        } catch (error) {
+          console.warn('Could not encrypt key for safeStorage:', error);
+        }
+      }
+      
+      // If changing password, re-encrypt all secrets atomically
+      if (changePassword && oldKeyguardKey) {
+        const { reencryptAllSecrets } = require('./utils/KeyguardReencryption');
+        
+        console.log('[profile-guard:setup] Re-encrypting all secrets with new keyguard key...');
+        const reencryptResult = reencryptAllSecrets(
+          db,
+          oldKeyguardKey,
+          newKeyguardKey,
+          newSalt.toString('hex'),
+          newKeyHash,
+          highSecurityMode,
+          newEncryptedKey
+        );
+        
+        if (!reencryptResult.success) {
+          console.error('[profile-guard:setup] Re-encryption failed:', reencryptResult.error);
+          return { 
+            success: false, 
+            error: `Failed to re-encrypt secrets: ${reencryptResult.error}` 
+          };
+        }
+        
+        console.log(`[profile-guard:setup] Successfully re-encrypted ${reencryptResult.reencryptedCount} secret(s)`);
+        
+        // Verify re-encryption was successful
+        const { verifyReencryption } = require('./utils/KeyguardReencryption');
+        const verifyResult = verifyReencryption(db, newKeyguardKey);
+        
+        if (!verifyResult.success) {
+          console.error('[profile-guard:setup] Verification failed after re-encryption:', verifyResult.errors);
+          // This should never happen if transaction worked, but log it
+          return {
+            success: false,
+            error: `Re-encryption completed but verification failed: ${verifyResult.errors.join('; ')}`
+          };
+        }
+        
+        console.log(`[profile-guard:setup] Verified ${verifyResult.verifiedCount} secret(s) can be decrypted with new key`);
+        
+        return { 
+          success: true, 
+          highSecurityMode: highSecurityMode,
+          reencryptedCount: reencryptResult.reencryptedCount,
+          verifiedCount: verifyResult.verifiedCount
+        };
+      }
+      
+      // New setup (not changing password) - just store settings
       // Store salt in database
       const uuid1 = crypto.randomUUID();
       db.prepare(`
         INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
         VALUES (?, ?, ?)
         ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid1, 'keyguardsalt', salt.toString('hex'));
+      `).run(uuid1, 'keyguardsalt', newSalt.toString('hex'));
       
       // Store SHA512 hash of key for verification
       const uuid2 = crypto.randomUUID();
@@ -9590,7 +9694,7 @@ function registerDatabaseHandlers(dbManager) {
         INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
         VALUES (?, ?, ?)
         ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-      `).run(uuid2, 'keyguard_key_hash', keyHash);
+      `).run(uuid2, 'keyguard_key_hash', newKeyHash);
       
       // Store high security mode setting
       const uuid3 = crypto.randomUUID();
@@ -9601,25 +9705,20 @@ function registerDatabaseHandlers(dbManager) {
       `).run(uuid3, 'keyguard_high_security_mode', highSecurityMode ? 'true' : 'false');
       
       // Store key in safeStorage if not in high security mode
-      if (!highSecurityMode && safeStorage.isEncryptionAvailable()) {
-        try {
-          const encryptedKey = safeStorage.encryptString(key.toString('hex'));
-          const uuid4 = crypto.randomUUID();
-          db.prepare(`
-            INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-            VALUES (?, ?, ?)
-            ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-          `).run(uuid4, 'keyguard_key_encrypted', encryptedKey.toString('base64'));
-          
-          const uuid5 = crypto.randomUUID();
-          db.prepare(`
-            INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
-            VALUES (?, ?, ?)
-            ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
-          `).run(uuid5, 'keyguard_key_stored', 'true');
-        } catch (error) {
-          console.warn('Could not store key in safeStorage:', error);
-        }
+      if (!highSecurityMode && newEncryptedKey) {
+        const uuid4 = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid4, 'keyguard_key_encrypted', newEncryptedKey);
+        
+        const uuid5 = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO csettings (csettinguid, csetting_name, csetting_value)
+          VALUES (?, ?, ?)
+          ON CONFLICT(csetting_name) DO UPDATE SET csetting_value = excluded.csetting_value
+        `).run(uuid5, 'keyguard_key_stored', 'true');
       }
       
       return { success: true, highSecurityMode: highSecurityMode };

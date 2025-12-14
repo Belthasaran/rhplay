@@ -121,7 +121,7 @@
                     <button @click="changeProfileGuardKey" class="btn-secondary-small">
                       Change Master Password
                     </button>
-                    <button @click="removeProfileGuard" class="btn-danger-small">
+                    <button @click="removeProfileGuard" class="btn-danger-small" style="visibility: hidden;">
                       Remove Profile Guard
                     </button>
                   </div>
@@ -485,6 +485,28 @@
                 </div>
               </div>
               <!-- End Trust Declarations Tab -->
+
+              <!-- Trust & Delegation Tab -->
+              <div v-if="onlineActiveTab === 'trust-assignments'" class="tab-content">
+                <div class="online-section">
+                  <TrustInspector />
+                </div>
+
+                <div class="online-section trust-assignments-section">
+                  <TrustAssignmentsList
+                    :assignments="trustAssignments"
+                    :loading="trustAssignmentsLoading"
+                    :error="trustAssignmentsError"
+                    :can-manage="canManageTrustAssignments"
+                    :filter="trustAssignmentsFilter"
+                    @refresh="handleTrustAssignmentsRefresh"
+                    @action="handleTrustAssignmentsAction"
+                    @update-filter="handleTrustAssignmentsFilterUpdate"
+                    ref="trustAssignmentsListRef"
+                  />
+                </div>
+              </div>
+              <!-- End Trust & Delegation Tab -->
 
               <!-- Moderation Tab -->
               <div v-if="onlineActiveTab === 'moderation'" class="tab-content">
@@ -3270,28 +3292,39 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   <div v-if="showProfileGuardSetupModal" class="modal-backdrop" :class="{ 'welcome-wizard-nested': welcomeWizardOpen }" @click.self="welcomeWizardOpen ? null : (showProfileGuardSetupModal = false)">
     <div class="modal">
       <header class="modal-header">
-        <h3>Set Up Profile Guard</h3>
+        <h3>{{ isChangingPassword ? 'Change Profile Guard Password' : 'Set Up Profile Guard' }}</h3>
         <button v-if="!welcomeWizardOpen" class="close" @click="showProfileGuardSetupModal = false">✕</button>
       </header>
       <section class="modal-body">
-        <div class="modal-field">
-          <label>Enter a master password for Profile Guard:</label>
+        <div v-if="isChangingPassword" class="modal-field">
+          <label>Enter your current password:</label>
           <input 
             type="password" 
-            v-model="profileGuardPassword"
+            v-model="profileGuardOldPassword"
             @keydown.enter="confirmSetupProfileGuard"
-            placeholder="Enter master password"
+            placeholder="Enter current password"
             class="modal-input"
             autofocus
           />
         </div>
         <div class="modal-field">
-          <label>Confirm password:</label>
+          <label>{{ isChangingPassword ? 'Enter new master password:' : 'Enter a master password for Profile Guard:' }}</label>
+          <input 
+            type="password" 
+            v-model="profileGuardPassword"
+            @keydown.enter="confirmSetupProfileGuard"
+            :placeholder="isChangingPassword ? 'Enter new master password' : 'Enter master password'"
+            class="modal-input"
+            :autofocus="!isChangingPassword"
+          />
+        </div>
+        <div class="modal-field">
+          <label>Confirm {{ isChangingPassword ? 'new ' : '' }}password:</label>
           <input 
             type="password" 
             v-model="profileGuardPasswordConfirm"
             @keydown.enter="confirmSetupProfileGuard"
-            placeholder="Confirm master password"
+            :placeholder="isChangingPassword ? 'Confirm new master password' : 'Confirm master password'"
             class="modal-input"
           />
         </div>
@@ -3304,15 +3337,23 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             High Security Mode: Prompt for master password every time (do not save)
           </label>
         </div>
-        <p class="modal-note">
+        <p v-if="isChangingPassword" class="modal-note" style="color: #856404; background: #fff3cd; padding: 12px; border-radius: 4px; border: 1px solid #ffc107;">
+          <strong>⚠️ Important:</strong> Changing your password will re-encrypt all secrets (master seeds, private keys, Twitch tokens, etc.) in a single atomic transaction. 
+          This ensures all secrets are updated or none are - there is no partial state. The operation will verify your current password before proceeding.
+        </p>
+        <p v-else class="modal-note">
           The master password will be used to derive an encryption key. In High Security Mode, you'll be prompted every time you start RHTools.
           Otherwise, the derived key will be securely stored in your OS credential manager.
         </p>
         <div class="modal-actions">
-          <button @click="confirmSetupProfileGuard" class="btn-primary-small" :disabled="!profileGuardPassword || profileGuardPassword !== profileGuardPasswordConfirm">
-            Set Up Profile Guard
+          <button 
+            @click="confirmSetupProfileGuard" 
+            class="btn-primary-small" 
+            :disabled="!profileGuardPassword || profileGuardPassword !== profileGuardPasswordConfirm || (isChangingPassword && !profileGuardOldPassword)"
+          >
+            {{ isChangingPassword ? 'Change Password' : 'Set Up Profile Guard' }}
           </button>
-          <button @click="showProfileGuardSetupModal = false" class="btn-secondary-small">Cancel</button>
+          <button @click="showProfileGuardSetupModal = false; isChangingPassword = false; profileGuardOldPassword = ''" class="btn-secondary-small">Cancel</button>
         </div>
       </section>
     </div>
@@ -8255,6 +8296,7 @@ import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
 import TrustAssignmentsList from './components/trust/TrustAssignmentsList.vue';
+import TrustInspector from './components/trust/TrustInspector.vue';
 import RelayHealthDashboard from './components/relay/RelayHealthDashboard.vue';
 import PublishingQueueDashboard from './components/publish/PublishingQueueDashboard.vue';
 import ProfilePublishingDashboard from './components/publish/ProfilePublishingDashboard.vue';
@@ -11050,6 +11092,8 @@ const showProfileGuardSetupModal = ref(false);
 const showProfileGuardPasswordPrompt = ref(false);
 const profileGuardPassword = ref('');
 const profileGuardPasswordConfirm = ref('');
+const profileGuardOldPassword = ref(''); // For password changes
+const isChangingPassword = ref(false); // Track if we're changing password
 const profileGuardPasswordPrompt = ref('');
 const profileGuardPasswordError = ref('');
 const profileGuardUnlocked = ref(false);
@@ -16306,6 +16350,8 @@ function setupProfileGuard() {
   showProfileGuardSetupModal.value = true;
   profileGuardPassword.value = '';
   profileGuardPasswordConfirm.value = '';
+  profileGuardOldPassword.value = '';
+  isChangingPassword.value = false;
 }
 
 async function confirmSetupProfileGuard() {
@@ -16314,29 +16360,53 @@ async function confirmSetupProfileGuard() {
     return;
   }
   
+  // Validate passwords match
   if (profileGuardPassword.value !== profileGuardPasswordConfirm.value) {
     await showAlert('Passwords do not match', 'Validation Error');
     return;
   }
   
+  // Validate password length
   if (!profileGuardPassword.value || profileGuardPassword.value.length < 8) {
     await showAlert('Password must be at least 8 characters long', 'Validation Error');
+    return;
+  }
+  
+  // If changing password, validate old password is provided
+  if (isChangingPassword.value && !profileGuardOldPassword.value) {
+    await showAlert('Please enter your current password', 'Validation Error');
     return;
   }
   
   try {
     const result = await (window as any).electronAPI.setupProfileGuard({
       password: profileGuardPassword.value,
-      highSecurityMode: profileGuardHighSecurityMode.value
+      highSecurityMode: profileGuardHighSecurityMode.value,
+      changePassword: isChangingPassword.value,
+      oldPassword: isChangingPassword.value ? profileGuardOldPassword.value : undefined
     });
     
     if (result.success) {
+      const wasChangingPassword = isChangingPassword.value;
+      const reencryptedCount = result.reencryptedCount;
+      
       profileGuardEnabled.value = true;
       profileGuardHighSecurityMode.value = result.highSecurityMode || false;
       profileGuardUnlocked.value = true;
       showProfileGuardSetupModal.value = false;
       profileGuardPassword.value = '';
       profileGuardPasswordConfirm.value = '';
+      profileGuardOldPassword.value = '';
+      isChangingPassword.value = false;
+      
+      // Show success message with re-encryption count if password was changed
+      if (wasChangingPassword && reencryptedCount !== undefined) {
+        await showAlert(
+          `Profile Guard password changed successfully!\n\n` +
+          `${reencryptedCount} secret(s) were re-encrypted with the new password in a single atomic transaction.`,
+          'Password Changed'
+        );
+      }
       
       // If WelcomeWizard is open, advance to next task
       if (welcomeWizardOpen.value && currentWelcomeTask.value === 'setup-keyguard') {
@@ -16346,7 +16416,8 @@ async function confirmSetupProfileGuard() {
       // Check if profile needs to be created after setup
       await checkAndCreateProfileIfNeeded();
     } else {
-      await showAlert(`Failed to set up Profile Guard: ${result.error}`, 'Setup Failed');
+      await showAlert(`Failed to ${isChangingPassword.value ? 'change' : 'set up'} Profile Guard: ${result.error}`, 
+        isChangingPassword.value ? 'Change Failed' : 'Setup Failed');
     }
   } catch (error) {
     console.error('Error setting up Profile Guard:', error);
@@ -16499,15 +16570,21 @@ async function deleteProfileGuardSecrets() {
 }
 
 async function changeProfileGuardKey() {
-  const confirmed = await showConfirm('Changing the Profile Guard key will require re-encrypting all your secret keys. Continue?', 'Change Profile Guard Key');
+  const confirmed = await showConfirm(
+    'Changing the Profile Guard password will re-encrypt all your secret keys (master seeds, private keys, Twitch tokens, etc.) in a single atomic transaction. ' +
+    'This ensures all secrets are updated or none are. Continue?', 
+    'Change Profile Guard Password'
+  );
   if (!confirmed) {
     return;
   }
   
-  // Open the setup modal (which works for changing the password too)
+  // Open the setup modal in password change mode
   showProfileGuardSetupModal.value = true;
+  isChangingPassword.value = true;
   profileGuardPassword.value = '';
   profileGuardPasswordConfirm.value = '';
+  profileGuardOldPassword.value = '';
   // Keep the current high security mode setting
 }
 
@@ -30439,13 +30516,16 @@ button:disabled {
 
 .profile-details-modal .btn-primary-small,
 .profile-details-modal .btn-secondary-small,
-.profile-details-modal .btn-danger-small {
-  font-size: 20px;
+.profile-details-modal .btn-danger-small,
+.online-section .btn-secondary-small,
+.online-section .btn-primary-small,
+.online-section .btn-danger-small {
+  font-size: 22px;
   padding: 12px 20px;
 }
 
 .profile-details-modal .btn-link-small {
-  font-size: 18px;
+  font-size: 24px;
 }
 
 .profile-details-modal .modal-input {

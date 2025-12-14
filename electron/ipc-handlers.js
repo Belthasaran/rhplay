@@ -2229,6 +2229,35 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get a single client setting value
+   * Channel: db:settings:get:value
+   * Note: require_reauth defaults to '1' if not set
+   */
+  ipcMain.handle('db:settings:get:value', async (event, { name }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      
+      const row = db.prepare(`
+        SELECT csetting_value
+        FROM csettings
+        WHERE csetting_name = ?
+      `).get(name);
+      
+      let value = row ? row.csetting_value : null;
+      
+      // Default require_reauth to '1' if not set
+      if (name === 'require_reauth' && value === null) {
+        value = '1';
+      }
+      
+      return { success: true, value: value };
+    } catch (error) {
+      console.error('[db:settings:get:value] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Set a single setting
    * Channel: db:settings:set:value
    */
@@ -9566,7 +9595,7 @@ function registerDatabaseHandlers(dbManager) {
    * Channel: profile-guard:setup
    * 
    * If changePassword is true, this will:
-   * 1. Verify the old password to get the old keyguard key
+   * 1. Verify the old password or use in-memory keyguard key (if unlocked and not in High Security Mode)
    * 2. Generate new keyguard key from new password
    * 3. Atomically re-encrypt ALL secrets with the new key in a single transaction
    * 4. Update Keyguard settings
@@ -9584,35 +9613,71 @@ function registerDatabaseHandlers(dbManager) {
       
       let oldKeyguardKey = null;
       
-      // If changing password, verify old password and get old key
+      // If changing password, get old keyguard key
       if (changePassword) {
-        if (!oldPassword) {
-          return { success: false, error: 'Old password is required when changing password' };
-        }
-        
-        // Get old salt and hash
-        const oldSaltRow = db.prepare(`
+        // Check High Security Mode and require_reauth setting
+        const highSecurityRow = db.prepare(`
           SELECT csetting_value FROM csettings WHERE csetting_name = ?
-        `).get('keyguardsalt');
+        `).get('keyguard_high_security_mode');
+        const isHighSecurityMode = highSecurityRow?.csetting_value === 'true';
         
+        const requireReauthRow = db.prepare(`
+          SELECT csetting_value FROM csettings WHERE csetting_name = ?
+        `).get('require_reauth');
+        const requireReauth = requireReauthRow?.csetting_value === '1';
+        
+        // Get stored hash for verification
         const oldHashRow = db.prepare(`
           SELECT csetting_value FROM csettings WHERE csetting_name = ?
         `).get('keyguard_key_hash');
         
-        if (!oldSaltRow || !oldHashRow) {
+        if (!oldHashRow) {
           return { success: false, error: 'Profile Guard not set up - cannot change password' };
         }
         
-        const oldSalt = Buffer.from(oldSaltRow.csetting_value, 'hex');
         const oldStoredHash = oldHashRow.csetting_value;
         
-        // Derive old key from old password
-        oldKeyguardKey = crypto.pbkdf2Sync(oldPassword, oldSalt, 100000, 32, 'sha256');
-        
-        // Verify old password
-        const oldComputedHash = crypto.createHash('sha512').update(oldKeyguardKey).digest('hex');
-        if (oldComputedHash !== oldStoredHash) {
-          return { success: false, error: 'Invalid old password' };
+        // If old password provided, use it
+        if (oldPassword) {
+          const oldSaltRow = db.prepare(`
+            SELECT csetting_value FROM csettings WHERE csetting_name = ?
+          `).get('keyguardsalt');
+          
+          if (!oldSaltRow) {
+            return { success: false, error: 'Profile Guard not set up - cannot change password' };
+          }
+          
+          const oldSalt = Buffer.from(oldSaltRow.csetting_value, 'hex');
+          oldKeyguardKey = crypto.pbkdf2Sync(oldPassword, oldSalt, 100000, 32, 'sha256');
+          
+          // Verify old password
+          const oldComputedHash = crypto.createHash('sha512').update(oldKeyguardKey).digest('hex');
+          if (oldComputedHash !== oldStoredHash) {
+            return { success: false, error: 'Invalid old password' };
+          }
+        } 
+        // If no old password provided, check if we can use in-memory keyguard key
+        else {
+          // Require password if in High Security Mode or require_reauth is set
+          if (isHighSecurityMode || requireReauth) {
+            return { success: false, error: 'Current password is required when changing password in High Security Mode or when require_reauth is enabled' };
+          }
+          
+          // Try to get in-memory keyguard key from session
+          const inMemoryKeyguardKey = getKeyguardKey(event);
+          
+          if (!inMemoryKeyguardKey) {
+            return { success: false, error: 'Profile Guard is not unlocked. Please unlock it first or provide your current password.' };
+          }
+          
+          // Verify the in-memory key matches the stored hash (same logic as unlock)
+          const inMemoryKeyHash = crypto.createHash('sha512').update(inMemoryKeyguardKey).digest('hex');
+          if (inMemoryKeyHash !== oldStoredHash) {
+            return { success: false, error: 'In-memory keyguard key does not match stored key. Please unlock Profile Guard again or provide your current password.' };
+          }
+          
+          // Use the verified in-memory key
+          oldKeyguardKey = inMemoryKeyguardKey;
         }
       }
       

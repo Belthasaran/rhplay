@@ -160,6 +160,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('db:settings:get:all'),
   
   /**
+   * Get a single setting value
+   * @param {string} name - Setting name
+   * @returns {Promise<{success: boolean, value: string|null}>}
+   */
+  getClientSetting: (name) => ipcRenderer.invoke('db:settings:get:value', { name }),
+  
+  /**
    * Set a single setting
    * @param {string} name - Setting name
    * @param {string} value - Setting value

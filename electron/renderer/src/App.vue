@@ -2,7 +2,110 @@
   <main class="layout">
     <header class="toolbar">
       <div class="left-controls">
-        <button @click="openSettings">Open settings</button>
+        <!-- Profile Dropdown Button -->
+        <div class="profile-dropdown-container">
+          <button @click="toggleProfileDropdown" class="profile-dropdown-btn">
+            <span class="dropdown-icon">👤</span>
+            <span>Profile</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+
+          <div v-if="profileDropdownOpen" class="profile-dropdown" @click.stop>
+            <div class="profile-dropdown-header">
+              <h3>User Profile & Settings</h3>
+              <button @click="closeProfileDropdown" class="close">✕</button>
+            </div>
+
+            <div class="profile-dropdown-body">
+              <!-- Current Profile Info -->
+              <div class="profile-info-section">
+                <div v-if="!onlineProfile?.primaryKeypair" class="profile-empty">
+                  <p>No profile created yet.</p>
+                  <p style="font-size: 12px; color: #666; margin-top: 8px;">
+                    Create a profile in the Online dropdown to use online features.
+                  </p>
+                </div>
+                <div v-else class="profile-info-display">
+                  <div class="profile-header">
+                    <div class="profile-badge">
+                      {{ getProfileBadgeText(onlineProfile.displayName || onlineProfile.username || 'U') }}
+                    </div>
+                    <div class="profile-names">
+                      <div class="profile-display-name">
+                        {{ onlineProfile.displayName || onlineProfile.username || 'Unknown' }}
+                      </div>
+                      <div class="profile-username">
+                        {{ onlineProfile.username || 'Unknown' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Profile Actions -->
+              <div class="profile-actions-section">
+                <button 
+                  v-if="onlineProfile?.primaryKeypair" 
+                  @click="openMyProfileModal(); closeProfileDropdown()" 
+                  class="btn-primary-small profile-action-btn"
+                >
+                  My Profile
+                </button>
+                <button 
+                  v-else
+                  @click="closeProfileDropdown(); toggleOnlineDropdown(); onlineActiveTab = 'profile-keys'" 
+                  class="btn-secondary-small profile-action-btn"
+                >
+                  Create Profile (Online)
+                </button>
+                
+                <button 
+                  @click="openTwitchIntegrationSetup(); closeProfileDropdown()" 
+                  class="btn-primary-small profile-action-btn"
+                  :disabled="!profileGuardEnabled"
+                >
+                  Twitch Integration
+                </button>
+                
+                <button 
+                  @click="changeProfileGuardKey(); closeProfileDropdown()" 
+                  class="btn-secondary-small profile-action-btn"
+                  :disabled="!profileGuardEnabled"
+                >
+                  Change Master Password
+                </button>
+                
+                <button 
+                  @click="openSettings(); closeProfileDropdown()" 
+                  class="btn-secondary-small profile-action-btn"
+                >
+                  Settings
+                </button>
+              </div>
+
+              <!-- Profile Guard Status -->
+              <div class="profile-guard-status-section" style="display: none;">
+                <h4>Profile Guard</h4>
+                <div v-if="!profileGuardEnabled" class="profile-guard-status-item">
+                  <span class="status-indicator disconnected">●</span>
+                  <span>Not set up</span>
+                </div>
+                <div v-else class="profile-guard-status-item">
+                  <span class="status-indicator connected">●</span>
+                  <span>Active</span>
+                  <span v-if="profileGuardHighSecurityMode" style="margin-left: 8px; font-size: 12px; color: #666;">
+                    (High Security Mode)
+                  </span>
+                </div>
+                <div v-if="!profileGuardEnabled" style="margin-top: 8px;">
+                  <button @click="setupProfileGuard(); closeProfileDropdown()" class="btn-primary-small">
+                    Set Up Profile Guard
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         
         <!-- Online Dropdown Button -->
         <div class="online-dropdown-container">
@@ -106,16 +209,6 @@
                   <div class="profile-guard-status-item">
                     <span class="status-indicator connected">●</span>
                     <span>Profile Guard is active</span>
-                  </div>
-                  <div class="profile-guard-mode">
-                    <label class="security-mode-toggle">
-                      <input 
-                        type="checkbox" 
-                        v-model="profileGuardHighSecurityMode"
-                        @change="updateProfileGuardSecurityMode"
-                      />
-                      High Security Mode: Prompt for master password every time (do not save)
-                    </label>
                   </div>
                   <div class="profile-guard-actions">
                     <button @click="changeProfileGuardKey" class="btn-secondary-small">
@@ -3297,14 +3390,20 @@ Do you recommend; is the game fun and worthwhile?</span></label>
       </header>
       <section class="modal-body">
         <div v-if="isChangingPassword" class="modal-field">
-          <label>Enter your current password:</label>
+          <label>
+            Enter your current password
+            <span v-if="!requireReauthForPasswordChange && profileGuardUnlocked" style="font-weight: normal; color: #666; font-size: 0.9em;">
+              (optional - will use unlocked keyguard key if left blank)
+            </span>
+            <span v-else style="font-weight: normal; color: #d32f2f;">*</span>
+          </label>
           <input 
             type="password" 
             v-model="profileGuardOldPassword"
             @keydown.enter="confirmSetupProfileGuard"
-            placeholder="Enter current password"
+            :placeholder="requireReauthForPasswordChange || profileGuardHighSecurityMode ? 'Enter current password (required)' : 'Enter current password (optional if Profile Guard is unlocked)'"
             class="modal-input"
-            autofocus
+            :autofocus="requireReauthForPasswordChange || profileGuardHighSecurityMode"
           />
         </div>
         <div class="modal-field">
@@ -3349,7 +3448,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           <button 
             @click="confirmSetupProfileGuard" 
             class="btn-primary-small" 
-            :disabled="!profileGuardPassword || profileGuardPassword !== profileGuardPasswordConfirm || (isChangingPassword && !profileGuardOldPassword)"
+            :disabled="!profileGuardPassword || profileGuardPassword !== profileGuardPasswordConfirm || (isChangingPassword && (requireReauthForPasswordChange || profileGuardHighSecurityMode) && !profileGuardOldPassword)"
           >
             {{ isChangingPassword ? 'Change Password' : 'Set Up Profile Guard' }}
           </button>
@@ -3468,6 +3567,159 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             :disabled="!profileGuardForgotPassword">
             Delete my Secrets and Profile guard information
           </button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Password Verification Modal -->
+  <div v-if="showPasswordVerificationModal" class="modal-backdrop" @click.self="cancelPasswordVerification()">
+    <div class="modal">
+      <header class="modal-header">
+        <h3>Verify Master Password</h3>
+        <button class="close" @click="cancelPasswordVerification()">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="modal-field">
+          <label>Enter your master password to {{ passwordVerificationOperation }}:</label>
+          <input 
+            type="password" 
+            v-model="passwordVerificationPrompt"
+            @keydown.enter="confirmPasswordVerification"
+            placeholder="Enter master password"
+            class="modal-input"
+            autofocus
+          />
+          <div v-if="passwordVerificationError" class="error-message" style="margin-top: 8px;">
+            {{ passwordVerificationError }}
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button @click="confirmPasswordVerification" class="btn-primary-small" :disabled="!passwordVerificationPrompt">
+            Verify
+          </button>
+          <button @click="cancelPasswordVerification()" class="btn-secondary-small">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- My Profile Modal (Simplified) -->
+  <div v-if="showMyProfileModal" class="modal-backdrop" @click.self="showMyProfileModal = false">
+    <div class="modal my-profile-modal">
+      <header class="modal-header">
+        <h3>My Profile: {{ onlineProfile?.username || 'Unknown' }}</h3>
+        <button class="close" @click="showMyProfileModal = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <div v-if="!onlineProfile" class="profile-empty">
+          <p>No profile loaded. Please create a profile first.</p>
+        </div>
+        <div v-else class="my-profile-content">
+          <!-- Display Name -->
+          <div class="profile-field">
+            <label>Display Name</label>
+            <input 
+              type="text" 
+              v-model="myProfileEditData.displayName"
+              placeholder="Enter display name"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Bio -->
+          <div class="profile-field">
+            <label>Bio</label>
+            <textarea 
+              v-model="myProfileEditData.bio"
+              placeholder="Enter bio"
+              class="profile-textarea"
+              rows="4"
+            ></textarea>
+          </div>
+
+          <!-- Homepage -->
+          <div class="profile-field">
+            <label>Homepage</label>
+            <input 
+              type="url" 
+              v-model="myProfileEditData.link"
+              placeholder="https://example.com"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Picture URL -->
+          <div class="profile-field">
+            <label>Picture URL</label>
+            <input 
+              type="url" 
+              v-model="myProfileEditData.picture"
+              placeholder="https://example.com/picture.jpg"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Banner URL -->
+          <div class="profile-field">
+            <label>Banner URL</label>
+            <input 
+              type="url" 
+              v-model="myProfileEditData.banner"
+              placeholder="https://example.com/banner.jpg"
+              class="profile-input"
+            />
+          </div>
+
+          <!-- Verification Level -->
+          <div class="profile-field">
+            <label>Verification Level</label>
+            <div class="verification-level-display">
+              <span class="verification-level-value">{{ myProfileEditData.verificationLevel || 0 }}</span>
+              <span class="verification-level-note">(Starts at 0 for new profiles)</span>
+            </div>
+          </div>
+
+          <!-- Social IDs -->
+          <div class="profile-field">
+            <label>Social Links</label>
+            <div class="social-links-list">
+              <div 
+                v-for="(social, index) in myProfileEditData.socialIds" 
+                :key="index"
+                class="social-link-item"
+              >
+                <select v-model="social.type" class="social-link-type">
+                  <option value="discord">Discord Username</option>
+                  <option value="twitch">Twitch Username</option>
+                  <option value="youtube">YouTube Channel Link</option>
+                  <option value="keyoxide">Keyoxide Profile Link or Hash</option>
+                  <option value="brightid">BrightID</option>
+                  <option value="playtracker">Playtracker</option>
+                  <option value="gamerprofiles">Gamerprofiles</option>
+                </select>
+                <input 
+                  type="text" 
+                  v-model="social.value"
+                  :placeholder="getSocialPlaceholder(social.type)"
+                  class="social-link-value"
+                />
+                <div class="social-link-verification">
+                  <span class="verification-status" :class="social.verified ? 'verified' : 'unverified'">
+                    {{ social.verified ? 'Verified' : 'Unverified' }}
+                  </span>
+                </div>
+                <button @click="removeSocialLink(index)" class="btn-danger-small" style="margin-left: 8px;">Remove</button>
+              </div>
+              <button @click="addSocialLink()" class="btn-secondary-small" style="margin-top: 8px;">Add Social Link</button>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="profile-actions">
+            <button @click="saveMyProfile()" class="btn-primary">Save Changes</button>
+            <button @click="showMyProfileModal = false" class="btn-secondary">Cancel</button>
+          </div>
         </div>
       </section>
     </div>
@@ -8447,6 +8699,7 @@ const bulkEditExcludeFromRandom = ref('');
 
 // Filter dropdown state
 const filterDropdownOpen = ref(false);
+const profileDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
 const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing' | 'submissions'>('profile-keys');
@@ -11094,6 +11347,7 @@ const profileGuardPassword = ref('');
 const profileGuardPasswordConfirm = ref('');
 const profileGuardOldPassword = ref(''); // For password changes
 const isChangingPassword = ref(false); // Track if we're changing password
+const requireReauthForPasswordChange = ref(false); // Track if require_reauth is enabled
 const profileGuardPasswordPrompt = ref('');
 const profileGuardPasswordError = ref('');
 const profileGuardUnlocked = ref(false);
@@ -11116,6 +11370,24 @@ const currentWelcomeTask = computed(() => {
 
 // Profile Creation Wizard state
 const showProfileDetailsModal = ref(false);
+const showMyProfileModal = ref(false);
+const myProfileEditData = ref<{
+  displayName: string;
+  bio: string;
+  link: string;
+  picture: string;
+  banner: string;
+  socialIds: Array<{type: string, value: string, verified: boolean}>;
+  verificationLevel: number;
+}>({
+  displayName: '',
+  bio: '',
+  link: '',
+  picture: '',
+  banner: '',
+  socialIds: [],
+  verificationLevel: 0
+});
 const showProfileCreationWizard = ref(false);
 const profileDidPkh = ref<string | null>(null);
 const profileEthereumAddress = ref<string | null>(null);
@@ -11544,6 +11816,119 @@ function closeUsb2snesDropdown() {
   usb2snesDropdownOpen.value = false;
 }
 
+// Profile dropdown functions
+function getProfileBadgeText(name: string): string {
+  if (!name || name.length === 0) return '?';
+  // Get first letter of each word, up to 2 letters
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return name[0].toUpperCase();
+}
+
+/**
+ * Check if require_reauth is enabled (defaults to true if not set)
+ */
+async function checkRequireReauth(): Promise<boolean> {
+  if (!isElectronAvailable()) {
+    return true; // Default to requiring reauth
+  }
+  try {
+    const requireReauthResult = await (window as any).electronAPI.getClientSetting('require_reauth');
+    return requireReauthResult?.value !== '0'; // Default to true (1) if not set or explicitly set to 1
+  } catch (error) {
+    console.error('Error checking require_reauth:', error);
+    return true; // Default to requiring reauth on error
+  }
+}
+
+// Password verification modal state
+const showPasswordVerificationModal = ref(false);
+const passwordVerificationPrompt = ref('');
+const passwordVerificationError = ref('');
+const passwordVerificationOperation = ref('');
+const passwordVerificationResolve = ref<((value: boolean) => void) | null>(null);
+
+/**
+ * Verify master password if require_reauth is enabled
+ * Returns true if verification passed or not required, false if failed
+ */
+async function verifyMasterPasswordIfRequired(operationName: string): Promise<boolean> {
+  const requireReauth = await checkRequireReauth();
+  
+  // If require_reauth is disabled and Profile Guard is unlocked, no verification needed
+  if (!requireReauth && profileGuardUnlocked.value) {
+    return true;
+  }
+  
+  // Show password verification modal
+  return new Promise((resolve) => {
+    passwordVerificationOperation.value = operationName;
+    passwordVerificationPrompt.value = '';
+    passwordVerificationError.value = '';
+    passwordVerificationResolve.value = resolve;
+    showPasswordVerificationModal.value = true;
+  });
+}
+
+async function confirmPasswordVerification() {
+  if (!passwordVerificationPrompt.value) {
+    passwordVerificationError.value = 'Please enter your master password';
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.verifyProfileGuardPassword({
+      password: passwordVerificationPrompt.value
+    });
+    
+    if (result.success) {
+      showPasswordVerificationModal.value = false;
+      passwordVerificationPrompt.value = '';
+      passwordVerificationError.value = '';
+      if (passwordVerificationResolve.value) {
+        passwordVerificationResolve.value(true);
+        passwordVerificationResolve.value = null;
+      }
+    } else {
+      passwordVerificationError.value = result.error || 'Invalid password';
+    }
+  } catch (error) {
+    console.error('Error verifying password:', error);
+    passwordVerificationError.value = formatErrorMessage(error);
+  }
+}
+
+function cancelPasswordVerification() {
+  showPasswordVerificationModal.value = false;
+  passwordVerificationPrompt.value = '';
+  passwordVerificationError.value = '';
+  if (passwordVerificationResolve.value) {
+    passwordVerificationResolve.value(false);
+    passwordVerificationResolve.value = null;
+  }
+}
+
+function toggleProfileDropdown() {
+  profileDropdownOpen.value = !profileDropdownOpen.value;
+  // Close Online dropdown if open
+  if (profileDropdownOpen.value && onlineDropdownOpen.value) {
+    onlineDropdownOpen.value = false;
+  }
+  // Load profile info when opening
+  if (profileDropdownOpen.value) {
+    if (profileGuardUnlocked.value) {
+      loadOnlineProfile();
+    }
+    checkProfileGuardStatus();
+  }
+}
+
+function closeProfileDropdown() {
+  profileDropdownOpen.value = false;
+}
+
 // Online dropdown functions
 function toggleOnlineDropdown() {
   onlineDropdownOpen.value = !onlineDropdownOpen.value;
@@ -11562,6 +11947,10 @@ function toggleOnlineDropdown() {
 }
 
 function closeOnlineDropdown() {
+  // Close Profile dropdown if open
+  if (onlineDropdownOpen.value && profileDropdownOpen.value) {
+    profileDropdownOpen.value = false;
+  }
   onlineDropdownOpen.value = false;
   
   // Check if profile needs to be created when opening Online dropdown
@@ -11971,6 +12360,101 @@ async function openProfileDetailsModal() {
   }
   // Load did:pkh and Ethereum address
   await loadProfileDidEthereum();
+}
+
+async function openMyProfileModal() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  // Load profile if not loaded
+  if (!onlineProfile.value) {
+    await loadOnlineProfile();
+  }
+  
+  if (!onlineProfile.value) {
+    await showAlert('No profile found. Please create a profile first.', 'No Profile');
+    return;
+  }
+  
+  // Populate edit data from current profile
+  // Ensure socialIds have verified property (default to false if missing)
+  const socialIds = onlineProfile.value.socialIds ? onlineProfile.value.socialIds.map((social: any) => ({
+    type: social.type || 'discord',
+    value: social.value || '',
+    verified: social.verified !== undefined ? social.verified : false
+  })) : [];
+  
+  myProfileEditData.value = {
+    displayName: onlineProfile.value.displayName || '',
+    bio: onlineProfile.value.bio || '',
+    link: onlineProfile.value.link || '',
+    picture: onlineProfile.value.picture || '',
+    banner: onlineProfile.value.banner || '',
+    socialIds: socialIds,
+    verificationLevel: onlineProfile.value.verificationLevel || 0
+  };
+  
+  showMyProfileModal.value = true;
+}
+
+function getSocialPlaceholder(type: string): string {
+  const placeholders: Record<string, string> = {
+    discord: 'username#1234',
+    twitch: 'username',
+    youtube: 'https://youtube.com/channel/...',
+    keyoxide: 'https://keyoxide.org/... or hash',
+    brightid: 'BrightID identifier',
+    playtracker: 'Playtracker profile link',
+    gamerprofiles: 'Gamerprofiles profile link'
+  };
+  return placeholders[type] || 'Enter value';
+}
+
+function addSocialLink() {
+  myProfileEditData.value.socialIds.push({
+    type: 'discord',
+    value: '',
+    verified: false
+  });
+}
+
+function removeSocialLink(index: number) {
+  myProfileEditData.value.socialIds.splice(index, 1);
+}
+
+async function saveMyProfile() {
+  if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  try {
+    // Update profile with edited data
+    const updatedProfile = {
+      ...onlineProfile.value,
+      displayName: myProfileEditData.value.displayName,
+      bio: myProfileEditData.value.bio,
+      link: myProfileEditData.value.link,
+      picture: myProfileEditData.value.picture,
+      banner: myProfileEditData.value.banner,
+      socialIds: myProfileEditData.value.socialIds,
+      verificationLevel: myProfileEditData.value.verificationLevel
+    };
+    
+    const result = await (window as any).electronAPI.saveOnlineProfile(updatedProfile);
+    
+    if (result.success) {
+      // Reload profile to get updated data
+      await loadOnlineProfile();
+      showMyProfileModal.value = false;
+      showToastNotification('Profile updated successfully!', 'success', 3000);
+    } else {
+      await showAlert(`Failed to save profile: ${result.error}`, 'Save Failed');
+    }
+  } catch (error) {
+    console.error('Error saving profile:', error);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
+  }
 }
 
 async function loadProfileDidEthereum() {
@@ -16372,10 +16856,21 @@ async function confirmSetupProfileGuard() {
     return;
   }
   
-  // If changing password, validate old password is provided
-  if (isChangingPassword.value && !profileGuardOldPassword.value) {
-    await showAlert('Please enter your current password', 'Validation Error');
-    return;
+  // If changing password, validate old password is provided only if required
+  if (isChangingPassword.value) {
+    const oldPasswordRequired = requireReauthForPasswordChange.value || profileGuardHighSecurityMode.value;
+    
+    if (oldPasswordRequired && !profileGuardOldPassword.value) {
+      await showAlert('Please enter your current password', 'Validation Error');
+      return;
+    }
+    
+    // If old password not required and Profile Guard is unlocked, we can proceed without it
+    // The backend will use the in-memory keyguard key
+    if (!oldPasswordRequired && !profileGuardUnlocked.value && !profileGuardOldPassword.value) {
+      await showAlert('Please enter your current password or unlock Profile Guard first', 'Validation Error');
+      return;
+    }
   }
   
   try {
@@ -16534,6 +17029,13 @@ async function deleteProfileGuardSecrets() {
     return;
   }
   
+  // Verify password if require_reauth is enabled
+  const verified = await verifyMasterPasswordIfRequired('delete Profile Guard');
+  if (!verified) {
+    profileGuardForgotPassword.value = false;
+    return;
+  }
+  
   // Double confirmation
   const confirmed = await showConfirm('Are you absolutely sure? This will permanently delete:\n\n- Profile Guard keys\n- All encrypted secret keys\n- All protected keypairs\n\nThis action cannot be undone.', 'Delete Profile Guard');
   if (!confirmed) {
@@ -16570,22 +17072,54 @@ async function deleteProfileGuardSecrets() {
 }
 
 async function changeProfileGuardKey() {
-  const confirmed = await showConfirm(
-    'Changing the Profile Guard password will re-encrypt all your secret keys (master seeds, private keys, Twitch tokens, etc.) in a single atomic transaction. ' +
-    'This ensures all secrets are updated or none are. Continue?', 
-    'Change Profile Guard Password'
-  );
-  if (!confirmed) {
+  if (!isElectronAvailable()) {
     return;
   }
   
-  // Open the setup modal in password change mode
-  showProfileGuardSetupModal.value = true;
-  isChangingPassword.value = true;
-  profileGuardPassword.value = '';
-  profileGuardPasswordConfirm.value = '';
-  profileGuardOldPassword.value = '';
-  // Keep the current high security mode setting
+  // Verify password if require_reauth is enabled
+  const verified = await verifyMasterPasswordIfRequired('change master password');
+  if (!verified) {
+    return;
+  }
+  
+  // Check High Security Mode and require_reauth setting
+  try {
+    const status = await (window as any).electronAPI.checkProfileGuard();
+    const isHighSecurityMode = status.highSecurityMode || false;
+    
+    // Get require_reauth setting (defaults to '1' if not set)
+    const requireReauthResult = await (window as any).electronAPI.getClientSetting('require_reauth');
+    requireReauthForPasswordChange.value = requireReauthResult?.value !== '0'; // Default to true (1) if not set or explicitly set to 1
+    
+    // Determine if old password is required
+    const oldPasswordRequired = isHighSecurityMode || requireReauthForPasswordChange.value;
+    
+    const confirmed = await showConfirm(
+      'Changing the Profile Guard password will re-encrypt all your secret keys (master seeds, private keys, Twitch tokens, etc.) in a single atomic transaction. ' +
+      'This ensures all secrets are updated or none are. Continue?', 
+      'Change Profile Guard Password'
+    );
+    if (!confirmed) {
+      return;
+    }
+    
+    // Open the setup modal in password change mode
+    showProfileGuardSetupModal.value = true;
+    isChangingPassword.value = true;
+    profileGuardPassword.value = '';
+    profileGuardPasswordConfirm.value = '';
+    profileGuardOldPassword.value = '';
+    
+    // If old password is not required and Profile Guard is unlocked, we can use the in-memory key
+    if (!oldPasswordRequired && profileGuardUnlocked.value) {
+      // Old password is optional - user can leave it blank to use in-memory key
+      // The backend will verify the in-memory key matches the stored hash
+    }
+    // Keep the current high security mode setting
+  } catch (error) {
+    console.error('Error checking Profile Guard status:', error);
+    await showAlert('Failed to check Profile Guard status', 'Error');
+  }
 }
 
 async function removeProfileGuard() {
@@ -16620,6 +17154,12 @@ function exportFullProfile() {
 
 async function confirmExportProfile() {
   if (!isElectronAvailable() || !onlineProfile.value) {
+    return;
+  }
+  
+  // Verify master password if require_reauth is enabled (before showing export modal)
+  const verified = await verifyMasterPasswordIfRequired('export profile backup');
+  if (!verified) {
     return;
   }
   
@@ -17839,6 +18379,11 @@ function handleGlobalClick(e: MouseEvent) {
   }
   
   // Check Online dropdown separately
+  const profileDropdown = document.querySelector('.profile-dropdown-container');
+  if (profileDropdown && profileDropdown.contains(target)) {
+    clickedInsideAnyDropdown = true;
+  }
+  
   const onlineDropdown = document.querySelector('.online-dropdown-container');
   if (onlineDropdown && onlineDropdown.contains(target)) {
     clickedInsideAnyDropdown = true;
@@ -17855,6 +18400,7 @@ function handleGlobalClick(e: MouseEvent) {
     closeSelectDropdown();
     closeManageDropdown();
     closeSnesContentsDropdown();
+    closeProfileDropdown();
     // Don't close Online dropdown on outside clicks - user must explicitly close it
     // to prevent losing unsaved work in forms
     // closeOnlineDropdown();
@@ -30502,6 +31048,124 @@ button:disabled {
 /* Settings Modal */
 .settings-modal { width: 800px; max-width: 95vw; }
 
+.my-profile-modal {
+  width: 1200px;
+  max-width: 95vw;
+  max-height: 90vh;
+}
+
+.my-profile-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.my-profile-content .profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.my-profile-content .profile-field label {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.my-profile-content .profile-input,
+.my-profile-content .profile-textarea {
+  font-size: 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.my-profile-content .profile-textarea {
+  resize: vertical;
+  font-family: inherit;
+  font-size: 20px;
+}
+
+.verification-level-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.verification-level-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.verification-level-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.social-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.social-link-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+}
+
+.social-link-type {
+  flex: 0 0 180px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.social-link-value {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 24px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.social-link-verification {
+  flex: 0 0 100px;
+  display: flex;
+  justify-content: center;
+}
+
+.verification-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.verification-status.verified {
+  color: #4caf50;
+  font-weight: bold;
+  background: black;
+}
+
+.verification-status.unverified {
+  color: #ff9800;
+  font-weight: bold;
+  background: black;
+}
+
 .profile-details-modal {
   width: 95vw;
   max-width: 95vw;
@@ -30519,7 +31183,10 @@ button:disabled {
 .profile-details-modal .btn-danger-small,
 .online-section .btn-secondary-small,
 .online-section .btn-primary-small,
-.online-section .btn-danger-small {
+.online-section .btn-danger-small,
+.social-links-list .btn-danger-small,
+.social-link-verification .verification-status
+ {
   font-size: 22px;
   padding: 12px 20px;
 }
@@ -32647,6 +33314,168 @@ button:disabled {
 /* ===========================================================================
    USB2SNES DROPDOWN STYLING
    =========================================================================== */
+
+/* Profile Dropdown Styling */
+.profile-dropdown-container {
+  position: relative;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.profile-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.profile-dropdown-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+.profile-dropdown {
+  position: fixed;
+  top: 60px;
+  left: 10px;
+  width: 400px;
+  max-width: calc(95vw - 20px);
+  max-height: 80vh;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.profile-dropdown-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-dropdown-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.profile-info-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.profile-info-display {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.profile-names {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-display-name {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-username {
+  font-size: 20px;
+  color: var(--text-secondary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-actions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.profile-actions-section .btn-primary-small,
+.profile-actions-section .btn-secondary-small {
+ font-size: 22px;
+}
+
+.profile-action-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.profile-guard-status-section {
+  margin-bottom: 0;
+}
+
+.profile-guard-status-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-guard-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
 
 /* Online Dropdown Styling */
 .online-dropdown-container {

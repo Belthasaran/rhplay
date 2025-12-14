@@ -134,6 +134,25 @@ class DatabaseManager {
           );
         `);
         console.log(`Created empty ${dbName} with basic schema`);
+      } else if (dbName === 'ratings.db') {
+        // Apply full ratings schema from ratings.sql
+        const ratingsSchemaPath = path.join(__dirname, 'sql', 'ratings.sql');
+        if (fs.existsSync(ratingsSchemaPath)) {
+          const schema = fs.readFileSync(ratingsSchemaPath, 'utf8');
+          db.exec(schema);
+          console.log(`Created empty ${dbName} with full ratings schema`);
+        } else {
+          console.warn(`ratings.sql not found at ${ratingsSchemaPath}, creating minimal schema`);
+          // Fallback to minimal schema if ratings.sql not found
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS info (
+              key TEXT PRIMARY KEY,
+              value TEXT
+            );
+            INSERT OR IGNORE INTO info (key, value) VALUES ('version', '1.0.0');
+            INSERT OR IGNORE INTO info (key, value) VALUES ('created', '${new Date().toISOString()}');
+          `);
+        }
       } else {
         // For rhdata.db and patchbin.db, create minimal schema
         db.exec(`
@@ -216,6 +235,29 @@ class DatabaseManager {
       
       // Enable WAL mode for better concurrency
       this.connections[dbName].pragma('journal_mode = WAL');
+      
+      // For ratings.db, ensure trust_assignments table exists (for existing databases)
+      if (dbName === 'ratings') {
+        try {
+          const tableExists = this.connections[dbName].prepare(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name='trust_assignments'
+          `).get();
+          
+          if (!tableExists) {
+            console.log(`[ratings.db] trust_assignments table missing, applying schema...`);
+            const ratingsSchemaPath = path.join(__dirname, 'sql', 'ratings.sql');
+            if (fs.existsSync(ratingsSchemaPath)) {
+              const schema = fs.readFileSync(ratingsSchemaPath, 'utf8');
+              this.connections[dbName].exec(schema);
+              console.log(`[ratings.db] Applied ratings schema successfully`);
+            } else {
+              console.warn(`[ratings.db] ratings.sql not found at ${ratingsSchemaPath}`);
+            }
+          }
+        } catch (error) {
+          console.error(`[ratings.db] Error checking/applying schema:`, error);
+        }
+      }
       
       // Store path for reference
       this.connections[dbName].dbPath = dbPath;

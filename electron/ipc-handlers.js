@@ -10107,6 +10107,68 @@ function registerDatabaseHandlers(dbManager) {
       return [];
     }
   });
+
+  /**
+   * List user-op keypairs (admin keypairs bound to a specific profile)
+   * Channel: online:user-op-keypairs:list
+   */
+  ipcMain.handle('online:user-op-keypairs:list', async (event, { profileUuid }) => {
+    try {
+      if (!profileUuid) {
+        return [];
+      }
+      
+      const db = dbManager.getConnection('clientdata');
+      
+      const keypairs = db.prepare(`
+        SELECT 
+          keypair_uuid,
+          keypair_type,
+          key_usage,
+          storage_status,
+          public_key,
+          public_key_hex,
+          fingerprint,
+          trust_level,
+          local_name,
+          canonical_name,
+          name,
+          label,
+          comments,
+          profile_uuid,
+          created_at,
+          nostr_status,
+          nostr_event_id
+        FROM admin_keypairs
+        WHERE profile_uuid = ?
+        ORDER BY COALESCE(name, local_name, canonical_name), created_at DESC
+      `).all(profileUuid);
+      
+      return keypairs.map(kp => ({
+        uuid: kp.keypair_uuid,
+        type: kp.keypair_type,
+        keyUsage: kp.key_usage,
+        storageStatus: kp.storage_status || 'public-only',
+        publicKey: kp.public_key,
+        publicKeyHex: kp.public_key_hex,
+        fingerprint: kp.fingerprint,
+        trustLevel: kp.trust_level,
+        localName: kp.local_name,
+        canonicalName: kp.canonical_name,
+        name: kp.name,
+        label: kp.label,
+        comments: kp.comments,
+        profileUuid: kp.profile_uuid,
+        createdAt: kp.created_at,
+        nostrStatus: kp.nostr_status || 'pending',
+        nostrEventId: kp.nostr_event_id
+      }));
+    } catch (error) {
+      console.error('Error listing user-op keypairs:', error);
+      return [];
+    }
+  });
+
   /**
    * Get admin keypair (with decrypted secret key if Profile Guard is unlocked)
    * Channel: online:admin-keypair:get

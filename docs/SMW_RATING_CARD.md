@@ -402,6 +402,10 @@ Are sections within a level consistently difficult, fairly checkpointed, and not
 **Internal Name:** `user_overworld_rating`  
 **Range:** 0 to 5 stars
 
+**Description:**
+
+Evaluation of the game's overworld design, layout, navigation, and how well it connects levels or areas. Skip this rating if the game has no overworld.
+
 **Rating Labels:**
 
 | Rating | Label |

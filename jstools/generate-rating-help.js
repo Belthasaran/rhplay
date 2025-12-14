@@ -31,7 +31,8 @@ const DEFAULT_DESCRIPTIONS = {
   'user_originality_rating': 'How original and creative the game is. Does it bring new ideas or unique takes on familiar concepts?',
   'user_visual_aesthetics_rating': 'Assessment of the game\'s visual presentation, graphics quality, and aesthetic appeal.',
   'user_story_rating': 'Evaluation of the game\'s narrative, story quality, and how well it integrates with gameplay.',
-  'user_soundtrack_graphics_rating': 'Assessment of the game\'s soundtrack, music quality, and audio design.'
+  'user_soundtrack_graphics_rating': 'Assessment of the game\'s soundtrack, music quality, and audio design.',
+  'user_overworld_rating': 'Evaluation of the game\'s overworld design, layout, navigation, and how well it connects levels or areas. Skip this rating if the game has no overworld.'
 };
 
 // Mapping of internal names to their label functions and UI info

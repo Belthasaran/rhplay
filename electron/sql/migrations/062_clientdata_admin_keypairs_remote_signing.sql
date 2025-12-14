@@ -37,6 +37,10 @@ ALTER TABLE admin_keypairs ADD COLUMN is_seed_based INTEGER DEFAULT 0;
 -- Add derivation_path for seed-based admin keypairs
 ALTER TABLE admin_keypairs ADD COLUMN derivation_path TEXT;
 
+-- Add master_seed_id to reference which admin seed was used for this keypair
+-- References admin_seeds.seed_id - NULL if keypair is not seed-based or uses a different seed
+ALTER TABLE admin_keypairs ADD COLUMN master_seed_id TEXT;
+
 -- Add indexes for remote signing queries
 CREATE INDEX IF NOT EXISTS idx_admin_keypairs_remote_signing 
   ON admin_keypairs(is_remote_signing) 
@@ -53,6 +57,10 @@ CREATE INDEX IF NOT EXISTS idx_admin_keypairs_seed_based
 CREATE INDEX IF NOT EXISTS idx_admin_keypairs_derivation_path 
   ON admin_keypairs(derivation_path) 
   WHERE derivation_path IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_admin_keypairs_master_seed_id 
+  ON admin_keypairs(master_seed_id) 
+  WHERE master_seed_id IS NOT NULL;
 
 SELECT 'Migration 062 completed successfully. Added remote signing support columns to admin_keypairs.' as message;
 

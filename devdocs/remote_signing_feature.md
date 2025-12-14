@@ -14,9 +14,29 @@ The remote signing feature allows admin keypairs and profile keypairs to use pri
 
 ## Database Schema
 
+### Admin Seeds (`admin_seeds` table)
+
+**Purpose**: Store encrypted master seeds for admin keypairs, separate from user profile seeds.
+
+- **`seed_id`** (VARCHAR(255), PRIMARY KEY): UUID identifier for this seed
+- **`seed_name`** (TEXT): Human-readable name/description (e.g., "Primary Admin Seed", "Organization A Seed")
+- **`encrypted_master_seed`** (TEXT, NOT NULL): Encrypted 256-bit (32-byte) master seed
+  - Encrypted with Profile Guard key (same encryption method as `encrypted_private_key` in `admin_keypairs`)
+  - Format: `IV:HEX_ENCRYPTED_SEED` (same format as other encrypted fields)
+- **`seed_generated_at`** (TIMESTAMP): When seed was first generated
+- **`created_at`** (TIMESTAMP): Record creation timestamp
+- **`updated_at`** (TIMESTAMP): Auto-updated timestamp
+- **`notes`** (TEXT): Optional notes about the seed (usage, organization, etc.)
+
+**Key Design Points:**
+- Allows multiple admin seeds (e.g., different seeds for different organizations or contexts)
+- Admin seeds are independent of user profile seeds
+- Encrypted using Profile Guard key (requires Profile Guard to be unlocked to access)
+- Each seed can generate multiple admin keypairs using different derivation paths
+
 ### Admin Keypairs (`admin_keypairs` table)
 
-The following columns support remote signing:
+The following columns support remote signing and seed-based generation:
 
 - **`is_remote_signing`** (INTEGER, default 0): Flag indicating if keypair uses remote signing (1) or local storage (0)
 - **`remote_wallet_type`** (TEXT): Type of remote wallet (e.g., 'hardware-ledger', 'hardware-trezor', 'mobile-nostr-wallet', 'ceramic', 'web3-wallet', 'custom')
@@ -24,7 +44,10 @@ The following columns support remote signing:
 - **`remote_wallet_metadata`** (TEXT, JSON): Additional wallet-specific configuration (connection params, API endpoints, auth methods)
 - **`seed_export_ready`** (INTEGER, default 0): Flag indicating if seed-based keypair can be exported to remote wallet
 - **`is_seed_based`** (INTEGER, default 0): Flag indicating if keypair was generated from master seed
-- **`derivation_path`** (TEXT): BIP32/BIP44 derivation path for seed-based keypairs
+- **`derivation_path`** (TEXT): BIP32/BIP44 derivation path for seed-based keypairs (e.g., `m/44'/1237'/0'/0/0`)
+- **`master_seed_id`** (TEXT): References `admin_seeds.seed_id` - identifies which admin seed was used to generate this keypair
+  - NULL if keypair is not seed-based
+  - Foreign key relationship (enforced at application level, not database level to allow flexibility)
 
 ### Profile Keypairs (`profile_keypairs` table)
 
@@ -150,6 +173,8 @@ Similar columns for profile keypairs:
 
 ### Phase 1: Seed-Based Keypair Generation
 
+#### For User Profiles
+
 1. **Master Seed Generation**
    - Generate cryptographically secure 256-bit (32-byte) random seed
    - Encrypt seed with Profile Guard key using AES-256-CBC
@@ -161,7 +186,7 @@ Similar columns for profile keypairs:
    - Default path for Nostr keys: `m/44'/1237'/0'/0/index` (where index is sequential)
    - Derive private key from seed + derivation path
    - Generate public key from private key
-   - Store `is_seed_based=1` and `derivation_path` in keypair record
+   - Store `is_seed_based=1` and `derivation_path` in `profile_keypairs` record
 
 3. **Migration for Existing Profiles**
    - Detect when profile is unlocked/accessed
@@ -169,6 +194,35 @@ Similar columns for profile keypairs:
    - If missing, generate new random seed and encrypt it
    - Do NOT replace existing Nostr keypairs during migration
    - Mark new keypairs as seed-based going forward
+
+#### For Admin Keypairs
+
+1. **Admin Master Seed Generation**
+   - Generate cryptographically secure 256-bit (32-byte) random seed
+   - Encrypt seed with Profile Guard key using AES-256-CBC
+   - Store encrypted seed in `admin_seeds` table with a `seed_id` (UUID)
+   - Optionally provide a `seed_name` for identification (e.g., "Primary Admin Seed")
+   - Record generation timestamp in `seed_generated_at`
+
+2. **Admin Keypair Derivation**
+   - Select which admin seed to use (via `seed_id`)
+   - Decrypt the seed using Profile Guard key
+   - Use BIP32/BIP44 hierarchical deterministic key derivation
+   - Default path for Nostr admin keys: `m/44'/1237'/0'/0/index` (or custom path)
+   - Derive private key from seed + derivation path
+   - Generate public key from private key
+   - Store `is_seed_based=1`, `derivation_path`, and `master_seed_id` in `admin_keypairs` record
+
+3. **Multiple Admin Seeds**
+   - System supports multiple admin seeds in `admin_seeds` table
+   - Each admin keypair references exactly one seed via `master_seed_id`
+   - Allows organization/context separation (e.g., different seeds for different organizations)
+   - When creating new admin keypair, user selects which seed to use (or creates new seed)
+
+4. **Migration for Existing Admin Keypairs**
+   - Existing admin keypairs are NOT automatically converted to seed-based
+   - When admin creates new seed-based admin keypair, must explicitly choose seed-based generation
+   - Optionally, admin can create a seed and re-generate existing keypairs from it (requires manual process)
 
 ### Phase 2: Remote Signing Integration
 

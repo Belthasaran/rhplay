@@ -1472,6 +1472,25 @@ const MIGRATIONS = {
         return tableExists(db, 'admin_seeds');
       },
     },
+    {
+      id: 'clientdata_064_user_profiles_did_pkh',
+      description: 'Add did_pkh column to user_profiles table for Ceramic-compatible DID',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/064_clientdata_user_profiles_did_pkh.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_profiles', 'did_pkh');
+      },
+    },
+    {
+      id: 'clientdata_065_user_profiles_ethereum_wallet',
+      description: 'Add encrypted_ethereum_private_key and ethereum_address columns to user_profiles table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/065_clientdata_user_profiles_ethereum_wallet.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_profiles', 'encrypted_ethereum_private_key')
+          && columnExists(db, 'user_profiles', 'ethereum_address');
+      },
+    },
   ],
   thumbnail_cache: [
     {

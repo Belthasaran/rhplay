@@ -94,6 +94,37 @@ class OnlineProfileManager {
     // Parse profile JSON
     const profile = JSON.parse(row.profile_json);
     
+    // CRITICAL: Ensure profile_json does not contain private/secret keys
+    // Public keypair data (publicKey, publicKeyHex, canonicalName, fingerprint) is allowed
+    // Private/secret keys (privateKey, encrypted private keys) must be removed if present
+    
+    // Remove private keys from keypairs if they exist (they shouldn't, but clean up just in case)
+    if (profile.primaryKeypair) {
+      delete profile.primaryKeypair.privateKey;
+      delete profile.primaryKeypair.encrypted;
+      delete profile.primaryKeypair.privateKeyRaw;
+    }
+    
+    if (profile.additionalKeypairs) {
+      profile.additionalKeypairs.forEach(kp => {
+        delete kp.privateKey;
+        delete kp.encrypted;
+        delete kp.privateKeyRaw;
+      });
+    }
+    
+    if (profile.adminKeypairs) {
+      profile.adminKeypairs.forEach(kp => {
+        delete kp.privateKey;
+        delete kp.encrypted;
+        delete kp.privateKeyRaw;
+      });
+    }
+    
+    // Remove private Ethereum key if present (must not be in profile_json)
+    delete profile.ethereum_privkey;
+    delete profile.primaryKeyPair; // Alternative spelling (also clean private keys if present)
+    
     // Add metadata
     profile._metadata = {
       profileUuid: row.profile_uuid,
@@ -132,6 +163,38 @@ class OnlineProfileManager {
     
     return rows.map(row => {
       const profile = JSON.parse(row.profile_json);
+      
+      // CRITICAL: Ensure profile_json does not contain private/secret keys
+      // Public keypair data (publicKey, publicKeyHex, canonicalName, fingerprint) is allowed
+      // Private/secret keys (privateKey, encrypted private keys) must be removed if present
+      
+      // Remove private keys from keypairs if they exist (they shouldn't, but clean up just in case)
+      if (profile.primaryKeypair) {
+        delete profile.primaryKeypair.privateKey;
+        delete profile.primaryKeypair.encrypted;
+        delete profile.primaryKeypair.privateKeyRaw;
+      }
+      
+      if (profile.additionalKeypairs) {
+        profile.additionalKeypairs.forEach(kp => {
+          delete kp.privateKey;
+          delete kp.encrypted;
+          delete kp.privateKeyRaw;
+        });
+      }
+      
+      if (profile.adminKeypairs) {
+        profile.adminKeypairs.forEach(kp => {
+          delete kp.privateKey;
+          delete kp.encrypted;
+          delete kp.privateKeyRaw;
+        });
+      }
+      
+      // Remove private Ethereum key if present (must not be in profile_json)
+      delete profile.ethereum_privkey;
+      delete profile.primaryKeyPair; // Alternative spelling (also clean private keys if present)
+      
       return {
         ...profile,
         _metadata: {
@@ -170,7 +233,52 @@ class OnlineProfileManager {
       SELECT profile_uuid FROM user_profiles WHERE profile_uuid = ?
     `).get(profileUuid);
     
-    const profileJson = JSON.stringify(profileData);
+    // CRITICAL: profile_json is published to Nostr - it must NOT contain private/secret keys
+    // Public keypair data (publicKey, publicKeyHex, canonicalName, fingerprint, type) CAN be in profile_json
+    // Private/secret keys (privateKey, encrypted private keys) MUST be stored only in profile_keypairs table
+    
+    // Create a copy of profileData and remove private/secret key fields
+    const profileForJson = { ...profileData };
+    
+    // Remove private/secret keys from keypairs, but keep public key data
+    if (profileForJson.primaryKeypair) {
+      const primaryKp = { ...profileForJson.primaryKeypair };
+      delete primaryKp.privateKey; // Remove private key
+      delete primaryKp.encrypted; // Remove encryption flag
+      delete primaryKp.privateKeyRaw; // Remove raw private key
+      // Keep: type, publicKey, publicKeyHex, fingerprint, canonicalName, localName, etc.
+      profileForJson.primaryKeypair = primaryKp;
+    }
+    
+    if (profileForJson.additionalKeypairs) {
+      profileForJson.additionalKeypairs = profileForJson.additionalKeypairs.map(kp => {
+        const cleanedKp = { ...kp };
+        delete cleanedKp.privateKey; // Remove private key
+        delete cleanedKp.encrypted; // Remove encryption flag
+        delete cleanedKp.privateKeyRaw; // Remove raw private key
+        // Keep: type, publicKey, publicKeyHex, fingerprint, canonicalName, localName, etc.
+        return cleanedKp;
+      });
+    }
+    
+    if (profileForJson.adminKeypairs) {
+      profileForJson.adminKeypairs = profileForJson.adminKeypairs.map(kp => {
+        const cleanedKp = { ...kp };
+        delete cleanedKp.privateKey; // Remove private key
+        delete cleanedKp.encrypted; // Remove encryption flag
+        delete cleanedKp.privateKeyRaw; // Remove raw private key
+        // Keep: type, publicKey, publicKeyHex, fingerprint, canonicalName, localName, etc.
+        return cleanedKp;
+      });
+    }
+    
+    // Remove private Ethereum key (must not be in profile_json)
+    delete profileForJson.ethereum_privkey;
+    
+    // Remove internal metadata (not for publishing)
+    delete profileForJson._metadata;
+    
+    const profileJson = JSON.stringify(profileForJson);
     const isCurrent = this.getCurrentProfileId() === profileUuid;
     
     if (existing) {
@@ -338,14 +446,41 @@ class OnlineProfileManager {
     
     const db = this.getDb();
     const keypairUuid = keypairData.uuid || crypto.randomUUID();
+    const keyUsage = keypairData.keyUsage || null;
     
-    // Check if keypair exists
-    const existing = db.prepare(`
-      SELECT keypair_uuid FROM profile_keypairs WHERE keypair_uuid = ?
-    `).get(keypairUuid);
+    // CRITICAL: Check for duplicates by profile_uuid + key_usage + public_key_hex
+    // This prevents the same keypair from being saved multiple times
+    // For primary keypairs, there should be only one per profile
+    // For additional keypairs, check by public key to avoid duplicates
+    
+    let existing = null;
+    if (keyUsage === 'primary') {
+      // For primary keypairs, check by profile_uuid + key_usage (only one primary per profile)
+      existing = db.prepare(`
+        SELECT keypair_uuid FROM profile_keypairs 
+        WHERE profile_uuid = ? AND key_usage = 'primary'
+        LIMIT 1
+      `).get(profileUuid);
+    } else if (keypairData.publicKeyHex) {
+      // For additional keypairs, check by profile_uuid + public_key_hex (same key should not be duplicated)
+      existing = db.prepare(`
+        SELECT keypair_uuid FROM profile_keypairs 
+        WHERE profile_uuid = ? AND public_key_hex = ?
+        LIMIT 1
+      `).get(profileUuid, keypairData.publicKeyHex);
+    } else {
+      // Fallback: check by UUID if provided
+      existing = db.prepare(`
+        SELECT keypair_uuid FROM profile_keypairs WHERE keypair_uuid = ?
+      `).get(keypairUuid);
+    }
+    
+    // If found existing, use its UUID instead of potentially creating a new one
+    const existingUuid = existing ? existing.keypair_uuid : null;
+    const finalUuid = existingUuid || keypairUuid;
     
     if (existing) {
-      // Update existing keypair
+      // Update existing keypair (prevent duplicates)
       db.prepare(`
         UPDATE profile_keypairs 
         SET profile_uuid = ?,
@@ -384,7 +519,7 @@ class OnlineProfileManager {
         keypairData.comments || null,
         keypairData.nostrEventId || null,
         keypairData.nostrStatus || null,
-        keypairUuid
+        finalUuid
       );
     } else {
       // Insert new keypair
@@ -396,7 +531,7 @@ class OnlineProfileManager {
           nostr_event_id, nostr_status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        keypairUuid,
+        finalUuid,
         profileUuid,
         keypairData.type,
         keypairData.keyUsage || null,
@@ -417,7 +552,7 @@ class OnlineProfileManager {
       );
     }
     
-    return { success: true, keypairUuid };
+    return { success: true, keypairUuid: finalUuid };
   }
   
   /**
@@ -448,37 +583,21 @@ class OnlineProfileManager {
       throw new Error('Profile not found');
     }
     
-    // Get primary keypair - must be Nostr type
-    if (!profile.primaryKeypair) {
+    // CRITICAL: Keypairs are NOT stored in profile_json - they are in profile_keypairs table
+    // Get primary keypair from database table, not from profile JSON
+    const primaryKeypair = this.getDecryptedPrimaryKeypair(profileUuid);
+    if (!primaryKeypair) {
       throw new Error('Profile has no primary keypair');
     }
     
-    const primaryKeypair = profile.primaryKeypair;
     if (!primaryKeypair.type || !primaryKeypair.type.toLowerCase().includes('nostr')) {
       throw new Error('Primary keypair must be Nostr type to publish profile');
     }
     
-    // Decrypt private key
-    let privateKeyHex;
-    try {
-      if (!primaryKeypair.encrypted || !primaryKeypair.privateKey) {
-        throw new Error('Private key not available or not encrypted');
-      }
-      
-      const parts = primaryKeypair.privateKey.split(':');
-      if (parts.length !== 2) {
-        throw new Error('Invalid encrypted private key format');
-      }
-      
-      const iv = Buffer.from(parts[0], 'hex');
-      const encrypted = Buffer.from(parts[1], 'hex');
-      const decipher = crypto.createDecipheriv('aes-256-cbc', this.keyguardKey, iv);
-      let decrypted = decipher.update(encrypted);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      
-      privateKeyHex = decrypted.toString('hex');
-    } catch (err) {
-      throw new Error(`Cannot decrypt primary keypair: ${err.message}`);
+    // Private key should already be decrypted by getDecryptedPrimaryKeypair
+    let privateKeyHex = primaryKeypair.privateKey;
+    if (typeof privateKeyHex !== 'string') {
+      throw new Error('Private key must be a hex string');
     }
     
     // Build NIP-01 profile metadata content

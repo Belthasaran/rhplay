@@ -1,6 +1,6 @@
 {
   "name": "rhtools",
-  "version": "0.1.15beta",
+  "version": "0.1.16beta",
   "description": "RHTools - ROM HackPlay Tools Application",
   "author": "RHTools Team <143627208+Belthasaran@users.noreply.github.com>",
   "main": "electron/main.js",
@@ -159,6 +159,7 @@
       "!electron/asdf",
       "!electron/*.db_bak",
       "!electron/db_temp",
+      "!electron/bak_*",
       "jsutils/migratedb.js",
       "electron/sql/migrations/**/*",
       "Flips/asar.exe",

@@ -3964,6 +3964,25 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                 <p class="keypair-locked-note">Keypairs cannot be edited directly. Use key rotation process.</p>
               </div>
             </div>
+            
+            <!-- DID and Ethereum Address -->
+            <div class="keypair-info" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+              <div class="keypair-field" v-if="profileDidPkh">
+                <label>DID (did:pkh):</label>
+                <code class="keypair-public-key">{{ profileDidPkh }}</code>
+                <button @click="copyToClipboard(profileDidPkh)" class="btn-link-small">Copy</button>
+              </div>
+              <div class="keypair-field" v-if="profileEthereumAddress">
+                <label>Ethereum Address:</label>
+                <code class="keypair-public-key">{{ profileEthereumAddress }}</code>
+                <button @click="copyToClipboard(profileEthereumAddress)" class="btn-link-small">Copy</button>
+              </div>
+              <div class="keypair-actions" style="margin-top: 15px;">
+                <button @click="showMasterSeedModal = true" class="btn-secondary-small">
+                  Display Master Seed (Bip39)
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Additional Keypairs (locked if profile has keys) -->
@@ -4102,6 +4121,88 @@ Do you recommend; is the game fun and worthwhile?</span></label>
       <footer class="modal-footer">
         <button @click="showProfileDetailsModal = false" class="btn-primary-small">Close</button>
       </footer>
+    </div>
+  </div>
+
+  <!-- Master Seed Display Modal -->
+  <div v-if="showMasterSeedModal" class="modal-backdrop" @click.self="closeMasterSeedModal">
+    <div class="modal profile-details-modal">
+      <header class="modal-header">
+        <h3>Display Master Seed (Bip39)</h3>
+        <button class="close" @click="closeMasterSeedModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="warning-box" style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+          <h4 style="color: #856404; margin-top: 0; font-size: 24px;">⚠️ Security Warning</h4>
+          <p style="color: #856404; font-size: 20px; line-height: 1.6; margin-bottom: 15px;">
+            Your master seed is extremely sensitive information. Anyone who has access to your master seed can:
+          </p>
+          <ul style="color: #856404; font-size: 18px; line-height: 1.8; margin-left: 20px; margin-bottom: 15px;">
+            <li>Generate all your keypairs and access your accounts</li>
+            <li>Impersonate you on Nostr and other services</li>
+            <li>Access your Ethereum wallet and funds</li>
+            <li>Permanently compromise your digital identity</li>
+          </ul>
+          <p style="color: #856404; font-size: 20px; line-height: 1.6; margin-bottom: 0;">
+            <strong>Never share your master seed with anyone.</strong> Store it securely offline (e.g., written on paper in a safe location). 
+            This application will never ask you to share your seed.
+          </p>
+        </div>
+        
+        <div v-if="!masterSeedMnemonic" class="modal-field">
+          <label style="font-size: 22px;">KeyGuard Password Verification:</label>
+          <p style="font-size: 18px; color: #666; margin-bottom: 10px;">
+            Enter your KeyGuard password to verify your identity and display the master seed.
+            This verification is required even if your KeyGuard is already unlocked to prevent accidental exposure.
+          </p>
+          <input 
+            type="password" 
+            v-model="masterSeedPassword"
+            @keyup.enter="getMasterSeedMnemonic"
+            class="modal-input"
+            placeholder="Enter KeyGuard password"
+            style="font-size: 22px; padding: 12px 16px;"
+            autofocus
+          />
+          <p v-if="masterSeedError" class="error-text" style="color: #d32f2f; font-size: 18px; margin-top: 10px;">
+            {{ masterSeedError }}
+          </p>
+        </div>
+        
+        <div v-if="masterSeedMnemonic" class="master-seed-display" style="background: #f5f5f5; border: 2px solid #4caf50; border-radius: 8px; padding: 20px; margin-top: 20px;">
+          <h4 style="color: #2e7d32; margin-top: 0; font-size: 24px; margin-bottom: 15px;">Your Master Seed (Bip39 Mnemonic):</h4>
+          <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 20px; font-family: 'Courier New', monospace; font-size: 20px; line-height: 1.8; word-break: break-word; color: #333;">
+            {{ masterSeedMnemonic }}
+          </div>
+          <div style="margin-top: 15px;">
+            <button @click="copyToClipboard(masterSeedMnemonic)" class="btn-secondary-small" style="font-size: 18px; padding: 10px 20px;">
+              Copy to Clipboard
+            </button>
+          </div>
+          <p style="color: #d32f2f; font-size: 18px; margin-top: 15px; font-weight: bold;">
+            ⚠️ Copy this seed to a secure location immediately. This display will be cleared when you close this dialog.
+          </p>
+        </div>
+        
+        <div class="modal-actions" style="margin-top: 30px;">
+          <button 
+            v-if="!masterSeedMnemonic"
+            @click="getMasterSeedMnemonic" 
+            :disabled="masterSeedLoading || !masterSeedPassword"
+            class="btn-primary-small"
+            style="font-size: 20px; padding: 12px 24px;"
+          >
+            {{ masterSeedLoading ? 'Verifying...' : 'Verify and Display Seed' }}
+          </button>
+          <button 
+            @click="closeMasterSeedModal" 
+            class="btn-secondary-small"
+            style="font-size: 20px; padding: 12px 24px; margin-left: 10px;"
+          >
+            {{ masterSeedMnemonic ? 'Close' : 'Cancel' }}
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -10973,6 +11074,13 @@ const currentWelcomeTask = computed(() => {
 // Profile Creation Wizard state
 const showProfileDetailsModal = ref(false);
 const showProfileCreationWizard = ref(false);
+const profileDidPkh = ref<string | null>(null);
+const profileEthereumAddress = ref<string | null>(null);
+const showMasterSeedModal = ref(false);
+const masterSeedPassword = ref('');
+const masterSeedMnemonic = ref<string | null>(null);
+const masterSeedError = ref<string | null>(null);
+const masterSeedLoading = ref(false);
 const profileCreationWizardStep = ref(1); // 1 = profile info, 2 = keypair generation
 const profileCreationWizardInitialized = ref(false); // Track if wizard has been initialized
 const profileCreationWizardMode = ref<'create-first' | 'new-profile'>('create-first'); // 'create-first' = wizard opened automatically, 'new-profile' = opened from New Profile button
@@ -11818,6 +11926,66 @@ async function openProfileDetailsModal() {
   if (onlineProfile.value?.profileId) {
     await loadUserOpKeypairsList(onlineProfile.value.profileId);
   }
+  // Load did:pkh and Ethereum address
+  await loadProfileDidEthereum();
+}
+
+async function loadProfileDidEthereum() {
+  if (!isElectronAvailable()) {
+    return;
+  }
+  
+  try {
+    const result = await (window as any).electronAPI.getProfileDidEthereum();
+    if (result.success) {
+      profileDidPkh.value = result.didPkh || null;
+      profileEthereumAddress.value = result.ethereumAddress || null;
+    } else {
+      profileDidPkh.value = null;
+      profileEthereumAddress.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading did:pkh and Ethereum address:', error);
+    profileDidPkh.value = null;
+    profileEthereumAddress.value = null;
+  }
+}
+
+async function getMasterSeedMnemonic() {
+  if (!isElectronAvailable() || !masterSeedPassword.value) {
+    masterSeedError.value = 'Please enter your KeyGuard password';
+    return;
+  }
+  
+  masterSeedLoading.value = true;
+  masterSeedError.value = null;
+  masterSeedMnemonic.value = null;
+  
+  try {
+    const result = await (window as any).electronAPI.getMasterSeedMnemonic({
+      password: masterSeedPassword.value
+    });
+    
+    if (result.success) {
+      masterSeedMnemonic.value = result.mnemonic;
+      masterSeedPassword.value = ''; // Clear password after successful retrieval
+    } else {
+      masterSeedError.value = result.error || 'Failed to retrieve master seed';
+    }
+  } catch (error: any) {
+    console.error('Error getting master seed mnemonic:', error);
+    masterSeedError.value = error.message || 'An error occurred';
+  } finally {
+    masterSeedLoading.value = false;
+  }
+}
+
+function closeMasterSeedModal() {
+  showMasterSeedModal.value = false;
+  masterSeedPassword.value = '';
+  masterSeedMnemonic.value = null;
+  masterSeedError.value = null;
+  masterSeedLoading.value = false;
 }
 
 async function updateOnlineProfile() {

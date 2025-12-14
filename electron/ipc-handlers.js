@@ -1062,7 +1062,8 @@ function registerDatabaseHandlers(dbManager) {
                   const fp = await calculateProfileFp(profileUuid);
                   const metadata = preparedData.metadata || (preparedData.metadata = {});
                   const metaInfo = profile._metadata || {};
-                  const primary = profile.primaryKeypair || profile.primaryKeyPair || primaryKeypair || {};
+                  // CRITICAL: Keypairs are NOT stored in profile_json - get from database table
+                  // primaryKeypair already obtained from getDecryptedPrimaryKeypair above
                   
                   // Always add packager_profile when online profile is active
                   metadata.packager_profile = {
@@ -1076,9 +1077,10 @@ function registerDatabaseHandlers(dbManager) {
                     fp,
                     public_nostr_version: metaInfo.publicNostrVersion || null,
                     primaryKeypair: {
-                      canonicalName: primary.canonicalName || primary.publicKey || '',
-                      publicKeyHex: primary.publicKeyHex || primary.publicKey || '',
-                      fingerprint: primary.fingerprint || '',
+                      // Only include public key details (no private key)
+                      canonicalName: primaryKeypair.canonicalName || primaryKeypair.publicKey || '',
+                      publicKeyHex: primaryKeypair.publicKeyHex || primaryKeypair.publicKey || '',
+                      fingerprint: primaryKeypair.fingerprint || '',
                       createdAt: metaInfo.createdAt || null
                     }
                   };
@@ -8266,14 +8268,16 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // Check if profile needs master seed generation (one-time upgrade)
-      if (profile && keyguardKey && profile._metadata) {
-        const profileUuid = profile._metadata.profileUuid || profile.profileId;
+      if (profile && keyguardKey) {
+        const profileUuid = (profile._metadata && profile._metadata.profileUuid) || profile.profileId;
         if (profileUuid) {
           const { needsSeedGeneration, generateProfileSeedAndDidPkh } = require('./utils/ProfileSeedManager');
           const db = dbManager.getConnection('clientdata');
           
           if (needsSeedGeneration(db, profileUuid)) {
             try {
+              console.log(`[online:profile:get] Profile ${profileUuid} needs seed generation, generating now...`);
+              
               // Generate master seed, Ethereum wallet, and did:pkh
               const { 
                 encryptedSeed, 
@@ -8285,14 +8289,22 @@ function registerDatabaseHandlers(dbManager) {
               
               // Verify seed is not null or zero
               if (encryptedSeed && encryptedSeed !== '0' && encryptedSeed !== '') {
-                // Update profile with master seed and did:pkh in database columns
+                console.log(`[online:profile:get] Updating profile ${profileUuid} with master seed, Ethereum wallet, and did:pkh...`);
+                
+                // Update profile with master seed, Ethereum wallet, and did:pkh in database columns
+                // PRIVATE: encrypted_master_seed, encrypted_ethereum_private_key (database columns only, NOT in profile_json)
+                // PUBLIC: ethereum_address, did_pkh (database columns, can optionally be added to profile_json for publishing)
                 db.prepare(`
                   UPDATE user_profiles 
                   SET encrypted_master_seed = ?, 
+                      encrypted_ethereum_private_key = ?,
+                      ethereum_address = ?,
                       did_pkh = ?, 
                       seed_generated_at = ?
                   WHERE profile_uuid = ?
-                `).run(encryptedSeed, didPkh, seedGeneratedAt, profileUuid);
+                `).run(encryptedSeed, encryptedEthereumPrivateKey, ethereumAddress, didPkh, seedGeneratedAt, profileUuid);
+                
+                console.log(`[online:profile:get] Successfully updated profile ${profileUuid} with seed and wallet data`);
                 
                 // NOTE: We do NOT add Ethereum wallet data to profile JSON
                 // because profile_json is published to Nostr (kind 0 event).
@@ -8305,16 +8317,29 @@ function registerDatabaseHandlers(dbManager) {
                 profile = profileManager.getCurrentProfile();
                 
                 // Return upgrade flag so UI can show alert
-                if (profile && profile._metadata) {
+                if (profile) {
+                  const metadata = profile._metadata || {};
                   const { _metadata, ...profileWithoutMetadata } = profile;
                   return { ...profileWithoutMetadata, _seedUpgraded: true };
                 }
+              } else {
+                console.error(`[online:profile:get] Generated seed is null or zero for profile ${profileUuid}`);
               }
             } catch (seedError) {
-              console.error('Error generating master seed for existing profile:', seedError);
+              console.error(`[online:profile:get] Error generating master seed for existing profile ${profileUuid}:`, seedError);
               // Continue without seed generation if it fails
             }
+          } else {
+            console.log(`[online:profile:get] Profile ${profileUuid} already has a seed, skipping generation`);
           }
+        } else {
+          console.log(`[online:profile:get] Cannot determine profile UUID for seed generation`);
+        }
+      } else {
+        if (!profile) {
+          console.log(`[online:profile:get] No profile found, skipping seed generation`);
+        } else if (!keyguardKey) {
+          console.log(`[online:profile:get] Profile Guard not unlocked, skipping seed generation`);
         }
       }
       
@@ -8360,6 +8385,117 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get profile's did:pkh and Ethereum address
+   * Channel: online:profile:get-did-ethereum
+   */
+  ipcMain.handle('online:profile:get-did-ethereum', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const profileManager = new OnlineProfileManager(dbManager, null);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No current profile' };
+      }
+      
+      const row = db.prepare(`
+        SELECT did_pkh, ethereum_address 
+        FROM user_profiles 
+        WHERE profile_uuid = ?
+      `).get(currentProfileId);
+      
+      if (!row) {
+        return { success: false, error: 'Profile not found' };
+      }
+      
+      return {
+        success: true,
+        didPkh: row.did_pkh || null,
+        ethereumAddress: row.ethereum_address || null
+      };
+    } catch (error) {
+      console.error('Error getting did:pkh and Ethereum address:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get master seed as Bip39 mnemonic (requires password verification)
+   * Channel: online:profile:get-master-seed-mnemonic
+   */
+  ipcMain.handle('online:profile:get-master-seed-mnemonic', async (event, { password }) => {
+    try {
+      // First verify the password using the same logic as profile-guard:verify-password
+      const crypto = require('crypto');
+      const db = dbManager.getConnection('clientdata');
+      
+      const saltRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguardsalt');
+      
+      const hashRow = db.prepare(`
+        SELECT csetting_value FROM csettings WHERE csetting_name = ?
+      `).get('keyguard_key_hash');
+      
+      if (!saltRow || !hashRow) {
+        return { success: false, error: 'Profile Guard not set up' };
+      }
+      
+      const salt = Buffer.from(saltRow.csetting_value, 'hex');
+      const storedHash = hashRow.csetting_value;
+      
+      // Derive key from password
+      const keyguardKey = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Compute hash of derived key
+      const computedHash = crypto.createHash('sha512').update(keyguardKey).digest('hex');
+      
+      // Verify against stored hash
+      if (computedHash !== storedHash) {
+        return { success: false, error: 'Invalid password' };
+      }
+      
+      // Get current profile
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      
+      if (!currentProfileId) {
+        return { success: false, error: 'No current profile' };
+      }
+      
+      // Get encrypted master seed
+      const row = db.prepare(`
+        SELECT encrypted_master_seed 
+        FROM user_profiles 
+        WHERE profile_uuid = ?
+      `).get(currentProfileId);
+      
+      if (!row || !row.encrypted_master_seed) {
+        return { success: false, error: 'Master seed not found for this profile' };
+      }
+      
+      // Decrypt master seed
+      const { decryptMasterSeed } = require('./utils/ProfileSeedManager');
+      const masterSeed = decryptMasterSeed(row.encrypted_master_seed, keyguardKey);
+      
+      // Convert to Bip39 mnemonic
+      const { entropyToMnemonic } = require('@scure/bip39');
+      const { wordlist } = require('@scure/bip39/wordlists/english');
+      
+      // Convert 32-byte seed to mnemonic (24 words for 256 bits)
+      const mnemonic = entropyToMnemonic(masterSeed, wordlist);
+      
+      return {
+        success: true,
+        mnemonic: mnemonic
+      };
+    } catch (error) {
+      console.error('Error getting master seed mnemonic:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * List all profiles with primary keypair details
    * Channel: online:profiles:list-detailed
    */
@@ -8371,18 +8507,29 @@ function registerDatabaseHandlers(dbManager) {
 
       return profiles.map((profile) => {
         const metadata = profile._metadata || {};
-        const primary = profile.primaryKeypair || profile.primaryKeyPair || null;
-
+        // CRITICAL: Keypairs are NOT stored in profile_json - get from database table
+        // Get primary keypair public details from profile_keypairs table
         let primaryKeypair = null;
-        if (primary) {
-          primaryKeypair = {
-            canonicalName: primary.canonicalName || primary.publicKey || '',
-            publicKey: primary.publicKey || '',
-            publicKeyHex: primary.publicKeyHex || primary.public_key_hex || '',
-            fingerprint: primary.fingerprint || '',
-            keypairType: primary.type || primary.keypair_type || '',
-            keypairUuid: primary.keypairUuid || primary.keypair_uuid || primary.uuid || primary.id || null
-          };
+        try {
+          const keyguardKey = getKeyguardKey(event);
+          if (keyguardKey) {
+            const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+            const primaryKp = profileManager.getProfileKeypairs(profile.profileId || metadata.profileUuid);
+            const primaryKpRow = primaryKp.find(kp => kp.keyUsage === 'primary');
+            if (primaryKpRow) {
+              // Only include public key details (no private key)
+              primaryKeypair = {
+                canonicalName: primaryKpRow.canonicalName || primaryKpRow.publicKey || '',
+                publicKey: primaryKpRow.publicKey || '',
+                publicKeyHex: primaryKpRow.publicKeyHex || '',
+                fingerprint: primaryKpRow.fingerprint || '',
+                keypairType: primaryKpRow.type || '',
+                keypairUuid: primaryKpRow.uuid || null
+              };
+            }
+          }
+        } catch (kpError) {
+          console.error('Error getting primary keypair for profile list:', kpError);
         }
 
         return {
@@ -12359,10 +12506,18 @@ function registerDatabaseHandlers(dbManager) {
         return { hasProfile: false, hasNostrKeypair: false };
       }
       
-      // Check if profile has primary keypair and if it's Nostr type
-      const hasNostrKeypair = profile.primaryKeypair && 
-        profile.primaryKeypair.type && 
-        profile.primaryKeypair.type.toLowerCase().includes('nostr');
+      // CRITICAL: Keypairs are stored in profile_keypairs table, not profile_json
+      // Check if profile has primary keypair and if it's Nostr type by querying the table
+      let hasNostrKeypair = false;
+      try {
+        const keypairs = profileManager.getProfileKeypairs(profile.profileId || profile._metadata?.profileUuid);
+        const primaryKp = keypairs.find(kp => kp.keyUsage === 'primary');
+        if (primaryKp && primaryKp.type && primaryKp.type.toLowerCase().includes('nostr')) {
+          hasNostrKeypair = true;
+        }
+      } catch (kpError) {
+        console.error('Error checking primary keypair type:', kpError);
+      }
       
       return { 
         hasProfile: true, 

@@ -2,7 +2,7 @@ rhmd.dat
 example-gametable
 rhmd-import
 backup
-clientdata.db
+clientdata.db*
 rhdata.db
 patchbin.db
 *.db-shm

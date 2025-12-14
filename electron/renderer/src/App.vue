@@ -3973,7 +3973,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                 <button @click="copyToClipboard(profileDidPkh)" class="btn-link-small">Copy</button>
               </div>
               <div class="keypair-field" v-if="profileEthereumAddress">
-                <label>Ethereum Address:</label>
+                <label>did:pkh Eth Address:</label>
                 <code class="keypair-public-key">{{ profileEthereumAddress }}</code>
                 <button @click="copyToClipboard(profileEthereumAddress)" class="btn-link-small">Copy</button>
               </div>
@@ -4140,7 +4140,6 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           <ul style="color: #856404; font-size: 18px; line-height: 1.8; margin-left: 20px; margin-bottom: 15px;">
             <li>Generate all your keypairs and access your accounts</li>
             <li>Impersonate you on Nostr and other services</li>
-            <li>Access your Ethereum wallet and funds</li>
             <li>Permanently compromise your digital identity</li>
           </ul>
           <p style="color: #856404; font-size: 20px; line-height: 1.6; margin-bottom: 0;">
@@ -11544,7 +11543,7 @@ async function loadOnlineProfile() {
       
       // Show alert to inform user their profile has been upgraded
       await showAlert(
-        'Your profile has been upgraded with a master seed and Ethereum wallet support. ' +
+        'Your profile has been upgraded with a master seed. ' +
         'Please export and backup your profile again to ensure you have the latest encrypted data.',
         'Profile Upgraded'
       );

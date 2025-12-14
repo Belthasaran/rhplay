@@ -8265,6 +8265,59 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // Check if profile needs master seed generation (one-time upgrade)
+      if (profile && keyguardKey && profile._metadata) {
+        const profileUuid = profile._metadata.profileUuid || profile.profileId;
+        if (profileUuid) {
+          const { needsSeedGeneration, generateProfileSeedAndDidPkh } = require('./utils/ProfileSeedManager');
+          const db = dbManager.getConnection('clientdata');
+          
+          if (needsSeedGeneration(db, profileUuid)) {
+            try {
+              // Generate master seed, Ethereum wallet, and did:pkh
+              const { 
+                encryptedSeed, 
+                encryptedEthereumPrivateKey, 
+                ethereumAddress, 
+                didPkh, 
+                seedGeneratedAt 
+              } = generateProfileSeedAndDidPkh(keyguardKey);
+              
+              // Verify seed is not null or zero
+              if (encryptedSeed && encryptedSeed !== '0' && encryptedSeed !== '') {
+                // Update profile with master seed and did:pkh in database columns
+                db.prepare(`
+                  UPDATE user_profiles 
+                  SET encrypted_master_seed = ?, 
+                      did_pkh = ?, 
+                      seed_generated_at = ?
+                  WHERE profile_uuid = ?
+                `).run(encryptedSeed, didPkh, seedGeneratedAt, profileUuid);
+                
+                // NOTE: We do NOT add Ethereum wallet data to profile JSON
+                // because profile_json is published to Nostr (kind 0 event).
+                // PRIVATE data (encrypted_ethereum_private_key) is stored in database column only.
+                // PUBLIC data (ethereum_address, did_pkh) is stored in database columns.
+                // If we want to publish did_pkh or ethereum_address to Nostr, we can add
+                // them to profile_json later, but private keys must NEVER be in profile_json.
+                
+                // Reload profile to include new fields
+                profile = profileManager.getCurrentProfile();
+                
+                // Return upgrade flag so UI can show alert
+                if (profile && profile._metadata) {
+                  const { _metadata, ...profileWithoutMetadata } = profile;
+                  return { ...profileWithoutMetadata, _seedUpgraded: true };
+                }
+              }
+            } catch (seedError) {
+              console.error('Error generating master seed for existing profile:', seedError);
+              // Continue without seed generation if it fails
+            }
+          }
+        }
+      }
+      
       // Remove metadata before returning (for backward compatibility)
       if (profile && profile._metadata) {
         const { _metadata, ...profileWithoutMetadata } = profile;
@@ -8442,6 +8495,34 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
       }
       
+      // Generate profile ID if not present
+      if (!profileData.profileId) {
+        profileData.profileId = crypto.randomUUID();
+      }
+      
+      // IMPORTANT: Generate master seed, Ethereum wallet, and did:pkh BEFORE creating keypairs
+      // This ensures seed-based keypair generation is possible
+      const { generateProfileSeedAndDidPkh } = require('./utils/ProfileSeedManager');
+      const { 
+        encryptedSeed, 
+        encryptedEthereumPrivateKey, 
+        ethereumAddress, 
+        didPkh, 
+        seedGeneratedAt 
+      } = generateProfileSeedAndDidPkh(keyguardKey);
+      
+      // Verify seed is not null or zero
+      if (!encryptedSeed || encryptedSeed === '0' || encryptedSeed === '') {
+        throw new Error('Master seed generation failed: seed is null or zero');
+      }
+      
+      // NOTE: Ethereum wallet data is NOT added to profileData.profile_json
+      // because profile_json is published to Nostr (kind 0 event).
+      // PRIVATE data (encrypted_ethereum_private_key) will be stored in database column.
+      // PUBLIC data (ethereum_address, did_pkh) will be stored in database columns.
+      // If we want to publish did_pkh or ethereum_address to Nostr, we can add
+      // them to profile_json later, but private keys must NEVER be in profile_json.
+      
       // Calculate and set fp attribute for the profile
       const profileFp = await calculateProfileFp(profileData.profileId);
       profileData.fp = profileFp;
@@ -8454,6 +8535,20 @@ function registerDatabaseHandlers(dbManager) {
       
       // Save profile to database (automatically syncs to csettings)
       const result = profileManager.saveProfile(profileData, true); // Mark as having unpublished edits
+      
+      // Update profile with master seed, Ethereum wallet, and did:pkh in database columns
+      // PRIVATE: encrypted_master_seed, encrypted_ethereum_private_key (database columns only, NOT in profile_json)
+      // PUBLIC: ethereum_address, did_pkh (database columns, can optionally be added to profile_json for publishing)
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        UPDATE user_profiles 
+        SET encrypted_master_seed = ?, 
+            encrypted_ethereum_private_key = ?,
+            ethereum_address = ?,
+            did_pkh = ?, 
+            seed_generated_at = ?
+        WHERE profile_uuid = ?
+      `).run(encryptedSeed, encryptedEthereumPrivateKey, ethereumAddress, didPkh, seedGeneratedAt, profileData.profileId);
       
       // Also save keypairs to database if they exist
       if (profileData.primaryKeypair) {
@@ -8621,13 +8716,44 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('online:profile:create', async (event, { keyType }) => {
     try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
+      }
+      
+      // Generate profile ID first
+      const profileId = crypto.randomUUID();
+      
+      // IMPORTANT: Generate master seed, Ethereum wallet, and did:pkh BEFORE creating the first keypair
+      // This ensures seed-based keypair generation is possible
+      const { generateProfileSeedAndDidPkh } = require('./utils/ProfileSeedManager');
+      const { 
+        encryptedSeed, 
+        encryptedEthereumPrivateKey, 
+        ethereumAddress, 
+        didPkh, 
+        seedGeneratedAt 
+      } = generateProfileSeedAndDidPkh(keyguardKey);
+      
+      // Verify seed is not null or zero
+      if (!encryptedSeed || encryptedSeed === '0' || encryptedSeed === '') {
+        throw new Error('Master seed generation failed: seed is null or zero');
+      }
+      
+      // Verify Ethereum private key encryption succeeded
+      if (!encryptedEthereumPrivateKey || encryptedEthereumPrivateKey === '0' || encryptedEthereumPrivateKey === '') {
+        throw new Error('Ethereum private key encryption failed');
+      }
+      
       // Users' first profile key must be a Nostr key
       const actualKeyType = keyType || 'Nostr';
       
-      // Generate the actual keypair
+      // Generate the actual keypair (will be seed-based, but we need to implement that separately)
+      // For now, generate normally - seed-based derivation will be added later
       const keypair = await generateKeypair(actualKeyType);
       
       const profile = {
+        profileId,
         displayName: '',
         bio: '',
         primaryKeypair: {
@@ -8640,27 +8766,38 @@ function registerDatabaseHandlers(dbManager) {
         additionalKeypairs: [],
         adminKeypairs: [],
         isAdmin: false
+        // NOTE: Ethereum wallet data (ethereum_privkey, ethereum_address, did_pkh) 
+        // is NOT stored in profile_json because profile_json is published to Nostr.
+        // PRIVATE data (encrypted_ethereum_private_key) is stored in database column.
+        // PUBLIC data (ethereum_address, did_pkh) is stored in database columns.
+        // If we want to publish did_pkh or ethereum_address to Nostr, we can add
+        // them to profile_json later, but private keys must NEVER be in profile_json.
       };
       
-      // Use OnlineProfileManager to save profile
-      const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
-      }
-      
       const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      
-      // Generate profile ID if not present
-      if (!profile.profileId) {
-        profile.profileId = crypto.randomUUID();
-      }
       
       // Calculate and set fp attribute
       const profileFp = await calculateProfileFp(profile.profileId);
       profile.fp = profileFp;
       
-      // Save profile to database
+      // Save profile to database - OnlineProfileManager.saveProfile will handle the profile_json
+      // But we need to set encrypted_master_seed and did_pkh separately
       profileManager.saveProfile(profile, true);
+      
+      // Update profile with master seed, Ethereum wallet, and did:pkh in database columns
+      // AFTER saving the profile record
+      // PRIVATE: encrypted_master_seed, encrypted_ethereum_private_key (database columns only, NOT in profile_json)
+      // PUBLIC: ethereum_address, did_pkh (database columns, can optionally be added to profile_json for publishing)
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        UPDATE user_profiles 
+        SET encrypted_master_seed = ?, 
+            encrypted_ethereum_private_key = ?,
+            ethereum_address = ?,
+            did_pkh = ?, 
+            seed_generated_at = ?
+        WHERE profile_uuid = ?
+      `).run(encryptedSeed, encryptedEthereumPrivateKey, ethereumAddress, didPkh, seedGeneratedAt, profileId);
       
       // Save keypairs
       if (profile.primaryKeypair) {

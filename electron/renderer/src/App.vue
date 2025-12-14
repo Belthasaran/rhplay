@@ -11428,6 +11428,20 @@ async function loadOnlineProfile() {
   
   try {
     const profile = await (window as any).electronAPI.getOnlineProfile();
+    
+    // Check if profile was upgraded with master seed (one-time upgrade for existing profiles)
+    if (profile && (profile as any)._seedUpgraded) {
+      // Remove the flag from profile object
+      delete (profile as any)._seedUpgraded;
+      
+      // Show alert to inform user their profile has been upgraded
+      await showAlert(
+        'Your profile has been upgraded with a master seed and Ethereum wallet support. ' +
+        'Please export and backup your profile again to ensure you have the latest encrypted data.',
+        'Profile Upgraded'
+      );
+    }
+    
     onlineProfile.value = profile || null;
     if (profile) {
       selectedProfileId.value = profile.profileId || null;

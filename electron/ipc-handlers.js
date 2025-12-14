@@ -8480,7 +8480,8 @@ function registerDatabaseHandlers(dbManager) {
       
       // Convert to Bip39 mnemonic
       const { entropyToMnemonic } = require('@scure/bip39');
-      const { wordlist } = require('@scure/bip39/wordlists/english');
+      const wordlistModule = require('@scure/bip39/wordlists/english.js');
+      const wordlist = wordlistModule.wordlist; // The wordlist is in a .wordlist property
       
       // Convert 32-byte seed to mnemonic (24 words for 256 bits)
       const mnemonic = entropyToMnemonic(masterSeed, wordlist);

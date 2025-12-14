@@ -76,12 +76,18 @@
     "upload:list-ardrive": "node list-unuploaded-blobs.js --provider=ardrive"
   },
   "dependencies": {
+    "@ceramicnetwork/http-client": "^6.4.0",
+    "@didtools/pkh-ethereum": "^0.6.0",
+    "@noble/curves": "^2.0.1",
     "@noble/post-quantum": "^0.5.2",
+    "@noble/secp256k1": "^3.0.0",
     "@nostr-connect/connect": "^0.4.0",
     "@nostr-dev-kit/ndk": "2.18.1",
     "@nostr/gadgets": "npm:@jsr/nostr__gadgets@^0.0.39",
     "@nostrify/nostrify": "^0.47.1",
     "@poeticode/js-lzma": "^1.0.0",
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
     "@twurple/api": "^8.0.2",
     "@twurple/auth": "^8.0.2",
     "7zip-min": "^2.1.0",
@@ -91,7 +97,9 @@
     "better-sqlite3": "^12.4.1",
     "crc": "^4.3.2",
     "crc-32": "^1.2.2",
+    "did-session": "^4.0.0",
     "dotenv": "^16.6.1",
+    "ethers": "^6.16.0",
     "express": "^4.21.2",
     "fernet": "0.3.2",
     "hddserial": "^0.0.7",
@@ -178,8 +186,8 @@
         "to": "twitch-config.json"
       },
       {
-         "from": "electron/packed_db/patchbin-schema-3-to-10.sql.xz",
-          "to" : "db/patchbin-schema-3-to-10.sql.xz"
+        "from": "electron/packed_db/patchbin-schema-3-to-10.sql.xz",
+        "to": "db/patchbin-schema-3-to-10.sql.xz"
       },
       {
         "from": "electron/packed_db/clientdata.db.initial.xz",
@@ -328,7 +336,7 @@
         "deb"
       ],
       "category": "Utility",
-      "description" : "SMW Romhack Access Tool"
+      "description": "SMW Romhack Access Tool"
     },
     "mac": {
       "target": [

@@ -1,3 +1,19 @@
+# NodeJS Dependencies added to support future work:
+
+# DID & Ceramic readiness
+    "@ceramicnetwork/http-client": "^6.4.0",
+    "@didtools/pkh-ethereum": "^0.6.0",
+    "did-session": "^4.0.0",
+
+# Identity & keys
+    "ethers": "^6.16.0",
+    "@scure/bip32": "^2.0.1",
+    "@noble/curves": "^2.0.1",
+    "@noble/secp256k1": "^3.0.0",
+
+# Mnemonic Seed View
+    "@scure/bip39": "^2.0.1",
+
 # Identity Verification Mini‑Spec v0.1
 
 *(Draft for Nostr‑First Identity + Challenge Verification + Anti‑Abuse

@@ -16552,8 +16552,10 @@ async function confirmExportProfile() {
   }
   
   try {
+    // Serialize reactive object before sending over IPC to avoid structured clone errors
+    const profileToExport = JSON.parse(JSON.stringify(onlineProfile.value));
     const result = await (window as any).electronAPI.exportOnlineProfile({
-      profile: onlineProfile.value,
+      profile: profileToExport,
       password: profileExportPassword.value
     });
     

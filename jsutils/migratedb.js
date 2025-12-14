@@ -1421,6 +1421,47 @@ const MIGRATIONS = {
           && columnExists(db, 'user_game_version_annotations', 'user_boss_comment');
       },
     },
+    {
+      id: 'clientdata_060_user_profiles_master_seed',
+      description: 'Add encrypted master seed column to user_profiles table for seed-based keypair generation',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/060_clientdata_user_profiles_master_seed.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'user_profiles')) {
+          return true; // Table doesn't exist, skip
+        }
+        return columnExists(db, 'user_profiles', 'encrypted_master_seed')
+          && columnExists(db, 'user_profiles', 'seed_generated_at');
+      },
+    },
+    {
+      id: 'clientdata_061_profile_keypairs_seed_tracking',
+      description: 'Add seed-based tracking columns (is_seed_based, derivation_path) to profile_keypairs table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/061_clientdata_profile_keypairs_seed_tracking.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'profile_keypairs')) {
+          return true; // Table doesn't exist, skip
+        }
+        return columnExists(db, 'profile_keypairs', 'is_seed_based')
+          && columnExists(db, 'profile_keypairs', 'derivation_path');
+      },
+    },
+    {
+      id: 'clientdata_062_admin_keypairs_remote_signing',
+      description: 'Add remote signing support columns to admin_keypairs table for external wallet integration',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/062_clientdata_admin_keypairs_remote_signing.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'admin_keypairs')) {
+          return true; // Table doesn't exist, skip
+        }
+        return columnExists(db, 'admin_keypairs', 'is_remote_signing')
+          && columnExists(db, 'admin_keypairs', 'remote_wallet_type')
+          && columnExists(db, 'admin_keypairs', 'is_seed_based')
+          && columnExists(db, 'admin_keypairs', 'derivation_path');
+      },
+    },
   ],
   thumbnail_cache: [
     {

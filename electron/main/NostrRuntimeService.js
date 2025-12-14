@@ -53,7 +53,17 @@ const NUMERIC_RATING_FIELDS = [
   'user_originality_rating',
   'user_visual_aesthetics_rating',
   'user_story_rating',
-  'user_soundtrack_graphics_rating'
+  'user_soundtrack_graphics_rating',
+  'user_accessibility_rating',
+  'user_length_pacing',
+  'user_progression_rating',
+  'user_consistency_rating',
+  'user_overworld_rating',
+  'user_education_rating',
+  'user_custom_rating',
+  'user_puzzle_rating',
+  'user_polish_rating',
+  'user_boss_rating'
 ];
 const COMMENT_RATING_FIELDS = [
   'user_difficulty_comment',
@@ -67,7 +77,17 @@ const COMMENT_RATING_FIELDS = [
   'user_originality_comment',
   'user_visual_aesthetics_comment',
   'user_story_comment',
-  'user_soundtrack_graphics_comment'
+  'user_soundtrack_graphics_comment',
+  'user_accessibility_comment',
+  'user_length_pacing_comment',
+  'user_progression_comment',
+  'user_consistency_comment',
+  'user_overworld_comment',
+  'user_education_comment',
+  'user_custom_comment',
+  'user_puzzle_comment',
+  'user_polish_comment',
+  'user_boss_comment'
 ];
 const TIMESTAMP_FIELDS = ['created_at_ts', 'updated_at_ts'];
 const PRIORITY_BUCKETS = {

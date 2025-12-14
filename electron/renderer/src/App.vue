@@ -32625,19 +32625,19 @@ button:disabled {
 }
 
 .profile-field label {
-  font-size: 12px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .profile-input,
 .profile-textarea {
-  padding: 8px 12px;
+  padding: 12px 16px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 18px;
   font-family: inherit;
 }
 

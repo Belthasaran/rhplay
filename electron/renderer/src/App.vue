@@ -30247,6 +30247,28 @@ button:disabled {
   max-width: 95vw;
   max-height: 90vh;
 }
+
+.profile-details-modal .modal-header h3 {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-details-modal .btn-primary-small,
+.profile-details-modal .btn-secondary-small,
+.profile-details-modal .btn-danger-small {
+  font-size: 20px;
+  padding: 12px 20px;
+}
+
+.profile-details-modal .btn-link-small {
+  font-size: 18px;
+}
+
+.profile-details-modal .modal-input {
+  font-size: 22px;
+  padding: 12px 16px;
+}
 .settings-body { 
   padding: 20px; 
   max-height: 70vh; 
@@ -32503,18 +32525,19 @@ button:disabled {
 }
 
 .profile-list-header label {
+  font-size: 24px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .profile-select {
   flex: 1;
-  padding: 6px 10px;
+  padding: 12px 16px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 22px;
   font-family: inherit;
 }
 
@@ -32531,7 +32554,7 @@ button:disabled {
 }
 
 .locked-indicator {
-  font-size: 11px;
+  font-size: 18px;
   color: var(--text-secondary);
   font-style: italic;
   margin-left: 4px;
@@ -32559,11 +32582,11 @@ button:disabled {
 }
 
 .keypair-locked-note {
-  font-size: 12px;
+  font-size: 20px;
   color: var(--text-secondary);
   font-style: italic;
   margin-top: 8px;
-  padding: 8px;
+  padding: 12px;
   background: var(--bg-secondary);
   border-radius: 4px;
 }
@@ -32581,7 +32604,7 @@ button:disabled {
 
 .online-section h5 {
   margin: 12px 0 8px 0;
-  font-size: 13px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -32609,6 +32632,7 @@ button:disabled {
 
 .profile-empty p {
   margin: 0 0 16px 0;
+  font-size: 22px;
   color: var(--text-secondary);
 }
 
@@ -32625,19 +32649,19 @@ button:disabled {
 }
 
 .profile-field label {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .profile-input,
 .profile-textarea {
-  padding: 12px 16px;
+  padding: 16px 20px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 24px;
   font-family: inherit;
 }
 
@@ -32825,16 +32849,18 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 20px;
 }
 
 .keypair-field label {
+  font-size: 20px;
   font-weight: 500;
   color: var(--text-secondary);
-  min-width: 80px;
+  min-width: 120px;
 }
 
 .keypair-type {
+  font-size: 20px;
   font-weight: 600;
   color: var(--accent-primary);
   font-family: monospace;
@@ -32843,7 +32869,7 @@ button:disabled {
 .keypair-public-key {
   flex: 1;
   font-family: monospace;
-  font-size: 11px;
+  font-size: 18px;
   color: var(--text-primary);
   background-color: var(--bg-tertiary);
   padding: 4px 8px;
@@ -32958,7 +32984,7 @@ button:disabled {
 
 .backup-warning .warning-text {
   margin: 0 0 8px 0;
-  font-size: 12px;
+  font-size: 20px;
   color: #856404;
   line-height: 1.4;
 }
@@ -33494,13 +33520,15 @@ button:disabled {
 }
 
 .social-id-type {
+  font-size: 20px;
   font-weight: 600;
   color: var(--accent-primary);
-  min-width: 120px;
+  min-width: 160px;
 }
 
 .social-id-value {
   flex: 1;
+  font-size: 20px;
   color: var(--text-primary);
 }
 

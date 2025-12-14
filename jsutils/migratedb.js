@@ -1459,7 +1459,17 @@ const MIGRATIONS = {
         return columnExists(db, 'admin_keypairs', 'is_remote_signing')
           && columnExists(db, 'admin_keypairs', 'remote_wallet_type')
           && columnExists(db, 'admin_keypairs', 'is_seed_based')
-          && columnExists(db, 'admin_keypairs', 'derivation_path');
+          && columnExists(db, 'admin_keypairs', 'derivation_path')
+          && columnExists(db, 'admin_keypairs', 'master_seed_id');
+      },
+    },
+    {
+      id: 'clientdata_063_admin_seeds_table',
+      description: 'Create admin_seeds table for storing encrypted admin master seeds',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/063_clientdata_admin_seeds_table.sql'),
+      skipIf(db) {
+        return tableExists(db, 'admin_seeds');
       },
     },
   ],

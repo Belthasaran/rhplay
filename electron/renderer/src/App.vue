@@ -3617,7 +3617,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
         </div>
         <div v-else class="my-profile-content">
           <!-- Display Name -->
-          <div class="profile-field">
+          <div class="profile-field profile-field-inline">
             <label>Display Name</label>
             <input 
               type="text" 
@@ -3629,17 +3629,17 @@ Do you recommend; is the game fun and worthwhile?</span></label>
 
           <!-- Bio -->
           <div class="profile-field">
-            <label>Bio</label>
             <textarea 
               v-model="myProfileEditData.bio"
               placeholder="Enter bio"
               class="profile-textarea"
+              title="Bio"
               rows="4"
             ></textarea>
           </div>
 
           <!-- Homepage -->
-          <div class="profile-field">
+          <div class="profile-field profile-field-inline">
             <label>Homepage</label>
             <input 
               type="url" 
@@ -3650,7 +3650,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
 
           <!-- Picture URL -->
-          <div class="profile-field">
+          <div class="profile-field profile-field-inline">
             <label>Picture URL</label>
             <input 
               type="url" 
@@ -3661,7 +3661,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
 
           <!-- Banner URL -->
-          <div class="profile-field">
+          <div class="profile-field profile-field-inline">
             <label>Banner URL</label>
             <input 
               type="url" 
@@ -3690,13 +3690,16 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                 class="social-link-item"
               >
                 <select v-model="social.type" class="social-link-type">
-                  <option value="discord">Discord Username</option>
-                  <option value="twitch">Twitch Username</option>
-                  <option value="youtube">YouTube Channel Link</option>
-                  <option value="keyoxide">Keyoxide Profile Link or Hash</option>
-                  <option value="brightid">BrightID</option>
-                  <option value="playtracker">Playtracker</option>
-                  <option value="gamerprofiles">Gamerprofiles</option>
+                  <optgroup label="Tier 1 - Verifiable (Challenge Posting)">
+                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 1)" :key="type.value" :value="type.value">
+                      {{ type.label }}
+                    </option>
+                  </optgroup>
+                  <optgroup label="Tier 6 - Not Currently Verifiable">
+                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 6)" :key="type.value" :value="type.value">
+                      {{ type.label }}
+                    </option>
+                  </optgroup>
                 </select>
                 <input 
                   type="text" 
@@ -3708,6 +3711,14 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                   <span class="verification-status" :class="social.verified ? 'verified' : 'unverified'">
                     {{ social.verified ? 'Verified' : 'Unverified' }}
                   </span>
+                  <button 
+                    v-if="isVerifiableSocialIdType(social.type) && getSupportedVerificationMethods(social.type).length > 0"
+                    @click="beginVerification(social, index)"
+                    class="btn-secondary-small"
+                    style="margin-left: 8px;"
+                  >
+                    Begin Verification
+                  </button>
                 </div>
                 <button @click="removeSocialLink(index)" class="btn-danger-small" style="margin-left: 8px;">Remove</button>
               </div>
@@ -3719,6 +3730,86 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           <div class="profile-actions">
             <button @click="saveMyProfile()" class="btn-primary">Save Changes</button>
             <button @click="showMyProfileModal = false" class="btn-secondary">Cancel</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Social ID Verification Modal -->
+  <div v-if="showSocialVerificationModal" class="modal-backdrop" @click.self="cancelVerification()" @click="handleVerificationModalClick">
+    <div class="modal verification-modal">
+      <header class="modal-header">
+        <h3>Verify Social ID: {{ verificationSocialId ? getSocialIdTypeLabel(verificationSocialId.type) : '' }}</h3>
+        <button class="close" @click="cancelVerification()">✕</button>
+      </header>
+      <section class="modal-body">
+        <div v-if="verificationSocialId" class="verification-content">
+          <div class="modal-field">
+            <label>Verification Method:</label>
+            <select v-model="verificationMethod" class="modal-input" @change="generateChallengePostingInstructions(verificationSocialId.type, verificationSocialId.value)">
+              <option 
+                v-for="method in getSupportedVerificationMethods(verificationSocialId.type)" 
+                :key="method.id" 
+                :value="method.id"
+              >
+                {{ method.label }}
+              </option>
+            </select>
+          </div>
+          
+          <div v-if="verificationMethod === 'challenge-posting'" class="verification-instructions">
+            <div class="modal-field">
+              <label>Copy a Verification Code:</label>
+              <div class="verification-code-dropdown-container">
+                <div 
+                  class="verification-code-dropdown-header"
+                  @click="verificationCodeDropdownOpen = !verificationCodeDropdownOpen"
+                >
+                  <span class="verification-code-selected">
+                    {{ verificationCodeFormats.find(f => f.id === selectedCodeFormatId)?.label || 'Select format...' }}
+                  </span>
+                  <span class="verification-code-dropdown-arrow" :class="{ 'open': verificationCodeDropdownOpen }">▼</span>
+                </div>
+                <div 
+                  v-if="verificationCodeDropdownOpen" 
+                  class="verification-code-dropdown-list"
+                >
+                  <div
+                    v-for="format in verificationCodeFormats"
+                    :key="format.id"
+                    class="verification-code-dropdown-item"
+                    :class="{ 'selected': format.id === selectedCodeFormatId }"
+                    @click="selectCodeFormat(format.id)"
+                  >
+                    <div class="format-label">{{ format.label }}</div>
+                    <div class="format-description">{{ format.description }}</div>
+                    <code class="format-preview">{{ format.code }}</code>
+                  </div>
+                </div>
+              </div>
+              <div class="verification-code-display">
+                <code class="verification-code">{{ verificationCode }}</code>
+                <button @click="copyVerificationCode()" class="btn-secondary-small">Copy</button>
+              </div>
+            </div>
+            
+            <div class="modal-field">
+              <label><span style="font-size: 28px;">Instructions:</span></label>
+              <div class="verification-instructions-text" v-html="formatInstructions(verificationInstructions)"></div>
+            </div>
+            
+            <div class="modal-actions">
+              <button @click="verifySocialId()" class="btn-primary">Verify</button>
+              <button @click="cancelVerification()" class="btn-secondary">Cancel</button>
+            </div>
+          </div>
+          
+          <div v-else class="verification-method-not-implemented">
+            <p>This verification method is not yet implemented.</p>
+            <div class="modal-actions">
+              <button @click="cancelVerification()" class="btn-secondary">Close</button>
+            </div>
           </div>
         </div>
       </section>
@@ -3907,11 +3998,12 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
           
           <div class="modal-field">
-            <label>Social IDs <span class="required">*</span> (at least 1 required):</label>
+            <label>Social IDs <span class="required">*</span> (at least 1 Tier 1-3 required for online publishing):</label>
             <div class="social-ids-container">
               <div v-for="(socialId, index) in profileCreationData.socialIds" :key="index" class="social-id-item">
                 <span class="social-id-type">{{ getSocialIdTypeLabel(socialId.type) }}:</span>
                 <span class="social-id-value">{{ socialId.value }}</span>
+                <span v-if="isVerifiableSocialIdType(socialId.type)" class="social-id-tier-badge">Tier {{ getSocialIdType(socialId.type)?.tier }}</span>
                 <button @click="removeSocialId(index)" class="btn-link-small">Remove</button>
               </div>
               <div class="add-social-id-row">
@@ -3922,15 +4014,16 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                   @input.stop
                   @click.stop
                 >
-                  <option value="discord">Discord Username</option>
-                  <option value="twitch">Twitch Username</option>
-                  <option value="smwcentral">SMWCentral Username</option>
-                  <option value="youtube">YouTube Channel Link</option>
-                  <option value="keyoxide">Keyoxide Profile Link or Hash</option>
-                  <option value="steam">Steam Name</option>
-                  <option value="playtracker">Playtracker Name</option>
-                  <option value="gamerprofiles">Gamerprofiles Name</option>
-                  <option value="github">Github Username</option>
+                  <optgroup label="Tier 1 - Verifiable (Challenge Posting)">
+                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 1)" :key="type.value" :value="type.value">
+                      {{ type.label }}
+                    </option>
+                  </optgroup>
+                  <optgroup label="Tier 6 - Not Currently Verifiable">
+                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 6)" :key="type.value" :value="type.value">
+                      {{ type.label }}
+                    </option>
+                  </optgroup>
                 </select>
                 <input 
                   type="text" 
@@ -3946,6 +4039,9 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                 </button>
               </div>
               <p v-if="socialIdError" class="error-text">{{ socialIdError }}</p>
+              <p v-if="!meetsSocialIdRequirements(profileCreationData.socialIds)" class="warning-text" style="margin-top: 8px;">
+                ⚠️ At least one Tier 1-3 Social ID is required for online publishing. You can add one later or use "Stay Offline For Now".
+              </p>
             </div>
           </div>
           
@@ -4018,10 +4114,17 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             Next: Generate Keypair
           </button>
           <button 
+            v-if="profileCreationWizardStep === 1"
+            @click="createProfileOffline" 
+            class="btn-secondary-small"
+            :disabled="!canCreateProfileOffline">
+            Stay Offline For Now
+          </button>
+          <button 
             v-if="profileCreationWizardStep === 2"
             @click="completeProfileCreation" 
             class="btn-primary-small"
-            :disabled="profileCreationData.keypairType !== 'Nostr'">
+            :disabled="profileCreationData.keypairType !== 'Nostr' || !canPublishProfile">
             Complete and Publish Profile
           </button>
           <button 
@@ -4158,15 +4261,16 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                   @input.stop
                   @click.stop
                 >
-                  <option value="discord">Discord Username</option>
-                  <option value="twitch">Twitch Username</option>
-                  <option value="smwcentral">SMWCentral Username</option>
-                  <option value="youtube">YouTube Channel Link</option>
-                  <option value="keyoxide">Keyoxide Profile Link or Hash</option>
-                  <option value="steam">Steam Name</option>
-                  <option value="playtracker">Playtracker Name</option>
-                  <option value="gamerprofiles">Gamerprofiles Name</option>
-                  <option value="github">Github Username</option>
+                  <optgroup label="Tier 1 - Verifiable (Challenge Posting)">
+                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 1)" :key="type.value" :value="type.value">
+                      {{ type.label }}
+                    </option>
+                  </optgroup>
+                  <optgroup label="Tier 6 - Not Currently Verifiable">
+                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 6)" :key="type.value" :value="type.value">
+                      {{ type.label }}
+                    </option>
+                  </optgroup>
                 </select>
                 <input 
                   type="text" 
@@ -8551,6 +8655,13 @@ import TrustAssignmentsList from './components/trust/TrustAssignmentsList.vue';
 import TrustInspector from './components/trust/TrustInspector.vue';
 import RelayHealthDashboard from './components/relay/RelayHealthDashboard.vue';
 import PublishingQueueDashboard from './components/publish/PublishingQueueDashboard.vue';
+import { 
+  SOCIAL_ID_TYPES, 
+  getSocialIdType, 
+  isVerifiableSocialIdType,
+  getSupportedVerificationMethods,
+  meetsSocialIdRequirements 
+} from './utils/socialIdTypes';
 import ProfilePublishingDashboard from './components/publish/ProfilePublishingDashboard.vue';
 import RatingsPublishingDashboard from './components/publish/RatingsPublishingDashboard.vue';
 import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard.vue';
@@ -10922,10 +11033,11 @@ type Keypair = {
   createdAt?: string; // ISO timestamp
 };
 
-type SocialIdType = 'discord' | 'twitch' | 'smwcentral' | 'youtube' | 'keyoxide' | 'steam' | 'playtracker' | 'gamerprofiles' | 'github';
+// SocialId type - using string for type to support centralized socialIdTypes
 type SocialId = {
-  type: SocialIdType;
+  type: string;
   value: string;
+  verified?: boolean;
 };
 
 type SubjectProfileOption = {
@@ -11388,6 +11500,16 @@ const myProfileEditData = ref<{
   socialIds: [],
   verificationLevel: 0
 });
+
+// Social ID Verification Modal
+const showSocialVerificationModal = ref(false);
+const verificationSocialId = ref<{type: string, value: string, index: number} | null>(null);
+const verificationMethod = ref<string>('');
+const verificationCode = ref<string>('');
+const verificationCodeFormats = ref<Array<{id: string, label: string, description: string, code: string}>>([]);
+const selectedCodeFormatId = ref<string>('');
+const verificationCodeDropdownOpen = ref(false);
+const verificationInstructions = ref<string>('');
 const showProfileCreationWizard = ref(false);
 const profileDidPkh = ref<string | null>(null);
 const profileEthereumAddress = ref<string | null>(null);
@@ -11416,18 +11538,32 @@ const profileCreationData = ref({
   bannerUrl: '',
   keypairType: 'Nostr' as KeypairType
 });
-const newSocialIdType = ref<SocialIdType>('discord');
+const newSocialIdType = ref<string>('discord');
 const newSocialIdValue = ref('');
 const usernameError = ref('');
 const socialIdError = ref('');
 
 // Profile Creation Wizard computed
 const canProceedToKeypairStep = computed(() => {
+  // Basic requirements: username, displayName, and at least one social ID
+  // Note: Social ID verification requirements are checked in nextWizardStep with a warning
   return profileCreationData.value.username.trim() !== '' &&
          !usernameError.value &&
          profileCreationData.value.displayName.trim() !== '' &&
          profileCreationData.value.socialIds.length > 0 &&
          !socialIdError.value;
+});
+
+const canCreateProfileOffline = computed(() => {
+  return profileCreationData.value.username.trim() !== '' &&
+         !usernameError.value &&
+         profileCreationData.value.displayName.trim() !== '';
+  // No social ID requirement for offline profile
+});
+
+const canPublishProfile = computed(() => {
+  // Can publish if meets social ID requirements (Tier 1-3)
+  return meetsSocialIdRequirements(profileCreationData.value.socialIds);
 });
 
 // Profile Export/Import state
@@ -12225,22 +12361,28 @@ async function exportProfileFromDetails() {
 
 function addSocialIdToProfile() {
   if (!newSocialIdValue.value.trim()) {
+    socialIdError.value = 'Please enter a value';
     return;
   }
   
-  // Validate social ID
-  const type = newSocialIdType.value;
+  const selectedType = newSocialIdType.value;
   const value = newSocialIdValue.value.trim();
+  const socialType = getSocialIdType(selectedType);
   
-  // Basic validation
-  if (type === 'youtube' || type === 'keyoxide') {
-    // URL validation
-    try {
-      new URL(value);
-    } catch {
-      socialIdError.value = 'Invalid URL format';
-      return;
-    }
+  if (!socialType) {
+    socialIdError.value = 'Invalid social ID type';
+    return;
+  }
+  
+  // Validate based on type
+  if (selectedType === 'youtube' && !value.startsWith('http') && !value.startsWith('www.')) {
+    socialIdError.value = 'YouTube channel should be a URL';
+    return;
+  }
+  
+  if (selectedType === 'keyoxide' && !value.startsWith('http') && !value.includes('@')) {
+    socialIdError.value = 'Keyoxide should be a URL or hash';
+    return;
   }
   
   if (!onlineProfile.value) {
@@ -12257,13 +12399,24 @@ function addSocialIdToProfile() {
     onlineProfile.value.socialIds = [];
   }
   
+  // Check for duplicates
+  if (onlineProfile.value.socialIds.some(sid => sid.type === selectedType && sid.value === value)) {
+    socialIdError.value = 'This social ID is already added';
+    return;
+  }
+  
+  // Add the social ID
   onlineProfile.value.socialIds.push({
-    type,
-    value
+    type: selectedType,
+    value: value,
+    verified: false
   });
   
+  // Clear input but keep the selected type
   newSocialIdValue.value = '';
   socialIdError.value = '';
+  
+  // Update profile
   updateOnlineProfile();
 }
 
@@ -12399,16 +12552,7 @@ async function openMyProfileModal() {
 }
 
 function getSocialPlaceholder(type: string): string {
-  const placeholders: Record<string, string> = {
-    discord: 'username#1234',
-    twitch: 'username',
-    youtube: 'https://youtube.com/channel/...',
-    keyoxide: 'https://keyoxide.org/... or hash',
-    brightid: 'BrightID identifier',
-    playtracker: 'Playtracker profile link',
-    gamerprofiles: 'Gamerprofiles profile link'
-  };
-  return placeholders[type] || 'Enter value';
+  return getSocialIdPlaceholder(type);
 }
 
 function addSocialLink() {
@@ -12417,6 +12561,188 @@ function addSocialLink() {
     value: '',
     verified: false
   });
+}
+
+function beginVerification(social: {type: string, value: string, verified: boolean}, index: number) {
+  const socialType = getSocialIdType(social.type);
+  if (!socialType || !social.value.trim()) {
+    showAlert('Please enter a value for this social ID before verifying', 'Verification Error');
+    return;
+  }
+  
+  const supportedMethods = getSupportedVerificationMethods(social.type);
+  if (supportedMethods.length === 0) {
+    showAlert('No verification methods available for this social ID type', 'Verification Error');
+    return;
+  }
+  
+  verificationSocialId.value = { type: social.type, value: social.value, index };
+  verificationMethod.value = supportedMethods[0].id; // Default to first supported method
+  verificationCode.value = '';
+  verificationInstructions.value = '';
+  showSocialVerificationModal.value = true;
+  
+  // Generate verification code and instructions based on method
+  if (verificationMethod.value === 'challenge-posting') {
+    generateChallengePostingInstructions(social.type, social.value);
+  }
+}
+
+function generateChallengePostingInstructions(type: string, value: string) {
+  // Get the user's Nostr public key (npub)
+  if (!onlineProfile.value?.primaryKeypair?.publicKey) {
+    verificationInstructions.value = 'Error: No public key found. Please ensure your profile has a primary keypair.';
+    verificationCodeFormats.value = [];
+    return;
+  }
+  
+  // Convert public key to npub format (nip19)
+  let npub = '';
+  try {
+    const publicKey = onlineProfile.value.primaryKeypair.publicKey;
+    if (publicKey.startsWith('npub')) {
+      npub = publicKey;
+    } else if (publicKey.startsWith('0x') || /^[0-9a-fA-F]{64}$/.test(publicKey)) {
+      // Convert hex to npub if needed
+      const hexKey = publicKey.startsWith('0x') ? publicKey.slice(2) : publicKey;
+      // nip19.npubEncode expects a Buffer of 32 bytes (64 hex chars)
+      if (hexKey.length === 64) {
+        npub = nip19.npubEncode(Buffer.from(hexKey, 'hex'));
+      } else {
+        throw new Error('Invalid public key length');
+      }
+    } else {
+      // Try to use as-is (might already be in correct format)
+      npub = publicKey;
+    }
+  } catch (error) {
+    console.error('Error encoding npub:', error);
+    verificationInstructions.value = 'Error: Could not generate verification code. Please ensure your profile has a valid Nostr keypair.';
+    verificationCodeFormats.value = [];
+    return;
+  }
+  
+  // Get the social ID type definition
+  const socialType = getSocialIdType(type);
+  if (!socialType) {
+    verificationInstructions.value = 'Error: Invalid social ID type.';
+    verificationCodeFormats.value = [];
+    return;
+  }
+  
+  // Get the verification method
+  const method = socialType.verificationMethods.find(m => m.id === verificationMethod.value);
+  if (!method || !method.codeFormats || method.codeFormats.length === 0) {
+    // Fallback to simple format if no formats defined
+    verificationCode.value = `nostr-proof:v1:${npub}`;
+    verificationCodeFormats.value = [{
+      id: 'default',
+      label: 'Default Format',
+      description: 'Standard verification code',
+      code: verificationCode.value
+    }];
+    selectedCodeFormatId.value = 'default';
+    generateInstructionsForType(type, value, npub, verificationCode.value);
+    return;
+  }
+  
+  // Generate all code formats
+  verificationCodeFormats.value = method.codeFormats
+    .filter(format => format.supported)
+    .map(format => ({
+      id: format.id,
+      label: format.label,
+      description: format.description,
+      code: format.format(value, npub)
+    }));
+  
+  // Set preferred format or first format as default
+  selectedCodeFormatId.value = method.preferredFormatId || verificationCodeFormats.value[0]?.id || '';
+  const selectedFormat = verificationCodeFormats.value.find(f => f.id === selectedCodeFormatId.value);
+  verificationCode.value = selectedFormat?.code || verificationCodeFormats.value[0]?.code || '';
+  
+  // Generate instructions
+  generateInstructionsForType(type, value, npub, verificationCode.value);
+}
+
+function generateInstructionsForType(type: string, value: string, npub: string, code: string) {
+  if (type === 'twitch') {
+    verificationInstructions.value = `To verify your Twitch account:\n\n1. Go to your Twitch profile settings\n2. Edit your "About" section or bio\n3. Copy and paste the verification code from the dropdown above\n4. Save your changes\n5. Click "Verify" below to check if the code is present`;
+  } else if (type === 'youtube') {
+    verificationInstructions.value = `To verify your YouTube channel:\n\n1. Go to your YouTube channel\n2. Click "Customize channel"\n3. Edit your channel description\n4. Copy and paste the verification code from the dropdown above\n5. Save your changes\n6. Click "Verify" below to check if the code is present`;
+  } else {
+    verificationInstructions.value = `To verify this social ID:\n\n1. Post the verification code from the dropdown above to your profile\n2. Save your changes\n3. Click "Verify" below to check if the code is present`;
+  }
+}
+
+function selectCodeFormat(formatId: string) {
+  const format = verificationCodeFormats.value.find(f => f.id === formatId);
+  if (format) {
+    selectedCodeFormatId.value = formatId;
+    verificationCode.value = format.code;
+    verificationCodeDropdownOpen.value = false;
+    // Auto-copy when format is selected
+    setTimeout(() => {
+      copyVerificationCode();
+    }, 100);
+  }
+}
+
+// Close dropdown when clicking outside
+function handleVerificationModalClick(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.verification-code-dropdown-container')) {
+    verificationCodeDropdownOpen.value = false;
+  }
+}
+
+async function verifySocialId() {
+  if (!verificationSocialId.value || !verificationCode.value) {
+    await showAlert('Verification code is required', 'Verification Error');
+    return;
+  }
+  
+  // TODO: Implement client-side verification by fetching the social profile
+  // and checking if the verification code is present
+  // For now, we'll just mark it as verified (user must manually verify)
+  
+  await showAlert(
+    'Client-side verification will be implemented in a future update. For now, please ensure the verification code is posted to your profile, then mark it as verified manually.',
+    'Verification Pending'
+  );
+  
+  // Close modal
+  showSocialVerificationModal.value = false;
+  verificationSocialId.value = null;
+  verificationCode.value = '';
+  verificationInstructions.value = '';
+}
+
+function cancelVerification() {
+  showSocialVerificationModal.value = false;
+  verificationSocialId.value = null;
+  verificationCode.value = '';
+  verificationCodeFormats.value = [];
+  selectedCodeFormatId.value = '';
+  verificationCodeDropdownOpen.value = false;
+  verificationInstructions.value = '';
+  verificationMethod.value = '';
+}
+
+function copyVerificationCode() {
+  if (verificationCode.value) {
+    navigator.clipboard.writeText(verificationCode.value).then(() => {
+      showToastNotification('Verification code copied to clipboard', 'success', 2000);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      showAlert('Failed to copy verification code', 'Error');
+    });
+  }
+}
+
+function formatInstructions(text: string): string {
+  // Convert newlines to <br> tags for display
+  return text.replace(/\n/g, '<br>');
 }
 
 function removeSocialLink(index: number) {
@@ -17424,7 +17750,14 @@ function addSocialId(event?: Event) {
   }
   
   const selectedType = newSocialIdType.value;
-  console.log('[Social ID] Attempting to add:', { type: selectedType, value });
+  const socialType = getSocialIdType(selectedType);
+  
+  if (!socialType) {
+    socialIdError.value = 'Invalid social ID type';
+    return;
+  }
+  
+  console.log('[Social ID] Attempting to add:', { type: selectedType, value, tier: socialType.tier });
   
   // Validate based on type
   if (selectedType === 'youtube' && !value.startsWith('http') && !value.startsWith('www.')) {
@@ -17462,32 +17795,14 @@ function removeSocialId(index: number) {
   profileCreationData.value.socialIds.splice(index, 1);
 }
 
-function getSocialIdTypeLabel(type: SocialIdType): string {
-  const labels = {
-    discord: 'Discord',
-    twitch: 'Twitch',
-    smwcentral: 'SMWCentral',
-    youtube: 'YouTube',
-    keyoxide: 'Keyoxide',
-    steam: 'Steam',
-    playtracker: 'Playtracker',
-    gamerprofiles: 'Gamerprofiles'
-  };
-  return labels[type] || type;
+function getSocialIdTypeLabel(type: string): string {
+  const socialType = getSocialIdType(type);
+  return socialType ? socialType.label : type;
 }
 
-function getSocialIdPlaceholder(type: SocialIdType): string {
-  const placeholders = {
-    discord: 'username#1234',
-    twitch: 'username',
-    smwcentral: 'username',
-    youtube: 'https://youtube.com/@channel',
-    keyoxide: 'https://keyoxide.org/... or hash',
-    steam: 'Steam Name',
-    playtracker: 'Playtracker Name',
-    gamerprofiles: 'Gamerprofiles Name'
-  };
-  return placeholders[type] || 'Enter value';
+function getSocialIdPlaceholder(type: string): string {
+  const socialType = getSocialIdType(type);
+  return socialType ? socialType.placeholder : 'Enter value';
 }
 
 function nextWizardStep() {
@@ -17504,9 +17819,23 @@ function nextWizardStep() {
     return;
   }
   
+  // Check if social ID requirements are met for publishing
+  // Note: Social IDs are optional if user will use "Stay Offline For Now"
+  // But if proceeding to keypair step, we should warn if requirements aren't met
   if (profileCreationData.value.socialIds.length === 0) {
-    socialIdError.value = 'At least one social ID is required';
+    socialIdError.value = 'At least one social ID is required to proceed. Use "Stay Offline For Now" to create profile without social IDs.';
     return;
+  }
+  
+  // Check if at least one Tier 1-3 social ID exists (for publishing)
+  if (!meetsSocialIdRequirements(profileCreationData.value.socialIds)) {
+    const confirmed = confirm(
+      'You do not have any Tier 1-3 verifiable Social IDs. You will not be able to publish your profile online until you add and verify at least one.\n\n' +
+      'Do you want to continue anyway? You can add verifiable Social IDs later.'
+    );
+    if (!confirmed) {
+      return;
+    }
   }
   
   if (usernameError.value || socialIdError.value) {
@@ -17516,6 +17845,135 @@ function nextWizardStep() {
   // Advance to next step - preserve all data
   profileCreationWizardStep.value = 2;
   console.log('[Profile Wizard] Moving to step 2, preserving data:', profileCreationData.value);
+}
+
+async function createProfileOffline() {
+  if (!isElectronAvailable()) {
+    await showAlert('Profile creation requires Electron environment', 'Error');
+    return;
+  }
+  
+  // If Profile Guard is enabled, it must be unlocked to encrypt the keypair
+  if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
+    await showAlert('Profile Guard must be unlocked to create profile (keys need to be encrypted)', 'Profile Guard Locked');
+    return;
+  }
+  
+  // Validate basic fields
+  if (!profileCreationData.value.username.trim() || usernameError.value) {
+    await showAlert('Please enter a valid username', 'Validation Error');
+    return;
+  }
+  
+  if (!profileCreationData.value.displayName.trim()) {
+    await showAlert('Please enter a display name', 'Validation Error');
+    return;
+  }
+  
+  try {
+    const trimString = (value: any) => {
+      if (typeof value !== 'string') {
+        return '';
+      }
+      return value.trim();
+    };
+
+    // Create profile with basic info (no social ID requirements for offline)
+    const profileData = {
+      profileId: profileCreationData.value.profileId,
+      username: trimString(profileCreationData.value.username).toLowerCase(),
+      displayName: trimString(profileCreationData.value.displayName),
+      homepage: trimString(profileCreationData.value.homepage) || undefined,
+      socialIds: profileCreationData.value.socialIds || [], // Allow empty for offline
+      bio: trimString(profileCreationData.value.bio) || undefined,
+      pictureUrl: trimString(profileCreationData.value.pictureUrl) || undefined,
+      bannerUrl: trimString(profileCreationData.value.bannerUrl) || undefined,
+      primaryKeypair: null, // Will be created next
+      additionalKeypairs: [],
+      adminKeypairs: [],
+      isAdmin: false,
+      verificationLevel: 0
+    };
+    
+    // Create primary keypair
+    const keypairResult = await (window as any).electronAPI.createOnlineKeypair({
+      keyType: 'Nostr', // Always Nostr for first profile
+      isPrimary: true,
+      username: profileCreationData.value.username
+    });
+    
+    if (!keypairResult.success) {
+      await showAlert(`Failed to create keypair: ${keypairResult.error}`, 'Keypair Creation Failed');
+      return;
+    }
+    
+    // Add keypair to profile
+    profileData.primaryKeypair = {
+      type: String(keypairResult.keypair.type),
+      publicKey: String(keypairResult.keypair.publicKey),
+      privateKey: String(keypairResult.keypair.privateKey),
+      publicKeyHex: String(keypairResult.keypair.publicKeyHex || ''),
+      fingerprint: String(keypairResult.keypair.fingerprint || ''),
+      localName: String(keypairResult.keypair.localName || ''),
+      canonicalName: String(keypairResult.keypair.canonicalName || ''),
+      encrypted: keypairResult.keypair.encrypted === true,
+      createdAt: String(keypairResult.keypair.createdAt || new Date().toISOString())
+    };
+    
+    // Save profile
+    const hasExistingProfile = onlineProfile.value && onlineProfile.value.primaryKeypair;
+    
+    let saveResult;
+    if (hasExistingProfile) {
+      saveResult = await (window as any).electronAPI.createNewOnlineProfile({
+        profileData: JSON.parse(JSON.stringify(profileData))
+      });
+    } else {
+      saveResult = await (window as any).electronAPI.saveOnlineProfile(JSON.parse(JSON.stringify(profileData)));
+    }
+    
+    if (!saveResult.success) {
+      await showAlert(`Failed to save profile: ${saveResult.error}`, 'Save Failed');
+      return;
+    }
+    
+    // Update local state
+    if (hasExistingProfile) {
+      await loadOnlineProfilesList();
+      await loadOnlineProfile();
+    } else {
+      onlineProfile.value = profileData;
+    }
+    
+    // Close wizard
+    showProfileCreationWizard.value = false;
+    profileCreationWizardStep.value = 1;
+    
+    // Reset form
+    profileCreationData.value = {
+      profileId: '',
+      username: '',
+      displayName: '',
+      homepage: '',
+      socialIds: [],
+      bio: '',
+      pictureUrl: '',
+      bannerUrl: '',
+      keypairType: 'Nostr'
+    };
+    newSocialIdType.value = 'discord';
+    newSocialIdValue.value = '';
+    usernameError.value = '';
+    socialIdError.value = '';
+    
+    await showAlert(
+      'Profile created successfully! You can add Social IDs and verify them later to enable online publishing.',
+      'Profile Created'
+    );
+  } catch (error) {
+    console.error('Error creating offline profile:', error);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
+  }
 }
 
 async function completeProfileCreation() {
@@ -17530,8 +17988,17 @@ async function completeProfileCreation() {
     return;
   }
   
+  // Check verification requirements for publishing
+  if (!meetsSocialIdRequirements(profileCreationData.value.socialIds)) {
+    await showAlert(
+      'At least one Tier 1-3 Social ID is required for online publishing. Please add a verifiable Social ID or use "Stay Offline For Now".',
+      'Verification Required'
+    );
+    return;
+  }
+  
   try {
-    const trimString = (value) => {
+    const trimString = (value: any) => {
       if (typeof value !== 'string') {
         return '';
       }
@@ -17551,7 +18018,8 @@ async function completeProfileCreation() {
       primaryKeypair: null, // Will be created next
       additionalKeypairs: [],
       adminKeypairs: [],
-      isAdmin: false
+      isAdmin: false,
+      verificationLevel: 0
     };
     
     // Create primary keypair
@@ -31066,6 +31534,24 @@ button:disabled {
   gap: 8px;
 }
 
+.my-profile-content .profile-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.my-profile-content .profile-field-inline label {
+  flex: 0 0 140px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.my-profile-content .profile-field-inline .profile-input {
+  flex: 1;
+}
+
 .my-profile-content .profile-field label {
   font-size: 20px;
   font-weight: 600;
@@ -33475,6 +33961,171 @@ button:disabled {
   gap: 8px;
   font-size: 14px;
   color: var(--text-primary);
+}
+
+/* Social ID Verification Modal */
+.verification-modal {
+  width: 700px;
+  max-width: 95vw;
+  max-height: 90vh;
+}
+
+.verification-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.verification-code-dropdown-container {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.verification-code-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.verification-code-dropdown-header:hover {
+  background: var(--bg-hover);
+}
+
+.verification-code-selected {
+  flex: 1;
+  font-size: 28px;
+  color: var(--text-primary);
+}
+
+.verification-code-dropdown-arrow {
+  font-size: 24px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+  margin-left: 8px;
+}
+
+.verification-code-dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.verification-code-dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.verification-code-dropdown-item {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.verification-code-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.verification-code-dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.verification-code-dropdown-item.selected {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.verification-code-dropdown-item.selected .format-label,
+.verification-code-dropdown-item.selected .format-description,
+.verification-code-dropdown-item.selected .format-preview {
+  color: white;
+}
+
+.format-label {
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.format-description {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.format-preview {
+  display: block;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 6px 8px;
+  border-radius: 3px;
+  word-break: break-all;
+  margin-top: 4px;
+}
+
+.verification-code-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+}
+
+.verification-code {
+  flex: 1;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  word-break: break-all;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.verification-instructions-text {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: 24px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.verification-method-not-implemented {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.social-id-tier-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
 }
 
 /* Online Dropdown Styling */

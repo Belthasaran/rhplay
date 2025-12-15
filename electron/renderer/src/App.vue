@@ -3708,8 +3708,8 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                   class="social-link-value"
                 />
                 <div class="social-link-verification">
-                  <span class="verification-status" :class="social.verified ? 'verified' : 'unverified'">
-                    {{ social.verified ? 'Verified' : 'Unverified' }}
+                  <span class="verification-status" :class="getVerificationStatusClass(social)">
+                    {{ getVerificationStatusLabel(social) }}
                   </span>
                   <button 
                     v-if="isVerifiableSocialIdType(social.type) && getSupportedVerificationMethods(social.type).length > 0"
@@ -11037,7 +11037,12 @@ type Keypair = {
 type SocialId = {
   type: string;
   value: string;
-  verified?: boolean;
+  verified?: boolean; // Legacy field for backward compatibility
+  clientVerificationStatus?: string; // 'unverified', 'verified_unconfirmed', 'confirmed', 'accepted', 'rejected'
+  networkConfirmationStatus?: string; // 'unconfirmed', 'confirmed', 'accepted', 'rejected'
+  verificationConfirmationPending?: boolean; // Whether network confirmation is pending
+  verificationLastChecked?: string; // ISO timestamp
+  verificationLastConfirmed?: string; // ISO timestamp
 };
 
 type SubjectProfileOption = {
@@ -11489,7 +11494,7 @@ const myProfileEditData = ref<{
   link: string;
   picture: string;
   banner: string;
-  socialIds: Array<{type: string, value: string, verified: boolean}>;
+  socialIds: Array<SocialId>;
   verificationLevel: number;
 }>({
   displayName: '',
@@ -12702,20 +12707,81 @@ async function verifySocialId() {
     return;
   }
   
-  // TODO: Implement client-side verification by fetching the social profile
-  // and checking if the verification code is present
-  // For now, we'll just mark it as verified (user must manually verify)
+  if (!isElectronAvailable()) {
+    await showAlert('Verification requires Electron environment', 'Error');
+    return;
+  }
   
-  await showAlert(
-    'Client-side verification will be implemented in a future update. For now, please ensure the verification code is posted to your profile, then mark it as verified manually.',
-    'Verification Pending'
-  );
+  try {
+    // Show loading state
+    const verifyButton = document.querySelector('.verification-modal .btn-primary');
+    if (verifyButton) {
+      (verifyButton as HTMLButtonElement).disabled = true;
+      (verifyButton as HTMLButtonElement).textContent = 'Verifying...';
+    }
+    
+    // Call IPC handler to verify
+    const result = await (window as any).electronAPI.verifySocialId({
+      socialIdType: verificationSocialId.value.type,
+      socialIdValue: verificationSocialId.value.value,
+      verificationCode: verificationCode.value
+    });
+    
+    if (result.success && result.verified) {
+      // Update the social ID verification status in the profile
+      await updateSocialIdVerificationStatus(
+        verificationSocialId.value.index,
+        'verified_unconfirmed' // Client verified, network not confirmed yet
+      );
+      
+      await showAlert(
+        'Verification successful! Your social ID is now marked as "Verified Unconfirmed". ' +
+        'It will be upgraded to "Confirmed" once the network verifies it.',
+        'Verification Successful'
+      );
+      
+      // Close modal
+      showSocialVerificationModal.value = false;
+      cancelVerification();
+    } else {
+      await showAlert(
+        result.error || 'Verification failed. Please ensure the verification code is posted to your profile and saved.',
+        'Verification Failed'
+      );
+    }
+  } catch (error) {
+    console.error('Error verifying social ID:', error);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Verification Error');
+  } finally {
+    // Restore button state
+    const verifyButton = document.querySelector('.verification-modal .btn-primary');
+    if (verifyButton) {
+      (verifyButton as HTMLButtonElement).disabled = false;
+      (verifyButton as HTMLButtonElement).textContent = 'Verify';
+    }
+  }
+}
+
+async function updateSocialIdVerificationStatus(index: number, status: string) {
+  if (!onlineProfile.value || !onlineProfile.value.socialIds) {
+    return;
+  }
   
-  // Close modal
-  showSocialVerificationModal.value = false;
-  verificationSocialId.value = null;
-  verificationCode.value = '';
-  verificationInstructions.value = '';
+  // Update the social ID in the profile
+  if (onlineProfile.value.socialIds[index]) {
+    onlineProfile.value.socialIds[index].verified = status === 'verified_unconfirmed' || status === 'confirmed';
+    onlineProfile.value.socialIds[index].clientVerificationStatus = status;
+    onlineProfile.value.socialIds[index].verificationLastChecked = new Date().toISOString();
+    
+    // Save the profile
+    await updateOnlineProfile();
+    
+    // Also update in My Profile modal if it's open
+    if (myProfileEditData.value.socialIds && myProfileEditData.value.socialIds[index]) {
+      myProfileEditData.value.socialIds[index].verified = status === 'verified_unconfirmed' || status === 'confirmed';
+      myProfileEditData.value.socialIds[index].clientVerificationStatus = status;
+    }
+  }
 }
 
 function cancelVerification() {
@@ -12743,6 +12809,34 @@ function copyVerificationCode() {
 function formatInstructions(text: string): string {
   // Convert newlines to <br> tags for display
   return text.replace(/\n/g, '<br>');
+}
+
+function getVerificationStatusLabel(social: SocialId): string {
+  if (social.networkConfirmationStatus === 'confirmed' || social.networkConfirmationStatus === 'accepted') {
+    return 'Confirmed';
+  } else if (social.clientVerificationStatus === 'verified_unconfirmed') {
+    return 'Verified Unconfirmed';
+  } else if (social.clientVerificationStatus === 'confirmed') {
+    return 'Confirmed';
+  } else if (social.verified) {
+    return 'Verified'; // Legacy field
+  } else {
+    return 'Unverified';
+  }
+}
+
+function getVerificationStatusClass(social: SocialId): string {
+  if (social.networkConfirmationStatus === 'confirmed' || social.networkConfirmationStatus === 'accepted') {
+    return 'verified confirmed';
+  } else if (social.clientVerificationStatus === 'verified_unconfirmed') {
+    return 'verified unconfirmed';
+  } else if (social.clientVerificationStatus === 'confirmed') {
+    return 'verified confirmed';
+  } else if (social.verified) {
+    return 'verified'; // Legacy field
+  } else {
+    return 'unverified';
+  }
 }
 
 function removeSocialLink(index: number) {
@@ -31641,6 +31735,18 @@ button:disabled {
 }
 
 .verification-status.verified {
+  color: #4caf50;
+  font-weight: bold;
+  background: black;
+}
+
+.verification-status.verified.unconfirmed {
+  color: #ffc107;
+  font-weight: bold;
+  background: black;
+}
+
+.verification-status.verified.confirmed {
   color: #4caf50;
   font-weight: bold;
   background: black;

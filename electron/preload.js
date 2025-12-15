@@ -1282,4 +1282,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:cancel', params),
   cancelTwitchPredictionByTwitchId: (params) => ipcRenderer.invoke('twitch:prediction:cancel-by-twitch-id', params),
   releaseTwitchPrediction: (params) => ipcRenderer.invoke('twitch:prediction:release', params),
+  
+  /**
+   * Verify a social ID by checking if verification code is present
+   */
+  verifySocialId: (params) => ipcRenderer.invoke('online:social-id:verify', params),
 });

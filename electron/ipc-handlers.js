@@ -15544,6 +15544,98 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Channel: online:social-id:verify
+   * Verify a social ID by checking if the verification code is present on the profile
+   */
+  ipcMain.handle('online:social-id:verify', async (event, { socialIdType, socialIdValue, verificationCode }) => {
+    try {
+      if (!socialIdType || !socialIdValue || !verificationCode) {
+        return { success: false, error: 'Missing required parameters' };
+      }
+
+      let verified = false;
+      let error = null;
+
+      if (socialIdType === 'twitch') {
+        // Fetch Twitch profile about section
+        try {
+          // Twitch doesn't have a public API for profile bios, so we'll use the mobile page
+          const twitchUrl = `https://m.twitch.tv/${socialIdValue}/about`;
+          const response = await fetch(twitchUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+
+          if (!response.ok) {
+            return { 
+              success: false, 
+              error: `Failed to fetch Twitch profile: HTTP ${response.status}`,
+              verified: false
+            };
+          }
+
+          const html = await response.text();
+          console.log('' + html)
+          
+          // Check if verification code appears in the HTML
+          // We need to check for various formats of the code
+          const codeVariations = [
+            verificationCode, // Exact match
+            verificationCode.replace(/\[SMW Player Id\]/g, 'SMW Player Id'), // Without markdown brackets
+            verificationCode.replace(/\(https:\/\/m\.twitch\.tv\/[^)]+\)/g, ''), // Without link
+            verificationCode.match(/npub[a-z0-9]+/)?.[0] || '', // Just the npub
+          ].filter(c => c.length > 0);
+
+          verified = codeVariations.some(code => {
+            if (!code) return false;
+            // Check if code appears in the HTML (case-insensitive)
+            return html.toLowerCase().includes(code.toLowerCase());
+          });
+
+          if (!verified) {
+            error = 'Verification code not found on Twitch profile. Please ensure you have saved your changes.';
+          }
+        } catch (fetchError) {
+          console.error('[online:social-id:verify] Twitch fetch error:', fetchError);
+          return { 
+            success: false, 
+            error: `Failed to fetch Twitch profile: ${fetchError.message}`,
+            verified: false
+          };
+        }
+      } else if (socialIdType === 'youtube') {
+        // For YouTube, we'd need to use the YouTube Data API or scrape the channel page
+        // For now, we'll return a message that YouTube verification requires API access
+        return {
+          success: false,
+          error: 'YouTube verification requires API access. This will be implemented in a future update.',
+          verified: false
+        };
+      } else {
+        return {
+          success: false,
+          error: `Verification not yet supported for ${socialIdType}`,
+          verified: false
+        };
+      }
+
+      return {
+        success: verified,
+        verified: verified,
+        error: error
+      };
+    } catch (error) {
+      console.error('[online:social-id:verify] Error:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Unknown error during verification',
+        verified: false
+      };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 // Helper function to sanitize file names

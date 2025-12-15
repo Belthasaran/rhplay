@@ -1149,7 +1149,7 @@ function formatLevelNumberHex(levelnumber: string | null | undefined): string {
   const num = parseInt(levelnumber.trim(), 16);
   if (isNaN(num)) return '';
   // Clamp to valid range 0-0x13C (0-316 decimal)
-  const clamped = Math.max(0, Math.min(0x13C, num));
+  const clamped = Math.max(0, Math.min(0x14C, num));
   return clamped.toString(16).toUpperCase().padStart(3, '0');
 }
 
@@ -1160,8 +1160,8 @@ function normalizeHexInput(hexStr: string): string | null {
   // Parse to validate
   const num = parseInt(trimmed, 16);
   if (isNaN(num)) return null;
-  // Clamp to valid range 0-0x13C (0-316 decimal)
-  const clamped = Math.max(0, Math.min(0x13C, num));
+  // Clamp to valid range 0-0x14C (0-316 decimal)
+  const clamped = Math.max(0, Math.min(0x14C, num));
   return clamped.toString(16).toUpperCase().padStart(3, '0');
 }
 
@@ -1193,7 +1193,7 @@ function handleLevelNumberInput(event: Event, stage: GameStage) {
     const parsed = parseInt(value, 16);
     if (!isNaN(parsed)) {
       // Validate range
-      const clamped = Math.max(0, Math.min(0x13C, parsed));
+      const clamped = Math.max(0, Math.min(0x14C, parsed));
       if (clamped !== parsed) {
         // Value is out of range, but don't change it during typing
         // User can fix it or we'll clamp on blur

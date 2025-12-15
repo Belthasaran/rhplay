@@ -1491,6 +1491,17 @@ const MIGRATIONS = {
           && columnExists(db, 'user_profiles', 'ethereum_address');
       },
     },
+    {
+      id: 'clientdata_066_social_id_verification_status',
+      description: 'Add social ID verification status tracking columns and tables',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/066_clientdata_social_id_verification_status.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_profiles', 'account_verification_level')
+          && tableExists(db, 'nostr_profile_verification_status')
+          && tableExists(db, 'nostr_social_id_verification_status');
+      },
+    },
   ],
   thumbnail_cache: [
     {

@@ -417,7 +417,7 @@ node process_arcsfc.js --help
 - Standardizes ROM headers using snesheader.exe via Wine
 - Creates standardized versions (both headered and unheadered)
 - Calculates SHA1 and SHA256 hashes for all ROM variants
-- Generates BPS patches against `/home/steamu/smwdb/smw.sfc`
+- Generates BPS patches against `/home/me/smwdb/smw.sfc`
 - Extracts metadata from filenames (title, author, version, date, language, etc.)
 - Verifies archive contents if archive is provided
 - Organizes processed files into `done/`, `output/`, and `error/` directories
@@ -428,7 +428,7 @@ node process_arcsfc.js --help
 - `K:\snesheader.exe` available via wine
 - `flips` utility in PATH
 - `7z` utility in PATH
-- Must be run from a subdirectory of `/home/steamu/smwdb/`
+- Must be run from a subdirectory of `/home/me/smwdb/`
 
 **Output Files**:
 - `output/<sha1_hash>.bps` - BPS patch file
@@ -484,6 +484,82 @@ node ~/rhplay/jstools/process_arcsfc_runner.js
 ```
 
 **Note**: This script is designed to work with `process_arcsfc.js` and must be run from a directory where both .sfc and .7z files are present.
+
+---
+
+### process_index7zs.js
+**Purpose**: Index BPS files from 7z archives and consolidate JSON metadata from multiple sources
+
+**Usage**:
+```bash
+enode.sh process_index7zs.js <JSON File Tree> <BPS Index Folder> <BPS Archives Folder> [options]
+enode.sh process_index7zs.js --help
+```
+
+**Arguments**:
+- `JSON File Tree` (required): Directory tree containing JSON metadata files
+- `BPS Index Folder` (required): Directory where master JSON index files will be created/updated
+- `BPS Archives Folder` (required): Directory containing 7z archives with BPS files
+
+**Options**:
+- `--checkrom`: Extract BPS files, apply to smw.sfc, verify SHA1, and get ROM size
+- `--try-lmfilter`: If lmfilter is missing, attempt to generate it (requires --checkrom)
+- `--try-levelread`: If levelread is missing, attempt to generate it (requires --checkrom)
+- `--try-translevels`: If translevels is missing, attempt to generate it (requires --checkrom)
+- `--update-ardrive`: Scan ArDrive and update metadata for 7z archives
+- `--help, -h`: Show help message
+
+**What it does**:
+- Scans 7z archives in the BPS Archives Folder for BPS patch files
+- Lists contents of each archive to find BPS files (named by SHA1 hash)
+- Searches the JSON File Tree recursively for matching JSON files:
+  * `<sha1>.json` (main metadata)
+  * `<sha1>_levelread.json` (level names)
+  * `<sha1>_lmfilter.json` (level filter list)
+  * `<sha1>_translevel.json` (translevel data)
+- Creates or updates master JSON files in BPS Index Folder
+- Merges data from multiple source JSON files
+- Handles duplicate JSON files by tracking SHA256 hashes
+- Normalizes lmfilter data to 3-character level codes
+- Tracks folder categories from all source locations
+
+**Features**:
+- Handles malformed JSON files (single-line files with trailing commas)
+- Atomic file writes (writes to .temp file, then renames)
+- Deep merging of JSON data (preserves existing fields)
+- Duplicate detection using SHA256 hashes
+- Optional ROM verification and metadata generation
+
+**Requirements**:
+- `7z` utility in PATH (for listing/extracting archives)
+- `flips` utility in PATH (for --checkrom option)
+- `/home/me/smwdb/smw.sfc` (for --checkrom option)
+- Python scripts: `try_lmfilter.py`, `findtranslevels/find_translevels.py` (for --try-* options)
+- `level_reader` binary (for --try-levelread option)
+- `ipfs-only-hash` package (for IPFS CID calculation)
+- `ardrive-core-js` and `arweave` packages (for --update-ardrive option)
+
+**Output Files**:
+- `<sha1>.json` - Master JSON index file in BPS Index Folder
+- `temp/` - Temporary directory for extracted files (when using --checkrom)
+- `temp/output/` - Generated JSON files for manual review (when using --try-* options)
+
+**Examples**:
+```bash
+# Basic indexing (no ROM verification)
+enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/
+
+# With ROM verification and size calculation
+enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --checkrom
+
+# Generate missing metadata files
+enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --checkrom --try-lmfilter --try-levelread --try-translevels
+
+# Update ArDrive metadata for 7z archives
+enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --update-ardrive
+```
+
+**Documentation**: See `docs/PROCESS_INDEX7ZS_SPEC.md` for complete specification
 
 ---
 

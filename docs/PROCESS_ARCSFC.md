@@ -2,7 +2,7 @@
 
 ## Overview
 
-`process_arcsfc.js` is a command-line tool designed to process SNES ROM files, detect and standardize ROM headers, calculate cryptographic hashes, and generate BPS (Binary Patch System) patches. The script is designed to be run from subdirectories of `/home/steamu/smwdb/` and handles both individual ROM files and archived ROM files.
+`process_arcsfc.js` is a command-line tool designed to process SNES ROM files, detect and standardize ROM headers, calculate cryptographic hashes, and generate BPS (Binary Patch System) patches. The script is designed to be run from subdirectories of `/home/me/smwdb/` and handles both individual ROM files and archived ROM files.
 
 ## Purpose
 
@@ -11,7 +11,7 @@ This script automates the process of:
 - Standardizing ROM headers using `snesheader.exe` via Wine
 - Creating standardized versions (both headered and unheadered)
 - Calculating SHA1 and SHA256 hashes for all ROM variants
-- Generating BPS patches against a base ROM (`/home/steamu/smwdb/smw.sfc`)
+- Generating BPS patches against a base ROM (`/home/me/smwdb/smw.sfc`)
 - Extracting metadata from filenames
 - Verifying archive contents
 - Organizing processed files into appropriate directories
@@ -28,8 +28,8 @@ This script automates the process of:
 - **7z** - Archive extraction utility (must be in PATH)
 
 ### File System
-- Script must be run from a subdirectory of `/home/steamu/smwdb/`
-- Base ROM must exist at `/home/steamu/smwdb/smw.sfc`
+- Script must be run from a subdirectory of `/home/me/smwdb/`
+- Base ROM must exist at `/home/me/smwdb/smw.sfc`
 
 ## Usage
 
@@ -129,7 +129,7 @@ Calculates cryptographic hashes for all ROM variants:
 Creates a BPS patch using flips:
 
 ```bash
-flips --create --bps /home/steamu/smwdb/smw.sfc temp/source_unh.sfc temp/XX.bps
+flips --create --bps /home/me/smwdb/smw.sfc temp/source_unh.sfc temp/XX.bps
 ```
 
 Where `XX` is the `sfc_rom_sha1_hash` value.

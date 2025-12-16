@@ -7,7 +7,7 @@
  *   node process_arcsfc.js <sfcsource_filename> [sfcarchive_filename]
  *   node process_arcsfc.js --help
  * 
- * This script is designed to be run from a subdirectory of /home/steamu/smwdb/
+ * This script is designed to be run from a subdirectory of /home/me/smwdb/
  * It processes SNES ROM files, detects headers, creates standardized versions,
  * calculates hashes, and generates BPS patches.
  * 
@@ -27,7 +27,7 @@ const { lock, unlock } = require('os-lock');
 const { spawnSync, execSync, spawn } = require('child_process');
 
 // Constants
-const SMW_BASE_ROM = '/home/steamu/smwdb/smw.sfc';
+const SMW_BASE_ROM = process.env.PATH_BASE_ROM || '/home/me/smwdb/smw.sfc';
 const SNESHEADER_EXE = "K:\\snesheader.exe";
 const LOCK_FILE = 'temp/lock.txt';
 
@@ -850,7 +850,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
     console.log('Step 10: Running level_reader...');
     const levelreadOutputPath = `temp/${sfc_rom_sha1_hash}_levelread.json`;
     try {
-      const levelReaderPath = path.join(process.env.HOME || '/home/steamu', 'smwdb', 'level_reader');
+      const levelReaderPath =  process.env.LEVEL_READER || path.join(process.env.HOME || '/home/me', 'smwdb', 'level_reader');
       await appendLog(`[Step 10] Running: ${levelReaderPath} temp/source_unh.sfc > ${levelreadOutputPath}`);
       const levelreadResult = spawnSync(levelReaderPath, ['temp/source_unh.sfc'], {
         encoding: 'utf8',
@@ -1130,7 +1130,7 @@ This script:
   - Detects whether ROM is headered or unheadered
   - Standardizes ROM headers using snesheader.exe via wine
   - Calculates SHA1 and SHA256 hashes
-  - Creates BPS patches against /home/steamu/smwdb/smw.sfc
+  - Creates BPS patches against /home/me/smwdb/smw.sfc
   - Extracts metadata from filenames
   - Verifies archive contents if archive is provided
   - Moves processed files to done/ directory
@@ -1143,7 +1143,7 @@ Requirements:
   - flips utility in PATH
   - 7z utility in PATH
 
-The script must be run from a subdirectory of /home/steamu/smwdb/
+The script must be run from a subdirectory of /home/me/smwdb/
 
 Examples:
   node process_arcsfc.js example.sfc example.7z

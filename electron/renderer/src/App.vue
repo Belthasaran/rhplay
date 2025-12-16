@@ -3689,7 +3689,12 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                 :key="index"
                 class="social-link-item"
               >
-                <select v-model="social.type" class="social-link-type">
+                <select 
+                  v-model="social.type" 
+                  class="social-link-type"
+                  :disabled="isSocialIdVerified(social)"
+                  :title="isSocialIdVerified(social) ? 'Cannot edit verified social ID. Remove and add a new one to change.' : ''"
+                >
                   <optgroup label="Tier 1 - Verifiable (Challenge Posting)">
                     <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 1)" :key="type.value" :value="type.value">
                       {{ type.label }}
@@ -3706,6 +3711,8 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                   v-model="social.value"
                   :placeholder="getSocialPlaceholder(social.type)"
                   class="social-link-value"
+                  :disabled="isSocialIdVerified(social)"
+                  :title="isSocialIdVerified(social) ? 'Cannot edit verified social ID. Remove and add a new one to change.' : ''"
                 />
                 <div class="social-link-verification">
                   <span class="verification-status" :class="getVerificationStatusClass(social)">
@@ -12536,11 +12543,17 @@ async function openMyProfileModal() {
   }
   
   // Populate edit data from current profile
-  // Ensure socialIds have verified property (default to false if missing)
+  // Ensure socialIds have all verification status fields preserved
   const socialIds = onlineProfile.value.socialIds ? onlineProfile.value.socialIds.map((social: any) => ({
     type: social.type || 'discord',
     value: social.value || '',
-    verified: social.verified !== undefined ? social.verified : false
+    verified: social.verified !== undefined ? social.verified : false,
+    // Preserve verification status fields
+    clientVerificationStatus: social.clientVerificationStatus || (social.verified ? 'verified_unconfirmed' : 'unverified'),
+    networkConfirmationStatus: social.networkConfirmationStatus || 'unconfirmed',
+    verificationConfirmationPending: social.verificationConfirmationPending || false,
+    verificationLastChecked: social.verificationLastChecked,
+    verificationLastConfirmed: social.verificationLastConfirmed
   })) : [];
   
   myProfileEditData.value = {
@@ -12811,18 +12824,53 @@ function formatInstructions(text: string): string {
   return text.replace(/\n/g, '<br>');
 }
 
+function isSocialIdVerified(social: SocialId): boolean {
+  // Check if social ID has any verification status (not just unverified)
+  // Network confirmation status
+  if (social.networkConfirmationStatus && 
+      social.networkConfirmationStatus !== 'unconfirmed') {
+    return true;
+  }
+  
+  // Client verification status
+  if (social.clientVerificationStatus && 
+      social.clientVerificationStatus !== 'unverified') {
+    return true;
+  }
+  
+  // Legacy verified field
+  if (social.verified === true) {
+    return true;
+  }
+  
+  return false;
+}
+
 function getVerificationStatusLabel(social: SocialId): string {
+  // Network confirmation takes precedence (most authoritative)
   if (social.networkConfirmationStatus === 'confirmed' || social.networkConfirmationStatus === 'accepted') {
     return 'Confirmed';
-  } else if (social.clientVerificationStatus === 'verified_unconfirmed') {
-    return 'Verified Unconfirmed';
+  } else if (social.networkConfirmationStatus === 'rejected') {
+    return 'Rejected';
+  }
+  
+  // Then check client verification status
+  if (social.clientVerificationStatus === 'verified_unconfirmed') {
+    return 'Verified, Unconfirmed'; // Locally verified but not network-confirmed
   } else if (social.clientVerificationStatus === 'confirmed') {
     return 'Confirmed';
-  } else if (social.verified) {
-    return 'Verified'; // Legacy field
-  } else {
-    return 'Unverified';
+  } else if (social.clientVerificationStatus === 'accepted') {
+    return 'Accepted';
+  } else if (social.clientVerificationStatus === 'rejected') {
+    return 'Rejected';
   }
+  
+  // Legacy field fallback
+  if (social.verified) {
+    return 'Verified'; // Legacy field - assume unconfirmed if no status specified
+  }
+  
+  return 'Unverified';
 }
 
 function getVerificationStatusClass(social: SocialId): string {
@@ -12849,19 +12897,53 @@ async function saveMyProfile() {
   }
   
   try {
-    // Update profile with edited data
+    // Create a clean, serializable profile object
+    // Only include the fields we want to update, avoiding non-serializable Vue reactive proxies
     const updatedProfile = {
-      ...onlineProfile.value,
+      profileId: onlineProfile.value.profileId,
+      username: onlineProfile.value.username,
       displayName: myProfileEditData.value.displayName,
       bio: myProfileEditData.value.bio,
-      link: myProfileEditData.value.link,
-      picture: myProfileEditData.value.picture,
-      banner: myProfileEditData.value.banner,
-      socialIds: myProfileEditData.value.socialIds,
-      verificationLevel: myProfileEditData.value.verificationLevel
+      homepage: myProfileEditData.value.link, // Note: profile uses 'homepage', editData uses 'link'
+      pictureUrl: myProfileEditData.value.picture,
+      bannerUrl: myProfileEditData.value.banner,
+      socialIds: myProfileEditData.value.socialIds.map((social: SocialId) => {
+        // Preserve all verification status fields
+        const socialId: SocialId = {
+          type: social.type,
+          value: social.value,
+          verified: social.verified || false
+        };
+        
+        // Preserve verification status fields if they exist
+        if (social.clientVerificationStatus) {
+          socialId.clientVerificationStatus = social.clientVerificationStatus;
+        }
+        if (social.networkConfirmationStatus) {
+          socialId.networkConfirmationStatus = social.networkConfirmationStatus;
+        }
+        if (social.verificationConfirmationPending !== undefined) {
+          socialId.verificationConfirmationPending = social.verificationConfirmationPending;
+        }
+        if (social.verificationLastChecked) {
+          socialId.verificationLastChecked = social.verificationLastChecked;
+        }
+        if (social.verificationLastConfirmed) {
+          socialId.verificationLastConfirmed = social.verificationLastConfirmed;
+        }
+        
+        return socialId;
+      }),
+      verificationLevel: myProfileEditData.value.verificationLevel || 0,
+      // Preserve keypairs (they should already be clean from the profile manager)
+      primaryKeypair: onlineProfile.value.primaryKeypair,
+      additionalKeypairs: onlineProfile.value.additionalKeypairs || []
     };
     
-    const result = await (window as any).electronAPI.saveOnlineProfile(updatedProfile);
+    // Serialize to ensure no non-serializable data
+    const serializedProfile = JSON.parse(JSON.stringify(updatedProfile));
+    
+    const result = await (window as any).electronAPI.saveOnlineProfile(serializedProfile);
     
     if (result.success) {
       // Reload profile to get updated data
@@ -31711,6 +31793,13 @@ button:disabled {
   color: var(--text-primary);
 }
 
+.social-link-type:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .social-link-value {
   flex: 1;
   padding: 8px 12px;
@@ -31719,6 +31808,13 @@ button:disabled {
   border-radius: 4px;
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.social-link-value:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .social-link-verification {

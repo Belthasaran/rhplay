@@ -109,6 +109,7 @@
     "node-jose": "^2.2.0",
     "node-machine-id": "^1.1.12",
     "nostr-tools": "^2.4.0",
+    "os-lock": "^2.0.0",
     "papaparse": "^5.5.3",
     "serialport": "^13.0.0",
     "socks": "^2.8.7",

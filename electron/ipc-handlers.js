@@ -15618,11 +15618,12 @@ function registerDatabaseHandlers(dbManager) {
         // Extract rendered text
         renderedText = await win.webContents.executeJavaScript(`
           (function() {
-            return document.body.innerText || '';
+            return document.body.innerHTML || '';
           })()
         `);
         
         console.log(`[online:social-id:verify] Extracted ${renderedText.length} characters of text`);
+	console.log(`templog=${renderedText}`)
         
         // Check if npub appears in the rendered text (case-insensitive)
         // Per unified scraper spec: just check for substring match

@@ -23,6 +23,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { lock, unlock } = require('os-lock');
 const { spawnSync, execSync, spawn } = require('child_process');
 
 // Constants
@@ -64,7 +65,9 @@ async function ensureDir(dirPath) {
 async function acquireLock(lockPath, maxRetries = 10, retryDelay = 500) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const fd = await fs.open(lockPath, 'wx');
+      const fd = await fs.open(lockPath, 'w+');
+
+      await lock(fd.fd, { exclusive: true });
       // Keep the file descriptor open to maintain the lock
       return fd;
     } catch (error) {
@@ -88,7 +91,9 @@ async function acquireLock(lockPath, maxRetries = 10, retryDelay = 500) {
 async function releaseLock(lockFd, lockPath) {
   if (lockFd) {
     try {
+      await unlock(lockFd.fd);
       await lockFd.close();
+      console.log(`lock Released ${lockPath}`)
     } catch (e) {
       // Ignore close errors
     }
@@ -112,6 +117,7 @@ async function determineROMType(filePath) {
   const stats = await fs.stat(filePath);
   const size = stats.size;
   const sizeMod1024 = size % 1024;
+
   
 	//
 	//The power of 2 thing is just a suggestion, apparently.
@@ -123,9 +129,17 @@ async function determineROMType(filePath) {
 	// these 1081344-byte files  might be headered despite not being a power of 2.. it does have  n mod 1024==512., hmm.
 	////  What is this 786432 size?
 	//
+	//
+  if (sizeMod1024==0 && size >= 683263)
+	return 'unheadered';
+
+  if (size >= 529966 && process.env["FORCEROM"]) {
+	  return process.env["FORCEROM"]
+  }
+
   if (sizeMod1024==0 && ((isPowerOf2KB(size) && sizeMod1024 === 0) || (size === 3145728) || (size === 2097152) || (size === 4194304) || (size === 2621440) || (size === 1048576) || (size === 1179648) || (size === 2097152) || (size === 4194304) || (size === 6291456)  || (size == 1310720) || (size === 3145728) || (size === 1572864) || (size === 3276800) || (size === 2621440) ))  {
     return 'unheadered';
-  } else if (sizeMod1024 === 512 && (isPowerOf2KB(size - 512) || (0)  )) {
+  } else if (sizeMod1024 === 512 && (isPowerOf2KB(size - 512) || (size === 6291968 || 0)  )) {
     return 'headered';
   } else {
     return 'exception';
@@ -675,10 +689,11 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
     
     // Step 2: Copy source to temp and acquire lock
     console.log('Step 2: Copying source and acquiring lock...');
-    await fs.copyFile(sfcsourceFilename, 'temp/source.sfc');
+    //await fs.copyFile(sfcsourceFilename, 'temp/source.sfc');
     lockFd = await acquireLock(LOCK_FILE);
     lockAcquired = true;
     console.log('Lock acquired');
+    await fs.copyFile(sfcsourceFilename, 'temp/source.sfc');
     
     // Step 3: Clean up existing temp files
     console.log('Step 3: Cleaning up temp files...');
@@ -712,6 +727,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       const errorMsg = `ROM file size exception: ${stats.size} bytes (not a valid SNES ROM size)`;
       await appendLog(errorMsg);
       console.error(errorMsg);
+      cleanupSync();
       process.exit(1);
     }
     
@@ -735,6 +751,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
         const errorMsg = `snesheader.exe failed to add header: ${wineResult.stderr}`;
         await appendLog(errorMsg);
         console.error(errorMsg);
+        cleanupSync();
         process.exit(1);
       }
       
@@ -753,6 +770,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
         const errorMsg = `snesheader.exe failed to remove header: ${wineResult1.stderr}`;
         await appendLog(errorMsg);
         console.error(errorMsg);
+         cleanupSync();
         process.exit(1);
       }
       
@@ -770,6 +788,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
         const errorMsg = `snesheader.exe failed to re-add header: ${wineResult2.stderr}`;
         await appendLog(errorMsg);
         console.error(errorMsg);
+         cleanupSync();
         process.exit(1);
       }
       
@@ -815,6 +834,7 @@ async function processROM(sfcsourceFilename, sfcarchiveFilename) {
       const errorMsg = `flips failed to create BPS patch: ${flipsResult.stderr}`;
       await appendLog(errorMsg);
       console.error(errorMsg);
+      cleanupSync();
       process.exit(1);
     }
     

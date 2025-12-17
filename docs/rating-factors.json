@@ -4,7 +4,7 @@
   "description": "Template for rating factors documentation. Auto-extracted fields are marked with AUTO_EXTRACT comments.",
   "version": "1.0.0",
   "metadata": {
-    "lastUpdated": "2025-12-13T19:15:21.027Z",
+    "lastUpdated": "2025-12-17T14:12:32.987Z",
     "generatedBy": "generate-rating-help.js"
   },
   "introduction": {
@@ -391,19 +391,19 @@
         },
         {
           "value": 2,
-          "text": "Above excellent for 80% of the game. All trolls easily avoidable after 1 try."
+          "text": "Above excellent for 80% of the game."
         },
         {
           "value": 3,
-          "text": "Above 90%. 80% free of blind jumps; kaizo trolls; all trolls easily avoidable."
+          "text": "Above 90%. Also generally free of blind jumps; unforseeable obstacles; etc. Excepting a few trolls if they are well-placed, infrequent, and easily-avoidable."
         },
         {
           "value": 4,
-          "text": "Extremely superior gameplay design vs other titles. 90% of sections free of blind jumps, kaizo trolls, etc"
+          "text": "Extremely superior gameplay design vs other titles."
         },
         {
           "value": 5,
-          "text": "Maximally Enjoyable interesting gameplay. 100% free of blind jumps, kaizo trolls, etc"
+          "text": "Maximally Enjoyable interesting gameplay."
         }
       ],
       "hoverText": null,

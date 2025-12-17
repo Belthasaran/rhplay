@@ -181,10 +181,10 @@ Evaluation of the game's core gameplay design, mechanics, and how well they work
 |--------|------|
 | 0 | About Average |
 | 1 | Excellent gameplay >=50% of the game |
-| 2 | Above excellent for 80% of the game. All trolls easily avoidable after 1 try. |
-| 3 | Above 90%. 80% free of blind jumps; kaizo trolls; all trolls easily avoidable. |
-| 4 | Extremely superior gameplay design vs other titles. 90% of sections free of blind jumps, kaizo trolls, etc |
-| 5 | Maximally Enjoyable interesting gameplay. 100% free of blind jumps, kaizo trolls, etc |
+| 2 | Above excellent for 80% of the game. |
+| 3 | Above 90%. Also generally free of blind jumps; unforseeable obstacles; etc. Excepting a few trolls if they are well-placed, infrequent, and easily-avoidable. |
+| 4 | Extremely superior gameplay design vs other titles. |
+| 5 | Maximally Enjoyable interesting gameplay. |
 
 
 ## 9. Design: Player Fairness

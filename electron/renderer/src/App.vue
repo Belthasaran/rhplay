@@ -28895,10 +28895,10 @@ function designGameplayLabel(rating?: number | null): string {
   const labels = [
    'About Average',
   'Excellent gameplay >=50% of the game',
-  'Above excellent for 80% of the game. All trolls easily avoidable after 1 try.',
-  'Above 90%. 80% free of blind jumps; kaizo trolls; all trolls easily avoidable.',
-  'Extremely superior gameplay design vs other titles. 90% of sections free of blind jumps, kaizo trolls, etc',
-  'Maximally Enjoyable interesting gameplay. 100% free of blind jumps, kaizo trolls, etc'
+  'Above excellent for 80% of the game.',
+  'Above 90%. Also generally free of blind jumps; unforseeable obstacles; etc. Excepting a few trolls if they are well-placed, infrequent, and easily-avoidable.',
+  'Extremely superior gameplay design vs other titles.',
+  'Maximally Enjoyable interesting gameplay.'
   ];
   return labels[rating] || '';
 }

@@ -2,14 +2,50 @@
 
 /**
  * augment_index7zs.js - Augment master JSON files with database information
+ *  Ultimately this data collection is to help out searching for game info based on metadata.
+ *  And automation (Such as one-click Patch and start of games through the USB2SNES connection
+ *  of the sd2snes or FXPAK).
+ *
+ *  Example of finished Master JSON file for the SMW romhack named Invictus, 1.0 after
+ *  data harvesting has completed:
+ *
+ *  https://gist.github.com/Belthasaran/3e3a28d22e8c9e9afad338c0c7d9208a
+ *
+ *
+ *  This essentially harvests all the information we have collected about each
+ *  of our found ~29,000 SMW Romhack files so far, into a single master JSON data file
+ *  for each hack (our index7z folder contains 29,000 JSON files; each JSON file represents
+ *  one of the BPS files stored in the 256 .7z files in the bps7z folder).
+ *
+ *  (Although this only takes care of hacks that already had a master JSON file generated.
+ *  and patches saved in the bps_**.7z files
+ *   And not necessarily all hacks in our database have these yet.)
+ *
+ *  This attempts to add the following metadata:
+ *  Such as name, author, but also our parsed data, such as:
+ *    - Overworld level names for each romhack (Where we were successful)
+ *    - Level numbers that contain modified level data or pointers for each hack (Where we were succesful)
+ *
+ *    The level numbers "detected" are then to be used to help compile gamestages data.
+ *
+ *- For now: gamestages records still have to be created manually by a human.
+ *
+ * The problem is "detected levels" in a ROMhack includes non-playable levels left behind by
+ * the authors.  We want to create a randomizer that plucks legitimate stages for the player
+ * to play, and drops the player in, and has the stage work correctly no matter what the hack
+ * is, and even if there is custom ASM.
+ * But we need a way to automatically detect that the stage chosen will be good and proper,
+ * and that the stage can actually be won.
+ *
+ *
  * 
  * Usage:
  *   enode.sh augment_index7zs.js <BPS Index Folder> <BPS Archives Folder> [options]
  *   enode.sh augment_index7zs.js --help
  * 
- * This script scans 7z archives containing BPS patch files and augments existing
- * master JSON index files with data from databases (patchblobs, gameversions,
- * attachments, screenshots, res_attachments).
+ * This script scans 7z archives containing SMW Romhacks (BPS patch files) and
+ * augments the existing master JSON index files with data aggregated from our
+ * databases (patchblobs, gameversions, attachments, screenshots, res_attachments).
  */
 
 const fs = require('fs').promises;
@@ -121,8 +157,24 @@ function rowToObject(row, excludeColumns = []) {
   return obj;
 }
 
+// Helper function to check if hex string is in range
+function isHexInRange(hexStr, startHex, endHex) {
+  // Normalize hex strings to same length for comparison
+  const maxLen = Math.max(startHex.length, endHex.length, hexStr.length);
+  const normalizedStart = startHex.padStart(maxLen, '0');
+  const normalizedEnd = endHex.padStart(maxLen, '0');
+  const normalizedValue = hexStr.substring(0, maxLen).padStart(maxLen, '0');
+  
+  const start = parseInt(normalizedStart, 16);
+  const end = parseInt(normalizedEnd, 16);
+  const value = parseInt(normalizedValue, 16);
+  
+  return value >= start && value <= end;
+}
+
 // Main processing function
-async function augmentIndex7zs(bpsIndexFolder, bpsArchivesFolder) {
+async function augmentIndex7zs(bpsIndexFolder, bpsArchivesFolder, options) {
+  const { bpsRange, sevenZRange, sevenZFile, bpsFile } = options;
   // Validate directories
   try {
     await fs.access(bpsArchivesFolder);
@@ -181,9 +233,35 @@ async function augmentIndex7zs(bpsIndexFolder, bpsArchivesFolder) {
   // Scan BPS archives folder for 7z files
   console.log(`\nScanning BPS archives folder: ${bpsArchivesFolder}`);
   const archiveFiles = await fs.readdir(bpsArchivesFolder);
-  const sevenZFiles = archiveFiles.filter(f => f.toLowerCase().endsWith('.7z'));
+  let sevenZFiles = archiveFiles.filter(f => f.toLowerCase().endsWith('.7z'));
   
-  console.log(`Found ${sevenZFiles.length} 7z archive(s)`);
+  // Filter 7z files based on options
+  if (sevenZFile) {
+    // Only process specific 7z file
+    const targetFile = sevenZFile.toLowerCase();
+    sevenZFiles = sevenZFiles.filter(f => f.toLowerCase() === targetFile);
+    if (sevenZFiles.length === 0) {
+      console.log(`⚠ Specified 7z file not found: ${sevenZFile}`);
+      return;
+    }
+    console.log(`Filtering to specific 7z file: ${sevenZFile}`);
+  } else if (sevenZRange) {
+    // Filter by hex range (e.g., bps_09.7z through bps_0b.7z)
+    const [startHex, endHex] = sevenZRange.split(':');
+    if (!startHex || !endHex) {
+      throw new Error(`Invalid --7zrange format: ${sevenZRange}. Expected format: START:END (hex)`);
+    }
+    sevenZFiles = sevenZFiles.filter(f => {
+      // Extract hex prefix from filename like "bps_09.7z"
+      const match = f.match(/^bps_([0-9a-f]+)\.7z$/i);
+      if (!match) return false;
+      const fileHex = match[1];
+      return isHexInRange(fileHex, startHex, endHex);
+    });
+    console.log(`Filtering 7z files by range: ${sevenZRange} (${sevenZFiles.length} file(s))`);
+  }
+  
+  console.log(`Found ${sevenZFiles.length} 7z archive(s) to process`);
   
   // Process each 7z file
   const processedBPS = new Set();
@@ -212,6 +290,29 @@ async function augmentIndex7zs(bpsIndexFolder, bpsArchivesFolder) {
         }
         
         const bpsSha1 = sha1Match[1].toLowerCase();
+        
+        // Filter by BPS file option
+        if (bpsFile) {
+          const targetBps = bpsFile.toLowerCase().replace(/\.bps$/i, '');
+          if (bpsSha1 !== targetBps) {
+            continue;
+          }
+          console.log(`Filtering to specific BPS file: ${bpsFile}`);
+        }
+        
+        // Filter by BPS range option
+        if (bpsRange && !bpsFile) {
+          const [startHex, endHex] = bpsRange.split(':');
+          if (!startHex || !endHex) {
+            throw new Error(`Invalid --bpsrange format: ${bpsRange}. Expected format: START:END (hex)`);
+          }
+          // Extract prefix from BPS SHA1 matching the length of the range specifiers
+          const prefixLen = Math.max(startHex.length, endHex.length);
+          const bpsPrefix = bpsSha1.substring(0, prefixLen);
+          if (!isHexInRange(bpsPrefix, startHex, endHex)) {
+            continue;
+          }
+        }
         
         if (processedBPS.has(bpsSha1)) {
           console.log(`  ⊙ Already processed: ${bpsSha1}`);
@@ -408,7 +509,11 @@ Arguments:
   BPS Archives Folder   Directory containing 7z archives with BPS files
 
 Options:
-  --help, -h            Show this help message
+  --bpsrange=START:END  Only process BPS files whose SHA1 starts with hex in range (e.g., 09:0b)
+  --7zrange=START:END  Only scan 7z files in hex range (e.g., 09:0b for bps_09.7z through bps_0b.7z)
+  --7zfile=FILE        Only scan specific 7z file (e.g., bps_00.7z)
+  --bpsfile=FILE       Only process specific BPS file (e.g., 6dd24c31b5d8c568aab0de6d68855f609cbe8f08.bps)
+  --help, -h           Show this help message
 
 Environment Variables:
   RHDATA_DB_PATH         Path to rhdata.db (default: electron/rhdata.db)
@@ -430,6 +535,10 @@ The script:
 
 Examples:
   enode.sh augment_index7zs.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/
+  enode.sh augment_index7zs.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --7zrange=09:0b
+  enode.sh augment_index7zs.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --bpsrange=09:0b
+  enode.sh augment_index7zs.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --7zfile=bps_00.7z
+  enode.sh augment_index7zs.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --bpsfile=6dd24c31b5d8c568aab0de6d68855f609cbe8f08.bps
 `);
     process.exit(0);
   }
@@ -444,9 +553,46 @@ Examples:
   const bpsIndexFolder = args[0];
   const bpsArchivesFolder = args[1];
   
+  // Parse options
+  const options = {
+    bpsRange: null,
+    sevenZRange: null,
+    sevenZFile: null,
+    bpsFile: null
+  };
+  
+  for (const arg of args.slice(2)) {
+    if (arg.startsWith('--bpsrange=')) {
+      options.bpsRange = arg.substring('--bpsrange='.length);
+    } else if (arg.startsWith('--7zrange=')) {
+      options.sevenZRange = arg.substring('--7zrange='.length);
+    } else if (arg.startsWith('--7zfile=')) {
+      options.sevenZFile = arg.substring('--7zfile='.length);
+    } else if (arg.startsWith('--bpsfile=')) {
+      options.bpsFile = arg.substring('--bpsfile='.length);
+    } else if (arg === '--help' || arg === '-h') {
+      // Already handled above
+    } else {
+      console.error(`Error: Unknown option: ${arg}`);
+      console.error('Run with --help for usage information');
+      process.exit(1);
+    }
+  }
+  
+  // Validate mutually exclusive options
+  if (options.sevenZFile && options.sevenZRange) {
+    console.error('Error: --7zfile and --7zrange are mutually exclusive');
+    process.exit(1);
+  }
+  
+  if (options.bpsFile && options.bpsRange) {
+    console.error('Error: --bpsfile and --bpsrange are mutually exclusive');
+    process.exit(1);
+  }
+  
   // Run processing
   try {
-    await augmentIndex7zs(bpsIndexFolder, bpsArchivesFolder);
+    await augmentIndex7zs(bpsIndexFolder, bpsArchivesFolder, options);
   } catch (error) {
     console.error(`Fatal error: ${error.message}`);
     process.exit(1);

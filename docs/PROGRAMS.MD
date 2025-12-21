@@ -1109,6 +1109,9 @@ See `docs/DBMIGRATE.md` for detailed migration instructions.
 - `docs/VERIFY_RESULT_FEATURE.md` - Result verification
 - `docs/NEWER_THAN_FEATURE.md` - Incremental verification
 
+**Search Catalog System**:
+- `docs/SEARCH_CATALOG_SYSTEM.md` - Complete search catalog system documentation
+
 ### Nostr Runtime Tools
 
 ### nostr-status.js
@@ -1148,6 +1151,103 @@ When creating new scripts:
 
 ---
 
-*Last Updated: October 12, 2025*  
-*Total Programs: 15+ interactive scripts*
+### search_build1.js
+**Purpose**: Stage 1 of search catalog build - Ingest and normalize master JSON files
+
+**Usage**:
+```bash
+enode.sh search_build1.js <index7z folder> <bps7z folder> [options]
+```
+
+**Options**:
+- `--rhsearchdb=FILE` - Path to search catalog database (default: rhsearch_cat.db)
+- `--rhsearchzip=FILE` - Path to JSON ZIP archive (default: rhsearch.zip)
+- `--help, -h` - Show help message
+
+**What it does**:
+- Scans index7z folder recursively for master JSON files
+- Normalizes and extracts standard fields (title, author, version, tags, etc.)
+- Creates/updates SQLite database with items table
+- Packages all JSON files into a ZIP archive with high compression
+
+**Output**:
+- `rhsearch_cat.db` - SQLite database with items table
+- `rhsearch.zip` - ZIP archive containing all master JSON files
+
+**Documentation**: See `docs/SEARCH_CATALOG_SYSTEM.md` for complete documentation
+
+---
+
+### search_build2.js
+**Purpose**: Stage 2 of search catalog build - Entity resolution and grouping
+
+**Usage**:
+```bash
+enode.sh search_build2.js <index7z folder> <bps7z folder> [options]
+```
+
+**Options**:
+- `--rhsearchdb=FILE` - Path to search catalog database (default: rhsearch_cat.db)
+- `--rhsearchzip=FILE` - Path to JSON ZIP archive (default: rhsearch.zip)
+- `--help, -h` - Show help message
+
+**What it does**:
+- Reads items from Stage 1 database
+- Performs deterministic grouping (by gameid, title+author, etc.)
+- Performs probabilistic merge pass (similarity-based)
+- Creates groups and edges tables for relationships
+- Builds FTS5 full-text search index
+
+**Output**:
+- Updates `rhsearch_cat.db` with groups, items_groups, edges tables
+- Creates FTS5 virtual table for fast searching
+
+**Documentation**: See `docs/SEARCH_CATALOG_SYSTEM.md` for complete documentation
+
+---
+
+### search_smwhacks.js
+**Purpose**: Command-line search tool for SMW hacks (proof of concept)
+
+**Usage**:
+```bash
+enode.sh search_smwhacks.js <search phrases...> [options]
+```
+
+**Arguments**:
+- `search phrases` - One or more search phrases (searched in title, author, description, tags)
+
+**Options**:
+- `--rhsearchdb=FILE` - Path to search catalog database
+- `--rhsearchzip=FILE` - Path to JSON ZIP archive
+- `--help, -h` - Show help message
+
+**What it does**:
+- Searches the SMW hack catalog using FTS5 full-text search
+- Displays results with title, author, version, description, tags
+- Shows group information for related hacks
+- Automatically finds database/ZIP files if not specified (like database-manager.js)
+
+**Environment Variables**:
+- `RHSEARCH_DB_PATH` - Path to search catalog database
+- `RHSEARCH_ZIP_PATH` - Path to JSON ZIP archive
+
+**Examples**:
+```bash
+# Search by title
+enode.sh search_smwhacks.js invictus
+
+# Search multiple terms
+enode.sh search_smwhacks.js kaizo intermediate
+
+# Search with specific database
+enode.sh search_smwhacks.js --rhsearchdb=search.db --rhsearchzip=search.zip "super mario"
+```
+
+**Documentation**: See search catalog system documentation
+
+---
+
+*Last Updated: December 2025*  
+*Total Programs: 18+ interactive scripts*
 

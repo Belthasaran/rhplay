@@ -1194,6 +1194,32 @@ enode.sh search_build2.js <index7z folder> <bps7z folder> [options]
 **What it does**:
 - Reads items from Stage 1 database
 - Performs deterministic grouping (by gameid, title+author, etc.)
+
+---
+
+### search_rebuild_fts5.js
+**Purpose**: Quick FTS5 index rebuild without running full Stage 2
+
+**Usage**:
+```bash
+enode.sh search_rebuild_fts5.js [options]
+```
+
+**Options**:
+- `--rhsearchdb=FILE` - Path to search catalog database (default: auto-detect)
+- `--help, -h` - Show help message
+
+**What it does**:
+- Quickly rebuilds the FTS5 search index when it gets out of sync
+- Drops and recreates the FTS5 table and triggers
+- Much faster than running the full Stage 2 (only takes seconds)
+- Use this when you get "missing row" errors from FTS5
+
+**Example**:
+```bash
+# Quick rebuild when FTS5 index is out of sync
+enode.sh search_rebuild_fts5.js --rhsearchdb=~/rhplay/refmaterial/rhsearch_cat.db
+```
 - Performs probabilistic merge pass (similarity-based)
 - Creates groups and edges tables for relationships
 - Builds FTS5 full-text search index

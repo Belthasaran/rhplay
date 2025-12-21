@@ -1323,4 +1323,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Array>} Array of search results
    */
   catalogSearch: (params) => ipcRenderer.invoke('catalog:search', params),
+  
+  /**
+   * Check if a game exists in database by BPS SHA256
+   * @param {Object} params - {bpsSha256: string}
+   * @returns {Promise<{exists: boolean, gameid?: string, gvuuid?: string}>}
+   */
+  catalogCheckGameExists: (params) => ipcRenderer.invoke('catalog:check-game-exists', params),
+  
+  /**
+   * Get item JSON from catalog ZIP
+   * @param {Object} params - {itemId: string}
+   * @returns {Promise<Object>} Item JSON data
+   */
+  catalogGetItemJson: (params) => ipcRenderer.invoke('catalog:get-item-json', params),
+  
+  /**
+   * Find BPS/7z files for a catalog item
+   * @param {Object} params - {itemId: string, index7zName?: string, indexBpsName?: string, bpsSha256?: string}
+   * @returns {Promise<{filesFound: boolean, bpsPath?: string, sevenZPath?: string, missingFiles?: string[], canDownload?: boolean}>}
+   */
+  catalogFindFiles: (params) => ipcRenderer.invoke('catalog:find-files', params),
+  
+  /**
+   * Download files from IPFS/ArDrive
+   * @param {Object} params - {itemId: string, index7zName?: string, index7zIpfsCidv1?: string, index7zArdriveFileId?: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  catalogDownloadFiles: (params) => ipcRenderer.invoke('catalog:download-files', params),
+  
+  /**
+   * Create temporary RHPAK from catalog item
+   * @param {Object} params - {itemId: string, bpsPath: string, sfcSha256: string, itemJson: Object}
+   * @returns {Promise<{success: boolean, rhpakPath?: string, error?: string}>}
+   */
+  catalogCreateRhpak: (params) => ipcRenderer.invoke('catalog:create-rhpak', params),
 });

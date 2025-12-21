@@ -1985,8 +1985,8 @@
   </div>
 
   <!-- Catalog Search Modal -->
-  <div v-if="catalogSearchModalOpen" class="modal-backdrop" @click.self="closeCatalogSearchModal" style="z-index: 20001;">
-    <div class="modal catalog-search-modal" style="max-width: 900px; max-height: 80vh;">
+  <div v-if="catalogSearchModalOpen" class="modal-backdrop catalog-search-backdrop" style="z-index: 20001;">
+    <div class="modal catalog-search-modal catalog-search-fullscreen">
       <header class="modal-header">
         <h3>🔎 Search Full Catalog</h3>
         <button @click="closeCatalogSearchModal" class="close">✕</button>
@@ -33018,10 +33018,35 @@ button:disabled {
   gap: 0.75rem;
 }
 
+.catalog-search-backdrop {
+  pointer-events: all;
+}
+
+.catalog-search-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  min-width: 100vw !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
 .catalog-search-modal .modal-body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .catalog-search-input-row {

@@ -486,6 +486,15 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
   
   // Create FTS5 virtual table for search
   console.log('Creating FTS5 search index...');
+  
+  // Drop old triggers first (they might reference old schema)
+  db.exec(`
+    DROP TRIGGER IF EXISTS items_fts_insert;
+    DROP TRIGGER IF EXISTS items_fts_update;
+    DROP TRIGGER IF EXISTS items_fts_delete;
+  `);
+  
+  // Drop and recreate FTS5 table
   db.exec(`
     DROP TABLE IF EXISTS items_fts;
     CREATE VIRTUAL TABLE items_fts USING fts5(
@@ -499,22 +508,42 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
       content='items',
       content_rowid='rowid'
     );
-    
-    INSERT INTO items_fts (item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
-    SELECT 
-      i.item_id,
-      COALESCE(i.title, ''),
-      COALESCE(i.author, ''),
-      COALESCE(i.versioninfo, ''),
-      COALESCE(i.tags, ''),
-      COALESCE(i.brief, ''),
-      ''
-    FROM items i;
   `);
+  
+  // When using content='items', SQLite automatically syncs, but we need to rebuild
+  // the index to ensure it's in sync. Use the rebuild command.
+  console.log('Rebuilding FTS5 index from items table...');
+  const itemCount = db.prepare(`SELECT COUNT(*) as count FROM items`).get().count;
+  console.log(`  Found ${itemCount} item(s) to index`);
+  
+  // Rebuild the FTS5 index using the rebuild command
+  // This ensures the index is properly synced with the items table
+  try {
+    db.exec(`INSERT INTO items_fts(items_fts) VALUES('rebuild')`);
+    console.log('  FTS5 index rebuilt successfully');
+  } catch (error) {
+    // If rebuild fails, fall back to manual population
+    console.log('  Rebuild command failed, using manual population...');
+    const rebuildStmt = db.prepare(`
+      INSERT INTO items_fts (rowid, item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
+      SELECT 
+        rowid,
+        item_id,
+        COALESCE(title, ''),
+        COALESCE(author, ''),
+        COALESCE(versioninfo, ''),
+        COALESCE(tags, ''),
+        COALESCE(brief, ''),
+        COALESCE(levelnames_keywords, '')
+      FROM items
+    `);
+    rebuildStmt.run();
+    console.log('  FTS5 index populated manually');
+  }
   
   // Create triggers to keep FTS5 in sync
   db.exec(`
-    CREATE TRIGGER IF NOT EXISTS items_fts_insert AFTER INSERT ON items BEGIN
+    CREATE TRIGGER items_fts_insert AFTER INSERT ON items BEGIN
       INSERT INTO items_fts (item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
       VALUES (
         NEW.item_id,
@@ -523,21 +552,22 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
         COALESCE(NEW.versioninfo, ''),
         COALESCE(NEW.tags, ''),
         COALESCE(NEW.brief, ''),
-        ''
+        COALESCE(NEW.levelnames_keywords, '')
       );
     END;
     
-    CREATE TRIGGER IF NOT EXISTS items_fts_update AFTER UPDATE ON items BEGIN
+    CREATE TRIGGER items_fts_update AFTER UPDATE ON items BEGIN
       UPDATE items_fts SET
         title = COALESCE(NEW.title, ''),
         author = COALESCE(NEW.author, ''),
         versioninfo = COALESCE(NEW.versioninfo, ''),
         tags = COALESCE(NEW.tags, ''),
-        brief = COALESCE(NEW.brief, '')
+        brief = COALESCE(NEW.brief, ''),
+        levelnames_keywords = COALESCE(NEW.levelnames_keywords, '')
       WHERE item_id = NEW.item_id;
     END;
     
-    CREATE TRIGGER IF NOT EXISTS items_fts_delete AFTER DELETE ON items BEGIN
+    CREATE TRIGGER items_fts_delete AFTER DELETE ON items BEGIN
       DELETE FROM items_fts WHERE item_id = OLD.item_id;
     END;
   `);

@@ -263,6 +263,9 @@ function normalizeItem(json, jsonPath) {
     has_translevel_data: 0,
     has_official_source: 0,
     
+    // Searchable keywords
+    levelnames_keywords: null,
+    
     // Raw JSON (for reference, will be stored in ZIP)
     raw_json_hash: null
   };
@@ -355,6 +358,10 @@ function normalizeItem(json, jsonPath) {
   item.has_lmfilter = (json.lmfilter && Array.isArray(json.lmfilter) && json.lmfilter.length > 0) ? 1 : 0;
   item.has_translevel_data = (json.translevel_data && Object.keys(json.translevel_data).length > 0) ? 1 : 0;
   item.has_official_source = (json.gameversion && json.gameversion.gameid) ? 1 : 0;
+  
+  // Extract levelname keywords for search
+  const levelnameKeywords = extractLevelnameKeywords(json, 20);
+  item.levelnames_keywords = levelnameKeywords.length > 0 ? levelnameKeywords.join(' ') : null;
   
   // Calculate raw JSON hash
   const jsonStr = JSON.stringify(json);
@@ -468,6 +475,27 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
     CREATE INDEX IF NOT EXISTS idx_items_bps_sha1 ON items(bps_sha1_hash);
   `);
   
+  // Add levelnames_keywords column if it doesn't exist (migration)
+  const tableInfo = db.prepare(`PRAGMA table_info(items)`).all();
+  const hasLevelnamesKeywords = tableInfo.some(col => col.name === 'levelnames_keywords');
+  
+  if (!hasLevelnamesKeywords) {
+    db.exec(`ALTER TABLE items ADD COLUMN levelnames_keywords TEXT`);
+    console.log('Added levelnames_keywords column to items table');
+  }
+  
+  // Drop old FTS5 triggers if they exist (they might have wrong schema)
+  // Stage 2 will recreate them with correct schema
+  try {
+    db.exec(`
+      DROP TRIGGER IF EXISTS items_fts_insert;
+      DROP TRIGGER IF EXISTS items_fts_update;
+      DROP TRIGGER IF EXISTS items_fts_delete;
+    `);
+  } catch (error) {
+    // Ignore errors - triggers might not exist
+  }
+  
   // Create ZIP archive
   console.log('Creating ZIP archive...');
   const zip = new AdmZip();
@@ -509,9 +537,9 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
           sfcsource_filename, sfc_rom_sha1_hash, sfc_rom_sha256_hash,
           bps_filename, bps_sha1_hash, bps_sha256_hash, bps_file_size,
           sfc_rom_size, has_screenshots, screenshot_count, has_levelnames,
-          has_lmfilter, has_translevel_data, has_official_source, raw_json_hash,
-          updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          has_lmfilter, has_translevel_data, has_official_source, levelnames_keywords,
+          raw_json_hash, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `);
       
       stmt.run(
@@ -540,6 +568,7 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
         item.has_lmfilter,
         item.has_translevel_data,
         item.has_official_source,
+        item.levelnames_keywords,
         item.raw_json_hash
       );
       

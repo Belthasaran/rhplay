@@ -48,6 +48,11 @@ function normalizeString(str) {
 function parseVersionInfo(str) {
   if (!str) return null;
   
+  // Ensure str is a string
+  if (typeof str !== 'string') {
+    str = String(str);
+  }
+  
   // Patterns: "V1.0", "1.0", "v1.1", "Version 1.2", etc.
   const patterns = [
     /v?\s*(\d+)\.(\d+)/i,
@@ -82,7 +87,13 @@ function extractDateEstimate(json) {
   
   for (const field of dateFields) {
     if (json[field]) {
-      const dateStr = json[field];
+      let dateStr = json[field];
+      
+      // Ensure dateStr is a string
+      if (typeof dateStr !== 'string') {
+        dateStr = String(dateStr);
+      }
+      
       // Try to parse ISO date or YYYY-MM-DD
       const dateMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
       if (dateMatch) {
@@ -112,7 +123,22 @@ function extractBriefDescription(json) {
   ];
   
   for (const field of descFields) {
-    const value = getNestedValue(json, field);
+    let value = getNestedValue(json, field);
+    
+    // If value is not a string, try to convert or skip
+    if (value && typeof value !== 'string') {
+      // If it's an object, try to stringify (for gvjsondata)
+      if (typeof value === 'object') {
+        try {
+          value = JSON.stringify(value);
+        } catch (e) {
+          continue; // Skip if can't stringify
+        }
+      } else {
+        value = String(value);
+      }
+    }
+    
     if (value && typeof value === 'string' && value.length > 0) {
       // Truncate to ~1K characters
       let brief = value.substring(0, 1000);
@@ -182,9 +208,15 @@ function extractLevelnameKeywords(json, maxKeywords = 10) {
     const uniqueNames = [...new Set(levelNames)];
     
     for (const name of uniqueNames.slice(0, maxKeywords)) {
-      if (name && typeof name === 'string' && name.length > 0) {
+      // Ensure name is a string
+      let nameStr = name;
+      if (typeof nameStr !== 'string') {
+        nameStr = String(nameStr);
+      }
+      
+      if (nameStr && nameStr.length > 0) {
         // Extract meaningful words (skip common words like "VANILLA", "SECRET")
-        const words = name.split(/\s+/).filter(w => 
+        const words = nameStr.split(/\s+/).filter(w => 
           w.length > 2 && 
           !['vanilla', 'secret', 'level', 'the', 'a', 'an', 'and', 'or'].includes(w.toLowerCase())
         );
@@ -248,17 +280,29 @@ function normalizeItem(json, jsonPath) {
   }
   
   // Extract title (prefer gameversion.name, then filename fields)
-  item.title = json.gameversion?.name || 
-               json.sfc_filename_title || 
-               json['7z_filename_title'] ||
-               json.sfcsource_filename?.replace(/\.(sfc|smc)$/i, '') ||
-               null;
+  let title = json.gameversion?.name || 
+              json.sfc_filename_title || 
+              json['7z_filename_title'] ||
+              null;
+  
+  // If no title found, try to extract from filename
+  if (!title && json.sfcsource_filename && typeof json.sfcsource_filename === 'string') {
+    title = json.sfcsource_filename.replace(/\.(sfc|smc)$/i, '');
+  }
+  
+  item.title = title;
   
   // Extract version info
-  const versionStr = json.gameversion?.version || 
-                    json.sfc_filename_versioninfo ||
-                    json['7z_filename_versioninfo'] ||
-                    null;
+  let versionStr = json.gameversion?.version || 
+                   json.sfc_filename_versioninfo ||
+                   json['7z_filename_versioninfo'] ||
+                   null;
+  
+  // Convert to string if it's a number
+  if (versionStr !== null && typeof versionStr !== 'string') {
+    versionStr = String(versionStr);
+  }
+  
   item.versioninfo = versionStr ? parseVersionInfo(versionStr)?.label || versionStr : null;
   
   // Extract author

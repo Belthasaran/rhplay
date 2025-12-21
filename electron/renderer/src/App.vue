@@ -1997,19 +1997,19 @@
           <p style="margin: 16px 0; color: #d32f2f; font-size: 20px; font-weight: bold;">
             <strong>⚠️ Search catalog is not available</strong>
           </p>
-          <p style="margin: 12px 0;">
+          <p class="catalog-not-available-text">
             The search catalog files (rhsearch_cat.db and rhsearch.zip) are required for full catalog search.
             These files should be located in your program data directory.
           </p>
-          <div v-if="catalogSearchState.missingFiles" style="margin: 12px 0; padding: 12px; background: #fff3cd; border-radius: 4px; color: black; font-weight: bold;">
+          <div v-if="catalogSearchState.missingFiles" class="catalog-missing-files">
             <strong>Missing files:</strong>
-            <ul style="margin: 8px 0; padding-left: 24px;">
+            <ul>
               <li v-for="file in catalogSearchState.missingFiles" :key="file">{{ file }}</li>
             </ul>
           </div>
-          <div style="margin: 16px 0;">
-            <p style="margin-bottom: 8px;"><strong>Copy catalog files to program data directory:</strong></p>
-            <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="catalog-file-selection">
+            <p class="catalog-file-selection-label"><strong>Copy catalog files to program data directory:</strong></p>
+            <div class="catalog-file-buttons">
               <button @click="chooseCatalogDbFile" class="btn-secondary-small">
                 Select rhsearch_cat.db
               </button>
@@ -2017,26 +2017,25 @@
                 Select rhsearch.zip
               </button>
             </div>
-            <div v-if="catalogSearchState.selectedDbPath || catalogSearchState.selectedZipPath" style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px; color: black; font-size: 22px; font-weight: bold;">
-              <p v-if="catalogSearchState.selectedDbPath" style="margin: 4px 0;">
+            <div v-if="catalogSearchState.selectedDbPath || catalogSearchState.selectedZipPath" class="catalog-selected-files">
+              <p v-if="catalogSearchState.selectedDbPath">
                 <strong>Database:</strong> {{ getFileNameFromPath(catalogSearchState.selectedDbPath) }}
               </p>
-              <p v-if="catalogSearchState.selectedZipPath" style="margin: 4px 0;">
+              <p v-if="catalogSearchState.selectedZipPath">
                 <strong>ZIP:</strong> {{ getFileNameFromPath(catalogSearchState.selectedZipPath) }}
               </p>
             </div>
             <button 
               @click="copyCatalogFiles" 
               :disabled="!catalogSearchState.selectedDbPath || !catalogSearchState.selectedZipPath || catalogSearchState.copying"
-              class="btn-primary-small"
-              style="margin-top: 12px;"
+              class="btn-primary-small catalog-copy-button"
             >
               {{ catalogSearchState.copying ? 'Copying...' : 'Copy Files to Program Data' }}
             </button>
-            <p v-if="catalogSearchState.copyError" style="margin-top: 8px; color: #d32f2f;">
+            <p v-if="catalogSearchState.copyError" class="catalog-error-message">
               {{ catalogSearchState.copyError }}
             </p>
-            <p v-if="catalogSearchState.copySuccess" style="margin-top: 8px; color: #2e7d32;">
+            <p v-if="catalogSearchState.copySuccess" class="catalog-success-message">
               {{ catalogSearchState.copySuccess }}
             </p>
           </div>
@@ -2068,53 +2067,52 @@
           </div>
 
           <div v-if="catalogSearchResults.length > 0" class="catalog-search-results">
-            <p style="margin-bottom: 12px; color: #666;">
+            <p class="catalog-results-count">
               Found {{ catalogSearchResults.length }} result(s)
             </p>
-            <div class="catalog-results-list" style="max-height: 400px; overflow-y: auto;">
+            <div class="catalog-results-list">
               <div 
                 v-for="result in catalogSearchResults" 
                 :key="result.item_id"
                 class="catalog-result-item"
-                style="padding: 12px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px; background: #f9f9f9;"
               >
-                <div style="display: flex; justify-content: space-between; align-items: start;">
-                  <div style="flex: 1;">
-                    <h4 style="margin: 0 0 4px 0; font-size: 16px;">{{ result.title || 'Untitled' }}</h4>
-                    <p v-if="result.author" style="margin: 4px 0; color: #666; font-size: 14px;">
+                <div class="catalog-result-content">
+                  <div class="catalog-result-main">
+                    <h4 class="catalog-result-title">{{ result.title || 'Untitled' }}</h4>
+                    <p v-if="result.author" class="catalog-result-meta">
                       <strong>Author:</strong> {{ result.author }}
                     </p>
-                    <p v-if="result.versioninfo" style="margin: 4px 0; color: #666; font-size: 14px;">
+                    <p v-if="result.versioninfo" class="catalog-result-meta">
                       <strong>Version:</strong> {{ result.versioninfo }}
                     </p>
-                    <p v-if="result.brief" style="margin: 8px 0; color: #333; font-size: 13px;">
+                    <p v-if="result.brief" class="catalog-result-brief">
                       {{ result.brief.substring(0, 200) }}{{ result.brief.length > 200 ? '...' : '' }}
                     </p>
-                    <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
-                      <span v-if="result.has_screenshots" style="padding: 2px 8px; background: #e3f2fd; border-radius: 3px; font-size: 12px;">
+                    <div class="catalog-result-badges">
+                      <span v-if="result.has_screenshots" class="catalog-badge catalog-badge-screenshots">
                         📷 {{ result.screenshot_count }} screenshot(s)
                       </span>
-                      <span v-if="result.has_levelnames" style="padding: 2px 8px; background: #e8f5e9; border-radius: 3px; font-size: 12px;">
+                      <span v-if="result.has_levelnames" class="catalog-badge catalog-badge-levelnames">
                         📝 Has level names
                       </span>
-                      <span v-if="result.has_lmfilter" style="padding: 2px 8px; background: #fff3e0; border-radius: 3px; font-size: 12px;">
+                      <span v-if="result.has_lmfilter" class="catalog-badge catalog-badge-lmfilter">
                         🔍 Has level filter
                       </span>
                     </div>
-                    <p v-if="result.sfc_rom_sha1_hash" style="margin: 4px 0; font-size: 11px; color: #999; font-family: monospace;">
+                    <p v-if="result.sfc_rom_sha1_hash" class="catalog-result-hash">
                       SHA1: {{ result.sfc_rom_sha1_hash }}
                     </p>
                   </div>
                 </div>
-                <div v-if="result.canonical_title || result.canonical_author" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+                <div v-if="result.canonical_title || result.canonical_author" class="catalog-result-group">
                   <span v-if="result.group_id">Group ID: {{ result.group_id }}</span>
-                  <span v-if="result.version_count" style="margin-left: 12px;">{{ result.version_count }} version(s) in group</span>
+                  <span v-if="result.version_count" class="catalog-group-version-count">{{ result.version_count }} version(s) in group</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div v-else-if="catalogSearchState.searched && catalogSearchResults.length === 0" style="padding: 24px; text-align: center; color: #666;">
+          <div v-else-if="catalogSearchState.searched && catalogSearchResults.length === 0" class="catalog-no-results">
             No results found. Try different search terms.
           </div>
         </div>
@@ -33052,14 +33050,193 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.catalog-results-count {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 22px;
 }
 
 .catalog-result-item {
-  transition: background 0.2s;
+  padding: 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  margin-bottom: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .catalog-result-item:hover {
-  background: #f0f0f0 !important;
+  background: var(--bg-secondary);
+  border-color: var(--border-secondary);
+}
+
+.catalog-result-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.catalog-result-main {
+  flex: 1;
+}
+
+.catalog-result-title {
+  margin: 0 0 8px 0;
+  font-size: 26px;
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.catalog-result-meta {
+  margin: 6px 0;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.catalog-result-brief {
+  margin: 10px 0;
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1.5;
+}
+
+.catalog-result-badges {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.catalog-badge {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 20px;
+  font-weight: 500;
+  border: 1px solid var(--border-primary);
+}
+
+.catalog-badge-screenshots {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.catalog-badge-levelnames {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.catalog-badge-lmfilter {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.catalog-result-hash {
+  margin: 6px 0;
+  font-size: 20px;
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+
+.catalog-result-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-primary);
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
+.catalog-group-version-count {
+  margin-left: 12px;
+}
+
+.catalog-no-results {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary, #666);
+  font-size: 18px;
+}
+
+.catalog-search-error {
+  padding: 12px;
+  background: var(--bg-secondary, #ffebee);
+  border-radius: 4px;
+  margin-bottom: 16px;
+  color: var(--text-primary, #d32f2f);
+  font-size: 18px;
+}
+
+.catalog-not-available-text {
+  margin: 12px 0;
+  color: var(--text-primary, #333);
+  font-size: 18px;
+}
+
+.catalog-missing-files {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--bg-secondary, #fff3cd);
+  border-radius: 4px;
+  color: var(--text-primary, #000);
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.catalog-missing-files ul {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.catalog-file-selection {
+  margin: 16px 0;
+}
+
+.catalog-file-selection-label {
+  margin-bottom: 8px;
+  color: var(--text-primary, #333);
+  font-size: 18px;
+}
+
+.catalog-file-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.catalog-selected-files {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 4px;
+  color: var(--text-primary, #000);
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.catalog-selected-files p {
+  margin: 4px 0;
+}
+
+.catalog-copy-button {
+  margin-top: 12px;
+}
+
+.catalog-error-message {
+  margin-top: 8px;
+  color: var(--text-primary, #d32f2f);
+  font-size: 18px;
+}
+
+.catalog-success-message {
+  margin-top: 8px;
+  color: var(--text-primary, #2e7d32);
+  font-size: 18px;
 }
 
 .selected-file-chip {

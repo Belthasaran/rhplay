@@ -158,31 +158,50 @@ async function searchSMWHacks(searchPhrases, options) {
     throw new Error('FTS5 index not found. Run Stage 2 (search_build2.js) first.');
   }
   
-  const results = db.prepare(`
-    SELECT 
-      i.item_id,
-      i.title,
-      i.author,
-      i.versioninfo,
-      i.brief,
-      i.tags,
-      i.sfc_rom_sha1_hash,
-      i.has_screenshots,
-      i.screenshot_count,
-      i.has_levelnames,
-      i.has_lmfilter,
-      ig.group_id,
-      g.canonical_title,
-      g.canonical_author,
-      g.version_count
-    FROM items_fts
-    JOIN items i ON items_fts.item_id = i.item_id
-    LEFT JOIN items_groups ig ON i.item_id = ig.item_id
-    LEFT JOIN groups g ON ig.group_id = g.group_id
-    WHERE items_fts MATCH ?
-    ORDER BY i.title
-    LIMIT 50
-  `).all(ftsQuery);
+  // Check if items table exists
+  const itemsExists = db.prepare(`
+    SELECT name FROM sqlite_master WHERE type='table' AND name='items'
+  `).get();
+  
+  if (!itemsExists) {
+    throw new Error('Items table not found. Run Stage 1 (search_build1.js) first.');
+  }
+  
+  // Execute search - get group_id from join, not from FTS5 table
+  let results;
+  try {
+    results = db.prepare(`
+      SELECT 
+        i.item_id,
+        i.title,
+        i.author,
+        i.versioninfo,
+        i.brief,
+        i.tags,
+        i.sfc_rom_sha1_hash,
+        i.has_screenshots,
+        i.screenshot_count,
+        i.has_levelnames,
+        i.has_lmfilter,
+        ig.group_id,
+        g.canonical_title,
+        g.canonical_author,
+        g.version_count
+      FROM items_fts
+      JOIN items i ON items_fts.item_id = i.item_id
+      LEFT JOIN items_groups ig ON i.item_id = ig.item_id
+      LEFT JOIN groups g ON ig.group_id = g.group_id
+      WHERE items_fts MATCH ?
+      ORDER BY i.title
+      LIMIT 50
+    `).all(ftsQuery);
+  } catch (error) {
+    // If error is about group_id column, the FTS5 table might have old schema
+    if (error.message.includes('group_id')) {
+      throw new Error('FTS5 table has old schema. Please re-run Stage 2 (search_build2.js) to recreate the index.');
+    }
+    throw error;
+  }
   
   console.log(`Found ${results.length} result(s)`);
   console.log();

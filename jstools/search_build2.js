@@ -490,7 +490,6 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
     DROP TABLE IF EXISTS items_fts;
     CREATE VIRTUAL TABLE items_fts USING fts5(
       item_id UNINDEXED,
-      group_id UNINDEXED,
       title,
       author,
       versioninfo,
@@ -501,34 +500,31 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
       content_rowid='rowid'
     );
     
-    INSERT INTO items_fts (item_id, group_id, title, author, versioninfo, tags, brief, levelnames_keywords)
+    INSERT INTO items_fts (item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
     SELECT 
       i.item_id,
-      COALESCE(ig.group_id, ''),
       COALESCE(i.title, ''),
       COALESCE(i.author, ''),
       COALESCE(i.versioninfo, ''),
       COALESCE(i.tags, ''),
       COALESCE(i.brief, ''),
       ''
-    FROM items i
-    LEFT JOIN items_groups ig ON i.item_id = ig.item_id;
+    FROM items i;
   `);
   
   // Create triggers to keep FTS5 in sync
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS items_fts_insert AFTER INSERT ON items BEGIN
-      INSERT INTO items_fts (item_id, group_id, title, author, versioninfo, tags, brief, levelnames_keywords)
-      SELECT 
+      INSERT INTO items_fts (item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
+      VALUES (
         NEW.item_id,
-        COALESCE(ig.group_id, ''),
         COALESCE(NEW.title, ''),
         COALESCE(NEW.author, ''),
         COALESCE(NEW.versioninfo, ''),
         COALESCE(NEW.tags, ''),
         COALESCE(NEW.brief, ''),
         ''
-      FROM items_groups ig WHERE ig.item_id = NEW.item_id LIMIT 1;
+      );
     END;
     
     CREATE TRIGGER IF NOT EXISTS items_fts_update AFTER UPDATE ON items BEGIN

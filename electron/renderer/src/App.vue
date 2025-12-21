@@ -1994,14 +1994,14 @@
       <section class="modal-body" style="overflow-y: auto;">
         <!-- Catalog not available -->
         <div v-if="catalogSearchState.status === 'not-available'" class="catalog-not-available">
-          <p style="margin: 16px 0; color: #d32f2f;">
+          <p style="margin: 16px 0; color: #d32f2f; font-size: 20px; font-weight: bold;">
             <strong>⚠️ Search catalog is not available</strong>
           </p>
           <p style="margin: 12px 0;">
             The search catalog files (rhsearch_cat.db and rhsearch.zip) are required for full catalog search.
             These files should be located in your program data directory.
           </p>
-          <div v-if="catalogSearchState.missingFiles" style="margin: 12px 0; padding: 12px; background: #fff3cd; border-radius: 4px;">
+          <div v-if="catalogSearchState.missingFiles" style="margin: 12px 0; padding: 12px; background: #fff3cd; border-radius: 4px; color: black; font-weight: bold;">
             <strong>Missing files:</strong>
             <ul style="margin: 8px 0; padding-left: 24px;">
               <li v-for="file in catalogSearchState.missingFiles" :key="file">{{ file }}</li>
@@ -2017,7 +2017,7 @@
                 Select rhsearch.zip
               </button>
             </div>
-            <div v-if="catalogSearchState.selectedDbPath || catalogSearchState.selectedZipPath" style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+            <div v-if="catalogSearchState.selectedDbPath || catalogSearchState.selectedZipPath" style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px; color: black; font-size: 22px; font-weight: bold;">
               <p v-if="catalogSearchState.selectedDbPath" style="margin: 4px 0;">
                 <strong>Database:</strong> {{ getFileNameFromPath(catalogSearchState.selectedDbPath) }}
               </p>
@@ -19314,7 +19314,7 @@ function closeCatalogSearchModal() {
 
 async function chooseCatalogDbFile() {
   try {
-    const result = await (window as any).electronAPI.invoke('catalog:choose-db-file');
+    const result = await (window as any).electronAPI.catalogChooseDbFile();
     if (result.canceled) return;
     catalogSearchState.value.selectedDbPath = result.filePath;
     catalogSearchState.value.copyError = undefined;
@@ -19346,7 +19346,7 @@ async function copyCatalogFiles() {
   catalogSearchState.value.copySuccess = undefined;
   
   try {
-    const result = await (window as any).electronAPI.invoke('catalog:copy-files', {
+    const result = await (window as any).electronAPI.catalogCopyFiles({
       dbPath: catalogSearchState.value.selectedDbPath,
       zipPath: catalogSearchState.value.selectedZipPath
     });
@@ -32411,7 +32411,7 @@ button:disabled {
   border: 1px solid var(--border-primary, #ccc);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--text-primary, #333);
   transition: background 0.2s, border-color 0.2s;
@@ -33037,7 +33037,7 @@ button:disabled {
   padding: 8px 12px;
   border: 1px solid var(--border-primary, #ccc);
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 20px;
   background: var(--bg-primary, #fff);
   color: var(--text-primary, #333);
 }
@@ -36137,7 +36137,7 @@ button:disabled {
 .btn-secondary-small,
 .btn-danger-small {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 14px;
   border-radius: 4px;
   border: none;
   cursor: pointer;

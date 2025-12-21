@@ -2075,10 +2075,31 @@
                 v-for="result in catalogSearchResults" 
                 :key="result.item_id"
                 class="catalog-result-item"
+                @click="openCatalogItemDetails(result)"
               >
                 <div class="catalog-result-content">
                   <div class="catalog-result-main">
-                    <h4 class="catalog-result-title">{{ result.title || 'Untitled' }}</h4>
+                    <div class="catalog-result-header">
+                      <h4 class="catalog-result-title">{{ result.title || 'Untitled' }}</h4>
+                      <div class="catalog-result-actions">
+                        <button 
+                          v-if="result.gameExists && result.existingGameid"
+                          @click.stop="navigateToGame(result.existingGameid)"
+                          class="btn-catalog-go-to-game"
+                          title="Go to game in database"
+                        >
+                          🎮 Go to Game
+                        </button>
+                        <button 
+                          v-else
+                          @click.stop="openAddGameFromCatalog(result)"
+                          class="btn-catalog-add-game"
+                          :disabled="result.checkingGame || result.addingGame"
+                        >
+                          {{ result.checkingGame ? 'Checking...' : result.addingGame ? 'Adding...' : 'Add Game' }}
+                        </button>
+                      </div>
+                    </div>
                     <p v-if="result.author" class="catalog-result-meta">
                       <strong>Author:</strong> {{ result.author }}
                     </p>
@@ -2124,6 +2145,142 @@
       </section>
       <footer class="modal-footer">
         <button @click="closeCatalogSearchModal" class="btn-secondary">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Catalog Item Details Modal -->
+  <div v-if="catalogItemDetailsModalOpen" class="modal-backdrop" @click.self="closeCatalogItemDetails" style="z-index: 20002;">
+    <div class="modal catalog-item-details-modal catalog-search-fullscreen">
+      <header class="modal-header">
+        <h3>🔎 Catalog Item Details</h3>
+        <button @click="closeCatalogItemDetails" class="close">✕</button>
+      </header>
+      <section class="modal-body" style="overflow-y: auto;">
+        <div v-if="catalogItemDetails" class="catalog-item-details-content">
+          <div class="catalog-item-details-header">
+            <h2 class="catalog-item-details-title">{{ catalogItemDetails.title || 'Untitled' }}</h2>
+            <div class="catalog-item-details-actions">
+              <button 
+                v-if="catalogItemDetails.gameExists && catalogItemDetails.existingGameid"
+                @click="navigateToGame(catalogItemDetails.existingGameid)"
+                class="btn-primary-small"
+              >
+                🎮 Go to Game
+              </button>
+              <button 
+                v-else
+                @click="openAddGameFromCatalog(catalogItemDetails)"
+                class="btn-primary-small"
+              >
+                Add Game
+              </button>
+            </div>
+          </div>
+          
+          <div v-if="catalogItemDetails.author" class="catalog-item-detail-row">
+            <strong>Author:</strong> {{ catalogItemDetails.author }}
+          </div>
+          <div v-if="catalogItemDetails.versioninfo" class="catalog-item-detail-row">
+            <strong>Version:</strong> {{ catalogItemDetails.versioninfo }}
+          </div>
+          <div v-if="catalogItemDetails.sfc_rom_sha1_hash" class="catalog-item-detail-row">
+            <strong>SFC SHA1:</strong> <code>{{ catalogItemDetails.sfc_rom_sha1_hash }}</code>
+          </div>
+          <div v-if="catalogItemDetails.bps_sha256_hash" class="catalog-item-detail-row">
+            <strong>BPS SHA256:</strong> <code>{{ catalogItemDetails.bps_sha256_hash }}</code>
+          </div>
+          
+          <div v-if="catalogItemJson" class="catalog-item-json-viewer">
+            <h3>Full JSON Data</h3>
+            <pre class="catalog-json-content">{{ JSON.stringify(catalogItemJson, null, 2) }}</pre>
+          </div>
+          <div v-else class="catalog-item-json-loading">
+            Loading JSON data...
+          </div>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeCatalogItemDetails" class="btn-secondary">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Add Game from Catalog Modal -->
+  <div v-if="addGameFromCatalogModalOpen" class="modal-backdrop" @click.self="closeAddGameFromCatalog" style="z-index: 20003;">
+    <div class="modal add-game-from-catalog-modal" style="max-width: 800px;">
+      <header class="modal-header">
+        <h3>Add Game from Catalog</h3>
+        <button @click="closeAddGameFromCatalog" class="close">✕</button>
+      </header>
+      <section class="modal-body" style="overflow-y: auto;">
+        <div v-if="addGameFromCatalogState.item" class="add-game-content">
+          <div class="add-game-item-info">
+            <h4>{{ addGameFromCatalogState.item.title || 'Untitled' }}</h4>
+            <p v-if="addGameFromCatalogState.item.author"><strong>Author:</strong> {{ addGameFromCatalogState.item.author }}</p>
+            <p v-if="addGameFromCatalogState.item.sfc_rom_sha1_hash"><strong>SFC SHA1:</strong> <code>{{ addGameFromCatalogState.item.sfc_rom_sha1_hash }}</code></p>
+          </div>
+          
+          <!-- Step 1: Check if game exists -->
+          <div class="add-game-step">
+            <h4>Step 1: Verify Game Not Already Loaded</h4>
+            <p v-if="addGameFromCatalogState.item.gameExists" class="add-game-warning">
+              ⚠️ This game already exists in the database (Game ID: {{ addGameFromCatalogState.item.existingGameid }})
+            </p>
+            <p v-else class="add-game-success">
+              ✓ Game not found in database, can proceed
+            </p>
+          </div>
+          
+          <!-- Step 2: Find files -->
+          <div class="add-game-step">
+            <h4>Step 2: Locate Required Files</h4>
+            <div v-if="addGameFromCatalogState.checkingFiles" class="add-game-status">
+              Checking for required files...
+            </div>
+            <div v-else-if="addGameFromCatalogState.filesFound" class="add-game-success">
+              ✓ Files found:
+              <ul>
+                <li v-if="addGameFromCatalogState.bpsPath">BPS: {{ addGameFromCatalogState.bpsPath }}</li>
+                <li v-if="addGameFromCatalogState.sevenZPath">7Z Archive: {{ addGameFromCatalogState.sevenZPath }}</li>
+              </ul>
+            </div>
+            <div v-else-if="addGameFromCatalogState.missingFiles && addGameFromCatalogState.missingFiles.length > 0" class="add-game-error">
+              <p>Missing files:</p>
+              <ul>
+                <li v-for="file in addGameFromCatalogState.missingFiles" :key="file">{{ file }}</li>
+              </ul>
+              <p v-if="addGameFromCatalogState.item.index7z_ipfs_cidv1 || addGameFromCatalogState.item.index7z_ardrive_file_id">
+                Files can be downloaded from IPFS/ArDrive if available.
+              </p>
+              <button @click="downloadCatalogFiles" :disabled="addGameFromCatalogState.downloading" class="btn-primary-small">
+                {{ addGameFromCatalogState.downloading ? 'Downloading...' : 'Download from IPFS/ArDrive' }}
+              </button>
+            </div>
+          </div>
+          
+          <!-- Step 3: Create and install RHPAK -->
+          <div v-if="addGameFromCatalogState.filesFound" class="add-game-step">
+            <h4>Step 3: Create and Install Temporary RHPAK</h4>
+            <button 
+              @click="createAndInstallCatalogRhpak" 
+              :disabled="addGameFromCatalogState.creatingRhpak || addGameFromCatalogState.installingRhpak"
+              class="btn-primary"
+            >
+              {{ addGameFromCatalogState.creatingRhpak ? 'Creating RHPAK...' : addGameFromCatalogState.installingRhpak ? 'Installing RHPAK...' : 'Create and Install RHPAK' }}
+            </button>
+          </div>
+          
+          <div v-if="addGameFromCatalogState.error" class="add-game-error">
+            <strong>Error:</strong> {{ addGameFromCatalogState.error }}
+          </div>
+          <div v-if="addGameFromCatalogState.success" class="add-game-success">
+            ✓ Game successfully added to database!
+          </div>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeAddGameFromCatalog" class="btn-secondary">Close</button>
       </footer>
     </div>
   </div>
@@ -8984,6 +9141,28 @@ const catalogSearchState = ref<{
 }>({
   status: 'checking'
 });
+
+// Catalog item details state
+const catalogItemDetailsModalOpen = ref(false);
+const catalogItemDetails = ref<any>(null);
+const catalogItemJson = ref<any>(null);
+
+// Add game from catalog state
+const addGameFromCatalogModalOpen = ref(false);
+const addGameFromCatalogState = ref<{
+  item?: any;
+  checkingFiles?: boolean;
+  filesFound?: boolean;
+  bpsPath?: string;
+  sevenZPath?: string;
+  missingFiles?: string[];
+  downloading?: boolean;
+  downloadError?: string;
+  creatingRhpak?: boolean;
+  installingRhpak?: boolean;
+  error?: string;
+  success?: boolean;
+}>({});
 
 // Filter dropdown state
 const filterDropdownOpen = ref(false);
@@ -19387,6 +19566,97 @@ async function performCatalogSearch() {
       query: catalogSearchQuery.value.trim()
     });
     
+    // Check if each game exists in database
+    for (const result of results) {
+      result.checkingGame = true;
+      result.gameExists = false;
+      result.existingGameid = null;
+      
+      try {
+        // Get BPS SHA256 from item - it might be in the JSON, need to load it
+        // For now, use item_id as fallback (item_id is the SFC SHA1, not BPS SHA256)
+        // We'll need to load the JSON to get the actual BPS SHA256
+        let bpsSha256 = null;
+        try {
+          const itemJson = await (window as any).electronAPI.catalogGetItemJson({
+            itemId: result.item_id
+          });
+          bpsSha256 = itemJson.bps_sha256_hash;
+        } catch (e) {
+          // If we can't load JSON, skip existence check for this item
+          result.checkingGame = false;
+          continue;
+        }
+        
+        if (!bpsSha256) {
+          result.checkingGame = false;
+          continue;
+        }
+        
+        const exists = await (window as any).electronAPI.catalogCheckGameExists({
+          bpsSha256: bpsSha256
+        });
+        
+        result.gameExists = exists.exists;
+        result.existingGameid = exists.gameid;
+        result.existingGvuuid = exists.gvuuid;
+      } catch (error) {
+        // Ignore errors checking game existence
+        result.gameExists = false;
+      } finally {
+        result.checkingGame = false;
+      }
+    }
+    
+    // Check if each game exists in database (only if bps_sha256_hash is available)
+    for (const result of results) {
+      result.checkingGame = true;
+      result.gameExists = false;
+      result.existingGameid = null;
+      
+      try {
+        // Use bps_sha256_hash from search results if available
+        if (result.bps_sha256_hash) {
+          const exists = await (window as any).electronAPI.catalogCheckGameExists({
+            bpsSha256: result.bps_sha256_hash
+          });
+          
+          result.gameExists = exists.exists;
+          result.existingGameid = exists.gameid;
+          result.existingGvuuid = exists.gvuuid;
+        } else {
+          // If bps_sha256_hash not in results, try loading JSON
+          try {
+            const itemJson = await (window as any).electronAPI.catalogGetItemJson({
+              itemId: result.item_id
+            });
+            if (itemJson.bps_sha256_hash) {
+              const exists = await (window as any).electronAPI.catalogCheckGameExists({
+                bpsSha256: itemJson.bps_sha256_hash
+              });
+              result.gameExists = exists.exists;
+              result.existingGameid = exists.gameid;
+              result.existingGvuuid = exists.gvuuid;
+              // Cache the bps_sha256_hash in the result
+              result.bps_sha256_hash = itemJson.bps_sha256_hash;
+              // Also cache other needed fields
+              result.index7z_name = itemJson.index7z_name;
+              result.indexbps_name = itemJson.indexbps_name;
+              result.index7z_ipfs_cidv1 = itemJson.index7z_ipfs_cidv1;
+              result.index7z_ardrive_file_id = itemJson.index7z_ardrive_file_id;
+            }
+          } catch (e) {
+            // If we can't load JSON, skip existence check
+          }
+        }
+      } catch (error) {
+        // Ignore errors checking game existence
+        result.gameExists = false;
+      } finally {
+        result.checkingGame = false;
+      }
+    }
+    
     catalogSearchResults.value = results;
     catalogSearchState.value.searched = true;
   } catch (error: any) {
@@ -19394,6 +19664,192 @@ async function performCatalogSearch() {
     catalogSearchResults.value = [];
   } finally {
     catalogSearchState.value.searching = false;
+  }
+}
+
+async function openCatalogItemDetails(result: any) {
+  catalogItemDetails.value = result;
+  catalogItemDetailsModalOpen.value = true;
+  
+  try {
+    // Load JSON from ZIP
+    const json = await (window as any).electronAPI.catalogGetItemJson({
+      itemId: result.item_id
+    });
+    catalogItemJson.value = json;
+  } catch (error: any) {
+    catalogItemJson.value = null;
+    await showAlert('Error', `Failed to load item JSON: ${error.message}`);
+  }
+}
+
+function closeCatalogItemDetails() {
+  catalogItemDetailsModalOpen.value = false;
+  catalogItemDetails.value = null;
+  catalogItemJson.value = null;
+}
+
+async function navigateToGame(gameid: string) {
+  // Close catalog modals
+  closeCatalogSearchModal();
+  closeCatalogItemDetails();
+  
+  // Find and select the game in the main list
+  const game = items.find((item: any) => item.Id === gameid);
+  if (game) {
+    // Select the game
+    selectedIds.value.clear();
+    selectedIds.value.add(gameid);
+    
+    // Scroll to the game in the list
+    // You may need to implement scrolling logic based on your view mode
+    await showAlert('Game Selected', `Game ${gameid} has been selected in the main list.`);
+  } else {
+    await showAlert('Game Not Found', `Game ${gameid} is not currently loaded in the main list.`);
+  }
+}
+
+async function openAddGameFromCatalog(result: any) {
+  addGameFromCatalogState.value = {
+    item: result,
+    checkingFiles: true,
+    filesFound: false,
+    bpsPath: undefined,
+    sevenZPath: undefined,
+    missingFiles: [],
+    downloading: false,
+    downloadError: undefined,
+    creatingRhpak: false,
+    installingRhpak: false,
+    error: undefined,
+    success: false
+  };
+  
+  addGameFromCatalogModalOpen.value = true;
+  
+  // Start checking for files
+  await checkCatalogFiles(result);
+}
+
+async function checkCatalogFiles(item: any) {
+  addGameFromCatalogState.value.checkingFiles = true;
+  addGameFromCatalogState.value.error = undefined;
+  
+  try {
+    const result = await (window as any).electronAPI.catalogFindFiles({
+      itemId: item.item_id,
+      index7zName: item.index7z_name,
+      indexBpsName: item.indexbps_name,
+      bpsSha256: item.bps_sha256_hash
+    });
+    
+    addGameFromCatalogState.value.filesFound = result.filesFound;
+    addGameFromCatalogState.value.bpsPath = result.bpsPath;
+    addGameFromCatalogState.value.sevenZPath = result.sevenZPath;
+    addGameFromCatalogState.value.missingFiles = result.missingFiles || [];
+    
+    if (result.filesFound && result.bpsPath) {
+      // Files found, ready to proceed
+    } else if (result.canDownload) {
+      // Can download from IPFS/ArDrive
+      addGameFromCatalogState.value.downloadError = undefined;
+    } else {
+      // Files not found and cannot download
+      addGameFromCatalogState.value.error = 'Required files not found and cannot be downloaded automatically.';
+    }
+  } catch (error: any) {
+    addGameFromCatalogState.value.error = error.message || 'Failed to check for files';
+  } finally {
+    addGameFromCatalogState.value.checkingFiles = false;
+  }
+}
+
+function closeAddGameFromCatalog() {
+  addGameFromCatalogModalOpen.value = false;
+  addGameFromCatalogState.value = {};
+}
+
+async function downloadCatalogFiles() {
+  if (!addGameFromCatalogState.value.item) return;
+  
+  addGameFromCatalogState.value.downloading = true;
+  addGameFromCatalogState.value.downloadError = undefined;
+  
+  try {
+    const result = await (window as any).electronAPI.catalogDownloadFiles({
+      itemId: addGameFromCatalogState.value.item.item_id,
+      index7zName: addGameFromCatalogState.value.item.index7z_name,
+      index7zIpfsCidv1: addGameFromCatalogState.value.item.index7z_ipfs_cidv1,
+      index7zArdriveFileId: addGameFromCatalogState.value.item.index7z_ardrive_file_id
+    });
+    
+    if (result.success) {
+      // Recheck files
+      await checkCatalogFiles(addGameFromCatalogState.value.item);
+    } else {
+      addGameFromCatalogState.value.downloadError = result.error || 'Download failed';
+    }
+  } catch (error: any) {
+    addGameFromCatalogState.value.downloadError = error.message || 'Download failed';
+  } finally {
+    addGameFromCatalogState.value.downloading = false;
+  }
+}
+
+async function createAndInstallCatalogRhpak() {
+  if (!addGameFromCatalogState.value.item || !addGameFromCatalogState.value.bpsPath) return;
+  
+  addGameFromCatalogState.value.creatingRhpak = true;
+  addGameFromCatalogState.value.error = undefined;
+  
+  try {
+    // Load item JSON if not already loaded
+    let itemJson = catalogItemJson.value;
+    if (!itemJson) {
+      itemJson = await (window as any).electronAPI.catalogGetItemJson({
+        itemId: addGameFromCatalogState.value.item.item_id
+      });
+      catalogItemJson.value = itemJson;
+    }
+    
+    // Create temporary RHPAK
+    const createResult = await (window as any).electronAPI.catalogCreateRhpak({
+      itemId: addGameFromCatalogState.value.item.item_id,
+      bpsPath: addGameFromCatalogState.value.bpsPath,
+      sfcSha256: addGameFromCatalogState.value.item.sfc_rom_sha256_hash || itemJson.sfc_rom_sha256_hash,
+      itemJson: itemJson
+    });
+    
+    if (!createResult.success) {
+      throw new Error(createResult.error || 'Failed to create RHPAK');
+    }
+    
+    addGameFromCatalogState.value.creatingRhpak = false;
+    addGameFromCatalogState.value.installingRhpak = true;
+    
+    // Install RHPAK using the existing rhpakImport IPC handler
+    const installResult = await (window as any).electronAPI.rhpakImport(createResult.rhpakPath, {
+      forceGameids: false,
+      forceExtrapatches: false
+    });
+    
+    if (!installResult.success) {
+      throw new Error(installResult.error || 'Failed to install RHPAK');
+    }
+    
+    addGameFromCatalogState.value.success = true;
+    // Refresh games list - reload from database
+    try {
+      const games = await (window as any).electronAPI.getGames();
+      items.splice(0, items.length, ...games);
+    } catch (error) {
+      console.error('Failed to reload games:', error);
+    }
+  } catch (error: any) {
+    addGameFromCatalogState.value.error = error.message || 'Failed to create/install RHPAK';
+  } finally {
+    addGameFromCatalogState.value.creatingRhpak = false;
+    addGameFromCatalogState.value.installingRhpak = false;
   }
 }
 
@@ -33046,7 +33502,16 @@ button:disabled {
   flex-direction: column;
   gap: 16px;
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.catalog-search-results {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .catalog-search-input-row {
@@ -33075,8 +33540,10 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 .catalog-results-count {
@@ -33111,11 +33578,12 @@ button:disabled {
 }
 
 .catalog-result-title {
-  margin: 0 0 8px 0;
+  margin: 0;
   font-size: 26px;
   color: var(--text-primary);
   font-weight: 600;
   line-height: 1.3;
+  flex: 1;
 }
 
 .catalog-result-meta {
@@ -33262,6 +33730,173 @@ button:disabled {
   margin-top: 8px;
   color: var(--text-primary, #2e7d32);
   font-size: 18px;
+}
+
+.catalog-item-details-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalog-item-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalog-item-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.catalog-item-details-title {
+  margin: 0;
+  font-size: 28px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.catalog-item-details-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.catalog-item-detail-row {
+  font-size: 20px;
+  color: var(--text-primary);
+  margin: 8px 0;
+}
+
+.catalog-item-detail-row code {
+  font-family: monospace;
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 18px;
+}
+
+.catalog-item-json-viewer {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.catalog-item-json-viewer h3 {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.catalog-json-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 16px;
+  overflow-x: auto;
+  font-size: 16px;
+  color: var(--text-primary);
+  font-family: monospace;
+  line-height: 1.5;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.catalog-item-json-loading {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.add-game-from-catalog-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.add-game-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.add-game-item-info {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+}
+
+.add-game-item-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  color: var(--text-primary);
+}
+
+.add-game-item-info p {
+  margin: 4px 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.add-game-item-info code {
+  font-family: monospace;
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.add-game-step {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+}
+
+.add-game-step h4 {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.add-game-status {
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.add-game-success {
+  color: var(--text-primary, #2e7d32);
+  font-size: 18px;
+  padding: 8px;
+  background: var(--bg-secondary, #d4edda);
+  border-radius: 4px;
+}
+
+.add-game-success ul {
+  margin: 8px 0 0 20px;
+}
+
+.add-game-error {
+  color: var(--text-primary, #d32f2f);
+  font-size: 18px;
+  padding: 8px;
+  background: var(--bg-secondary, #ffebee);
+  border-radius: 4px;
+}
+
+.add-game-error ul {
+  margin: 8px 0 0 20px;
+}
+
+.add-game-warning {
+  color: var(--text-primary, #ff9800);
+  font-size: 18px;
+  padding: 8px;
+  background: var(--bg-secondary, #fff3cd);
+  border-radius: 4px;
 }
 
 .selected-file-chip {

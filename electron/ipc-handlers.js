@@ -15820,6 +15820,14 @@ function registerDatabaseHandlers(dbManager) {
           i.brief,
           i.tags,
           i.sfc_rom_sha1_hash,
+          i.sfc_rom_sha256_hash,
+          i.bps_sha1_hash,
+          i.bps_sha256_hash,
+          i.bps_filename,
+          i.index7z_name,
+          i.indexbps_name,
+          i.index7z_ipfs_cidv1,
+          i.index7z_ardrive_file_id,
           i.has_screenshots,
           i.screenshot_count,
           i.has_levelnames,
@@ -15843,6 +15851,299 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('[catalog:search] Error:', error);
       throw error;
+    }
+  });
+
+  // Catalog game existence check
+  ipcMain.handle('catalog:check-game-exists', async (_event, { bpsSha256 }) => {
+    try {
+      const patchbinDb = dbManager.getConnection('patchbin');
+      
+      // Check attachments table for matching decoded_hash_sha256
+      const attachment = patchbinDb.prepare(`
+        SELECT auuid, gvuuid, file_name, decoded_hash_sha256
+        FROM attachments
+        WHERE decoded_hash_sha256 = ?
+        LIMIT 1
+      `).get(bpsSha256);
+      
+      if (!attachment) {
+        return { exists: false };
+      }
+      
+      // Get gameid from gameversions table using gvuuid
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const gameversion = rhdataDb.prepare(`
+        SELECT gameid, gvuuid
+        FROM gameversions
+        WHERE gvuuid = ?
+        LIMIT 1
+      `).get(attachment.gvuuid);
+      
+      return {
+        exists: true,
+        gameid: gameversion?.gameid || null,
+        gvuuid: attachment.gvuuid
+      };
+    } catch (error) {
+      console.error('[catalog:check-game-exists] Error:', error);
+      return { exists: false, error: error.message };
+    }
+  });
+
+  // Get item JSON from catalog ZIP
+  ipcMain.handle('catalog:get-item-json', async (_event, { itemId }) => {
+    try {
+      const { app } = require('electron');
+      const AdmZip = require('adm-zip');
+      const basePath = app.getPath('userData');
+      const zipPath = path.join(basePath, 'rhsearch.zip');
+      
+      if (!fs.existsSync(zipPath)) {
+        throw new Error('Search catalog ZIP not found');
+      }
+      
+      const zip = new AdmZip(zipPath);
+      const jsonPath = `${itemId}.json`;
+      const entry = zip.getEntry(jsonPath);
+      
+      if (!entry) {
+        throw new Error(`JSON file not found in catalog: ${jsonPath}`);
+      }
+      
+      const jsonContent = entry.getData().toString('utf8');
+      return JSON.parse(jsonContent);
+    } catch (error) {
+      console.error('[catalog:get-item-json] Error:', error);
+      throw error;
+    }
+  });
+
+  // Find BPS/7z files for catalog item
+  ipcMain.handle('catalog:find-files', async (_event, { itemId, index7zName, indexBpsName, bpsSha256 }) => {
+    try {
+      const { app } = require('electron');
+      const os = require('os');
+      
+      // Possible locations to search
+      const searchPaths = [
+        path.join(__dirname, '..', 'refmaterial', 'bps7z'), // Program directory
+        path.join(os.homedir(), 'Downloads'), // Downloads folder
+        path.join(__dirname, '..', 'electron'), // Electron directory
+      ];
+      
+      let bpsPath = null;
+      let sevenZPath = null;
+      const missingFiles = [];
+      
+      // First, try to find the 7z archive
+      if (index7zName) {
+        for (const searchPath of searchPaths) {
+          const candidate7z = path.join(searchPath, index7zName);
+          if (fs.existsSync(candidate7z)) {
+            sevenZPath = candidate7z;
+            break;
+          }
+        }
+        
+        if (!sevenZPath) {
+          missingFiles.push(`7z archive: ${index7zName}`);
+        }
+      }
+      
+      // Try to find standalone BPS file
+      if (indexBpsName) {
+        for (const searchPath of searchPaths) {
+          const candidateBps = path.join(searchPath, indexBpsName);
+          if (fs.existsSync(candidateBps)) {
+            bpsPath = candidateBps;
+            break;
+          }
+        }
+        
+        // If 7z found, try extracting BPS from it
+        if (!bpsPath && sevenZPath) {
+          try {
+            const sevenZip = require('7zip-min');
+            const tempDir = path.join(os.tmpdir(), `catalog-extract-${Date.now()}`);
+            fs.mkdirSync(tempDir, { recursive: true });
+            
+            sevenZip.unpack(sevenZPath, tempDir);
+            
+            // Look for the BPS file in extracted directory
+            const findBpsInDir = (dir) => {
+              try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                  const fullPath = path.join(dir, entry.name);
+                  if (entry.isDirectory()) {
+                    const found = findBpsInDir(fullPath);
+                    if (found) return found;
+                  } else if (entry.name === indexBpsName || (entry.name.endsWith('.bps') && indexBpsName && entry.name.includes(indexBpsName))) {
+                    // Verify SHA256 if provided
+                    if (bpsSha256) {
+                      const crypto = require('crypto');
+                      const fileData = fs.readFileSync(fullPath);
+                      const hash = crypto.createHash('sha256').update(fileData).digest('hex');
+                      if (hash.toLowerCase() === bpsSha256.toLowerCase()) {
+                        return fullPath;
+                      }
+                    } else {
+                      return fullPath;
+                    }
+                  }
+                }
+              } catch (err) {
+                // Ignore read errors
+              }
+              return null;
+            };
+            
+            bpsPath = findBpsInDir(tempDir);
+            
+            // If BPS found, copy it to a more permanent location for RHPAK creation
+            if (bpsPath) {
+              const bpsFileName = path.basename(bpsPath);
+              const permanentBpsPath = path.join(os.tmpdir(), `catalog-bps-${bpsSha256 || Date.now()}-${bpsFileName}`);
+              fs.copyFileSync(bpsPath, permanentBpsPath);
+              bpsPath = permanentBpsPath;
+            }
+          } catch (error) {
+            console.warn('[catalog:find-files] Failed to extract from 7z:', error.message);
+          }
+        }
+        
+        if (!bpsPath) {
+          missingFiles.push(`BPS file: ${indexBpsName}`);
+        }
+      }
+      
+      const filesFound = !!(bpsPath || (sevenZPath && indexBpsName));
+      
+      return {
+        filesFound,
+        bpsPath,
+        sevenZPath,
+        missingFiles: missingFiles.length > 0 ? missingFiles : undefined
+      };
+    } catch (error) {
+      console.error('[catalog:find-files] Error:', error);
+      return {
+        filesFound: false,
+        error: error.message
+      };
+    }
+  });
+
+  // Download files from IPFS/ArDrive
+  ipcMain.handle('catalog:download-files', async (_event, { itemId, index7zName, index7zIpfsCidv1, index7zArdriveFileId }) => {
+    try {
+      // TODO: Implement IPFS/ArDrive download
+      // For now, return error indicating not implemented
+      return {
+        success: false,
+        error: 'IPFS/ArDrive download not yet implemented'
+      };
+    } catch (error) {
+      console.error('[catalog:download-files] Error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  // Create temporary RHPAK from catalog item
+  ipcMain.handle('catalog:create-rhpak', async (_event, { itemId, bpsPath, sfcSha256, itemJson }) => {
+    try {
+      const os = require('os');
+      const crypto = require('crypto');
+      const tempDir = path.join(os.tmpdir(), `catalog-rhpak-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+      
+      // Generate deterministic UUID from SFC SHA256
+      // Use first 32 characters of SHA256 to create a UUID-like string
+      const uuidFromSha256 = (sha256) => {
+        const hex = sha256.substring(0, 32);
+        return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
+      };
+      
+      const deterministicUuid = uuidFromSha256(sfcSha256);
+      
+      // Create RHPAK skeleton JSON
+      const skeleton = {
+        metadata: {
+          rhpakuuid: deterministicUuid,
+          rhpakname: `${itemJson.title || 'Untitled'} - ${itemJson.author || 'Unknown'}`,
+          version: '0.1.1',
+          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : []
+        },
+        gameversion: {
+          ...(itemJson.gameversion || {}),
+          gameid: itemJson.gameversion?.gameid || `catalog_${itemId.substring(0, 8)}`,
+          name: itemJson.title || itemJson.gameversion?.name || 'Untitled',
+          author: itemJson.author || itemJson.gameversion?.author || 'Unknown',
+          version: itemJson.gameversion?.version || (itemJson.versioninfo ? parseInt(String(itemJson.versioninfo).replace(/[^0-9]/g, '')) || 1 : 1),
+          // Reference the BPS file - newgame.js expects patch_relative_path or patch
+          patch: bpsRelativePath,
+          patch_relative_path: bpsRelativePath
+        },
+        patchblob: itemJson.patchblob || {},
+        attachments: itemJson.attachments || [],
+        screenshots: itemJson.screenshots || [],
+        res_attachments: itemJson.res_attachments || []
+      };
+      
+      // Write skeleton JSON
+      const skeletonPath = path.join(tempDir, 'skeleton.json');
+      fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
+      
+      // Copy BPS file to temp directory
+      const bpsFileName = path.basename(bpsPath);
+      const bpsDestPath = path.join(tempDir, bpsFileName);
+      fs.copyFileSync(bpsPath, bpsDestPath);
+      
+      // Run newgame.js --prepare
+      const { spawnSync } = require('child_process');
+      const enodeScript = path.join(__dirname, '..', 'enode.sh');
+      const newgameScript = path.join(__dirname, '..', 'jstools', 'newgame.js');
+      
+      const prepareResult = spawnSync('bash', [enodeScript, newgameScript, skeletonPath, '--prepare'], {
+        cwd: path.dirname(skeletonPath),
+        encoding: 'utf8'
+      });
+      
+      if (prepareResult.error || prepareResult.status !== 0) {
+        throw new Error(`Failed to prepare RHPAK: ${prepareResult.stderr || prepareResult.error?.message}`);
+      }
+      
+      // Run newgame.js --package
+      const rhpakFileName = `${deterministicUuid}.rhpak`;
+      const rhpakPath = path.join(tempDir, rhpakFileName);
+      
+      const packageResult = spawnSync('bash', [enodeScript, newgameScript, skeletonPath, `--package=${rhpakPath}`], {
+        cwd: path.dirname(skeletonPath),
+        encoding: 'utf8'
+      });
+      
+      if (packageResult.error || packageResult.status !== 0) {
+        throw new Error(`Failed to package RHPAK: ${packageResult.stderr || packageResult.error?.message}`);
+      }
+      
+      if (!fs.existsSync(rhpakPath)) {
+        throw new Error('RHPAK file was not created');
+      }
+      
+      return {
+        success: true,
+        rhpakPath
+      };
+    } catch (error) {
+      console.error('[catalog:create-rhpak] Error:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to create RHPAK'
+      };
     }
   });
 

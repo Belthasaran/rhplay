@@ -351,6 +351,12 @@ function normalizeItem(json, jsonPath) {
   item.bps_file_size = null; // Will be populated if available
   item.sfc_rom_size = json.sfc_rom_size || null;
   
+  // Extract 7z archive and BPS index information
+  item.index7z_name = json.index7z_name || null;
+  item.indexbps_name = json.indexbps_name || null;
+  item.index7z_ipfs_cidv1 = json.index7z_ipfs_cidv1 || null;
+  item.index7z_ardrive_file_id = json.index7z_ardrive_file_id || null;
+  
   // Extract metadata flags
   item.has_screenshots = (json.screenshots && Array.isArray(json.screenshots) && json.screenshots.length > 0) ? 1 : 0;
   item.screenshot_count = item.has_screenshots ? json.screenshots.length : 0;
@@ -457,6 +463,10 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
       bps_sha256_hash TEXT,
       bps_file_size INTEGER,
       sfc_rom_size INTEGER,
+      index7z_name TEXT,
+      indexbps_name TEXT,
+      index7z_ipfs_cidv1 TEXT,
+      index7z_ardrive_file_id TEXT,
       has_screenshots INTEGER DEFAULT 0,
       screenshot_count INTEGER DEFAULT 0,
       has_levelnames INTEGER DEFAULT 0,
@@ -475,13 +485,23 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
     CREATE INDEX IF NOT EXISTS idx_items_bps_sha1 ON items(bps_sha1_hash);
   `);
   
-  // Add levelnames_keywords column if it doesn't exist (migration)
+  // Add missing columns if they don't exist (migration)
   const tableInfo = db.prepare(`PRAGMA table_info(items)`).all();
-  const hasLevelnamesKeywords = tableInfo.some(col => col.name === 'levelnames_keywords');
+  const existingColumns = new Set(tableInfo.map(col => col.name));
   
-  if (!hasLevelnamesKeywords) {
-    db.exec(`ALTER TABLE items ADD COLUMN levelnames_keywords TEXT`);
-    console.log('Added levelnames_keywords column to items table');
+  const columnsToAdd = [
+    { name: 'levelnames_keywords', type: 'TEXT' },
+    { name: 'index7z_name', type: 'TEXT' },
+    { name: 'indexbps_name', type: 'TEXT' },
+    { name: 'index7z_ipfs_cidv1', type: 'TEXT' },
+    { name: 'index7z_ardrive_file_id', type: 'TEXT' }
+  ];
+  
+  for (const col of columnsToAdd) {
+    if (!existingColumns.has(col.name)) {
+      db.exec(`ALTER TABLE items ADD COLUMN ${col.name} ${col.type}`);
+      console.log(`Added ${col.name} column to items table`);
+    }
   }
   
   // Drop old FTS5 triggers if they exist (they might have wrong schema)
@@ -538,8 +558,9 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
           bps_filename, bps_sha1_hash, bps_sha256_hash, bps_file_size,
           sfc_rom_size, has_screenshots, screenshot_count, has_levelnames,
           has_lmfilter, has_translevel_data, has_official_source, levelnames_keywords,
+          index7z_name, indexbps_name, index7z_ipfs_cidv1, index7z_ardrive_file_id,
           raw_json_hash, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `);
       
       stmt.run(
@@ -569,6 +590,10 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
         item.has_translevel_data,
         item.has_official_source,
         item.levelnames_keywords,
+        item.index7z_name,
+        item.indexbps_name,
+        item.index7z_ipfs_cidv1,
+        item.index7z_ardrive_file_id,
         item.raw_json_hash
       );
       

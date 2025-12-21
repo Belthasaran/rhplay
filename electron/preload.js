@@ -1287,4 +1287,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * Verify a social ID by checking if verification code is present
    */
   verifySocialId: (params) => ipcRenderer.invoke('online:social-id:verify', params),
+  
+  // =============================
+  // Catalog Search Operations
+  // =============================
+  
+  /**
+   * Check if search catalog files are available
+   * @returns {Promise<{available: boolean, missingFiles?: string[], dbPath?: string, zipPath?: string, error?: string}>}
+   */
+  catalogCheckAvailability: () => ipcRenderer.invoke('catalog:check-availability'),
+  
+  /**
+   * Choose database file for catalog
+   * @returns {Promise<{canceled: boolean, filePath?: string}>}
+   */
+  catalogChooseDbFile: () => ipcRenderer.invoke('catalog:choose-db-file'),
+  
+  /**
+   * Choose ZIP file for catalog
+   * @returns {Promise<{canceled: boolean, filePath?: string}>}
+   */
+  catalogChooseZipFile: () => ipcRenderer.invoke('catalog:choose-zip-file'),
+  
+  /**
+   * Copy catalog files to program data directory
+   * @param {Object} params - {dbPath: string, zipPath: string}
+   * @returns {Promise<{success: boolean, error?: string, dbPath?: string, zipPath?: string}>}
+   */
+  catalogCopyFiles: (params) => ipcRenderer.invoke('catalog:copy-files', params),
+  
+  /**
+   * Search catalog using FTS5
+   * @param {Object} params - {query: string}
+   * @returns {Promise<Array>} Array of search results
+   */
+  catalogSearch: (params) => ipcRenderer.invoke('catalog:search', params),
 });

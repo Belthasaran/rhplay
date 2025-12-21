@@ -899,6 +899,12 @@
           </div>
         </div>
 
+        <div class="catalog-button-container" style="margin-right: 8px;">
+          <button @click="openCatalogSearchModal" class="catalog-btn">
+            <span>🔎 Catalog</span>
+          </button>
+        </div>
+
         <div class="filter-dropdown-container">
           <button @click="toggleFilterDropdown" class="filter-dropdown-btn" :class="{ 'has-active-filter': hasActiveFilters }">
             <span>Search/Filters</span>
@@ -1974,6 +1980,152 @@
           Show Installed
         </button>
         <button @click="closeInstallRhpakModal">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Catalog Search Modal -->
+  <div v-if="catalogSearchModalOpen" class="modal-backdrop" @click.self="closeCatalogSearchModal" style="z-index: 20001;">
+    <div class="modal catalog-search-modal" style="max-width: 900px; max-height: 80vh;">
+      <header class="modal-header">
+        <h3>🔎 Search Full Catalog</h3>
+        <button @click="closeCatalogSearchModal" class="close">✕</button>
+      </header>
+      <section class="modal-body" style="overflow-y: auto;">
+        <!-- Catalog not available -->
+        <div v-if="catalogSearchState.status === 'not-available'" class="catalog-not-available">
+          <p style="margin: 16px 0; color: #d32f2f;">
+            <strong>⚠️ Search catalog is not available</strong>
+          </p>
+          <p style="margin: 12px 0;">
+            The search catalog files (rhsearch_cat.db and rhsearch.zip) are required for full catalog search.
+            These files should be located in your program data directory.
+          </p>
+          <div v-if="catalogSearchState.missingFiles" style="margin: 12px 0; padding: 12px; background: #fff3cd; border-radius: 4px;">
+            <strong>Missing files:</strong>
+            <ul style="margin: 8px 0; padding-left: 24px;">
+              <li v-for="file in catalogSearchState.missingFiles" :key="file">{{ file }}</li>
+            </ul>
+          </div>
+          <div style="margin: 16px 0;">
+            <p style="margin-bottom: 8px;"><strong>Copy catalog files to program data directory:</strong></p>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button @click="chooseCatalogDbFile" class="btn-secondary-small">
+                Select rhsearch_cat.db
+              </button>
+              <button @click="chooseCatalogZipFile" class="btn-secondary-small">
+                Select rhsearch.zip
+              </button>
+            </div>
+            <div v-if="catalogSearchState.selectedDbPath || catalogSearchState.selectedZipPath" style="margin-top: 12px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+              <p v-if="catalogSearchState.selectedDbPath" style="margin: 4px 0;">
+                <strong>Database:</strong> {{ getFileNameFromPath(catalogSearchState.selectedDbPath) }}
+              </p>
+              <p v-if="catalogSearchState.selectedZipPath" style="margin: 4px 0;">
+                <strong>ZIP:</strong> {{ getFileNameFromPath(catalogSearchState.selectedZipPath) }}
+              </p>
+            </div>
+            <button 
+              @click="copyCatalogFiles" 
+              :disabled="!catalogSearchState.selectedDbPath || !catalogSearchState.selectedZipPath || catalogSearchState.copying"
+              class="btn-primary-small"
+              style="margin-top: 12px;"
+            >
+              {{ catalogSearchState.copying ? 'Copying...' : 'Copy Files to Program Data' }}
+            </button>
+            <p v-if="catalogSearchState.copyError" style="margin-top: 8px; color: #d32f2f;">
+              {{ catalogSearchState.copyError }}
+            </p>
+            <p v-if="catalogSearchState.copySuccess" style="margin-top: 8px; color: #2e7d32;">
+              {{ catalogSearchState.copySuccess }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Catalog available - search interface -->
+        <div v-else-if="catalogSearchState.status === 'ready'">
+          <div class="catalog-search-input-row" style="margin-bottom: 16px;">
+            <input
+              v-model="catalogSearchQuery"
+              type="text"
+              placeholder="Enter search keywords (e.g., Invictus, Kaizo, author:Panga)"
+              class="catalog-search-input"
+              @keydown.enter="performCatalogSearch"
+              @keydown.esc="closeCatalogSearchModal"
+              ref="catalogSearchInput"
+            />
+            <button @click="performCatalogSearch" :disabled="!catalogSearchQuery.trim() || catalogSearchState.searching" class="btn-primary-small">
+              {{ catalogSearchState.searching ? 'Searching...' : 'Search' }}
+            </button>
+            <button @click="clearCatalogSearch" :disabled="!catalogSearchQuery.trim() && catalogSearchResults.length === 0" class="btn-secondary-small">
+              Clear
+            </button>
+          </div>
+
+          <!-- Search results -->
+          <div v-if="catalogSearchState.searchError" class="catalog-search-error" style="padding: 12px; background: #ffebee; border-radius: 4px; margin-bottom: 16px;">
+            <strong>Error:</strong> {{ catalogSearchState.searchError }}
+          </div>
+
+          <div v-if="catalogSearchResults.length > 0" class="catalog-search-results">
+            <p style="margin-bottom: 12px; color: #666;">
+              Found {{ catalogSearchResults.length }} result(s)
+            </p>
+            <div class="catalog-results-list" style="max-height: 400px; overflow-y: auto;">
+              <div 
+                v-for="result in catalogSearchResults" 
+                :key="result.item_id"
+                class="catalog-result-item"
+                style="padding: 12px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px; background: #f9f9f9;"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                  <div style="flex: 1;">
+                    <h4 style="margin: 0 0 4px 0; font-size: 16px;">{{ result.title || 'Untitled' }}</h4>
+                    <p v-if="result.author" style="margin: 4px 0; color: #666; font-size: 14px;">
+                      <strong>Author:</strong> {{ result.author }}
+                    </p>
+                    <p v-if="result.versioninfo" style="margin: 4px 0; color: #666; font-size: 14px;">
+                      <strong>Version:</strong> {{ result.versioninfo }}
+                    </p>
+                    <p v-if="result.brief" style="margin: 8px 0; color: #333; font-size: 13px;">
+                      {{ result.brief.substring(0, 200) }}{{ result.brief.length > 200 ? '...' : '' }}
+                    </p>
+                    <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                      <span v-if="result.has_screenshots" style="padding: 2px 8px; background: #e3f2fd; border-radius: 3px; font-size: 12px;">
+                        📷 {{ result.screenshot_count }} screenshot(s)
+                      </span>
+                      <span v-if="result.has_levelnames" style="padding: 2px 8px; background: #e8f5e9; border-radius: 3px; font-size: 12px;">
+                        📝 Has level names
+                      </span>
+                      <span v-if="result.has_lmfilter" style="padding: 2px 8px; background: #fff3e0; border-radius: 3px; font-size: 12px;">
+                        🔍 Has level filter
+                      </span>
+                    </div>
+                    <p v-if="result.sfc_rom_sha1_hash" style="margin: 4px 0; font-size: 11px; color: #999; font-family: monospace;">
+                      SHA1: {{ result.sfc_rom_sha1_hash }}
+                    </p>
+                  </div>
+                </div>
+                <div v-if="result.canonical_title || result.canonical_author" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+                  <span v-if="result.group_id">Group ID: {{ result.group_id }}</span>
+                  <span v-if="result.version_count" style="margin-left: 12px;">{{ result.version_count }} version(s) in group</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="catalogSearchState.searched && catalogSearchResults.length === 0" style="padding: 24px; text-align: center; color: #666;">
+            No results found. Try different search terms.
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div v-else-if="catalogSearchState.status === 'checking'" style="padding: 24px; text-align: center;">
+          <p>Checking for search catalog...</p>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeCatalogSearchModal" class="btn-secondary">Close</button>
       </footer>
     </div>
   </div>
@@ -8814,6 +8966,26 @@ const bulkEditModalOpen = ref(false);
 const bulkEditStatus = ref('');
 const bulkEditHidden = ref('');
 const bulkEditExcludeFromRandom = ref('');
+
+// Catalog search state
+const catalogSearchModalOpen = ref(false);
+const catalogSearchQuery = ref('');
+const catalogSearchResults = ref<any[]>([]);
+const catalogSearchInput = ref<HTMLInputElement | null>(null);
+const catalogSearchState = ref<{
+  status: 'checking' | 'ready' | 'not-available';
+  missingFiles?: string[];
+  selectedDbPath?: string;
+  selectedZipPath?: string;
+  copying?: boolean;
+  copyError?: string;
+  copySuccess?: string;
+  searching?: boolean;
+  searched?: boolean;
+  searchError?: string;
+}>({
+  status: 'checking'
+});
 
 // Filter dropdown state
 const filterDropdownOpen = ref(false);
@@ -19101,6 +19273,138 @@ function closeBulkEditModal() {
   bulkEditStatus.value = '';
   bulkEditHidden.value = '';
   bulkEditExcludeFromRandom.value = '';
+}
+
+// Catalog search functions
+async function openCatalogSearchModal() {
+  catalogSearchModalOpen.value = true;
+  catalogSearchState.value = { status: 'checking' };
+  catalogSearchQuery.value = '';
+  catalogSearchResults.value = [];
+  
+  try {
+    const result = await (window as any).electronAPI.catalogCheckAvailability();
+    if (result.available) {
+      catalogSearchState.value = { status: 'ready' };
+    } else {
+      catalogSearchState.value = {
+        status: 'not-available',
+        missingFiles: result.missingFiles || []
+      };
+    }
+  } catch (error: any) {
+    catalogSearchState.value = {
+      status: 'not-available',
+      missingFiles: ['rhsearch_cat.db', 'rhsearch.zip']
+    };
+  }
+  
+  // Focus search input after modal opens
+  setTimeout(() => {
+    catalogSearchInput.value?.focus();
+  }, 100);
+}
+
+function closeCatalogSearchModal() {
+  catalogSearchModalOpen.value = false;
+  catalogSearchQuery.value = '';
+  catalogSearchResults.value = [];
+  catalogSearchState.value = { status: 'checking' };
+}
+
+async function chooseCatalogDbFile() {
+  try {
+    const result = await (window as any).electronAPI.invoke('catalog:choose-db-file');
+    if (result.canceled) return;
+    catalogSearchState.value.selectedDbPath = result.filePath;
+    catalogSearchState.value.copyError = undefined;
+    catalogSearchState.value.copySuccess = undefined;
+  } catch (error: any) {
+    await showAlert('Error', `Failed to select database file: ${error.message}`);
+  }
+}
+
+async function chooseCatalogZipFile() {
+  try {
+    const result = await (window as any).electronAPI.catalogChooseZipFile();
+    if (result.canceled) return;
+    catalogSearchState.value.selectedZipPath = result.filePath;
+    catalogSearchState.value.copyError = undefined;
+    catalogSearchState.value.copySuccess = undefined;
+  } catch (error: any) {
+    await showAlert('Error', `Failed to select ZIP file: ${error.message}`);
+  }
+}
+
+async function copyCatalogFiles() {
+  if (!catalogSearchState.value.selectedDbPath || !catalogSearchState.value.selectedZipPath) {
+    return;
+  }
+  
+  catalogSearchState.value.copying = true;
+  catalogSearchState.value.copyError = undefined;
+  catalogSearchState.value.copySuccess = undefined;
+  
+  try {
+    const result = await (window as any).electronAPI.invoke('catalog:copy-files', {
+      dbPath: catalogSearchState.value.selectedDbPath,
+      zipPath: catalogSearchState.value.selectedZipPath
+    });
+    
+    if (result.success) {
+      catalogSearchState.value.copySuccess = 'Files copied successfully!';
+      catalogSearchState.value.selectedDbPath = undefined;
+      catalogSearchState.value.selectedZipPath = undefined;
+      
+      // Recheck availability
+      setTimeout(async () => {
+        try {
+          const checkResult = await (window as any).electronAPI.catalogCheckAvailability();
+          if (checkResult.available) {
+            catalogSearchState.value = { status: 'ready' };
+          }
+        } catch (error) {
+          // Ignore
+        }
+      }, 500);
+    } else {
+      catalogSearchState.value.copyError = result.error || 'Failed to copy files';
+    }
+  } catch (error: any) {
+    catalogSearchState.value.copyError = error.message || 'Failed to copy files';
+  } finally {
+    catalogSearchState.value.copying = false;
+  }
+}
+
+async function performCatalogSearch() {
+  if (!catalogSearchQuery.value.trim()) return;
+  
+  catalogSearchState.value.searching = true;
+  catalogSearchState.value.searchError = undefined;
+  catalogSearchResults.value = [];
+  
+  try {
+    const results = await (window as any).electronAPI.catalogSearch({
+      query: catalogSearchQuery.value.trim()
+    });
+    
+    catalogSearchResults.value = results;
+    catalogSearchState.value.searched = true;
+  } catch (error: any) {
+    catalogSearchState.value.searchError = error.message || 'Search failed';
+    catalogSearchResults.value = [];
+  } finally {
+    catalogSearchState.value.searching = false;
+  }
+}
+
+function clearCatalogSearch() {
+  catalogSearchQuery.value = '';
+  catalogSearchResults.value = [];
+  catalogSearchState.value.searched = false;
+  catalogSearchState.value.searchError = undefined;
+  catalogSearchInput.value?.focus();
 }
 
 function applyBulkEdit() {
@@ -32097,6 +32401,31 @@ button:disabled {
   display: inline-block;
 }
 
+.catalog-button-container {
+  display: inline-block;
+}
+
+.catalog-btn {
+  padding: 8px 16px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.catalog-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary, #e9e9e9);
+  border-color: var(--border-secondary, #999);
+}
+
+.catalog-btn:active:not(:disabled) {
+  background: var(--bg-primary, #ddd);
+}
+
 .filter-dropdown-btn {
   display: flex;
   align-items: center;
@@ -32689,6 +33018,48 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.catalog-search-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalog-search-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.catalog-search-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #333);
+}
+
+.catalog-search-input:focus {
+  outline: none;
+  border-color: var(--accent-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.catalog-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-result-item {
+  transition: background 0.2s;
+}
+
+.catalog-result-item:hover {
+  background: #f0f0f0 !important;
 }
 
 .selected-file-chip {

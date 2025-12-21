@@ -15665,6 +15665,187 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // Catalog search handlers
+  ipcMain.handle('catalog:check-availability', async (_event) => {
+    try {
+      const { app } = require('electron');
+      const basePath = app.getPath('userData');
+      const dbPath = path.join(basePath, 'rhsearch_cat.db');
+      const zipPath = path.join(basePath, 'rhsearch.zip');
+      
+      const missingFiles = [];
+      if (!fs.existsSync(dbPath)) {
+        missingFiles.push('rhsearch_cat.db');
+      }
+      if (!fs.existsSync(zipPath)) {
+        missingFiles.push('rhsearch.zip');
+      }
+      
+      return {
+        available: missingFiles.length === 0,
+        missingFiles,
+        dbPath,
+        zipPath
+      };
+    } catch (error) {
+      console.error('[catalog:check-availability] Error:', error);
+      return {
+        available: false,
+        missingFiles: ['rhsearch_cat.db', 'rhsearch.zip'],
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('catalog:choose-db-file', async (_event) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Select Search Catalog Database',
+        filters: [
+          { name: 'Database Files', extensions: ['db'] },
+          { name: 'All Files', extensions: ['*'] }
+        ],
+        properties: ['openFile']
+      });
+      
+      if (result.canceled) {
+        return { canceled: true };
+      }
+      
+      return {
+        canceled: false,
+        filePath: result.filePaths[0]
+      };
+    } catch (error) {
+      console.error('[catalog:choose-db-file] Error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('catalog:choose-zip-file', async (_event) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Select Search Catalog ZIP Archive',
+        filters: [
+          { name: 'ZIP Files', extensions: ['zip'] },
+          { name: 'All Files', extensions: ['*'] }
+        ],
+        properties: ['openFile']
+      });
+      
+      if (result.canceled) {
+        return { canceled: true };
+      }
+      
+      return {
+        canceled: false,
+        filePath: result.filePaths[0]
+      };
+    } catch (error) {
+      console.error('[catalog:choose-zip-file] Error:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('catalog:copy-files', async (_event, { dbPath, zipPath }) => {
+    try {
+      const { app } = require('electron');
+      const basePath = app.getPath('userData');
+      const targetDbPath = path.join(basePath, 'rhsearch_cat.db');
+      const targetZipPath = path.join(basePath, 'rhsearch.zip');
+      
+      // Ensure directory exists
+      if (!fs.existsSync(basePath)) {
+        fs.mkdirSync(basePath, { recursive: true });
+      }
+      
+      // Copy files
+      fs.copyFileSync(dbPath, targetDbPath);
+      fs.copyFileSync(zipPath, targetZipPath);
+      
+      return {
+        success: true,
+        dbPath: targetDbPath,
+        zipPath: targetZipPath
+      };
+    } catch (error) {
+      console.error('[catalog:copy-files] Error:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to copy files'
+      };
+    }
+  });
+
+  ipcMain.handle('catalog:search', async (_event, { query }) => {
+    try {
+      const { app } = require('electron');
+      const Database = require('better-sqlite3');
+      const basePath = app.getPath('userData');
+      const dbPath = path.join(basePath, 'rhsearch_cat.db');
+      
+      if (!fs.existsSync(dbPath)) {
+        throw new Error('Search catalog database not found');
+      }
+      
+      const db = new Database(dbPath, { readonly: true });
+      
+      // Build FTS5 query
+      const queryTerms = query.split(/\s+/).map(term => {
+        if (term.includes(' ')) {
+          return `"${term}"`;
+        } else {
+          return `${term}*`;
+        }
+      }).join(' OR ');
+      
+      const ftsQuery = queryTerms;
+      
+      // Check if FTS5 table exists
+      const ftsExists = db.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table' AND name='items_fts'
+      `).get();
+      
+      if (!ftsExists) {
+        throw new Error('FTS5 index not found. Run Stage 2 (search_build2.js) first.');
+      }
+      
+      // Execute search
+      const results = db.prepare(`
+        SELECT 
+          i.item_id,
+          i.title,
+          i.author,
+          i.versioninfo,
+          i.brief,
+          i.tags,
+          i.sfc_rom_sha1_hash,
+          i.has_screenshots,
+          i.screenshot_count,
+          i.has_levelnames,
+          i.has_lmfilter,
+          ig.group_id,
+          g.canonical_title,
+          g.canonical_author,
+          g.version_count
+        FROM items_fts
+        JOIN items i ON items_fts.item_id = i.item_id
+        LEFT JOIN items_groups ig ON i.item_id = ig.item_id
+        LEFT JOIN groups g ON ig.group_id = g.group_id
+        WHERE items_fts MATCH ?
+        ORDER BY i.title
+        LIMIT 50
+      `).all(ftsQuery);
+      
+      db.close();
+      
+      return results;
+    } catch (error) {
+      console.error('[catalog:search] Error:', error);
+      throw error;
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 // Helper function to sanitize file names

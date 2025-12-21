@@ -15810,32 +15810,46 @@ function registerDatabaseHandlers(dbManager) {
         throw new Error('FTS5 index not found. Run Stage 2 (search_build2.js) first.');
       }
       
+      // Check which columns exist in the items table
+      const tableInfo = db.prepare(`PRAGMA table_info(items)`).all();
+      const existingColumns = new Set(tableInfo.map(col => col.name));
+      
+      // Build SELECT list with only existing columns
+      const selectColumns = [
+        'i.item_id',
+        'i.title',
+        'i.author',
+        'i.versioninfo',
+        'i.brief',
+        'i.tags',
+        'i.sfc_rom_sha1_hash',
+        'i.sfc_rom_sha256_hash',
+        'i.bps_sha1_hash',
+        'i.bps_sha256_hash',
+        'i.bps_filename'
+      ];
+      
+      // Add optional columns if they exist
+      if (existingColumns.has('index7z_name')) selectColumns.push('i.index7z_name');
+      if (existingColumns.has('indexbps_name')) selectColumns.push('i.indexbps_name');
+      if (existingColumns.has('index7z_ipfs_cidv1')) selectColumns.push('i.index7z_ipfs_cidv1');
+      if (existingColumns.has('index7z_ardrive_file_id')) selectColumns.push('i.index7z_ardrive_file_id');
+      
+      selectColumns.push(
+        'i.has_screenshots',
+        'i.screenshot_count',
+        'i.has_levelnames',
+        'i.has_lmfilter',
+        'ig.group_id',
+        'g.canonical_title',
+        'g.canonical_author',
+        'g.version_count'
+      );
+      
       // Execute search
       const results = db.prepare(`
         SELECT 
-          i.item_id,
-          i.title,
-          i.author,
-          i.versioninfo,
-          i.brief,
-          i.tags,
-          i.sfc_rom_sha1_hash,
-          i.sfc_rom_sha256_hash,
-          i.bps_sha1_hash,
-          i.bps_sha256_hash,
-          i.bps_filename,
-          i.index7z_name,
-          i.indexbps_name,
-          i.index7z_ipfs_cidv1,
-          i.index7z_ardrive_file_id,
-          i.has_screenshots,
-          i.screenshot_count,
-          i.has_levelnames,
-          i.has_lmfilter,
-          ig.group_id,
-          g.canonical_title,
-          g.canonical_author,
-          g.version_count
+          ${selectColumns.join(',\n          ')}
         FROM items_fts
         JOIN items i ON items_fts.item_id = i.item_id
         LEFT JOIN items_groups ig ON i.item_id = ig.item_id

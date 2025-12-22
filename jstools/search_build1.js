@@ -5,6 +5,7 @@
  * 
  * Usage:
  *   enode.sh search_build1.js <index7z folder> <bps7z folder> [options]
+ *   enode.sh search_build1.js --incremental <json-file> [options]
  *   enode.sh search_build1.js --help
  * 
  * Stage 1: Ingest all raw JSON, normalize into compact canonical records
@@ -13,6 +14,11 @@
  * - Extract and normalize standard fields
  * - Create SQLite database with items table
  * - Package JSON files in ZIP archive
+ * 
+ * Incremental mode (--incremental):
+ * - Add a single JSON file to existing catalog database
+ * - Update ZIP archive with the new JSON
+ * - Does not rebuild entire catalog
  */
 
 const fs = require('fs').promises;
@@ -628,18 +634,149 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
 }
 
 // Main entry point
+/**
+ * Incremental build: Add a single JSON file to existing catalog
+ */
+async function buildSearchCatalog1Incremental(jsonFilePath, options) {
+  const { rhsearchdb, rhsearchzip } = options;
+  
+  console.log('='.repeat(70));
+  console.log('Incremental Build: Add Single JSON to Catalog');
+  console.log('='.repeat(70));
+  console.log();
+  
+  if (!fsSync.existsSync(jsonFilePath)) {
+    throw new Error(`JSON file not found: ${jsonFilePath}`);
+  }
+  
+  // Determine database and ZIP paths
+  const dbPath = rhsearchdb || path.join(path.dirname(jsonFilePath), 'rhsearch_cat.db');
+  const zipPath = rhsearchzip || path.join(path.dirname(jsonFilePath), 'rhsearch.zip');
+  
+  if (!fsSync.existsSync(dbPath)) {
+    throw new Error(`Database not found: ${dbPath}. Run full build first.`);
+  }
+  
+  console.log(`JSON file: ${jsonFilePath}`);
+  console.log(`Database: ${dbPath}`);
+  console.log(`ZIP archive: ${zipPath}`);
+  console.log();
+  
+  // Open existing database
+  const db = new Database(dbPath);
+  
+  // Ensure schema is up to date (migration)
+  const tableInfo = db.prepare(`PRAGMA table_info(items)`).all();
+  const existingColumns = new Set(tableInfo.map(col => col.name));
+  const columnsToAdd = [
+    { name: 'levelnames_keywords', type: 'TEXT' },
+    { name: 'index7z_name', type: 'TEXT' },
+    { name: 'indexbps_name', type: 'TEXT' },
+    { name: 'index7z_ipfs_cidv1', type: 'TEXT' },
+    { name: 'index7z_ardrive_file_id', type: 'TEXT' }
+  ];
+  for (const col of columnsToAdd) {
+    if (!existingColumns.has(col.name)) {
+      db.exec(`ALTER TABLE items ADD COLUMN ${col.name} ${col.type}`);
+      console.log(`Added ${col.name} column to items table`);
+    }
+  }
+  
+  // Drop old FTS5 triggers (Stage 2 will recreate)
+  try {
+    db.exec(`
+      DROP TRIGGER IF EXISTS items_fts_insert;
+      DROP TRIGGER IF EXISTS items_fts_update;
+      DROP TRIGGER IF EXISTS items_fts_delete;
+    `);
+  } catch (error) {
+    // Ignore errors
+  }
+  
+  // Open or create ZIP archive
+  let zip;
+  if (fsSync.existsSync(zipPath)) {
+    zip = new AdmZip(zipPath);
+  } else {
+    zip = new AdmZip();
+  }
+  
+  // Process the single JSON file
+  console.log('Processing JSON file...');
+  const relativePath = path.basename(jsonFilePath);
+  
+  try {
+    const content = await fs.readFile(jsonFilePath, 'utf8');
+    const json = JSON.parse(content);
+    
+    const item = normalizeItem(json, relativePath);
+    if (!item) {
+      throw new Error('Failed to normalize JSON');
+    }
+    
+    // Insert or update in database
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO items (
+        item_id, json_path, title, versioninfo, author, authors, tags,
+        brief, date_estimate, upload_estimate, folder_categories,
+        sfcsource_filename, sfc_rom_sha1_hash, sfc_rom_sha256_hash,
+        bps_filename, bps_sha1_hash, bps_sha256_hash, bps_file_size,
+        sfc_rom_size, has_screenshots, screenshot_count, has_levelnames,
+        has_lmfilter, has_translevel_data, has_official_source, levelnames_keywords,
+        index7z_name, indexbps_name, index7z_ipfs_cidv1, index7z_ardrive_file_id,
+        raw_json_hash, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    
+    stmt.run(
+      item.item_id, item.json_path, item.title, item.versioninfo, item.author, item.authors, item.tags,
+      item.brief, item.date_estimate, item.upload_estimate, item.folder_categories,
+      item.sfcsource_filename, item.sfc_rom_sha1_hash, item.sfc_rom_sha256_hash,
+      item.bps_filename, item.bps_sha1_hash, item.bps_sha256_hash, item.bps_file_size,
+      item.sfc_rom_size, item.has_screenshots, item.screenshot_count, item.has_levelnames,
+      item.has_lmfilter, item.has_translevel_data, item.has_official_source, item.levelnames_keywords,
+      item.index7z_name, item.indexbps_name, item.index7z_ipfs_cidv1, item.index7z_ardrive_file_id,
+      item.raw_json_hash
+    );
+    
+    // Add to ZIP archive
+    zip.addFile(relativePath, Buffer.from(content, 'utf8'));
+    
+    console.log(`✓ Processed: ${relativePath}`);
+  } catch (error) {
+    console.error(`⚠ Error processing ${relativePath}: ${error.message}`);
+    throw error;
+  }
+  
+  // Save ZIP archive
+  zip.writeZip(zipPath);
+  console.log(`✓ Updated ZIP archive: ${zipPath}`);
+  
+  db.close();
+  
+  console.log();
+  console.log('='.repeat(70));
+  console.log('Incremental build complete');
+  console.log('='.repeat(70));
+  console.log('Next: Run search_build2.js to update grouping and FTS5 index');
+}
+
 async function main() {
   const args = process.argv.slice(2);
   
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     console.log(`
 Usage: enode.sh search_build1.js <index7z folder> <bps7z folder> [options]
+       enode.sh search_build1.js --incremental <json-file> [options]
 
 Stage 1: Ingest and normalize master JSON files
 
-Arguments:
+Arguments (normal mode):
   index7z folder    Directory containing master JSON index files
   bps7z folder      Directory containing 7z archives (for reference, not used in Stage 1)
+
+Arguments (incremental mode):
+  --incremental <json-file>   Add a single JSON file to existing catalog
 
 Options:
   --rhsearchdb=FILE    Path to search catalog database (default: rhsearch_cat.db in index7z parent)
@@ -652,13 +789,65 @@ This script:
   - Creates/updates SQLite database with items table
   - Packages all JSON files into a ZIP archive
 
+Incremental mode:
+  - Adds a single JSON file to existing catalog database
+  - Updates ZIP archive with the new JSON
+  - Does not rebuild entire catalog
+
 Examples:
   enode.sh search_build1.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/
-  enode.sh search_build1.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/ --rhsearchdb=search.db --rhsearchzip=search.zip
+  enode.sh search_build1.js --incremental new_item.json --rhsearchdb=search.db --rhsearchzip=search.zip
 `);
     process.exit(0);
   }
   
+  // Check for incremental mode
+  const incrementalIndex = args.findIndex(arg => arg === '--incremental' || arg.startsWith('--incremental='));
+  if (incrementalIndex !== -1) {
+    // Incremental mode: process single JSON file
+    let jsonFilePath = null;
+    if (args[incrementalIndex].startsWith('--incremental=')) {
+      jsonFilePath = args[incrementalIndex].substring('--incremental='.length);
+    } else if (incrementalIndex + 1 < args.length) {
+      jsonFilePath = args[incrementalIndex + 1];
+    }
+    
+    if (!jsonFilePath) {
+      console.error('Error: --incremental requires a JSON file path');
+      console.error('Usage: search_build1.js --incremental <json-file> [--rhsearchdb=...] [--rhsearchzip=...]');
+      process.exit(1);
+    }
+    
+    const options = {
+      rhsearchdb: null,
+      rhsearchzip: null,
+    };
+    
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg === '--incremental' || arg.startsWith('--incremental=')) {
+        continue; // Skip incremental arg
+      } else if (arg.startsWith('--rhsearchdb=')) {
+        options.rhsearchdb = arg.substring('--rhsearchdb='.length);
+      } else if (arg === '--rhsearchdb' && i + 1 < args.length) {
+        options.rhsearchdb = args[++i];
+      } else if (arg.startsWith('--rhsearchzip=')) {
+        options.rhsearchzip = arg.substring('--rhsearchzip='.length);
+      } else if (arg === '--rhsearchzip' && i + 1 < args.length) {
+        options.rhsearchzip = args[++i];
+      }
+    }
+    
+    try {
+      await buildSearchCatalog1Incremental(jsonFilePath, options);
+    } catch (error) {
+      console.error(`Fatal error: ${error.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+  
+  // Normal mode: process folder
   if (args.length < 2) {
     console.error('Error: Missing required arguments');
     console.error('Usage: enode.sh search_build1.js <index7z folder> <bps7z folder> [options]');
@@ -705,4 +894,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildSearchCatalog1, normalizeItem };
+module.exports = { buildSearchCatalog1, buildSearchCatalog1Incremental, normalizeItem };

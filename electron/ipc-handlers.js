@@ -16136,24 +16136,70 @@ function registerDatabaseHandlers(dbManager) {
       fs.copyFileSync(bpsPath, bpsDestPath);
       const bpsRelativePath = bpsFileName; // Relative to skeleton directory
       
+      // Extract meaningful title, version, and author from JSON
+      // Priority: title/name fields, then filename fields, then fallback
+      const title = itemJson.title || 
+                   itemJson.gameversion?.name || 
+                   itemJson.sfc_filename_title || 
+                   itemJson['7z_filename_title'] || 
+                   null;
+      
+      const versionInfo = itemJson.versioninfo || 
+                         itemJson.gameversion?.version || 
+                         itemJson.sfc_filename_versioninfo || 
+                         itemJson['7z_filename_versioninfo'] || 
+                         null;
+      
+      const author = itemJson.author || 
+                    itemJson.gameversion?.author || 
+                    itemJson.sfc_filename_author || 
+                    itemJson['7z_filename_author'] || 
+                    null;
+      
+      // Build game name: "Title Version catalog_xxxxx" (only if we have a title)
+      const catalogPrefix = `catalog_${itemId.substring(0, 8)}`;
+      let gameName;
+      if (title) {
+        if (versionInfo) {
+          gameName = `${title} ${versionInfo} ${catalogPrefix}`;
+        } else {
+          gameName = `${title} ${catalogPrefix}`;
+        }
+      } else {
+        // Fallback: use catalog prefix as name if no title found
+        gameName = catalogPrefix;
+      }
+      
+      // Ensure we have at least some author (fallback to Unknown only if truly missing)
+      const finalAuthor = author || 'Unknown';
+      
+      // Determine type/gametype from folder_categories
+      const folderCategories = itemJson.folder_categories || [];
+      const hasKaizo = Array.isArray(folderCategories) && folderCategories.includes('Kaizo');
+      const inferredType = itemJson.gameversion?.type || 
+                          itemJson.gameversion?.gametype || 
+                          itemJson.type || 
+                          (hasKaizo ? 'Kaizo' : 'Standard');
+      
       // Create RHPAK skeleton JSON
       const skeleton = {
         metadata: {
           rhpakuuid: deterministicUuid,
-          rhpakname: `${itemJson.title || itemJson.gameversion?.name || 'Untitled'} - ${itemJson.author || itemJson.gameversion?.author || 'Unknown'}`,
+          rhpakname: `${title}${versionInfo ? ` ${versionInfo}` : ''} - ${author}`,
           version: '0.1.1',
-          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : [sfcSha256 ? sfcSha256.substring(0, 32) : `catalog_${itemId.substring(0, 8)}`]
+          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : [sfcSha256 ? sfcSha256.substring(0, 32) : catalogPrefix]
         },
         gameversion: {
           ...(itemJson.gameversion || {}),
           gvuuid: deterministicGvuuid,
-          gameid: itemJson.gameversion?.gameid || `catalog_${itemId.substring(0, 8)}`,
-          name: itemJson.title || itemJson.gameversion?.name || 'Untitled',
-          author: itemJson.author || itemJson.gameversion?.author || 'Unknown',
-          version: itemJson.gameversion?.version || (itemJson.versioninfo ? parseInt(String(itemJson.versioninfo).replace(/[^0-9]/g, '')) || 1 : 1),
+          gameid: itemJson.gameversion?.gameid || catalogPrefix,
+          name: gameName,
+          author: author,
+          version: itemJson.gameversion?.version || (versionInfo ? parseInt(String(versionInfo).replace(/[^0-9]/g, '')) || 1 : 1),
           difficulty: itemJson.gameversion?.difficulty || itemJson.difficulty || 'Intermediate',
-          gametype: itemJson.gameversion?.gametype || itemJson.gameversion?.type || itemJson.type || 'Standard',
-          type: itemJson.gameversion?.type || itemJson.gameversion?.gametype || itemJson.type || 'Standard',
+          gametype: itemJson.gameversion?.gametype || inferredType,
+          type: itemJson.gameversion?.type || inferredType,
+          fields_type: itemJson.gameversion?.fields_type || (hasKaizo ? 'Kaizo' : inferredType),
           // Reference the BPS file - newgame.js expects patch_local_path (relative to baseDir)
           patch: bpsRelativePath,
           patch_relative_path: bpsRelativePath,
@@ -16173,12 +16219,32 @@ function registerDatabaseHandlers(dbManager) {
       // Use newgame.js functions directly (not via shell)
       const newgame = require(path.join(__dirname, '..', 'jstools', 'newgame.js'));
       
-      // Prepare the skeleton
+      // Prepare the skeleton (this will modify it, so reload after)
       try {
         await newgame.handlePrepare(skeletonPath);
       } catch (error) {
         throw new Error(`Failed to prepare RHPAK: ${error.message}`);
       }
+      
+      // Reload skeleton after prepare to ensure our gameversion data is preserved
+      let preparedSkeleton = JSON.parse(fs.readFileSync(skeletonPath, 'utf8'));
+      
+      // Ensure our gameversion data is preserved (prepare might have modified it)
+      // This is critical - the name and author must be set correctly for the database
+      if (preparedSkeleton.gameversion) {
+        // Preserve all our carefully extracted values
+        preparedSkeleton.gameversion.name = gameName; // "Invictus V1.1 catalog_4cea8e79"
+        preparedSkeleton.gameversion.author = finalAuthor; // "juzcook"
+        preparedSkeleton.gameversion.authors = finalAuthor; // Also set authors field
+        preparedSkeleton.gameversion.gvuuid = deterministicGvuuid;
+        preparedSkeleton.gameversion.difficulty = itemJson.gameversion?.difficulty || itemJson.difficulty || 'Intermediate';
+        preparedSkeleton.gameversion.gametype = itemJson.gameversion?.gametype || inferredType;
+        preparedSkeleton.gameversion.type = itemJson.gameversion?.type || inferredType;
+        preparedSkeleton.gameversion.fields_type = itemJson.gameversion?.fields_type || (hasKaizo ? 'Kaizo' : inferredType);
+      }
+      
+      // Save the skeleton with preserved data before packaging
+      fs.writeFileSync(skeletonPath, JSON.stringify(preparedSkeleton, null, 2));
       
       // Package the RHPAK
       const rhpakFileName = `${deterministicUuid}.rhpak`;

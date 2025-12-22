@@ -2251,56 +2251,104 @@
           </div>
           
           <!-- Step 1: Check if game exists -->
-          <div class="add-game-step">
-            <h4>Step 1: Verify Game Not Already Loaded</h4>
-            <p v-if="addGameFromCatalogState.item.gameExists" class="add-game-warning">
-              ⚠️ This game already exists in the database (Game ID: {{ addGameFromCatalogState.item.existingGameid }})
-            </p>
-            <p v-else class="add-game-success">
-              ✓ Game not found in database, can proceed
-            </p>
+          <div class="add-game-step" :class="{ 'step-collapsed': addGameFromCatalogState.step1Collapsed && !addGameFromCatalogState.checkingFiles && !addGameFromCatalogState.downloading && !addGameFromCatalogState.creatingRhpak && !addGameFromCatalogState.installingRhpak }">
+            <div class="step-header" @click="toggleStep(1)">
+              <div class="step-header-content">
+                <span class="step-checkmark" v-if="!addGameFromCatalogState.item?.gameExists && !addGameFromCatalogState.checkingFiles">✓</span>
+                <h4>Step 1: Verify Game Not Already Loaded</h4>
+              </div>
+              <span class="step-toggle">{{ addGameFromCatalogState.step1Collapsed ? '▼' : '▲' }}</span>
+            </div>
+            <div class="step-content" v-if="!addGameFromCatalogState.step1Collapsed || addGameFromCatalogState.checkingFiles">
+              <p v-if="addGameFromCatalogState.item?.gameExists" class="add-game-warning">
+                ⚠️ This game already exists in the database (Game ID: {{ addGameFromCatalogState.item.existingGameid }})
+              </p>
+              <p v-else-if="!addGameFromCatalogState.checkingFiles" class="add-game-success">
+                ✓ Game not found in database, can proceed
+              </p>
+            </div>
           </div>
           
           <!-- Step 2: Find files -->
-          <div class="add-game-step">
-            <h4>Step 2: Locate Required Files</h4>
-            <div v-if="addGameFromCatalogState.checkingFiles" class="add-game-status">
-              Checking for required files...
+          <div class="add-game-step" :class="{ 'step-collapsed': addGameFromCatalogState.step2Collapsed && !addGameFromCatalogState.checkingFiles && !addGameFromCatalogState.downloading }">
+            <div class="step-header" @click="toggleStep(2)">
+              <div class="step-header-content">
+                <span class="step-checkmark" v-if="addGameFromCatalogState.filesFound && !addGameFromCatalogState.checkingFiles && !addGameFromCatalogState.downloading">✓</span>
+                <h4>Step 2: Locate Required Files</h4>
+              </div>
+              <span class="step-toggle">{{ addGameFromCatalogState.step2Collapsed ? '▼' : '▲' }}</span>
             </div>
-            <div v-else-if="addGameFromCatalogState.filesFound" class="add-game-success">
-              ✓ Files found:
-              <ul>
-                <li v-if="addGameFromCatalogState.bpsPath">BPS: {{ addGameFromCatalogState.bpsPath }}</li>
-                <li v-if="addGameFromCatalogState.sevenZPath">7Z Archive: {{ addGameFromCatalogState.sevenZPath }}</li>
-              </ul>
-            </div>
-            <div v-else-if="addGameFromCatalogState.missingFiles && addGameFromCatalogState.missingFiles.length > 0" class="add-game-error">
-              <p>Missing files:</p>
-              <ul>
-                <li v-for="file in addGameFromCatalogState.missingFiles" :key="file">{{ file }}</li>
-              </ul>
-              <p v-if="addGameFromCatalogState.item.index7z_ipfs_cidv1 || addGameFromCatalogState.item.index7z_ardrive_file_id">
-                Files can be downloaded from IPFS/ArDrive if available.
-              </p>
-              <button @click="downloadCatalogFiles" :disabled="addGameFromCatalogState.downloading" class="btn-primary-small">
-                {{ addGameFromCatalogState.downloading ? 'Downloading...' : 'Download from IPFS/ArDrive' }}
-              </button>
+            <div class="step-content" v-if="!addGameFromCatalogState.step2Collapsed || addGameFromCatalogState.checkingFiles || addGameFromCatalogState.downloading">
+              <!-- Status messages and progress -->
+              <div v-if="addGameFromCatalogState.statusMessages && addGameFromCatalogState.statusMessages.length > 0" class="status-messages">
+                <div v-for="(msg, idx) in addGameFromCatalogState.statusMessages.slice(-3)" :key="idx" class="status-message">
+                  {{ msg }}
+                </div>
+              </div>
+              
+              <!-- Download progress -->
+              <div v-if="addGameFromCatalogState.downloading && addGameFromCatalogState.downloadProgress" class="download-progress">
+                <div class="progress-info">
+                  <span class="progress-filename">{{ addGameFromCatalogState.downloadProgress.filename || 'Downloading...' }}</span>
+                  <span class="progress-message" v-if="addGameFromCatalogState.downloadProgress.message">{{ addGameFromCatalogState.downloadProgress.message }}</span>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar" :style="{ width: (addGameFromCatalogState.downloadProgress.percent || 0) + '%' }"></div>
+                </div>
+                <div class="progress-details" v-if="addGameFromCatalogState.downloadProgress.downloaded && addGameFromCatalogState.downloadProgress.total">
+                  {{ formatBytes(addGameFromCatalogState.downloadProgress.downloaded) }} / {{ formatBytes(addGameFromCatalogState.downloadProgress.total) }}
+                  ({{ Math.round(addGameFromCatalogState.downloadProgress.percent || 0) }}%)
+                </div>
+              </div>
+              
+              <div v-if="addGameFromCatalogState.checkingFiles && !addGameFromCatalogState.downloading" class="add-game-status">
+                Checking for required files...
+              </div>
+              <div v-else-if="addGameFromCatalogState.filesFound && !addGameFromCatalogState.downloading" class="add-game-success">
+                ✓ Files found:
+                <ul>
+                  <li v-if="addGameFromCatalogState.bpsPath">BPS: {{ addGameFromCatalogState.bpsPath }}</li>
+                  <li v-if="addGameFromCatalogState.sevenZPath">7Z Archive: {{ addGameFromCatalogState.sevenZPath }}</li>
+                </ul>
+              </div>
+              <div v-else-if="addGameFromCatalogState.missingFiles && addGameFromCatalogState.missingFiles.length > 0 && !addGameFromCatalogState.downloading" class="add-game-error">
+                <p>Missing files:</p>
+                <ul>
+                  <li v-for="file in addGameFromCatalogState.missingFiles" :key="file">{{ file }}</li>
+                </ul>
+                <p v-if="addGameFromCatalogState.item?.index7z_ipfs_cidv1 || addGameFromCatalogState.item?.index7z_ardrive_file_id">
+                  Files can be downloaded from IPFS/ArDrive if available.
+                </p>
+                <button @click="downloadCatalogFiles" :disabled="addGameFromCatalogState.downloading" class="btn-primary-small">
+                  {{ addGameFromCatalogState.downloading ? 'Downloading...' : 'Download from IPFS/ArDrive' }}
+                </button>
+              </div>
             </div>
           </div>
           
           <!-- Step 3: Create and install RHPAK -->
-          <div v-if="addGameFromCatalogState.filesFound || (addGameFromCatalogState.sevenZPath && addGameFromCatalogState.item.indexbps_name)" class="add-game-step">
-            <h4>Step 3: Create and Install Temporary RHPAK</h4>
-            <p v-if="addGameFromCatalogState.sevenZPath && !addGameFromCatalogState.bpsPath" class="add-game-status">
-              BPS file will be extracted from 7z archive when creating RHPAK...
-            </p>
-            <button 
-              @click="createAndInstallCatalogRhpak" 
-              :disabled="addGameFromCatalogState.creatingRhpak || addGameFromCatalogState.installingRhpak || addGameFromCatalogState.checkingFiles"
-              class="btn-primary"
-            >
-              {{ addGameFromCatalogState.checkingFiles ? 'Extracting BPS...' : addGameFromCatalogState.creatingRhpak ? 'Creating RHPAK...' : addGameFromCatalogState.installingRhpak ? 'Installing RHPAK...' : 'Create and Install RHPAK' }}
-            </button>
+          <div v-if="addGameFromCatalogState.filesFound || (addGameFromCatalogState.sevenZPath && addGameFromCatalogState.item?.indexbps_name)" 
+               class="add-game-step" 
+               :class="{ 'step-collapsed': addGameFromCatalogState.step3Collapsed && !addGameFromCatalogState.creatingRhpak && !addGameFromCatalogState.installingRhpak }">
+            <div class="step-header" @click="toggleStep(3)">
+              <div class="step-header-content">
+                <span class="step-checkmark" v-if="addGameFromCatalogState.success">✓</span>
+                <h4>Step 3: Create and Install Temporary RHPAK</h4>
+              </div>
+              <span class="step-toggle">{{ addGameFromCatalogState.step3Collapsed ? '▼' : '▲' }}</span>
+            </div>
+            <div class="step-content" v-if="!addGameFromCatalogState.step3Collapsed || addGameFromCatalogState.creatingRhpak || addGameFromCatalogState.installingRhpak">
+              <p v-if="addGameFromCatalogState.sevenZPath && !addGameFromCatalogState.bpsPath" class="add-game-status">
+                BPS file will be extracted from 7z archive when creating RHPAK...
+              </p>
+              <button 
+                @click="createAndInstallCatalogRhpak" 
+                :disabled="addGameFromCatalogState.creatingRhpak || addGameFromCatalogState.installingRhpak || addGameFromCatalogState.checkingFiles"
+                class="btn-primary"
+              >
+                {{ addGameFromCatalogState.checkingFiles ? 'Extracting BPS...' : addGameFromCatalogState.creatingRhpak ? 'Creating RHPAK...' : addGameFromCatalogState.installingRhpak ? 'Installing RHPAK...' : 'Create and Install RHPAK' }}
+              </button>
+            </div>
           </div>
           
           <div v-if="addGameFromCatalogState.error" class="add-game-error">
@@ -9202,6 +9250,19 @@ const addGameFromCatalogState = ref<{
   installingRhpak?: boolean;
   error?: string;
   success?: boolean;
+  // Progress tracking
+  downloadProgress?: {
+    filename?: string;
+    message?: string;
+    downloaded?: number;
+    total?: number;
+    percent?: number;
+  };
+  statusMessages?: string[]; // Recent status messages
+  // Panel collapse state
+  step1Collapsed?: boolean;
+  step2Collapsed?: boolean;
+  step3Collapsed?: boolean;
 }>({});
 
 // Filter dropdown state
@@ -19771,9 +19832,73 @@ async function openAddGameFromCatalog(result: any) {
   await checkCatalogFiles(result);
 }
 
+function addStatusMessage(message: string) {
+  if (!addGameFromCatalogState.value.statusMessages) {
+    addGameFromCatalogState.value.statusMessages = [];
+  }
+  addGameFromCatalogState.value.statusMessages.push(message);
+  // Keep only last 10 messages
+  if (addGameFromCatalogState.value.statusMessages.length > 10) {
+    addGameFromCatalogState.value.statusMessages.shift();
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
+
+function toggleStep(step: number) {
+  if (step === 1) {
+    addGameFromCatalogState.value.step1Collapsed = !addGameFromCatalogState.value.step1Collapsed;
+  } else if (step === 2) {
+    addGameFromCatalogState.value.step2Collapsed = !addGameFromCatalogState.value.step2Collapsed;
+  } else if (step === 3) {
+    addGameFromCatalogState.value.step3Collapsed = !addGameFromCatalogState.value.step3Collapsed;
+  }
+}
+
+function updateStepCollapseState() {
+  // Step 1: Collapse if completed (game doesn't exist) and not active
+  if (!addGameFromCatalogState.value.item?.gameExists && 
+      !addGameFromCatalogState.value.checkingFiles && 
+      !addGameFromCatalogState.value.downloading && 
+      !addGameFromCatalogState.value.creatingRhpak && 
+      !addGameFromCatalogState.value.installingRhpak) {
+    if (addGameFromCatalogState.value.step1Collapsed === undefined) {
+      addGameFromCatalogState.value.step1Collapsed = true;
+    }
+  }
+  
+  // Step 2: Expand if active, collapse if completed
+  if (addGameFromCatalogState.value.checkingFiles || addGameFromCatalogState.value.downloading) {
+    addGameFromCatalogState.value.step2Collapsed = false;
+  } else if (addGameFromCatalogState.value.filesFound && 
+             addGameFromCatalogState.value.step2Collapsed === undefined) {
+    addGameFromCatalogState.value.step2Collapsed = true;
+  }
+  
+  // Step 3: Collapse until Step 2 is finished
+  if (!addGameFromCatalogState.value.filesFound && 
+      !(addGameFromCatalogState.value.sevenZPath && addGameFromCatalogState.value.item?.indexbps_name)) {
+    addGameFromCatalogState.value.step3Collapsed = true;
+  } else if (addGameFromCatalogState.value.creatingRhpak || addGameFromCatalogState.value.installingRhpak) {
+    addGameFromCatalogState.value.step3Collapsed = false;
+  } else if (addGameFromCatalogState.value.success && 
+             addGameFromCatalogState.value.step3Collapsed === undefined) {
+    addGameFromCatalogState.value.step3Collapsed = true;
+  }
+}
+
 async function checkCatalogFiles(item: any) {
   addGameFromCatalogState.value.checkingFiles = true;
   addGameFromCatalogState.value.error = undefined;
+  addGameFromCatalogState.value.statusMessages = [];
+  addStatusMessage('Checking for required files...');
+  updateStepCollapseState();
   
   try {
     const result = await (window as any).electronAPI.catalogFindFiles({
@@ -19789,18 +19914,20 @@ async function checkCatalogFiles(item: any) {
     addGameFromCatalogState.value.missingFiles = result.missingFiles || [];
     
     if (result.filesFound && result.bpsPath) {
-      // Files found, ready to proceed
+      addStatusMessage('✓ Files found locally');
     } else if (result.canDownload) {
-      // Can download from IPFS/ArDrive
+      addStatusMessage('Files not found locally, download available');
       addGameFromCatalogState.value.downloadError = undefined;
     } else {
-      // Files not found and cannot download
+      addStatusMessage('✗ Files not found and cannot be downloaded');
       addGameFromCatalogState.value.error = 'Required files not found and cannot be downloaded automatically.';
     }
   } catch (error: any) {
+    addStatusMessage(`✗ Error: ${error.message || 'Failed to check for files'}`);
     addGameFromCatalogState.value.error = error.message || 'Failed to check for files';
   } finally {
     addGameFromCatalogState.value.checkingFiles = false;
+    updateStepCollapseState();
   }
 }
 
@@ -19809,11 +19936,40 @@ function closeAddGameFromCatalog() {
   addGameFromCatalogState.value = {};
 }
 
+// Initialize step collapse state when opening dialog
+watch(addGameFromCatalogModalOpen, (isOpen) => {
+  if (isOpen) {
+    // Initialize collapse states
+    addGameFromCatalogState.value.step1Collapsed = false;
+    addGameFromCatalogState.value.step2Collapsed = false;
+    addGameFromCatalogState.value.step3Collapsed = true; // Start collapsed
+    addGameFromCatalogState.value.statusMessages = [];
+    addGameFromCatalogState.value.downloadProgress = undefined;
+  }
+});
+
 async function downloadCatalogFiles() {
   if (!addGameFromCatalogState.value.item) return;
   
   addGameFromCatalogState.value.downloading = true;
   addGameFromCatalogState.value.downloadError = undefined;
+  addGameFromCatalogState.value.downloadProgress = {
+    filename: addGameFromCatalogState.value.item.index7z_name || 'Unknown file',
+    message: 'Starting download...',
+    downloaded: 0,
+    total: 0,
+    percent: 0
+  };
+  addStatusMessage(`Starting download: ${addGameFromCatalogState.value.item.index7z_name || 'Unknown file'}`);
+  updateStepCollapseState();
+  
+  // Set up progress listener (if IPC supports it)
+  // For now, we'll simulate progress updates
+  const progressInterval = setInterval(() => {
+    if (addGameFromCatalogState.value.downloadProgress && addGameFromCatalogState.value.downloadProgress.total > 0) {
+      // Progress will be updated by IPC events if available
+    }
+  }, 500);
   
   try {
     const result = await (window as any).electronAPI.catalogDownloadFiles({
@@ -19823,16 +19979,26 @@ async function downloadCatalogFiles() {
       index7zArdriveFileId: addGameFromCatalogState.value.item.index7z_ardrive_file_id
     });
     
+    clearInterval(progressInterval);
+    
     if (result.success) {
+      addStatusMessage(`✓ Download completed: ${addGameFromCatalogState.value.item.index7z_name || 'Unknown file'}`);
+      addGameFromCatalogState.value.downloadProgress = undefined;
       // Recheck files
       await checkCatalogFiles(addGameFromCatalogState.value.item);
     } else {
+      addStatusMessage(`✗ Download failed: ${result.error || 'Unknown error'}`);
       addGameFromCatalogState.value.downloadError = result.error || 'Download failed';
+      addGameFromCatalogState.value.downloadProgress = undefined;
     }
   } catch (error: any) {
+    clearInterval(progressInterval);
+    addStatusMessage(`✗ Download error: ${error.message || 'Download failed'}`);
     addGameFromCatalogState.value.downloadError = error.message || 'Download failed';
+    addGameFromCatalogState.value.downloadProgress = undefined;
   } finally {
     addGameFromCatalogState.value.downloading = false;
+    updateStepCollapseState();
   }
 }
 
@@ -19902,11 +20068,14 @@ async function createAndInstallCatalogRhpak() {
     if (!createResult.success) {
       throw new Error(createResult.error || 'Failed to create RHPAK');
     } else {
+      addStatusMessage('✓ RHPAK created successfully');
       console.log(`Create temporary rhpak`)
     }
     
     addGameFromCatalogState.value.creatingRhpak = false;
     addGameFromCatalogState.value.installingRhpak = true;
+    addStatusMessage('Creating RHPAK completed, installing...');
+    updateStepCollapseState();
     
     // Install RHPAK using the existing rhpakImport IPC handler
     const installResult = await (window as any).electronAPI.rhpakImport(createResult.rhpakPath, {
@@ -19918,7 +20087,9 @@ async function createAndInstallCatalogRhpak() {
       throw new Error(installResult.error || 'Failed to install RHPAK');
     }
     
+    addStatusMessage('✓ RHPAK installed successfully');
     addGameFromCatalogState.value.success = true;
+    updateStepCollapseState();
     // Refresh games list - reload from database
     try {
       const games = await (window as any).electronAPI.getGames();
@@ -19927,11 +20098,13 @@ async function createAndInstallCatalogRhpak() {
       console.error('Failed to reload games:', error);
     }
   } catch (error: any) {
+    addStatusMessage(`✗ Error: ${error.message || 'Failed to create/install RHPAK'}`);
     console.error(`Failed to create/install RHPAK: ${error.message}`)
     addGameFromCatalogState.value.error = error.message || 'Failed to create/install RHPAK';
   } finally {
     addGameFromCatalogState.value.creatingRhpak = false;
     addGameFromCatalogState.value.installingRhpak = false;
+    updateStepCollapseState();
   }
 }
 

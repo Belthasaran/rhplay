@@ -1344,6 +1344,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{filesFound: boolean, bpsPath?: string, sevenZPath?: string, missingFiles?: string[], canDownload?: boolean}>}
    */
   catalogFindFiles: (params) => ipcRenderer.invoke('catalog:find-files', params),
+  onCatalogFindFilesProgress: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('catalog:find-files:progress', handler);
+    return () => ipcRenderer.removeListener('catalog:find-files:progress', handler);
+  },
   
   /**
    * Download files from IPFS/ArDrive

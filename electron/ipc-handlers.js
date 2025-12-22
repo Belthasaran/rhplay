@@ -16119,13 +16119,19 @@ function registerDatabaseHandlers(dbManager) {
       
       const deterministicUuid = uuidFromSha256(sfcSha256);
       
+      // Copy BPS file to temp directory first (before creating skeleton)
+      const bpsFileName = path.basename(bpsPath);
+      const bpsDestPath = path.join(tempDir, bpsFileName);
+      fs.copyFileSync(bpsPath, bpsDestPath);
+      const bpsRelativePath = bpsFileName; // Relative to skeleton directory
+      
       // Create RHPAK skeleton JSON
       const skeleton = {
         metadata: {
           rhpakuuid: deterministicUuid,
-          rhpakname: `${itemJson.title || 'Untitled'} - ${itemJson.author || 'Unknown'}`,
+          rhpakname: `${itemJson.title || itemJson.gameversion?.name || 'Untitled'} - ${itemJson.author || itemJson.gameversion?.author || 'Unknown'}`,
           version: '0.1.1',
-          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : [sfcSha256.substring(0,32)]
+          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : [sfcSha256 ? sfcSha256.substring(0, 32) : `catalog_${itemId.substring(0, 8)}`]
         },
         gameversion: {
           ...(itemJson.gameversion || {}),
@@ -16146,11 +16152,6 @@ function registerDatabaseHandlers(dbManager) {
       // Write skeleton JSON
       const skeletonPath = path.join(tempDir, 'skeleton.json');
       fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
-      
-      // Copy BPS file to temp directory
-      const bpsFileName = path.basename(bpsPath);
-      const bpsDestPath = path.join(tempDir, bpsFileName);
-      fs.copyFileSync(bpsPath, bpsDestPath);
       
       // Run newgame.js --prepare
       const { spawnSync } = require('child_process');

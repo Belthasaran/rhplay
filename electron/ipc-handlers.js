@@ -16153,31 +16153,24 @@ function registerDatabaseHandlers(dbManager) {
       const skeletonPath = path.join(tempDir, 'skeleton.json');
       fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
       
-      // Run newgame.js --prepare
-      const { spawnSync } = require('child_process');
-      const enodeScript = path.join(__dirname, '..', 'enode.sh');
-      const newgameScript = path.join(__dirname, '..', 'jstools', 'newgame.js');
+      // Use newgame.js functions directly (not via shell)
+      const newgame = require(path.join(__dirname, '..', 'jstools', 'newgame.js'));
       
-      const prepareResult = spawnSync('bash', [enodeScript, newgameScript, skeletonPath, '--prepare'], {
-        cwd: path.dirname(skeletonPath),
-        encoding: 'utf8'
-      });
-      
-      if (prepareResult.error || prepareResult.status !== 0) {
-        throw new Error(`Failed to prepare RHPAK: ${prepareResult.stderr || prepareResult.error?.message}`);
+      // Prepare the skeleton
+      try {
+        await newgame.handlePrepare(skeletonPath);
+      } catch (error) {
+        throw new Error(`Failed to prepare RHPAK: ${error.message}`);
       }
       
-      // Run newgame.js --package
+      // Package the RHPAK
       const rhpakFileName = `${deterministicUuid}.rhpak`;
       const rhpakPath = path.join(tempDir, rhpakFileName);
       
-      const packageResult = spawnSync('bash', [enodeScript, newgameScript, skeletonPath, `--package=${rhpakPath}`], {
-        cwd: path.dirname(skeletonPath),
-        encoding: 'utf8'
-      });
-      
-      if (packageResult.error || packageResult.status !== 0) {
-        throw new Error(`Failed to package RHPAK: ${packageResult.stderr || packageResult.error?.message}`);
+      try {
+        await newgame.handlePackage(skeletonPath, rhpakPath);
+      } catch (error) {
+        throw new Error(`Failed to package RHPAK: ${error.message}`);
       }
       
       if (!fs.existsSync(rhpakPath)) {

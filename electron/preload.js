@@ -1358,4 +1358,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, rhpakPath?: string, error?: string}>}
    */
   catalogCreateRhpak: (params) => ipcRenderer.invoke('catalog:create-rhpak', params),
+  
+  /**
+   * Check for catalog updates
+   * @returns {Promise<{available: boolean, updates: Array}>}
+   */
+  catalogCheckUpdates: () => ipcRenderer.invoke('catalog:check-updates'),
+  
+  /**
+   * Apply catalog update
+   * @param {Object} params - {update: Object}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  catalogApplyUpdate: (params) => ipcRenderer.invoke('catalog:apply-update', params),
 });

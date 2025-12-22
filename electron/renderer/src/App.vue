@@ -2043,6 +2043,35 @@
 
         <!-- Catalog available - search interface -->
         <div v-else-if="catalogSearchState.status === 'ready'">
+          <!-- Catalog updates available -->
+          <div v-if="catalogSearchState.hasUpdates && catalogSearchState.availableUpdates && catalogSearchState.availableUpdates.length > 0" class="catalog-updates-available" style="padding: 16px; background: #e3f2fd; border-radius: 8px; margin-bottom: 16px; border: 2px solid #2196f3;">
+            <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #1976d2;">
+              📦 Catalog Updates Available
+            </p>
+            <div v-for="update in catalogSearchState.availableUpdates" :key="update.name" style="margin-bottom: 12px; padding: 12px; background: white; border-radius: 4px;">
+              <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">
+                {{ update.name }}
+              </p>
+              <p v-if="update.currentVersion && update.availableVersion" style="margin: 0 0 8px 0; font-size: 14px; color: #666;">
+                Current: v{{ update.currentVersion }} → Available: v{{ update.availableVersion }}
+              </p>
+              <p v-else style="margin: 0 0 8px 0; font-size: 14px; color: #666;">
+                New update available
+              </p>
+              <button 
+                @click.stop="applyCatalogUpdate(update)" 
+                :disabled="catalogSearchState.applyingUpdate"
+                class="btn-primary-small"
+                style="margin-top: 8px;"
+              >
+                {{ catalogSearchState.applyingUpdate ? 'Installing...' : 'Install Update' }}
+              </button>
+            </div>
+            <p v-if="catalogSearchState.updateError" style="margin: 8px 0 0 0; color: #d32f2f; font-size: 14px;">
+              Error: {{ catalogSearchState.updateError }}
+            </p>
+          </div>
+          
           <div class="catalog-search-input-row" style="margin-bottom: 16px;">
             <input
               v-model="catalogSearchQuery"
@@ -9141,8 +9170,16 @@ const catalogSearchState = ref<{
   searching?: boolean;
   searched?: boolean;
   searchError?: string;
+  hasUpdates?: boolean;
+  availableUpdates?: any[];
+  applyingUpdate?: boolean;
+  updateError?: string;
 }>({
-  status: 'checking'
+  status: 'checking',
+  hasUpdates: false,
+  availableUpdates: [],
+  applyingUpdate: false,
+  updateError: undefined
 });
 
 // Catalog item details state

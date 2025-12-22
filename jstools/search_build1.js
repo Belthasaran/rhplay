@@ -432,19 +432,35 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
   const dbPath = rhsearchdb || path.join(path.dirname(index7zFolder), 'rhsearch_cat.db');
   const zipPath = rhsearchzip || path.join(path.dirname(index7zFolder), 'rhsearch.zip');
   
-  console.log(`Index7z folder: ${index7zFolder}`);
-  console.log(`Database: ${dbPath}`);
-  console.log(`ZIP archive: ${zipPath}`);
-  console.log();
+  if (onProgress) {
+    onProgress({ stage: 'stage1', message: `Index7z folder: ${index7zFolder}`, progress: 5 });
+  } else {
+    console.log(`Index7z folder: ${index7zFolder}`);
+    console.log(`Database: ${dbPath}`);
+    console.log(`ZIP archive: ${zipPath}`);
+    console.log();
+  }
   
   // Find all JSON files
-  console.log('Scanning for master JSON files...');
+  if (onProgress) {
+    onProgress({ stage: 'stage1', message: 'Scanning for master JSON files...', progress: 10 });
+  } else {
+    console.log('Scanning for master JSON files...');
+  }
   const jsonFiles = await findJSONFiles(index7zFolder);
-  console.log(`Found ${jsonFiles.length} JSON file(s)`);
-  console.log();
+  if (onProgress) {
+    onProgress({ stage: 'stage1', message: `Found ${jsonFiles.length} JSON file(s)`, progress: 15 });
+  } else {
+    console.log(`Found ${jsonFiles.length} JSON file(s)`);
+    console.log();
+  }
   
   // Create or open database
-  console.log('Creating/updating database schema...');
+  if (onProgress) {
+    onProgress({ stage: 'stage1', message: 'Creating/updating database schema...', progress: 20 });
+  } else {
+    console.log('Creating/updating database schema...');
+  }
   const db = new Database(dbPath);
   
   // Create schema
@@ -523,7 +539,11 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
   }
   
   // Create ZIP archive
-  console.log('Creating ZIP archive...');
+  if (onProgress) {
+    onProgress({ stage: 'stage1', message: 'Creating ZIP archive...', progress: 25 });
+  } else {
+    console.log('Creating ZIP archive...');
+  }
   const zip = new AdmZip();
   
   // Process each JSON file
@@ -531,14 +551,21 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
   let skipped = 0;
   let errors = 0;
   
-  console.log();
-  console.log('Processing JSON files...');
+  if (onProgress) {
+    onProgress({ stage: 'stage1', message: 'Processing JSON files...', progress: 30 });
+  } else {
+    console.log();
+    console.log('Processing JSON files...');
+  }
   
   for (let i = 0; i < jsonFiles.length; i++) {
     const jsonFile = jsonFiles[i];
     const relativePath = path.relative(index7zFolder, jsonFile);
     
-    if ((i + 1) % 100 === 0) {
+    const progress = 30 + Math.floor((i / jsonFiles.length) * 60);
+    if (onProgress && (i + 1) % 100 === 0) {
+      onProgress({ stage: 'stage1', message: `Processed ${i + 1}/${jsonFiles.length} files...`, progress });
+    } else if (!onProgress && (i + 1) % 100 === 0) {
       console.log(`  Processed ${i + 1}/${jsonFiles.length} files...`);
     }
     
@@ -882,6 +909,20 @@ Examples:
   try {
     await buildSearchCatalog1(index7zFolder, bps7zFolder, options);
   } catch (error) {
+    console.error(`Fatal error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+if (require.main === module) {
+  main().catch(error => {
+    console.error(`Fatal error: ${error.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = { buildSearchCatalog1, buildSearchCatalog1Incremental, normalizeItem };
+ } catch (error) {
     console.error(`Fatal error: ${error.message}`);
     process.exit(1);
   }

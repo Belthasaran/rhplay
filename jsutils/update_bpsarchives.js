@@ -80,6 +80,7 @@ function parseArguments(argv) {
         exitWithError('Expected value after --add-archive');
       }
       options.addArchive = argv[i + 1];
+      console.log(`add-archive: ${options.addArchive}`)
       i += 1;
     } else if (arg.startsWith('--add-archive=')) {
       options.addArchive = arg.substring('--add-archive='.length);

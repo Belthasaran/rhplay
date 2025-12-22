@@ -15981,6 +15981,46 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
+      // If files are missing, try to download them
+      if (!bpsPath && !sevenZPath && index7zName) {
+        // Try to download from manifest
+        try {
+          const catalogManifestUtils = require('./utils/catalog-manifest-utils');
+          const catalogDownloadManager = require('./utils/catalog-download-manager');
+          const manifest = catalogManifestUtils.loadBpsArchivesManifest();
+          
+          if (manifest && manifest[index7zName]) {
+            const manifestEntry = manifest[index7zName];
+            if (manifestEntry.base) {
+              const { app } = require('electron');
+              const userDataDir = app.getPath('userData');
+              const workingDir = path.join(userDataDir, 'CatalogTemp');
+              fs.mkdirSync(workingDir, { recursive: true });
+              
+              const downloadTracker = catalogDownloadManager.createDownloadTracker();
+              const downloadedPath = await catalogDownloadManager.ensureArtifact(
+                manifestEntry.base,
+                workingDir,
+                downloadTracker,
+                userDataDir,
+                20
+              );
+              
+              // Copy to refmaterial/bps7z
+              const targetDir = path.join(__dirname, '..', 'refmaterial', 'bps7z');
+              fs.mkdirSync(targetDir, { recursive: true });
+              const targetPath = path.join(targetDir, index7zName);
+              fs.copyFileSync(downloadedPath, targetPath);
+              
+              sevenZPath = targetPath;
+              console.log(`[catalog:find-files] Downloaded and installed ${index7zName} to ${targetPath}`);
+            }
+          }
+        } catch (downloadError) {
+          console.warn(`[catalog:find-files] Failed to download ${index7zName}:`, downloadError.message);
+        }
+      }
+      
       // If 7z found (from index7z_name), extract ONLY the specific BPS file by name
       if (!bpsPath && sevenZPath && indexBpsName) {
         try {
@@ -16089,17 +16129,16 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const { app } = require('electron');
       const catalogDownloadManager = require('./utils/catalog-download-manager');
+      const catalogManifestUtils = require('./utils/catalog-manifest-utils');
       
       // Load bpsarchives.json manifest
-      const manifestPath = path.join(__dirname, '..', 'electron', 'bpsarchives.json');
-      if (!fs.existsSync(manifestPath)) {
+      const manifest = catalogManifestUtils.loadBpsArchivesManifest();
+      if (!manifest) {
         return {
           success: false,
           error: 'bpsarchives.json manifest not found'
         };
       }
-      
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
       
       // Find the 7z archive entry in manifest
       if (!index7zName || !manifest[index7zName]) {
@@ -16147,6 +16186,149 @@ function registerDatabaseHandlers(dbManager) {
       };
     } catch (error) {
       console.error('[catalog:download-files] Error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+  
+  // Check for catalog updates
+  ipcMain.handle('catalog:check-updates', async () => {
+    try {
+      const catalogManifestUtils = require('./utils/catalog-manifest-utils');
+      const updates = catalogManifestUtils.checkCatalogUpdates();
+      return updates;
+    } catch (error) {
+      console.error('[catalog:check-updates] Error:', error);
+      return {
+        available: false,
+        updates: [],
+        error: error.message
+      };
+    }
+  });
+  
+  // Apply catalog update (download and install)
+  ipcMain.handle('catalog:apply-update', async (_event, { update }) => {
+    try {
+      const { app } = require('electron');
+      const catalogDownloadManager = require('./utils/catalog-download-manager');
+      const catalogManifestUtils = require('./utils/catalog-manifest-utils');
+      const searchBuild1 = require('../../jstools/search_build1');
+      const searchBuild2 = require('../../jstools/search_build2');
+      const crypto = require('crypto');
+      
+      const userDataDir = app.getPath('userData');
+      const workingDir = path.join(userDataDir, 'CatalogTemp');
+      fs.mkdirSync(workingDir, { recursive: true });
+      
+      // Download the file
+      const downloadTracker = catalogDownloadManager.createDownloadTracker();
+      const downloadedPath = await catalogDownloadManager.ensureArtifact(
+        update.entry,
+        workingDir,
+        downloadTracker,
+        userDataDir,
+        20
+      );
+      
+      // Verify SHA256
+      const fileData = fs.readFileSync(downloadedPath);
+      const sha256 = crypto.createHash('sha256').update(fileData).digest('hex');
+      if (sha256 !== update.availableSha256) {
+        throw new Error(`SHA256 mismatch: expected ${update.availableSha256}, got ${sha256}`);
+      }
+      
+      // Install based on type
+      if (update.type === 'catalog-base' || update.type === 'catalog-additional') {
+        // For catalog ZIP files, extract and add to catalog
+        const AdmZip = require('adm-zip');
+        const zip = new AdmZip(downloadedPath);
+        const zipEntries = zip.getEntries();
+        
+        const catalogDbPath = path.join(userDataDir, 'rhsearch_cat.db');
+        const catalogZipPath = path.join(userDataDir, 'rhsearch.zip');
+        
+        // Extract JSON files and add to catalog
+        for (const entry of zipEntries) {
+          if (entry.entryName.endsWith('.json')) {
+            const jsonContent = entry.getData().toString('utf8');
+            const tempJsonPath = path.join(workingDir, entry.entryName);
+            fs.writeFileSync(tempJsonPath, jsonContent, 'utf8');
+            
+            // Add to catalog using incremental build
+            await searchBuild1.buildSearchCatalog1Incremental(tempJsonPath, {
+              rhsearchdb: catalogDbPath,
+              rhsearchzip: catalogZipPath
+            });
+            
+            // Update FTS5 index
+            const json = JSON.parse(jsonContent);
+            const itemId = json.sfc_rom_sha1_hash || path.basename(entry.entryName, '.json');
+            await searchBuild2.buildSearchCatalog2Incremental([itemId], {
+              rhsearchdb: catalogDbPath,
+              rhsearchzip: catalogZipPath
+            });
+          }
+        }
+        
+        // Update searchdat.json
+        const version = update.entry.searchdb_version || update.availableVersion || '1';
+        catalogManifestUtils.updateSearchDatCatalog(
+          update.type === 'catalog-additional' ? 'catalog-additional' : 'catalog',
+          version,
+          sha256,
+          downloadedPath
+        );
+      } else if (update.type === 'catalogdb-base') {
+        // For catalog database, replace the existing one
+        const catalogDbPath = path.join(userDataDir, 'rhsearch_cat.db');
+        
+        // If it's a 7z archive, extract it first
+        if (downloadedPath.endsWith('.7z')) {
+          const sevenZip = require('7zip-min');
+          const extractDir = path.join(workingDir, 'extract');
+          fs.mkdirSync(extractDir, { recursive: true });
+          sevenZip.unpack(downloadedPath, extractDir);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Find the .db file
+          const findDbFile = (dir) => {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                const found = findDbFile(fullPath);
+                if (found) return found;
+              } else if (entry.name.endsWith('.db')) {
+                return fullPath;
+              }
+            }
+            return null;
+          };
+          
+          const extractedDb = findDbFile(extractDir);
+          if (extractedDb) {
+            fs.copyFileSync(extractedDb, catalogDbPath);
+          } else {
+            throw new Error('Database file not found in archive');
+          }
+        } else {
+          fs.copyFileSync(downloadedPath, catalogDbPath);
+        }
+        
+        // Update searchdat.json
+        const version = update.entry.searchdb_version || update.availableVersion || '1';
+        catalogManifestUtils.updateSearchDatCatalog('catalogdb', version, sha256, catalogDbPath);
+      }
+      
+      return {
+        success: true,
+        message: `Successfully installed ${update.name}`
+      };
+    } catch (error) {
+      console.error('[catalog:apply-update] Error:', error);
       return {
         success: false,
         error: error.message

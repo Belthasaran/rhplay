@@ -19805,6 +19805,7 @@ async function createAndInstallCatalogRhpak() {
   // If we have 7z but no BPS path, try to extract it first
   if (!addGameFromCatalogState.value.bpsPath && addGameFromCatalogState.value.sevenZPath) {
     addGameFromCatalogState.value.checkingFiles = true;
+    addGameFromCatalogState.value.error = undefined;
     try {
       // Re-check files and extract BPS from 7z
       const result = await (window as any).electronAPI.catalogFindFiles({
@@ -19817,11 +19818,16 @@ async function createAndInstallCatalogRhpak() {
       if (result.filesFound && result.bpsPath) {
         addGameFromCatalogState.value.bpsPath = result.bpsPath;
         addGameFromCatalogState.value.filesFound = true;
+        console.log(`[createAndInstallCatalogRhpak] Extracted BPS to: ${result.bpsPath}`);
       } else {
-        throw new Error('Could not extract BPS file from 7z archive');
+        const errorMsg = result.error || 'Could not extract BPS file from 7z archive';
+        console.error(`[createAndInstallCatalogRhpak] Extraction failed:`, errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
-      addGameFromCatalogState.value.error = error.message || 'Failed to extract BPS from 7z';
+      const errorMsg = error.message || 'Failed to extract BPS from 7z';
+      console.error(`[createAndInstallCatalogRhpak] Error:`, errorMsg);
+      addGameFromCatalogState.value.error = errorMsg;
       return;
     } finally {
       addGameFromCatalogState.value.checkingFiles = false;

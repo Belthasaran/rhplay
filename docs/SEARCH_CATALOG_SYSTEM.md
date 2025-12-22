@@ -1,7 +1,7 @@
 # Search Catalog System - Complete Documentation
 
-**Version**: 1.0  
-**Last Updated**: December 2025  
+**Version**: 2.0  
+**Last Updated**: January 2025  
 **Purpose**: Comprehensive documentation for the SMW hack search catalog system
 
 ---
@@ -16,6 +16,9 @@
 6. [Database Schema](#database-schema)
 7. [Usage Examples](#usage-examples)
 8. [Workflow](#workflow)
+9. [Incremental Build Support](#incremental-build-support)
+10. [Download Manager and Manifest System](#download-manager-and-manifest-system)
+11. [Catalog Updates](#catalog-updates)
 
 ---
 
@@ -628,7 +631,37 @@ enode.sh search_smwhacks.js --rhsearchdb=search.db screenshot
 
 ### Incremental Updates
 
-When new master JSON files are added:
+When new master JSON files are added, you can use incremental build mode to add a single JSON file without rebuilding the entire catalog:
+
+1. **Add single JSON file (Stage 1)**:
+   ```bash
+   enode.sh search_build1.js --incremental <json-file> [--rhsearchdb=...] [--rhsearchzip=...]
+   ```
+   - Adds the JSON file to the existing catalog database
+   - Updates the ZIP archive with the new JSON
+   - Does not rebuild the entire catalog
+
+2. **Update FTS5 index (Stage 2)**:
+   ```bash
+   enode.sh search_build2.js --incremental <item-id> [--rhsearchdb=...]
+   ```
+   - Updates FTS5 index for specific item ID(s)
+   - Much faster than full rebuild
+
+**Example**:
+```bash
+# Add a new JSON file to existing catalog
+enode.sh search_build1.js --incremental new_item.json \
+  --rhsearchdb=rhsearch_cat.db --rhsearchzip=rhsearch.zip
+
+# Update FTS5 index for the new item
+enode.sh search_build2.js --incremental 4cea8e79aee65e859f8d4860ec9fb5a2bfb260f5 \
+  --rhsearchdb=rhsearch_cat.db
+```
+
+### Full Rebuild
+
+When many files have changed or you want to rebuild from scratch:
 
 1. **Re-run Stage 1**: Will update existing items and add new ones
    ```bash
@@ -739,6 +772,15 @@ For distribution to end users:
 
 ## Version History
 
+### Version 2.0 (January 2025)
+- **Incremental Build Support**: Added `--incremental` mode to both Stage 1 and Stage 2 for adding single items without full rebuild
+- **Programmatic API**: Both build scripts now support progress callbacks for GUI integration
+- **Download Manager**: Automatic download of BPS/7z archives and catalog files from IPFS/ArDrive
+- **Manifest System**: `bpsarchives.json` manifest for managing catalog and archive downloads
+- **Catalog Updates**: UI integration for checking and applying catalog updates
+- **searchdat.json Tracking**: Tracks installed catalog versions for update detection
+- **Electron Integration**: Full catalog search UI with "Add Game" workflow
+
 ### Version 1.0 (December 2025)
 - Initial release
 - Stage 1: Ingest and normalize
@@ -748,4 +790,275 @@ For distribution to end users:
 
 ---
 
-*Last Updated: December 2025*
+## Incremental Build Support
+
+### Overview
+
+Incremental build mode allows you to add individual JSON files to an existing catalog without rebuilding the entire database. This is much faster for adding small numbers of new items.
+
+### Stage 1 Incremental Mode
+
+**Usage**:
+```bash
+enode.sh search_build1.js --incremental <json-file> [options]
+```
+
+**What it does**:
+- Opens existing catalog database (must exist)
+- Processes the single JSON file
+- Adds/updates the item in the `items` table
+- Adds the JSON to the ZIP archive
+- Does NOT rebuild the entire catalog
+
+**Example**:
+```bash
+enode.sh search_build1.js --incremental new_hack.json \
+  --rhsearchdb=rhsearch_cat.db \
+  --rhsearchzip=rhsearch.zip
+```
+
+### Stage 2 Incremental Mode
+
+**Usage**:
+```bash
+enode.sh search_build2.js --incremental <item-id> [options]
+```
+
+**What it does**:
+- Updates FTS5 index for specific item ID(s)
+- Does NOT rebuild groups or edges
+- Much faster than full Stage 2 rebuild
+
+**Example**:
+```bash
+# Update FTS5 for a single item
+enode.sh search_build2.js --incremental 4cea8e79aee65e859f8d4860ec9fb5a2bfb260f5
+
+# Update FTS5 for multiple items
+enode.sh search_build2.js --incremental id1,id2,id3
+```
+
+### Programmatic Usage
+
+Both build scripts can be called programmatically with progress callbacks:
+
+```javascript
+const searchBuild1 = require('./jstools/search_build1');
+const searchBuild2 = require('./jstools/search_build2');
+
+// Stage 1 with progress callback
+await searchBuild1.buildSearchCatalog1(index7zFolder, bps7zFolder, {
+  rhsearchdb: dbPath,
+  rhsearchzip: zipPath,
+  onProgress: ({ stage, message, progress }) => {
+    console.log(`[${stage}] ${message} (${progress}%)`);
+  }
+});
+
+// Incremental Stage 1
+await searchBuild1.buildSearchCatalog1Incremental(jsonFilePath, {
+  rhsearchdb: dbPath,
+  rhsearchzip: zipPath
+});
+
+// Incremental Stage 2
+await searchBuild2.buildSearchCatalog2Incremental([itemId1, itemId2], {
+  rhsearchdb: dbPath,
+  rhsearchzip: zipPath
+});
+```
+
+---
+
+## Download Manager and Manifest System
+
+### Overview
+
+The catalog download system automatically downloads BPS/7z archives and catalog files from IPFS, ArDrive, or direct URLs when needed. All downloads are managed through a `bpsarchives.json` manifest file.
+
+### bpsarchives.json Manifest
+
+The manifest file (`electron/bpsarchives.json`) describes available catalog files and BPS archives:
+
+```json
+{
+  "rhsearch_cat.db": {
+    "type": "catalogdb",
+    "version": "1",
+    "base": {
+      "file_name": "rhsearch_cat.db.7z",
+      "format": "7z",
+      "sha256": "xxx",
+      "ipfs_cidv1": "xxx",
+      "ardrive_file_id": "xxx",
+      "size": "1234",
+      "priority": ["baddr", "ipfs", "ardrive"]
+    }
+  },
+  "rhsearch.zip": {
+    "type": "catalog",
+    "version": "1",
+    "base": {
+      "file_name": "rhsearch.zip",
+      "sha256": "xxx",
+      "ipfs_cidv1": "xxx",
+      "searchdb_version": "1",
+      "priority": ["baddr", "ipfs", "ardrive"]
+    },
+    "additional": [
+      {
+        "file_name": "rhsearch-add1.zip",
+        "sha256": "xxx",
+        "ipfs_cidv1": "xxx"
+      }
+    ]
+  },
+  "bps_00.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bps_00.7z",
+      "sha1prefixes": "00:00",
+      "format": "7z",
+      "sha256": "xxx",
+      "ipfs_cidv1": "xxx",
+      "size": "20582263",
+      "priority": ["baddr", "ipfs", "ardrive"]
+    }
+  }
+}
+```
+
+### Download Sources
+
+The system supports multiple download sources (in priority order):
+
+1. **IPFS (CIDv1)**: Downloads from IPFS gateways
+2. **ArDrive**: Downloads from ArDrive using file IDs or paths
+3. **URL (addr)**: Direct HTTP/HTTPS URLs
+4. **Base64-encoded URL (baddr)**: Base64-encoded URLs for privacy
+
+### Download Locations
+
+All downloads go to the program's data directory:
+- **BPS Archives**: `%APPDATA%\RHTools\downloads\bps_XX.7z` (Windows) or equivalent
+- **Catalog Files**: `%APPDATA%\RHTools\` (for processing)
+
+### update_bpsarchives.js
+
+**Purpose**: Manage `bpsarchives.json` manifest file
+
+**Usage**:
+```bash
+enode.sh update_bpsarchives.js <manifest.json> [options]
+```
+
+**Options**:
+- `--target <name>` - Manifest entry to update (e.g., `bps_00.7z`, `rhsearch_cat.db`)
+- `--add-archive <file>` - Add a BPS archive 7z file to the manifest
+- `--calculate-ipfs` - Calculate IPFS CIDv1 for entries missing it
+- `--update-from-ardrive` - Populate missing ArDrive metadata from the configured folder
+- `--ardrive-drive-id <id>` - ArDrive drive ID (default: `d3338fab-d24c-4d75-9e78-d3024befc225`)
+- `--ardrive-folder-id <id>` - ArDrive folder ID (default: `a6130936-d92e-45ac-a004-273d96e9ec9d`)
+
+**Examples**:
+```bash
+# Add a new BPS archive to manifest
+enode.sh update_bpsarchives.js bpsarchives.json \
+  --target bps_00.7z --add-archive bps_00.7z
+
+# Calculate IPFS CIDs for all entries
+enode.sh update_bpsarchives.js bpsarchives.json --calculate-ipfs
+
+# Update ArDrive metadata
+enode.sh update_bpsarchives.js bpsarchives.json \
+  --target bps_00.7z --update-from-ardrive
+```
+
+### catalog-download-manager.js
+
+**Purpose**: Download files from manifest (IPFS, ArDrive, URLs)
+
+**Location**: `electron/utils/catalog-download-manager.js`
+
+**Features**:
+- Automatic download from multiple sources (IPFS, ArDrive, URLs)
+- SHA256 hash verification
+- Local file search before downloading
+- Progress tracking
+- Direct download to final destination directory
+
+**Usage** (programmatic):
+```javascript
+const catalogDownloadManager = require('./utils/catalog-download-manager');
+
+// Download a file
+const downloadedPath = await catalogDownloadManager.ensureArtifact(
+  manifestEntry.base,
+  workingDir,
+  downloadTracker,
+  userDataDir,
+  20, // ipfsTimeout
+  finalDestinationDir // Optional: download directly here
+);
+```
+
+---
+
+## Catalog Updates
+
+### searchdat.json Tracking
+
+The system tracks installed catalog versions in `searchdat.json` (located in program data directory):
+
+```json
+{
+  "catalog": {
+    "base_version": "1",
+    "base_sha256": "xxx",
+    "base_installed_at": "2025-01-XX...",
+    "additional": []
+  },
+  "catalogdb": {
+    "base_version": "1",
+    "base_sha256": "xxx",
+    "base_installed_at": "2025-01-XX..."
+  },
+  "bpsarchives": {}
+}
+```
+
+### Update Detection
+
+The Electron app automatically checks for catalog updates when the catalog search modal is opened. Updates are detected by comparing:
+- Installed version vs. manifest version
+- Installed SHA256 vs. manifest SHA256
+
+### Applying Updates
+
+When updates are available:
+1. User sees update notification in catalog search modal
+2. User clicks "Install Update" button
+3. System downloads the update file
+4. Verifies SHA256 hash
+5. Installs the update:
+   - **Catalog ZIP files**: Extracts JSON files and adds to catalog using incremental build
+   - **Catalog Database**: Replaces existing database file
+6. Updates `searchdat.json` with new version info
+
+### catalog-manifest-utils.js
+
+**Purpose**: Utilities for locating and managing manifests and tracking files
+
+**Location**: `electron/utils/catalog-manifest-utils.js`
+
+**Functions**:
+- `locateBpsArchivesManifest()` - Finds `bpsarchives.json` in dev or packaged builds
+- `loadBpsArchivesManifest()` - Loads manifest JSON
+- `loadSearchDat()` - Loads `searchdat.json` tracking file
+- `updateSearchDatCatalog()` - Updates tracking file with installed version
+- `checkCatalogUpdates()` - Compares manifest with installed versions
+
+---
+
+*Last Updated: January 2025*

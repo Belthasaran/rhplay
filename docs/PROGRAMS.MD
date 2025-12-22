@@ -372,6 +372,48 @@ enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json 
 
 ---
 
+### update_bpsarchives.js
+**Purpose**: Manage `bpsarchives.json` manifest for catalog and BPS archive downloads
+
+**Usage**:
+```bash
+enode.sh update_bpsarchives.js <manifest.json> [options]
+```
+
+**Options**:
+- `--target <name>` - Manifest entry to update (e.g., `bps_00.7z`, `rhsearch_cat.db`)
+- `--add-archive <file>` - Add a BPS archive 7z file to the manifest
+- `--calculate-ipfs` - Calculate IPFS CIDv1 for entries missing it
+- `--update-from-ardrive` - Populate missing ArDrive metadata from the configured folder
+- `--ardrive-drive-id <id>` - ArDrive drive ID (default: `d3338fab-d24c-4d75-9e78-d3024befc225`)
+- `--ardrive-folder-id <id>` - ArDrive folder ID (default: `a6130936-d92e-45ac-a004-273d96e9ec9d`)
+- `--help` - Show help message
+
+**What it does**:
+- Calculates SHA256 hash of archive files
+- Calculates IPFS CIDv1 hashes (using `ipfs-only-hash`)
+- Fetches ArDrive metadata from public folder
+- Updates or creates manifest entries
+
+**Examples**:
+```bash
+# Add a new BPS archive to manifest
+enode.sh update_bpsarchives.js electron/bpsarchives.json \
+  --target bps_00.7z --add-archive bps_00.7z
+
+# Calculate IPFS CIDs for all entries
+enode.sh update_bpsarchives.js electron/bpsarchives.json \
+  --target bps_00.7z --calculate-ipfs
+
+# Update ArDrive metadata
+enode.sh update_bpsarchives.js electron/bpsarchives.json \
+  --target bps_00.7z --update-from-ardrive
+```
+
+**Documentation**: See `docs/CATALOG_DOWNLOAD_SYSTEM.md` for complete documentation
+
+---
+
 ### arjson2tree.js
 **Purpose**: Parse JSON input containing ArDrive file metadata and generate an HTML index file with a table displaying file information in a tree-like structure.
 
@@ -1111,6 +1153,7 @@ See `docs/DBMIGRATE.md` for detailed migration instructions.
 
 **Search Catalog System**:
 - `docs/SEARCH_CATALOG_SYSTEM.md` - Complete search catalog system documentation
+- `docs/CATALOG_DOWNLOAD_SYSTEM.md` - Download manager and manifest system documentation
 
 ### Nostr Runtime Tools
 
@@ -1162,6 +1205,7 @@ enode.sh search_build1.js <index7z folder> <bps7z folder> [options]
 **Options**:
 - `--rhsearchdb=FILE` - Path to search catalog database (default: rhsearch_cat.db)
 - `--rhsearchzip=FILE` - Path to JSON ZIP archive (default: rhsearch.zip)
+- `--incremental <json-file>` - Incremental mode: add a single JSON file to existing catalog
 - `--help, -h` - Show help message
 
 **What it does**:
@@ -1169,6 +1213,17 @@ enode.sh search_build1.js <index7z folder> <bps7z folder> [options]
 - Normalizes and extracts standard fields (title, author, version, tags, etc.)
 - Creates/updates SQLite database with items table
 - Packages all JSON files into a ZIP archive with high compression
+
+**Incremental Mode**:
+- `--incremental <json-file>` - Add a single JSON file to existing catalog without full rebuild
+- Much faster for adding individual items
+- Updates both database and ZIP archive
+- Requires existing catalog database to be present
+
+**Incremental Mode**:
+- `--incremental <json-file>` - Add a single JSON file to existing catalog without full rebuild
+- Much faster for adding individual items
+- Updates both database and ZIP archive
 
 **Output**:
 - `rhsearch_cat.db` - SQLite database with items table

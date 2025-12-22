@@ -15934,11 +15934,19 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   // Find BPS/7z files for catalog item
-  ipcMain.handle('catalog:find-files', async (_event, { itemId, index7zName, indexBpsName, bpsSha256 }) => {
+  ipcMain.handle('catalog:find-files', async (event, { itemId, index7zName, indexBpsName, bpsSha256 }) => {
+    const sendProgress = (message: string) => {
+      if (event.sender && !event.sender.isDestroyed()) {
+        event.sender.send('catalog:find-files:progress', { message });
+      }
+    };
+    
     try {
       const { app } = require('electron');
       const os = require('os');
       const userDataDir = app.getPath('userData');
+      
+      sendProgress('Searching for files locally...');
       
       // Possible locations to search (program data downloads directory and user Downloads)
       const downloadsDir = path.join(userDataDir, 'downloads');
@@ -15953,10 +15961,12 @@ function registerDatabaseHandlers(dbManager) {
       
       // Only check the 7z archive specified in index7zName from JSON
       if (index7zName) {
+        sendProgress(`Looking for ${index7zName} in local directories...`);
         for (const searchPath of searchPaths) {
           const candidate7z = path.join(searchPath, index7zName);
           if (fs.existsSync(candidate7z)) {
             sevenZPath = candidate7z;
+            sendProgress(`✓ Found ${index7zName} locally`);
             console.log(`[catalog:find-files] Found 7z archive from JSON index7z_name: ${sevenZPath}`);
             break;
           }
@@ -15964,9 +15974,11 @@ function registerDatabaseHandlers(dbManager) {
         
         if (!sevenZPath) {
           missingFiles.push(`7z archive: ${index7zName}`);
+          sendProgress(`✗ ${index7zName} not found locally`);
           console.warn(`[catalog:find-files] 7z archive not found: ${index7zName}`);
         }
       } else {
+        sendProgress('⚠ No 7z archive name specified');
         console.warn(`[catalog:find-files] No index7z_name specified in JSON, cannot locate 7z archive`);
       }
       
@@ -15986,6 +15998,7 @@ function registerDatabaseHandlers(dbManager) {
       if (!bpsPath && !sevenZPath && index7zName) {
         // Try to download from manifest
         try {
+          sendProgress(`Attempting to download ${index7zName}...`);
           const catalogManifestUtils = require('./utils/catalog-manifest-utils');
           const catalogDownloadManager = require('./utils/catalog-download-manager');
           const manifest = catalogManifestUtils.loadBpsArchivesManifest();
@@ -15996,7 +16009,86 @@ function registerDatabaseHandlers(dbManager) {
               const downloadsDir = path.join(userDataDir, 'downloads');
               fs.mkdirSync(downloadsDir, { recursive: true });
               
+              // Create download tracker that reports progress
               const downloadTracker = catalogDownloadManager.createDownloadTracker();
+              
+              // Helper function to format bytes
+              function formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+              }
+              
+              // Override progress method to send updates to renderer
+              const originalProgress = downloadTracker.progress;
+              downloadTracker.progress = (spec, downloaded, total) => {
+                if (originalProgress) originalProgress(spec, downloaded, total);
+                const percent = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+                sendProgress(`Downloading ${spec.file_name}: ${percent}% (${formatBytes(downloaded)} / ${formatBytes(total)})`);
+                if (event.sender && !event.sender.isDestroyed()) {
+                  event.sender.send('catalog:find-files:progress', {
+                    message: `Downloading ${spec.file_name}...`,
+                    filename: spec.file_name,
+                    downloaded,
+                    total,
+                    percent
+                  });
+                }
+              };
+              
+              // Override start method
+              const originalStart = downloadTracker.start;
+              downloadTracker.start = (spec, total) => {
+                if (originalStart) originalStart(spec, total);
+                sendProgress(`Starting download: ${spec.file_name} (${formatBytes(total)})`);
+                if (event.sender && !event.sender.isDestroyed()) {
+                  event.sender.send('catalog:find-files:progress', {
+                    message: `Starting download: ${spec.file_name}...`,
+                    filename: spec.file_name,
+                    downloaded: 0,
+                    total,
+                    percent: 0
+                  });
+                }
+              };
+              
+              // Override register method to show IPFS gateway testing and other status messages
+              const originalRegister = downloadTracker.register;
+              downloadTracker.register = (spec) => {
+                if (originalRegister) originalRegister(spec);
+                // Check if this is a progress message (from IPFS gateway testing, etc.)
+                if (spec._progressMessage) {
+                  sendProgress(spec._progressMessage);
+                  if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('catalog:find-files:progress', {
+                      message: spec._progressMessage,
+                      filename: spec.file_name
+                    });
+                  }
+                } else {
+                  sendProgress(`Preparing to download ${spec.file_name}...`);
+                  if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('catalog:find-files:progress', {
+                      message: `Preparing to download ${spec.file_name}...`,
+                      filename: spec.file_name
+                    });
+                  }
+                }
+              };
+              
+              // Create progress callback for IPFS gateway testing
+              const ipfsProgressCallback = (message) => {
+                sendProgress(message);
+                if (event.sender && !event.sender.isDestroyed()) {
+                  event.sender.send('catalog:find-files:progress', { message });
+                }
+              };
+              
+              // Attach progress callback to spec so it gets passed through
+              manifestEntry.base._ipfsProgressCallback = ipfsProgressCallback;
+              
               // Download directly to program data downloads directory
               const downloadedPath = await catalogDownloadManager.ensureArtifact(
                 manifestEntry.base,
@@ -16008,17 +16100,25 @@ function registerDatabaseHandlers(dbManager) {
               );
               
               sevenZPath = downloadedPath;
+              sendProgress(`✓ Download completed: ${index7zName}`);
               console.log(`[catalog:find-files] Downloaded and installed ${index7zName} to ${downloadedPath}`);
+            } else {
+              sendProgress(`✗ No download source available for ${index7zName}`);
             }
+          } else {
+            sendProgress(`✗ ${index7zName} not found in manifest`);
           }
         } catch (downloadError) {
+          sendProgress(`✗ Download failed: ${downloadError.message}`);
           console.warn(`[catalog:find-files] Failed to download ${index7zName}:`, downloadError.message);
         }
       }
       
+      
       // If 7z found (from index7z_name), extract ONLY the specific BPS file by name
       if (!bpsPath && sevenZPath && indexBpsName) {
         try {
+            sendProgress(`Extracting ${indexBpsName} from archive...`);
             const sevenZip = require('7zip-min');
             const tempDir = path.join(os.tmpdir(), `catalog-extract-${Date.now()}`);
             fs.mkdirSync(tempDir, { recursive: true });
@@ -16059,10 +16159,12 @@ function registerDatabaseHandlers(dbManager) {
             bpsPath = findExactBpsFile(tempDir, indexBpsName);
             
             if (bpsPath) {
+              sendProgress(`✓ Found ${indexBpsName} in archive`);
               console.log(`[catalog:find-files] Found exact BPS file: ${bpsPath}`);
               
               // Verify SHA256 if provided
               if (bpsSha256) {
+                sendProgress('Verifying file integrity (SHA256)...');
                 try {
                   const fileData = fs.readFileSync(bpsPath);
                   const hash = crypto.createHash('sha256').update(fileData).digest('hex');
@@ -16071,9 +16173,11 @@ function registerDatabaseHandlers(dbManager) {
                     bpsPath = null;
                     throw new Error(`SHA256 hash mismatch for ${indexBpsName}. Expected ${bpsSha256.substring(0, 16)}..., got ${hash.substring(0, 16)}...`);
                   } else {
+                    sendProgress('✓ SHA256 verification passed');
                     console.log(`[catalog:find-files] ✓ SHA256 verified: ${hash.substring(0, 16)}...`);
                   }
                 } catch (err) {
+                  sendProgress(`✗ SHA256 verification failed: ${err.message}`);
                   console.error(`[catalog:find-files] Failed to verify SHA256:`, err.message);
                   bpsPath = null;
                   throw err;
@@ -16085,9 +16189,11 @@ function registerDatabaseHandlers(dbManager) {
             
             // If BPS found, copy it to a more permanent location for RHPAK creation
             if (bpsPath) {
+              sendProgress('Preparing BPS file...');
               const bpsFileName = path.basename(bpsPath);
               const permanentBpsPath = path.join(os.tmpdir(), `catalog-bps-${bpsSha256 ? bpsSha256.substring(0, 16) : Date.now()}-${bpsFileName}`);
               fs.copyFileSync(bpsPath, permanentBpsPath);
+              sendProgress('✓ BPS file ready');
               console.log(`[catalog:find-files] ✓ Copied BPS to permanent location: ${permanentBpsPath}`);
               bpsPath = permanentBpsPath;
             }

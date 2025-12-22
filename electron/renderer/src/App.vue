@@ -19903,8 +19903,35 @@ async function checkCatalogFiles(item: any) {
   addGameFromCatalogState.value.checkingFiles = true;
   addGameFromCatalogState.value.error = undefined;
   addGameFromCatalogState.value.statusMessages = [];
+  addGameFromCatalogState.value.downloadProgress = undefined;
   addStatusMessage('Checking for required files...');
   updateStepCollapseState();
+  
+  // Set up progress listener
+  let progressUnsubscribe: (() => void) | null = null;
+  if ((window as any).electronAPI.onCatalogFindFilesProgress) {
+    progressUnsubscribe = (window as any).electronAPI.onCatalogFindFilesProgress((progressData: any) => {
+      if (progressData.message) {
+        addStatusMessage(progressData.message);
+      }
+      
+      // Update download progress if provided
+      if (progressData.filename || progressData.downloaded !== undefined || progressData.total !== undefined) {
+        addGameFromCatalogState.value.downloadProgress = {
+          filename: progressData.filename || addGameFromCatalogState.value.downloadProgress?.filename,
+          message: progressData.message || addGameFromCatalogState.value.downloadProgress?.message,
+          downloaded: progressData.downloaded ?? addGameFromCatalogState.value.downloadProgress?.downloaded ?? 0,
+          total: progressData.total ?? addGameFromCatalogState.value.downloadProgress?.total ?? 0,
+          percent: progressData.percent ?? (progressData.total > 0 ? Math.round((progressData.downloaded / progressData.total) * 100) : 0)
+        };
+        
+        // If we have download progress, we're downloading
+        if (progressData.downloaded !== undefined || progressData.total !== undefined) {
+          addGameFromCatalogState.value.downloading = true;
+        }
+      }
+    });
+  }
   
   try {
     const result = await (window as any).electronAPI.catalogFindFiles({
@@ -19920,19 +19947,30 @@ async function checkCatalogFiles(item: any) {
     addGameFromCatalogState.value.missingFiles = result.missingFiles || [];
     
     if (result.filesFound && result.bpsPath) {
-      addStatusMessage('✓ Files found locally');
+      if (!addGameFromCatalogState.value.statusMessages?.some(m => m.includes('Files found'))) {
+        addStatusMessage('✓ Files found locally');
+      }
     } else if (result.canDownload) {
-      addStatusMessage('Files not found locally, download available');
+      if (!addGameFromCatalogState.value.statusMessages?.some(m => m.includes('download available'))) {
+        addStatusMessage('Files not found locally, download available');
+      }
       addGameFromCatalogState.value.downloadError = undefined;
     } else {
-      addStatusMessage('✗ Files not found and cannot be downloaded');
+      if (!addGameFromCatalogState.value.statusMessages?.some(m => m.includes('cannot be downloaded'))) {
+        addStatusMessage('✗ Files not found and cannot be downloaded');
+      }
       addGameFromCatalogState.value.error = 'Required files not found and cannot be downloaded automatically.';
     }
   } catch (error: any) {
     addStatusMessage(`✗ Error: ${error.message || 'Failed to check for files'}`);
     addGameFromCatalogState.value.error = error.message || 'Failed to check for files';
   } finally {
+    // Clean up progress listener
+    if (progressUnsubscribe) {
+      progressUnsubscribe();
+    }
     addGameFromCatalogState.value.checkingFiles = false;
+    addGameFromCatalogState.value.downloading = false;
     updateStepCollapseState();
   }
 }

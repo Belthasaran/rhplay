@@ -19822,6 +19822,8 @@ async function createAndInstallCatalogRhpak() {
     
     if (!createResult.success) {
       throw new Error(createResult.error || 'Failed to create RHPAK');
+    } else {
+      console.log(`Create temporary rhpak`)
     }
     
     addGameFromCatalogState.value.creatingRhpak = false;
@@ -19846,6 +19848,7 @@ async function createAndInstallCatalogRhpak() {
       console.error('Failed to reload games:', error);
     }
   } catch (error: any) {
+    console.error(`Failed to create/install RHPAK: ${error.message}`)
     addGameFromCatalogState.value.error = error.message || 'Failed to create/install RHPAK';
   } finally {
     addGameFromCatalogState.value.creatingRhpak = false;

@@ -16090,7 +16090,7 @@ function registerDatabaseHandlers(dbManager) {
           rhpakuuid: deterministicUuid,
           rhpakname: `${itemJson.title || 'Untitled'} - ${itemJson.author || 'Unknown'}`,
           version: '0.1.1',
-          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : []
+          gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : [sfcSha256.substring(0,32)]
         },
         gameversion: {
           ...(itemJson.gameversion || {}),

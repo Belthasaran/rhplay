@@ -16119,6 +16119,17 @@ function registerDatabaseHandlers(dbManager) {
       
       const deterministicUuid = uuidFromSha256(sfcSha256);
       
+      // Generate deterministic gvuuid from SFC SHA256 if not present
+      const generateGvuuidFromSha256 = (sha256) => {
+        if (!sha256 || sha256.length < 32) {
+          return crypto.randomUUID();
+        }
+        const hex = sha256.substring(0, 32);
+        return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
+      };
+      
+      const deterministicGvuuid = itemJson.gameversion?.gvuuid || generateGvuuidFromSha256(sfcSha256);
+      
       // Copy BPS file to temp directory first (before creating skeleton)
       const bpsFileName = path.basename(bpsPath);
       const bpsDestPath = path.join(tempDir, bpsFileName);
@@ -16135,13 +16146,19 @@ function registerDatabaseHandlers(dbManager) {
         },
         gameversion: {
           ...(itemJson.gameversion || {}),
+          gvuuid: deterministicGvuuid,
           gameid: itemJson.gameversion?.gameid || `catalog_${itemId.substring(0, 8)}`,
           name: itemJson.title || itemJson.gameversion?.name || 'Untitled',
           author: itemJson.author || itemJson.gameversion?.author || 'Unknown',
           version: itemJson.gameversion?.version || (itemJson.versioninfo ? parseInt(String(itemJson.versioninfo).replace(/[^0-9]/g, '')) || 1 : 1),
-          // Reference the BPS file - newgame.js expects patch_relative_path or patch
+          difficulty: itemJson.gameversion?.difficulty || itemJson.difficulty || 'Intermediate',
+          gametype: itemJson.gameversion?.gametype || itemJson.gameversion?.type || itemJson.type || 'Standard',
+          type: itemJson.gameversion?.type || itemJson.gameversion?.gametype || itemJson.type || 'Standard',
+          // Reference the BPS file - newgame.js expects patch_local_path (relative to baseDir)
           patch: bpsRelativePath,
-          patch_relative_path: bpsRelativePath
+          patch_relative_path: bpsRelativePath,
+          patch_filename: bpsFileName,
+          patch_local_path: bpsRelativePath // Relative to tempDir (baseDir)
         },
         patchblob: itemJson.patchblob || {},
         attachments: itemJson.attachments || [],

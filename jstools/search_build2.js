@@ -91,14 +91,117 @@ function calculateLmfilterOverlap(lmfilter1, lmfilter2) {
   return intersection.size / union.size;
 }
 
+/**
+ * Incremental build: Update FTS5 index for new items only
+ */
+async function buildSearchCatalog2Incremental(itemIds, options) {
+  const { rhsearchdb, rhsearchzip, onProgress } = options;
+  
+  if (onProgress) onProgress({ stage: 'incremental', message: 'Starting incremental FTS5 update...' });
+  
+  const dbPath = rhsearchdb || path.join(process.cwd(), 'rhsearch_cat.db');
+  
+  if (!fsSync.existsSync(dbPath)) {
+    throw new Error(`Database not found: ${dbPath}. Run full build first.`);
+  }
+  
+  const db = new Database(dbPath);
+  
+  // Ensure FTS5 table exists
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
+        item_id UNINDEXED,
+        title,
+        author,
+        versioninfo,
+        tags,
+        brief,
+        levelnames_keywords,
+        content='items',
+        content_rowid='rowid'
+      );
+    `);
+  } catch (error) {
+    // Table might already exist with different schema, try to use it
+  }
+  
+  // Ensure triggers exist
+  try {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS items_fts_insert AFTER INSERT ON items BEGIN
+        INSERT INTO items_fts (item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
+        VALUES (
+          NEW.item_id,
+          COALESCE(NEW.title, ''),
+          COALESCE(NEW.author, ''),
+          COALESCE(NEW.versioninfo, ''),
+          COALESCE(NEW.tags, ''),
+          COALESCE(NEW.brief, ''),
+          COALESCE(NEW.levelnames_keywords, '')
+        );
+      END;
+      
+      CREATE TRIGGER IF NOT EXISTS items_fts_update AFTER UPDATE ON items BEGIN
+        UPDATE items_fts SET
+          title = COALESCE(NEW.title, ''),
+          author = COALESCE(NEW.author, ''),
+          versioninfo = COALESCE(NEW.versioninfo, ''),
+          tags = COALESCE(NEW.tags, ''),
+          brief = COALESCE(NEW.brief, ''),
+          levelnames_keywords = COALESCE(NEW.levelnames_keywords, '')
+        WHERE item_id = NEW.item_id;
+      END;
+      
+      CREATE TRIGGER IF NOT EXISTS items_fts_delete AFTER DELETE ON items BEGIN
+        DELETE FROM items_fts WHERE item_id = OLD.item_id;
+      END;
+    `);
+  } catch (error) {
+    // Triggers might already exist
+  }
+  
+  // Update FTS5 for specific items
+  if (itemIds && itemIds.length > 0) {
+    if (onProgress) onProgress({ stage: 'incremental', message: `Updating FTS5 for ${itemIds.length} item(s)...` });
+    
+    const updateStmt = db.prepare(`
+      INSERT OR REPLACE INTO items_fts (rowid, item_id, title, author, versioninfo, tags, brief, levelnames_keywords)
+      SELECT 
+        rowid,
+        item_id,
+        COALESCE(title, ''),
+        COALESCE(author, ''),
+        COALESCE(versioninfo, ''),
+        COALESCE(tags, ''),
+        COALESCE(brief, ''),
+        COALESCE(levelnames_keywords, '')
+      FROM items
+      WHERE item_id IN (${itemIds.map(() => '?').join(',')})
+    `);
+    
+    updateStmt.run(...itemIds);
+    
+    if (onProgress) onProgress({ stage: 'incremental', message: `Updated FTS5 index for ${itemIds.length} item(s)` });
+  }
+  
+  db.close();
+  
+  if (onProgress) onProgress({ stage: 'incremental', message: 'Incremental FTS5 update complete' });
+}
+
 // Main processing function
 async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
-  const { rhsearchdb, rhsearchzip } = options;
+  const { rhsearchdb, rhsearchzip, onProgress } = options || {};
   
-  console.log('='.repeat(70));
-  console.log('Stage 2: Entity Resolution and Grouping');
-  console.log('='.repeat(70));
-  console.log();
+  if (onProgress) {
+    onProgress({ stage: 'stage2', message: 'Starting Stage 2: Entity Resolution and Grouping' });
+  } else {
+    console.log('='.repeat(70));
+    console.log('Stage 2: Entity Resolution and Grouping');
+    console.log('='.repeat(70));
+    console.log();
+  }
   
   // Determine database path
   const dbPath = rhsearchdb || path.join(path.dirname(index7zFolder), 'rhsearch_cat.db');
@@ -156,13 +259,21 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
   `);
   
   // Load all items from database
-  console.log('Loading items from database...');
+  if (onProgress) {
+    onProgress({ stage: 'stage2', message: 'Loading items from database...' });
+  } else {
+    console.log('Loading items from database...');
+  }
   const items = db.prepare(`
     SELECT * FROM items
   `).all();
   
-  console.log(`Loaded ${items.length} item(s)`);
-  console.log();
+  if (onProgress) {
+    onProgress({ stage: 'stage2', message: `Loaded ${items.length} item(s)`, progress: 10 });
+  } else {
+    console.log(`Loaded ${items.length} item(s)`);
+    console.log();
+  }
   
   // Load JSON data for items (we'll need it for grouping)
   console.log('Loading JSON data from ZIP archive...');
@@ -512,9 +623,17 @@ async function buildSearchCatalog2(index7zFolder, bps7zFolder, options) {
   
   // When using content='items', SQLite automatically syncs, but we need to rebuild
   // the index to ensure it's in sync. Use the rebuild command.
-  console.log('Rebuilding FTS5 index from items table...');
+  if (onProgress) {
+    onProgress({ stage: 'stage2', message: 'Rebuilding FTS5 index from items table...', progress: 90 });
+  } else {
+    console.log('Rebuilding FTS5 index from items table...');
+  }
   const itemCount = db.prepare(`SELECT COUNT(*) as count FROM items`).get().count;
-  console.log(`  Found ${itemCount} item(s) to index`);
+  if (onProgress) {
+    onProgress({ stage: 'stage2', message: `Found ${itemCount} item(s) to index`, progress: 92 });
+  } else {
+    console.log(`  Found ${itemCount} item(s) to index`);
+  }
   
   // Rebuild the FTS5 index using the rebuild command
   // This ensures the index is properly synced with the items table
@@ -593,12 +712,16 @@ async function main() {
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     console.log(`
 Usage: enode.sh search_build2.js <index7z folder> <bps7z folder> [options]
+       enode.sh search_build2.js --incremental <item-id> [options]
 
 Stage 2: Entity resolution and grouping
 
-Arguments:
+Arguments (normal mode):
   index7z folder    Directory containing master JSON index files
   bps7z folder      Directory containing 7z archives (for reference, not used in Stage 2)
+
+Arguments (incremental mode):
+  --incremental <item-id>   Update FTS5 index for specific item ID(s) (comma-separated)
 
 Options:
   --rhsearchdb=FILE    Path to search catalog database (default: rhsearch_cat.db in index7z parent)
@@ -612,12 +735,66 @@ This script:
   - Creates groups and edges tables
   - Builds FTS5 search index
 
+Incremental mode:
+  - Updates FTS5 index for specific items only
+  - Does not rebuild entire catalog
+
 Examples:
   enode.sh search_build2.js ~/rhplay/refmaterial/index7z ~/rhplay/refmaterial/bps7z/
+  enode.sh search_build2.js --incremental abc123,def456 --rhsearchdb=search.db
 `);
     process.exit(0);
   }
   
+  // Check for incremental mode
+  const incrementalIndex = args.findIndex(arg => arg === '--incremental' || arg.startsWith('--incremental='));
+  if (incrementalIndex !== -1) {
+    // Incremental mode: update FTS5 for specific items
+    let itemIdsStr = null;
+    if (args[incrementalIndex].startsWith('--incremental=')) {
+      itemIdsStr = args[incrementalIndex].substring('--incremental='.length);
+    } else if (incrementalIndex + 1 < args.length) {
+      itemIdsStr = args[incrementalIndex + 1];
+    }
+    
+    if (!itemIdsStr) {
+      console.error('Error: --incremental requires item ID(s)');
+      console.error('Usage: search_build2.js --incremental <item-id> [--rhsearchdb=...] [--rhsearchzip=...]');
+      process.exit(1);
+    }
+    
+    const itemIds = itemIdsStr.split(',').map(id => id.trim()).filter(Boolean);
+    
+    const options = {
+      rhsearchdb: null,
+      rhsearchzip: null,
+    };
+    
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg === '--incremental' || arg.startsWith('--incremental=')) {
+        continue; // Skip incremental arg
+      } else if (arg.startsWith('--rhsearchdb=')) {
+        options.rhsearchdb = arg.substring('--rhsearchdb='.length);
+      } else if (arg === '--rhsearchdb' && i + 1 < args.length) {
+        options.rhsearchdb = args[++i];
+      } else if (arg.startsWith('--rhsearchzip=')) {
+        options.rhsearchzip = arg.substring('--rhsearchzip='.length);
+      } else if (arg === '--rhsearchzip' && i + 1 < args.length) {
+        options.rhsearchzip = args[++i];
+      }
+    }
+    
+    try {
+      await buildSearchCatalog2Incremental(itemIds, options);
+    } catch (error) {
+      console.error(`Fatal error: ${error.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+  
+  // Normal mode: process folder
   if (args.length < 2) {
     console.error('Error: Missing required arguments');
     console.error('Usage: enode.sh search_build2.js <index7z folder> <bps7z folder> [options]');
@@ -664,4 +841,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildSearchCatalog2 };
+module.exports = { buildSearchCatalog2, buildSearchCatalog2Incremental };

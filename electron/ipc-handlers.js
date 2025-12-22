@@ -16021,6 +16021,43 @@ function registerDatabaseHandlers(dbManager) {
               const permanentBpsPath = path.join(os.tmpdir(), `catalog-bps-${bpsSha256 || Date.now()}-${bpsFileName}`);
               fs.copyFileSync(bpsPath, permanentBpsPath);
               bpsPath = permanentBpsPath;
+            } else {
+              // If we couldn't find the specific BPS, try to find any .bps file in the 7z
+              const findAnyBpsInDir = (dir) => {
+                try {
+                  const entries = fs.readdirSync(dir, { withFileTypes: true });
+                  for (const entry of entries) {
+                    const fullPath = path.join(dir, entry.name);
+                    if (entry.isDirectory()) {
+                      const found = findAnyBpsInDir(fullPath);
+                      if (found) return found;
+                    } else if (entry.name.endsWith('.bps')) {
+                      // Verify SHA256 if provided
+                      if (bpsSha256) {
+                        const crypto = require('crypto');
+                        const fileData = fs.readFileSync(fullPath);
+                        const hash = crypto.createHash('sha256').update(fileData).digest('hex');
+                        if (hash.toLowerCase() === bpsSha256.toLowerCase()) {
+                          return fullPath;
+                        }
+                      } else {
+                        return fullPath;
+                      }
+                    }
+                  }
+                } catch (err) {
+                  // Ignore read errors
+                }
+                return null;
+              };
+              
+              bpsPath = findAnyBpsInDir(tempDir);
+              if (bpsPath) {
+                const bpsFileName = path.basename(bpsPath);
+                const permanentBpsPath = path.join(os.tmpdir(), `catalog-bps-${bpsSha256 || Date.now()}-${bpsFileName}`);
+                fs.copyFileSync(bpsPath, permanentBpsPath);
+                bpsPath = permanentBpsPath;
+              }
             }
           } catch (error) {
             console.warn('[catalog:find-files] Failed to extract from 7z:', error.message);
@@ -16028,10 +16065,11 @@ function registerDatabaseHandlers(dbManager) {
         }
         
         if (!bpsPath) {
-          missingFiles.push(`BPS file: ${indexBpsName}`);
+          missingFiles.push(`BPS file: ${indexBpsName || '*.bps'}`);
         }
       }
       
+      // If we have 7z but no BPS yet, we can still extract it later
       const filesFound = !!(bpsPath || (sevenZPath && indexBpsName));
       
       return {

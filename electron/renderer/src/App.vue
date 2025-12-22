@@ -2260,14 +2260,17 @@
           </div>
           
           <!-- Step 3: Create and install RHPAK -->
-          <div v-if="addGameFromCatalogState.filesFound" class="add-game-step">
+          <div v-if="addGameFromCatalogState.filesFound || (addGameFromCatalogState.sevenZPath && addGameFromCatalogState.item.indexbps_name)" class="add-game-step">
             <h4>Step 3: Create and Install Temporary RHPAK</h4>
+            <p v-if="addGameFromCatalogState.sevenZPath && !addGameFromCatalogState.bpsPath" class="add-game-status">
+              BPS file will be extracted from 7z archive when creating RHPAK...
+            </p>
             <button 
               @click="createAndInstallCatalogRhpak" 
-              :disabled="addGameFromCatalogState.creatingRhpak || addGameFromCatalogState.installingRhpak"
+              :disabled="addGameFromCatalogState.creatingRhpak || addGameFromCatalogState.installingRhpak || addGameFromCatalogState.checkingFiles"
               class="btn-primary"
             >
-              {{ addGameFromCatalogState.creatingRhpak ? 'Creating RHPAK...' : addGameFromCatalogState.installingRhpak ? 'Installing RHPAK...' : 'Create and Install RHPAK' }}
+              {{ addGameFromCatalogState.checkingFiles ? 'Extracting BPS...' : addGameFromCatalogState.creatingRhpak ? 'Creating RHPAK...' : addGameFromCatalogState.installingRhpak ? 'Installing RHPAK...' : 'Create and Install RHPAK' }}
             </button>
           </div>
           
@@ -19797,7 +19800,38 @@ async function downloadCatalogFiles() {
 }
 
 async function createAndInstallCatalogRhpak() {
-  if (!addGameFromCatalogState.value.item || !addGameFromCatalogState.value.bpsPath) return;
+  if (!addGameFromCatalogState.value.item) return;
+  
+  // If we have 7z but no BPS path, try to extract it first
+  if (!addGameFromCatalogState.value.bpsPath && addGameFromCatalogState.value.sevenZPath) {
+    addGameFromCatalogState.value.checkingFiles = true;
+    try {
+      // Re-check files and extract BPS from 7z
+      const result = await (window as any).electronAPI.catalogFindFiles({
+        itemId: addGameFromCatalogState.value.item.item_id,
+        index7zName: addGameFromCatalogState.value.item.index7z_name,
+        indexBpsName: addGameFromCatalogState.value.item.indexbps_name,
+        bpsSha256: addGameFromCatalogState.value.item.bps_sha256_hash
+      });
+      
+      if (result.filesFound && result.bpsPath) {
+        addGameFromCatalogState.value.bpsPath = result.bpsPath;
+        addGameFromCatalogState.value.filesFound = true;
+      } else {
+        throw new Error('Could not extract BPS file from 7z archive');
+      }
+    } catch (error: any) {
+      addGameFromCatalogState.value.error = error.message || 'Failed to extract BPS from 7z';
+      return;
+    } finally {
+      addGameFromCatalogState.value.checkingFiles = false;
+    }
+  }
+  
+  if (!addGameFromCatalogState.value.bpsPath) {
+    addGameFromCatalogState.value.error = 'BPS file is required but not found. Please ensure the BPS file or 7z archive is available.';
+    return;
+  }
   
   addGameFromCatalogState.value.creatingRhpak = true;
   addGameFromCatalogState.value.error = undefined;

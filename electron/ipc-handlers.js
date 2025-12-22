@@ -15993,26 +15993,22 @@ function registerDatabaseHandlers(dbManager) {
           if (manifest && manifest[index7zName]) {
             const manifestEntry = manifest[index7zName];
             if (manifestEntry.base) {
-              const workingDir = path.join(userDataDir, 'CatalogTemp');
-              fs.mkdirSync(workingDir, { recursive: true });
-              
-              const downloadTracker = catalogDownloadManager.createDownloadTracker();
-              const downloadedPath = await catalogDownloadManager.ensureArtifact(
-                manifestEntry.base,
-                workingDir,
-                downloadTracker,
-                userDataDir,
-                20
-              );
-              
-              // Copy to program data downloads directory
               const downloadsDir = path.join(userDataDir, 'downloads');
               fs.mkdirSync(downloadsDir, { recursive: true });
-              const targetPath = path.join(downloadsDir, index7zName);
-              fs.copyFileSync(downloadedPath, targetPath);
               
-              sevenZPath = targetPath;
-              console.log(`[catalog:find-files] Downloaded and installed ${index7zName} to ${targetPath}`);
+              const downloadTracker = catalogDownloadManager.createDownloadTracker();
+              // Download directly to program data downloads directory
+              const downloadedPath = await catalogDownloadManager.ensureArtifact(
+                manifestEntry.base,
+                path.join(userDataDir, 'CatalogTemp'), // workingDir for temp operations
+                downloadTracker,
+                userDataDir,
+                20,
+                downloadsDir // finalDestinationDir - download directly here
+              );
+              
+              sevenZPath = downloadedPath;
+              console.log(`[catalog:find-files] Downloaded and installed ${index7zName} to ${downloadedPath}`);
             }
           }
         } catch (downloadError) {
@@ -16160,6 +16156,13 @@ function registerDatabaseHandlers(dbManager) {
       const workingDir = path.join(userDataDir, 'CatalogTemp');
       fs.mkdirSync(workingDir, { recursive: true });
       
+      // Download directly to program data downloads directory if it's a bpsarchive
+      let finalDestinationDir = null;
+      if (manifestEntry.type === 'bpsarchive') {
+        finalDestinationDir = path.join(userDataDir, 'downloads');
+        fs.mkdirSync(finalDestinationDir, { recursive: true });
+      }
+      
       // Download the file
       const downloadTracker = catalogDownloadManager.createDownloadTracker();
       const downloadedPath = await catalogDownloadManager.ensureArtifact(
@@ -16167,16 +16170,12 @@ function registerDatabaseHandlers(dbManager) {
         workingDir,
         downloadTracker,
         userDataDir,
-        20 // ipfsTimeout
+        20, // ipfsTimeout
+        finalDestinationDir // Download directly to downloads directory if specified
       );
       
-      // Copy to program data downloads directory if it's a bpsarchive
       if (manifestEntry.type === 'bpsarchive') {
-        const downloadsDir = path.join(userDataDir, 'downloads');
-        fs.mkdirSync(downloadsDir, { recursive: true });
-        const targetPath = path.join(downloadsDir, index7zName);
-        fs.copyFileSync(downloadedPath, targetPath);
-        console.log(`[catalog:download-files] Copied ${index7zName} to ${targetPath}`);
+        console.log(`[catalog:download-files] Downloaded ${index7zName} to ${downloadedPath}`);
       }
       
       return {
@@ -16222,14 +16221,15 @@ function registerDatabaseHandlers(dbManager) {
       const workingDir = path.join(userDataDir, 'CatalogTemp');
       fs.mkdirSync(workingDir, { recursive: true });
       
-      // Download the file
+      // Download the file (catalog files go to CatalogTemp, bpsarchives go to downloads)
       const downloadTracker = catalogDownloadManager.createDownloadTracker();
       const downloadedPath = await catalogDownloadManager.ensureArtifact(
         update.entry,
         workingDir,
         downloadTracker,
         userDataDir,
-        20
+        20,
+        null // Catalog updates stay in workingDir for processing
       );
       
       // Verify SHA256

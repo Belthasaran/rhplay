@@ -16087,11 +16087,63 @@ function registerDatabaseHandlers(dbManager) {
   // Download files from IPFS/ArDrive
   ipcMain.handle('catalog:download-files', async (_event, { itemId, index7zName, index7zIpfsCidv1, index7zArdriveFileId }) => {
     try {
-      // TODO: Implement IPFS/ArDrive download
-      // For now, return error indicating not implemented
+      const { app } = require('electron');
+      const catalogDownloadManager = require('./utils/catalog-download-manager');
+      
+      // Load bpsarchives.json manifest
+      const manifestPath = path.join(__dirname, '..', 'electron', 'bpsarchives.json');
+      if (!fs.existsSync(manifestPath)) {
+        return {
+          success: false,
+          error: 'bpsarchives.json manifest not found'
+        };
+      }
+      
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      
+      // Find the 7z archive entry in manifest
+      if (!index7zName || !manifest[index7zName]) {
+        return {
+          success: false,
+          error: `Archive ${index7zName} not found in bpsarchives.json manifest`
+        };
+      }
+      
+      const manifestEntry = manifest[index7zName];
+      if (!manifestEntry.base) {
+        return {
+          success: false,
+          error: `Manifest entry for ${index7zName} has no base file specified`
+        };
+      }
+      
+      // Set up download paths
+      const userDataDir = app.getPath('userData');
+      const workingDir = path.join(userDataDir, 'CatalogTemp');
+      fs.mkdirSync(workingDir, { recursive: true });
+      
+      // Download the file
+      const downloadTracker = catalogDownloadManager.createDownloadTracker();
+      const downloadedPath = await catalogDownloadManager.ensureArtifact(
+        manifestEntry.base,
+        workingDir,
+        downloadTracker,
+        userDataDir,
+        20 // ipfsTimeout
+      );
+      
+      // Copy to refmaterial/bps7z if it's a bpsarchive
+      if (manifestEntry.type === 'bpsarchive') {
+        const targetDir = path.join(__dirname, '..', 'refmaterial', 'bps7z');
+        fs.mkdirSync(targetDir, { recursive: true });
+        const targetPath = path.join(targetDir, index7zName);
+        fs.copyFileSync(downloadedPath, targetPath);
+        console.log(`[catalog:download-files] Copied ${index7zName} to ${targetPath}`);
+      }
+      
       return {
-        success: false,
-        error: 'IPFS/ArDrive download not yet implemented'
+        success: true,
+        downloadedPath: downloadedPath
       };
     } catch (error) {
       console.error('[catalog:download-files] Error:', error);

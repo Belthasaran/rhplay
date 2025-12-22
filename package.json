@@ -184,6 +184,10 @@
         "to": "db/dbmanifest.json"
       },
       {
+        "from": "electron/bpsarchives.json",
+        "to": "db/bpsarchives.json"
+      },
+      {
         "from": "electron/twitch-config.json",
         "to": "twitch-config.json"
       },

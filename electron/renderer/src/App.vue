@@ -19811,11 +19811,17 @@ async function navigateToGame(gameid: string) {
 }
 
 async function openAddGameFromCatalog(result: any) {
+  // Initialize state with proper defaults
   addGameFromCatalogState.value = {
     item: result,
     checkingFiles: true,
     filesFound: false,
     bpsPath: undefined,
+    step1Collapsed: false,
+    step2Collapsed: false,
+    step3Collapsed: true, // Start collapsed
+    statusMessages: [],
+    downloadProgress: undefined,
     sevenZPath: undefined,
     missingFiles: [],
     downloading: false,
@@ -19963,14 +19969,6 @@ async function downloadCatalogFiles() {
   addStatusMessage(`Starting download: ${addGameFromCatalogState.value.item.index7z_name || 'Unknown file'}`);
   updateStepCollapseState();
   
-  // Set up progress listener (if IPC supports it)
-  // For now, we'll simulate progress updates
-  const progressInterval = setInterval(() => {
-    if (addGameFromCatalogState.value.downloadProgress && addGameFromCatalogState.value.downloadProgress.total > 0) {
-      // Progress will be updated by IPC events if available
-    }
-  }, 500);
-  
   try {
     const result = await (window as any).electronAPI.catalogDownloadFiles({
       itemId: addGameFromCatalogState.value.item.item_id,
@@ -19978,8 +19976,6 @@ async function downloadCatalogFiles() {
       index7zIpfsCidv1: addGameFromCatalogState.value.item.index7z_ipfs_cidv1,
       index7zArdriveFileId: addGameFromCatalogState.value.item.index7z_ardrive_file_id
     });
-    
-    clearInterval(progressInterval);
     
     if (result.success) {
       addStatusMessage(`✓ Download completed: ${addGameFromCatalogState.value.item.index7z_name || 'Unknown file'}`);
@@ -19992,7 +19988,6 @@ async function downloadCatalogFiles() {
       addGameFromCatalogState.value.downloadProgress = undefined;
     }
   } catch (error: any) {
-    clearInterval(progressInterval);
     addStatusMessage(`✗ Download error: ${error.message || 'Download failed'}`);
     addGameFromCatalogState.value.downloadError = error.message || 'Download failed';
     addGameFromCatalogState.value.downloadProgress = undefined;
@@ -20044,6 +20039,8 @@ async function createAndInstallCatalogRhpak() {
   
   addGameFromCatalogState.value.creatingRhpak = true;
   addGameFromCatalogState.value.error = undefined;
+  addStatusMessage('Starting RHPAK creation...');
+  updateStepCollapseState();
   
   try {
     // Load item JSON if not already loaded
@@ -34019,6 +34016,69 @@ button:disabled {
   gap: 8px;
 }
 
+.add-game-step {
+  margin-bottom: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+  transition: all 0.2s ease;
+}
+
+.add-game-step.step-collapsed {
+  padding: 8px 16px;
+}
+
+.add-game-step:not(.step-collapsed) {
+  padding: 16px;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 0;
+}
+
+.step-header:hover {
+  background: var(--bg-primary);
+  border-radius: 4px;
+  margin: -8px -8px 0 -8px;
+  padding: 8px;
+}
+
+.step-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.step-checkmark {
+  color: #2e7d32;
+  font-weight: bold;
+  font-size: 20px;
+  min-width: 24px;
+}
+
+.step-toggle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 4px 8px;
+  transition: transform 0.2s ease;
+}
+
+.add-game-step h4 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.step-content {
+  margin-top: 12px;
+}
+
 .catalog-item-detail-row {
   font-size: 20px;
   color: var(--text-primary);
@@ -34105,17 +34165,136 @@ button:disabled {
 }
 
 .add-game-step {
-  padding: 16px;
+  margin-bottom: 12px;
   background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+  transition: all 0.2s ease;
+}
+
+.add-game-step.step-collapsed {
+  padding: 8px 16px;
+}
+
+.add-game-step:not(.step-collapsed) {
+  padding: 16px;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 0;
+}
+
+.step-header:hover {
+  background: var(--bg-primary);
+  border-radius: 4px;
+  margin: -8px -8px 0 -8px;
+  padding: 8px;
+}
+
+.step-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.step-checkmark {
+  color: #2e7d32;
+  font-weight: bold;
+  font-size: 20px;
+  min-width: 24px;
+}
+
+.step-toggle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 4px 8px;
+  transition: transform 0.2s ease;
+}
+
+.add-game-step h4 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.step-content {
+  margin-top: 12px;
+}
+
+.status-messages {
+  margin-bottom: 12px;
+  max-height: 120px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+  font-family: 'Courier New', monospace;
+}
+
+.status-message {
+  font-size: 16px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  line-height: 1.4;
+}
+
+.download-progress {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--bg-primary);
   border-radius: 4px;
   border: 1px solid var(--border-primary);
 }
 
-.add-game-step h4 {
-  margin: 0 0 12px 0;
-  font-size: 22px;
+.progress-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.progress-filename {
+  font-weight: bold;
+  font-size: 18px;
   color: var(--text-primary);
 }
+
+.progress-message {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 24px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+  margin: 8px 0;
+  position: relative;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  min-width: 0;
+}
+
 
 .add-game-status {
   color: var(--text-secondary);

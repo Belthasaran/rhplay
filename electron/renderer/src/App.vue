@@ -19853,11 +19853,13 @@ async function createAndInstallCatalogRhpak() {
     }
     
     // Create temporary RHPAK
+    // Serialize itemJson to avoid IPC cloning issues
+    const serializedItemJson = JSON.parse(JSON.stringify(itemJson));
     const createResult = await (window as any).electronAPI.catalogCreateRhpak({
       itemId: addGameFromCatalogState.value.item.item_id,
       bpsPath: addGameFromCatalogState.value.bpsPath,
       sfcSha256: addGameFromCatalogState.value.item.sfc_rom_sha256_hash || itemJson.sfc_rom_sha256_hash,
-      itemJson: itemJson
+      itemJson: serializedItemJson
     });
     
     if (!createResult.success) {

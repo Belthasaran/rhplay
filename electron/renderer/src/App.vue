@@ -2236,11 +2236,11 @@
   </div>
 
   <!-- Add Game from Catalog Modal -->
-  <div v-if="addGameFromCatalogModalOpen" class="modal-backdrop" @click.self="closeAddGameFromCatalog" style="z-index: 20003;">
+  <div v-if="addGameFromCatalogModalOpen" class="modal-backdrop" @click.self.prevent style="z-index: 20003;">
     <div class="modal add-game-from-catalog-modal" style="max-width: 800px;">
       <header class="modal-header">
         <h3>Add Game from Catalog</h3>
-        <button @click="closeAddGameFromCatalog" class="close">✕</button>
+        <button @click="attemptCloseAddGameFromCatalog" class="close">✕</button>
       </header>
       <section class="modal-body" style="overflow-y: auto;">
         <div v-if="addGameFromCatalogState.item" class="add-game-content">
@@ -19874,28 +19874,39 @@ function updateStepCollapseState() {
       !addGameFromCatalogState.value.downloading && 
       !addGameFromCatalogState.value.creatingRhpak && 
       !addGameFromCatalogState.value.installingRhpak) {
-    if (addGameFromCatalogState.value.step1Collapsed === undefined) {
-      addGameFromCatalogState.value.step1Collapsed = true;
-    }
+    addGameFromCatalogState.value.step1Collapsed = true;
+  } else {
+    // Keep Step 1 expanded if it's active or has issues
+    addGameFromCatalogState.value.step1Collapsed = false;
   }
   
   // Step 2: Expand if active, collapse if completed
   if (addGameFromCatalogState.value.checkingFiles || addGameFromCatalogState.value.downloading) {
     addGameFromCatalogState.value.step2Collapsed = false;
-  } else if (addGameFromCatalogState.value.filesFound && 
-             addGameFromCatalogState.value.step2Collapsed === undefined) {
+  } else if (addGameFromCatalogState.value.filesFound) {
+    // Step 2 completed successfully - collapse it
     addGameFromCatalogState.value.step2Collapsed = true;
+  } else {
+    // Step 2 not completed yet - keep expanded
+    addGameFromCatalogState.value.step2Collapsed = false;
   }
   
-  // Step 3: Collapse until Step 2 is finished
-  if (!addGameFromCatalogState.value.filesFound && 
-      !(addGameFromCatalogState.value.sevenZPath && addGameFromCatalogState.value.item?.indexbps_name)) {
+  // Step 3: Expand when Step 2 is finished, collapse if not ready or completed
+  const step3Ready = addGameFromCatalogState.value.filesFound || 
+                     (addGameFromCatalogState.value.sevenZPath && addGameFromCatalogState.value.item?.indexbps_name);
+  
+  if (!step3Ready) {
+    // Step 3 not ready yet - keep collapsed
     addGameFromCatalogState.value.step3Collapsed = true;
   } else if (addGameFromCatalogState.value.creatingRhpak || addGameFromCatalogState.value.installingRhpak) {
+    // Step 3 is active - expand it
     addGameFromCatalogState.value.step3Collapsed = false;
-  } else if (addGameFromCatalogState.value.success && 
-             addGameFromCatalogState.value.step3Collapsed === undefined) {
+  } else if (addGameFromCatalogState.value.success) {
+    // Step 3 completed - collapse it
     addGameFromCatalogState.value.step3Collapsed = true;
+  } else {
+    // Step 3 is ready but not started - expand it
+    addGameFromCatalogState.value.step3Collapsed = false;
   }
 }
 
@@ -19971,8 +19982,33 @@ async function checkCatalogFiles(item: any) {
     }
     addGameFromCatalogState.value.checkingFiles = false;
     addGameFromCatalogState.value.downloading = false;
+    // Update collapse state after Step 2 completes
     updateStepCollapseState();
   }
+}
+
+async function attemptCloseAddGameFromCatalog() {
+  // Check if any operations are in progress
+  const isOperationInProgress = 
+    addGameFromCatalogState.value.checkingFiles ||
+    addGameFromCatalogState.value.downloading ||
+    addGameFromCatalogState.value.creatingRhpak ||
+    addGameFromCatalogState.value.installingRhpak;
+  
+  if (isOperationInProgress) {
+    const confirmed = await showConfirm(
+      'An operation is currently in progress (download, file check, or RHPAK creation/installation). Closing now will cancel the operation. Are you sure you want to close?',
+      'Operation In Progress'
+    );
+    
+    if (!confirmed) {
+      return; // User cancelled, don't close
+    }
+  }
+  
+  // Close the modal
+  addGameFromCatalogModalOpen.value = false;
+  addGameFromCatalogState.value = {};
 }
 
 function closeAddGameFromCatalog() {
@@ -20018,19 +20054,22 @@ async function downloadCatalogFiles() {
     if (result.success) {
       addStatusMessage(`✓ Download completed: ${addGameFromCatalogState.value.item.index7z_name || 'Unknown file'}`);
       addGameFromCatalogState.value.downloadProgress = undefined;
-      // Recheck files
+      // Recheck files - this will update filesFound and trigger collapse state update
       await checkCatalogFiles(addGameFromCatalogState.value.item);
     } else {
       addStatusMessage(`✗ Download failed: ${result.error || 'Unknown error'}`);
       addGameFromCatalogState.value.downloadError = result.error || 'Download failed';
       addGameFromCatalogState.value.downloadProgress = undefined;
+      updateStepCollapseState();
     }
   } catch (error: any) {
     addStatusMessage(`✗ Download error: ${error.message || 'Download failed'}`);
     addGameFromCatalogState.value.downloadError = error.message || 'Download failed';
     addGameFromCatalogState.value.downloadProgress = undefined;
+    updateStepCollapseState();
   } finally {
     addGameFromCatalogState.value.downloading = false;
+    // Update collapse state after download completes
     updateStepCollapseState();
   }
 }

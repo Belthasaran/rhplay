@@ -15938,12 +15938,13 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const { app } = require('electron');
       const os = require('os');
+      const userDataDir = app.getPath('userData');
       
-      // Possible locations to search
+      // Possible locations to search (program data downloads directory and user Downloads)
+      const downloadsDir = path.join(userDataDir, 'downloads');
       const searchPaths = [
-        path.join(__dirname, '..', 'refmaterial', 'bps7z'), // Program directory
-        path.join(os.homedir(), 'Downloads'), // Downloads folder
-        path.join(__dirname, '..', 'electron'), // Electron directory
+        downloadsDir, // Program data downloads directory
+        path.join(os.homedir(), 'Downloads'), // User Downloads folder
       ];
       
       let bpsPath = null;
@@ -15992,8 +15993,6 @@ function registerDatabaseHandlers(dbManager) {
           if (manifest && manifest[index7zName]) {
             const manifestEntry = manifest[index7zName];
             if (manifestEntry.base) {
-              const { app } = require('electron');
-              const userDataDir = app.getPath('userData');
               const workingDir = path.join(userDataDir, 'CatalogTemp');
               fs.mkdirSync(workingDir, { recursive: true });
               
@@ -16006,10 +16005,10 @@ function registerDatabaseHandlers(dbManager) {
                 20
               );
               
-              // Copy to refmaterial/bps7z
-              const targetDir = path.join(__dirname, '..', 'refmaterial', 'bps7z');
-              fs.mkdirSync(targetDir, { recursive: true });
-              const targetPath = path.join(targetDir, index7zName);
+              // Copy to program data downloads directory
+              const downloadsDir = path.join(userDataDir, 'downloads');
+              fs.mkdirSync(downloadsDir, { recursive: true });
+              const targetPath = path.join(downloadsDir, index7zName);
               fs.copyFileSync(downloadedPath, targetPath);
               
               sevenZPath = targetPath;
@@ -16156,7 +16155,7 @@ function registerDatabaseHandlers(dbManager) {
         };
       }
       
-      // Set up download paths
+      // Set up download paths (use program data directory)
       const userDataDir = app.getPath('userData');
       const workingDir = path.join(userDataDir, 'CatalogTemp');
       fs.mkdirSync(workingDir, { recursive: true });
@@ -16171,11 +16170,11 @@ function registerDatabaseHandlers(dbManager) {
         20 // ipfsTimeout
       );
       
-      // Copy to refmaterial/bps7z if it's a bpsarchive
+      // Copy to program data downloads directory if it's a bpsarchive
       if (manifestEntry.type === 'bpsarchive') {
-        const targetDir = path.join(__dirname, '..', 'refmaterial', 'bps7z');
-        fs.mkdirSync(targetDir, { recursive: true });
-        const targetPath = path.join(targetDir, index7zName);
+        const downloadsDir = path.join(userDataDir, 'downloads');
+        fs.mkdirSync(downloadsDir, { recursive: true });
+        const targetPath = path.join(downloadsDir, index7zName);
         fs.copyFileSync(downloadedPath, targetPath);
         console.log(`[catalog:download-files] Copied ${index7zName} to ${targetPath}`);
       }

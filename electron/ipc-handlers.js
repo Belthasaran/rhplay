@@ -15935,7 +15935,7 @@ function registerDatabaseHandlers(dbManager) {
 
   // Find BPS/7z files for catalog item
   ipcMain.handle('catalog:find-files', async (event, { itemId, index7zName, indexBpsName, bpsSha256 }) => {
-    const sendProgress = (message: string) => {
+    const sendProgress = (message) => {
       if (event.sender && !event.sender.isDestroyed()) {
         event.sender.send('catalog:find-files:progress', { message });
       }

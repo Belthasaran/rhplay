@@ -2,7 +2,7 @@ import os
 import re
 
 for de in os.listdir("."):
-   m = re.match('KLDCX_(\d+)_([^.]+).bps',de)
+   m = re.match('KLDCX_(\d+)_(.*).bps',de)
    if not(m):
        continue
    fromname = de

@@ -2360,7 +2360,7 @@
         </div>
       </section>
       <footer class="modal-footer">
-        <button @click="closeAddGameFromCatalog" class="btn-secondary">Close</button>
+        <button @click="attemptCloseAddGameFromCatalog" class="btn-secondary">Close</button>
       </footer>
     </div>
   </div>
@@ -34372,6 +34372,12 @@ button:disabled {
   min-width: 0;
 }
 
+.progress-details {
+  font-size: 16px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 4px;
+}
 
 .add-game-status {
   color: var(--text-secondary);

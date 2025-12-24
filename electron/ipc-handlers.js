@@ -15797,7 +15797,7 @@ function registerDatabaseHandlers(dbManager) {
         } else {
           return `${term}*`;
         }
-      }).join(' OR ');
+      }).join(' AND ');
       
       const ftsQuery = queryTerms;
       
@@ -15856,7 +15856,7 @@ function registerDatabaseHandlers(dbManager) {
         LEFT JOIN groups g ON ig.group_id = g.group_id
         WHERE items_fts MATCH ?
         ORDER BY i.title
-        LIMIT 50
+        LIMIT 100
       `).all(ftsQuery);
       
       db.close();

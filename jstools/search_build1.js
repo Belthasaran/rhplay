@@ -922,17 +922,3 @@ if (require.main === module) {
 }
 
 module.exports = { buildSearchCatalog1, buildSearchCatalog1Incremental, normalizeItem };
- } catch (error) {
-    console.error(`Fatal error: ${error.message}`);
-    process.exit(1);
-  }
-}
-
-if (require.main === module) {
-  main().catch(error => {
-    console.error(`Fatal error: ${error.message}`);
-    process.exit(1);
-  });
-}
-
-module.exports = { buildSearchCatalog1, buildSearchCatalog1Incremental, normalizeItem };

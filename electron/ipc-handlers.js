@@ -15856,7 +15856,7 @@ function registerDatabaseHandlers(dbManager) {
         LEFT JOIN groups g ON ig.group_id = g.group_id
         WHERE items_fts MATCH ?
         ORDER BY i.title
-        LIMIT 100
+        LIMIT 200
       `).all(ftsQuery);
       
       db.close();

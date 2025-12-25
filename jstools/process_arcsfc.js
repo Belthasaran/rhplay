@@ -137,7 +137,7 @@ async function determineROMType(filePath) {
 	  return process.env["FORCEROM"]
   }
 
-  if (sizeMod1024==0 && ((isPowerOf2KB(size) && sizeMod1024 === 0) || (size === 3145728) || (size === 2097152) || (size === 4194304) || (size === 2621440) || (size === 1048576) || (size === 1179648) || (size === 2097152) || (size === 4194304) || (size === 6291456)  || (size == 1310720) || (size === 3145728) || (size === 1572864) || (size === 3276800) || (size === 2621440) || (size === 655360) ))  {
+  if (sizeMod1024==0 && ((isPowerOf2KB(size) && sizeMod1024 === 0) || (size === 3145728) || (size === 2097152) || (size === 4194304) || (size === 2621440) || (size === 1048576) || (size === 1179648) || (size === 2097152) || (size === 4194304) || (size === 6291456)  || (size == 1310720) || (size === 3145728) || (size === 1572864) || (size === 3276800) || (size === 2621440) || (size === 655360) || (size === 589824) ))  {
     return 'unheadered';
   } else if (sizeMod1024 === 512 && (isPowerOf2KB(size - 512) || (size === 6291968 || 0)  )) {
     return 'headered';

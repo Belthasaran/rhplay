@@ -19760,6 +19760,52 @@ async function downloadCatalogFilesAutomatically() {
   }
 }
 
+async function applyCatalogUpdate(update: any) {
+  catalogSearchState.value.applyingUpdate = true;
+  catalogSearchState.value.updateError = undefined;
+  
+  try {
+    const result = await (window as any).electronAPI.catalogApplyUpdate({ update });
+    
+    if (result.success) {
+      // Update successful - refresh catalog state
+      catalogSearchState.value.applyingUpdate = false;
+      
+      // Remove this update from available updates list
+      if (catalogSearchState.value.availableUpdates) {
+        catalogSearchState.value.availableUpdates = catalogSearchState.value.availableUpdates.filter(
+          (u: any) => u.name !== update.name || u.type !== update.type
+        );
+      }
+      
+      // If no more updates, clear the flag
+      if (!catalogSearchState.value.availableUpdates || catalogSearchState.value.availableUpdates.length === 0) {
+        catalogSearchState.value.hasUpdates = false;
+      }
+      
+      // Recheck availability to ensure catalog is ready
+      try {
+        const checkResult = await (window as any).electronAPI.catalogCheckAvailability();
+        if (checkResult.available && catalogSearchState.value.status !== 'ready') {
+          catalogSearchState.value.status = 'ready';
+        }
+      } catch (error) {
+        // Ignore
+      }
+      
+      await showAlert('Update Installed', `${update.name} has been successfully installed.`);
+    } else {
+      catalogSearchState.value.updateError = result.error || 'Update installation failed';
+      await showAlert('Update Failed', `Failed to install ${update.name}: ${result.error || 'Unknown error'}`);
+    }
+  } catch (error: any) {
+    catalogSearchState.value.updateError = error.message || 'Update installation failed';
+    await showAlert('Update Failed', `Failed to install ${update.name}: ${error.message || 'Unknown error'}`);
+  } finally {
+    catalogSearchState.value.applyingUpdate = false;
+  }
+}
+
 async function copyCatalogFiles() {
   if (!catalogSearchState.value.selectedDbPath || !catalogSearchState.value.selectedZipPath) {
     return;
@@ -19785,7 +19831,17 @@ async function copyCatalogFiles() {
         try {
           const checkResult = await (window as any).electronAPI.catalogCheckAvailability();
           if (checkResult.available) {
-            catalogSearchState.value = { status: 'ready' };
+            catalogSearchState.value.status = 'ready';
+            // Check for updates
+            try {
+              const updates = await (window as any).electronAPI.catalogCheckUpdates();
+              if (updates.available) {
+                catalogSearchState.value.hasUpdates = true;
+                catalogSearchState.value.availableUpdates = updates.updates || [];
+              }
+            } catch (error) {
+              // Ignore
+            }
           }
         } catch (error) {
           // Ignore

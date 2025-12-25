@@ -249,9 +249,13 @@ function checkCatalogUpdates() {
       const manifestVersion = entry.base.searchdb_version || entry.version || '1';
       const manifestSha256 = entry.base.sha256;
       
-      if (!installed.base_version || 
-          installed.base_sha256 !== manifestSha256 ||
-          installed.base_version !== manifestVersion) {
+      // Check if file is missing or version is higher
+      const versionCompare = compareVersions(manifestVersion, installed.base_version || '0');
+      const isMissing = !installed.base_version || !installed.base_sha256;
+      const isNewer = versionCompare > 0;
+      const isDifferent = installed.base_sha256 !== manifestSha256;
+      
+      if (isMissing || isNewer || isDifferent) {
         updates.push({
           type: 'catalog-base',
           name: 'rhsearch.zip',
@@ -259,7 +263,9 @@ function checkCatalogUpdates() {
           currentSha256: installed.base_sha256,
           availableVersion: manifestVersion,
           availableSha256: manifestSha256,
-          entry: entry.base
+          entry: entry.base,
+          isMissing: isMissing,
+          isNewer: isNewer
         });
       }
       
@@ -353,5 +359,6 @@ module.exports = {
   saveSearchDat,
   updateSearchDatCatalog,
   checkCatalogUpdates,
-  resolveResourcePath
+  resolveResourcePath,
+  compareVersions
 };

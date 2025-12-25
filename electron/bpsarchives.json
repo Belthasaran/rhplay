@@ -12,6 +12,7 @@
       "ardrive_file_id": "4b1aa47e-57da-4c38-ac9f-a89c3f29d574",
       "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
       "data_txid": "LzMu-beqRdyI-Cs7-NCYy13QPcEOQuE2uN7GxU9pcyE",
+      "baddR" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9yZVhad0NnRg==",
       "metadata_txid": "",
       "size": "19672244",
       "priority": [
@@ -34,6 +35,7 @@
       "ardrive_file_id": "0f545ecd-c521-46dd-84a4-0a0910f0984c",
       "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
       "data_txid": "6KNRBBpyg6Su25tzC0er0Ct1wZS4izlo3OjHbye8zZ4",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS80ajdabTFqeQ==",
       "metadata_txid": "",
       "baddr": "example",
       "size": "102131496",

@@ -5925,5 +5925,261 @@
       "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
       "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d"
     }
+  },
+  "bpsxa_0.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_0.7z",
+      "format": "7z",
+      "sha256": "d1bcb1d52ce000b922d9dde6a59c9f0743e48a73db0593ac5c6173e66211e4ff",
+      "ipfs_cidv1": "bafybeigo5z7tuptcfxcttcepzgxwlyywfqdbecoaq3jfd255v2k62khora",
+      "size": "16091536",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_1.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_1.7z",
+      "format": "7z",
+      "sha256": "aa8936666a42d2296d6d3c60bdf58f3077fc244796175ee142632319eac7d2d4",
+      "ipfs_cidv1": "bafybeidwvyiyfavjhktoatrnepaubmvg7mo4jvjsbizzo3ixav7k4hz6xi",
+      "size": "8108108",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_2.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_2.7z",
+      "format": "7z",
+      "sha256": "347a1d45be8c77976833d29dd89191d465ff8b8e29c9c0b3411c87882ceb56c4",
+      "ipfs_cidv1": "bafybeid4muswijdth4wsjdxzeuvmk3fjerecedm3u6d4ybchay6yx6chdu",
+      "size": "8954089",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_3.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_3.7z",
+      "format": "7z",
+      "sha256": "801b0ecd8ae9d753211cc8bf705e3a9f043337caa637d6631aafbb1d32bd423e",
+      "ipfs_cidv1": "bafybeibbekcx4lpy3223mg4a3dfm5sn3scb2b7nnz7ef3qyegonxzehrhe",
+      "size": "4879477",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_4.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_4.7z",
+      "format": "7z",
+      "sha256": "783659aaf944dabc1f9b0dd29af1fae8eddb8fd15f29de1bb1eff288ffc2b7c8",
+      "ipfs_cidv1": "bafybeifbifeyjnpyaxmfeimuuskuffcfk7lr3iiiur6gopzomia35kg5vq",
+      "size": "7216407",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_5.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_5.7z",
+      "format": "7z",
+      "sha256": "c4346670d0b65d2bd15f64514641027f690a88da473c14b0bf72f331f543a8b6",
+      "ipfs_cidv1": "bafybeieb6osejrit3djhq6n64k4mzcyxmqipxhk3pdmc6kigq7srkjm65i",
+      "size": "7409314",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_6.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_6.7z",
+      "format": "7z",
+      "sha256": "6aa8fe42d200d7dd0030c7652e8bed34f54a7a4073cc9c6571331cca3e5bc852",
+      "ipfs_cidv1": "bafybeidhemv5lxo7i7opwmdc2j5vzi4j5wdmo4jzwakm4jsxpcf7gxt4me",
+      "size": "7259510",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_7.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_7.7z",
+      "format": "7z",
+      "sha256": "8b4d336fe4ec25b85ee8e00eb2060724411ccd994e54e7b049ce8b421c37bd2b",
+      "ipfs_cidv1": "bafybeib7xasohnpg2f3izt3uvuj3bnc3dkrutologfqyfgg34y4sqhz5cy",
+      "size": "8024308",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_8.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_8.7z",
+      "format": "7z",
+      "sha256": "1efa0abde4fb89d3da07daad564f8ebfe71c186701a1f39165d1f6b9dc35c285",
+      "ipfs_cidv1": "bafybeianh4r57m4qkzntocluahh3mq3qb3vnyvjlahexjyevmqnxhuukpe",
+      "size": "6017041",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_9.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_9.7z",
+      "format": "7z",
+      "sha256": "61d6550bee9745785fb8977ed190c94aad9c9baab70b94ff1dab3919441f1c5e",
+      "ipfs_cidv1": "bafybeicv5ilyiabavu2uudhq5ynxub5wqc3kkx4f27nfr6lkby7xahkdlu",
+      "size": "7303041",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_a.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_a.7z",
+      "format": "7z",
+      "sha256": "bc467271834fda3bad02aa66366621f5085663ca771a0c51c3eb8a5ef5acd2d4",
+      "ipfs_cidv1": "bafybeibkxpx6iw5zfgjrurogblgaf6dvwrb4slcgyt26k5x2l2bd362lwm",
+      "size": "6652068",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_b.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_b.7z",
+      "format": "7z",
+      "sha256": "1637842c92ed836d69fa977beee24d5cc32a2d443dbe76bc4eb8d6c8b4bf4c01",
+      "ipfs_cidv1": "bafybeibolz73axce4wysph5l4amp4kdlfh3ivfwhqdkfhba6zudlqjd6su",
+      "size": "4018718",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_c.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_c.7z",
+      "format": "7z",
+      "sha256": "2cc7894bb11dd53b0d814223ff116d2881441279b907b8b4b1b63721cd85afd2",
+      "ipfs_cidv1": "bafybeif5jr5yajqbwdqcaj5b7vrozx6pujip2z2gmlxdgoerups3hdsqgu",
+      "size": "4534500",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_d.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_d.7z",
+      "format": "7z",
+      "sha256": "db177620f93a2f2059e85f7806d552ca2c15f4d7b763ce96b9f89c6a871d2583",
+      "ipfs_cidv1": "bafybeicqmlzyrx3why4a5qcqspsjoj24oyiic2u5ezhtxhdztwcnsqoava",
+      "size": "5858883",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_e.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_e.7z",
+      "format": "7z",
+      "sha256": "830b5dbe0b8ed7e30f3081e90bfd492dc362271a48d6b98e476c1a73b99739e6",
+      "ipfs_cidv1": "bafybeignsq5hcwpqgyxtzsdnuab3ac5zjnqj6xivs7z3acim43b64g6dke",
+      "size": "6355196",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
+  },
+  "bpsxa_f.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxa_f.7z",
+      "format": "7z",
+      "sha256": "b2965459bcc327a7bafa35f2daf7426e5a35f1234ed8b1aa9ca18060a1515c75",
+      "ipfs_cidv1": "bafybeigahk7evnvplbjcoi7bylpzngmxjxnsly33mlk5tufao7sv26zrju",
+      "size": "5803828",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    }
   }
 }

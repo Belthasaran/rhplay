@@ -165,7 +165,8 @@ async function collectArchiveMetadata(filePath) {
   }
 
   const buffer = fs.readFileSync(filePath);
-  const sha256 = computeSha256(buffer);
+  //const sha256 = computeSha256(buffer);
+  const sha256 = computeSha256(filePath);
   const ipfsCid = await ipfsOnlyHash(buffer, {
     cidVersion: 1,
     rawLeaves: true,

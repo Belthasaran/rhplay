@@ -291,9 +291,13 @@ function checkCatalogUpdates() {
       const manifestVersion = entry.base.searchdb_version || entry.version || '1';
       const manifestSha256 = entry.base.sha256;
       
-      if (!installed.base_version || 
-          installed.base_sha256 !== manifestSha256 ||
-          installed.base_version !== manifestVersion) {
+      // Check if file is missing or version is higher
+      const versionCompare = compareVersions(manifestVersion, installed.base_version || '0');
+      const isMissing = !installed.base_version || !installed.base_sha256;
+      const isNewer = versionCompare > 0;
+      const isDifferent = installed.base_sha256 !== manifestSha256;
+      
+      if (isMissing || isNewer || isDifferent) {
         updates.push({
           type: 'catalogdb-base',
           name: 'rhsearch_cat.db',
@@ -301,7 +305,9 @@ function checkCatalogUpdates() {
           currentSha256: installed.base_sha256,
           availableVersion: manifestVersion,
           availableSha256: manifestSha256,
-          entry: entry.base
+          entry: entry.base,
+          isMissing: isMissing,
+          isNewer: isNewer
         });
       }
     }
@@ -311,6 +317,31 @@ function checkCatalogUpdates() {
     available: updates.length > 0,
     updates: updates
   };
+}
+
+/**
+ * Compare version strings (simple numeric comparison)
+ * Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+ */
+function compareVersions(v1, v2) {
+  if (!v1 && !v2) return 0;
+  if (!v1) return -1;
+  if (!v2) return 1;
+  
+  // Try to parse as numbers
+  const n1 = parseFloat(v1);
+  const n2 = parseFloat(v2);
+  
+  if (!isNaN(n1) && !isNaN(n2)) {
+    if (n1 < n2) return -1;
+    if (n1 > n2) return 1;
+    return 0;
+  }
+  
+  // Fallback to string comparison
+  if (v1 < v2) return -1;
+  if (v1 > v2) return 1;
+  return 0;
 }
 
 module.exports = {

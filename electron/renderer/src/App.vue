@@ -2008,7 +2008,30 @@
             </ul>
           </div>
           <div class="catalog-file-selection">
-            <p class="catalog-file-selection-label"><strong>Copy catalog files to program data directory:</strong></p>
+            <div style="margin-bottom: 16px; padding: 16px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196f3;">
+              <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: bold; color: #1976d2;">
+                📥 Automatic Download Available
+              </p>
+              <p style="margin: 0 0 12px 0; font-size: 16px; color: #333;">
+                Download catalog files automatically from IPFS/ArDrive using the manifest.
+              </p>
+              <button 
+                @click="downloadCatalogFilesAutomatically" 
+                :disabled="catalogSearchState.downloadingCatalog"
+                class="btn-primary"
+                style="font-size: 18px; padding: 12px 24px;"
+              >
+                {{ catalogSearchState.downloadingCatalog ? 'Downloading...' : 'Automatically Download' }}
+              </button>
+              <p v-if="catalogSearchState.downloadCatalogError" style="margin: 12px 0 0 0; color: #d32f2f; font-size: 16px;">
+                Error: {{ catalogSearchState.downloadCatalogError }}
+              </p>
+              <p v-if="catalogSearchState.downloadCatalogProgress" style="margin: 12px 0 0 0; font-size: 16px; color: #666;">
+                {{ catalogSearchState.downloadCatalogProgress }}
+              </p>
+            </div>
+            
+            <p class="catalog-file-selection-label" style="margin-top: 24px;"><strong>Or copy catalog files manually:</strong></p>
             <div class="catalog-file-buttons">
               <button @click="chooseCatalogDbFile" class="btn-secondary-small">
                 Select rhsearch_cat.db
@@ -9213,6 +9236,9 @@ const catalogSearchState = ref<{
   selectedDbPath?: string;
   selectedZipPath?: string;
   copying?: boolean;
+  downloadingCatalog?: boolean;
+  downloadCatalogError?: string;
+  downloadCatalogProgress?: string;
   copyError?: string;
   copySuccess?: string;
   searching?: boolean;
@@ -19564,6 +19590,21 @@ async function openCatalogSearchModal() {
     const result = await (window as any).electronAPI.catalogCheckAvailability();
     if (result.available) {
       catalogSearchState.value = { status: 'ready' };
+      // Check for updates when catalog is available
+      try {
+        const updates = await (window as any).electronAPI.catalogCheckUpdates();
+        if (updates.available) {
+          catalogSearchState.value.hasUpdates = true;
+          catalogSearchState.value.availableUpdates = updates.updates || [];
+        } else {
+          catalogSearchState.value.hasUpdates = false;
+          catalogSearchState.value.availableUpdates = [];
+        }
+      } catch (error) {
+        // Ignore update check errors
+        catalogSearchState.value.hasUpdates = false;
+        catalogSearchState.value.availableUpdates = [];
+      }
     } else {
       catalogSearchState.value = {
         status: 'not-available',
@@ -19611,6 +19652,111 @@ async function chooseCatalogZipFile() {
     catalogSearchState.value.copySuccess = undefined;
   } catch (error: any) {
     await showAlert('Error', `Failed to select ZIP file: ${error.message}`);
+  }
+}
+
+async function downloadCatalogFilesAutomatically() {
+  catalogSearchState.value.downloadingCatalog = true;
+  catalogSearchState.value.downloadCatalogError = undefined;
+  catalogSearchState.value.downloadCatalogProgress = 'Checking manifest...';
+  
+  try {
+    // Check what files are needed
+    const missingFiles = catalogSearchState.value.missingFiles || ['rhsearch_cat.db', 'rhsearch.zip'];
+    const filesToDownload: string[] = [];
+    
+    if (missingFiles.includes('rhsearch_cat.db')) {
+      filesToDownload.push('rhsearch_cat.db');
+    }
+    if (missingFiles.includes('rhsearch.zip')) {
+      filesToDownload.push('rhsearch.zip');
+    }
+    
+    if (filesToDownload.length === 0) {
+      catalogSearchState.value.downloadCatalogError = 'No files to download';
+      return;
+    }
+    
+    // Download each file
+    for (const fileName of filesToDownload) {
+      catalogSearchState.value.downloadCatalogProgress = `Downloading ${fileName}...`;
+      
+      // Get available updates (which includes base files if not installed)
+      const updates = await (window as any).electronAPI.catalogCheckUpdates();
+      
+      // Find the update for this file
+      let updateToApply = null;
+      if (fileName === 'rhsearch_cat.db') {
+        updateToApply = updates.updates?.find((u: any) => u.type === 'catalogdb-base');
+      } else if (fileName === 'rhsearch.zip') {
+        updateToApply = updates.updates?.find((u: any) => u.type === 'catalog-base');
+      }
+      
+      if (!updateToApply) {
+        // If no update found, try to download directly from manifest
+        // This means the file isn't in searchdat.json yet - check manifest directly
+        catalogSearchState.value.downloadCatalogProgress = `Preparing to download ${fileName}...`;
+        
+        // Check updates again - if files are missing, they should show up as updates
+        const updatesCheck = await (window as any).electronAPI.catalogCheckUpdates();
+        if (fileName === 'rhsearch_cat.db') {
+          updateToApply = updatesCheck.updates?.find((u: any) => u.type === 'catalogdb-base' && u.name === 'rhsearch_cat.db');
+        } else if (fileName === 'rhsearch.zip') {
+          updateToApply = updatesCheck.updates?.find((u: any) => u.type === 'catalog-base' && u.name === 'rhsearch.zip');
+        }
+        
+        // If still not found, the manifest might not have these files
+        // or they're not properly configured - we'll handle the error below
+      }
+      
+      if (updateToApply) {
+        catalogSearchState.value.downloadCatalogProgress = `Installing ${fileName}...`;
+        const result = await (window as any).electronAPI.catalogApplyUpdate({ update: updateToApply });
+        
+        if (!result.success) {
+          throw new Error(`Failed to download ${fileName}: ${result.error || 'Unknown error'}`);
+        }
+      } else {
+        throw new Error(`No download source available for ${fileName} in manifest`);
+      }
+    }
+    
+    catalogSearchState.value.downloadCatalogProgress = 'Download complete! Verifying...';
+    
+    // Recheck availability
+    setTimeout(async () => {
+      try {
+        const checkResult = await (window as any).electronAPI.catalogCheckAvailability();
+        if (checkResult.available) {
+          catalogSearchState.value.status = 'ready';
+          catalogSearchState.value.downloadCatalogProgress = 'Catalog files installed successfully!';
+          
+          // Check for updates
+          try {
+            const updates = await (window as any).electronAPI.catalogCheckUpdates();
+            if (updates.available) {
+              catalogSearchState.value.hasUpdates = true;
+              catalogSearchState.value.availableUpdates = updates.updates || [];
+            } else {
+              catalogSearchState.value.hasUpdates = false;
+              catalogSearchState.value.availableUpdates = [];
+            }
+          } catch (error) {
+            // Ignore update check errors
+          }
+        } else {
+          catalogSearchState.value.downloadCatalogError = 'Files downloaded but verification failed';
+        }
+      } catch (error: any) {
+        catalogSearchState.value.downloadCatalogError = `Verification failed: ${error.message}`;
+      }
+    }, 500);
+    
+  } catch (error: any) {
+    catalogSearchState.value.downloadCatalogError = error.message || 'Download failed';
+    catalogSearchState.value.downloadCatalogProgress = undefined;
+  } finally {
+    catalogSearchState.value.downloadingCatalog = false;
   }
 }
 

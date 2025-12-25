@@ -414,7 +414,7 @@ async function findJSONFiles(dir) {
 
 // Main processing function
 async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
-  const { rhsearchdb, rhsearchzip } = options;
+  const { rhsearchdb, rhsearchzip, onProgress } = options || {};
   
   console.log('='.repeat(70));
   console.log('Stage 1: Ingest and Normalize Master JSON Files');
@@ -665,7 +665,7 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
  * Incremental build: Add a single JSON file to existing catalog
  */
 async function buildSearchCatalog1Incremental(jsonFilePath, options) {
-  const { rhsearchdb, rhsearchzip } = options;
+  const { rhsearchdb, rhsearchzip, onProgress } = options || {};
   
   console.log('='.repeat(70));
   console.log('Incremental Build: Add Single JSON to Catalog');

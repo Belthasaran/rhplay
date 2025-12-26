@@ -19658,7 +19658,12 @@ async function chooseCatalogZipFile() {
 async function downloadCatalogFilesAutomatically() {
   catalogSearchState.value.downloadingCatalog = true;
   catalogSearchState.value.downloadCatalogError = undefined;
-  catalogSearchState.value.downloadCatalogProgress = 'Checking manifest...';
+  catalogSearchState.value.downloadCatalogProgress = 'Preparing to download...';
+  
+  // Set up progress listener
+  const unsubscribeProgress = (window as any).electronAPI.onCatalogDownloadBaseFilesProgress((progressData: any) => {
+    catalogSearchState.value.downloadCatalogProgress = progressData.message || 'Downloading...';
+  });
   
   try {
     // Check what files are needed
@@ -19677,48 +19682,20 @@ async function downloadCatalogFilesAutomatically() {
       return;
     }
     
-    // Download each file
-    for (const fileName of filesToDownload) {
-      catalogSearchState.value.downloadCatalogProgress = `Downloading ${fileName}...`;
-      
-      // Get available updates (which includes base files if not installed)
-      const updates = await (window as any).electronAPI.catalogCheckUpdates();
-      
-      // Find the update for this file
-      let updateToApply = null;
-      if (fileName === 'rhsearch_cat.db') {
-        updateToApply = updates.updates?.find((u: any) => u.type === 'catalogdb-base');
-      } else if (fileName === 'rhsearch.zip') {
-        updateToApply = updates.updates?.find((u: any) => u.type === 'catalog-base');
-      }
-      
-      if (!updateToApply) {
-        // If no update found, try to download directly from manifest
-        // This means the file isn't in searchdat.json yet - check manifest directly
-        catalogSearchState.value.downloadCatalogProgress = `Preparing to download ${fileName}...`;
-        
-        // Check updates again - if files are missing, they should show up as updates
-        const updatesCheck = await (window as any).electronAPI.catalogCheckUpdates();
-        if (fileName === 'rhsearch_cat.db') {
-          updateToApply = updatesCheck.updates?.find((u: any) => u.type === 'catalogdb-base' && u.name === 'rhsearch_cat.db');
-        } else if (fileName === 'rhsearch.zip') {
-          updateToApply = updatesCheck.updates?.find((u: any) => u.type === 'catalog-base' && u.name === 'rhsearch.zip');
-        }
-        
-        // If still not found, the manifest might not have these files
-        // or they're not properly configured - we'll handle the error below
-      }
-      
-      if (updateToApply) {
-        catalogSearchState.value.downloadCatalogProgress = `Installing ${fileName}...`;
-        const result = await (window as any).electronAPI.catalogApplyUpdate({ update: updateToApply });
-        
-        if (!result.success) {
-          throw new Error(`Failed to download ${fileName}: ${result.error || 'Unknown error'}`);
-        }
-      } else {
-        throw new Error(`No download source available for ${fileName} in manifest`);
-      }
+    // Download files using the new handler
+    const result = await (window as any).electronAPI.catalogDownloadBaseFiles({ 
+      fileNames: filesToDownload 
+    });
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Download failed');
+    }
+    
+    // Check if all files were downloaded successfully
+    const failedFiles = result.results.filter((r: any) => !r.success);
+    if (failedFiles.length > 0) {
+      const errorMessages = failedFiles.map((r: any) => `${r.fileName}: ${r.error}`).join(', ');
+      throw new Error(`Failed to download some files: ${errorMessages}`);
     }
     
     catalogSearchState.value.downloadCatalogProgress = 'Download complete! Verifying...';
@@ -19756,6 +19733,7 @@ async function downloadCatalogFilesAutomatically() {
     catalogSearchState.value.downloadCatalogError = error.message || 'Download failed';
     catalogSearchState.value.downloadCatalogProgress = undefined;
   } finally {
+    unsubscribeProgress();
     catalogSearchState.value.downloadingCatalog = false;
   }
 }

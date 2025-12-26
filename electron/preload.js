@@ -1379,4 +1379,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   catalogApplyUpdate: (params) => ipcRenderer.invoke('catalog:apply-update', params),
+  
+  /**
+   * Download catalog base files (rhsearch_cat.db and rhsearch.zip)
+   * @param {Object} params - {fileNames: Array<string>}
+   * @returns {Promise<{success: boolean, results: Array, error?: string}>}
+   */
+  catalogDownloadBaseFiles: (params) => ipcRenderer.invoke('catalog:download-base-files', params),
+  
+  /**
+   * Listen for catalog base files download progress
+   * @param {Function} callback - (data) => void
+   * @returns {Function} Unsubscribe function
+   */
+  onCatalogDownloadBaseFilesProgress: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('catalog:download-base-files:progress', handler);
+    return () => ipcRenderer.removeListener('catalog:download-base-files:progress', handler);
+  },
 });

@@ -16441,6 +16441,243 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // Download catalog base files (rhsearch_cat.db and rhsearch.zip)
+  // This handler downloads and installs base catalog files without requiring search_build1
+  ipcMain.handle('catalog:download-base-files', async (event, { fileNames }) => {
+    try {
+      const { app } = require('electron');
+      const catalogDownloadManager = require('./utils/catalog-download-manager');
+      const catalogManifestUtils = require('./utils/catalog-manifest-utils');
+      const crypto = require('crypto');
+      const lzma = require('lzma-native');
+      const { pipeline } = require('stream/promises');
+      const fs = require('fs');
+      
+      const userDataDir = app.getPath('userData');
+      const workingDir = path.join(userDataDir, 'CatalogTemp');
+      fs.mkdirSync(workingDir, { recursive: true });
+      
+      // Load manifest
+      const manifest = catalogManifestUtils.loadBpsArchivesManifest();
+      if (!manifest) {
+        throw new Error('Failed to load bpsarchives.json manifest');
+      }
+      
+      const results = [];
+      const filesToDownload = Array.isArray(fileNames) ? fileNames : ['rhsearch_cat.db', 'rhsearch.zip'];
+      
+      // Helper function to format bytes
+      function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes < 0) return 'unknown';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let idx = 0;
+        let value = bytes;
+        while (value >= 1024 && idx < units.length - 1) {
+          value /= 1024;
+          idx += 1;
+        }
+        return `${value.toFixed(idx === 0 ? 0 : 1)}${units[idx]}`;
+      }
+      
+      // Helper function to send progress events
+      function sendProgress(data) {
+        event.sender.send('catalog:download-base-files:progress', data);
+      }
+      
+      // Create download tracker with progress events
+      const downloadTracker = catalogDownloadManager.createDownloadTracker();
+      
+      // Override download tracker methods to send progress events
+      const originalStart = downloadTracker.start;
+      const originalProgress = downloadTracker.progress;
+      const originalComplete = downloadTracker.complete;
+      
+      downloadTracker.start = (spec, totalBytes) => {
+        originalStart.call(downloadTracker, spec, totalBytes);
+        sendProgress({
+          message: `Starting download: ${spec.file_name} (${formatBytes(totalBytes)})`,
+          filename: spec.file_name,
+          downloaded: 0,
+          total: totalBytes,
+          percent: 0
+        });
+      };
+      
+      downloadTracker.progress = (spec, downloaded, total) => {
+        originalProgress.call(downloadTracker, spec, downloaded, total);
+        const percent = total > 0 ? Math.floor((downloaded / total) * 100) : 0;
+        sendProgress({
+          message: `Downloading ${spec.file_name}: ${percent}%`,
+          filename: spec.file_name,
+          downloaded,
+          total,
+          percent
+        });
+      };
+      
+      downloadTracker.complete = (spec) => {
+        originalComplete.call(downloadTracker, spec);
+        sendProgress({
+          message: `Download completed: ${spec.file_name}`,
+          filename: spec.file_name,
+          downloaded: spec.__downloadBytesTotal || 0,
+          total: spec.__downloadBytesTotal || 0,
+          percent: 100
+        });
+      };
+      
+      // Helper function to format bytes
+      function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes < 0) return 'unknown';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let idx = 0;
+        let value = bytes;
+        while (value >= 1024 && idx < units.length - 1) {
+          value /= 1024;
+          idx += 1;
+        }
+        return `${value.toFixed(idx === 0 ? 0 : 1)}${units[idx]}`;
+      }
+      
+      // Helper function to decompress xz file
+      async function decompressXz(sourcePath, destPath) {
+        await pipeline(
+          fs.createReadStream(sourcePath),
+          lzma.createDecompressor(),
+          fs.createWriteStream(destPath)
+        );
+      }
+      
+      for (const fileName of filesToDownload) {
+        try {
+          sendProgress({
+            message: `Preparing to download ${fileName}...`,
+            filename: fileName
+          });
+          
+          // Get manifest entry
+          const manifestEntry = manifest[fileName];
+          if (!manifestEntry || !manifestEntry.base) {
+            throw new Error(`Manifest entry not found for ${fileName}`);
+          }
+          
+          const baseSpec = manifestEntry.base;
+          
+          // Download the file
+          sendProgress({
+            message: `Downloading ${fileName}...`,
+            filename: fileName
+          });
+          
+          const downloadedPath = await catalogDownloadManager.ensureArtifact(
+            baseSpec,
+            workingDir,
+            downloadTracker,
+            userDataDir,
+            20, // IPFS timeout
+            null // Stay in workingDir for processing
+          );
+          
+          // Verify SHA256
+          sendProgress({
+            message: `Verifying ${fileName}...`,
+            filename: fileName
+          });
+          
+          const fileData = fs.readFileSync(downloadedPath);
+          const actualSha256 = crypto.createHash('sha256').update(fileData).digest('hex');
+          if (baseSpec.sha256 && actualSha256 !== baseSpec.sha256) {
+            throw new Error(`SHA256 mismatch for ${fileName}: expected ${baseSpec.sha256}, got ${actualSha256}`);
+          }
+          
+          // Determine target path
+          const targetPath = path.join(userDataDir, fileName);
+          const tempTargetPath = `${targetPath}.tmp`;
+          
+          // Process based on format
+          if (baseSpec.format === 'xz') {
+            // Decompress xz file
+            sendProgress({
+              message: `Decompressing ${fileName}...`,
+              filename: fileName
+            });
+            
+            await decompressXz(downloadedPath, tempTargetPath);
+            
+            // Verify decompressed file exists
+            if (!fs.existsSync(tempTargetPath)) {
+              throw new Error(`Decompression failed: ${fileName}`);
+            }
+          } else {
+            // Direct copy (no decompression needed)
+            fs.copyFileSync(downloadedPath, tempTargetPath);
+          }
+          
+          // Atomic install: rename temp file to final location
+          sendProgress({
+            message: `Installing ${fileName}...`,
+            filename: fileName
+          });
+          
+          // Remove old file if it exists
+          if (fs.existsSync(targetPath)) {
+            fs.unlinkSync(targetPath);
+          }
+          
+          // Atomic rename
+          fs.renameSync(tempTargetPath, targetPath);
+          
+          // Update searchdat.json
+          const version = manifestEntry.version || '1';
+          catalogManifestUtils.updateSearchDatCatalog(
+            fileName === 'rhsearch_cat.db' ? 'catalogdb' : 'catalog',
+            version,
+            actualSha256,
+            targetPath
+          );
+          
+          // Clean up downloaded archive
+          if (fs.existsSync(downloadedPath)) {
+            fs.unlinkSync(downloadedPath);
+          }
+          
+          results.push({
+            fileName,
+            success: true,
+            path: targetPath,
+            sha256: actualSha256
+          });
+          
+          sendProgress({
+            message: `Successfully installed ${fileName}`,
+            filename: fileName
+          });
+        } catch (error) {
+          console.error(`[catalog:download-base-files] Error downloading ${fileName}:`, error);
+          results.push({
+            fileName,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+      
+      const allSuccess = results.every(r => r.success);
+      return {
+        success: allSuccess,
+        results,
+        error: allSuccess ? null : 'Some files failed to download'
+      };
+    } catch (error) {
+      console.error('[catalog:download-base-files] Error:', error);
+      return {
+        success: false,
+        results: [],
+        error: error.message
+      };
+    }
+  });
+
   // Create temporary RHPAK from catalog item
   ipcMain.handle('catalog:create-rhpak', async (_event, { itemId, bpsPath, sfcSha256, itemJson }) => {
     try {

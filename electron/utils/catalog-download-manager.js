@@ -311,6 +311,7 @@ async function downloadFromIpfsParallel(cid, destPath, expectedSha256, spec, dow
 }
 
 async function downloadFromArDrive(spec, destPath, downloadTracker) {
+  // Try data_txid first (direct Arweave transaction)
   if (spec.data_txid) {
     const url = `https://arweave.net/${spec.data_txid}`;
     try {
@@ -321,6 +322,7 @@ async function downloadFromArDrive(spec, destPath, downloadTracker) {
     }
   }
   
+  // Try ardrive_file_path (ArDrive path-based download)
   if (spec.ardrive_file_path) {
     const url = `https://arweave.net${spec.ardrive_file_path}`;
     try {
@@ -331,9 +333,39 @@ async function downloadFromArDrive(spec, destPath, downloadTracker) {
     }
   }
   
+  // Try ardrive_file_id (fallback to Arweave URL if file_id is available)
+  // Note: Full ArDrive API implementation would require ardrive-core-js
+  // For now, we use the data_txid if available, or construct URL from file_id metadata
   if (spec.ardrive_file_id) {
-    // TODO: Implement ArDrive API download using ardrive-core-js
-    throw new Error('ArDrive file_id download not yet implemented');
+    // If we have a data_txid, use it (most reliable)
+    if (spec.data_txid) {
+      const url = `https://arweave.net/${spec.data_txid}`;
+      try {
+        await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:file_id');
+        return;
+      } catch (err) {
+        console.error(`[download-error] ${spec.file_name} via arweave:file_id -> ${err.message}`);
+      }
+    }
+    
+    // If we have ardrive_file_path, use it
+    if (spec.ardrive_file_path) {
+      const url = `https://arweave.net${spec.ardrive_file_path}`;
+      try {
+        await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:file_id_path');
+        return;
+      } catch (err) {
+        console.error(`[download-error] ${spec.file_name} via arweave:file_id_path -> ${err.message}`);
+      }
+    }
+    
+    // TODO: Full ArDrive API implementation using ardrive-core-js
+    // This would require:
+    // 1. ArDrive authentication (if needed)
+    // 2. File metadata lookup by file_id
+    // 3. Download using ArDrive API
+    // For now, throw error if no fallback available
+    throw new Error(`ArDrive file_id download requires data_txid or ardrive_file_path (file_id: ${spec.ardrive_file_id})`);
   }
   
   throw new Error('No ArDrive download source available');

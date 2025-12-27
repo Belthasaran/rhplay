@@ -434,6 +434,8 @@ function getParentDirectoryName(fieldsType) {
 }
 
 // Run level_reader (Step 10)
+// level_reader outputs a JSON snippet like: "levelnames" : { "001": "...", ... }
+// We need to wrap it in braces to make it valid JSON, then extract the levelnames value
 function runLevelReader(resultSfcPath, resultSha1) {
   try {
     const levelReaderPath = process.env.LEVEL_READER || path.join(process.env.HOME || '/home/me', 'smwdb', 'level_reader');
@@ -450,13 +452,80 @@ function runLevelReader(resultSfcPath, resultSha1) {
     
     if (result.status === 0) {
       if (result.stdout && result.stdout.trim()) {
+        const trimmed = result.stdout.trim();
+        
+        // level_reader outputs a JSON snippet: "levelnames" : { ... }
+        // We need to wrap it in braces to make it valid JSON
         try {
-          const data = JSON.parse(result.stdout);
-          console.log(`      [level_reader] SUCCESS: Parsed JSON data`);
-          return data;
+          // Try wrapping in braces first (most common case)
+          if (trimmed.startsWith('"levelnames"')) {
+            const wrapped = `{${trimmed}}`;
+            const parsed = JSON.parse(wrapped);
+            
+            // Extract the levelnames value from the parsed object
+            if (parsed.levelnames && typeof parsed.levelnames === 'object') {
+              console.log(`      [level_reader] SUCCESS: Extracted levelnames (${Object.keys(parsed.levelnames).length} entries)`);
+              return parsed.levelnames;
+            } else {
+              console.warn(`      [level_reader] WARNING: Parsed object does not contain levelnames`);
+              return null;
+            }
+          } else if (trimmed.startsWith('{')) {
+            // Already a complete JSON object, parse directly
+            const parsed = JSON.parse(trimmed);
+            if (parsed.levelnames && typeof parsed.levelnames === 'object') {
+              console.log(`      [level_reader] SUCCESS: Extracted levelnames from complete JSON (${Object.keys(parsed.levelnames).length} entries)`);
+              return parsed.levelnames;
+            } else {
+              // Maybe the whole object is the levelnames?
+              return parsed;
+            }
+          } else {
+            console.error(`      [level_reader] ERROR: Output doesn't start with "levelnames" or "{"`);
+            console.log(`      [level_reader] stdout preview: ${trimmed.substring(0, 200)}`);
+            return null;
+          }
         } catch (parseError) {
+          // If wrapping in braces fails, try to extract the levelnames object manually
+          console.log(`      [level_reader] Initial parse failed, attempting to extract levelnames object...`);
+          
+          // Try to find the levelnames object by matching braces
+          let braceCount = 0;
+          let startIdx = -1;
+          let endIdx = -1;
+          
+          // Find the opening brace after "levelnames"
+          const levelnamesMatch = trimmed.match(/"levelnames"\s*:\s*\{/);
+          if (levelnamesMatch) {
+            startIdx = levelnamesMatch.index + levelnamesMatch[0].length - 1; // Start at the {
+            
+            // Find the matching closing brace
+            for (let i = startIdx; i < trimmed.length; i++) {
+              if (trimmed[i] === '{') {
+                braceCount++;
+              } else if (trimmed[i] === '}') {
+                braceCount--;
+                if (braceCount === 0) {
+                  endIdx = i;
+                  break;
+                }
+              }
+            }
+            
+            if (startIdx !== -1 && endIdx !== -1) {
+              const levelnamesStr = trimmed.substring(startIdx, endIdx + 1);
+              try {
+                const levelnames = JSON.parse(levelnamesStr);
+                console.log(`      [level_reader] SUCCESS: Extracted levelnames object (${Object.keys(levelnames).length} entries)`);
+                return levelnames;
+              } catch (e4) {
+                console.error(`      [level_reader] ERROR: Failed to parse extracted levelnames object: ${e4.message}`);
+              }
+            }
+          }
+          
           console.error(`      [level_reader] ERROR: Failed to parse JSON output: ${parseError.message}`);
-          console.log(`      [level_reader] stdout preview: ${result.stdout.substring(0, 200)}`);
+          console.log(`      [level_reader] stdout preview: ${trimmed.substring(0, 500)}`);
           return null;
         }
       } else {
@@ -977,9 +1046,10 @@ async function main() {
           const parentDirName = getParentDirectoryName(typeMapping.fields_type);
           
           // Extract levelnames from levelReadData if available
+          // runLevelReader returns the levelnames object directly (not wrapped)
           let levelnames = null;
-          if (levelReadData && levelReadData.names_decimal) {
-            levelnames = levelReadData.names_decimal;
+          if (levelReadData && typeof levelReadData === 'object' && !Array.isArray(levelReadData)) {
+            levelnames = levelReadData;
           }
           
           const indexJson = {

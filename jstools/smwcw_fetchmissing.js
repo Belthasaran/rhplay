@@ -723,49 +723,81 @@ async function runLmFilter(resultSfcPath, resultSha1) {
         // Read the file content
         const fileContent = fs.readFileSync(tempJsonPath, 'utf8').trim();
         
-        // lmfilter outputs a JSON snippet (key-value pair) like: "levels": ["106", "1F0", ...]
-        // We need to extract the array value and return it as a list of strings
+        // lmfilter outputs a JSON snippet: "levels": ["106", "1F0", ...]
+        // We need to extract just the array part ["106", "1F0", ...] and parse it
+        // This matches how process_index7zs.js handles it - extract array directly without wrapping
         let lmfilterArray = null;
         try {
-          // The output is a JSON snippet like: "levels": ["106", "1F0", "121", ...]
-          // We need to wrap it in braces to make it a valid JSON object, then extract the array value
-          let wrappedContent = fileContent;
-          
-          // Check if it already starts with { (full JSON object)
-          if (!fileContent.startsWith('{')) {
-            // It's a JSON snippet, wrap it in braces
-            wrappedContent = `{${fileContent}}`;
-            console.log(`      [lmfilter] Wrapped JSON snippet in object braces`);
-          }
-          
-          // Parse the JSON object
-          const jsonData = JSON.parse(wrappedContent);
-          
-          // Extract the array value - it should have a "levels" key
-          // (or we take the first array value found in the object)
-          if (jsonData.levels && Array.isArray(jsonData.levels)) {
-            lmfilterArray = jsonData.levels;
-            console.log(`      [lmfilter] Successfully extracted levels array (${lmfilterArray.length} items)`);
-          } else {
-            // Try to find any array value in the object
-            const keys = Object.keys(jsonData);
-            for (const key of keys) {
-              if (Array.isArray(jsonData[key])) {
-                lmfilterArray = jsonData[key];
-                console.log(`      [lmfilter] Extracted array from key "${key}" (${lmfilterArray.length} items)`);
+          // Try to parse as complete JSON first (in case it's already a full object)
+          try {
+            const parsed = JSON.parse(fileContent);
+            if (parsed.levels && Array.isArray(parsed.levels)) {
+              lmfilterArray = parsed.levels;
+            } else if (Array.isArray(parsed)) {
+              lmfilterArray = parsed;
+            }
+          } catch (e) {
+            // Not complete JSON - extract the array part directly
+            // Find the array brackets: "levels": [ ... ]
+            const trimmed = fileContent.trim();
+            
+            // Find the opening bracket after "levels":
+            const levelsIndex = trimmed.indexOf('"levels"');
+            if (levelsIndex === -1) {
+              throw new Error('Could not find "levels" key in output');
+            }
+            
+            // Find the colon after "levels"
+            const colonIndex = trimmed.indexOf(':', levelsIndex);
+            if (colonIndex === -1) {
+              throw new Error('Could not find colon after "levels"');
+            }
+            
+            // Find the opening bracket after the colon
+            let bracketIndex = -1;
+            for (let i = colonIndex; i < trimmed.length; i++) {
+              if (trimmed[i] === '[') {
+                bracketIndex = i;
                 break;
               }
             }
+            if (bracketIndex === -1) {
+              throw new Error('Could not find opening bracket after "levels":');
+            }
+            
+            // Find the matching closing bracket
+            let braceCount = 0;
+            let endBracketIndex = -1;
+            for (let i = bracketIndex; i < trimmed.length; i++) {
+              if (trimmed[i] === '[') {
+                braceCount++;
+              } else if (trimmed[i] === ']') {
+                braceCount--;
+                if (braceCount === 0) {
+                  endBracketIndex = i;
+                  break;
+                }
+              }
+            }
+            if (endBracketIndex === -1) {
+              throw new Error('Could not find matching closing bracket');
+            }
+            
+            // Extract and parse just the array part
+            const arrayStr = trimmed.substring(bracketIndex, endBracketIndex + 1);
+            lmfilterArray = JSON.parse(arrayStr);
           }
           
-          if (!lmfilterArray) {
-            console.error(`      [lmfilter] ERROR: No array found in JSON data`);
-            console.log(`      [lmfilter] JSON data keys: ${Object.keys(jsonData).join(', ')}`);
+          if (!lmfilterArray || !Array.isArray(lmfilterArray)) {
+            console.error(`      [lmfilter] ERROR: Could not extract valid array from output`);
+            console.log(`      [lmfilter] File content preview (first 500 chars): ${fileContent.substring(0, 500)}`);
             fs.unlinkSync(tempJsonPath);
             return null;
           }
+          
+          console.log(`      [lmfilter] Successfully extracted levels array (${lmfilterArray.length} items)`);
         } catch (parseError) {
-          console.error(`      [lmfilter] ERROR: Failed to parse JSON from file: ${parseError.message}`);
+          console.error(`      [lmfilter] ERROR: Failed to extract array from file: ${parseError.message}`);
           console.log(`      [lmfilter] File content preview (first 500 chars): ${fileContent.substring(0, 500)}`);
           fs.unlinkSync(tempJsonPath);
           return null;

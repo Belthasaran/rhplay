@@ -438,19 +438,40 @@ function runLevelReader(resultSfcPath, resultSha1) {
   try {
     const levelReaderPath = process.env.LEVEL_READER || path.join(process.env.HOME || '/home/me', 'smwdb', 'level_reader');
     if (!fs.existsSync(levelReaderPath)) {
+      console.log(`      [level_reader] WARNING: level_reader not found at ${levelReaderPath}`);
       return null;
     }
     
+    console.log(`      [level_reader] Running: ${levelReaderPath} ${resultSfcPath}`);
     const result = spawnSync(levelReaderPath, [resultSfcPath], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe']
     });
     
     if (result.status === 0) {
-      return JSON.parse(result.stdout);
+      if (result.stdout && result.stdout.trim()) {
+        try {
+          const data = JSON.parse(result.stdout);
+          console.log(`      [level_reader] SUCCESS: Parsed JSON data`);
+          return data;
+        } catch (parseError) {
+          console.error(`      [level_reader] ERROR: Failed to parse JSON output: ${parseError.message}`);
+          console.log(`      [level_reader] stdout preview: ${result.stdout.substring(0, 200)}`);
+          return null;
+        }
+      } else {
+        console.warn(`      [level_reader] WARNING: Process exited with code 0 but no output`);
+        return null;
+      }
+    } else {
+      console.warn(`      [level_reader] WARNING: Process exited with status ${result.status}`);
+      if (result.stderr) {
+        console.warn(`      [level_reader] stderr: ${result.stderr.substring(0, 500)}`);
+      }
+      return null;
     }
-    return null;
   } catch (error) {
+    console.error(`      [level_reader] ERROR: ${error.message}`);
     return null;
   }
 }
@@ -629,10 +650,63 @@ async function runLmFilter(resultSfcPath, resultSha1) {
       const tempJsonPath = 'temp/temp.json';
       if (fs.existsSync(tempJsonPath)) {
         console.log(`      [lmfilter] SUCCESS: Found output file ${tempJsonPath}`);
-        const data = JSON.parse(fs.readFileSync(tempJsonPath, 'utf8'));
+        
+        // Read the file content
+        const fileContent = fs.readFileSync(tempJsonPath, 'utf8').trim();
+        
+        // lmfilter outputs a JSON snippet (key-value pair) like: "levels": ["106", "1F0", ...]
+        // We need to extract the array value and return it as a list of strings
+        let lmfilterArray = null;
+        try {
+          // The output is a JSON snippet like: "levels": ["106", "1F0", "121", ...]
+          // We need to wrap it in braces to make it a valid JSON object, then extract the array value
+          let wrappedContent = fileContent;
+          
+          // Check if it already starts with { (full JSON object)
+          if (!fileContent.startsWith('{')) {
+            // It's a JSON snippet, wrap it in braces
+            wrappedContent = `{${fileContent}}`;
+            console.log(`      [lmfilter] Wrapped JSON snippet in object braces`);
+          }
+          
+          // Parse the JSON object
+          const jsonData = JSON.parse(wrappedContent);
+          
+          // Extract the array value - it should have a "levels" key
+          // (or we take the first array value found in the object)
+          if (jsonData.levels && Array.isArray(jsonData.levels)) {
+            lmfilterArray = jsonData.levels;
+            console.log(`      [lmfilter] Successfully extracted levels array (${lmfilterArray.length} items)`);
+          } else {
+            // Try to find any array value in the object
+            const keys = Object.keys(jsonData);
+            for (const key of keys) {
+              if (Array.isArray(jsonData[key])) {
+                lmfilterArray = jsonData[key];
+                console.log(`      [lmfilter] Extracted array from key "${key}" (${lmfilterArray.length} items)`);
+                break;
+              }
+            }
+          }
+          
+          if (!lmfilterArray) {
+            console.error(`      [lmfilter] ERROR: No array found in JSON data`);
+            console.log(`      [lmfilter] JSON data keys: ${Object.keys(jsonData).join(', ')}`);
+            fs.unlinkSync(tempJsonPath);
+            return null;
+          }
+        } catch (parseError) {
+          console.error(`      [lmfilter] ERROR: Failed to parse JSON from file: ${parseError.message}`);
+          console.log(`      [lmfilter] File content preview (first 500 chars): ${fileContent.substring(0, 500)}`);
+          fs.unlinkSync(tempJsonPath);
+          return null;
+        }
+        
+        // Clean up temp file
         fs.unlinkSync(tempJsonPath);
-        console.log(`      [lmfilter] Successfully parsed JSON data`);
-        return data;
+        
+        // Return the array of strings (matches the format in index files)
+        return lmfilterArray;
       } else {
         console.warn(`      [lmfilter] WARNING: Process exited with code 0 but temp/temp.json not found`);
       }
@@ -723,6 +797,8 @@ async function main() {
     try {
       // Download ZIP file (atomic save) and get Last-Modified header
       console.log(`  Downloading from ${game.download_url}...`);
+      console.log(`  Waiting 10 seconds before download...`);
+      await new Promise(resolve => setTimeout(resolve, 10000));
       const response = await fetch(game.download_url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -782,30 +858,12 @@ async function main() {
             throw new Error('Failed to extract BPS from ZIP');
           }
           
-          // Calculate hash for filename
-          const hash = calculateHash(bpsData, CONFIG.USE_SHA256);
-          const bpsFilename = `${hash}.bps`;
-          const bpsPath = path.join(CONFIG.BPS_DIR, bpsFilename);
-          
-          // Check if BPS already exists
-          if (fs.existsSync(bpsPath)) {
-            console.log(`      ⚠ BPS file already exists: ${bpsFilename}`);
-            console.log(`      ⚠ Skipping Step 10 processing (level_reader, lmfilter, find_translevels) for existing BPS file`);
-            processedBps.push({
-              hash: hash,
-              filename: bpsFilename,
-              source_filename: bpsFile.filename,
-              already_existed: true
-            });
-            continue;
-          }
-          
-          // Save BPS file temporarily for testing
-          const tempBpsPath = path.join(CONFIG.TEMP_DIR, `test_${hash}.bps`);
+          // Save BPS file temporarily for testing (use temporary name)
+          const tempBpsPath = path.join(CONFIG.TEMP_DIR, `test_${Date.now()}_${Math.random().toString(36).substring(7)}.bps`);
           fs.writeFileSync(tempBpsPath, bpsData);
           
-          // Test patch with flips
-          const tempResultPath = path.join(CONFIG.TEMP_DIR, `result_${hash}.sfc`);
+          // Test patch with flips (use temporary name)
+          const tempResultPath = path.join(CONFIG.TEMP_DIR, `result_${Date.now()}_${Math.random().toString(36).substring(7)}.sfc`);
           const patchResult = testPatchBps(tempBpsPath, tempResultPath);
           
           if (!patchResult.success) {
@@ -815,13 +873,32 @@ async function main() {
             continue;
           }
           
-          // Calculate result hash and metadata (before cleanup)
+          // Calculate result hash (SFC ROM hash after patching) - this is what we use for filenames
           const resultData = fs.readFileSync(tempResultPath);
           const resultHash = calculateHash(resultData, false); // Always SHA1 for result
           const resultSha256 = crypto.createHash('sha256').update(resultData).digest('hex');
           const resultDataLength = resultData.length;
           
           console.log(`      ✓ Patch successful, result hash: ${resultHash}`);
+          
+          // BPS filename should be based on the SFC ROM hash (resultHash), not the BPS file hash
+          const bpsFilename = `${resultHash}.bps`;
+          const bpsPath = path.join(CONFIG.BPS_DIR, bpsFilename);
+          
+          // Check if BPS already exists (now using resultHash)
+          if (fs.existsSync(bpsPath)) {
+            console.log(`      ⚠ BPS file already exists: ${bpsFilename}`);
+            console.log(`      ⚠ Skipping Step 10 processing (level_reader, lmfilter, find_translevels) for existing BPS file`);
+            processedBps.push({
+              hash: resultHash, // Use resultHash as the hash identifier
+              filename: bpsFilename,
+              source_filename: bpsFile.filename,
+              already_existed: true
+            });
+            fs.unlinkSync(tempBpsPath);
+            fs.unlinkSync(tempResultPath);
+            continue;
+          }
           
           // Create headered version for smc_rom_sha1_hash and smc2_rom_sha256_hash
           const hasHeader = detectHeader(resultData);
@@ -989,25 +1066,26 @@ async function main() {
           };
           
           // Add lmfilter data if available (Step 10.5)
-          if (lmFilterData) {
-            indexJson.lmfilter_data = lmFilterData;
+          // lmFilterData should be an array of strings (list of level codes)
+          if (lmFilterData && Array.isArray(lmFilterData)) {
+            indexJson.lmfilter = lmFilterData;
           }
           
-          // Save index JSON
-          const indexJsonPath = path.join(CONFIG.BPSINDEX_DIR, `${hash}.json`);
+          // Save index JSON - use resultHash (SFC ROM hash) for filename, not BPS hash
+          const indexJsonPath = path.join(CONFIG.BPSINDEX_DIR, `${resultHash}.json`);
           fs.writeFileSync(indexJsonPath, JSON.stringify(indexJson, null, 2));
           console.log(`      ✓ Created index JSON: ${indexJsonPath}`);
           
           processedBps.push({
-            hash: hash,
+            hash: resultHash, // Use resultHash (SFC ROM hash) as the hash identifier
             filename: bpsFilename,
             source_filename: bpsFile.filename,
-            index_json: `${hash}.json`,
+            index_json: `${resultHash}.json`, // Use SFC ROM hash for JSON filename
             result_sha1: resultHash
           });
           
           gameResults.bps_files.push(bpsFilename);
-          gameResults.json_files.push(`${hash}.json`);
+          gameResults.json_files.push(`${resultHash}.json`); // Use SFC ROM hash for JSON filename
           
         } catch (error) {
           console.log(`      ✗ Error processing BPS ${bpsFile.filename}: ${error.message}`);

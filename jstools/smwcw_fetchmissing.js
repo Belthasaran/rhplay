@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execSync, spawnSync } = require('child_process');
+const { execSync, spawnSync, spawn } = require('child_process');
 const AdmZip = require('adm-zip');
 const { getFlipsPath, getSmwRomPath } = require('../lib/binary-finder');
 
@@ -286,9 +286,91 @@ function removeHeader(romData) {
   return romData;
 }
 
-// Create synthetic SFC filename
-function createSyntheticFilename(name, author, date) {
-  // Format: "Name by Author [YYYY-MM-DD] (SMW Hack).sfc"
+// Detect language from filename/path
+function detectLanguageFromFilename(filename) {
+  if (!filename) return null;
+  
+  const lowerFilename = filename.toLowerCase();
+  const pathParts = filename.split('/');
+  
+  // Check for language indicators in filename and path (check non-English first)
+  // Order matters - check more specific patterns first
+  // Note: Patterns need to be flexible to catch common typos like "Portguese" instead of "Portuguese"
+  const languagePatterns = [
+    { lang: 'Portuguese', pattern: /(ptbr|portug[uú][êe]s[e]?|portguese|portugese|brazil|brasil)/i },
+    { lang: 'Spanish', pattern: /(spanish|espa[ñn]ol|espanol)/i },
+    { lang: 'French', pattern: /(french|fran[çc]ais|francais)/i },
+    { lang: 'German', pattern: /(german|deutsch)/i },
+    { lang: 'Italian', pattern: /(italian|italiano)/i },
+    { lang: 'Japanese', pattern: /(japanese|japan)/i },
+    { lang: 'Chinese', pattern: /(chinese|china)/i },
+    { lang: 'Korean', pattern: /(korean|korea)/i },
+    { lang: 'English', pattern: /(english)/i }
+  ];
+  
+  // Priority 1: Check for language in parentheses first (strongest indicator)
+  const parenMatch = lowerFilename.match(/\(([^)]+)\)/);
+  if (parenMatch) {
+    const parenContent = parenMatch[1];
+    for (const { lang, pattern } of languagePatterns) {
+      if (pattern.test(parenContent) && lang !== 'English') {
+        return lang; // Language in parentheses is a strong indicator
+      }
+    }
+  }
+  
+  // Priority 2: Check the full filename
+  for (const { lang, pattern } of languagePatterns) {
+    if (pattern.test(lowerFilename)) {
+      if (lang !== 'English') {
+        return lang; // Non-English languages take priority
+      }
+    }
+  }
+  
+  // Priority 3: Check directory path parts
+  for (const part of pathParts.slice(0, -1)) {
+    const partLower = part.toLowerCase();
+    for (const { lang, pattern } of languagePatterns) {
+      if (pattern.test(partLower) && lang !== 'English') {
+        return lang; // Non-English languages take priority
+      }
+    }
+  }
+  
+  // Priority 4: Check for common English patterns (avoid false positives)
+  const englishIndicators = /^(smw|super mario|princess|rescue|mario)/i;
+  if (englishIndicators.test(lowerFilename.split('/').pop())) {
+    return 'English';
+  }
+  
+  // If no language indicators found, assume English
+  return 'English';
+}
+
+// Get language tag for filename (e.g., "[Lang EN]", "[Lang ES]")
+function getLanguageTag(language) {
+  if (!language || language === 'English') {
+    return ''; // Don't tag English by default (only when multiple languages exist)
+  }
+  
+  const tagMap = {
+    'Portuguese': '[Lang PT]',
+    'Spanish': '[Lang ES]',
+    'French': '[Lang FR]',
+    'German': '[Lang DE]',
+    'Italian': '[Lang IT]',
+    'Japanese': '[Lang JP]',
+    'Chinese': '[Lang CN]',
+    'Korean': '[Lang KR]'
+  };
+  
+  return tagMap[language] || '[Lang Non-EN]';
+}
+
+// Create synthetic SFC filename with optional language tag
+function createSyntheticFilename(name, author, date, languageTag = '') {
+  // Format: "Name [Lang XX] by Author [YYYY-MM-DD] (SMW Hack).sfc"
   const cleanName = name || 'Unknown';
   const cleanAuthor = author || 'Unknown';
   
@@ -302,7 +384,10 @@ function createSyntheticFilename(name, author, date) {
     dateStr = new Date().toISOString().split('T')[0];
   }
   
-  return `${cleanName} by ${cleanAuthor} [${dateStr}] (SMW Hack).sfc`;
+  // Add language tag to name if provided
+  const nameWithLang = languageTag ? `${cleanName} ${languageTag}` : cleanName;
+  
+  return `${nameWithLang} by ${cleanAuthor} [${dateStr}] (SMW Hack).sfc`;
 }
 
 // Extract date from URL path
@@ -370,9 +455,127 @@ function runLevelReader(resultSfcPath, resultSha1) {
   }
 }
 
+/**
+ * Spawn a process with timeout support (prevents deadlocks)
+ * @param {string} command - Command to execute
+ * @param {string[]} args - Command arguments
+ * @param {Object} options - spawn options (cwd, env, stdio, etc.)
+ * @param {number} timeoutMs - Timeout in milliseconds (default: 20000)
+ * @returns {Promise<{status: number, stdout: string, stderr: string}>}
+ */
+function spawnWithTimeout(command, args, options = {}, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    let timeoutId;
+    let killed = false;
+    let stdout = '';
+    let stderr = '';
+    
+    console.log(`      [lmfilter] Starting: ${command} ${args.join(' ')}`);
+    
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    // Collect stdout with logging
+    if (child.stdout) {
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (data) => {
+        stdout += data;
+        // Log progress in real-time (trimmed to avoid spam)
+        const lines = data.toString().split('\n').filter(l => l.trim());
+        if (lines.length > 0) {
+          console.log(`      [lmfilter] stdout: ${lines[0]}`);
+        }
+      });
+    }
+    
+    // Collect stderr with logging
+    if (child.stderr) {
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (data) => {
+        stderr += data;
+        // Log progress in real-time (trimmed to avoid spam)
+        const lines = data.toString().split('\n').filter(l => l.trim());
+        if (lines.length > 0) {
+          console.log(`      [lmfilter] stderr: ${lines[0]}`);
+        }
+      });
+    }
+    
+    // Set up timeout
+    timeoutId = setTimeout(() => {
+      if (!killed && !child.killed) {
+        killed = true;
+        console.warn(`      [lmfilter] WARNING: Process exceeded timeout of ${timeoutMs}ms, killing...`);
+        
+        // Try to kill the process
+        try {
+          // First, try graceful termination
+          child.kill('SIGTERM');
+          
+          // If it doesn't die quickly, force kill
+          const forceKillTimeout = setTimeout(() => {
+            if (!child.killed) {
+              console.warn(`      [lmfilter] WARNING: Process did not respond to SIGTERM, force killing with SIGKILL...`);
+              try {
+                child.kill('SIGKILL');
+              } catch (forceKillError) {
+                console.error(`      [lmfilter] ERROR: Error force killing process: ${forceKillError.message}`);
+              }
+            }
+          }, 2000);
+          
+          // Clear the force kill timeout if process exits
+          child.once('exit', () => {
+            clearTimeout(forceKillTimeout);
+          });
+        } catch (killError) {
+          console.error(`      [lmfilter] ERROR: Error killing process: ${killError.message}`);
+        }
+        
+        reject(new Error(`Process ${command} exceeded timeout of ${timeoutMs}ms and was killed`));
+      }
+    }, timeoutMs);
+    
+    // Handle process exit
+    child.on('exit', (code, signal) => {
+      clearTimeout(timeoutId);
+      
+      if (killed) {
+        // Already handled by timeout
+        return;
+      }
+      
+      console.log(`      [lmfilter] Process exited with code ${code}${signal ? ` (signal: ${signal})` : ''}`);
+      
+      if (signal) {
+        reject(new Error(`Process ${command} was killed by signal: ${signal}`));
+      } else {
+        resolve({
+          status: code,
+          stdout: stdout,
+          stderr: stderr
+        });
+      }
+    });
+    
+    // Handle process errors
+    child.on('error', (error) => {
+      clearTimeout(timeoutId);
+      console.error(`      [lmfilter] ERROR: Process spawn failed: ${error.message}`);
+      if (!killed) {
+        reject(error);
+      }
+    });
+  });
+}
+
 // Run try_lmfilter.py (Step 10.5) - returns data or null
 async function runLmFilter(resultSfcPath, resultSha1) {
   try {
+    console.log(`      [lmfilter] Starting try_lmfilter.py for ${resultSha1}...`);
+    
     const env = {
       ...process.env,
       GAMETAG: resultSha1,
@@ -380,21 +583,58 @@ async function runLmFilter(resultSfcPath, resultSha1) {
       ROMFILE: resultSfcPath
     };
     
-    const result = spawnSync('python3', ['try_lmfilter.py'], {
-      env: env,
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 20000 // 20 second timeout
-    });
+    console.log(`      [lmfilter] Environment: GAMETAG=${resultSha1}, GAMEVER=1, ROMFILE=${resultSfcPath}`);
     
-    if (result.status === 0 && fs.existsSync('temp/temp.json')) {
-      const data = JSON.parse(fs.readFileSync('temp/temp.json', 'utf8'));
-      fs.unlinkSync('temp/temp.json');
-      return data;
+    // Use spawnWithTimeout to prevent deadlocks - 20 second timeout with 2 second kill grace period
+    const result = await spawnWithTimeout(
+      'python3',
+      ['try_lmfilter.py'],
+      {
+        env: env,
+        cwd: process.cwd()
+      },
+      20000 // 20 second timeout
+    );
+    
+    console.log(`      [lmfilter] Process completed with status ${result.status}`);
+    
+    if (result.status === 0) {
+      const tempJsonPath = 'temp/temp.json';
+      if (fs.existsSync(tempJsonPath)) {
+        console.log(`      [lmfilter] SUCCESS: Found output file ${tempJsonPath}`);
+        const data = JSON.parse(fs.readFileSync(tempJsonPath, 'utf8'));
+        fs.unlinkSync(tempJsonPath);
+        console.log(`      [lmfilter] Successfully parsed JSON data`);
+        return data;
+      } else {
+        console.warn(`      [lmfilter] WARNING: Process exited with code 0 but temp/temp.json not found`);
+        if (result.stdout) {
+          console.log(`      [lmfilter] stdout: ${result.stdout.substring(0, 200)}`);
+        }
+        if (result.stderr) {
+          console.log(`      [lmfilter] stderr: ${result.stderr.substring(0, 200)}`);
+        }
+      }
+    } else {
+      console.warn(`      [lmfilter] WARNING: Process exited with status ${result.status}`);
+      if (result.stderr) {
+        console.warn(`      [lmfilter] stderr: ${result.stderr.substring(0, 500)}`);
+      }
+      if (result.stdout) {
+        console.log(`      [lmfilter] stdout: ${result.stdout.substring(0, 500)}`);
+      }
     }
+    
     return null;
   } catch (error) {
+    const errorMsg = error.message || String(error);
+    console.error(`      [lmfilter] ERROR: ${errorMsg}`);
+    
+    // If it was a timeout, log additional info
+    if (errorMsg.includes('exceeded timeout')) {
+      console.error(`      [lmfilter] The process was killed due to timeout. This may indicate a hang in try_lmfilter.py.`);
+    }
+    
     return null;
   }
 }
@@ -497,6 +737,15 @@ async function main() {
       
       console.log(`  Found ${bpsFiles.length} BPS file(s)`);
       
+      // Detect languages from all BPS files
+      const detectedLanguages = new Set();
+      for (const bpsFile of bpsFiles) {
+        const lang = detectLanguageFromFilename(bpsFile.filename);
+        if (lang) {
+          detectedLanguages.add(lang);
+        }
+      }
+      
       // Process each BPS file
       const processedBps = [];
       const gameResults = {
@@ -595,8 +844,37 @@ async function main() {
           const urlDate = extractDateFromUrl(game.download_url);
           const syntheticDate = urlDate || game.date || new Date().toISOString().split('T')[0];
           
-          // Create synthetic filename
-          const syntheticSfcFilename = createSyntheticFilename(game.name, firstAuthor || game.authors, syntheticDate);
+          // Detect language for this BPS file
+          const detectedLanguage = detectLanguageFromFilename(bpsFile.filename);
+          
+          // Determine language tag - if multiple languages exist, tag all (including English)
+          let languageTag = '';
+          if (detectedLanguages.size > 1) {
+            // Multiple languages detected - tag all files
+            if (detectedLanguage === 'English') {
+              languageTag = '[Lang EN]';
+            } else if (detectedLanguage) {
+              languageTag = getLanguageTag(detectedLanguage);
+            } else {
+              languageTag = '[Lang Non-EN]'; // Uncertain language
+            }
+          } else {
+            // Single language - only tag if non-English
+            languageTag = getLanguageTag(detectedLanguage);
+          }
+          
+          // Determine estimated_language attribute - use the detected language directly
+          let estimatedLanguage = detectedLanguage;
+          if (!estimatedLanguage) {
+            // Fallback to English only if detection completely failed
+            estimatedLanguage = 'English';
+          }
+          
+          // Create synthetic filename with language tag
+          const syntheticSfcFilename = createSyntheticFilename(game.name, firstAuthor || game.authors, syntheticDate, languageTag);
+          
+          // Create title with language tag
+          const titleWithLang = languageTag ? `${game.name} ${languageTag}` : game.name;
           
           // Get parent directory name
           const parentDirName = getParentDirectoryName(typeMapping.fields_type);
@@ -639,12 +917,15 @@ async function main() {
             smc2_rom_sha256_hash: smc2RomSha256,
             
             // Filename metadata (synthetic based on game data)
-            sfc_filename_title: game.name,
+            sfc_filename_title: titleWithLang,
             sfc_filename_author: firstAuthor || game.authors,
             sfc_filename_date: syntheticDate,
-            '7z_filename_title': game.name,
+            '7z_filename_title': titleWithLang,
             '7z_filename_author': firstAuthor || game.authors,
             '7z_filename_date': syntheticDate,
+            
+            // Language information
+            estimated_language: estimatedLanguage,
             
             // Upload estimates (from HTTP Last-Modified header)
             sfc_upload_estimate: uploadEstimate,

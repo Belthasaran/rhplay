@@ -50,7 +50,6 @@ const RecordCreator = require('../lib/record-creator');
 const { getFlipsPath, getSmwRomPath, SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
 const fernet = require('fernet');
 const lzma = require('lzma-native');
-const UrlBase64 = require('urlsafe-base64');
 
 // Configuration
 const CONFIG = {
@@ -152,56 +151,96 @@ function shake128(buffer) {
 }
 
 /**
- * Decompress LZMA data
- */
-async function decompressLZMA(buffer) {
-  return await lzma.decompress(buffer);
-}
-
-/**
- * Decrypt Fernet
- */
-async function decryptFernet(encryptedData, key) {
-  const token = new fernet.Token({
-    secret: new fernet.Secret(key),
-    ttl: 0
-  });
-  return token.decode(encryptedData);
-}
-
-/**
  * Decode encrypted patchblob (decrypt and decompress)
+ * Uses the same logic as record-creator.js decodeBlob method
  */
 async function decodePatchBlob(rawData, patchblob1_key) {
   try {
     // Step 1: Decompress LZMA
-    const decomp1 = await decompressLZMA(rawData);
+    const decompressed1 = await new Promise((resolve, reject) => {
+      lzma.decompress(rawData, (result, error) => {
+        if (error) reject(error);
+        else resolve(Buffer.from(result));
+      });
+    });
     
-    // Step 2: Prepare Fernet key (double-encoded base64)
-    const key = UrlBase64.encode(atob(patchblob1_key)).toString();
-    
-    // Step 3: Decrypt with Fernet
-    const decrypted = await decryptFernet(Buffer.from(decomp1).toString(), key);
-    
-    // Step 4: Try to decompress again (auto-detect format)
+    // Step 2: Decrypt Fernet
+    // The key might be in different formats:
+    // 1. Double-base64-encoded (60 chars) - older format
+    // 2. Single base64-encoded (44 chars) - newer format
+    let fernetKey;
     try {
-      // Try Python format (single LZMA decompress)
-      const decomp2 = await decompressLZMA(Buffer.from(decrypted, 'base64'));
-      return decomp2;
-    } catch (e1) {
-      // Try JavaScript format (base64-encoded LZMA data)
-      try {
-        const lzmaData = Buffer.from(decrypted, 'base64');
-        const decomp2 = await decompressLZMA(lzmaData);
-        return decomp2;
-      } catch (e2) {
-        // If decrypted data already looks like patch data, return it
-        if (decrypted.length > 0) {
-          return Buffer.from(decrypted, 'base64');
+      // Try double-decoded first (for old format)
+      const decoded = Buffer.from(patchblob1_key, 'base64').toString('utf8');
+      // Check if it looks like base64 (including URL-safe chars: - and _)
+      if (/^[A-Za-z0-9+/\-_]+=*$/.test(decoded) && decoded.length >= 40) {
+        fernetKey = decoded;
+      } else {
+        // Not double-encoded, use the original
+        fernetKey = patchblob1_key;
+      }
+    } catch (error) {
+      // If decoding fails, use the original
+      fernetKey = patchblob1_key;
+    }
+    
+    const frnsecret = new fernet.Secret(fernetKey);
+    let tokenStr;
+    try {
+      tokenStr = decompressed1.toString('utf8');
+    } catch (error) {
+      // Fallback to latin1 if UTF-8 fails
+      tokenStr = decompressed1.toString('latin1');
+    }
+    const token = new fernet.Token({ 
+      secret: frnsecret, 
+      ttl: 0, 
+      token: tokenStr
+    });
+    const decrypted = token.decode();
+    
+    // Step 3: Decompress again
+    // Auto-detect format: Python format vs JavaScript format
+    let lzmaData;
+    
+    // Detect if decrypted contains non-ASCII characters (Latin1-encoded binary)
+    const hasNonAscii = /[^\x00-\x7F]/.test(decrypted);
+    
+    if (hasNonAscii) {
+      // Decrypted is Latin1-encoded binary data (UTF-8 conversion failed in crypto-js)
+      // Convert directly from Latin1 string to Buffer
+      lzmaData = Buffer.from(decrypted, 'latin1');
+    } else {
+      // Decrypted is a base64 string (normal case)
+      lzmaData = Buffer.from(decrypted, 'base64');
+      
+      // Check if it starts with LZMA/XZ magic bytes (0xFD or 0x5D)
+      if (lzmaData[0] !== 0xfd && lzmaData[0] !== 0x5d) {
+        // Not LZMA magic - might be double-encoded base64 (JavaScript blobs)
+        // Try decoding one more layer
+        try {
+          const decoded1Str = lzmaData.toString('utf8');
+          lzmaData = Buffer.from(decoded1Str, 'base64');
+        } catch (e) {
+          // If UTF-8 fails, try latin1
+          try {
+            const decoded1Str = lzmaData.toString('latin1');
+            lzmaData = Buffer.from(decoded1Str, 'base64');
+          } catch (e2) {
+            // Keep original lzmaData
+          }
         }
-        throw new Error(`Cannot decode blob. Python format failed: ${e1.message}, JavaScript format failed: ${e2.message}`);
       }
     }
+    
+    const decompressed2 = await new Promise((resolve, reject) => {
+      lzma.decompress(lzmaData, (result, error) => {
+        if (error) reject(error);
+        else resolve(Buffer.from(result));
+      });
+    });
+    
+    return decompressed2;
   } catch (error) {
     throw new Error(`Error decoding patchblob: ${error.message}`);
   }
@@ -543,6 +582,9 @@ async function main() {
               null
             );
             
+            // Copy blob to standard location (needed before createPatchBlobRecord)
+            copyBlobToStandardLocation(blobPath, gameData.patchblob1_name);
+            
             // Create patchblob record
             const pbuuid = await recordCreator.createPatchBlobRecord(
               gvuuid,
@@ -551,15 +593,13 @@ async function main() {
               JSON.parse(patchFileRecord.blob_data)
             );
             
-            // Copy blob to standard location and create attachment record
-            await copyBlobAndCreateAttachment(
+            // Create attachment record
+            await createAttachmentRecord(
               recordCreator,
               pbuuid,
               gvuuid,
-              blobPath,
               gameData.patchblob1_name,
-              gameData.patchblob1_key,
-              gameData.pat_sha224
+              gameData.patchblob1_key
             );
             
             // Create rhpatch record if patch name exists
@@ -598,6 +638,9 @@ async function main() {
               );
               finalPbuuid = existingPb.pbuuid;
             } else {
+              // Copy blob to standard location (needed before createPatchBlobRecord)
+              copyBlobToStandardLocation(blobPath, gameData.patchblob1_name);
+              
               // Create new patchblob
               finalPbuuid = await recordCreator.createPatchBlobRecord(
                 latestVersion.gvuuid,
@@ -608,14 +651,12 @@ async function main() {
             }
             
             // Always ensure attachment record exists (createAttachmentRecord handles duplicates)
-            await copyBlobAndCreateAttachment(
+            await createAttachmentRecord(
               recordCreator,
               finalPbuuid,
               latestVersion.gvuuid,
-              blobPath,
               gameData.patchblob1_name,
-              gameData.patchblob1_key,
-              gameData.pat_sha224
+              gameData.patchblob1_key
             );
             
             // Update rhpatch record if patch name exists
@@ -636,6 +677,9 @@ async function main() {
             null
           );
           
+          // Copy blob to standard location (needed before createPatchBlobRecord)
+          copyBlobToStandardLocation(blobPath, gameData.patchblob1_name);
+          
           // Create patchblob record
           const pbuuid = await recordCreator.createPatchBlobRecord(
             gvuuid,
@@ -644,15 +688,13 @@ async function main() {
             JSON.parse(patchFileRecord.blob_data)
           );
           
-          // Copy blob to standard location and create attachment record
-          await copyBlobAndCreateAttachment(
+          // Create attachment record
+          await createAttachmentRecord(
             recordCreator,
             pbuuid,
             gvuuid,
-            blobPath,
             gameData.patchblob1_name,
-            gameData.patchblob1_key,
-            gameData.pat_sha224
+            gameData.patchblob1_key
           );
           
           // Create rhpatch record if patch name exists
@@ -693,22 +735,29 @@ async function main() {
 }
 
 /**
- * Copy blob to standard location and create attachment record
+ * Copy blob to standard location (needed before createPatchBlobRecord)
  */
-async function copyBlobAndCreateAttachment(recordCreator, pbuuid, gvuuid, sourceBlobPath, blobName, patchblob1_key, pat_sha224) {
-  // Copy blob to standard BLOBS_DIR location (if not already there)
+function copyBlobToStandardLocation(sourceBlobPath, blobName) {
   const targetBlobPath = path.join(CONFIG.BLOBS_DIR, blobName);
   if (!fs.existsSync(targetBlobPath)) {
     fs.copyFileSync(sourceBlobPath, targetBlobPath);
     console.log(`    ✓ Copied blob to ${targetBlobPath}`);
   }
-  
+  return targetBlobPath;
+}
+
+/**
+ * Create attachment record (blob should already be in standard location)
+ */
+async function createAttachmentRecord(recordCreator, pbuuid, gvuuid, blobName, patchblob1_key) {
   // Use the standard createAttachmentRecord method
   // It expects blobData object with patchblob1_name, patchblob1_key, patchblob1_sha224
+  const targetBlobPath = path.join(CONFIG.BLOBS_DIR, blobName);
+  const fileData = fs.readFileSync(targetBlobPath);
   const blobData = {
     patchblob1_name: blobName,
     patchblob1_key: patchblob1_key,
-    patchblob1_sha224: sha224(fs.readFileSync(sourceBlobPath))
+    patchblob1_sha224: sha224(fileData)
   };
   
   await recordCreator.createAttachmentRecord(pbuuid, gvuuid, blobData);

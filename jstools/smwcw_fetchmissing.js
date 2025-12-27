@@ -11,11 +11,13 @@
  * - Creates wrap-up JSON files for logging
  * 
  * Usage:
- *   enode.sh ~/rhplay/jstools/smwcw_fetchmissing.js [--sha256]
+ *   enode.sh ~/rhplay/jstools/smwcw_fetchmissing.js [options]
  * 
  * Options:
- *   --sha256    Use SHA256 instead of SHA1 for BPS filenames
- *   --help      Show this help message
+ *   --sha256                Use SHA256 instead of SHA1 for BPS filenames
+ *   --process-existing-zips Process games whose ZIP files already exist
+ *                           (by default, these are skipped)
+ *   --help                  Show this help message
  */
 
 const fs = require('fs');
@@ -40,7 +42,8 @@ const CONFIG = {
   BASE_ROM_PATH: null,
   
   // Options
-  USE_SHA256: false
+  USE_SHA256: false,
+  PROCESS_EXISTING_ZIPS: false
 };
 
 // Parse command line arguments
@@ -49,13 +52,17 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--sha256') {
       CONFIG.USE_SHA256 = true;
+    } else if (argv[i] === '--process-existing-zips') {
+      CONFIG.PROCESS_EXISTING_ZIPS = true;
     } else if (argv[i] === '--help' || argv[i] === '-h') {
       console.log(`
 Usage: enode.sh ~/rhplay/jstools/smwcw_fetchmissing.js [options]
 
 Options:
-  --sha256    Use SHA256 hash instead of SHA1 for BPS filenames
-  --help      Show this help message
+  --sha256                Use SHA256 hash instead of SHA1 for BPS filenames
+  --process-existing-zips Process games whose ZIP files already exist
+                          (by default, these are skipped)
+  --help                  Show this help message
 `);
       process.exit(0);
     }
@@ -890,6 +897,13 @@ async function main() {
     // Check if ZIP already exists
     const zipPath = path.join(CONFIG.ZIPS_DIR, `${gameid}.zip`);
     const zipAlreadyExists = fs.existsSync(zipPath);
+    
+    // Skip if ZIP exists and we're not processing existing ZIPs
+    if (zipAlreadyExists && !CONFIG.PROCESS_EXISTING_ZIPS) {
+      console.log(`  ⚠ Skipping: ZIP already exists at ${zipPath}`);
+      skipped++;
+      continue;
+    }
     
     let uploadEstimate = null;
     let originalFilename = null;

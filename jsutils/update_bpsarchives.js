@@ -57,6 +57,8 @@ function parseArguments(argv) {
     updateFromArdrive: false,
     ardriveDriveId: DEFAULT_BPS_DRIVE_ID,
     ardriveFolderId: DEFAULT_BPS_FOLDER_ID,
+    baddr: null,
+    setBaddr: false
   };
 
   const positional = [];
@@ -104,6 +106,9 @@ function parseArguments(argv) {
       i += 1;
     } else if (arg.startsWith('--ardrive-folder-id=')) {
       options.ardriveFolderId = arg.substring('--ardrive-folder-id='.length);
+    } else if (arg.startsWith('--baddr=')) {
+      options.baddr = arg.substring('--baddr='.length)
+      options.setBaddr = true
     } else if (arg.startsWith('--')) {
       exitWithError(`Unrecognized option "${arg}". Use --help for usage information.`);
     } else {
@@ -117,7 +122,7 @@ function parseArguments(argv) {
 
   options.manifestPath = positional.shift();
 
-  if (!options.addArchive && !options.calculateIpfs && !options.updateFromArdrive) {
+  if (!options.addArchive && !options.calculateIpfs && !options.updateFromArdrive && !options.setBaddr) {
     exitWithError('No action requested. Use --add-archive, --calculate-ipfs, and/or --update-from-ardrive.');
   }
 
@@ -126,7 +131,7 @@ function parseArguments(argv) {
     options.targetName = path.basename(options.addArchive);
   }
 
-  if (!options.targetName && (options.calculateIpfs || options.updateFromArdrive)) {
+  if (!options.targetName && (options.calculateIpfs || options.updateFromArdrive || options.setBaddr)) {
     exitWithError('--target is required when using --calculate-ipfs or --update-from-ardrive.');
   }
 
@@ -352,6 +357,19 @@ async function addArchiveEntry(manifest, targetName, filePath) {
   }
 }
 
+
+//          const setct = await setBaddr(manifest, options.targetName, options.baddr);
+async function setBaddr(manifest, targetName, newBaddr) {
+  const entry = manifest[targetName];
+  if (!entry || !entry.base) {
+    exitWithError(`Target "${targetName}" not found in manifest.`);
+  }
+
+  entry.base['baddr'] = newBaddr
+  return 1;
+}
+
+
 async function calculateIpfsForEntries(manifest, targetName) {
   let calculated = 0;
   
@@ -398,6 +416,11 @@ async function main() {
   if (options.calculateIpfs) {
     const calculated = await calculateIpfsForEntries(manifest, options.targetName);
     totalUpdated += calculated;
+  }
+
+  if (options.setBaddr) {
+	  const setct = await setBaddr(manifest, options.targetName, options.baddr);
+	  totalUpdated += setct
   }
 
   if (options.updateFromArdrive) {

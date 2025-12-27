@@ -642,25 +642,25 @@ async function main() {
             sfc_filename_title: game.name,
             sfc_filename_author: firstAuthor || game.authors,
             sfc_filename_date: syntheticDate,
-            7z_filename_title: game.name,
-            7z_filename_author: firstAuthor || game.authors,
-            7z_filename_date: syntheticDate,
+            '7z_filename_title': game.name,
+            '7z_filename_author': firstAuthor || game.authors,
+            '7z_filename_date': syntheticDate,
             
             // Upload estimates (from HTTP Last-Modified header)
             sfc_upload_estimate: uploadEstimate,
             dir_upload_estimate: uploadEstimate,
-            7z_upload_estimate: uploadEstimate,
+            '7z_upload_estimate': uploadEstimate,
             
             // Parent directories (synthetic based on type)
             sfc_parent_directory: parentDirName,
-            7z_parent_directory: parentDirName,
+            '7z_parent_directory': parentDirName,
             zip_parent_directory: parentDirName,
             
             // ZIP/7z content info
             zip_content_filename: bpsFile.filename,
             zip_content_timestamp: zipContentTimestamp,
-            7z_content_filename: bpsFile.filename,
-            7z_content_timestamp: zipContentTimestamp,
+            '7z_content_filename': bpsFile.filename,
+            '7z_content_timestamp': zipContentTimestamp,
             
             // Gameversion data (for database compatibility)
             gameversion: {

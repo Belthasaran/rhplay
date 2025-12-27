@@ -24,6 +24,21 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
+// HTML entity decoder
+function decodeHTMLEntities(text) {
+  if (!text) return text;
+  return text
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#x2F;/g, '/')
+    .replace(/&#47;/g, '/');
+}
+
 // Configuration
 const CONFIG = {
   SMWC_WORLD_URL: 'https://smwc.world/roms/',
@@ -124,16 +139,23 @@ function parseHTMLTable(html, logCallback) {
         name = cells[1].replace(/^\[|\]$/g, '').trim();
       }
       
+      // Decode HTML entities in name
+      name = decodeHTMLEntities(name);
+      
       // Column 2: Difficulty
-      const difficulty = cells[2] ? cells[2].trim() : null;
+      const difficulty = cells[2] ? decodeHTMLEntities(cells[2].trim()) : null;
       
       // Column 3: Length (skip)
       
       // Column 4: Author(s)
-      const authors = cells[4] ? cells[4].trim() : null;
+      let authors = cells[4] ? decodeHTMLEntities(cells[4].trim()) : null;
+      // Handle empty authors
+      if (authors === '' || authors === null || authors === undefined) {
+        authors = null;
+      }
       
       // Column 5: Date
-      const date = cells[5] ? cells[5].trim() : null;
+      const date = cells[5] ? decodeHTMLEntities(cells[5].trim()) : null;
       
       if (gameidStr && name) {
         games.push({
@@ -242,10 +264,14 @@ async function main() {
     
     const existingGameMap = new Map();
     for (const game of existingGames) {
+      // Normalize author fields - prefer authors over author, and decode HTML entities
+      let authorStr = game.authors || game.author || '';
+      authorStr = decodeHTMLEntities(authorStr);
+      
       existingGameMap.set(String(game.gameid), {
-        name: game.name || '',
-        author: game.author || '',
-        authors: game.authors || ''
+        name: decodeHTMLEntities(game.name || ''),
+        author: authorStr,
+        authors: authorStr
       });
     }
     
@@ -304,7 +330,7 @@ async function main() {
         let hasWarning = false;
         const warningsList = [];
         
-        // Check name
+        // Check name (both should already be HTML entity decoded)
         if (!stringsMatch(smwcGame.name, existing.name)) {
           warningsList.push(`name: "${existing.name}" vs "${smwcGame.name}"`);
           hasWarning = true;
@@ -313,8 +339,23 @@ async function main() {
         // Check author/authors
         const smwcAuthor = smwcGame.authors || '';
         const existingAuthor = existing.authors || existing.author || '';
-        if (!stringsMatch(smwcAuthor, existingAuthor)) {
+        
+        // Normalize empty/null/None values for comparison
+        const normalizedSmwcAuthor = (!smwcAuthor || smwcAuthor === 'None' || smwcAuthor === 'none' || smwcAuthor.trim() === '') ? '' : smwcAuthor.trim();
+        const normalizedExistingAuthor = (!existingAuthor || existingAuthor === 'None' || existingAuthor === 'none' || existingAuthor.trim() === '') ? '' : existingAuthor.trim();
+        
+        // Only warn if both have non-empty values and they don't match
+        if (normalizedSmwcAuthor && normalizedExistingAuthor && !stringsMatch(normalizedSmwcAuthor, normalizedExistingAuthor)) {
           warningsList.push(`author: "${existingAuthor}" vs "${smwcAuthor}"`);
+          hasWarning = true;
+        } else if (normalizedSmwcAuthor && !normalizedExistingAuthor) {
+          // SMWC has author but we don't - this is informational, not necessarily a warning
+          // Only warn if it's a significant difference (not just missing data)
+          warningsList.push(`author: missing in our DB vs "${smwcAuthor}"`);
+          hasWarning = true;
+        } else if (!normalizedSmwcAuthor && normalizedExistingAuthor) {
+          // We have author but SMWC doesn't - less concerning, but still note it
+          warningsList.push(`author: "${existingAuthor}" vs missing in SMWC`);
           hasWarning = true;
         }
         

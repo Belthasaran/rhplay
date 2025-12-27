@@ -889,35 +889,46 @@ async function main() {
     
     // Check if ZIP already exists
     const zipPath = path.join(CONFIG.ZIPS_DIR, `${gameid}.zip`);
-    if (fs.existsSync(zipPath)) {
-      console.log(`  ⚠ Skipping: ZIP already exists at ${zipPath}`);
-      skipped++;
-      continue;
+    const zipAlreadyExists = fs.existsSync(zipPath);
+    
+    let uploadEstimate = null;
+    let originalFilename = null;
+    
+    if (zipAlreadyExists) {
+      console.log(`  ⚠ ZIP already exists at ${zipPath}, processing existing file...`);
+      // Extract original filename from download_url
+      const urlParts = game.download_url.split('/');
+      originalFilename = urlParts[urlParts.length - 1];
+      // Use file modification time as upload estimate
+      const stats = fs.statSync(zipPath);
+      uploadEstimate = stats.mtime.toISOString();
     }
     
     try {
-      // Download ZIP file (atomic save) and get Last-Modified header
-      console.log(`  Downloading from ${game.download_url}...`);
-      console.log(`  Waiting 10 seconds before download...`);
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      const response = await fetch(game.download_url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!zipAlreadyExists) {
+        // Download ZIP file (atomic save) and get Last-Modified header
+        console.log(`  Downloading from ${game.download_url}...`);
+        console.log(`  Waiting 10 seconds before download...`);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        const response = await fetch(game.download_url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        // Get Last-Modified header for upload estimate
+        const lastModified = response.headers.get('last-modified');
+        uploadEstimate = lastModified ? new Date(lastModified).toISOString() : new Date().toISOString();
+        
+        const zipData = Buffer.from(await response.arrayBuffer());
+        const tempZipPath = `${zipPath}.tmp`;
+        fs.writeFileSync(tempZipPath, zipData);
+        fs.renameSync(tempZipPath, zipPath);
+        console.log(`  ✓ Downloaded and saved to ${zipPath}`);
+        
+        // Extract original filename from download_url
+        const urlParts = game.download_url.split('/');
+        originalFilename = urlParts[urlParts.length - 1];
       }
-      
-      // Get Last-Modified header for upload estimate
-      const lastModified = response.headers.get('last-modified');
-      const uploadEstimate = lastModified ? new Date(lastModified).toISOString() : new Date().toISOString();
-      
-      const zipData = Buffer.from(await response.arrayBuffer());
-      const tempZipPath = `${zipPath}.tmp`;
-      fs.writeFileSync(tempZipPath, zipData);
-      fs.renameSync(tempZipPath, zipPath);
-      console.log(`  ✓ Downloaded and saved to ${zipPath}`);
-      
-      // Extract original filename from download_url
-      const urlParts = game.download_url.split('/');
-      const originalFilename = urlParts[urlParts.length - 1];
       
       // Extract BPS files
       const bpsFiles = extractBpsFiles(zipPath);
@@ -947,6 +958,9 @@ async function main() {
         json_files: [],
         errors: []
       };
+      
+      // Track whether we downloaded the ZIP (have authoritative HTTP Last-Modified header data)
+      const hasAuthoritativeData = !zipAlreadyExists;
       
       for (const bpsFile of bpsFiles) {
         try {
@@ -1124,10 +1138,10 @@ async function main() {
             // Language information
             estimated_language: estimatedLanguage,
             
-            // Upload estimates (from HTTP Last-Modified header)
-            sfc_upload_estimate: uploadEstimate,
-            dir_upload_estimate: uploadEstimate,
-            '7z_upload_estimate': uploadEstimate,
+            // Upload estimates (from HTTP Last-Modified header, or file mtime if ZIP already existed)
+            sfc_upload_estimate: uploadEstimate || new Date().toISOString(),
+            dir_upload_estimate: uploadEstimate || new Date().toISOString(),
+            '7z_upload_estimate': uploadEstimate || new Date().toISOString(),
             
             // Parent directories (synthetic based on type)
             sfc_parent_directory: parentDirName,
@@ -1171,20 +1185,42 @@ async function main() {
             indexJson.lmfilter = lmFilterData;
           }
           
-          // Save index JSON - only create for new BPS files (we have Step 10 data)
-          // For existing BPS files, the index JSON should already exist
-          // Always add filenames to wrapup JSON even if files already exist
+          // Save index JSON - preserve existing data if we don't have authoritative updates
+          // Rule: Only create/update index JSON if:
+          //   1. BPS is new (we have Step 10 data), OR
+          //   2. BPS exists AND we downloaded the ZIP (have authoritative HTTP Last-Modified header data)
+          // If index JSON exists AND we didn't download the ZIP, preserve it (no authoritative data to update)
           const indexJsonPath = path.join(CONFIG.BPSINDEX_DIR, indexJsonFilename);
+          const indexJsonExists = fs.existsSync(indexJsonPath);
+          
           if (!bpsAlreadyExists) {
-            // Only create index JSON for new BPS files (we have Step 10 data)
+            // New BPS file - we have Step 10 data, so create index JSON
             fs.writeFileSync(indexJsonPath, JSON.stringify(indexJson, null, 2));
             console.log(`      ✓ Created index JSON: ${indexJsonPath}`);
-          } else if (!fs.existsSync(indexJsonPath)) {
-            // BPS exists but index JSON doesn't - this is unusual but we can't create it without Step 10 data
-            console.log(`      ⚠ WARNING: BPS exists but index JSON is missing: ${indexJsonFilename}`);
-            console.log(`      ⚠ Cannot recreate index JSON without Step 10 data (level_reader, lmfilter, find_translevels)`);
-          } else {
+          } else if (indexJsonExists && !hasAuthoritativeData) {
+            // Both BPS and index JSON exist, AND we didn't download the ZIP
+            // We don't have authoritative data (HTTP Last-Modified header), so preserve existing index JSON
             console.log(`      ⚠ Index JSON already exists: ${indexJsonFilename}`);
+            console.log(`      ⚠ Preserving existing index JSON (no authoritative data - ZIP was not downloaded)`);
+          } else if (indexJsonExists && hasAuthoritativeData) {
+            // BPS exists, index JSON exists, but we downloaded the ZIP (have authoritative data)
+            // Update with authoritative data
+            fs.writeFileSync(indexJsonPath, JSON.stringify(indexJson, null, 2));
+            console.log(`      ✓ Updated index JSON with authoritative data: ${indexJsonPath}`);
+          } else if (!indexJsonExists && hasAuthoritativeData) {
+            // BPS exists but index JSON doesn't, and we downloaded the ZIP
+            // We have authoritative data but no Step 10 data (BPS already existed)
+            // Cannot create complete index JSON without Step 10 data
+            console.log(`      ⚠ WARNING: BPS exists but index JSON missing: ${indexJsonFilename}`);
+            console.log(`      ⚠ Cannot create complete index JSON without Step 10 data (level_reader, lmfilter, find_translevels)`);
+            console.log(`      ⚠ Skipping index JSON creation - BPS exists but index JSON is missing`);
+          } else {
+            // !indexJsonExists && !hasAuthoritativeData
+            // BPS exists, index JSON doesn't, and we didn't download the ZIP
+            // Cannot create complete index JSON without Step 10 data or authoritative data
+            console.log(`      ⚠ WARNING: BPS exists but index JSON missing: ${indexJsonFilename}`);
+            console.log(`      ⚠ Cannot create complete index JSON without Step 10 data (level_reader, lmfilter, find_translevels)`);
+            console.log(`      ⚠ Skipping index JSON creation - BPS exists but index JSON is missing`);
           }
           
           // Always add to processedBps and gameResults, even if BPS already existed

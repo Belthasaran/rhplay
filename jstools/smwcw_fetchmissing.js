@@ -985,20 +985,13 @@ async function main() {
           // BPS filename should be based on the SFC ROM hash (resultHash), not the BPS file hash
           const bpsFilename = `${resultHash}.bps`;
           const bpsPath = path.join(CONFIG.BPS_DIR, bpsFilename);
+          const indexJsonFilename = `${resultHash}.json`;
           
           // Check if BPS already exists (now using resultHash)
-          if (fs.existsSync(bpsPath)) {
+          const bpsAlreadyExists = fs.existsSync(bpsPath);
+          if (bpsAlreadyExists) {
             console.log(`      ⚠ BPS file already exists: ${bpsFilename}`);
             console.log(`      ⚠ Skipping Step 10 processing (level_reader, lmfilter, find_translevels) for existing BPS file`);
-            processedBps.push({
-              hash: resultHash, // Use resultHash as the hash identifier
-              filename: bpsFilename,
-              source_filename: bpsFile.filename,
-              already_existed: true
-            });
-            fs.unlinkSync(tempBpsPath);
-            fs.unlinkSync(tempResultPath);
-            continue;
           }
           
           // Create headered version for smc_rom_sha1_hash and smc2_rom_sha256_hash
@@ -1014,25 +1007,30 @@ async function main() {
           const zipEntryTime = zipEntry.header.time;
           const zipContentTimestamp = zipEntryTime ? new Date(zipEntryTime.getTime()).toISOString().replace(/\.\d{3}Z$/, '') : null;
           
-          // Step 10: Run level_reader, try_lmfilter.py, find_translevels.py
-          console.log(`      Running Step 10 processing (level_reader, lmfilter, find_translevels)...`);
-          console.log(`      Step 10.1: Running level_reader...`);
-          const levelReadData = runLevelReader(tempResultPath, resultHash);
-          console.log(`      Step 10.2: Running try_lmfilter.py...`);
-          const lmFilterData = await runLmFilter(tempResultPath, resultHash);
-          console.log(`      Step 10.3: Running find_translevels.py...`);
-          const translevelData = runFindTranslevels(tempResultPath, resultHash);
-          console.log(`      Step 10 processing complete.`);
+          // Step 10: Run level_reader, try_lmfilter.py, find_translevels.py (only if BPS is new)
+          let levelReadData = null;
+          let lmFilterData = null;
+          let translevelData = null;
           
-          // Save BPS file (atomic)
-          const tempBpsFinalPath = `${bpsPath}.tmp`;
-          fs.writeFileSync(tempBpsFinalPath, bpsData);
-          fs.renameSync(tempBpsFinalPath, bpsPath);
+          if (!bpsAlreadyExists) {
+            console.log(`      Running Step 10 processing (level_reader, lmfilter, find_translevels)...`);
+            console.log(`      Step 10.1: Running level_reader...`);
+            levelReadData = runLevelReader(tempResultPath, resultHash);
+            console.log(`      Step 10.2: Running try_lmfilter.py...`);
+            lmFilterData = await runLmFilter(tempResultPath, resultHash);
+            console.log(`      Step 10.3: Running find_translevels.py...`);
+            translevelData = runFindTranslevels(tempResultPath, resultHash);
+            console.log(`      Step 10 processing complete.`);
+          }
           
-          // Clean up temp BPS file
-          fs.unlinkSync(tempBpsPath);
+          // Save BPS file (atomic) - only if it doesn't already exist
+          if (!bpsAlreadyExists) {
+            const tempBpsFinalPath = `${bpsPath}.tmp`;
+            fs.writeFileSync(tempBpsFinalPath, bpsData);
+            fs.renameSync(tempBpsFinalPath, bpsPath);
+          }
           
-          // Create index JSON
+          // Create index JSON - only if it doesn't already exist (for new BPS files)
           const typeMapping = mapTypeAndDifficulty(game);
           const firstAuthor = extractFirstAuthor(game.authors);
           const bpsSha1 = calculateHash(bpsData, false);
@@ -1173,21 +1171,45 @@ async function main() {
             indexJson.lmfilter = lmFilterData;
           }
           
-          // Save index JSON - use resultHash (SFC ROM hash) for filename, not BPS hash
-          const indexJsonPath = path.join(CONFIG.BPSINDEX_DIR, `${resultHash}.json`);
-          fs.writeFileSync(indexJsonPath, JSON.stringify(indexJson, null, 2));
-          console.log(`      ✓ Created index JSON: ${indexJsonPath}`);
+          // Save index JSON - only create for new BPS files (we have Step 10 data)
+          // For existing BPS files, the index JSON should already exist
+          // Always add filenames to wrapup JSON even if files already exist
+          const indexJsonPath = path.join(CONFIG.BPSINDEX_DIR, indexJsonFilename);
+          if (!bpsAlreadyExists) {
+            // Only create index JSON for new BPS files (we have Step 10 data)
+            fs.writeFileSync(indexJsonPath, JSON.stringify(indexJson, null, 2));
+            console.log(`      ✓ Created index JSON: ${indexJsonPath}`);
+          } else if (!fs.existsSync(indexJsonPath)) {
+            // BPS exists but index JSON doesn't - this is unusual but we can't create it without Step 10 data
+            console.log(`      ⚠ WARNING: BPS exists but index JSON is missing: ${indexJsonFilename}`);
+            console.log(`      ⚠ Cannot recreate index JSON without Step 10 data (level_reader, lmfilter, find_translevels)`);
+          } else {
+            console.log(`      ⚠ Index JSON already exists: ${indexJsonFilename}`);
+          }
           
+          // Always add to processedBps and gameResults, even if BPS already existed
+          // This ensures the wrapup JSON contains complete data for all BPS files linked to this gameid
+          // This is important because the same BPS file can belong to multiple gameids
           processedBps.push({
             hash: resultHash, // Use resultHash (SFC ROM hash) as the hash identifier
             filename: bpsFilename,
             source_filename: bpsFile.filename,
-            index_json: `${resultHash}.json`, // Use SFC ROM hash for JSON filename
-            result_sha1: resultHash
+            index_json: indexJsonFilename, // Use SFC ROM hash for JSON filename
+            result_sha1: resultHash,
+            already_existed: bpsAlreadyExists
           });
           
           gameResults.bps_files.push(bpsFilename);
-          gameResults.json_files.push(`${resultHash}.json`); // Use SFC ROM hash for JSON filename
+          gameResults.json_files.push(indexJsonFilename); // Use SFC ROM hash for JSON filename
+          
+          // Clean up temp files
+          if (bpsAlreadyExists) {
+            fs.unlinkSync(tempBpsPath);
+            fs.unlinkSync(tempResultPath);
+          } else {
+            // Clean up temp BPS file (already saved to final location)
+            fs.unlinkSync(tempBpsPath);
+          }
           
         } catch (error) {
           console.log(`      ✗ Error processing BPS ${bpsFile.filename}: ${error.message}`);

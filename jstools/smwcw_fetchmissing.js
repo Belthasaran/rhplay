@@ -267,6 +267,159 @@ function extractFirstAuthor(authors) {
   return parts[0] || null;
 }
 
+// Detect if ROM has a 512-byte header
+function detectHeader(romData) {
+  return (romData.length % 1024) === 512;
+}
+
+// Add 512-byte header to unheadered ROM
+function addHeader(romData) {
+  const header = Buffer.alloc(512, 0);
+  return Buffer.concat([header, romData]);
+}
+
+// Remove 512-byte header from headered ROM
+function removeHeader(romData) {
+  if (detectHeader(romData)) {
+    return romData.slice(512);
+  }
+  return romData;
+}
+
+// Create synthetic SFC filename
+function createSyntheticFilename(name, author, date) {
+  // Format: "Name by Author [YYYY-MM-DD] (SMW Hack).sfc"
+  const cleanName = name || 'Unknown';
+  const cleanAuthor = author || 'Unknown';
+  
+  // Ensure date is in YYYY-MM-DD format
+  let dateStr = date || new Date().toISOString().split('T')[0];
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Already correct format
+  } else if (dateStr.match(/^\d{4}-\d{2}$/)) {
+    dateStr = `${dateStr}-01`; // Add day
+  } else {
+    dateStr = new Date().toISOString().split('T')[0];
+  }
+  
+  return `${cleanName} by ${cleanAuthor} [${dateStr}] (SMW Hack).sfc`;
+}
+
+// Extract date from URL path
+function extractDateFromUrl(url) {
+  // URL format: https://roms.smwc.world/2019/March/escape-from-the-sewer-19248.zip
+  // Extract year/month and convert to YYYY-MM-01 format
+  const urlMatch = url.match(/\/(\d{4})\/(\w+)\//);
+  if (urlMatch) {
+    const year = urlMatch[1];
+    const monthName = urlMatch[2];
+    
+    const monthMap = {
+      'January': '01', 'February': '02', 'March': '03', 'April': '04',
+      'May': '05', 'June': '06', 'July': '07', 'August': '08',
+      'September': '09', 'October': '10', 'November': '11', 'December': '12'
+    };
+    
+    const month = monthMap[monthName] || '01';
+    return `${year}-${month}-01`;
+  }
+  return null;
+}
+
+// Get parent directory name based on fields_type
+function getParentDirectoryName(fieldsType) {
+  if (!fieldsType) {
+    return '[Super Mario World Hacks] SMW-General';
+  }
+  
+  // Extract primary type (first one if comma-separated)
+  const primaryType = fieldsType.split(',')[0].trim();
+  
+  const typeMap = {
+    'Kaizo': 'SMW-Kaizo',
+    'Standard': 'SMW-Standard',
+    'Puzzle': 'SMW-Puzzle',
+    'Joke': 'SMW-General',
+    'Misc.': 'SMW-General',
+    'Tool-Assisted': 'SMW-General'
+  };
+  
+  const dirName = typeMap[primaryType] || 'SMW-General';
+  return `[Super Mario World Hacks] ${dirName}`;
+}
+
+// Run level_reader (Step 10)
+function runLevelReader(resultSfcPath, resultSha1) {
+  try {
+    const levelReaderPath = process.env.LEVEL_READER || path.join(process.env.HOME || '/home/me', 'smwdb', 'level_reader');
+    if (!fs.existsSync(levelReaderPath)) {
+      return null;
+    }
+    
+    const result = spawnSync(levelReaderPath, [resultSfcPath], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    if (result.status === 0) {
+      return JSON.parse(result.stdout);
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Run try_lmfilter.py (Step 10.5) - returns data or null
+async function runLmFilter(resultSfcPath, resultSha1) {
+  try {
+    const env = {
+      ...process.env,
+      GAMETAG: resultSha1,
+      GAMEVER: '1',
+      ROMFILE: resultSfcPath
+    };
+    
+    const result = spawnSync('python3', ['try_lmfilter.py'], {
+      env: env,
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 20000 // 20 second timeout
+    });
+    
+    if (result.status === 0 && fs.existsSync('temp/temp.json')) {
+      const data = JSON.parse(fs.readFileSync('temp/temp.json', 'utf8'));
+      fs.unlinkSync('temp/temp.json');
+      return data;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Run find_translevels.py (Step 10.6) - returns data or null
+function runFindTranslevels(resultSfcPath, resultSha1) {
+  try {
+    const translevelsOutputPath = path.join(CONFIG.TEMP_DIR, `${resultSha1}_translevel.json`);
+    
+    const result = spawnSync('python3', ['findtranslevels/find_translevels.py', `--romfile=${resultSfcPath}`, `--output=${translevelsOutputPath}`], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: process.cwd()
+    });
+    
+    if (result.status === 0 && fs.existsSync(translevelsOutputPath)) {
+      const data = JSON.parse(fs.readFileSync(translevelsOutputPath, 'utf8'));
+      return data;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
 // Main processing function
 async function main() {
   parseArgs(process.argv.slice(2));
@@ -313,12 +466,16 @@ async function main() {
     }
     
     try {
-      // Download ZIP file (atomic save)
+      // Download ZIP file (atomic save) and get Last-Modified header
       console.log(`  Downloading from ${game.download_url}...`);
       const response = await fetch(game.download_url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+      
+      // Get Last-Modified header for upload estimate
+      const lastModified = response.headers.get('last-modified');
+      const uploadEstimate = lastModified ? new Date(lastModified).toISOString() : new Date().toISOString();
       
       const zipData = Buffer.from(await response.arrayBuffer());
       const tempZipPath = `${zipPath}.tmp`;
@@ -401,20 +558,54 @@ async function main() {
           
           console.log(`      ✓ Patch successful, result hash: ${resultHash}`);
           
+          // Create headered version for smc_rom_sha1_hash and smc2_rom_sha256_hash
+          const hasHeader = detectHeader(resultData);
+          let unheaderedData = hasHeader ? removeHeader(resultData) : resultData;
+          let headeredData = hasHeader ? resultData : addHeader(resultData);
+          
+          const smcRomSha1 = calculateHash(headeredData, false);
+          const smc2RomSha256 = calculateHash(headeredData, true);
+          
+          // Get ZIP entry timestamp
+          const zipEntry = bpsFile.entry;
+          const zipEntryTime = zipEntry.header.time;
+          const zipContentTimestamp = zipEntryTime ? new Date(zipEntryTime.getTime()).toISOString().replace(/\.\d{3}Z$/, '') : null;
+          
+          // Step 10: Run level_reader, try_lmfilter.py, find_translevels.py
+          console.log(`      Running Step 10 processing...`);
+          const levelReadData = runLevelReader(tempResultPath, resultHash);
+          const lmFilterData = await runLmFilter(tempResultPath, resultHash);
+          const translevelData = runFindTranslevels(tempResultPath, resultHash);
+          
           // Save BPS file (atomic)
           const tempBpsFinalPath = `${bpsPath}.tmp`;
           fs.writeFileSync(tempBpsFinalPath, bpsData);
           fs.renameSync(tempBpsFinalPath, bpsPath);
           
-          // Clean up temp files
+          // Clean up temp BPS file
           fs.unlinkSync(tempBpsPath);
-          fs.unlinkSync(tempResultPath);
           
           // Create index JSON
           const typeMapping = mapTypeAndDifficulty(game);
           const firstAuthor = extractFirstAuthor(game.authors);
           const bpsSha1 = calculateHash(bpsData, false);
           const bpsSha256 = calculateHash(bpsData, true);
+          
+          // Extract date from URL
+          const urlDate = extractDateFromUrl(game.download_url);
+          const syntheticDate = urlDate || game.date || new Date().toISOString().split('T')[0];
+          
+          // Create synthetic filename
+          const syntheticSfcFilename = createSyntheticFilename(game.name, firstAuthor || game.authors, syntheticDate);
+          
+          // Get parent directory name
+          const parentDirName = getParentDirectoryName(typeMapping.fields_type);
+          
+          // Extract levelnames from levelReadData if available
+          let levelnames = null;
+          if (levelReadData && levelReadData.names_decimal) {
+            levelnames = levelReadData.names_decimal;
+          }
           
           const indexJson = {
             // SMWC World data (keep original for reference)
@@ -428,6 +619,9 @@ async function main() {
               download_url: game.download_url
             },
             
+            // Synthetic filename
+            sfcsource_filename: syntheticSfcFilename,
+            
             // BPS file info
             bps_filename: bpsFilename,
             bps_sha1_hash: bpsSha1,
@@ -435,10 +629,38 @@ async function main() {
             original_download_filename: originalFilename,
             source_bps_filename: bpsFile.filename,
             
-            // Result ROM info
+            // Result ROM info (unheadered - SFC format)
             sfc_rom_sha1_hash: resultHash,
             sfc_rom_sha256_hash: resultSha256,
             sfc_rom_size: resultDataLength,
+            
+            // Headered ROM info (SMC format)
+            smc_rom_sha1_hash: smcRomSha1,
+            smc2_rom_sha256_hash: smc2RomSha256,
+            
+            // Filename metadata (synthetic based on game data)
+            sfc_filename_title: game.name,
+            sfc_filename_author: firstAuthor || game.authors,
+            sfc_filename_date: syntheticDate,
+            7z_filename_title: game.name,
+            7z_filename_author: firstAuthor || game.authors,
+            7z_filename_date: syntheticDate,
+            
+            // Upload estimates (from HTTP Last-Modified header)
+            sfc_upload_estimate: uploadEstimate,
+            dir_upload_estimate: uploadEstimate,
+            7z_upload_estimate: uploadEstimate,
+            
+            // Parent directories (synthetic based on type)
+            sfc_parent_directory: parentDirName,
+            7z_parent_directory: parentDirName,
+            zip_parent_directory: parentDirName,
+            
+            // ZIP/7z content info
+            zip_content_filename: bpsFile.filename,
+            zip_content_timestamp: zipContentTimestamp,
+            7z_content_filename: bpsFile.filename,
+            7z_content_timestamp: zipContentTimestamp,
             
             // Gameversion data (for database compatibility)
             gameversion: {
@@ -460,10 +682,15 @@ async function main() {
             index7z_ipfs_cidv1: null,
             indexbps_name: bpsFilename,
             
-            // Level names (optional - will be populated if process_arcsfc.js integration is added)
-            levelnames: null,
-            translevel_data: null
+            // Level data from Step 10 processing
+            levelnames: levelnames,
+            translevel_data: translevelData
           };
+          
+          // Add lmfilter data if available (Step 10.5)
+          if (lmFilterData) {
+            indexJson.lmfilter_data = lmFilterData;
+          }
           
           // Save index JSON
           const indexJsonPath = path.join(CONFIG.BPSINDEX_DIR, `${hash}.json`);

@@ -482,10 +482,13 @@ function spawnWithTimeout(command, args, options = {}, timeoutMs = 20000) {
       child.stdout.setEncoding('utf8');
       child.stdout.on('data', (data) => {
         stdout += data;
-        // Log progress in real-time (trimmed to avoid spam)
-        const lines = data.toString().split('\n').filter(l => l.trim());
-        if (lines.length > 0) {
-          console.log(`      [lmfilter] stdout: ${lines[0]}`);
+        // Log all output in real-time (each line)
+        const output = data.toString();
+        const lines = output.split('\n');
+        for (const line of lines) {
+          if (line.trim()) {
+            console.log(`      [lmfilter] stdout: ${line}`);
+          }
         }
       });
     }
@@ -495,10 +498,13 @@ function spawnWithTimeout(command, args, options = {}, timeoutMs = 20000) {
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', (data) => {
         stderr += data;
-        // Log progress in real-time (trimmed to avoid spam)
-        const lines = data.toString().split('\n').filter(l => l.trim());
-        if (lines.length > 0) {
-          console.log(`      [lmfilter] stderr: ${lines[0]}`);
+        // Log all output in real-time (each line)
+        const output = data.toString();
+        const lines = output.split('\n');
+        for (const line of lines) {
+          if (line.trim()) {
+            console.log(`      [lmfilter] stderr: ${line}`);
+          }
         }
       });
     }
@@ -598,6 +604,27 @@ async function runLmFilter(resultSfcPath, resultSha1) {
     
     console.log(`      [lmfilter] Process completed with status ${result.status}`);
     
+    // Always log full stdout/stderr for visibility
+    if (result.stdout && result.stdout.trim()) {
+      console.log(`      [lmfilter] Full stdout output:`);
+      const stdoutLines = result.stdout.split('\n');
+      for (const line of stdoutLines) {
+        if (line.trim()) {
+          console.log(`      [lmfilter]   ${line}`);
+        }
+      }
+    }
+    
+    if (result.stderr && result.stderr.trim()) {
+      console.log(`      [lmfilter] Full stderr output:`);
+      const stderrLines = result.stderr.split('\n');
+      for (const line of stderrLines) {
+        if (line.trim()) {
+          console.log(`      [lmfilter]   ${line}`);
+        }
+      }
+    }
+    
     if (result.status === 0) {
       const tempJsonPath = 'temp/temp.json';
       if (fs.existsSync(tempJsonPath)) {
@@ -608,21 +635,9 @@ async function runLmFilter(resultSfcPath, resultSha1) {
         return data;
       } else {
         console.warn(`      [lmfilter] WARNING: Process exited with code 0 but temp/temp.json not found`);
-        if (result.stdout) {
-          console.log(`      [lmfilter] stdout: ${result.stdout.substring(0, 200)}`);
-        }
-        if (result.stderr) {
-          console.log(`      [lmfilter] stderr: ${result.stderr.substring(0, 200)}`);
-        }
       }
     } else {
       console.warn(`      [lmfilter] WARNING: Process exited with status ${result.status}`);
-      if (result.stderr) {
-        console.warn(`      [lmfilter] stderr: ${result.stderr.substring(0, 500)}`);
-      }
-      if (result.stdout) {
-        console.log(`      [lmfilter] stdout: ${result.stdout.substring(0, 500)}`);
-      }
     }
     
     return null;
@@ -775,6 +790,7 @@ async function main() {
           // Check if BPS already exists
           if (fs.existsSync(bpsPath)) {
             console.log(`      ⚠ BPS file already exists: ${bpsFilename}`);
+            console.log(`      ⚠ Skipping Step 10 processing (level_reader, lmfilter, find_translevels) for existing BPS file`);
             processedBps.push({
               hash: hash,
               filename: bpsFilename,
@@ -821,10 +837,14 @@ async function main() {
           const zipContentTimestamp = zipEntryTime ? new Date(zipEntryTime.getTime()).toISOString().replace(/\.\d{3}Z$/, '') : null;
           
           // Step 10: Run level_reader, try_lmfilter.py, find_translevels.py
-          console.log(`      Running Step 10 processing...`);
+          console.log(`      Running Step 10 processing (level_reader, lmfilter, find_translevels)...`);
+          console.log(`      Step 10.1: Running level_reader...`);
           const levelReadData = runLevelReader(tempResultPath, resultHash);
+          console.log(`      Step 10.2: Running try_lmfilter.py...`);
           const lmFilterData = await runLmFilter(tempResultPath, resultHash);
+          console.log(`      Step 10.3: Running find_translevels.py...`);
           const translevelData = runFindTranslevels(tempResultPath, resultHash);
+          console.log(`      Step 10 processing complete.`);
           
           // Save BPS file (atomic)
           const tempBpsFinalPath = `${bpsPath}.tmp`;

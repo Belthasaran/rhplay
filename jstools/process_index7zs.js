@@ -25,6 +25,7 @@ const SMW_BASE_ROM = process.env.PATH_BASE_ROM || '/home/me/smwdb/smw.sfc';
 //const DEFAULT_ARDIVE_FOLDER_ID = '1e42b095-4fbf-4411-bcc9-688917d5a5af';
 const DEFAULT_ARDRIVE_DRIVE_ID = 'd3338fab-d24c-4d75-9e78-d3024befc225';
 const DEFAULT_ARDRIVE_FOLDER_ID = 'a6130936-d92e-45ac-a004-273d96e9ec9d';
+//const DEFAULT_ARDRIVE_FOLDER_ID = 'ffdad5c7-5299-4b6a-b925-e0214356085f'
 
 // Helper function to calculate SHA1 hash
 async function calculateSHA1(filePath) {

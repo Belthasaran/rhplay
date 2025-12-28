@@ -1,3 +1,7 @@
+#
+# To be run from inside index7z  subfolder to create  CSV summary
+# save to index7z.csv
+#
 import re
 import os
 import json

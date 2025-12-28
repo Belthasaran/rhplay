@@ -74,4 +74,9 @@ patch/
 rom_meta/
 screenshots/*.fernet
 resources/*.fernet
-
+RHR_UPDATE*
+games/
+games0/
+games2/
+games3/
+backups/

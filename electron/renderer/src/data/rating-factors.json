@@ -1,0 +1,1040 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rating Factors Documentation Template",
+  "description": "Template for rating factors documentation. Auto-extracted fields are marked with AUTO_EXTRACT comments.",
+  "version": "1.0.0",
+  "metadata": {
+    "lastUpdated": "2025-12-17T14:12:32.987Z",
+    "generatedBy": "generate-rating-help.js"
+  },
+  "introduction": {
+    "title": "Rating Factors Guide",
+    "description": "This guide explains all the rating factors available in the rating card. Each rating factor includes a range, description, and labels for each rating level.",
+    "customContent": "The below are the rating facts you can choose star ratings for.   Note that the rating factors intentionally overlap, and all items are optional.   Broader rating factors are on top, and it is suggested to rate romhacks based on those first.  More detailed factors such as Puzzle Quality follow.  Skip the rating factor if it is not relevant to the current game.   For example: leave Overworld star rating and comments field blank if the romhack has no overworld."
+  },
+  "ratingFactors": [
+    {
+      "internalName": "user_review_rating",
+      "displayName": "Overall (My Review)",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Your overall review rating for this game. This is your general assessment of the game's quality and your enjoyment of it.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Not exceptional"
+        },
+        {
+          "value": 1,
+          "text": "Okay, but Not Recommended"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Good"
+        },
+        {
+          "value": 4,
+          "text": "Extremely Great"
+        },
+        {
+          "value": 5,
+          "text": "Superior to 99% of games"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_review_comment"
+    },
+    {
+      "internalName": "user_difficulty_rating",
+      "displayName": "Peak Difficulty (My Review)",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "description": "0 to 10 stars"
+      },
+      "description": "The peak difficulty level of this game. This measures the hardest challenges in the game, not the average difficulty.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Trivial (Difficulty zero)"
+        },
+        {
+          "value": 1,
+          "text": "Newcomer"
+        },
+        {
+          "value": 2,
+          "text": "Casual Standard or Kaizo Tutorial"
+        },
+        {
+          "value": 3,
+          "text": "Intermediate Standard or Kaizo Beginner"
+        },
+        {
+          "value": 4,
+          "text": "Advanced"
+        },
+        {
+          "value": 5,
+          "text": "Expert"
+        },
+        {
+          "value": 6,
+          "text": "Master"
+        },
+        {
+          "value": 7,
+          "text": "Grandmaster"
+        },
+        {
+          "value": 8,
+          "text": "Grandmaster Plus"
+        },
+        {
+          "value": 9,
+          "text": "TAS-Only"
+        },
+        {
+          "value": 10,
+          "text": "Impossible"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_difficulty_comment"
+    },
+    {
+      "internalName": "user_skill_rating",
+      "displayName": "Self-Eval: My Experience Level (At this game type, At time I rated this)",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "description": "0 to 10 stars"
+      },
+      "description": "Your self-evaluated skill level at this game type at the time you rated this game. This helps contextualize your other ratings.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Observer"
+        },
+        {
+          "value": 1,
+          "text": "Newcomer"
+        },
+        {
+          "value": 2,
+          "text": "Apprentice"
+        },
+        {
+          "value": 3,
+          "text": "Medium"
+        },
+        {
+          "value": 4,
+          "text": "Advanced/Kaizo Intermediate"
+        },
+        {
+          "value": 5,
+          "text": "Expert"
+        },
+        {
+          "value": 6,
+          "text": "Master"
+        },
+        {
+          "value": 7,
+          "text": "Grandmaster"
+        },
+        {
+          "value": 8,
+          "text": "Grandmaster+/Legend"
+        },
+        {
+          "value": 9,
+          "text": "Deity"
+        },
+        {
+          "value": 10,
+          "text": "TAS"
+        }
+      ],
+      "hoverText": {
+        "0": "I saw someone play Mario once - \"Will you play my level?\"",
+        "1": "Newcomer - I beat Vanilla SMW 96 exits, or similar",
+        "2": "Casual/Apprentice - Vanilla is too easy for me, I look for more challenging things",
+        "3": "Intermediate - For standard: I cleared multiple Standard Normal hacks. If reviewing Kaizo: I completed beginner Kaizo hacks numerous times and find them easy.",
+        "4": "Advanced - Most Standard Intermediate hacks or Kaizo Beginner are a breeze for me. I completed multiple Intermediate Kaizo hacks.",
+        "5": "Expert - I confidently beat expert level standard or Advanced level kaizo (DRAM Any%, etc); cleared many Advanced level hacks of this type.",
+        "6": "Master - I cleared multiple expert level hacks of this type. I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years",
+        "7": "I have 100+ hours experience in hacks above Expert level. Cleared numerous hacks directly below or adjacent to this difficulty. I can clear DRAM3 RTA less than 50 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.",
+        "8": "I cleared 10+ Grandmaster hacks.I could speedrun Master++ hacks like DRAM3 RTA. I want longer levels with harder tricks; more trolls. Maximum of human possibility.",
+        "9": "I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these. Unless this is a TAS: you set this value too high.",
+        "10": "You probably set this value too high, since 10 is literally above (8) TAS-Only difficulty."
+      },
+      "commentField": "user_skill_comment"
+    },
+    {
+      "internalName": "user_skill_rating_when_beat",
+      "displayName": "Self-Eval: My Experience Level (At time I actually beat this game)",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "description": "0 to 10 stars"
+      },
+      "description": "Your self-evaluated skill level at the time you actually beat this game. This may differ from your skill level when you rated it.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Observer"
+        },
+        {
+          "value": 1,
+          "text": "Newcomer"
+        },
+        {
+          "value": 2,
+          "text": "Apprentice"
+        },
+        {
+          "value": 3,
+          "text": "Medium"
+        },
+        {
+          "value": 4,
+          "text": "Advanced/Kaizo Intermediate"
+        },
+        {
+          "value": 5,
+          "text": "Expert"
+        },
+        {
+          "value": 6,
+          "text": "Master"
+        },
+        {
+          "value": 7,
+          "text": "Grandmaster"
+        },
+        {
+          "value": 8,
+          "text": "Grandmaster+/Legend"
+        },
+        {
+          "value": 9,
+          "text": "Deity"
+        },
+        {
+          "value": 10,
+          "text": "TAS"
+        }
+      ],
+      "hoverText": {
+        "0": "I saw someone play Mario once - \"Will you play my level?\"",
+        "1": "Newcomer - I beat Vanilla SMW 96 exits, or similar",
+        "2": "Casual/Apprentice - Vanilla is too easy for me, I look for more challenging things",
+        "3": "Intermediate - For standard: I cleared multiple Standard Normal hacks. If reviewing Kaizo: I completed beginner Kaizo hacks numerous times and find them easy.",
+        "4": "Advanced - Most Standard Intermediate hacks or Kaizo Beginner are a breeze for me. I completed multiple Intermediate Kaizo hacks.",
+        "5": "Expert - I confidently beat expert level standard or Advanced level kaizo (DRAM Any%, etc); cleared many Advanced level hacks of this type.",
+        "6": "Master - I cleared multiple expert level hacks of this type. I beat above expert level challenges - DRAM2, DRAM 100%, Kaizo 1 All exits. played Mario most days for years",
+        "7": "I have 100+ hours experience in hacks above Expert level. Cleared numerous hacks directly below or adjacent to this difficulty. I can clear DRAM3 RTA less than 50 hours. I could tackle Perchance, Hackers Dream, JUMP, or, Responsible World 1.0, Casio, and Fruit Dealer RTA.",
+        "8": "I cleared 10+ Grandmaster hacks.I could speedrun Master++ hacks like DRAM3 RTA. I want longer levels with harder tricks; more trolls. Maximum of human possibility.",
+        "9": "I thought of trying to RTA Kaizo Pit hacks or Item Abuse 2/3, or speedrunning more than a few like these. Unless this is a TAS: you set this value too high.",
+        "10": "You probably set this value too high, since 10 is literally above (8) TAS-Only difficulty."
+      },
+      "commentField": "user_skill_comment_when_beat"
+    },
+    {
+      "internalName": "user_recommendation_rating",
+      "displayName": "Recommend?",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Do you recommend; is the game fun and worthwhile?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Never Recommend"
+        },
+        {
+          "value": 1,
+          "text": "Recommend over few games, About as much as SMW"
+        },
+        {
+          "value": 2,
+          "text": "Recommend over some games"
+        },
+        {
+          "value": 3,
+          "text": "Recommend over 50% of games"
+        },
+        {
+          "value": 4,
+          "text": "Recommend over 90% of games"
+        },
+        {
+          "value": 5,
+          "text": "Recommend over almost all games"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_recommendation_comment"
+    },
+    {
+      "internalName": "user_importance_rating",
+      "displayName": "Renown",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Whether the game is especially Influential or famous in your view; regardless of its review qualities",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Not a popularly known title"
+        },
+        {
+          "value": 1,
+          "text": "Slight influence"
+        },
+        {
+          "value": 2,
+          "text": "Title is of some influence"
+        },
+        {
+          "value": 3,
+          "text": "Title has substantial renown"
+        },
+        {
+          "value": 4,
+          "text": "Title is a major influence to many games"
+        },
+        {
+          "value": 5,
+          "text": "Famed title, example: Kaizo Mario World"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_importance_comment"
+    },
+    {
+      "internalName": "user_technical_quality_rating",
+      "displayName": "Technical Quality",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "How fully functional?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "The game is almost unplayable. Serious bugs; incompatibility with console or emulator; etc."
+        },
+        {
+          "value": 1,
+          "text": "The game could crash or corrupt data while playing normally; Or contain soft locks or soft lock trolls."
+        },
+        {
+          "value": 2,
+          "text": "Average technical quality. There are zero softlock trolls, or zero softlocks players would often encounter. May be mostly stable with a few bugs that are not serious."
+        },
+        {
+          "value": 3,
+          "text": "Contains few major bugs of any kind, deminimis impact, no data loss, no visual artifact, etc"
+        },
+        {
+          "value": 4,
+          "text": "All issues are few, minor, and rare"
+        },
+        {
+          "value": 5,
+          "text": "Zero notable glitches found"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_technical_quality_comment"
+    },
+    {
+      "internalName": "user_gameplay_design_rating",
+      "displayName": "Design: Gameplay",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Evaluation of the game's core gameplay design, mechanics, and how well they work together.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "About Average"
+        },
+        {
+          "value": 1,
+          "text": "Excellent gameplay >=50% of the game"
+        },
+        {
+          "value": 2,
+          "text": "Above excellent for 80% of the game."
+        },
+        {
+          "value": 3,
+          "text": "Above 90%. Also generally free of blind jumps; unforseeable obstacles; etc. Excepting a few trolls if they are well-placed, infrequent, and easily-avoidable."
+        },
+        {
+          "value": 4,
+          "text": "Extremely superior gameplay design vs other titles."
+        },
+        {
+          "value": 5,
+          "text": "Maximally Enjoyable interesting gameplay."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_gameplay_design_comment"
+    },
+    {
+      "internalName": "user_fairness_rating",
+      "displayName": "Design: Player Fairness",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Star rating for non-SMW-skill Progression barriers: How fair is the game’s design independent of raw difficulty? Does the game teach mechanics before testing them? How much does this game’s progress depend mainly on SMW player skill rather than anything else, including unforseeable hazards, forced trial-and-error, unfair setups?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor, Even an Expert player is greatly hindered by challenges of not SMW skills. RNG. Non-SMW custom mechanics or physics (example: Casio water). Unforseeable trolls, Frame Rules, or Frame-perfect tricks, etc."
+        },
+        {
+          "value": 1,
+          "text": "Below average. Game might have long retry sections or long series of obstacles that cannot be played blind at pace of level. The game might have a one-frame trick, such as required Yump or block grab a few obstacles after the start or midway."
+        },
+        {
+          "value": 2,
+          "text": "About average. Game has well-placed midways. Rarely imposes retry based on obstacles a maximally skilled player would not first-time win. Might contain some easily-avoidable trolls. There are zero chains of frame-perfect tricks, or frame-perfect tricks more than 5 seconds away from start or checkpoint."
+        },
+        {
+          "value": 3,
+          "text": "Above Average. Gameplay never punishes a skilled player for not having seen the level yet. There are almost zero trolls; all easy to avoid."
+        },
+        {
+          "value": 4,
+          "text": "10% or less of skilled player time is spent ever repeating sections due to a non-skill challenge."
+        },
+        {
+          "value": 5,
+          "text": "5%/less time is spent due to non-skill obstacles."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_fairness_comment"
+    },
+    {
+      "internalName": "user_challenge_quality_rating",
+      "displayName": "Design: Challenge Quality / Engagement",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "How well does the game provide high-quality challenges that test or engage the player’s core SMW skills at the game’s intended difficulty level (including any expected tricks)?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Unchallenging in player skill at SMW. Difficulty rating should be lower, or game contains minimal skill challenges. Might be an entirely novel game that replaces SMW physics and does not use SMW skills. May be RNG-focused, or focused on challenges orthoganol to SMW."
+        },
+        {
+          "value": 1,
+          "text": "Below Average. The game difficulty rating may be too high for its game type, or else the game does not push the player to have or develop SMW-related skills.  The challenge emphasis might be not towards SMW skills at the difficulty level selected."
+        },
+        {
+          "value": 2,
+          "text": "About average. The game is like other games in its type."
+        },
+        {
+          "value": 3,
+          "text": "The game has above average quality, better than 80% of games. In skill-related challenges that seem in line with the rated difficulty."
+        },
+        {
+          "value": 4,
+          "text": "The game is excellent, and in the top 10% of games one should play for skill-based challenges representative of the games targeted difficulty."
+        },
+        {
+          "value": 5,
+          "text": "Game is made almost entirely of strong, SMW skill-related challenges at appropriate difficulty. 95% of playtime comes from fair, well-designed tests of SMW skill which correspond to the gam difficulty rating."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_challenge_quality_comment"
+    },
+    {
+      "internalName": "user_originality_rating",
+      "displayName": "Originality / Creativity",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "How original and creative the game is. Does it bring new ideas or unique takes on familiar concepts?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "The game is below average originality. It may be repetitive or limited in substance."
+        },
+        {
+          "value": 1,
+          "text": "The game is about average. Original levels. It might be a clone or remake, but is not simply one."
+        },
+        {
+          "value": 2,
+          "text": "Above average. The game has many elements that are more original or creative than half of games"
+        },
+        {
+          "value": 3,
+          "text": "Every level has entirely new elements; the game is above most titles in the element of originality or novelty."
+        },
+        {
+          "value": 4,
+          "text": "The game is above excellent and above 90% of games in this area"
+        },
+        {
+          "value": 5,
+          "text": "The game has creative unique features to the maximal level, and moreso then 99% of games."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_originality_comment"
+    },
+    {
+      "internalName": "user_visual_aesthetics_rating",
+      "displayName": "Visual Aesthetics and Graphics",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Assessment of the game's visual presentation, graphics quality, and aesthetic appeal.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "About average or less, might have issues."
+        },
+        {
+          "value": 1,
+          "text": "Above average. Overworld and levels well designed visually - basically free of floating muncher stacks, naked pipes, throughout the game, etc"
+        },
+        {
+          "value": 2,
+          "text": "Very good visual aesthetics throughout at least 80% of the game. May have custom graphics.."
+        },
+        {
+          "value": 3,
+          "text": "Has custom graphics. Extremely good visual aesthetics within 90% or more."
+        },
+        {
+          "value": 4,
+          "text": "The aesthetics are mind-blowing."
+        },
+        {
+          "value": 5,
+          "text": "The aesthetics are out of this world for 99% of the game and exceed 99% of other SMW games."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_visual_aesthetics_comment"
+    },
+    {
+      "internalName": "user_story_rating",
+      "displayName": "Story",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Does the game have a compelling or interesting story? igh quality story. Highly immersive interesting story integration.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "0=About average for SMW games, Story is not a typical element."
+        },
+        {
+          "value": 1,
+          "text": "1=Notable story elements."
+        },
+        {
+          "value": 2,
+          "text": "2=The game contains a complete story with character development and world building."
+        },
+        {
+          "value": 3,
+          "text": "3=Pervasive dialog and storytelling, to the extent this could be considered an RPG."
+        },
+        {
+          "value": 4,
+          "text": "4=High quality story. Highly immersive interesting story integration."
+        },
+        {
+          "value": 5,
+          "text": "5=The story is a major draw for the game, and is almost the entire game."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_story_comment"
+    },
+    {
+      "internalName": "user_soundtrack_graphics_rating",
+      "displayName": "Soundtrack",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Assessment of the game's soundtrack, music quality, and audio design.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "0=Poorer than vanilla SMW, or seems more like noise than music (example: Casio)"
+        },
+        {
+          "value": 1,
+          "text": "1=Average soundtrack or graphics"
+        },
+        {
+          "value": 2,
+          "text": "2=Good soundtrack and graphics - better than vanilla"
+        },
+        {
+          "value": 3,
+          "text": "3=Above very good soundtrack and graphics"
+        },
+        {
+          "value": 4,
+          "text": "4=Highly excellent soundtrack and graphics throughout the entire game. Better than 90% of games."
+        },
+        {
+          "value": 5,
+          "text": "5=Better than 99% of games in this area)"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_soundtrack_graphics_comment"
+    },
+    {
+      "internalName": "user_accessibility_rating",
+      "displayName": "Design: Accessibility",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Consider: Visual clarity issues, Audio cues required for progress are an issue, Flashing lights, Overly tight timers, Colorblind-unfriendly setups",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "At most one minor occurence"
+        },
+        {
+          "value": 5,
+          "text": "No issues found"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_accessibility_comment"
+    },
+    {
+      "internalName": "user_length_pacing",
+      "displayName": "Design: Length, Value, and Pacing",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "How is the game's overall length and pacing? Not enough levels? Levels too short? Game too long? Overstays its welcome? Does each level have purpose and engage you in a fresh way, or does it become a slog?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_length_pacing_comment"
+    },
+    {
+      "internalName": "user_progression_rating",
+      "displayName": "Design: Difficulty Curve and Progression",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "How smoothly does the hack scale its difficulty? Does the challenge ramp up reasonably, or spike unpredictably? Are the level sizes a good length for the game type?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Below average Progression, level size, or number levels is too long/short"
+        },
+        {
+          "value": 1,
+          "text": "About average for progression and length"
+        },
+        {
+          "value": 2,
+          "text": "Better than most"
+        },
+        {
+          "value": 3,
+          "text": "Better than 80%"
+        },
+        {
+          "value": 4,
+          "text": "Better than 90%"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_progression_comment"
+    },
+    {
+      "internalName": "user_consistency_rating",
+      "displayName": "Design: Consistency, length and checkpointing",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Are sections within a level consistently difficult, fairly checkpointed, and not of excessive length? Checkpoint distance should be 20 seconds or less for Advanced or higher difficulty games to reach 3 stars.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_consistency_comment"
+    },
+    {
+      "internalName": "user_overworld_rating",
+      "displayName": "Design: Overworld",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Evaluation of the game's overworld design, layout, navigation, and how well it connects levels or areas. Skip this rating if the game has no overworld.",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Below average"
+        },
+        {
+          "value": 1,
+          "text": "Above average, Detailed and well-made overworld"
+        },
+        {
+          "value": 2,
+          "text": "Highly excellent, Beautiful overworld surpassing 50% of games"
+        },
+        {
+          "value": 3,
+          "text": "Overworld superior to 80% of games"
+        },
+        {
+          "value": 4,
+          "text": "Overworld in top 90% of games"
+        },
+        {
+          "value": 5,
+          "text": "Overworld in the top 1%"
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_overworld_comment"
+    },
+    {
+      "internalName": "user_education_rating",
+      "displayName": "Design: Player Education and Communication",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Does the game teach new mechanics properly? Do setups make intentions clear including any necessary coin guides? Are custom blocks, sprites, or physics changes explained?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor; Nothing is explained accurately."
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than most"
+        },
+        {
+          "value": 4,
+          "text": "Above 80%; Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_education_comment"
+    },
+    {
+      "internalName": "user_custom_rating",
+      "displayName": "Design: Custom Mechanics Evaluation",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Applies for some hacks that alter Mario's physics or add new mobility mechanics. Evaluate: Responsiveness, Clarity, Intuitive for skilled SMW players VS difficult or awkward",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_custom_comment"
+    },
+    {
+      "internalName": "user_puzzle_rating",
+      "displayName": "Design: Puzzle Quality Evaluation",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "If the game contains puzzle elements: Are puzzles logical? Do they respect the player's time? Are solutions satisfying rather than obscure or janky?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_puzzle_comment"
+    },
+    {
+      "internalName": "user_polish_rating",
+      "displayName": "Design: Polish and Quality of Life Rating",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "Example: Features like Retry system / fast resets, Consistent Indicators, Smooth transitions, Avoid tedious enemy reuse",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_polish_comment"
+    },
+    {
+      "internalName": "user_boss_rating",
+      "displayName": "Design: Boss Rating",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "description": "0 to 5 stars"
+      },
+      "description": "For hacks that use custom bosses. Are they good and fun to play, more annoying than vanilla, or with boring/tedious unnecessary extra phases or hits required, etc?",
+      "extraGuidelines": "<!-- Add extra guidelines here -->",
+      "labels": [
+        {
+          "value": 0,
+          "text": "Poor, Worse or more annoying for players than stock bosses"
+        },
+        {
+          "value": 1,
+          "text": "Below Average"
+        },
+        {
+          "value": 2,
+          "text": "About Average"
+        },
+        {
+          "value": 3,
+          "text": "Better than Average"
+        },
+        {
+          "value": 4,
+          "text": "Very good"
+        },
+        {
+          "value": 5,
+          "text": "Top 1%."
+        }
+      ],
+      "hoverText": null,
+      "commentField": "user_boss_comment"
+    }
+  ],
+  "footer": {
+    "customContent": "<!-- Add custom footer content here -->"
+  }
+}

@@ -1,31 +1,31 @@
 {
   "rhsearch_cat.db": {
     "type": "catalogdb",
-    "version": "5",
+    "version": "6",
     "base": {
-      "file_name": "rhsearch_cat-20251228.db.xz",
+      "file_name": "rhsearch_cat-20251229.db.xz",
       "format": "xz",
-      "sha256": "0625d88b3ffe85276f47e07491ae160f6502205da4fececaea7d9cb0a4ea82b5",
-      "ipfs_cidv1": "bafybeiabqq3xgv47da3wypfxu7u7csrie463ytnxh2lgjvgohzybf6hmlm",
-      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS83QTMyaUVMVQ==",
+      "sha256": "5efefe8dff6718d90bb7e6844175f3e4e7a4df4a7c743d95542967753f740ccc",
+      "ipfs_cidv1": "bafybeiesg3afbguivbizb3rxlmq7e5jdyhua3ygbctem3quze3dvz4ieq4",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9DTm5wU2VLWQ==",
       "metadata_txid": "",
-      "size": "21597532",
+      "size": "26831292",
       "priority": [
         "baddr",
         "ipfs",
         "ardrive"
       ],
       "ardrive_folder_id": "d4fe5f98-e15b-4ceb-98f9-cded2b6a7cf1",
-      "ardrive_file_name": "rhsearch_cat-20251228.db.xz",
-      "ardrive_file_path": "/MWDB/db/rhsearch_cat-20251228.db.xz",
-      "ardrive_file_id": "7be130d7-1893-4938-b10c-c8215da3ee99",
-      "data_txid": "p67aRAhT1U9yT6O2USqNRbLz5uqwgswJkJM6DUGhKag",
-      "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225"
+      "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
+      "ardrive_file_name": "rhsearch_cat-20251229.db.xz",
+      "ardrive_file_path": "/MWDB/db/rhsearch_cat-20251229.db.xz",
+      "ardrive_file_id": "c8ba3f17-5556-4345-9616-e643b1d17fd0",
+      "data_txid": "GZ6g4pIoo3lXHGoXbaQPLO5nH6IuLA5dCuZAPAbCHRA"
     }
   },
   "rhsearch.zip": {
     "type": "catalog",
-    "version": "5",
+    "version": "6",
     "base": {
       "file_name": "rhsearch-20251228.zip",
       "sha256": "4f715072b6d9ff5b17737b4030e6361ea870063ca220f008b14f45c3db106861",

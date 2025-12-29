@@ -1,7 +1,7 @@
 {
   "rhsearch_cat.db": {
     "type": "catalogdb",
-    "version": "4",
+    "version": "5",
     "base": {
       "file_name": "rhsearch_cat-20251228.db.xz",
       "format": "xz",
@@ -25,7 +25,7 @@
   },
   "rhsearch.zip": {
     "type": "catalog",
-    "version": "4",
+    "version": "5",
     "base": {
       "file_name": "rhsearch-20251228.zip",
       "sha256": "4f715072b6d9ff5b17737b4030e6361ea870063ca220f008b14f45c3db106861",

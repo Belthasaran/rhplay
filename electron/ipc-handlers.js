@@ -16534,8 +16534,26 @@ function registerDatabaseHandlers(dbManager) {
         // For catalog database, replace the existing one
         const catalogDbPath = path.join(userDataDir, 'rhsearch_cat.db');
         
-        // If it's a 7z archive, extract it first
-        if (downloadedPath.endsWith('.7z')) {
+        // Check format field or file extension to determine if decompression is needed
+        const format = update.entry.format || (downloadedPath.endsWith('.xz') ? 'xz' : 
+                                               downloadedPath.endsWith('.7z') ? '7z' : 'raw');
+        
+        if (format === 'xz' || downloadedPath.endsWith('.xz')) {
+          // Decompress .xz file
+          const lzma = require('lzma-native');
+          const { pipeline } = require('stream/promises');
+          
+          const tempDbPath = path.join(workingDir, 'rhsearch_cat.db');
+          await pipeline(
+            fs.createReadStream(downloadedPath),
+            lzma.createDecompressor(),
+            fs.createWriteStream(tempDbPath)
+          );
+          
+          // Copy decompressed file to final location
+          fs.copyFileSync(tempDbPath, catalogDbPath);
+        } else if (format === '7z' || downloadedPath.endsWith('.7z')) {
+          // If it's a 7z archive, extract it first
           const sevenZip = require('7zip-min');
           const extractDir = path.join(workingDir, 'extract');
           fs.mkdirSync(extractDir, { recursive: true });
@@ -16564,6 +16582,7 @@ function registerDatabaseHandlers(dbManager) {
             throw new Error('Database file not found in archive');
           }
         } else {
+          // Format is 'raw' or not specified - copy directly
           fs.copyFileSync(downloadedPath, catalogDbPath);
         }
         

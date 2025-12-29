@@ -2153,7 +2153,14 @@
                       </div>
                     </div>
                     <p v-if="result.author" class="catalog-result-meta">
-                      <strong>Author:</strong> {{ result.author }}
+                      <strong>Author:</strong> 
+                      <span 
+                        @click.stop="searchByAuthor(result.author)"
+                        class="catalog-author-link"
+                        :title="`Search for games by ${result.author}`"
+                      >
+                        {{ result.author }}
+                      </span>
                     </p>
                     <p v-if="result.versioninfo" class="catalog-result-meta">
                       <strong>Version:</strong> {{ result.versioninfo }}
@@ -2165,7 +2172,12 @@
                       <span v-if="result.has_screenshots" class="catalog-badge catalog-badge-screenshots">
                         📷 {{ result.screenshot_count }} screenshot(s)
                       </span>
-                      <span v-if="result.has_levelnames" class="catalog-badge catalog-badge-levelnames">
+                      <span 
+                        v-if="result.has_levelnames" 
+                        @click.stop="openLevelNamesPreview(result.item_id)"
+                        class="catalog-badge catalog-badge-levelnames catalog-badge-clickable"
+                        :title="`Click to view level names for ${result.title || 'this game'}`"
+                      >
                         📝 Has level names
                       </span>
                       <span v-if="result.has_lmfilter" class="catalog-badge catalog-badge-lmfilter">
@@ -2185,6 +2197,9 @@
             </div>
           </div>
 
+          <div v-else-if="catalogSearchState.searching" class="catalog-searching">
+            <p>Searching...</p>
+          </div>
           <div v-else-if="catalogSearchState.searched && catalogSearchResults.length === 0" class="catalog-no-results">
             No results found. Try different search terms.
           </div>
@@ -2197,6 +2212,41 @@
       </section>
       <footer class="modal-footer">
         <button @click="closeCatalogSearchModal" class="btn-secondary">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Level Names Preview Modal -->
+  <div v-if="catalogLevelNamesPreviewOpen" class="modal-backdrop" @click.self="closeLevelNamesPreview" style="z-index: 20002;">
+    <div class="modal" style="max-width: 600px; max-height: 80vh;">
+      <header class="modal-header">
+        <h3>Level Names Preview</h3>
+        <button class="close" @click="closeLevelNamesPreview">✕</button>
+      </header>
+      <section class="modal-body" style="overflow-y: auto; max-height: 60vh;">
+        <div v-if="catalogLevelNamesPreview.length === 0" style="padding: 20px; text-align: center; color: #666;">
+          No level names found for this game.
+        </div>
+        <div v-else>
+          <p style="margin-bottom: 12px; color: #666;">
+            Click on a level name to search for other games with that level name:
+          </p>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+            <li 
+              v-for="(levelName, index) in catalogLevelNamesPreview" 
+              :key="index"
+              @click="searchByLevelName(levelName)"
+              style="padding: 8px 12px; margin-bottom: 4px; background: #f5f5f5; border-radius: 4px; cursor: pointer; transition: background 0.2s;"
+              @mouseover="$event.target.style.background = '#e0e0e0'"
+              @mouseleave="$event.target.style.background = '#f5f5f5'"
+            >
+              {{ levelName }}
+            </li>
+          </ul>
+        </div>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeLevelNamesPreview" class="btn-secondary-small">Close</button>
       </footer>
     </div>
   </div>
@@ -9266,11 +9316,12 @@ const catalogSearchState = ref<{
   applyingUpdate: false,
   updateError: undefined
 });
-
-// Catalog item details state
-const catalogItemDetailsModalOpen = ref(false);
 const catalogItemDetails = ref<any>(null);
+const catalogItemDetailsModalOpen = ref(false);
 const catalogItemJson = ref<any>(null);
+const catalogLevelNamesPreviewOpen = ref(false);
+const catalogLevelNamesPreview = ref<string[]>([]);
+const catalogLevelNamesPreviewItemId = ref<string | null>(null);
 
 // Add game from catalog state
 const addGameFromCatalogModalOpen = ref(false);
@@ -19988,6 +20039,71 @@ async function performCatalogSearch() {
   } finally {
     catalogSearchState.value.searching = false;
   }
+}
+
+function searchByAuthor(authorName: string) {
+  // Set search query to author:"name" format
+  catalogSearchQuery.value = `author:"${authorName}"`;
+  // Trigger search
+  performCatalogSearch();
+}
+
+async function openLevelNamesPreview(itemId: string) {
+  catalogLevelNamesPreviewItemId.value = itemId;
+  catalogLevelNamesPreview.value = [];
+  catalogLevelNamesPreviewOpen.value = true;
+  
+  try {
+    // Load JSON from ZIP to get level names
+    const json = await (window as any).electronAPI.catalogGetItemJson({
+      itemId: itemId
+    });
+    
+    // Extract level names from JSON
+    // Level names might be in different formats, check common fields
+    const levelNames: string[] = [];
+    
+    if (json.levelnames && Array.isArray(json.levelnames)) {
+      levelNames.push(...json.levelnames);
+    } else if (json.level_names && Array.isArray(json.level_names)) {
+      levelNames.push(...json.level_names);
+    } else if (json.levels && Array.isArray(json.levels)) {
+      // If levels is an array of objects with name property
+      json.levels.forEach((level: any) => {
+        if (level.name) levelNames.push(level.name);
+        if (level.levelname) levelNames.push(level.levelname);
+      });
+    } else if (json.lmfilter && typeof json.lmfilter === 'object') {
+      // Check if lmfilter contains level names
+      Object.keys(json.lmfilter).forEach(key => {
+        if (json.lmfilter[key] && typeof json.lmfilter[key] === 'string') {
+          levelNames.push(json.lmfilter[key]);
+        }
+      });
+    }
+    
+    catalogLevelNamesPreview.value = levelNames.filter((name, index, self) => 
+      name && self.indexOf(name) === index // Remove duplicates
+    );
+  } catch (error: any) {
+    await showAlert('Error', `Failed to load level names: ${error.message}`);
+    catalogLevelNamesPreviewOpen.value = false;
+  }
+}
+
+function closeLevelNamesPreview() {
+  catalogLevelNamesPreviewOpen.value = false;
+  catalogLevelNamesPreview.value = [];
+  catalogLevelNamesPreviewItemId.value = null;
+}
+
+function searchByLevelName(levelName: string) {
+  // Close level names preview
+  closeLevelNamesPreview();
+  // Set search query to search for the level name
+  catalogSearchQuery.value = levelName;
+  // Trigger search
+  performCatalogSearch();
 }
 
 async function openCatalogItemDetails(result: any) {
@@ -40072,5 +40188,37 @@ button:disabled {
   margin-bottom: 4px;
 }
 
+.catalog-author-link {
+  color: #2196F3;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.catalog-author-link:hover {
+  color: #1976D2;
+  text-decoration: underline;
+}
+
+.catalog-badge-clickable {
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.catalog-badge-clickable:hover {
+  background-color: #e3f2fd !important;
+  transform: scale(1.05);
+}
+
+.catalog-searching {
+  padding: 24px;
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+}
+
+.catalog-searching p {
+  margin: 0;
+}
 </style>
 

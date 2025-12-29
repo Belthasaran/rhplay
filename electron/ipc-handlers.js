@@ -15927,16 +15927,35 @@ function registerDatabaseHandlers(dbManager) {
       
       const db = new Database(dbPath, { readonly: true });
       
-      // Build FTS5 query
-      const queryTerms = query.split(/\s+/).map(term => {
-        if (term.includes(' ')) {
-          return `"${term}"`;
-        } else {
-          return `${term}*`;
-        }
-      }).join(' AND ');
+      // Parse query for author: syntax
+      let authorSearch = null;
+      let remainingQuery = query;
       
-      const ftsQuery = queryTerms;
+      // Check for author:"name" or author:name syntax
+      const authorMatch = query.match(/author:\s*"([^"]+)"|author:\s*(\S+)/i);
+      if (authorMatch) {
+        authorSearch = authorMatch[1] || authorMatch[2];
+        // Remove author: part from remaining query
+        remainingQuery = query.replace(/author:\s*"[^"]+"|author:\s*\S+/gi, '').trim();
+      }
+      
+      // Build FTS5 query from remaining terms
+      let ftsQuery = '';
+      if (remainingQuery) {
+        const queryTerms = remainingQuery.split(/\s+/).map(term => {
+          if (term.includes(' ')) {
+            return `"${term}"`;
+          } else {
+            return `${term}*`;
+          }
+        }).join(' AND ');
+        ftsQuery = queryTerms;
+      }
+      
+      // If only author search, use a wildcard FTS query
+      if (!ftsQuery && authorSearch) {
+        ftsQuery = '*';
+      }
       
       // Check if FTS5 table exists
       const ftsExists = db.prepare(`
@@ -15983,18 +16002,63 @@ function registerDatabaseHandlers(dbManager) {
         'g.version_count'
       );
       
+      // Build WHERE clause
+      let whereClause = 'items_fts MATCH ?';
+      const queryParams = [ftsQuery];
+      
+      // Add author filter if specified
+      if (authorSearch) {
+        whereClause += ' AND (LOWER(i.author) LIKE ?)';
+        const authorLower = authorSearch.toLowerCase();
+        queryParams.push(`%${authorLower}%`);
+      }
+      
+      // Build ORDER BY clause to prioritize author matches
+      let orderBy = '';
+      if (authorSearch) {
+        // Use a subquery or computed column for ordering
+        // For now, we'll sort in JavaScript after fetching
+        orderBy = 'ORDER BY i.title';
+      } else {
+        orderBy = 'ORDER BY i.title';
+      }
+      
       // Execute search
-      const results = db.prepare(`
+      let results = db.prepare(`
         SELECT 
           ${selectColumns.join(',\n          ')}
         FROM items_fts
         JOIN items i ON items_fts.item_id = i.item_id
         LEFT JOIN items_groups ig ON i.item_id = ig.item_id
         LEFT JOIN groups g ON ig.group_id = g.group_id
-        WHERE items_fts MATCH ?
-        ORDER BY i.title
+        WHERE ${whereClause}
+        ${orderBy}
         LIMIT 200
-      `).all(ftsQuery);
+      `).all(...queryParams);
+      
+      // Sort results to prioritize author matches if author search is specified
+      if (authorSearch) {
+        const authorLower = authorSearch.toLowerCase();
+        results = results.sort((a, b) => {
+          const aAuthor = (a.author || '').toLowerCase();
+          const bAuthor = (b.author || '').toLowerCase();
+          
+          // Exact match first
+          if (aAuthor === authorLower && bAuthor !== authorLower) return -1;
+          if (bAuthor === authorLower && aAuthor !== authorLower) return 1;
+          
+          // Starts with author search term
+          if (aAuthor.startsWith(authorLower) && !bAuthor.startsWith(authorLower)) return -1;
+          if (bAuthor.startsWith(authorLower) && !aAuthor.startsWith(authorLower)) return 1;
+          
+          // Contains author search term
+          if (aAuthor.includes(authorLower) && !bAuthor.includes(authorLower)) return -1;
+          if (bAuthor.includes(authorLower) && !aAuthor.includes(authorLower)) return 1;
+          
+          // Otherwise sort by title
+          return (a.title || '').localeCompare(b.title || '');
+        });
+      }
       
       db.close();
       

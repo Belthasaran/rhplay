@@ -172,6 +172,90 @@ function getNestedValue(obj, path) {
   return current;
 }
 
+// Helper function to extract type/difficulty keywords from various fields
+function extractTypeDifficultyKeywords(json) {
+  const keywords = [];
+  
+  // Extract from gameversion fields
+  if (json.gameversion) {
+    // difficulty field
+    if (json.gameversion.difficulty) {
+      const diff = String(json.gameversion.difficulty);
+      // Split by common separators (comma, colon, semicolon)
+      const parts = diff.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+    
+    // legacy_type field
+    if (json.gameversion.legacy_type) {
+      const legacy = String(json.gameversion.legacy_type);
+      const parts = legacy.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+    
+    // combinedtype field
+    if (json.gameversion.combinedtype) {
+      const combined = String(json.gameversion.combinedtype);
+      const parts = combined.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+    
+    // fields_type field
+    if (json.gameversion.fields_type) {
+      const fields = String(json.gameversion.fields_type);
+      const parts = fields.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+    
+    // gametype field
+    if (json.gameversion.gametype) {
+      const gametype = String(json.gameversion.gametype);
+      const parts = gametype.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+    
+    // type field
+    if (json.gameversion.type) {
+      const type = String(json.gameversion.type);
+      const parts = type.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+  }
+  
+  // Extract from smwc_world fields
+  if (json.smwc_world) {
+    // difficulty field
+    if (json.smwc_world.difficulty) {
+      const diff = String(json.smwc_world.difficulty);
+      const parts = diff.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+    
+    // type field
+    if (json.smwc_world.type) {
+      const type = String(json.smwc_world.type);
+      const parts = type.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+      keywords.push(...parts);
+    }
+  }
+  
+  // Extract from top-level fields (fallback)
+  if (json.difficulty) {
+    const diff = String(json.difficulty);
+    const parts = diff.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+    keywords.push(...parts);
+  }
+  
+  if (json.type) {
+    const type = String(json.type);
+    const parts = type.split(/[,:;]/).map(p => p.trim()).filter(p => p.length > 0);
+    keywords.push(...parts);
+  }
+  
+  // Normalize and deduplicate
+  return [...new Set(keywords.map(k => normalizeString(k)).filter(k => k.length > 0))];
+}
+
 // Helper function to extract tags
 function extractTags(json) {
   const tags = [];
@@ -199,6 +283,10 @@ function extractTags(json) {
   if (json.folder_categories && Array.isArray(json.folder_categories)) {
     tags.push(...json.folder_categories);
   }
+  
+  // Add type/difficulty keywords for searchability
+  const typeKeywords = extractTypeDifficultyKeywords(json);
+  tags.push(...typeKeywords);
   
   // Normalize and deduplicate
   return [...new Set(tags.map(t => normalizeString(t)).filter(t => t.length > 0))];
@@ -292,7 +380,7 @@ function normalizeItem(json, jsonPath) {
     url: null,
     download_url: null,
     gametype: null,
-    type: null,
+    item_type: null,  // Using item_type instead of type to avoid reserved word conflicts
     
     // Raw JSON (for reference, will be stored in ZIP)
     raw_json_hash: null
@@ -415,24 +503,24 @@ function normalizeItem(json, jsonPath) {
                   json.type ||
                   null;
   
-  item.type = json.gameversion?.fields_type ||
-              json.gameversion?.combinedtype ||
-              json.gameversion?.legacy_type ||
-              json.gameversion?.gametype ||
-              json.gameversion?.type ||
-              json.smwc_world?.type ||
-              json.type ||
-              null;
+  item.item_type = json.gameversion?.fields_type ||
+                   json.gameversion?.combinedtype ||
+                   json.gameversion?.legacy_type ||
+                   json.gameversion?.gametype ||
+                   json.gameversion?.type ||
+                   json.smwc_world?.type ||
+                   json.type ||
+                   null;
   
-  // If type is still null, try to infer from folder_categories (e.g., "Kaizo" -> "Kaizo")
-  if (!item.type && json.folder_categories && Array.isArray(json.folder_categories) && json.folder_categories.length > 0) {
+  // If item_type is still null, try to infer from folder_categories (e.g., "Kaizo" -> "Kaizo")
+  if (!item.item_type && json.folder_categories && Array.isArray(json.folder_categories) && json.folder_categories.length > 0) {
     // Check for common patterns like "Kaizo LDC" or "KLDC2022" in title
     const titleLower = (item.title || '').toLowerCase();
     if (titleLower.includes('kaizo ldc') || titleLower.includes('kldc')) {
-      item.type = 'Kaizo';
+      item.item_type = 'Kaizo';
     } else {
       // Use first folder category as type hint
-      item.type = json.folder_categories[0];
+      item.item_type = json.folder_categories[0];
     }
   }
   
@@ -581,7 +669,7 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
     { name: 'url', type: 'TEXT' },
     { name: 'download_url', type: 'TEXT' },
     { name: 'gametype', type: 'TEXT' },
-    { name: 'type', type: 'TEXT' }
+    { name: 'item_type', type: 'TEXT' }  // Using item_type instead of type to avoid reserved word conflicts
   ];
   
   for (const col of columnsToAdd) {
@@ -657,7 +745,7 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
           sfc_rom_size, has_screenshots, screenshot_count, has_levelnames,
           has_lmfilter, has_translevel_data, has_official_source, levelnames_keywords,
           index7z_name, indexbps_name, index7z_ipfs_cidv1, index7z_ardrive_file_id,
-          url, download_url, gametype, type,
+          url, download_url, gametype, item_type,
           raw_json_hash, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `);
@@ -696,7 +784,7 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
         item.url,
         item.download_url,
         item.gametype,
-        item.type,
+        item.item_type,
         item.raw_json_hash
       );
       
@@ -774,7 +862,7 @@ async function buildSearchCatalog1Incremental(jsonFilePath, options) {
     { name: 'url', type: 'TEXT' },
     { name: 'download_url', type: 'TEXT' },
     { name: 'gametype', type: 'TEXT' },
-    { name: 'type', type: 'TEXT' }
+    { name: 'item_type', type: 'TEXT' }  // Using item_type instead of type to avoid reserved word conflicts
   ];
   for (const col of columnsToAdd) {
     if (!existingColumns.has(col.name)) {
@@ -838,7 +926,7 @@ async function buildSearchCatalog1Incremental(jsonFilePath, options) {
       item.sfc_rom_size, item.has_screenshots, item.screenshot_count, item.has_levelnames,
       item.has_lmfilter, item.has_translevel_data, item.has_official_source, item.levelnames_keywords,
       item.index7z_name, item.indexbps_name, item.index7z_ipfs_cidv1, item.index7z_ardrive_file_id,
-      item.url, item.download_url, item.gametype, item.type,
+        item.url, item.download_url, item.gametype, item.item_type,
       item.raw_json_hash
     );
     

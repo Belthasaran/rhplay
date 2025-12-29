@@ -15988,7 +15988,7 @@ function registerDatabaseHandlers(dbManager) {
       if (existingColumns.has('url')) selectColumns.push('i.url');
       if (existingColumns.has('download_url')) selectColumns.push('i.download_url');
       if (existingColumns.has('gametype')) selectColumns.push('i.gametype');
-      if (existingColumns.has('type')) selectColumns.push('i.type');
+      if (existingColumns.has('item_type')) selectColumns.push('i.item_type');
       
       selectColumns.push(
         'i.has_screenshots',

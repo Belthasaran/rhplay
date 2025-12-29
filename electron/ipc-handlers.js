@@ -16456,8 +16456,6 @@ function registerDatabaseHandlers(dbManager) {
       const { app } = require('electron');
       const catalogDownloadManager = require('./utils/catalog-download-manager');
       const catalogManifestUtils = require('./utils/catalog-manifest-utils');
-      const searchBuild1 = require('../jstools/search_build1.js');
-      const searchBuild2 = require('../jstools/search_build2.js');
       const crypto = require('crypto');
       
       const userDataDir = app.getPath('userData');
@@ -16483,8 +16481,22 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // Install based on type
-      if (update.type === 'catalog-base' || update.type === 'catalog-additional') {
-        // For catalog ZIP files, extract and add to catalog
+      if (update.type === 'catalog-base') {
+        // For base catalog ZIP files, replace directly (no incremental build)
+        // Base files already contain all previous updates and supersede everything
+        const catalogZipPath = path.join(userDataDir, 'rhsearch.zip');
+        
+        // Direct replacement - copy the downloaded file to replace rhsearch.zip
+        fs.copyFileSync(downloadedPath, catalogZipPath);
+        
+        // Update searchdat.json
+        const version = update.entry.searchdb_version || update.availableVersion || '1';
+        catalogManifestUtils.updateSearchDatCatalog('catalog', version, sha256, catalogZipPath);
+      } else if (update.type === 'catalog-additional') {
+        // For additional catalog updates, use incremental build
+        // This only happens when "additional" entries are present in bpsarchives.json
+        const searchBuild1 = require('../jstools/search_build1.js');
+        const searchBuild2 = require('../jstools/search_build2.js');
         const AdmZip = require('adm-zip');
         const zip = new AdmZip(downloadedPath);
         const zipEntries = zip.getEntries();
@@ -16492,7 +16504,7 @@ function registerDatabaseHandlers(dbManager) {
         const catalogDbPath = path.join(userDataDir, 'rhsearch_cat.db');
         const catalogZipPath = path.join(userDataDir, 'rhsearch.zip');
         
-        // Extract JSON files and add to catalog
+        // Extract JSON files and add to catalog incrementally
         for (const entry of zipEntries) {
           if (entry.entryName.endsWith('.json')) {
             const jsonContent = entry.getData().toString('utf8');
@@ -16517,12 +16529,7 @@ function registerDatabaseHandlers(dbManager) {
         
         // Update searchdat.json
         const version = update.entry.searchdb_version || update.availableVersion || '1';
-        catalogManifestUtils.updateSearchDatCatalog(
-          update.type === 'catalog-additional' ? 'catalog-additional' : 'catalog',
-          version,
-          sha256,
-          downloadedPath
-        );
+        catalogManifestUtils.updateSearchDatCatalog('catalog-additional', version, sha256, downloadedPath);
       } else if (update.type === 'catalogdb-base') {
         // For catalog database, replace the existing one
         const catalogDbPath = path.join(userDataDir, 'rhsearch_cat.db');

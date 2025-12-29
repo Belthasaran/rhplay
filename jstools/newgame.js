@@ -2454,8 +2454,13 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {
     PAT_META_DIR: dirs.patMetaDir,
     ROM_META_DIR: dirs.romMetaDir,
     BASE_ROM_PATH: baseRomPath,
-    PBKDF2_ITERATIONS: DEFAULT_PBKDF2_ITERATIONS
+    PBKDF2_ITERATIONS: DEFAULT_PBKDF2_ITERATIONS,
   };
+
+  if (Object.hasOwn(config, 'NO_PYTHON') && config.NO_PYTHON !== false) {
+	  blobConfig.NO_PYTHON = true
+	  blobConfig.USE_PYTHON_BLOB_CREATOR = false
+  }
 
   const blobCreator = new BlobCreator(null, blobConfig);
   const patchRecord = {

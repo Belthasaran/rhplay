@@ -17144,7 +17144,7 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   // Create temporary RHPAK from catalog item
-  ipcMain.handle('catalog:create-rhpak', async (_event, { itemId, bpsPath, sfcSha256, itemJson }) => {
+  ipcMain.handle('catalog:create-rhpak', async (_event, { itemId, bpsPath, sfcSha256, itemJson, NO_PYTHON }) => {
     try {
       const os = require('os');
       const crypto = require('crypto');
@@ -17270,7 +17270,8 @@ function registerDatabaseHandlers(dbManager) {
       try {
         await newgame.handlePrepare(skeletonPath, {
           baseDir: tempDir,
-          clientDbPath: clientDbPath
+          clientDbPath: clientDbPath,
+	  "NO_PYTHON": NO_PYTHON
         });
       } catch (error) {
         throw new Error(`Failed to prepare RHPAK: ${error.message}`);

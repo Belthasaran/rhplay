@@ -2183,6 +2183,30 @@
                       <span v-if="result.has_lmfilter" class="catalog-badge catalog-badge-lmfilter">
                         🔍 Has level filter
                       </span>
+                      <button 
+                        v-if="isValidUrl(result.url)"
+                        @click.stop="openUrlInBrowser(result.url)"
+                        class="catalog-badge catalog-badge-url catalog-badge-clickable"
+                        :title="`Open ${result.url}`"
+                      >
+                        🔗 URL
+                      </button>
+                      <button 
+                        v-if="isValidUrl(result.download_url)"
+                        @click.stop="openUrlInBrowser(result.download_url)"
+                        class="catalog-badge catalog-badge-download catalog-badge-clickable"
+                        :title="`Download from ${result.download_url}`"
+                      >
+                        ⬇️ Download
+                      </button>
+                      <button 
+                        v-if="result.sfc_rom_sha1_hash"
+                        @click.stop="openSmwdbUrl(result.sfc_rom_sha1_hash)"
+                        class="catalog-badge catalog-badge-smwdb catalog-badge-clickable"
+                        :title="`Open SMWDB page for ${result.sfc_rom_sha1_hash}`"
+                      >
+                        🗄️ SMWDB
+                      </button>
                     </div>
                     <p v-if="result.sfc_rom_sha1_hash" class="catalog-result-hash">
                       SHA1: {{ result.sfc_rom_sha1_hash }}
@@ -20115,6 +20139,40 @@ function searchByLevelName(levelName: string) {
   catalogSearchQuery.value = levelName;
   // Trigger search
   performCatalogSearch();
+}
+
+function isValidUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+async function openUrlInBrowser(url: string) {
+  if (!isValidUrl(url)) {
+    await showAlert('Error', 'Invalid URL');
+    return;
+  }
+  try {
+    await (window as any).electronAPI.shell.openExternal(url);
+  } catch (error: any) {
+    await showAlert('Error', `Failed to open URL: ${error.message}`);
+  }
+}
+
+function openSmwdbUrl(sha1Hash: string) {
+  if (!sha1Hash || sha1Hash.length !== 40) {
+    showAlert('Error', 'Invalid SHA1 hash');
+    return;
+  }
+  // Construct SMWDB URL: https://smwdb.me/db/(shard)/(hashcode)
+  // shard is the first character of the hash
+  const shard = sha1Hash.charAt(0).toLowerCase();
+  const url = `https://smwdb.me/db/${shard}/${sha1Hash.toLowerCase()}`;
+  openUrlInBrowser(url);
 }
 
 async function openCatalogItemDetails(result: any) {
@@ -40225,7 +40283,7 @@ button:disabled {
   padding: 24px;
   text-align: center;
   color: var(--text-secondary, #666);
-  font-size: 16px;
+  font-size: 24px;
 }
 
 .catalog-searching p {

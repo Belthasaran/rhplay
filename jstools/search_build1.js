@@ -288,6 +288,12 @@ function normalizeItem(json, jsonPath) {
     // Searchable keywords
     levelnames_keywords: null,
     
+    // URL and type information
+    url: null,
+    download_url: null,
+    gametype: null,
+    type: null,
+    
     // Raw JSON (for reference, will be stored in ZIP)
     raw_json_hash: null
   };
@@ -390,6 +396,45 @@ function normalizeItem(json, jsonPath) {
   // Extract levelname keywords for search (includes full level names and keywords)
   const levelnameKeywords = extractLevelnameKeywords(json, 50);
   item.levelnames_keywords = levelnameKeywords.length > 0 ? levelnameKeywords.join(' ') : null;
+  
+  // Extract URL and download_url (can be in gameversion, smwc_world, or top level)
+  item.url = json.gameversion?.url || 
+             json.smwc_world?.url || 
+             json.url || 
+             null;
+  
+  item.download_url = json.gameversion?.download_url || 
+                      json.smwc_world?.download_url || 
+                      json.download_url || 
+                      null;
+  
+  // Extract type/gametype (can be in gameversion, smwc_world, or derived from folder_categories)
+  item.gametype = json.gameversion?.gametype || 
+                  json.gameversion?.type ||
+                  json.smwc_world?.type ||
+                  json.type ||
+                  null;
+  
+  item.type = json.gameversion?.fields_type ||
+              json.gameversion?.combinedtype ||
+              json.gameversion?.legacy_type ||
+              json.gameversion?.gametype ||
+              json.gameversion?.type ||
+              json.smwc_world?.type ||
+              json.type ||
+              null;
+  
+  // If type is still null, try to infer from folder_categories (e.g., "Kaizo" -> "Kaizo")
+  if (!item.type && json.folder_categories && Array.isArray(json.folder_categories) && json.folder_categories.length > 0) {
+    // Check for common patterns like "Kaizo LDC" or "KLDC2022" in title
+    const titleLower = (item.title || '').toLowerCase();
+    if (titleLower.includes('kaizo ldc') || titleLower.includes('kldc')) {
+      item.type = 'Kaizo';
+    } else {
+      // Use first folder category as type hint
+      item.type = json.folder_categories[0];
+    }
+  }
   
   // Calculate raw JSON hash
   const jsonStr = JSON.stringify(json);
@@ -532,7 +577,11 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
     { name: 'index7z_name', type: 'TEXT' },
     { name: 'indexbps_name', type: 'TEXT' },
     { name: 'index7z_ipfs_cidv1', type: 'TEXT' },
-    { name: 'index7z_ardrive_file_id', type: 'TEXT' }
+    { name: 'index7z_ardrive_file_id', type: 'TEXT' },
+    { name: 'url', type: 'TEXT' },
+    { name: 'download_url', type: 'TEXT' },
+    { name: 'gametype', type: 'TEXT' },
+    { name: 'type', type: 'TEXT' }
   ];
   
   for (const col of columnsToAdd) {
@@ -608,8 +657,9 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
           sfc_rom_size, has_screenshots, screenshot_count, has_levelnames,
           has_lmfilter, has_translevel_data, has_official_source, levelnames_keywords,
           index7z_name, indexbps_name, index7z_ipfs_cidv1, index7z_ardrive_file_id,
+          url, download_url, gametype, type,
           raw_json_hash, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `);
       
       stmt.run(
@@ -643,6 +693,10 @@ async function buildSearchCatalog1(index7zFolder, bps7zFolder, options) {
         item.indexbps_name,
         item.index7z_ipfs_cidv1,
         item.index7z_ardrive_file_id,
+        item.url,
+        item.download_url,
+        item.gametype,
+        item.type,
         item.raw_json_hash
       );
       
@@ -716,7 +770,11 @@ async function buildSearchCatalog1Incremental(jsonFilePath, options) {
     { name: 'index7z_name', type: 'TEXT' },
     { name: 'indexbps_name', type: 'TEXT' },
     { name: 'index7z_ipfs_cidv1', type: 'TEXT' },
-    { name: 'index7z_ardrive_file_id', type: 'TEXT' }
+    { name: 'index7z_ardrive_file_id', type: 'TEXT' },
+    { name: 'url', type: 'TEXT' },
+    { name: 'download_url', type: 'TEXT' },
+    { name: 'gametype', type: 'TEXT' },
+    { name: 'type', type: 'TEXT' }
   ];
   for (const col of columnsToAdd) {
     if (!existingColumns.has(col.name)) {
@@ -767,8 +825,9 @@ async function buildSearchCatalog1Incremental(jsonFilePath, options) {
         sfc_rom_size, has_screenshots, screenshot_count, has_levelnames,
         has_lmfilter, has_translevel_data, has_official_source, levelnames_keywords,
         index7z_name, indexbps_name, index7z_ipfs_cidv1, index7z_ardrive_file_id,
+        url, download_url, gametype, type,
         raw_json_hash, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
     
     stmt.run(
@@ -779,6 +838,7 @@ async function buildSearchCatalog1Incremental(jsonFilePath, options) {
       item.sfc_rom_size, item.has_screenshots, item.screenshot_count, item.has_levelnames,
       item.has_lmfilter, item.has_translevel_data, item.has_official_source, item.levelnames_keywords,
       item.index7z_name, item.indexbps_name, item.index7z_ipfs_cidv1, item.index7z_ardrive_file_id,
+      item.url, item.download_url, item.gametype, item.type,
       item.raw_json_hash
     );
     

@@ -15952,11 +15952,6 @@ function registerDatabaseHandlers(dbManager) {
         ftsQuery = queryTerms;
       }
       
-      // If only author search, use a wildcard FTS query
-      if (!ftsQuery && authorSearch) {
-        ftsQuery = '*';
-      }
-      
       // Check if FTS5 table exists
       const ftsExists = db.prepare(`
         SELECT name FROM sqlite_master WHERE type='table' AND name='items_fts'
@@ -15990,6 +15985,10 @@ function registerDatabaseHandlers(dbManager) {
       if (existingColumns.has('indexbps_name')) selectColumns.push('i.indexbps_name');
       if (existingColumns.has('index7z_ipfs_cidv1')) selectColumns.push('i.index7z_ipfs_cidv1');
       if (existingColumns.has('index7z_ardrive_file_id')) selectColumns.push('i.index7z_ardrive_file_id');
+      if (existingColumns.has('url')) selectColumns.push('i.url');
+      if (existingColumns.has('download_url')) selectColumns.push('i.download_url');
+      if (existingColumns.has('gametype')) selectColumns.push('i.gametype');
+      if (existingColumns.has('type')) selectColumns.push('i.type');
       
       selectColumns.push(
         'i.has_screenshots',
@@ -16003,12 +16002,31 @@ function registerDatabaseHandlers(dbManager) {
       );
       
       // Build WHERE clause
-      let whereClause = 'items_fts MATCH ?';
-      const queryParams = [ftsQuery];
+      let whereClause = '';
+      const queryParams = [];
+      let fromClause = '';
+      
+      // If we have an FTS query, use FTS5 table
+      if (ftsQuery) {
+        fromClause = 'FROM items_fts JOIN items i ON items_fts.item_id = i.item_id';
+        whereClause = 'items_fts MATCH ?';
+        queryParams.push(ftsQuery);
+      } else if (authorSearch) {
+        // If only author search (no FTS query), query items table directly
+        fromClause = 'FROM items i';
+        whereClause = '1=1'; // Base condition
+      } else {
+        // No search criteria - return empty
+        return [];
+      }
       
       // Add author filter if specified
       if (authorSearch) {
-        whereClause += ' AND (LOWER(i.author) LIKE ?)';
+        if (whereClause && whereClause !== '1=1') {
+          whereClause += ' AND (LOWER(i.author) LIKE ?)';
+        } else {
+          whereClause = '(LOWER(i.author) LIKE ?)';
+        }
         const authorLower = authorSearch.toLowerCase();
         queryParams.push(`%${authorLower}%`);
       }
@@ -16027,8 +16045,7 @@ function registerDatabaseHandlers(dbManager) {
       let results = db.prepare(`
         SELECT 
           ${selectColumns.join(',\n          ')}
-        FROM items_fts
-        JOIN items i ON items_fts.item_id = i.item_id
+        ${fromClause}
         LEFT JOIN items_groups ig ON i.item_id = ig.item_id
         LEFT JOIN groups g ON ig.group_id = g.group_id
         WHERE ${whereClause}

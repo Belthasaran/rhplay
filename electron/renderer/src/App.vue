@@ -2218,27 +2218,25 @@
 
   <!-- Level Names Preview Modal -->
   <div v-if="catalogLevelNamesPreviewOpen" class="modal-backdrop" @click.self="closeLevelNamesPreview" style="z-index: 20002;">
-    <div class="modal" style="max-width: 600px; max-height: 80vh;">
+    <div class="modal catalog-levelnames-preview-modal" style="max-width: 600px; max-height: 80vh;">
       <header class="modal-header">
         <h3>Level Names Preview</h3>
         <button class="close" @click="closeLevelNamesPreview">✕</button>
       </header>
-      <section class="modal-body" style="overflow-y: auto; max-height: 60vh;">
-        <div v-if="catalogLevelNamesPreview.length === 0" style="padding: 20px; text-align: center; color: #666;">
+      <section class="modal-body catalog-levelnames-preview-body" style="overflow-y: auto; max-height: 60vh;">
+        <div v-if="catalogLevelNamesPreview.length === 0" class="catalog-levelnames-empty">
           No level names found for this game.
         </div>
         <div v-else>
-          <p style="margin-bottom: 12px; color: #666;">
+          <p class="catalog-levelnames-instruction">
             Click on a level name to search for other games with that level name:
           </p>
-          <ul style="list-style: none; padding: 0; margin: 0;">
+          <ul class="catalog-levelnames-list">
             <li 
               v-for="(levelName, index) in catalogLevelNamesPreview" 
               :key="index"
               @click="searchByLevelName(levelName)"
-              style="padding: 8px 12px; margin-bottom: 4px; background: #f5f5f5; border-radius: 4px; cursor: pointer; transition: background 0.2s;"
-              @mouseover="$event.target.style.background = '#e0e0e0'"
-              @mouseleave="$event.target.style.background = '#f5f5f5'"
+              class="catalog-levelname-item"
             >
               {{ levelName }}
             </li>
@@ -20063,8 +20061,14 @@ async function openLevelNamesPreview(itemId: string) {
     // Level names might be in different formats, check common fields
     const levelNames: string[] = [];
     
-    if (json.levelnames && Array.isArray(json.levelnames)) {
-      levelNames.push(...json.levelnames);
+    if (json.levelnames) {
+      if (Array.isArray(json.levelnames)) {
+        // If it's an array, use it directly
+        levelNames.push(...json.levelnames);
+      } else if (typeof json.levelnames === 'object') {
+        // If it's an object/dictionary, extract the values (level names, not IDs)
+        levelNames.push(...Object.values(json.levelnames).filter((v: any) => typeof v === 'string'));
+      }
     } else if (json.level_names && Array.isArray(json.level_names)) {
       levelNames.push(...json.level_names);
     } else if (json.levels && Array.isArray(json.levels)) {
@@ -20074,12 +20078,19 @@ async function openLevelNamesPreview(itemId: string) {
         if (level.levelname) levelNames.push(level.levelname);
       });
     } else if (json.lmfilter && typeof json.lmfilter === 'object') {
-      // Check if lmfilter contains level names
-      Object.keys(json.lmfilter).forEach(key => {
-        if (json.lmfilter[key] && typeof json.lmfilter[key] === 'string') {
-          levelNames.push(json.lmfilter[key]);
-        }
-      });
+      // Check if lmfilter contains level names (values, not keys)
+      if (Array.isArray(json.lmfilter)) {
+        levelNames.push(...json.lmfilter.filter((v: any) => typeof v === 'string'));
+      } else {
+        // If it's an object, extract values
+        Object.values(json.lmfilter).forEach((value: any) => {
+          if (typeof value === 'string') {
+            levelNames.push(value);
+          } else if (Array.isArray(value)) {
+            levelNames.push(...value.filter((v: any) => typeof v === 'string'));
+          }
+        });
+      }
     }
     
     catalogLevelNamesPreview.value = levelNames.filter((name, index, self) => 
@@ -40213,12 +40224,53 @@ button:disabled {
 .catalog-searching {
   padding: 24px;
   text-align: center;
-  color: #666;
+  color: var(--text-secondary, #666);
   font-size: 16px;
 }
 
 .catalog-searching p {
   margin: 0;
+}
+
+.catalog-levelnames-preview-modal {
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #333);
+}
+
+.catalog-levelnames-preview-body {
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #333);
+}
+
+.catalog-levelnames-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary, #666);
+}
+
+.catalog-levelnames-instruction {
+  margin-bottom: 12px;
+  color: var(--text-secondary, #666);
+}
+
+.catalog-levelnames-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.catalog-levelname-item {
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--bg-secondary, #f5f5f5);
+  color: var(--text-primary, #333);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.catalog-levelname-item:hover {
+  background: var(--bg-tertiary, #e0e0e0);
 }
 </style>
 

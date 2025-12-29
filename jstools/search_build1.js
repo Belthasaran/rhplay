@@ -205,15 +205,18 @@ function extractTags(json) {
 }
 
 // Helper function to extract levelname keywords
-function extractLevelnameKeywords(json, maxKeywords = 10) {
+// Returns both full level names and individual keywords for better searchability
+function extractLevelnameKeywords(json, maxLevelNames = 50) {
   const keywords = [];
+  const fullNames = [];
   
   if (json.levelnames && typeof json.levelnames === 'object') {
     const levelNames = Object.values(json.levelnames);
     // Filter out vanilla/common names (would need a list, but for now just take unique ones)
     const uniqueNames = [...new Set(levelNames)];
     
-    for (const name of uniqueNames.slice(0, maxKeywords)) {
+    // Include full level names (up to maxLevelNames)
+    for (const name of uniqueNames.slice(0, maxLevelNames)) {
       // Ensure name is a string
       let nameStr = name;
       if (typeof nameStr !== 'string') {
@@ -221,17 +224,30 @@ function extractLevelnameKeywords(json, maxKeywords = 10) {
       }
       
       if (nameStr && nameStr.length > 0) {
-        // Extract meaningful words (skip common words like "VANILLA", "SECRET")
-        const words = nameStr.split(/\s+/).filter(w => 
-          w.length > 2 && 
-          !['vanilla', 'secret', 'level', 'the', 'a', 'an', 'and', 'or'].includes(w.toLowerCase())
-        );
-        keywords.push(...words);
+        // Skip obviously vanilla/common names
+        const nameLower = nameStr.toLowerCase();
+        if (!nameLower.includes('vanilla') && 
+            !nameLower.includes('secret') &&
+            nameStr.trim().length > 0) {
+          // Add full level name
+          fullNames.push(nameStr);
+          
+          // Also extract meaningful words for partial matching
+          const words = nameStr.split(/\s+/).filter(w => 
+            w.length > 2 && 
+            !['vanilla', 'secret', 'level', 'the', 'a', 'an', 'and', 'or'].includes(w.toLowerCase())
+          );
+          keywords.push(...words);
+        }
       }
     }
   }
   
-  return keywords.slice(0, maxKeywords);
+  // Combine full names and keywords, removing duplicates
+  const allTerms = [...fullNames, ...keywords];
+  const uniqueTerms = [...new Set(allTerms)];
+  
+  return uniqueTerms;
 }
 
 // Helper function to normalize item record
@@ -371,8 +387,8 @@ function normalizeItem(json, jsonPath) {
   item.has_translevel_data = (json.translevel_data && Object.keys(json.translevel_data).length > 0) ? 1 : 0;
   item.has_official_source = (json.gameversion && json.gameversion.gameid) ? 1 : 0;
   
-  // Extract levelname keywords for search
-  const levelnameKeywords = extractLevelnameKeywords(json, 20);
+  // Extract levelname keywords for search (includes full level names and keywords)
+  const levelnameKeywords = extractLevelnameKeywords(json, 50);
   item.levelnames_keywords = levelnameKeywords.length > 0 ? levelnameKeywords.join(' ') : null;
   
   // Calculate raw JSON hash

@@ -9019,6 +9019,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   
   <ToastNotification ref="toastNotificationRef" />
   
+  <!-- Search Catalog Acknowledgement Modal -->
+  <SearchCatalogAcknowledgement
+    :visible="catalogSearchAckVisible"
+    @agree="handleCatalogSearchAckAgree"
+    @cancel="handleCatalogSearchAckCancel"
+  />
+  
   <!-- Prediction Conflict Dialog -->
   <PredictionConflictDialog
     :visible="predictionConflictDialogVisible"
@@ -9093,6 +9100,7 @@ import WinRulesDropdown from './components/WinRulesDropdown.vue';
 import TwitchIntegrationSetup from './components/TwitchIntegrationSetup.vue';
 import PredictionConflictDialog from './components/PredictionConflictDialog.vue';
 import RatingFactorsHelp from './components/RatingFactorsHelp.vue';
+import SearchCatalogAcknowledgement from './components/SearchCatalogAcknowledgement.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -9230,6 +9238,9 @@ const catalogSearchModalOpen = ref(false);
 const catalogSearchQuery = ref('');
 const catalogSearchResults = ref<any[]>([]);
 const catalogSearchInput = ref<HTMLInputElement | null>(null);
+const catalogSearchAckShownThisSession = ref(false);
+const catalogSearchAckVisible = ref(false);
+const pendingCatalogSearchOpen = ref(false);
 const catalogSearchState = ref<{
   status: 'checking' | 'ready' | 'not-available';
   missingFiles?: string[];
@@ -19581,6 +19592,19 @@ function closeBulkEditModal() {
 
 // Catalog search functions
 async function openCatalogSearchModal() {
+  // Check if acknowledgement has been shown this session
+  if (!catalogSearchAckShownThisSession.value) {
+    // Show acknowledgement modal first
+    catalogSearchAckVisible.value = true;
+    pendingCatalogSearchOpen.value = true;
+    return;
+  }
+  
+  // Proceed with opening the catalog search modal
+  await actuallyOpenCatalogSearchModal();
+}
+
+async function actuallyOpenCatalogSearchModal() {
   catalogSearchModalOpen.value = true;
   catalogSearchState.value = { status: 'checking' };
   catalogSearchQuery.value = '';
@@ -19622,6 +19646,22 @@ async function openCatalogSearchModal() {
   setTimeout(() => {
     catalogSearchInput.value?.focus();
   }, 100);
+}
+
+function handleCatalogSearchAckAgree() {
+  catalogSearchAckShownThisSession.value = true;
+  catalogSearchAckVisible.value = false;
+  pendingCatalogSearchOpen.value = false;
+  // Now open the catalog search modal
+  actuallyOpenCatalogSearchModal();
+}
+
+function handleCatalogSearchAckCancel() {
+  catalogSearchAckVisible.value = false;
+  pendingCatalogSearchOpen.value = false;
+  // Don't mark as shown, so it will appear again next time
+  // Close any open catalog search modal
+  closeCatalogSearchModal();
 }
 
 function closeCatalogSearchModal() {

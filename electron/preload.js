@@ -1388,6 +1388,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   catalogApplyUpdate: (params) => ipcRenderer.invoke('catalog:apply-update', params),
   
   /**
+   * Get random catalog items for exploration
+   * @param {Object} params - {count: number}
+   * @returns {Promise<Array>}
+   */
+  catalogGetRandomItems: (params) => ipcRenderer.invoke('catalog:get-random-items', params),
+  
+  /**
+   * Get available years from catalog
+   * @returns {Promise<Array<number>>}
+   */
+  catalogGetYears: () => ipcRenderer.invoke('catalog:get-years'),
+  
+  /**
+   * Get top authors from catalog
+   * @param {Object} params - {limit: number}
+   * @returns {Promise<Array<{author: string, count: number}>>}
+   */
+  catalogGetTopAuthors: (params) => ipcRenderer.invoke('catalog:get-top-authors', params),
+  
+  /**
+   * Get available tags from catalog
+   * @returns {Promise<Array<string>>}
+   */
+  catalogGetTags: () => ipcRenderer.invoke('catalog:get-tags'),
+  
+  /**
    * Download catalog base files (rhsearch_cat.db and rhsearch.zip)
    * @param {Object} params - {fileNames: Array<string>}
    * @returns {Promise<{success: boolean, results: Array, error?: string}>}

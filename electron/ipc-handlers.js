@@ -15963,8 +15963,9 @@ function registerDatabaseHandlers(dbManager) {
       
       const db = new Database(dbPath, { readonly: true });
       
-      // Parse query for author: syntax
+      // Parse query for author: syntax and year detection
       let authorSearch = null;
+      let yearSearch = null;
       let remainingQuery = query;
       
       // Check for author:"name" or author:name syntax
@@ -15973,6 +15974,16 @@ function registerDatabaseHandlers(dbManager) {
         authorSearch = authorMatch[1] || authorMatch[2];
         // Remove author: part from remaining query
         remainingQuery = query.replace(/author:\s*"[^"]+"|author:\s*\S+/gi, '').trim();
+      }
+      
+      // Check if remaining query is a 4-digit year (1990-2030)
+      const yearMatch = remainingQuery.match(/^(\d{4})$/);
+      if (yearMatch) {
+        const year = parseInt(yearMatch[1], 10);
+        if (year >= 1990 && year <= 2030) {
+          yearSearch = year;
+          remainingQuery = ''; // Clear remaining query for year-only searches
+        }
       }
       
       // Build FTS5 query from remaining terms
@@ -16047,8 +16058,8 @@ function registerDatabaseHandlers(dbManager) {
         fromClause = 'FROM items_fts JOIN items i ON items_fts.item_id = i.item_id';
         whereClause = 'items_fts MATCH ?';
         queryParams.push(ftsQuery);
-      } else if (authorSearch) {
-        // If only author search (no FTS query), query items table directly
+      } else if (authorSearch || yearSearch) {
+        // If only author/year search (no FTS query), query items table directly
         fromClause = 'FROM items i';
         whereClause = '1=1'; // Base condition
       } else {
@@ -16065,6 +16076,16 @@ function registerDatabaseHandlers(dbManager) {
         }
         const authorLower = authorSearch.toLowerCase();
         queryParams.push(`%${authorLower}%`);
+      }
+      
+      // Add year filter if specified (search in date_estimate field)
+      if (yearSearch) {
+        if (whereClause && whereClause !== '1=1') {
+          whereClause += ' AND (i.date_estimate LIKE ?)';
+        } else {
+          whereClause = '(i.date_estimate LIKE ?)';
+        }
+        queryParams.push(`${yearSearch}%`); // Match year at start of date_estimate
       }
       
       // Build ORDER BY clause to prioritize author matches
@@ -16156,6 +16177,170 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('[catalog:check-game-exists] Error:', error);
       return { exists: false, error: error.message };
+    }
+  });
+
+  // Get random catalog items for exploration
+  ipcMain.handle('catalog:get-random-items', async (_event, { count = 10 }) => {
+    try {
+      const { app } = require('electron');
+      const Database = require('better-sqlite3');
+      const basePath = app.getPath('userData');
+      const dbPath = path.join(basePath, 'rhsearch_cat.db');
+      
+      if (!fs.existsSync(dbPath)) {
+        throw new Error('Search catalog database not found');
+      }
+      
+      const db = new Database(dbPath, { readonly: true });
+      
+      const results = db.prepare(`
+        SELECT item_id, title, author
+        FROM items
+        WHERE title IS NOT NULL AND title != ''
+        ORDER BY RANDOM()
+        LIMIT ?
+      `).all(count);
+      
+      db.close();
+      return results;
+    } catch (error) {
+      console.error('[catalog:get-random-items] Error:', error);
+      throw error;
+    }
+  });
+
+  // Get available years from catalog
+  ipcMain.handle('catalog:get-years', async (_event) => {
+    try {
+      const { app } = require('electron');
+      const Database = require('better-sqlite3');
+      const basePath = app.getPath('userData');
+      const dbPath = path.join(basePath, 'rhsearch_cat.db');
+      
+      if (!fs.existsSync(dbPath)) {
+        throw new Error('Search catalog database not found');
+      }
+      
+      const db = new Database(dbPath, { readonly: true });
+      
+      // Extract years from date_estimate field (format: YYYY-MM-DD, ISO timestamp, or YYYY)
+      const results = db.prepare(`
+        SELECT DISTINCT date_estimate
+        FROM items
+        WHERE date_estimate IS NOT NULL 
+          AND date_estimate != ''
+      `).all();
+      
+      const yearSet = new Set();
+      for (const row of results) {
+        const dateStr = String(row.date_estimate);
+        let year = null;
+        
+        // Try YYYY-MM-DD format
+        const ymdMatch = dateStr.match(/^(\d{4})-\d{2}-\d{2}/);
+        if (ymdMatch) {
+          year = parseInt(ymdMatch[1], 10);
+        } else {
+          // Try ISO timestamp format (YYYY-MM-DDTHH:MM:SS)
+          const isoMatch = dateStr.match(/^(\d{4})-\d{2}-\d{2}T/);
+          if (isoMatch) {
+            year = parseInt(isoMatch[1], 10);
+          } else {
+            // Try just YYYY at start
+            const yearMatch = dateStr.match(/^(\d{4})/);
+            if (yearMatch) {
+              year = parseInt(yearMatch[1], 10);
+            }
+          }
+        }
+        
+        if (year !== null && year >= 1990 && year <= 2030) {
+          yearSet.add(year);
+        }
+      }
+      
+      db.close();
+      return Array.from(yearSet).sort((a, b) => a - b);
+    } catch (error) {
+      console.error('[catalog:get-years] Error:', error);
+      throw error;
+    }
+  });
+
+  // Get top authors from catalog
+  ipcMain.handle('catalog:get-top-authors', async (_event, { limit = 50 }) => {
+    try {
+      const { app } = require('electron');
+      const Database = require('better-sqlite3');
+      const basePath = app.getPath('userData');
+      const dbPath = path.join(basePath, 'rhsearch_cat.db');
+      
+      if (!fs.existsSync(dbPath)) {
+        throw new Error('Search catalog database not found');
+      }
+      
+      const db = new Database(dbPath, { readonly: true });
+      
+      const results = db.prepare(`
+        SELECT author, COUNT(*) as count
+        FROM items
+        WHERE author IS NOT NULL AND author != ''
+        GROUP BY author
+        ORDER BY count DESC, author ASC
+        LIMIT ?
+      `).all(limit);
+      
+      db.close();
+      return results.map(r => ({ author: r.author, count: r.count }));
+    } catch (error) {
+      console.error('[catalog:get-top-authors] Error:', error);
+      throw error;
+    }
+  });
+
+  // Get available tags from catalog
+  ipcMain.handle('catalog:get-tags', async (_event) => {
+    try {
+      const { app } = require('electron');
+      const Database = require('better-sqlite3');
+      const basePath = app.getPath('userData');
+      const dbPath = path.join(basePath, 'rhsearch_cat.db');
+      
+      if (!fs.existsSync(dbPath)) {
+        throw new Error('Search catalog database not found');
+      }
+      
+      const db = new Database(dbPath, { readonly: true });
+      
+      // Tags are stored as JSON array in tags column
+      const results = db.prepare(`
+        SELECT tags
+        FROM items
+        WHERE tags IS NOT NULL AND tags != ''
+      `).all();
+      
+      const tagSet = new Set();
+      for (const row of results) {
+        try {
+          const tags = typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags;
+          if (Array.isArray(tags)) {
+            tags.forEach(tag => {
+              if (tag && typeof tag === 'string' && tag.trim().length > 0) {
+                tagSet.add(tag.trim().toLowerCase());
+              }
+            });
+          }
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+      
+      db.close();
+      return Array.from(tagSet).sort();
+    } catch (error) {
+      console.error('[catalog:get-tags] Error:', error);
+      throw error;
     }
   });
 

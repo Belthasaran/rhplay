@@ -20716,7 +20716,7 @@ async function loadCatalogExplorationData() {
   try {
     // Load exploration data in parallel
     const [randomItems, years, topAuthors] = await Promise.all([
-      (window as any).electronAPI.catalogGetRandomItems({ count: 10 }),
+      (window as any).electronAPI.catalogGetRandomItems({ count: 6 }),
       (window as any).electronAPI.catalogGetYears(),
       (window as any).electronAPI.catalogGetTopAuthors({ limit: 50 })
     ]);
@@ -40550,9 +40550,9 @@ button:disabled {
 }
 
 .exploration-random-items {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
 .exploration-random-item {

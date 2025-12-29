@@ -15211,9 +15211,9 @@ function registerDatabaseHandlers(dbManager) {
         targetVersion = latestVersion?.max_version || 1;
       }
       
-      // Get gameversion record
+      // Get gameversion record (including gvjsondata for URL calculation)
       const gameVersion = rhdataDb.prepare(`
-        SELECT url, download_url, patchblob1_name
+        SELECT url, download_url, patchblob1_name, gvjsondata
         FROM gameversions
         WHERE gameid = ? AND version = ?
       `).get(gameid, targetVersion);
@@ -15225,11 +15225,47 @@ function registerDatabaseHandlers(dbManager) {
       const links = [];
       const metadata = {};
       
-      // Add main URL (first link)
-      if (gameVersion.url && gameVersion.url.trim()) {
+      // Calculate URL if missing but download_url matches SMWC pattern
+      let calculatedUrl = gameVersion.url && gameVersion.url.trim() ? gameVersion.url.trim() : null;
+      
+      if (!calculatedUrl && gameVersion.download_url && gameVersion.download_url.trim()) {
+        const downloadUrl = gameVersion.download_url.trim();
+        // Check if download_url matches pattern: https://dl.smwcentral.net/(ID)/(anything)
+        const smwcDownloadPattern = /^https:\/\/dl\.smwcentral\.net\/(\d+)\//i;
+        const match = downloadUrl.match(smwcDownloadPattern);
+        
+        if (match) {
+          const downloadId = match[1];
+          
+          // Try to get id from gvjsondata
+          let jsonId = null;
+          if (gameVersion.gvjsondata) {
+            try {
+              const jsonData = typeof gameVersion.gvjsondata === 'string' 
+                ? JSON.parse(gameVersion.gvjsondata) 
+                : gameVersion.gvjsondata;
+              jsonId = jsonData.id ? String(jsonData.id) : null;
+            } catch (e) {
+              // If JSON parsing fails, try to extract id directly from string
+              const idMatch = String(gameVersion.gvjsondata).match(/"id"\s*:\s*"?(\d+)"?/);
+              if (idMatch) {
+                jsonId = idMatch[1];
+              }
+            }
+          }
+          
+          // If IDs match, calculate the URL
+          if (jsonId && jsonId === downloadId) {
+            calculatedUrl = `https://www.smwcentral.net/?p=section&a=details&id=${downloadId}`;
+          }
+        }
+      }
+      
+      // Add main URL (first link) - use calculated URL if original was missing
+      if (calculatedUrl) {
         links.push({
           label: 'Game Page',
-          url: gameVersion.url.trim(),
+          url: calculatedUrl,
           type: 'main'
         });
       }
@@ -15262,8 +15298,8 @@ function registerDatabaseHandlers(dbManager) {
           const shard = hash.charAt(0);
           const smwdbUrl = `https://smwdb.me/db/${shard}/${hash}/`;
           
-          // If no main URL, this becomes the first link
-          if (!gameVersion.url || !gameVersion.url.trim()) {
+          // If no main URL (including calculated), this becomes the first link
+          if (!calculatedUrl) {
             links.unshift({
               label: 'SMWDB Link',
               url: smwdbUrl,

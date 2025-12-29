@@ -479,6 +479,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getGameStages: (params) => ipcRenderer.invoke('gamestages:get', params),
     
     /**
+     * Get game links (URLs, downloads, patchblob links, etc.)
+     * @param {Object} params - Parameters { gameid, version }
+     * @returns {Promise<{success: boolean, links?: Array, metadata?: Object, hasLinks?: boolean, error?: string}>}
+     */
+    getGameLinks: (params) => ipcRenderer.invoke('db:game:get-links', params),
+    
+    /**
      * Get screenshots for a game
      * @param {Object} params - Parameters { gameid }
      * @returns {Promise<{success: boolean, screenshots?: Array, error?: string}>}

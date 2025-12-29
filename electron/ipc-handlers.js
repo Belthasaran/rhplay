@@ -5,7 +5,7 @@
  * Provides database access, game data, user annotations, and settings
  */
 
-const { ipcMain, dialog, BrowserWindow } = require('electron');
+const { ipcMain, dialog, BrowserWindow, shell } = require('electron');
 const crypto = require('crypto');
 const { app } = require('electron');
 const { ensureRhpakAssociation, removeRhpakAssociation } = require('./rhpak-association');
@@ -15183,6 +15183,143 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true, screenshots };
     } catch (error) {
       console.error('[db:screenshots:get] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get game links (URLs, download links, patchblob links, etc.)
+   * Channel: db:game:get-links
+   */
+  ipcMain.handle('db:game:get-links', async (_event, { gameid, version }) => {
+    try {
+      if (!gameid) {
+        return { success: false, error: 'gameid is required' };
+      }
+      
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const patchbinDbPath = dbManager.paths?.patchbin;
+      
+      // If version not specified, get the latest version
+      let targetVersion = version;
+      if (!targetVersion) {
+        const latestVersion = rhdataDb.prepare(`
+          SELECT MAX(version) as max_version
+          FROM gameversions
+          WHERE gameid = ?
+        `).get(gameid);
+        targetVersion = latestVersion?.max_version || 1;
+      }
+      
+      // Get gameversion record
+      const gameVersion = rhdataDb.prepare(`
+        SELECT url, download_url, patchblob1_name
+        FROM gameversions
+        WHERE gameid = ? AND version = ?
+      `).get(gameid, targetVersion);
+      
+      if (!gameVersion) {
+        return { success: true, links: [], metadata: {} };
+      }
+      
+      const links = [];
+      const metadata = {};
+      
+      // Add main URL (first link)
+      if (gameVersion.url && gameVersion.url.trim()) {
+        links.push({
+          label: 'Game Page',
+          url: gameVersion.url.trim(),
+          type: 'main'
+        });
+      }
+      
+      // Add download_url from gameversions
+      if (gameVersion.download_url && gameVersion.download_url.trim()) {
+        links.push({
+          label: 'Download',
+          url: gameVersion.download_url.trim(),
+          type: 'download'
+        });
+      }
+      
+      // Check for patchblob
+      let patchblob = null;
+      let attachment = null;
+      
+      if (gameVersion.patchblob1_name && gameVersion.patchblob1_name.trim()) {
+        patchblob = rhdataDb.prepare(`
+          SELECT result_sha1
+          FROM patchblobs
+          WHERE patchblob1_name = ?
+        `).get(gameVersion.patchblob1_name.trim());
+        
+        if (patchblob && patchblob.result_sha1) {
+          metadata.patchedSha1 = patchblob.result_sha1;
+          
+          // Create smwdb.me link
+          const hash = patchblob.result_sha1;
+          const shard = hash.charAt(0);
+          const smwdbUrl = `https://smwdb.me/db/${shard}/${hash}/`;
+          
+          // If no main URL, this becomes the first link
+          if (!gameVersion.url || !gameVersion.url.trim()) {
+            links.unshift({
+              label: 'SMWDB Link',
+              url: smwdbUrl,
+              type: 'smwdb'
+            });
+          } else {
+            links.push({
+              label: 'SMWDB Link',
+              url: smwdbUrl,
+              type: 'smwdb'
+            });
+          }
+          
+          // Check for attachment in patchbin.db
+          if (patchbinDbPath && require('fs').existsSync(patchbinDbPath)) {
+            try {
+              const Database = require('better-sqlite3');
+              const patchbinDb = new Database(patchbinDbPath);
+              
+              attachment = patchbinDb.prepare(`
+                SELECT file_name, filekey, decoded_hash_sha1, download_urls
+                FROM attachments
+                WHERE file_name = ?
+              `).get(gameVersion.patchblob1_name.trim());
+              
+              if (attachment) {
+                if (attachment.file_name) metadata.fileName = attachment.file_name;
+                if (attachment.filekey) metadata.fileKey = attachment.filekey;
+                if (attachment.decoded_hash_sha1) metadata.bpsSha1 = attachment.decoded_hash_sha1;
+                
+                // Add download_urls from attachment if not blank
+                if (attachment.download_urls && attachment.download_urls.trim()) {
+                  links.push({
+                    label: 'Attachment Download',
+                    url: attachment.download_urls.trim(),
+                    type: 'attachment-download'
+                  });
+                }
+              }
+              
+              patchbinDb.close();
+            } catch (error) {
+              console.warn('[db:game:get-links] Error accessing patchbin.db:', error.message);
+            }
+          }
+        }
+      }
+      
+      return { 
+        success: true, 
+        links,
+        metadata,
+        hasLinks: links.length > 0
+      };
+    } catch (error) {
+      console.error('[db:game:get-links] Error:', error);
       return { success: false, error: error.message };
     }
   });

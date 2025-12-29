@@ -2227,6 +2227,93 @@
           <div v-else-if="catalogSearchState.searched && catalogSearchResults.length === 0" class="catalog-no-results">
             No results found. Try different search terms.
           </div>
+          
+          <!-- Exploration Page (shown when no search is active) -->
+          <div 
+            v-else-if="catalogSearchState.status === 'ready' && !catalogSearchState.searched && catalogSearchResults.length === 0 && !catalogSearchState.hasUpdates"
+            class="catalog-exploration"
+          >
+            <!-- Random Items -->
+            <div v-if="catalogExplorationData.randomItems.length > 0" class="exploration-section">
+              <h4 class="exploration-section-title">Random Items</h4>
+              <div class="exploration-random-items">
+                <div 
+                  v-for="item in catalogExplorationData.randomItems" 
+                  :key="item.item_id"
+                  class="exploration-random-item"
+                >
+                  <span 
+                    @click="searchByTitle(item.title)"
+                    class="exploration-item-title"
+                    :title="`Search for: ${item.title}`"
+                  >
+                    {{ item.title || 'Untitled' }}
+                  </span>
+                  <span v-if="item.author" class="exploration-item-separator">by</span>
+                  <span 
+                    v-if="item.author"
+                    @click="searchByAuthor(item.author)"
+                    class="exploration-item-author"
+                    :title="`Search for games by: ${item.author}`"
+                  >
+                    {{ item.author }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Years Grid -->
+            <div v-if="catalogExplorationData.years.length > 0" class="exploration-section">
+              <h4 class="exploration-section-title">Years:</h4>
+              <div class="exploration-years-grid">
+                <button
+                  v-for="year in catalogExplorationData.years"
+                  :key="year"
+                  @click="searchByYear(year)"
+                  class="exploration-year-button"
+                  :title="`Search for games from ${year}`"
+                >
+                  {{ year }}
+                </button>
+              </div>
+            </div>
+            
+            <!-- Top Authors Grid -->
+            <div v-if="catalogExplorationData.topAuthors.length > 0" class="exploration-section">
+              <h4 class="exploration-section-title">Top Authors:</h4>
+              <div class="exploration-authors-grid">
+                <button
+                  v-for="(author, index) in catalogExplorationData.topAuthors"
+                  :key="index"
+                  @click="searchByAuthor(author.author)"
+                  class="exploration-author-button"
+                  :title="`Search for games by: ${author.author} (${author.count} games)`"
+                >
+                  {{ author.author.length > 30 ? author.author.substring(0, 30) + '...' : author.author }}
+                </button>
+              </div>
+            </div>
+            
+            <!-- Tags Grid -->
+            <div v-if="catalogExplorationData.tags.length > 0" class="exploration-section">
+              <h4 class="exploration-section-title">Tags:</h4>
+              <div class="exploration-tags-grid">
+                <button
+                  v-for="tag in catalogExplorationData.tags"
+                  :key="tag"
+                  @click="searchByTag(tag)"
+                  class="exploration-tag-button"
+                  :title="`Search for tag: ${tag}`"
+                >
+                  {{ tag }}
+                </button>
+              </div>
+            </div>
+            
+            <div v-if="catalogExplorationData.loading" class="exploration-loading">
+              Loading exploration data...
+            </div>
+          </div>
         </div>
 
         <!-- Loading state -->
@@ -9344,6 +9431,19 @@ const catalogItemJson = ref<any>(null);
 const catalogLevelNamesPreviewOpen = ref(false);
 const catalogLevelNamesPreview = ref<string[]>([]);
 const catalogLevelNamesPreviewItemId = ref<string | null>(null);
+const catalogExplorationData = ref<{
+  randomItems: any[];
+  years: number[];
+  topAuthors: Array<{author: string, count: number}>;
+  tags: string[];
+  loading: boolean;
+}>({
+  randomItems: [],
+  years: [],
+  topAuthors: [],
+  tags: [],
+  loading: false
+});
 
 // Add game from catalog state
 const addGameFromCatalogModalOpen = ref(false);
@@ -19696,11 +19796,15 @@ async function actuallyOpenCatalogSearchModal() {
         } else {
           catalogSearchState.value.hasUpdates = false;
           catalogSearchState.value.availableUpdates = [];
+          // Only load exploration data if no updates are needed
+          loadCatalogExplorationData();
         }
       } catch (error) {
         // Ignore update check errors
         catalogSearchState.value.hasUpdates = false;
         catalogSearchState.value.availableUpdates = [];
+        // Load exploration data even if update check fails
+        loadCatalogExplorationData();
       }
     } else {
       catalogSearchState.value = {
@@ -19881,6 +19985,10 @@ async function applyCatalogUpdate(update: any) {
         const checkResult = await (window as any).electronAPI.catalogCheckAvailability();
         if (checkResult.available && catalogSearchState.value.status !== 'ready') {
           catalogSearchState.value.status = 'ready';
+        }
+        // Reload exploration data after update if no more updates pending
+        if (catalogSearchState.value.status === 'ready' && !catalogSearchState.value.hasUpdates) {
+          loadCatalogExplorationData();
         }
       } catch (error) {
         // Ignore
@@ -20595,6 +20703,100 @@ function clearCatalogSearch() {
   catalogSearchState.value.searched = false;
   catalogSearchState.value.searchError = undefined;
   catalogSearchInput.value?.focus();
+  // Reload exploration data when clearing search
+  if (catalogSearchState.value.status === 'ready') {
+    loadCatalogExplorationData();
+  }
+}
+
+async function loadCatalogExplorationData() {
+  if (catalogSearchState.value.status !== 'ready') return;
+  
+  catalogExplorationData.value.loading = true;
+  try {
+    // Load exploration data in parallel
+    const [randomItems, years, topAuthors] = await Promise.all([
+      (window as any).electronAPI.catalogGetRandomItems({ count: 10 }),
+      (window as any).electronAPI.catalogGetYears(),
+      (window as any).electronAPI.catalogGetTopAuthors({ limit: 50 })
+    ]);
+    
+    catalogExplorationData.value.randomItems = randomItems || [];
+    catalogExplorationData.value.years = years || [];
+    catalogExplorationData.value.topAuthors = topAuthors || [];
+    
+    // Use predefined tags list (as specified by user)
+    catalogExplorationData.value.tags = [
+      'kldc', 'custom player', 'non linear',
+      'kaizo', 'kaizo light', 'standard',
+      'vanilla', 'chocolate', 'short',
+      'one screen', 'no overworld', 'monty mole',
+      'meme', 'cutscenes', 'custom bosses',
+      'cape',
+      'choconilla', 'space', 'sicari',
+      'german', 'long', 'first hack',
+      'smw adventures', 'remake', 'enemy',
+      'french', 'legacy', 'intro kaizo',
+      'portuguese', 'spanish', 'shell jump',
+      'secrets', 'ninji', 'fun',
+      'compilation', 'vanilla ish', 'tsrp',
+      'exploration', 'health', 'glitch',
+      'puzzle', 'puzzles', 'kldc2022',
+      'non mario', 'powers', 'tool assisted',
+      'rhr', 'racelevel', 'races',
+      'luigi', 'wario', 'script recommended',
+      'peach', 'megaman',
+      'waluigi', 'touhou', 'speedrun',
+      'yoshi', 'holiday', 'horror',
+      'xmas', 'wornilla', 'vanilla graphics',
+      'toad', 'sonic', 'smb3',
+      'joke', 'light', 'graphics',
+      'smw contests', 'general', 'smw collabs',
+      'troll', 'variety', 'smw enhance',
+      'custom sprites', 'custom character', 'redrawn',
+      'japanese', 'music', 'contests',
+      'asm', 'normal', 'traditional',
+      'beginner', 'casual', 'intermediate',
+      'exgfx', 'story', 'easy',
+      'hard', 'advanced', 'master',
+      'expert', 'boss', 'bosses',
+      'imitations', 'newcomer', 'gimmick',
+      'ess exgfx', 'fixme', 'hdma',
+      'intermediate kaizo', 'very hard', 'unknown',
+      'huge level', 'no boss', 'original soundtrack',
+      'smw jokes', 'less exgfx', 'original graphics',
+      'pit', 'misc', 'bpsindex',
+      'grandmaster', 'platforming', 'shell',
+      'sa 1', 'retry', 'qhackjam',
+      'pokemon', 'palettes', 'non platformer',
+      'super', 'shy guy', 'stars',
+      'motorskills', 'mini hack', 'minimalist',
+      'koopa', 'gfx', 'italian',
+      'demo', 'desert', 'crossover',
+      'christmas', 'athletic', 'zelda'
+    ];
+  } catch (error: any) {
+    console.error('Error loading catalog exploration data:', error);
+    // Don't show error to user, just leave exploration data empty
+  } finally {
+    catalogExplorationData.value.loading = false;
+  }
+}
+
+function searchByTitle(title: string) {
+  catalogSearchQuery.value = title;
+  performCatalogSearch();
+}
+
+function searchByYear(year: number) {
+  // Search for year in date_estimate field
+  catalogSearchQuery.value = String(year);
+  performCatalogSearch();
+}
+
+function searchByTag(tag: string) {
+  catalogSearchQuery.value = tag;
+  performCatalogSearch();
 }
 
 function applyBulkEdit() {
@@ -40329,6 +40531,137 @@ button:disabled {
 
 .catalog-levelname-item:hover {
   background: var(--bg-tertiary, #e0e0e0);
+}
+
+.catalog-exploration {
+  padding: 24px;
+  color: var(--text-primary, #333);
+}
+
+.exploration-section {
+  margin-bottom: 32px;
+}
+
+.exploration-section-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text-primary, #333);
+}
+
+.exploration-random-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exploration-random-item {
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 4px;
+  font-size: 20px;
+}
+
+.exploration-item-title,
+.exploration-item-author {
+  cursor: pointer;
+  color: var(--accent-primary, #2196F3);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.exploration-item-title:hover,
+.exploration-item-author:hover {
+  color: var(--accent-hover, #1976D2);
+}
+
+.exploration-item-separator {
+  margin: 0 8px;
+  color: var(--text-secondary, #666);
+}
+
+.exploration-years-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.exploration-year-button {
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 22px;
+  color: var(--text-primary, #333);
+  transition: all 0.2s;
+}
+
+.exploration-year-button:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+  border-color: var(--accent-primary, #2196F3);
+  color: var(--accent-primary, #2196F3);
+}
+
+.exploration-authors-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.exploration-author-button {
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--text-primary, #333);
+  text-align: left;
+  transition: all 0.2s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exploration-author-button:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+  border-color: var(--accent-primary, #2196F3);
+  color: var(--accent-primary, #2196F3);
+}
+
+.exploration-tags-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.exploration-tag-button {
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 22px;
+  color: var(--text-primary, #333);
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.exploration-tag-button:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+  border-color: var(--accent-primary, #2196F3);
+  color: var(--accent-primary, #2196F3);
+}
+
+.exploration-loading {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary, #666);
+  font-size: 16px;
 }
 </style>
 

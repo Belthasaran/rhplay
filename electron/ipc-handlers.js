@@ -16456,8 +16456,8 @@ function registerDatabaseHandlers(dbManager) {
       const { app } = require('electron');
       const catalogDownloadManager = require('./utils/catalog-download-manager');
       const catalogManifestUtils = require('./utils/catalog-manifest-utils');
-      const searchBuild1 = require('../../jstools/search_build1');
-      const searchBuild2 = require('../../jstools/search_build2');
+      const searchBuild1 = require('../jstools/search_build1.js');
+      const searchBuild2 = require('../jstools/search_build2.js');
       const crypto = require('crypto');
       
       const userDataDir = app.getPath('userData');

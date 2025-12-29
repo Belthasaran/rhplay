@@ -4391,11 +4391,16 @@ module.exports = {
    * Programmatic prepare: accepts a JSON config path, loads skeleton, and runs prepare.
    * Returns true on success.
    */
-  async handlePrepare(jsonPath) {
+  async handlePrepare(jsonPath, configOverride = {}) {
     if (!jsonPath) {
       throw new Error('handlePrepare requires a JSON path');
     }
-    const config = { jsonPath, baseDir: path.dirname(jsonPath), mode: 'prepare' };
+    const config = { 
+      jsonPath, 
+      baseDir: path.dirname(jsonPath), 
+      mode: 'prepare',
+      ...configOverride // Allow overriding config (e.g., clientDbPath)
+    };
     const skeleton = loadSkeleton(jsonPath) || defaultSkeleton();
     await handlePrepare(config, skeleton);
     return true;

@@ -17260,9 +17260,18 @@ function registerDatabaseHandlers(dbManager) {
       // Use newgame.js functions directly (not via shell)
       const newgame = require(path.join(__dirname, '..', 'jstools', 'newgame.js'));
       
+      // Get clientdata.db path for BinaryFinder to locate smw.sfc
+      // This is critical for AppImage builds where the project root is inside the mount point
+      const { app } = require('electron');
+      const clientDbPath = path.join(app.getPath('userData'), 'clientdata.db');
+      
       // Prepare the skeleton (this will modify it, so reload after)
+      // Pass clientDbPath so BinaryFinder can check database settings for smw.sfc path
       try {
-        await newgame.handlePrepare(skeletonPath);
+        await newgame.handlePrepare(skeletonPath, {
+          baseDir: tempDir,
+          clientDbPath: clientDbPath
+        });
       } catch (error) {
         throw new Error(`Failed to prepare RHPAK: ${error.message}`);
       }

@@ -16,8 +16,28 @@
               <li class="acknowledgement-item">
                 You certify that you are Age 18 or higher and agree to secure your installation against access by minors.
                 And you alone take full responsibility for materials inside any games you choose to "get" and run from below.
+                As well as all results.
               </li>
-              
+
+              <li class="acknowledgement-item">
+                No license or authorization to use the catalog: Nothing here comes with any license, right clearance, or authorizations.
+                You agree it is your responsibility to ensure that any manner in which you intend to use SMW or any hack or files you
+                assemble using this catalog and patch automation tool is in a manner
+                which does not infringe upon the rights or violate any Terms of Service or agreements you have with anyone else.
+                You might want to ask hack authors and original game publishers before using any file found in any way whatsoever.
+                The developers of this tool cannot guarantee anything you find would be non-infringing upon 3rd party rights.
+                For example: A SMW hack author might have appropriated copyright music.
+                In this case you would be unable to lawfully play the game and exhibit or share a gameplay video, without negotiating and paying for the appropriate licenses, for example.
+              </li>
+
+              <li class="acknowledgement-item">
+                There is no warranty whatsoever express nor implied. This tool is not sold and is not made available nor intended for consumer use.  The archival search tool, and any data available within it is for academic study, scientific research, software developer education, and review purposes only.
+                There is no license or authorization to use any files found in the catalog - they belong to hack authors who generally posted them publicly solely for personal enjoyment.
+                The games catalog is not a product available for sale, not sold, and not authorized to be sold nor resold.  The catalog is not a standalone product, and does not contain standalone games. A base game copy is required to access any data in the cattalog. You agree that you must obtain all base game copies and any other materials required to access the catalog (Super Mario World) through lawful means only.
+                The catalog you can build and search using the tool is not sanctioned nor approved by the developers, and not approved or authorized by any S
+MW hack developers, and is Not approved nor authorized by any original game publishers.
+              </li>
+
               <li class="acknowledgement-item">
                 Some SMW hacks might have extremely offensive contents. Reportedly, according to SMWDB.me: this was often the case with "Joke" or "Troll" hacks.
               </li>
@@ -31,7 +51,14 @@
               </li>
               
               <li class="acknowledgement-item">
-                The historical collection is included only for personal study and review purposes. Many of the games in the database could be in a completely unsafe or unstable state, unplayable, or inconsistent in compatibility with official hardware or modern emulators. This includes Demos that never became a stable release, or early unstable versions of hacks that were later leased or updated, possibly under different names or author pseudonyms.
+                The historical collection is included only for personal study and review purposes.
+                There is no permission or license to use anything available through the catalog.
+                You are downloading random files off the internet posted by hack authors.
+                The hack authors might include materials you are not authorized to exhibit or show.
+              </li>
+
+              <li class="acknowledgement-item">
+ Many of the games in the database could be in a completely unsafe or unstable state, unplayable, or inconsistent in compatibility with official hardware or modern emulators. This includes Demos that never became a stable release, or early unstable versions of hacks that were later leased or updated, possibly under different names or author pseudonyms.
               </li>
               
               <li class="acknowledgement-item">

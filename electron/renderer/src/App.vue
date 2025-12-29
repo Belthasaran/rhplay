@@ -19743,7 +19743,9 @@ async function applyCatalogUpdate(update: any) {
   catalogSearchState.value.updateError = undefined;
   
   try {
-    const result = await (window as any).electronAPI.catalogApplyUpdate({ update });
+    // Serialize the update object to ensure it's IPC-safe (no circular refs, functions, etc.)
+    const serializedUpdate = JSON.parse(JSON.stringify(update));
+    const result = await (window as any).electronAPI.catalogApplyUpdate({ update: serializedUpdate });
     
     if (result.success) {
       // Update successful - refresh catalog state

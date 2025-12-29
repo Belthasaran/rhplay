@@ -1,0 +1,15 @@
+*.7z
+*.txt
+flisting.json
+done
+findtranslevels
+bpsindex_initial
+lm361
+*.exe
+*.sfc
+newindex/
+zips/
+redo/
+x/
+games/
+bpsindex/*.json

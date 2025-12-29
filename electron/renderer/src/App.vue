@@ -20651,7 +20651,8 @@ async function createAndInstallCatalogRhpak() {
       itemId: addGameFromCatalogState.value.item.item_id,
       bpsPath: addGameFromCatalogState.value.bpsPath,
       sfcSha256: addGameFromCatalogState.value.item.sfc_rom_sha256_hash || itemJson.sfc_rom_sha256_hash,
-      itemJson: serializedItemJson
+      itemJson: serializedItemJson,
+      NO_PYTHON: true
     });
     
     if (!createResult.success) {

@@ -55,15 +55,9 @@
       "source_path": "packed_db/resource.db.initial.xz",
       "file_name": "resource.db.initial.xz",
       "format": "xz",
-      "sha256": "355e388186d8f69da4b198eb6b897f2aa6455ec6b01ef93cfc2a6b14bdfd6286",
-      "ipfs_cidv1": "bafybeihovtzzey5jyxrlbbwr7fxr4sqm6wtnqyl254p6fnaek37ijl2b5y",
-      "size": "2214364",
-      "ardrive_file_name": "resource.db.initial.xz",
-      "ardrive_file_path": "/SMWRH/db/patch/resource.db.initial.xz",
-      "ardrive_file_id": "b1782d13-a883-4ff4-9584-3f2a28759d91",
-      "data_txid": "x5kMrsaoZohKfefIhdg6vqcElaIvqCeQKnX9Px1MnX4",
-      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
-      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      "sha256": "31ecf773f00d550426423df3cdad9981974af22facdc7654f0f244e091b24f81",
+      "ipfs_cidv1": "bafybeicmghwppy6vwgysxbu5hw3yfryeuzguqnngyqmthr52nmybllupgi",
+      "size": "37453636"
     },
     "sqlpatches": []
   },

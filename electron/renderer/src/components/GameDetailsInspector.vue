@@ -2,7 +2,17 @@
   <div class="panel" v-if="game">
     <div class="panel-header">
       <h3>Details</h3>
-      <button @click="openPopoutModal" class="popout-icon" title="Pop out details">🔍</button>
+      <div class="header-actions">
+        <button 
+          v-if="hasGameLinks" 
+          @click="openLinksModal" 
+          class="globe-icon" 
+          title="View Links"
+        >
+          🌐
+        </button>
+        <button @click="openPopoutModal" class="popout-icon" title="Pop out details">🔍</button>
+      </div>
     </div>
     <div class="panel-body details">
       <table class="kv-table">
@@ -16,7 +26,16 @@
           </tr>
           
           <!-- Official Fields (READ-ONLY) -->
-          <tr><th>Name</th><td class="readonly-field">{{ game.Name }}</td></tr>
+          <tr>
+            <th 
+              :class="{ 'clickable-name': hasGameLinks && mainLink }" 
+              @click="hasGameLinks && mainLink ? openMainLink() : null"
+              :title="hasGameLinks && mainLink ? 'Click to open main link' : ''"
+            >
+              Name
+            </th>
+            <td class="readonly-field">{{ game.Name }}</td>
+          </tr>
           <tr><th>Type</th><td class="readonly-field">{{ game.Type }}</td></tr>
           <tr v-if="game.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ game.LegacyType }}</td></tr>
           <tr><th>Author</th><td class="readonly-field">{{ game.Author }}</td></tr>
@@ -292,7 +311,16 @@
                 </tr>
                 
                 <tr><th>Id</th><td class="readonly-field">{{ game?.Id }}</td></tr>
-                <tr><th>Name</th><td class="readonly-field">{{ game?.Name }}</td></tr>
+                <tr>
+                  <th 
+                    :class="{ 'clickable-name': hasGameLinks && mainLink }" 
+                    @click="hasGameLinks && mainLink ? openMainLink() : null"
+                    :title="hasGameLinks && mainLink ? 'Click to open main link' : ''"
+                  >
+                    Name
+                  </th>
+                  <td class="readonly-field">{{ game?.Name }}</td>
+                </tr>
                 <tr><th>Type</th><td class="readonly-field">{{ game?.Type }}</td></tr>
                 <tr v-if="game?.LegacyType"><th>Legacy Type</th><td class="readonly-field">{{ game.LegacyType }}</td></tr>
                 <tr><th>Author</th><td class="readonly-field">{{ game?.Author }}</td></tr>
@@ -559,6 +587,61 @@
     @cancel="handleAcknowledgmentCancel"
   />
   
+  <!-- Links Modal -->
+  <Teleport to="body">
+    <div v-if="linksModalOpen" class="modal-backdrop" @click.self="closeLinksModal" style="z-index: 20001;">
+      <div class="modal links-modal">
+        <header class="modal-header">
+          <h3>Links - {{ game?.Name }}</h3>
+          <button @click="closeLinksModal" class="close">✕</button>
+        </header>
+        <section class="modal-body links-body">
+          <div v-if="linksLoading" class="loading">Loading links...</div>
+          <div v-else-if="linksError" class="error">{{ linksError }}</div>
+          <div v-else-if="!gameLinks || gameLinks.length === 0" class="no-links">No links available for this game.</div>
+          <div v-else class="links-content">
+            <div class="links-list">
+              <div 
+                v-for="(link, index) in gameLinks" 
+                :key="index" 
+                class="link-item"
+              >
+                <a 
+                  @click.prevent="openLink(link.url)" 
+                  href="#" 
+                  class="link-url"
+                  :title="link.url"
+                >
+                  {{ link.label }}
+                </a>
+                <span class="link-type">{{ link.type }}</span>
+              </div>
+            </div>
+            
+            <div v-if="linksMetadata && Object.keys(linksMetadata).length > 0" class="links-metadata">
+              <h4>Metadata</h4>
+              <div v-if="linksMetadata.patchedSha1" class="metadata-item">
+                <strong>Patched SHA1:</strong> {{ linksMetadata.patchedSha1 }}
+              </div>
+              <div v-if="linksMetadata.fileName" class="metadata-item">
+                <strong>File Name:</strong> {{ linksMetadata.fileName }}
+              </div>
+              <div v-if="linksMetadata.fileKey" class="metadata-item">
+                <strong>File Key:</strong> {{ linksMetadata.fileKey }}
+              </div>
+              <div v-if="linksMetadata.bpsSha1" class="metadata-item">
+                <strong>BPS SHA1:</strong> {{ linksMetadata.bpsSha1 }}
+              </div>
+            </div>
+          </div>
+        </section>
+        <footer class="modal-footer">
+          <button @click="closeLinksModal" class="btn-secondary">Close</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
+  
   <!-- Ban Details Modal -->
   <Teleport to="body">
     <div v-if="banDetailsModalOpen" class="modal-backdrop" @click.self="closeBanDetailsModal" style="z-index: 25000;">
@@ -735,8 +818,16 @@ watch(() => props.game?.Id, () => {
     loadGameStages();
     checkScreenshots();
     checkForBans();
+    loadGameLinks();
   }
 }, { immediate: true });
+
+watch(() => props.selectedVersion, () => {
+  if (props.game?.Id) {
+    loadGameStages();
+    loadGameLinks();
+  }
+});
 
 watch(() => props.selectedVersion, () => {
   if (props.game?.Id) {
@@ -749,12 +840,22 @@ onMounted(() => {
     loadGameStages();
     checkScreenshots();
     checkForBans();
+    loadGameLinks();
   }
 });
 
 const popoutModalOpen = ref(false);
 const screenshotGalleryVisible = ref(false);
 const hasScreenshots = ref(false);
+
+// Links modal state
+const linksModalOpen = ref(false);
+const gameLinks = ref<any[]>([]);
+const linksMetadata = ref<any>({});
+const linksLoading = ref(false);
+const linksError = ref<string | null>(null);
+const hasGameLinks = ref(false);
+const mainLink = ref<string | null>(null);
 
 // Acknowledgment dialog state
 const acknowledgmentDialogVisible = ref(false);
@@ -1182,6 +1283,83 @@ function formatRatingStat(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) return '—';
   return value.toFixed(2);
 }
+
+// Links modal functions
+async function loadGameLinks() {
+  if (!props.game?.Id) {
+    hasGameLinks.value = false;
+    mainLink.value = null;
+    return;
+  }
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getGameLinks) {
+      hasGameLinks.value = false;
+      mainLink.value = null;
+      return;
+    }
+    
+    const result = await api.getGameLinks({
+      gameid: String(props.game.Id),
+      version: props.selectedVersion
+    });
+    
+    if (result?.success) {
+      gameLinks.value = result.links || [];
+      linksMetadata.value = result.metadata || {};
+      hasGameLinks.value = result.hasLinks || false;
+      
+      // Find main link (first link with type 'main' or first link if no main)
+      const mainLinkItem = gameLinks.value.find(l => l.type === 'main') || gameLinks.value[0];
+      mainLink.value = mainLinkItem?.url || null;
+    } else {
+      hasGameLinks.value = false;
+      mainLink.value = null;
+    }
+  } catch (error) {
+    console.error('Error loading game links:', error);
+    hasGameLinks.value = false;
+    mainLink.value = null;
+  }
+}
+
+function openLinksModal() {
+  linksModalOpen.value = true;
+  linksLoading.value = false;
+  linksError.value = null;
+  
+  // Reload links when opening modal
+  if (props.game?.Id) {
+    loadGameLinks();
+  }
+}
+
+function closeLinksModal() {
+  linksModalOpen.value = false;
+}
+
+async function openLink(url: string) {
+  if (!url) return;
+  
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.shell?.openExternal) {
+      console.warn('openExternal API not available');
+      return;
+    }
+    
+    await api.shell.openExternal(url);
+  } catch (error) {
+    console.error('Error opening link:', error);
+  }
+}
+
+async function openMainLink() {
+  if (mainLink.value) {
+    await openLink(mainLink.value);
+  }
+}
 </script>
 
 <style scoped>
@@ -1191,7 +1369,14 @@ function formatRatingStat(value: number | null | undefined): string {
   align-items: center;
 }
 
-.popout-icon {
+.header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.popout-icon,
+.globe-icon {
   background: none;
   border: none;
   cursor: pointer;
@@ -1201,8 +1386,20 @@ function formatRatingStat(value: number | null | undefined): string {
   transition: opacity 0.2s;
 }
 
-.popout-icon:hover {
+.popout-icon:hover,
+.globe-icon:hover {
   opacity: 1;
+}
+
+.clickable-name {
+  cursor: pointer;
+  color: var(--accent-primary, #4CAF50);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.clickable-name:hover {
+  color: var(--accent-hover, #45a049);
 }
 
 .avail-stages-link {
@@ -1406,6 +1603,107 @@ function formatRatingStat(value: number | null | undefined): string {
 .screenshot-icon-btn:hover {
   opacity: 1;
   transform: scale(1.1);
+}
+
+/* Links Modal */
+.links-modal {
+  max-width: 90vw;
+  width: 600px;
+  max-height: 90vh;
+}
+
+.links-body {
+  max-height: calc(90vh - 120px);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.links-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.link-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--border-primary, #ccc);
+  border-radius: 4px;
+  background: var(--bg-secondary, #f9f9f9);
+  transition: background-color 0.2s;
+}
+
+.link-item:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.link-url {
+  flex: 1;
+  color: var(--accent-primary, #4CAF50);
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.link-url:hover {
+  color: var(--accent-hover, #45a049);
+  text-decoration: underline;
+}
+
+.link-type {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  padding: 4px 8px;
+  background: var(--bg-primary, #fff);
+  border-radius: 3px;
+  border: 1px solid var(--border-secondary, #e0e0e0);
+}
+
+.links-metadata {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-primary, #ccc);
+}
+
+.links-metadata h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.metadata-item {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--bg-secondary, #f9f9f9);
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.metadata-item strong {
+  display: inline-block;
+  min-width: 120px;
+  color: var(--text-primary, #333);
+}
+
+.loading,
+.error,
+.no-links {
+  padding: 20px;
+  text-align: center;
+}
+
+.error {
+  color: #d32f2f;
 }
 </style>
 

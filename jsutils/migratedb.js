@@ -1310,15 +1310,17 @@ const MIGRATIONS = {
       description: 'Update CHECK constraints to allow 0-10 range for user_difficulty_rating (instead of 0-5)',
       type: 'function',
       apply(db) {
-        // First, ensure created_at and updated_at columns exist
-        // This handles fresh databases where columns might not exist yet
+        // Defensive check: Ensure created_at and updated_at columns exist before running migration
+        // These should exist from migration 001, but handle edge cases where they might not
         const tableInfo = db.prepare("PRAGMA table_info(user_game_annotations)").all();
         const columnNames = new Set(tableInfo.map(col => col.name));
         
         if (!columnNames.has('created_at')) {
+          console.warn('[Migration 057] Adding missing created_at column to user_game_annotations');
           db.exec("ALTER TABLE user_game_annotations ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
         }
         if (!columnNames.has('updated_at')) {
+          console.warn('[Migration 057] Adding missing updated_at column to user_game_annotations');
           db.exec("ALTER TABLE user_game_annotations ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
         }
         
@@ -1332,9 +1334,11 @@ const MIGRATIONS = {
           const versionColumnNames = new Set(versionTableInfo.map(col => col.name));
           
           if (!versionColumnNames.has('created_at')) {
+            console.warn('[Migration 057] Adding missing created_at column to user_game_version_annotations');
             db.exec("ALTER TABLE user_game_version_annotations ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
           }
           if (!versionColumnNames.has('updated_at')) {
+            console.warn('[Migration 057] Adding missing updated_at column to user_game_version_annotations');
             db.exec("ALTER TABLE user_game_version_annotations ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
           }
         }

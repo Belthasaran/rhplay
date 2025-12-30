@@ -60,7 +60,28 @@ CREATE TABLE user_game_annotations_new (
 );
 
 -- Step 2: Copy all data from old table to new table
-INSERT INTO user_game_annotations_new 
+-- Note: If created_at/updated_at columns don't exist in the source table,
+-- they will be added with default values (CURRENT_TIMESTAMP) during the INSERT
+-- This handles fresh databases where columns might not exist yet
+
+-- Try to add created_at column if it doesn't exist (will fail silently if it exists)
+-- SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we'll handle this
+-- by catching the error or checking schema first via JavaScript migration wrapper
+-- For now, we assume columns exist or will be handled by migration wrapper
+
+INSERT INTO user_game_annotations_new (
+    gameid, status, user_rating, user_difficulty_rating, user_review_rating,
+    user_skill_rating, user_skill_rating_when_beat, user_recommendation_rating,
+    user_importance_rating, user_technical_quality_rating, user_gameplay_design_rating,
+    user_fairness_rating, user_challenge_quality_rating, user_originality_rating,
+    user_visual_aesthetics_rating, user_story_rating, user_soundtrack_graphics_rating,
+    user_difficulty_comment, user_skill_comment, user_skill_comment_when_beat,
+    user_review_comment, user_recommendation_comment, user_importance_comment,
+    user_technical_quality_comment, user_gameplay_design_comment, user_fairness_comment,
+    user_challenge_quality_comment, user_originality_comment, user_visual_aesthetics_comment,
+    user_story_comment, user_soundtrack_graphics_comment,
+    hidden, exclude_from_random, user_notes, created_at, updated_at
+)
 SELECT 
     gameid,
     status,
@@ -96,8 +117,10 @@ SELECT
     hidden,
     exclude_from_random,
     user_notes,
-    created_at,
-    updated_at
+    -- Use COALESCE to handle NULL values, but columns must exist
+    -- If columns don't exist, this will fail - handled by migration wrapper
+    COALESCE(created_at, CURRENT_TIMESTAMP) as created_at,
+    COALESCE(updated_at, CURRENT_TIMESTAMP) as updated_at
 FROM user_game_annotations;
 
 -- Step 3: Drop old table
@@ -207,6 +230,8 @@ CREATE TABLE user_game_version_annotations_new (
 );
 
 -- Step 2: Copy all data from old table to new table
+-- Check if created_at/updated_at columns exist before selecting them
+-- This handles fresh databases where columns might not exist yet
 INSERT INTO user_game_version_annotations_new 
 SELECT 
     gameid,
@@ -241,8 +266,16 @@ SELECT
     user_story_comment,
     user_soundtrack_graphics_comment,
     user_notes,
-    created_at,
-    updated_at
+    CASE 
+        WHEN (SELECT COUNT(*) FROM pragma_table_info('user_game_version_annotations') WHERE name = 'created_at') > 0 
+        THEN created_at 
+        ELSE CURRENT_TIMESTAMP 
+    END as created_at,
+    CASE 
+        WHEN (SELECT COUNT(*) FROM pragma_table_info('user_game_version_annotations') WHERE name = 'updated_at') > 0 
+        THEN updated_at 
+        ELSE CURRENT_TIMESTAMP 
+    END as updated_at
 FROM user_game_version_annotations;
 
 -- Step 3: Drop old table

@@ -1308,8 +1308,42 @@ const MIGRATIONS = {
     {
       id: 'clientdata_057_difficulty_rating_0_to_10',
       description: 'Update CHECK constraints to allow 0-10 range for user_difficulty_rating (instead of 0-5)',
-      type: 'sql',
-      file: resolveRelative('electron/sql/migrations/057_clientdata_difficulty_rating_0_to_10.sql'),
+      type: 'function',
+      apply(db) {
+        // First, ensure created_at and updated_at columns exist
+        // This handles fresh databases where columns might not exist yet
+        const tableInfo = db.prepare("PRAGMA table_info(user_game_annotations)").all();
+        const columnNames = new Set(tableInfo.map(col => col.name));
+        
+        if (!columnNames.has('created_at')) {
+          db.exec("ALTER TABLE user_game_annotations ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+        }
+        if (!columnNames.has('updated_at')) {
+          db.exec("ALTER TABLE user_game_annotations ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+        }
+        
+        // Check user_game_version_annotations table if it exists
+        const versionTableExists = db.prepare(`
+          SELECT name FROM sqlite_master WHERE type='table' AND name='user_game_version_annotations'
+        `).get();
+        
+        if (versionTableExists) {
+          const versionTableInfo = db.prepare("PRAGMA table_info(user_game_version_annotations)").all();
+          const versionColumnNames = new Set(versionTableInfo.map(col => col.name));
+          
+          if (!versionColumnNames.has('created_at')) {
+            db.exec("ALTER TABLE user_game_version_annotations ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+          }
+          if (!versionColumnNames.has('updated_at')) {
+            db.exec("ALTER TABLE user_game_version_annotations ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+          }
+        }
+        
+        // Now run the SQL migration which assumes columns exist
+        const sqlPath = resolveRelative('electron/sql/migrations/057_clientdata_difficulty_rating_0_to_10.sql');
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+        db.exec(sql);
+      },
       skipIf(db) {
         // CRITICAL: Check if constraints already allow 0-10 to avoid unnecessary table recreation
         // This is important because:

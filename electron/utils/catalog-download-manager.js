@@ -22,6 +22,7 @@ const IPFS_GATEWAYS = [
   'https://cloudflare-ipfs.com/ipfs/',
   'https://ipfs.io/ipfs/',
   'https://gateway.pinata.cloud/ipfs/',
+  'https://rhtools.4everland.link/ipfs/'
 ];
 
 const DEFAULT_BPS_DRIVE_ID = 'd3338fab-d24c-4d75-9e78-d3024befc225';

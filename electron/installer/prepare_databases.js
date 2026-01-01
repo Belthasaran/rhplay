@@ -842,6 +842,7 @@ const IPFS_GATEWAYS = [
   'https://cloudflare-ipfs.com/ipfs/',
   'https://ipfs.io/ipfs/',
   'https://gateway.pinata.cloud/ipfs/',
+  'https://rhtools.4everland.link/ipfs/'
 ];
 
 /**

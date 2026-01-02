@@ -13652,7 +13652,8 @@ function registerDatabaseHandlers(dbManager) {
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            webSecurity: true // Keep web security enabled
+            webSecurity: true, // Keep web security enabled
+            partition: 'in-memory-session'
           }
         });
         

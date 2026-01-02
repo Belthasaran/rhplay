@@ -1022,10 +1022,38 @@ async function main() {
         }
       }
       
+      // Extract date from time field for use in name enhancement
+      let gameDate = null;
+      if (game.time) {
+        const dateObj = new Date(game.time * 1000);
+        gameDate = dateObj.toISOString().split('T')[0];
+      } else {
+        const urlDate = extractDateFromUrl(game.download_url);
+        gameDate = urlDate || game.date || new Date().toISOString().split('T')[0];
+      }
+      
+      // Add "[SMWC-Waiting YYYY-MM-DD]" to game name if not already present
+      const waitingTag = `[SMWC-Waiting ${gameDate}]`;
+      let enhancedGameName = game.name;
+      if (!enhancedGameName.includes('[SMWC-Waiting')) {
+        enhancedGameName = `${enhancedGameName} ${waitingTag}`;
+      }
+      
+      // Add "smwc-waiting" to tags if not already present
+      let enhancedTags = game.tags || [];
+      if (!Array.isArray(enhancedTags)) {
+        enhancedTags = [];
+      }
+      if (!enhancedTags.includes('smwc-waiting')) {
+        enhancedTags = [...enhancedTags, 'smwc-waiting'];
+      }
+      
       // Process each BPS file
       const processedBps = [];
       const gameResults = {
         ...game, // Include ALL fields from waiting_queue.json
+        name: enhancedGameName, // Use enhanced name with [SMWC-Waiting] tag
+        tags: enhancedTags, // Use enhanced tags with smwc-waiting
         original_download_filename: originalFilename,
         screenshot_files: allScreenshots, // Add screenshot files list
         bps_files: [],
@@ -1112,16 +1140,8 @@ async function main() {
           const bpsSha1 = calculateHash(bpsData, false);
           const bpsSha256 = calculateHash(bpsData, true);
           
-          // Extract date - prefer time field converted to date, then URL, then other fields
-          let syntheticDate = null;
-          if (game.time) {
-            // Convert Unix timestamp to YYYY-MM-DD
-            const dateObj = new Date(game.time * 1000);
-            syntheticDate = dateObj.toISOString().split('T')[0];
-          } else {
-            const urlDate = extractDateFromUrl(game.download_url);
-            syntheticDate = urlDate || game.date || new Date().toISOString().split('T')[0];
-          }
+          // Use the gameDate calculated earlier (from time field)
+          const syntheticDate = gameDate;
           
           const detectedLanguage = detectLanguageFromFilename(bpsFile.filename);
           
@@ -1143,8 +1163,8 @@ async function main() {
             estimatedLanguage = 'English';
           }
           
-          const syntheticSfcFilename = createSyntheticFilename(game.name, firstAuthor || game.authors, syntheticDate, languageTag);
-          const titleWithLang = languageTag ? `${game.name} ${languageTag}` : game.name;
+          const syntheticSfcFilename = createSyntheticFilename(enhancedGameName, firstAuthor || game.authors, syntheticDate, languageTag);
+          const titleWithLang = languageTag ? `${enhancedGameName} ${languageTag}` : enhancedGameName;
           const parentDirName = getParentDirectoryName(typeMapping.fields_type);
           
           let levelnames = null;
@@ -1156,6 +1176,9 @@ async function main() {
           // Start with all fields from the game object (waiting_queue.json has normalized data)
           const gameversion = {
             ...game, // Include ALL fields from waiting_queue.json
+            // Override name and tags with enhanced versions
+            name: enhancedGameName,
+            tags: enhancedTags,
             // Ensure required fields are set, using typeMapping for type/difficulty fields
             legacy_type: typeMapping.legacy_type || game.fields_type || game.difficulty,
             combinedtype: game.combinedtype || typeMapping.legacy_type || game.fields_type || game.difficulty,
@@ -1169,7 +1192,7 @@ async function main() {
             // SMWC Waiting data (keep original for reference)
             smwc_waiting: {
               gameid: game.gameid,
-              name: game.name,
+              name: enhancedGameName, // Use enhanced name with [SMWC-Waiting] tag
               url: game.url,
               download_url: game.download_url
             },

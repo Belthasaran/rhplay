@@ -78,6 +78,7 @@
   "dependencies": {
     "@ceramicnetwork/http-client": "^6.4.0",
     "@didtools/pkh-ethereum": "^0.6.0",
+    "@electron/fuses": "^2.0.0",
     "@noble/curves": "^2.0.1",
     "@noble/post-quantum": "^0.5.2",
     "@noble/secp256k1": "^3.0.0",
@@ -131,6 +132,10 @@
   },
   "build": {
     "appId": "com.rhtools.app",
+    "electronFuses": {
+      "EnableEmbeddedAsarIntegrityValidation": true,
+      "cookieEncryption": true
+    },
     "productName": "RHTools",
     "directories": {
       "output": "dist-builds"

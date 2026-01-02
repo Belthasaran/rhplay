@@ -19925,6 +19925,12 @@ async function downloadCatalogFilesAutomatically() {
           catalogSearchState.value.status = 'ready';
           catalogSearchState.value.downloadCatalogProgress = 'Catalog files installed successfully!';
           
+          // Clear search state to show exploration page
+          catalogSearchQuery.value = '';
+          catalogSearchResults.value = [];
+          catalogSearchState.value.searched = false;
+          catalogSearchState.value.searchError = undefined;
+          
           // Check for updates
           try {
             const updates = await (window as any).electronAPI.catalogCheckUpdates();
@@ -19934,9 +19940,15 @@ async function downloadCatalogFilesAutomatically() {
             } else {
               catalogSearchState.value.hasUpdates = false;
               catalogSearchState.value.availableUpdates = [];
+              // Load exploration data if no updates are needed
+              loadCatalogExplorationData();
             }
           } catch (error) {
             // Ignore update check errors
+            catalogSearchState.value.hasUpdates = false;
+            catalogSearchState.value.availableUpdates = [];
+            // Load exploration data even if update check fails
+            loadCatalogExplorationData();
           }
         } else {
           catalogSearchState.value.downloadCatalogError = 'Files downloaded but verification failed';
@@ -20033,15 +20045,31 @@ async function copyCatalogFiles() {
           const checkResult = await (window as any).electronAPI.catalogCheckAvailability();
           if (checkResult.available) {
             catalogSearchState.value.status = 'ready';
+            
+            // Clear search state to show exploration page
+            catalogSearchQuery.value = '';
+            catalogSearchResults.value = [];
+            catalogSearchState.value.searched = false;
+            catalogSearchState.value.searchError = undefined;
+            
             // Check for updates
             try {
               const updates = await (window as any).electronAPI.catalogCheckUpdates();
               if (updates.available) {
                 catalogSearchState.value.hasUpdates = true;
                 catalogSearchState.value.availableUpdates = updates.updates || [];
+              } else {
+                catalogSearchState.value.hasUpdates = false;
+                catalogSearchState.value.availableUpdates = [];
+                // Load exploration data if no updates are needed
+                loadCatalogExplorationData();
               }
             } catch (error) {
-              // Ignore
+              // Ignore update check errors
+              catalogSearchState.value.hasUpdates = false;
+              catalogSearchState.value.availableUpdates = [];
+              // Load exploration data even if update check fails
+              loadCatalogExplorationData();
             }
           }
         } catch (error) {

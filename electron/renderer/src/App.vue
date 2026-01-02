@@ -18641,7 +18641,7 @@ function getSocialIdPlaceholder(type: string): string {
   return socialType ? socialType.placeholder : 'Enter value';
 }
 
-function nextWizardStep() {
+async function nextWizardStep() {
   // Validate before proceeding
   validateUsername();
   
@@ -18665,7 +18665,7 @@ function nextWizardStep() {
   
   // Check if at least one Tier 1-3 social ID exists (for publishing)
   if (!meetsSocialIdRequirements(profileCreationData.value.socialIds)) {
-    const confirmed = confirm(
+    const confirmed = await showConfirm(
       'You do not have any Tier 1-3 verifiable Social IDs. You will not be able to publish your profile online until you add and verify at least one.\n\n' +
       'Do you want to continue anyway? You can add verifiable Social IDs later.'
     );

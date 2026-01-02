@@ -6,7 +6,7 @@
 <template>
   <div class="rating-factors-help">
     <div class="help-header">
-      <h1>{{ template.introduction.title }}</h1>
+      <h1>{{ template.introduction.title }}</h1><!-- <A HREF="https://www.twitch.tv">test</A> -->
       <p v-if="template.introduction.description">{{ template.introduction.description }}</p>
       <div v-if="template.introduction.customContent && template.introduction.customContent !== '<!-- Add custom introduction content here -->'" v-html="template.introduction.customContent"></div>
     </div>

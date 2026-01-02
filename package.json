@@ -133,8 +133,8 @@
   "build": {
     "appId": "com.rhtools.app",
     "electronFuses": {
-      "EnableEmbeddedAsarIntegrityValidation": true,
-      "cookieEncryption": true
+      "enableEmbeddedAsarIntegrityValidation" : true,
+      "enableCookieEncryption": true
     },
     "productName": "RHTools",
     "directories": {

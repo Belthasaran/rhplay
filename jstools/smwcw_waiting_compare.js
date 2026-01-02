@@ -19,6 +19,7 @@
  *   smwc_world/waiting_alreadyhave.json - Games we already have in database
  *   smwc_world/waiting_needed.json - Games we need (not in DB, not processed)
  *   smwc_world/waiting_processed.json - Games we've processed but not in DB
+ *   smwc_world/waiting_queue.json - Normalized version of waiting_needed.json
  */
 
 const fs = require('fs');
@@ -68,6 +69,142 @@ async function fetchWithThrottle(url, lastRequestTime) {
   }
   
   return await response.json();
+}
+
+/**
+ * Compute combinedtype using the same logic as migration 003
+ * Format: [fields_type]: [difficulty] (raw_difficulty) (raw_fields.type)
+ */
+function computeCombinedType(normalized) {
+  const fieldsType = normalized.fields_type || null;
+  const difficulty = normalized.difficulty || null;
+  const rawDifficulty = normalized.raw_difficulty || null;
+  const rawFieldsType = (normalized.raw_fields && normalized.raw_fields.type) || null;
+  
+  let result = '';
+  
+  // Add fields_type with colon if present
+  if (fieldsType) {
+    result += fieldsType + ': ';
+  }
+  
+  // Add main difficulty
+  if (difficulty) {
+    result += difficulty;
+  }
+  
+  // Add raw_difficulty in parentheses if present
+  if (rawDifficulty) {
+    result += ' (' + rawDifficulty + ')';
+  }
+  
+  // Add raw_fields.type in parentheses if present
+  if (rawFieldsType) {
+    const typeStr = Array.isArray(rawFieldsType) ? rawFieldsType.join(', ') : rawFieldsType;
+    result += ' (' + typeStr + ')';
+  }
+  
+  // Trim the result
+  result = result.trim();
+  
+  // If result is empty, fall back to type/gametype field
+  if (!result) {
+    const fallbackType = normalized.gametype || normalized.type;
+    if (fallbackType) {
+      result = fallbackType;
+    }
+  }
+  
+  return result || null;
+}
+
+/**
+ * Normalize game data to match gameversions table format
+ */
+function normalizeGame(game) {
+  const normalized = {};
+  
+  // gameid: Convert id (integer) to gameid (string)
+  normalized.gameid = String(game.id);
+  
+  // authors: Convert array to comma-separated string
+  if (game.authors && Array.isArray(game.authors)) {
+    normalized.authors_json = game.authors; // Preserve original structure
+    const authorNames = game.authors.map(a => a.name || '').filter(n => n);
+    normalized.authors = authorNames.join(', ');
+    normalized.author = authorNames[0] || null; // First author
+  } else {
+    normalized.authors = null;
+    normalized.author = null;
+  }
+  
+  // submitter: Convert object to string name
+  if (game.submitter) {
+    normalized.submitter_json = game.submitter; // Preserve original structure
+    normalized.submitter = game.submitter.name || null;
+  } else {
+    normalized.submitter = null;
+  }
+  
+  // Extract from fields and raw_fields
+  if (game.fields) {
+    normalized.length = game.fields.length || null;
+    normalized.difficulty = game.fields.difficulty || null;
+    normalized.fields_type = game.fields.type || null;
+    normalized.gametype = game.fields.type || null; // Same as fields_type
+    normalized.demo = game.fields.demo || null;
+    normalized.sa1 = game.fields.sa1 || null;
+    normalized.collab = game.fields.collab || null;
+  } else {
+    normalized.length = null;
+    normalized.difficulty = null;
+    normalized.fields_type = null;
+    normalized.gametype = null;
+    normalized.demo = null;
+    normalized.sa1 = null;
+    normalized.collab = null;
+  }
+  
+  if (game.raw_fields) {
+    normalized.description = game.raw_fields.description || null;
+    normalized.raw_difficulty = game.raw_fields.difficulty || null;
+    
+    // warnings: Convert array to comma-separated string
+    if (game.raw_fields.warnings && Array.isArray(game.raw_fields.warnings)) {
+      normalized.warnings = game.raw_fields.warnings.join(', ');
+    } else {
+      normalized.warnings = null;
+    }
+    
+    // Preserve raw_fields for combinedtype computation
+    normalized.raw_fields = game.raw_fields;
+  } else {
+    normalized.description = null;
+    normalized.raw_difficulty = null;
+    normalized.warnings = null;
+    normalized.raw_fields = null;
+  }
+  
+  // combinedtype: Compute using migration 003 logic
+  normalized.combinedtype = computeCombinedType(normalized);
+  
+  // url: Construct from gameid
+  normalized.url = `https://www.smwcentral.net/?p=section&a=details&id=${normalized.gameid}`;
+  
+  // Preserve other fields that might be useful
+  normalized.name = game.name || null;
+  normalized.section = game.section || null;
+  normalized.time = game.time || null;
+  normalized.moderated = game.moderated || null;
+  normalized.tags = game.tags || null;
+  normalized.images = game.images || null;
+  normalized.rating = game.rating || null;
+  normalized.size = game.size || null;
+  normalized.downloads = game.downloads || null;
+  normalized.download_url = game.download_url || null;
+  normalized.obsoleted_by = game.obsoleted_by || null;
+  
+  return normalized;
 }
 
 /**
@@ -226,6 +363,13 @@ async function main() {
     fs.writeFileSync(processedPath, JSON.stringify(processed, null, 2), 'utf8');
     log(`  ✓ ${processed.length} games we've processed -> ${processedPath}`);
     
+    // Normalize and create waiting_queue.json (same as needed but normalized)
+    log('\nNormalizing data for waiting_queue.json...');
+    const queueGames = needed.map(game => normalizeGame(game));
+    const queuePath = path.join(CONFIG.OUTPUT_DIR, 'waiting_queue.json');
+    fs.writeFileSync(queuePath, JSON.stringify(queueGames, null, 2), 'utf8');
+    log(`  ✓ ${queueGames.length} normalized games -> ${queuePath}`);
+    
     // Summary
     log('\n==================================================');
     log('              Comparison Complete!                ');
@@ -233,7 +377,8 @@ async function main() {
     log(`  Total waiting games:     ${waitingGames.length}`);
     log(`  Games we already have:   ${alreadyHave.length}`);
     log(`  Games we need:           ${needed.length}`);
-    log(`  Games we've processed:   ${processed.length}\n`);
+    log(`  Games we've processed:   ${processed.length}`);
+    log(`  Games in queue:          ${needed.length} (normalized)\n`);
     
     db.close();
     logStream.end();

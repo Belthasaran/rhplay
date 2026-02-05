@@ -15,7 +15,7 @@
 #
 # This script is part of the process for importing new ROMHacks into the Offline-Searchable 
 # romhack patch catalog and
-# BPS patch cache which holds earch data and catch for ~31,000 patch files of various SMW romhacks.
+# BPS patch cache which holds search data and cache for ~31,000 patch files of various SMW romhacks.
 #
 # This is still a manual process: with some automation.
 #

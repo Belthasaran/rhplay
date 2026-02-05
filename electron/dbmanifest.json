@@ -65,7 +65,17 @@
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
       "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
     },
-    "sqlpatches": []
+    "sqlpatches": [
+      {
+        "file_name": "res12_to_13.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "bcf789bf2c5776cc523842af6dc923bc924fd38375204eb16d0ddb605db41029",
+        "ipfs_cidv1": "bafybeia7ocaxswtagp5z2hiryncr4zxtihs7uxekylkk3t5ntbyourasfy",
+        "size": "43753884",
+	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9FaXhZQjZ0aQo="
+      }
+    ]
   },
   "screenshot.db": {
     "version": "12",
@@ -436,13 +446,22 @@
         "sha256": "8029ce273be1ed49bfcb935322e07f24ed5815c31fa3cfd4e9165bbdeff4daea",
         "ipfs_cidv1": "bafkreieafhhcoo7b5ve37s4tkmroa7ze5vmblqy7uph5j2iwlo6675g25i",
         "size": "37212",
-	"baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9IZVJvVHBUcQ==",
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9IZVJvVHBUcQ==",
         "ardrive_file_name": "ss-p-010-to-012.sql.xz",
         "ardrive_file_path": "/SMWRH/db/patch/ss-p-010-to-012.sql.xz",
         "ardrive_file_id": "86deabf0-1ad2-4010-9363-03e1286c3209",
         "data_txid": "LNcCZZj1hRP5qTKyUxgDqk8NQEbn56RtM9dhdniEQC8",
         "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
         "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      },
+      {
+        "file_name": "ss12_to_13.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "19de65d269fcf90fffdde295eab9788e9ad221a87d843c0e634af9bcd6c69629",
+        "ipfs_cidv1": "bafkreiaz3zs5e2p47eh77xpcsxvls6eotljcdkd5qq6a4y2k7g6nnruwfe",
+        "size": "37180",
+	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9xNkxBV29tSAo="
       }
     ]
   },
@@ -468,7 +487,17 @@
       "ardrive_file_id": "c865d4ba-3825-4647-b94b-7df16e93cdee",
       "data_txid": "DnlxSNMUafsIPM46UisYEfeq2T-v0n6ibrgjMZFjlhM"
     },
-    "sqlpatches": []
+    "sqlpatches": [
+      {
+        "file_name": "rhd12_to_13.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "27931ba9065a85ba30c613aebaadc38d7b04b59c335ddb7a29e6ac7eba2917d3",
+        "ipfs_cidv1": "bafkreibhsmn2sbs2qw5dbrqtv25k3q4npmcllhbtlxnxukpgvr7lukix2m",
+        "size": "40268",
+	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS82Uzdka3l5Ywo="
+      }
+    ]
   },
   "patchbin.db": {
     "version": "12",
@@ -783,13 +812,22 @@
         "sha256": "ac443eb43aac47ffbae2449a3000f3ea332fff013ffe9b7b918c8b8c2e85ba12",
         "ipfs_cidv1": "bafybeierb6exyqrqz4vvvcxjygw6f7csn6hym6lvejblfrhtpjra2yyona",
         "size": "5578964",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9BWXpCMUtVOQ==",
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9BWXpCMUtVOQ==",
         "ardrive_file_name": "patchbin-diff-010-to-012.sql.xz",
         "ardrive_file_path": "/SMWRH/db/patch/patchbin-diff-010-to-012.sql.xz",
         "ardrive_file_id": "b3a676d6-36b3-4345-b58e-241ca9473015",
         "data_txid": "lgiU8ukNmGG4k80RRVSSN69tfLj-BKA9gr4BiKaQl_Y",
         "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
         "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      },
+      {
+        "file_name": "pbin12_to13.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "b7a908b5fd2a1201b98a2417f7b59ae96a47e50dab02a8ee661e877883045342",
+        "ipfs_cidv1": "bafybeigyf4g2gm3b5dkdob3ok7i24qtpndpzxmlouryoga3fdevtz43j4a",
+        "size": "41807556",
+	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9ESlBpUHRMZwo="
       }
     ]
   }

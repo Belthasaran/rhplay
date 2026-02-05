@@ -73,7 +73,7 @@
         "sha256": "bcf789bf2c5776cc523842af6dc923bc924fd38375204eb16d0ddb605db41029",
         "ipfs_cidv1": "bafybeia7ocaxswtagp5z2hiryncr4zxtihs7uxekylkk3t5ntbyourasfy",
         "size": "43753884",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9FaXhZQjZ0aQo="
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9FaXhZQjZ0aQo="
       }
     ]
   },
@@ -461,7 +461,13 @@
         "sha256": "19de65d269fcf90fffdde295eab9788e9ad221a87d843c0e634af9bcd6c69629",
         "ipfs_cidv1": "bafkreiaz3zs5e2p47eh77xpcsxvls6eotljcdkd5qq6a4y2k7g6nnruwfe",
         "size": "37180",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9xNkxBV29tSAo="
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9xNkxBV29tSAo=",
+        "ardrive_file_name": "ss12_to_13.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/ss12_to_13.sql.xz",
+        "ardrive_file_id": "d9912296-d1f5-4a41-b41a-90b845da785c",
+        "data_txid": "GIngblVfkvl586Puex3UHQDPU69CI_jPO4vwyTOjnPA",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
       }
     ]
   },
@@ -495,7 +501,7 @@
         "sha256": "27931ba9065a85ba30c613aebaadc38d7b04b59c335ddb7a29e6ac7eba2917d3",
         "ipfs_cidv1": "bafkreibhsmn2sbs2qw5dbrqtv25k3q4npmcllhbtlxnxukpgvr7lukix2m",
         "size": "40268",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS82Uzdka3l5Ywo="
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS82Uzdka3l5Ywo="
       }
     ]
   },
@@ -827,7 +833,7 @@
         "sha256": "b7a908b5fd2a1201b98a2417f7b59ae96a47e50dab02a8ee661e877883045342",
         "ipfs_cidv1": "bafybeigyf4g2gm3b5dkdob3ok7i24qtpndpzxmlouryoga3fdevtz43j4a",
         "size": "41807556",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9ESlBpUHRMZwo="
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9ESlBpUHRMZwo="
       }
     ]
   }

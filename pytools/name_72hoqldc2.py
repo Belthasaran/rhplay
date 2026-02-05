@@ -1,21 +1,47 @@
-#
+####
 # Importing of 72hoQLDC SMW Romhacks into the master search catalog --
+# These scripts are written against Python 3.10.1 and Electron NodeJS v22.19.0
 #
-# This script is part of the process for importing new ROMHacks into the Offline-Searchable catalog and
-# BPS patch cache which currently contains 31,000 BPS patch files and seIarch data for various SMW romhacks.
+# This script is part of the Rhplay SMW Romhack Manager;
+# which is a Javascript prototype rewrite of RHTools.
 #
-# This script handles Step 1.  Of the process.
+# The reimplementation as an Electron app has been cursorAi-assisted.
+#  - https://github.com/belthasaran/rhplay?tab=readme-ov-file#purpose-of-this-program
+
+# This file remains in Python, and has not been converted.
+# The scripts in pytools/ specifically are provided under the GNU General Public License Version 3 or later.
+#####
+
+#
+# This script is part of the process for importing new ROMHacks into the Offline-Searchable 
+# romhack patch catalog and
+# BPS patch cache which holds earch data and catch for ~31,000 patch files of various SMW romhacks.
+#
+# This is still a manual process: with some automation.
+#
+
+#
+# This script handles Step 1.  Of the overall process.
 # This documentation header points to the next steps.
 # After you finish the steps in this process:
 #
-#   - New SMW romhacks should be searchable through the Search Catalog feature. And available by users to
-#   point-and-click Add and launch on their SNES using the USB2SNES File Upload integration.
-#   On top of the existing 31,000 SMW Romhacks  
+#   - New SMW romhacks should be searchable through the Search Catalog button. And available by users to
+#   point-and-click Add and then launch on their SNES using the USB2SNES File Upload integration.
 #
-#   That is, once users have updated their client to use your new Manifest file
+#   That is, once users have updated their client to use a new Manifest file
 #   from  https://github.com/Belthasaran/rhplay/blob/main/electron/bpsarchives.json
+#
+#   - This requires a new build of the app, (until Online functionality is finished,
+#   but the plan requires Minimizing the use of hosted or centralized servers for any feature.
+#
+#     - Eventually we could iplement a Nostr+Ceramic event for Manifest updates, or Ethereum blockchain
+#       artifact for locating the current dbmanifest and bps manifests, or an IPFS IPNS,
+#       or IPFS DNSLink to point to an IPFS CID containing signed Manifest update locations on the
+#       IPFS or ArWeave networks.
+#
 
-###
+###  
+# PREPARATION PROCES
 #
 #
 # Step 1 is to temporarily enrich BPS filenames for convenience to import 72hoQLDC files with better metadata.
@@ -218,8 +244,36 @@
 # Note that the client does not detect an Update/Replacement to its search database is required if the Version 
 # number has not changed.
 #                
+####
+#  Intake Step 10.  BPSMANIFEST VERIFICATION
+#    Run automated Manifest verification to help ensure that the search catalog will actually still
+#    work, and still be installable after the update.
+#
+#  Final step is to use the  verify_bpsarchives.js  to verify that:
+#    -  The new entries can be successfully downloaded from all locations
+#    -  The script will also make sure SHA256 checksum values match; which is critical for successful downloads.
 #
 #
+#   enode.sh $RHTPROG/jstools/verify_bpsarchives.js --manifest $RHTPROG/electron/bpsarchives.json --target NAME --verify-links 
+#
+#    * Repeat the script where NAME is:  rhsearch.zip      then rhsearch_cat.db
+#    * Repeat for each BPS 7Z file that was added to the manifest earlier
+#
+#   -- Use the Verify script to confirm the entire build process.
+#
+##   enode.sh $RHTPROG/jstools/verify_bpsarchives.js --manifest $RHTPROG/electron/bpsarchives.json --target rhsearch.zip --verify-build
+#    enode.sh $RHTPROG/jstools/verify_bpsarchives.js --manifest $RHTPROG/electron/bpsarchives.json --target rhsearch_cat.db --verify-build
+#
+#    Also,  enode.sh $RHTPROG/jstools/verify_bpsarchives.js --help
+#    For more information.   The target option should be optional, and omit it to completely verify the entire manifest.
+#
+#    (Make sure Download endpoints added earlier are still operational!)
+#
+#
+#    - If you have also modified dbmanifest.json,  then invoke its verification script as well.
+#      (The dbmanifest.json  is actually more critical than the bpsarchives manifest.)
+#
+
 import sys
 import os
 import re

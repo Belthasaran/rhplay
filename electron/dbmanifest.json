@@ -50,7 +50,7 @@
     }
   },
   "resource.db": {
-    "version": "12",
+    "version": "13",
     "base": {
       "source_path": "packed_db/resource.db.initial.xz",
       "file_name": "resource.db.initial.xz",
@@ -84,7 +84,7 @@
     ]
   },
   "screenshot.db": {
-    "version": "12",
+    "version": "13",
     "base": {
       "source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
@@ -478,7 +478,7 @@
     ]
   },
   "rhdata.db": {
-    "version": "10",
+    "version": "13",
     "base": {
       "file_name": "rhdata-f12-20251228.tar.xz",
       "format": "tar+xz",
@@ -518,7 +518,7 @@
     ]
   },
   "patchbin.db": {
-    "version": "12",
+    "version": "13",
     "base": {
       "file_name": "bare_patchbin_2025_11_01.tar.xz",
       "format": "tar+xz",

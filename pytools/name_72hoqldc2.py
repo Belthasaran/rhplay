@@ -49,10 +49,10 @@
 #####
 
 #
-# AFTER STep 2: 
+# AFTER Step 2: 
 #  Follow the Intake process for any list of new Romhacks without detailed metadata that uses:  7z+sfc file pairs
 #
-#   In this example "authorname" will be automatically arsed as the author name.
+#   In this example "authorname" will be automatically parsed as the author name.
 #    2026-01-026 will be automatically parsed as the date.
 #    And  "SMWC72hoQLDC2-2026 Level Design Contest 1234"  will be entered in the hack title field
 #
@@ -186,8 +186,10 @@
 #
 #
 #
-# Intake Step 8. COMPLETE Manifest Updates so peoples Catalog search clients can find and download the new
-# Romhack search catalog's cache data.
+# Intake Step 9. COMPLETE and Finalize the Manifest Updates (bpsarchives.json)
+#  So that end users' Catalog search clients would find and download the new
+# Romhack search catalog updates  After updating their program to a version including the new
+# manifest file.
 #
 #             Update bpsarchives.json for the rhsearch.zip and rhsearch_cat.db targets
 #              - to  remove the specific ArWeave locations.

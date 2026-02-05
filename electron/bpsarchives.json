@@ -8024,5 +8024,51 @@
       "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d",
       "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS92b2JGcURicQ=="
     }
+  },
+  "bpsxc_202602.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxc_202602.7z",
+      "format": "7z",
+      "sha256": "890d59e24e77ebbd999d7c6c87398a0d3e5bf7ced457c18fb47d3fc7126d2a61",
+      "ipfs_cidv1": "bafybeifkytg2z6rvwulsiw7ibeofw3ny4bwp3hbjbgmycuqp43dmcasw2m",
+      "size": "23077741",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS8yU0VFNGJEYwo=",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ],
+      "ardrive_file_name": "bpsxc_202602.7z",
+      "ardrive_file_path": "/MWDB/storeB/bpsxc_202602.7z",
+      "ardrive_file_id": "699ebea8-ede3-40c7-949c-d6e728763477",
+      "data_txid": "hMtGTc5HKkP-5S9QpExI0AvTMahE4rPc1jHjf8geeXc",
+      "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
+      "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d"
+    }
+  },
+  "bpsxc_20260204.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxc_20260204.7z",
+      "format": "7z",
+      "sha256": "010dafefd22338c6054921765f68549873d208910078477d3737b19033143b57",
+      "ipfs_cidv1": "bafybeifcyvifasrdntyxvtjwrue3bai2x3dds2uaxd5udqgufqvq67iuda",
+      "size": "41491502",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS91aUtXUXdkbQo=",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ],
+      "ardrive_file_name": "bpsxc_20260204.7z",
+      "ardrive_file_path": "/MWDB/storeB/bpsxc_20260204.7z",
+      "ardrive_file_id": "8b111b1c-70a0-434e-8bba-af0adf52af85",
+      "data_txid": "7oUSYPoGH4LGZkWcsm8ylfh4h-EzJEANtz02xWXzBCA",
+      "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
+      "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d"
+    }
   }
 }

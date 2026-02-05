@@ -27,23 +27,23 @@
     "type": "catalog",
     "version": "6",
     "base": {
-      "file_name": "rhsearch-20251228.zip",
-      "sha256": "4f715072b6d9ff5b17737b4030e6361ea870063ca220f008b14f45c3db106861",
-      "ipfs_cidv1": "bafybeibu42z2hz6ixsdmw7nhpdrq532rny37kopseczbtssmlo6wxxcf3i",
+      "file_name": "rhsearch-20260204.zip",
+      "sha256" : "42969533cdab4f0ce96b3aef41673d2ba7256405a0174e8716989a8c42b9c8f8",
+      "ipfs_cidv1" : "bafybeihs7nuyai57apmouzz7lul2uj7jysphfn7jtbewpfa2iqz7bowm4u",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS91cFh0d0RTeAo=",
+      "size" : "108785563",
       "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
-      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS84a3VWakh2Zwo=",
       "metadata_txid": "",
-      "size": "108356535",
       "priority": [
         "baddr",
         "ipfs",
         "ardrive"
       ],
       "ardrive_folder_id": "d4fe5f98-e15b-4ceb-98f9-cded2b6a7cf1",
-      "ardrive_file_name": "rhsearch-20251228.zip",
-      "ardrive_file_path": "/MWDB/db/rhsearch-20251228.zip",
-      "ardrive_file_id": "0dacd44c-9064-4c72-af7a-aa2bef57d120",
-      "data_txid": "JLe4CU7ATi6r1gXkb6nWABY-KnG8AA9ixgo-bM5cH0w"
+      "ardrive_file_name": "rhsearch-20260204.zip",
+      "ardrive_file_path": "/MWDB/db/rhsearch-20260204.zip",
+      "ardrive_file_id": "0c7fb5dc-92c5-4247-9af4-26e6dc048969",
+      "data_txid": "6C3WQ4mHdMvIHeLI6d4zUrkDhNEqh6m2DXOSI9-wxcg"
     }
   },
   "bps_00.7z": {
@@ -8034,7 +8034,7 @@
       "sha256": "890d59e24e77ebbd999d7c6c87398a0d3e5bf7ced457c18fb47d3fc7126d2a61",
       "ipfs_cidv1": "bafybeifkytg2z6rvwulsiw7ibeofw3ny4bwp3hbjbgmycuqp43dmcasw2m",
       "size": "23077741",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS8yU0VFNGJEYwo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS8yU0VFNGJEYwo=",
       "priority": [
         "baddr",
         "ipfs",
@@ -8057,7 +8057,7 @@
       "sha256": "010dafefd22338c6054921765f68549873d208910078477d3737b19033143b57",
       "ipfs_cidv1": "bafybeifcyvifasrdntyxvtjwrue3bai2x3dds2uaxd5udqgufqvq67iuda",
       "size": "41491502",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS91aUtXUXdkbQo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS91aUtXUXdkbQo=",
       "priority": [
         "baddr",
         "ipfs",

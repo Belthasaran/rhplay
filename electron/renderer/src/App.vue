@@ -2165,6 +2165,44 @@
                     <p v-if="result.versioninfo" class="catalog-result-meta">
                       <strong>Version:</strong> {{ result.versioninfo }}
                     </p>
+                    <p 
+                      v-if="!result.gameExists && result.sfcsource_filename && String(result.sfcsource_filename).trim()"
+                      class="catalog-result-meta"
+                    >
+                      <strong>Filename:</strong> <code>{{ result.sfcsource_filename }}</code>
+                    </p>
+                    <div 
+                      v-if="getCatalogTags(result).length > 0 || getCatalogFolderCategories(result).length > 0"
+                      class="catalog-result-taxonomy"
+                    >
+                      <div v-if="getCatalogTags(result).length > 0" class="catalog-taxonomy-row">
+                        <strong>Tags:</strong>
+                        <span class="catalog-taxonomy-chips">
+                          <button
+                            v-for="tag in getCatalogTags(result)"
+                            :key="tag"
+                            class="catalog-chip catalog-chip-clickable"
+                            @click.stop="searchByTag(tag)"
+                            :title="`Search for tag: ${tag}`"
+                          >
+                            {{ tag }}
+                          </button>
+                        </span>
+                      </div>
+                      <div v-if="getCatalogFolderCategories(result).length > 0" class="catalog-taxonomy-row">
+                        <strong>Categories:</strong>
+                        <span class="catalog-taxonomy-chips">
+                          <span
+                            v-for="cat in getCatalogFolderCategories(result)"
+                            :key="cat"
+                            class="catalog-chip"
+                            :title="cat"
+                          >
+                            {{ cat }}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
                     <p v-if="result.brief" class="catalog-result-brief">
                       {{ result.brief.substring(0, 200) }}{{ result.brief.length > 200 ? '...' : '' }}
                     </p>
@@ -20767,6 +20805,39 @@ function searchByYear(year: number) {
 function searchByTag(tag: string) {
   catalogSearchQuery.value = tag;
   performCatalogSearch();
+}
+
+function parseCatalogStringList(value: any): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return [...new Set(value.map(v => String(v).trim()).filter(Boolean))];
+  }
+  const s = String(value).trim();
+  if (!s) return [];
+  // Try JSON array first
+  if (s.startsWith('[') && s.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) {
+        return [...new Set(parsed.map(v => String(v).trim()).filter(Boolean))];
+      }
+    } catch {
+      // fall through
+    }
+  }
+  // Prefer comma/semicolon separators if present
+  const parts = (s.includes(',') || s.includes(';'))
+    ? s.split(/[;,]/)
+    : s.split(/\s+/);
+  return [...new Set(parts.map(p => p.trim()).filter(Boolean))];
+}
+
+function getCatalogTags(result: any): string[] {
+  return parseCatalogStringList(result?.tags);
+}
+
+function getCatalogFolderCategories(result: any): string[] {
+  return parseCatalogStringList(result?.folder_categories);
 }
 
 function applyBulkEdit() {
@@ -40632,6 +40703,46 @@ button:disabled {
   text-align: center;
   color: var(--text-secondary, #666);
   font-size: 16px;
+}
+
+.catalog-result-taxonomy {
+  margin: 8px 0 10px 0;
+}
+
+.catalog-taxonomy-row {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text-primary, #333);
+}
+
+.catalog-taxonomy-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.catalog-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid var(--border-primary, #ccc);
+  color: var(--text-primary, #333);
+  font-size: 13px;
+  line-height: 1.2;
+  user-select: none;
+}
+
+button.catalog-chip {
+  cursor: pointer;
+}
+
+.catalog-chip-clickable:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+  border-color: var(--accent-primary, #2196F3);
+  color: var(--accent-primary, #2196F3);
 }
 </style>
 

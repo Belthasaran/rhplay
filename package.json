@@ -1,6 +1,6 @@
 {
   "name": "rhtools",
-  "version": "0.1.18beta",
+  "version": "0.1.19beta",
   "description": "RHTools - ROM HackPlay Tools Application",
   "author": "RHTools Team <143627208+Belthasaran@users.noreply.github.com>",
   "main": "electron/main.js",

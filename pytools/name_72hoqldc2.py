@@ -120,7 +120,12 @@
 #    There can be MANY bps 7z files.  Or just one.
 #
 #    ** Make sure the average 7Z size is approximately 25 Megabytes, and avoid exceeding 30 **
-#    ** See earlier batches for the naming conventions for sharded batches **
+#    ** The average number of ROMHacks per 7Z file should be approximately 100 hacks. **
+#    ** Make sure any additional files subfolders, such as Readme or Credits files for a particular filecode are added to the same 7Z file as its BPS **
+#
+#    ** See earlier batches for the naming conventions for sharded batches AND the pack_bpsa.sh script for the "bpsa" Batch's example **
+#    ** Make sure the batch name and file prefix for 7z files is uninque.  Do not reuse previous batch names such as bps_, bpsxa, bpsxb, etc.
+#    ** bpsxc_ is a date-based batch for updates that are a single file with approximately 100 Romhacks per 7z file **
 #
 #     - The bps files are named  (FILECODE).bps
 #     - There are some logfiles

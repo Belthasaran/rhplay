@@ -20098,99 +20098,40 @@ async function performCatalogSearch() {
       query: catalogSearchQuery.value.trim()
     });
     
-    // Check if each game exists in database
-    for (const result of results) {
-      result.checkingGame = true;
-      result.gameExists = false;
-      result.existingGameid = null;
-      
-      try {
-        // Get BPS SHA256 from item - it might be in the JSON, need to load it
-        // For now, use item_id as fallback (item_id is the SFC SHA1, not BPS SHA256)
-        // We'll need to load the JSON to get the actual BPS SHA256
-        let bpsSha256 = null;
-        try {
-          const itemJson = await (window as any).electronAPI.catalogGetItemJson({
-            itemId: result.item_id
-          });
-          bpsSha256 = itemJson.bps_sha256_hash;
-        } catch (e) {
-          // If we can't load JSON, skip existence check for this item
-          result.checkingGame = false;
-          continue;
-        }
-        
-        if (!bpsSha256) {
-          result.checkingGame = false;
-          continue;
-        }
-        
-        const exists = await (window as any).electronAPI.catalogCheckGameExists({
-          bpsSha256: bpsSha256
-        });
-        
-        result.gameExists = exists.exists;
-        result.existingGameid = exists.gameid;
-        result.existingGvuuid = exists.gvuuid;
-      } catch (error) {
-        // Ignore errors checking game existence
-        result.gameExists = false;
-      } finally {
-        result.checkingGame = false;
-      }
+    // Show results immediately so the UI updates in under a second
+    for (const r of results) {
+      r.checkingGame = true;
+      r.gameExists = false;
+      r.existingGameid = null;
     }
-    
-    // Check if each game exists in database (only if bps_sha256_hash is available)
-    for (const result of results) {
-      result.checkingGame = true;
-      result.gameExists = false;
-      result.existingGameid = null;
-      
-      try {
-        // Use bps_sha256_hash from search results if available
-        if (result.bps_sha256_hash) {
-          const exists = await (window as any).electronAPI.catalogCheckGameExists({
-            bpsSha256: result.bps_sha256_hash
-          });
-          
-          result.gameExists = exists.exists;
-          result.existingGameid = exists.gameid;
-          result.existingGvuuid = exists.gvuuid;
-        } else {
-          // If bps_sha256_hash not in results, try loading JSON
-          try {
-            const itemJson = await (window as any).electronAPI.catalogGetItemJson({
-              itemId: result.item_id
-            });
-            if (itemJson.bps_sha256_hash) {
-              const exists = await (window as any).electronAPI.catalogCheckGameExists({
-                bpsSha256: itemJson.bps_sha256_hash
-              });
-              result.gameExists = exists.exists;
-              result.existingGameid = exists.gameid;
-              result.existingGvuuid = exists.gvuuid;
-              // Cache the bps_sha256_hash in the result
-              result.bps_sha256_hash = itemJson.bps_sha256_hash;
-              // Also cache other needed fields
-              result.index7z_name = itemJson.index7z_name;
-              result.indexbps_name = itemJson.indexbps_name;
-              result.index7z_ipfs_cidv1 = itemJson.index7z_ipfs_cidv1;
-              result.index7z_ardrive_file_id = itemJson.index7z_ardrive_file_id;
-            }
-          } catch (e) {
-            // If we can't load JSON, skip existence check
-          }
-        }
-      } catch (error) {
-        // Ignore errors checking game existence
-        result.gameExists = false;
-      } finally {
-        result.checkingGame = false;
-      }
-    }
-    
     catalogSearchResults.value = results;
     catalogSearchState.value.searched = true;
+    catalogSearchState.value.searching = false;
+    
+    // Batch check existence in one IPC call instead of N calls
+    const bpsSha256List = results.map((r: any) => r.bps_sha256_hash || null);
+    const hasAnyHash = bpsSha256List.some(Boolean);
+    if (hasAnyHash) {
+      const { results: existResults } = await (window as any).electronAPI.catalogCheckGamesExist({
+        bpsSha256List
+      });
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        r.checkingGame = false;
+        if (existResults[i]) {
+          r.gameExists = existResults[i].exists;
+          r.existingGameid = existResults[i].gameid ?? null;
+          r.existingGvuuid = existResults[i].gvuuid ?? null;
+        }
+      }
+    } else {
+      for (const r of results) {
+        r.checkingGame = false;
+      }
+    }
+    
+    // Trigger reactivity update (same array reference, but Vue may need a nudge for nested props)
+    catalogSearchResults.value = [...results];
   } catch (error: any) {
     catalogSearchState.value.searchError = error.message || 'Search failed';
     catalogSearchResults.value = [];

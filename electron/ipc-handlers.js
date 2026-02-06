@@ -16100,7 +16100,7 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // Execute search
-      let results = db.prepare(`
+      let cat_ftsearch_query = (`
         SELECT 
           ${selectColumns.join(',\n          ')}
         ${fromClause}
@@ -16109,7 +16109,14 @@ function registerDatabaseHandlers(dbManager) {
         WHERE ${whereClause}
         ${orderBy}
         LIMIT 200
-      `).all(...queryParams);
+      `);
+
+	//console.log(`FTSEARCH_QUERY: ${cat_ftsearch_query}`)
+       let results = db.prepare(
+	       cat_ftsearch_query
+       ).all(...queryParams);
+	//console.log("QUERY DONE");
+
       
       // Sort results to prioritize author matches if author search is specified
       if (authorSearch) {
@@ -16144,7 +16151,7 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
-  // Catalog game existence check
+  // Catalog game existence check (single)
   ipcMain.handle('catalog:check-game-exists', async (_event, { bpsSha256 }) => {
     try {
       const patchbinDb = dbManager.getConnection('patchbin');
@@ -16178,6 +16185,51 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('[catalog:check-game-exists] Error:', error);
       return { exists: false, error: error.message };
+    }
+  });
+
+  // Catalog game existence check (batch) - one IPC for many hashes to avoid N round-trips
+  ipcMain.handle('catalog:check-games-exist', async (_event, { bpsSha256List }) => {
+    if (!Array.isArray(bpsSha256List) || bpsSha256List.length === 0) {
+      return { results: [] };
+    }
+    const list = bpsSha256List.filter(Boolean);
+    if (list.length === 0) {
+      return { results: bpsSha256List.map(() => ({ exists: false })) };
+    }
+    try {
+      const patchbinDb = dbManager.getConnection('patchbin');
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const placeholders = list.map(() => '?').join(',');
+      const attachments = patchbinDb.prepare(`
+        SELECT decoded_hash_sha256, gvuuid
+        FROM attachments
+        WHERE decoded_hash_sha256 IN (${placeholders})
+      `).all(...list);
+      const hashToGvuuid = new Map(attachments.map(a => [a.decoded_hash_sha256, a.gvuuid]));
+      const gvuuids = [...new Set(hashToGvuuid.values())];
+      const gvPlaceholders = gvuuids.map(() => '?').join(',');
+      const gameversions = gvuuids.length
+        ? rhdataDb.prepare(`
+            SELECT gameid, gvuuid
+            FROM gameversions
+            WHERE gvuuid IN (${gvPlaceholders})
+          `).all(...gvuuids)
+        : [];
+      const gvuuidToGameid = new Map(gameversions.map(g => [g.gvuuid, g.gameid]));
+      const results = list.map(hash => {
+        const gvuuid = hashToGvuuid.get(hash);
+        if (!gvuuid) return { exists: false };
+        return {
+          exists: true,
+          gameid: gvuuidToGameid.get(gvuuid) || null,
+          gvuuid
+        };
+      });
+      return { results };
+    } catch (error) {
+      console.error('[catalog:check-games-exist] Error:', error);
+      return { results: bpsSha256List.map(() => ({ exists: false, error: error.message })) };
     }
   });
 

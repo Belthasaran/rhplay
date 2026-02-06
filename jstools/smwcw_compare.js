@@ -23,6 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
+const Papa = require('papaparse');
 
 // HTML entity decoder
 function decodeHTMLEntities(text) {
@@ -41,7 +42,7 @@ function decodeHTMLEntities(text) {
 
 // Configuration
 const CONFIG = {
-  SMWC_WORLD_URL: 'https://smwc.world/roms/',
+  SMWC_WORLD_URL: 'https://smwcworld.com/roms/', // 'https://smwc.world/roms/',
   REQUEST_DELAY: 2000, // 2 seconds between requests
   USER_AGENT: 'rhtools-smwc-compare/1.0',
   DB_PATH: process.env.RHDATA_DB_PATH || path.join(__dirname, '..', 'electron', 'rhdata.db'),
@@ -128,7 +129,7 @@ function parseHTMLTable(html, logCallback) {
       // Column 1: Name and download URL - Look for link to roms.smwc.world
       let name = null;
       let download_url = null;
-      const nameLink = rowLinks.find(l => l.href && l.href.includes('roms.smwc.world'));
+      const nameLink = rowLinks.find(l => l.href && l.href.includes('roms.smwcworld.com'));
       
       if (nameLink) {
         // Name is the link text (may have brackets or not)
@@ -154,6 +155,12 @@ function parseHTMLTable(html, logCallback) {
       // Handle empty authors
       if (authors === '' || authors === null || authors === undefined) {
         authors = null;
+	oneauthor = null;
+      } else {
+	oneauthor = authors;
+	if (authors.split(/[, ]+/)) {
+		oneauthor = authors.split(/[, ]+/)[0]
+	}
       }
       
       // Column 5: Date
@@ -165,6 +172,7 @@ function parseHTMLTable(html, logCallback) {
           name: name,
           difficulty: difficulty,
           authors: authors,
+          author: authors,
           date: date,
           url: url,
           download_url: download_url
@@ -258,11 +266,41 @@ async function main() {
     
     // Get existing game IDs with their names and authors
     log('Querying existing games from database...');
-    const existingGames = db.prepare(`
+    let existingGames = db.prepare(`
       SELECT DISTINCT gameid, name, author, authors
       FROM gameversions
       ORDER BY gameid
     `).all();
+
+    //
+    const csvContent = fs.readFileSync(  path.join(__dirname, 'smwc_world', '/waiting_index.csv') , 'utf8')
+    const parsedContent = await new Promise((resolve,reject) => {
+	        Papa.parse(csvContent, {
+	        header: true,
+	        dynamicTyping: true,
+		error: function(error) {
+			reject(error)
+		},
+	        complete: function(results) {
+	    	        const desiredColumns = ['gameid','name','authors','author'];
+		        const filteredData = results.data.map(row => {
+		  	        const newRow = {};
+			        desiredColumns.forEach(col => {
+			  	        if (row.hasOwnProperty(col)) {
+				 	       newRow[col] = row[col];
+				        }
+			        });
+				existingGames.push(newRow)
+			    //existingGames.concat(newRow)
+			        return newRow;
+		        });
+
+		        console.log("Finished parsing:", filteredData);
+			resolve(filteredData)
+	        }
+		})
+    });
+    console.log(`PARSECONTENT: ${parsedContent}`)
     
     const existingGameMap = new Map();
     for (const game of existingGames) {
@@ -309,8 +347,8 @@ async function main() {
         log('  HTML contains smwcentral.net links');
       }
       
-      if (html.includes('roms.smwc.world')) {
-        log('  HTML contains roms.smwc.world links');
+      if (html.includes('roms.smwcworld.com')) {
+        log('  HTML contains roms.smwcworld.com links');
       }
     }
     

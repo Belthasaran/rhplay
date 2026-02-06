@@ -1336,6 +1336,7 @@ async function main() {
   console.log(`  Processed:       ${processed}`);
   console.log(`  Skipped:         ${skipped}`);
   console.log(`  Failed:          ${failed}\n`);
+  process.exit(1)
 }
 
 // Execute

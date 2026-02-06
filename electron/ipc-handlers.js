@@ -16033,6 +16033,8 @@ function registerDatabaseHandlers(dbManager) {
       if (existingColumns.has('indexbps_name')) selectColumns.push('i.indexbps_name');
       if (existingColumns.has('index7z_ipfs_cidv1')) selectColumns.push('i.index7z_ipfs_cidv1');
       if (existingColumns.has('index7z_ardrive_file_id')) selectColumns.push('i.index7z_ardrive_file_id');
+      if (existingColumns.has('sfcsource_filename')) selectColumns.push('i.sfcsource_filename');
+      if (existingColumns.has('folder_categories')) selectColumns.push('i.folder_categories');
       if (existingColumns.has('url')) selectColumns.push('i.url');
       if (existingColumns.has('download_url')) selectColumns.push('i.download_url');
       if (existingColumns.has('gametype')) selectColumns.push('i.gametype');
@@ -16108,7 +16110,7 @@ function registerDatabaseHandlers(dbManager) {
         LEFT JOIN groups g ON ig.group_id = g.group_id
         WHERE ${whereClause}
         ${orderBy}
-        LIMIT 200
+        LIMIT 700
       `);
 
 	//console.log(`FTSEARCH_QUERY: ${cat_ftsearch_query}`)

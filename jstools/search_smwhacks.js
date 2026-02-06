@@ -147,7 +147,7 @@ async function searchSMWHacks(searchPhrases, options) {
     } else {
       return `${phrase}*`;
     }
-  }).join(' OR ');
+  }).join(' AND ');
   
   const ftsQuery = queryTerms;
   

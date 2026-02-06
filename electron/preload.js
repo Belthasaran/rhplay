@@ -1339,6 +1339,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   catalogCheckGameExists: (params) => ipcRenderer.invoke('catalog:check-game-exists', params),
   
   /**
+   * Check if multiple games exist by BPS SHA256 (batch, one IPC round-trip)
+   * @param {Object} params - {bpsSha256List: string[]}
+   * @returns {Promise<{results: Array<{exists: boolean, gameid?: string, gvuuid?: string}>}>}
+   */
+  catalogCheckGamesExist: (params) => ipcRenderer.invoke('catalog:check-games-exist', params),
+  
+  /**
    * Get item JSON from catalog ZIP
    * @param {Object} params - {itemId: string}
    * @returns {Promise<Object>} Item JSON data

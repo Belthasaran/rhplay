@@ -607,6 +607,22 @@ enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/i
 
 ## SMWC Waiting and Ad-Hoc Intake
 
+### update_waiting_index.js
+**Purpose**: Update waiting_index.csv for SMWC Waiting pipeline (append/update or full rebuild)
+
+**Usage**:
+```bash
+enode.sh jstools/update_waiting_index.js [--full-rebuild] [--no-copy]
+```
+
+**Options**: `--full-rebuild` (overwrite from scratch, like make_waiting_index.py), `--no-copy` (do not copy CSV to upload/), `--help`
+
+**Default**: Non-destructively appends/updates entries from games/*.json; copies result to upload/ for distribution. Use `--full-rebuild` for full rewrite.
+
+**Documentation**: See `docs/SMWC_WAITING_AUTOMATION.md`
+
+---
+
 ### smwcw_waiting_build7z.js
 **Purpose**: Build 7z waiting packages for SMWC Waiting games (port of enter.py)
 
@@ -623,7 +639,7 @@ enode.sh jstools/smwcw_waiting_build7z.js --all [--dry-run]
 ---
 
 ### smwcw_waiting_periodic.js
-**Purpose**: Periodic runner for SMWC Waiting pipeline (compare, fetch, build7z)
+**Purpose**: Periodic runner for SMWC Waiting pipeline (compare, fetch, build7z, update waiting_index.csv)
 
 **Usage**:
 ```bash

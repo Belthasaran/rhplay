@@ -24,6 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { loadCompletedRegistry } = require('./smwcw_waiting_build7z');
+const { appendUpdate, copyToUpload } = require('./update_waiting_index');
 
 const CONFIG = {
   OUTPUT_DIR: path.join(__dirname, 'smwc_world'),
@@ -182,6 +183,13 @@ Environment:
   const completed = new Set(loadCompletedRegistry());
   const files = getUploadFiles();
   const toProcess = files.filter(f => !completed.has(f.gameid));
+
+  try {
+    appendUpdate();
+    copyToUpload();
+  } catch (e) {
+    console.warn(`Warning: update_waiting_index failed: ${e.message}`);
+  }
 
   if (toProcess.length === 0) {
     console.log('No files to upload (all in completed registry or no waiting_*.7z in upload/)');

@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+
+/**
+ * PointerRegistry
+ * - Owner (your Trezor-controlled address) posts the latest pointer.
+ * - Version must strictly increase (prevents rollback).
+ * - Clients read latest() via eth_call (free).
+ */
+contract PointerRegistry is Ownable2Step {
+    struct Pointer {
+        uint64 version;
+        uint64 updatedAt;   // unix seconds
+        bytes32 sha256;     // sha256(pointerJSON) or sha256(manifest root), your choice
+        string cid;         // e.g. "bafy..."
+        string[] urls;      // fallback HTTPS (or ipfs gateway) URLs
+    }
+
+    Pointer private _p;
+
+    event PointerUpdated(
+        uint64 indexed version,
+        bytes32 indexed sha256,
+        string cid,
+        string[] urls,
+        uint64 updatedAt
+    );
+
+    constructor(address initialOwner) {
+        _transferOwnership(initialOwner);
+    }
+
+    /**
+     * Update the pointer. Must be monotonic.
+     */
+    function updatePointer(
+        uint64 newVersion,
+        bytes32 newSha256,
+        string calldata newCid,
+        string[] calldata newUrls
+    ) external onlyOwner {
+        require(newVersion > _p.version, "version must increase");
+        require(bytes(newCid).length != 0, "cid required");
+        require(newUrls.length != 0, "at least one url required");
+
+        // Optional: cap URL count to prevent accidental huge calldata
+        require(newUrls.length <= 10, "too many urls");
+
+        _p.version = newVersion;
+        _p.updatedAt = uint64(block.timestamp);
+        _p.sha256 = newSha256;
+        _p.cid = newCid;
+
+        // Replace urls
+        delete _p.urls;
+        for (uint256 i = 0; i < newUrls.length; i++) {
+            _p.urls.push(newUrls[i]);
+        }
+
+        emit PointerUpdated(_p.version, _p.sha256, _p.cid, _p.urls, _p.updatedAt);
+    }
+
+    /**
+     * Read the latest pointer (free eth_call).
+     */
+    function latest()
+        external
+        view
+        returns (
+            uint64 version,
+            uint64 updatedAt,
+            bytes32 sha256,
+            string memory cid,
+            string[] memory urls
+        )
+    {
+        return (_p.version, _p.updatedAt, _p.sha256, _p.cid, _p.urls);
+    }
+
+    function version() external view returns (uint64) {
+        return _p.version;
+    }
+
+    function urlsCount() external view returns (uint256) {
+        return _p.urls.length;
+    }
+}
+
+

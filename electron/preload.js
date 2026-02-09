@@ -1386,6 +1386,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{available: boolean, updates: Array}>}
    */
   catalogCheckUpdates: () => ipcRenderer.invoke('catalog:check-updates'),
+  catalogUpdateBpsarchivesManifest: (manifestPkgEntry) => ipcRenderer.invoke('catalog:update-bpsarchives-manifest', { manifestPkgEntry }),
+  onCatalogUpdateBpsarchivesManifestProgress: (callback) => {
+    ipcRenderer.on('catalog:update-bpsarchives-manifest:progress', (_event, data) => callback(data));
+  },
   
   /**
    * Apply catalog update

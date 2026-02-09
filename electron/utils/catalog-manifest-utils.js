@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const manifestResolver = require('./manifest-resolver');
 
 /**
  * Resolve resource path (similar to prepare_databases.js)
@@ -41,64 +42,27 @@ function resolveResourcePath(input) {
 
 /**
  * Locate bpsarchives.json manifest
- * Searches in multiple locations (dev mode and packaged app)
+ * Uses manifest resolver to check userData/_latest.json first, then bundled
  */
 function locateBpsArchivesManifest() {
-  const candidates = [
-    path.resolve(__dirname, '..', 'electron', 'bpsarchives.json'),
-    path.resolve(__dirname, '..', 'bpsarchives.json'),
-    path.resolve(__dirname, '..', 'db', 'bpsarchives.json'),
-  ];
-  
-  if (process.resourcesPath) {
-    // Packaged app
-    candidates.push(path.join(process.resourcesPath, 'db', 'bpsarchives.json'));
-    candidates.push(path.join(process.resourcesPath, 'electron', 'bpsarchives.json'));
-  }
-  
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+  const resolved = manifestResolver.getBpsarchivesManifestPath();
+  return resolved ? resolved.path : null;
 }
 
 /**
  * Load bpsarchives.json manifest
+ * Uses manifest resolver to get resolved manifest
  */
 function loadBpsArchivesManifest() {
-  const manifestPath = locateBpsArchivesManifest();
-  if (!manifestPath) {
-    return null;
-  }
-  
-  try {
-    const raw = fs.readFileSync(manifestPath, 'utf8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error(`[catalog-manifest] Failed to parse bpsarchives.json: ${err.message}`);
-    return null;
-  }
+  return manifestResolver.loadBpsArchivesManifest();
 }
 
 /**
  * Get user data directory (where searchdat.json should be stored)
+ * Uses manifest resolver's getUserDataDir
  */
 function getUserDataDir() {
-  try {
-    const { app } = require('electron');
-    return app.getPath('userData');
-  } catch (err) {
-    // If electron is not available (e.g., in Node.js script), use default
-    const os = require('os');
-    const path = require('path');
-    const platform = process.platform;
-    if (platform === 'win32') {
-      const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-      return path.join(base, 'RHTools');
-    }
-    if (platform === 'darwin') {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'RHTools');
-    }
-    const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-    return path.join(configHome, 'RHTools');
-  }
+  return manifestResolver.getUserDataDir();
 }
 
 /**

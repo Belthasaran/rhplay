@@ -372,6 +372,86 @@ enode.sh electron/db_temp/update_dbmanifest.js electron/db_temp/dbmanifest.json 
 
 ---
 
+### update_coremf.js
+**Purpose**: Update coremanifest.json targets (MANIFEST_PKG, win64/portable, linux64/AppImage) with new file metadata
+
+**Usage**:
+```bash
+enode.sh update_coremf.js <coremanifest.json> --target <key> [options]
+```
+
+**Options**:
+- `--target <key>` - Target entry (e.g., `beta/MANIFEST_PKG`, `beta/RHPLAY/win64/portable`)
+- `--zipfile <path>` - (MANIFEST_PKG) Path to ZIP file
+- `--exe <path>` - (Software) Path to executable file
+- `--file <path>` - (Software) Path to file (alternative to --exe)
+- `--sha256 <hex>` - SHA256 hash (compute if omitted)
+- `--size <bytes>` - File size in bytes (compute if omitted)
+- `--ipfs-cid <cid>` - IPFS CIDv1 (compute if omitted)
+- `--url <url>`, `--baddr <base64>`, ArDrive options - Download source metadata
+- `--bump-lastupdated` - Update lastupdated to current time
+- `--bump-versionid` - Increment versionid
+
+**Examples**:
+```bash
+# Update MANIFEST_PKG with new ZIP
+enode.sh update_coremf.js electron/coremanifest.json --target beta/MANIFEST_PKG --zipfile manifest.zip
+
+# Update Windows portable executable
+enode.sh update_coremf.js electron/coremanifest.json --target beta/RHPLAY/win64/portable --exe RHTools.exe --bump-lastupdated
+```
+
+**See Also**: `docs/ONCHAIN_POINTER_DISCUSSION.md`, `docs/PointerRegistry.sol`
+
+---
+
+### create_coremf_dat.js
+**Purpose**: Create coremanifest.dat binary file from coremanifest.json with LZMA compression, SHA512 digest, and Ed25519 signature
+
+**Usage**:
+```bash
+enode.sh create_coremf_dat.js --coremanifest <path> --key <pem_path> [--output <path>] [--passphrase-env VAR]
+```
+
+**Options**:
+- `--coremanifest <path>` - Path to coremanifest.json
+- `--key <pem_path>` - Path to PEM-encoded AES-256-encrypted Ed25519 private key
+- `--output <path>` - Output path for coremanifest.dat (default: same dir as input)
+- `--passphrase-env VAR` - Environment variable name containing passphrase
+
+**Example**:
+```bash
+enode.sh create_coremf_dat.js --coremanifest electron/coremanifest.json --key keys/coremanifest_key.pem --passphrase-env COREMF_KEY_PASSPHRASE
+```
+
+**Format**: Binary file with [8-byte lastupdated][8-byte versionid][4-byte compressed_size][LZMA(JSON)][64-byte SHA512][64-byte Ed25519 signature of SHA512]
+
+**See Also**: `verify_coremf_dat.js`, `docs/ONCHAIN_POINTER_DISCUSSION.md`
+
+---
+
+### verify_coremf_dat.js
+**Purpose**: Verify coremanifest.dat binary file integrity (SHA512 and Ed25519 signature), optionally extract JSON
+
+**Usage**:
+```bash
+enode.sh verify_coremf_dat.js --input <path> [--extract <path>] [--verify-only]
+```
+
+**Options**:
+- `--input <path>` - Path to coremanifest.dat
+- `--extract <path>` - Optional: Extract decompressed JSON to this path
+- `--verify-only` - Only verify, do not extract
+
+**Example**:
+```bash
+enode.sh verify_coremf_dat.js --input coremanifest.dat --extract coremanifest_verified.json
+```
+
+**See Also**: `create_coremf_dat.js`, `docs/ONCHAIN_POINTER_DISCUSSION.md`
+
+---
+
 ### update_bpsarchives.js
 **Purpose**: Manage `bpsarchives.json` manifest for catalog and BPS archive downloads
 

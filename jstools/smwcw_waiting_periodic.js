@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { build7zForGame, loadCompletedRegistry, getProcessedGameIds } = require('./smwcw_waiting_build7z');
+const { appendUpdate, copyToUpload } = require('./update_waiting_index');
 
 const CONFIG = {
   JSTOOLS_DIR: __dirname,
@@ -176,6 +177,16 @@ Examples:
   log('Running build7z...', logStream);
   const buildResult = runBuild7z(options, logStream);
   log(`Build7z: ${buildResult.built} built, ${buildResult.failed} failed`, logStream);
+
+  log('Updating waiting_index.csv (append/update mode)...', logStream);
+  try {
+    const csvResult = appendUpdate();
+    log(`waiting_index.csv: ${csvResult.added} added, ${csvResult.updated} updated, ${csvResult.total} total rows`, logStream);
+    copyToUpload();
+    log('Copied waiting_index.csv to upload/', logStream);
+  } catch (e) {
+    log(`Warning: update_waiting_index failed: ${e.message}`, logStream);
+  }
 
   log('========== smwcw_waiting_periodic complete ==========', logStream);
   logStream.end();

@@ -1,7 +1,7 @@
 # SMWC Waiting Automation
 
 **Date**: February 2026  
-**Scripts**: `smwcw_waiting_build7z.js`, `smwcw_waiting_periodic.js`, `smwcw_waiting_upload.js`
+**Scripts**: `smwcw_waiting_build7z.js`, `smwcw_waiting_periodic.js`, `smwcw_waiting_upload.js`, `update_waiting_index.js`
 
 ---
 
@@ -18,7 +18,8 @@ The SMWC Waiting automation pipeline automates building and uploading waiting 7z
 1. **smwcw_waiting_compare.js** — Compares SMWC Waiting ROMs with rhdata.db, outputs `waiting_queue.json`, `waiting_processed.json`
 2. **smwcw_waiting_fetchmissing.js** — Downloads games from queue, creates BPS, bpsindex JSON, games JSON, images
 3. **smwcw_waiting_build7z.js** — Builds `upload/waiting_<GAMEID>.7z` for each processed game (skips if in completed registry)
-4. **smwcw_waiting_upload.js** — Uploads 7z to IPFS and Pixeldrain, moves to `upload/done/`, appends GameID to completed registry
+4. **update_waiting_index.js** — Updates `waiting_index.csv` (append/update mode by default), copies to `upload/` for distribution. End users use the CSV to identify games by gameid and find the correct waiting 7z or BPS files.
+5. **smwcw_waiting_upload.js** — Updates waiting_index.csv, uploads 7z to IPFS and Pixeldrain, moves to `upload/done/`, appends GameID to completed registry
 
 ---
 
@@ -38,9 +39,25 @@ enode.sh jstools/smwcw_waiting_build7z.js --all --dry-run
 
 ---
 
+### update_waiting_index.js
+
+Update waiting_index.csv for distribution. By default, non-destructively appends/updates entries from `games/*.json`; preserves existing rows for gameids not in games/; deduplicates. Use `--full-rebuild` to overwrite from scratch (like `make_waiting_index.py`).
+
+```bash
+enode.sh jstools/update_waiting_index.js
+enode.sh jstools/update_waiting_index.js --full-rebuild
+enode.sh jstools/update_waiting_index.js --no-copy
+```
+
+**Options**: `--full-rebuild` (overwrite from scratch), `--no-copy` (do not copy to upload/)
+
+**Output**: `smwc_world/waiting_index.csv`, copied to `smwc_world/upload/waiting_index.csv`
+
+---
+
 ### smwcw_waiting_periodic.js
 
-Periodic runner. Runs compare, fetch, and build7z in sequence.
+Periodic runner. Runs compare, fetch, build7z, and update_waiting_index in sequence.
 
 ```bash
 enode.sh jstools/smwcw_waiting_periodic.js
@@ -77,8 +94,10 @@ enode.sh jstools/smwcw_waiting_upload.js --skip-ipfs
 
 ```
 jstools/smwc_world/
+  waiting_index.csv                 # Index of games (gameid, name, author, bps_files, etc.) — copied to upload/
   waiting_packages_completed.json   # PERSISTENT: GameIDs fully handled (never reprocess)
   upload/
+    waiting_index.csv               # Copy of index for distribution with uploads
     done/                           # Ephemeral — external process expires old files
     upload_state.json               # Per-file upload status (transient)
   periodic_log_YYYYMMDD.txt         # Run logs

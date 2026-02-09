@@ -5,9 +5,17 @@
 
 ## Overview
 
-The Chat Commands system brings **PatCdr's Chat Hacks** and **Project CARL** functionality to RHTools! Execute memory writes, read values, and load dynamic ASM modules through an intuitive chat interface.
+The Chat Commands system brings **PatCdr's Chat Hacks** and **Project CARL** functionality to RHTools! 
 
-**Based on:**
+No it doesn't! This was just an experimental mockup, and maybe 10% of this works.
+You will crash your SNES 80% of the time if you try to use !load in RHT.
+
+
+Execute memory writes, read values, and load dynamic ASM modules through an intuitive chat interface.
+
+
+
+**See :**
 - Chat Hacks SMW by PatCdr (https://patcdr.net/chathacks.html)
 - Project CARL - ChatHacks Assembly ROM Loader (https://patcdr.net/carl)
 

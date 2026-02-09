@@ -1,0 +1,74 @@
+{
+ "updated" : 1770624417,
+ "version" : "1",
+ "dbmanifest.json": {
+    "version": "13",
+    "updated" : 1770624417
+ },
+ "bpsarchives.json" : {
+     "version" : "7",
+     "updated" : 1770624417
+ },
+ "RHPLAY_win64_portable" : {
+     "source_filename" : "RHTools-0.1.19-beta-portable.exe",
+      "version" : "0.1.19beta",
+      "updated" : 1770624417,
+      "target_filename" : "RHTools-0.1.19-beta-portable.exe",
+      "sha256" : "736ddde371d03c9f4ffbc516cafbcc7642f4e9be3b754529efc7b5c9a9d8ea0a",
+      "size" : "250738021",
+       "ipfs_cidv1" : "bafybeia4iwf5ttjynhvhgcqdu4umzuyeqt43n53qmulpnft5dctjag7rha",
+	 "baddr" : "",
+	 "priority": [
+          "baddr",
+          "ipfs",
+          "ardrive"
+         ],
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
+      "ardrive_file_name": "RHTools-0.1.19-beta-portable.exe",
+      "ardrive_file_path": "/SMWRH/release/0.1.19beta/RHTools-0.1.19-beta-portable.exe",
+      "ardrive_file_id": "example",
+      "data_txid": "example"
+ },
+ "RHPLAY_linux64_AppImage" : {
+	 "source_filename" : "RHTools-0.1.19-beta-portable.exe",
+         "version" : "0.1.19beta",
+         "updated" : 1770624417,
+         "target_filename" : "RHTools-0.1.19-beta.AppImage",
+         "sha256" : "ee26fb0475849f118153f34a2016a01f9e9b3270e3ebf6b013818c99b02be209",
+         "size" : "307241691",
+         "ipfs_cidv1" : "bafybeib64tc2wuvxz2mjkeijfybv23mgek5haamjyiohogk5nkh4ppbsg4",
+         "baddr" : "",
+         "priority": [
+          "baddr",
+          "ipfs",
+          "ardrive"
+         ],
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
+      "ardrive_file_name": "RHTools-0.1.19-beta.AppImage",
+      "ardrive_file_path": "/SMWRH/release/0.1.19beta/RHTools-0.1.19-beta.AppImage",
+      "ardrive_file_id": "example",
+      "data_txid": "example"
+
+ },
+ "MANIFEST_PKG" : {
+	 "contents" : ["dbmanifest.json", "bpsarchives.json"],
+	 "sha256" : "e7a6406a76b44f68e856a60ef69e40cd17d382bf9610212d2373f3ba27c11e54" ,
+	 "ipfs_cidv1": "bafkreihhuzagu5vuj5uoqvvgb33j4qgnc7jyfp4wcaqs2i3t6o5cpqi6kq",
+	 "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9kLzZwenpkcEVuCg==",
+	 "size" : "73524",
+	 "priority": [
+          "baddr",
+          "ipfs",
+          "ardrive"
+         ],
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
+      "ardrive_file_name": "rhdata-f12-20251228.tar.xz",
+      "ardrive_file_path": "/SMWRH/release/manifest20260201.zip",
+      "ardrive_file_id": "example",
+      "data_txid": "example"
+ }
+}
+

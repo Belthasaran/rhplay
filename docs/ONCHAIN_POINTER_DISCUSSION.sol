@@ -7,6 +7,8 @@ import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.3/contr
 
 
 contract PointerRegistry is Ownable2Step {
+    string public name;
+
     struct Pointer {
         uint64 version;
         uint64 updatedAt;
@@ -28,6 +30,7 @@ contract PointerRegistry is Ownable2Step {
     );
 
     constructor(address initialOwner) /* Ownable2Step(initialOwner)*/ {       
+        name = "RHP0120 Base Manifest Pointers";
         // _transferOwnership(initialOwner);
     }
 

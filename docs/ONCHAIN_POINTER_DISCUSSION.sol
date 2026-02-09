@@ -1,7 +1,10 @@
 //import "@openzeppelin/contracts/access/Ownable2Step.sol";
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-import "@openzeppelin/contracts/access/Ownable2Step.sol";
+//import "@openzeppelin/contracts/access/Ownable2Step.sol";
+//import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.3/contracts/access/Ownable2Step.sol";
+
 
 contract PointerRegistry is Ownable2Step {
     struct Pointer {
@@ -24,7 +27,7 @@ contract PointerRegistry is Ownable2Step {
         uint64 updatedAt
     );
 
-    constructor(address initialOwner) Ownable2Step(initialOwner) {
+    constructor(address initialOwner) /* Ownable2Step(initialOwner)*/ {       
         // _transferOwnership(initialOwner);
     }
 

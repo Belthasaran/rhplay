@@ -605,6 +605,123 @@ enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/i
 
 ---
 
+## SMWC Waiting and Ad-Hoc Intake
+
+### smwcw_waiting_build7z.js
+**Purpose**: Build 7z waiting packages for SMWC Waiting games (port of enter.py)
+
+**Usage**:
+```bash
+enode.sh jstools/smwcw_waiting_build7z.js <GAMEID>
+enode.sh jstools/smwcw_waiting_build7z.js --all [--dry-run]
+```
+
+**Options**: `--all`, `--dry-run`, `--help`
+
+**Documentation**: See `docs/SMWC_WAITING_AUTOMATION.md`
+
+---
+
+### smwcw_waiting_periodic.js
+**Purpose**: Periodic runner for SMWC Waiting pipeline (compare, fetch, build7z)
+
+**Usage**:
+```bash
+enode.sh jstools/smwcw_waiting_periodic.js [--dry-run] [--skip-compare] [--skip-fetch] [--only-build-7z] [--max-games N]
+```
+
+**Options**: `--dry-run`, `--skip-compare`, `--skip-fetch`, `--only-build-7z`, `--max-games N`, `--help`
+
+**Documentation**: See `docs/SMWC_WAITING_AUTOMATION.md`
+
+---
+
+### smwcw_waiting_upload.js
+**Purpose**: Upload waiting 7z packages to IPFS and Pixeldrain
+
+**Usage**:
+```bash
+enode.sh jstools/smwcw_waiting_upload.js [--dry-run] [--skip-ipfs] [--skip-pd]
+```
+
+**Environment**: `PIXELDRAIN_API_KEY` required for Pixeldrain upload
+
+**Documentation**: See `docs/SMWC_WAITING_AUTOMATION.md`
+
+---
+
+### intake_bps_metadata.js
+**Purpose**: Interactive BPS metadata enrichment for ad-hoc intake
+
+**Usage**:
+```bash
+enode.sh jstools/intake_bps_metadata.js --input-dir <dir> [--interactive] [--batch] [--apply] [--dry-run]
+```
+
+**Options**: `--input-dir`, `--output-dir`, `--interactive`, `--batch`, `--apply`, `--csv`, `--dry-run`, `--help`
+
+**Documentation**: See `docs/ADHOC_INTAKE.md`
+
+---
+
+### intake_adhoc.js
+**Purpose**: Orchestrate ad-hoc catalog intake for contests and one-off hacks
+
+**Usage**:
+```bash
+enode.sh jstools/intake_adhoc.js --input-dir <dir> --mode bps|zip|sfc [--metadata-script] [--dry-run]
+```
+
+**Options**: `--input-dir`, `--mode`, `--metadata-script`, `--dry-run`, `--help`
+
+**Documentation**: See `docs/ADHOC_INTAKE.md`
+
+---
+
+### intake_pack_and_index.js
+**Purpose**: Pack BPS into 7z and run process_index7zs + search_build
+
+**Usage**:
+```bash
+enode.sh jstools/intake_pack_and_index.js --json-dir <dir> --bps-dir <dir> [options]
+```
+
+**Options**: `--json-dir`, `--bps-dir`, `--index7z`, `--bps7z`, `--batch-prefix`, `--max-per-7z`, `--max-size-mb`, `--dry-run`, `--skip-search`, `--help`
+
+**Documentation**: See `docs/ADHOC_INTAKE.md`
+
+---
+
+### promote_catalog_to_rhpak.js
+**Purpose**: Promote search catalog item to RHPAK file
+
+**Usage**:
+```bash
+enode.sh jstools/promote_catalog_to_rhpak.js --from-json <path> --bps-path <path> [--output <path>]
+```
+
+**Options**: `--from-json`, `--bps-path`, `--metadata-file`, `--add-screenshots`, `--output`, `--help`
+
+**Documentation**: See `docs/PROMOTE_CATALOG.md`
+
+---
+
+### promote_catalog_to_db.js
+**Purpose**: Promote search catalog item to main database (rhdata.db, etc.)
+
+**Usage**:
+```bash
+enode.sh jstools/promote_catalog_to_db.js --from-json <path> --bps-path <path> [options]
+```
+
+**Options**: `--from-json`, `--bps-path`, `--metadata-file`, `--add-screenshots`, `--skip-rhpak`, `--skeleton`, `--help`
+
+**Environment**: `RHDATA_DB_PATH`, `PATCHBIN_DB_PATH` for tests
+
+**Documentation**: See `docs/PROMOTE_CATALOG.md`
+
+---
+
 ### prepare_databases.js
 **Purpose**: Produce a provisioning plan for installer builds by inspecting `dbmanifest.json`, evaluating existing databases in the user settings directory, and staging manifest resources.
 

@@ -1,6 +1,6 @@
+//import "@openzeppelin/contracts/access/Ownable2Step.sol";
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 contract PointerRegistry is Ownable2Step {
@@ -8,9 +8,9 @@ contract PointerRegistry is Ownable2Step {
         uint64 version;
         uint64 updatedAt;
         uint64 payloadSize;      // optional; 0 means "unknown"
-        bytes32 payloadSha256;   // sha256 of the exact bytes fetched from CID/URL
+        bytes32 payloadSha256;   // sha256 of the exact bytes fetched from CID/
         string cid;              // CIDv1 string (optional but recommended)
-        string[] urls;           // fallback URLs (at least one)
+        string[] brefs;           // fallback BREFs
     }
 
     Pointer private _p;
@@ -20,12 +20,12 @@ contract PointerRegistry is Ownable2Step {
         bytes32 indexed payloadSha256,
         uint64 payloadSize,
         string cid,
-        string[] urls,
+        string[] brefs,
         uint64 updatedAt
     );
 
-    constructor(address initialOwner) {
-        _transferOwnership(initialOwner);
+    constructor(address initialOwner) Ownable2Step(initialOwner) {
+        // _transferOwnership(initialOwner);
     }
 
     function updatePointer(
@@ -33,44 +33,45 @@ contract PointerRegistry is Ownable2Step {
         bytes32 newPayloadSha256,
         uint64 newPayloadSize,
         string calldata newCid,
-        string[] calldata newUrls
+        string[] calldata newBrefs
     ) external onlyOwner {
         require(newVersion > _p.version, "version must increase");
         require(newPayloadSha256 != bytes32(0), "sha256 required");
-        require(newUrls.length != 0, "at least one url required");
-        require(newUrls.length <= 12, "too many urls"); // safety cap
+        require(newBrefs.length >= 0, "0 or 1+ bref required");
+        require(newBrefs.length <= 12, "too many brefs"); // safety cap
 
         _p.version = newVersion;
         _p.updatedAt = uint64(block.timestamp);
         _p.payloadSha256 = newPayloadSha256;
         _p.payloadSize = newPayloadSize;
-        _p.cid = newCid; // can be "" if you rely only on URLs
+        _p.cid = newCid; // can be "" if you rely only on BREFs
 
-        delete _p.urls;
-        for (uint256 i = 0; i < newUrls.length; i++) {
-            _p.urls.push(newUrls[i]);
+        delete _p.brefs;
+        for (uint256 i = 0; i < newBrefs.length; i++) {
+            _p.brefs.push(newBrefs[i]);
         }
 
-        emit PointerUpdated(_p.version, _p.payloadSha256, _p.payloadSize, _p.cid, _p.urls, _p.updatedAt);
+        emit PointerUpdated(_p.version, _p.payloadSha256, _p.payloadSize, _p.cid, _p.brefs, _p.updatedAt);
     }
 
     function latest()
         external
         view
         returns (
-            uint64 version,
+            uint64 currentVersion,
             uint64 updatedAt,
             bytes32 payloadSha256,
             uint64 payloadSize,
             string memory cid,
-            string[] memory urls
+            string[] memory brefs
         )
     {
-        return (_p.version, _p.updatedAt, _p.payloadSha256, _p.payloadSize, _p.cid, _p.urls);
+        return (_p.version, _p.updatedAt, _p.payloadSha256, _p.payloadSize, _p.cid, _p.brefs);
     }
 
     function version() external view returns (uint64) { return _p.version; }
-    function urlsCount() external view returns (uint256) { return _p.urls.length; }
+    function brefsCount() external view returns (uint256) { return _p.brefs.length; }
 }
+
 
 

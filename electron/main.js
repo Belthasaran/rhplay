@@ -10,6 +10,9 @@ const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
 const { queueRhpakPath, drainRhpakQueue } = require('./rhpak-queue');
 const { SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
+const { bootstrapManifests, getDbmanifestPath } = require('./utils/manifest-resolver');
+const { checkForUpdates: checkCoreManifestUpdates } = require('./utils/coremanifest-updater');
+const { checkForSoftwareUpdate } = require('./utils/software-update-check');
 
 const DATABASE_FILES = ['clientdata.db', 'rhdata.db', 'patchbin.db', 'resource.db', 'screenshot.db', 'thumbnail_cache.db'];
 let handlersRegistered = false;
@@ -127,19 +130,26 @@ function getProvisionerPaths() {
 }
 
 function getManifestPath() {
-    const candidates = [
-        path.join(process.resourcesPath || '', 'db', 'dbmanifest.json'),
-        path.join(process.resourcesPath || '', 'app.asar.unpacked', 'electron', 'dbmanifest.json'),
-        path.join(__dirname, 'dbmanifest.json'),
-        path.join(__dirname, '..', 'electron', 'dbmanifest.json'),
-        path.join(process.cwd(), 'electron', 'dbmanifest.json'),
-    ];
-    for (const candidate of candidates) {
-        if (candidate && fs.existsSync(candidate)) {
-            return candidate;
+    // Use manifest resolver to get dbmanifest path (will support _latest in future)
+    try {
+        const resolved = getDbmanifestPath();
+        return resolved.path;
+    } catch (err) {
+        // Fallback to old logic if resolver fails
+        const candidates = [
+            path.join(process.resourcesPath || '', 'db', 'dbmanifest.json'),
+            path.join(process.resourcesPath || '', 'app.asar.unpacked', 'electron', 'dbmanifest.json'),
+            path.join(__dirname, 'dbmanifest.json'),
+            path.join(__dirname, '..', 'electron', 'dbmanifest.json'),
+            path.join(process.cwd(), 'electron', 'dbmanifest.json'),
+        ];
+        for (const candidate of candidates) {
+            if (candidate && fs.existsSync(candidate)) {
+                return candidate;
+            }
         }
+        throw new Error('dbmanifest.json not found in expected locations.');
     }
-    throw new Error('dbmanifest.json not found in expected locations.');
 }
 
 function getProvisionerScriptPath() {
@@ -935,6 +945,44 @@ app.whenReady().then(async () => {
     if (isInstallerCli) {
         return;
     }
+
+    // Bootstrap manifest files (_latest.json) from bundled manifests
+    try {
+        bootstrapManifests();
+    } catch (err) {
+        console.error('[main] Failed to bootstrap manifests:', err);
+        // Continue anyway - app can still work with bundled manifests
+    }
+
+    // Check for core manifest updates (non-blocking, background)
+    (async () => {
+        try {
+            const result = await checkCoreManifestUpdates(null, { forceCheck: false });
+            if (result.updated) {
+                console.log(`[main] Core manifest updated to version ${result.newVersion}`);
+            } else if (result.error) {
+                console.warn(`[main] Core manifest update check failed: ${result.error}`);
+            }
+        } catch (err) {
+            console.warn('[main] Core manifest update check error:', err.message);
+            // Non-critical, continue
+        }
+    })();
+
+    // Check for software updates (non-blocking, background)
+    (async () => {
+        try {
+            const updateCheck = checkForSoftwareUpdate();
+            if (updateCheck.updateAvailable) {
+                console.log(`[main] Software update available: ${updateCheck.currentVersion} -> ${updateCheck.availableVersion}`);
+                // Phase 1: Only warn (log for now, UI warning can be added later)
+                // TODO: Show toast/notification to user
+            }
+        } catch (err) {
+            console.warn('[main] Software update check error:', err.message);
+            // Non-critical, continue
+        }
+    })();
 
     setupProvisionerIpc();
 

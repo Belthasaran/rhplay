@@ -16795,13 +16795,54 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('catalog:check-updates', async () => {
     try {
       const catalogManifestUtils = require('./utils/catalog-manifest-utils');
+      const bpsarchivesUpdateCheck = require('./utils/bpsarchives-update-check');
+      
+      // Check catalog updates (existing logic)
       const updates = catalogManifestUtils.checkCatalogUpdates();
-      return updates;
+      
+      // Check if bpsarchives manifest is out of date
+      const bpsOutOfDate = bpsarchivesUpdateCheck.checkBpsarchivesOutOfDate();
+      
+      return {
+        ...updates,
+        bpsarchivesOutOfDate: bpsOutOfDate.outOfDate,
+        bpsarchivesUpdateInfo: bpsOutOfDate.outOfDate ? {
+          currentLastupdated: bpsOutOfDate.currentLastupdated,
+          availableLastupdated: bpsOutOfDate.availableLastupdated,
+          manifestPkgEntry: bpsOutOfDate.manifestPkgEntry
+        } : null
+      };
     } catch (error) {
       console.error('[catalog:check-updates] Error:', error);
       return {
         available: false,
         updates: [],
+        bpsarchivesOutOfDate: false,
+        bpsarchivesUpdateInfo: null,
+        error: error.message
+      };
+    }
+  });
+  
+  // Update bpsarchives manifest from MANIFEST_PKG
+  ipcMain.handle('catalog:update-bpsarchives-manifest', async (_event, { manifestPkgEntry }) => {
+    try {
+      const bpsarchivesUpdateCheck = require('./utils/bpsarchives-update-check');
+      
+      let progressSent = false;
+      const progressCallback = (data) => {
+        if (!progressSent && _event.sender && !_event.sender.isDestroyed()) {
+          _event.sender.send('catalog:update-bpsarchives-manifest:progress', data);
+          progressSent = true;
+        }
+      };
+      
+      const result = await bpsarchivesUpdateCheck.updateBpsarchivesFromManifestPkg(manifestPkgEntry, progressCallback);
+      return result;
+    } catch (error) {
+      console.error('[catalog:update-bpsarchives-manifest] Error:', error);
+      return {
+        success: false,
         error: error.message
       };
     }

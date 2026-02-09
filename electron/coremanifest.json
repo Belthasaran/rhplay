@@ -1,15 +1,24 @@
 {
- "updated" : 1770624417,
- "version" : "1",
- "dbmanifest.json": {
+ "lastupdated" : 1770624417,
+ "versionid" : 1,
+ "version_string" : "1",
+ "coremanifest" : {
+	 "signer_keys" : [{
+		 "keytype" : "ed25519",
+		 "publickey" : "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAg2OfoECrhroIOmtHhn2mPMtXBN9NspqN8VNO1v3lBxg=\n-----END PUBLIC KEY-----\n"
+	 }
+	 ]
+ },
+ "beta/dbmanifest.json": {
     "version": "13",
     "updated" : 1770624417
  },
- "bpsarchives.json" : {
+ "beta/bpsarchives.json" : {
      "version" : "7",
      "updated" : 1770624417
  },
- "RHPLAY_win64_portable" : {
+ "beta/RHPLAY/win64/portable" : {
+     "pointer" : "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
      "source_filename" : "RHTools-0.1.19-beta-portable.exe",
       "version" : "0.1.19beta",
       "updated" : 1770624417,
@@ -30,7 +39,8 @@
       "ardrive_file_id": "example",
       "data_txid": "example"
  },
- "RHPLAY_linux64_AppImage" : {
+ "beta/RHPLAY/linux64/AppImage" : {
+	 "pointer" : "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
 	 "source_filename" : "RHTools-0.1.19-beta-portable.exe",
          "version" : "0.1.19beta",
          "updated" : 1770624417,
@@ -52,7 +62,7 @@
       "data_txid": "example"
 
  },
- "MANIFEST_PKG" : {
+ "beta/MANIFEST_PKG" : {
 	 "contents" : ["dbmanifest.json", "bpsarchives.json"],
 	 "sha256" : "e7a6406a76b44f68e856a60ef69e40cd17d382bf9610212d2373f3ba27c11e54" ,
 	 "ipfs_cidv1": "bafkreihhuzagu5vuj5uoqvvgb33j4qgnc7jyfp4wcaqs2i3t6o5cpqi6kq",
@@ -65,10 +75,11 @@
          ],
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
       "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
-      "ardrive_file_name": "rhdata-f12-20251228.tar.xz",
+      "ardrive_file_name": "manifest20260201.zip",
       "ardrive_file_path": "/SMWRH/release/manifest20260201.zip",
       "ardrive_file_id": "example",
       "data_txid": "example"
  }
 }
+
 

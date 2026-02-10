@@ -27,6 +27,7 @@ const crypto = require('crypto');
 const { execSync, spawnSync, spawn } = require('child_process');
 const AdmZip = require('adm-zip');
 const { getFlipsPath, getSmwRomPath } = require('../lib/binary-finder');
+const { extractExtrasToDir } = require('./smwc_world_extras');
 
 // Configuration
 const CONFIG = {
@@ -37,6 +38,7 @@ const CONFIG = {
   BPSINDEX_DIR: path.join(__dirname, 'smwc_world', 'bpsindex'),
   GAMES_DIR: path.join(__dirname, 'smwc_world', 'games'),
   IMAGES_DIR: path.join(__dirname, 'smwc_world', 'images'),
+  EXTRAS_DIR: path.join(__dirname, 'smwc_world', 'extras'),
   TEMP_DIR: path.join(__dirname, 'temp'),
   
   // Will be set during initialization
@@ -46,6 +48,7 @@ const CONFIG = {
   // Options
   USE_SHA256: false,
   PROCESS_EXISTING_ZIPS: false,
+  INCLUDE_EXTRAS: true,
   IMAGE_DOWNLOAD_DELAY: 2000 // 2 seconds between image downloads
 };
 
@@ -57,6 +60,8 @@ function parseArgs(argv) {
       CONFIG.USE_SHA256 = true;
     } else if (argv[i] === '--process-existing-zips') {
       CONFIG.PROCESS_EXISTING_ZIPS = true;
+    } else if (argv[i] === '--no-extras') {
+      CONFIG.INCLUDE_EXTRAS = false;
     } else if (argv[i] === '--help' || argv[i] === '-h') {
       console.log(`
 Usage: enode.sh ~/rhplay/jstools/smwcw_waiting_fetchmissing.js [options]
@@ -65,6 +70,7 @@ Options:
   --sha256                Use SHA256 hash instead of SHA1 for BPS filenames
   --process-existing-zips Process games whose ZIP files already exist
                           (by default, these are skipped)
+  --no-extras             Do not extract extra files (README, text, images) from ZIPs to extras/
   --help                  Show this help message
 `);
       process.exit(0);
@@ -84,7 +90,7 @@ function initConfig() {
   console.log(`Using base ROM: ${CONFIG.BASE_ROM_PATH}`);
   
   // Create output directories
-  for (const dir of [CONFIG.OUTPUT_DIR, CONFIG.ZIPS_DIR, CONFIG.BPS_DIR, CONFIG.BPSINDEX_DIR, CONFIG.GAMES_DIR, CONFIG.IMAGES_DIR, CONFIG.TEMP_DIR]) {
+  for (const dir of [CONFIG.OUTPUT_DIR, CONFIG.ZIPS_DIR, CONFIG.BPS_DIR, CONFIG.BPSINDEX_DIR, CONFIG.GAMES_DIR, CONFIG.IMAGES_DIR, CONFIG.EXTRAS_DIR, CONFIG.TEMP_DIR]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
       console.log(`Created directory: ${dir}`);
@@ -1307,6 +1313,20 @@ async function main() {
         }
       }
       
+      // Extract extras from ZIP to extras/<gameid>/ and extras/<hash2>/<hash>/ (for each BPS)
+      if (CONFIG.INCLUDE_EXTRAS && processedBps.length > 0) {
+        try {
+          const zip = new AdmZip(zipPath);
+          const hashes = processedBps.map(p => p.hash);
+          const written = extractExtrasToDir(zip, String(gameid), hashes, CONFIG.EXTRAS_DIR);
+          if (written.length > 0) {
+            console.log(`  ✓ Extracted ${written.length} extra file(s) to extras/`);
+          }
+        } catch (e) {
+          console.log(`  ⚠ Extras extraction failed: ${e.message}`);
+        }
+      }
+
       // Create wrap-up JSON with screenshot_files included
       if (processedBps.length > 0 || gameResults.errors.length > 0) {
         const wrapupPath = path.join(CONFIG.GAMES_DIR, `${gameid}.json`);

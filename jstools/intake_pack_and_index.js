@@ -19,18 +19,22 @@
  *   --max-size-mb N     Target max size per 7z in MB (default: 25)
  *   --dry-run           Report what would run, do not execute
  *   --skip-search       Skip search_build1 and search_build2
+ *   --no-extras         Do not include extras (text/README/images) from smwc_world/extras in 7z
+ *   --extras-dir <dir>  Directory for extras (default: jstools/smwc_world/extras)
  *   --help              Show this help message
  */
 
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { listExtrasUnder } = require('./smwc_world_extras');
 
 const CONFIG = {
   JSTOOLS_DIR: __dirname,
   PROJECT_ROOT: path.resolve(__dirname, '..'),
   DEFAULT_INDEX7Z: path.join(__dirname, '..', 'refmaterial', 'index7z'),
   DEFAULT_BPS7Z: path.join(__dirname, 'bps7z_new'),
+  DEFAULT_EXTRAS_DIR: path.join(__dirname, 'smwc_world', 'extras'),
   MAX_PER_7Z: 100,
   MAX_SIZE_MB: 25
 };
@@ -61,7 +65,9 @@ function shardIntoBatches(files, maxPer7z, maxSizeBytes) {
   return batches;
 }
 
-function create7zArchives(bpsDir, batches, bps7zDir, batchPrefix, dryRun) {
+function create7zArchives(bpsDir, batches, bps7zDir, batchPrefix, dryRun, options = {}) {
+  const extrasDir = options.extrasDir || null;
+  const includeExtras = options.includeExtras !== false && extrasDir && fs.existsSync(extrasDir);
   const created = [];
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
@@ -69,17 +75,54 @@ function create7zArchives(bpsDir, batches, bps7zDir, batchPrefix, dryRun) {
     const archiveName = `${batchPrefix}${suffix}.7z`;
     const archivePath = path.join(bps7zDir, archiveName);
     if (dryRun) {
-      console.log('Would create', archivePath, `(${batch.length} files)`);
+      const extraCount = includeExtras ? batch.reduce((sum, f) => {
+        const hash = f.name.replace(/\.bps$/i, '');
+        const hash2 = hash.slice(0, 2);
+        return sum + listExtrasUnder(extrasDir, path.join(hash2, hash)).length;
+      }, 0) : 0;
+      console.log('Would create', archivePath, `(${batch.length} BPS${extraCount ? ` + ${extraCount} extras` : ''})`);
       created.push(archivePath);
       continue;
     }
     fs.mkdirSync(bps7zDir, { recursive: true });
-    const fileArgs = batch.map(f => f.path);
-    const result = spawnSync('7z', ['a', '-t7z', '-y', '-mx=9', archivePath, ...fileArgs], {
-      cwd: path.dirname(archivePath),
-      stdio: 'pipe',
-      encoding: 'utf8'
-    });
+    let result;
+    if (includeExtras) {
+      const stagingDir = path.join(bps7zDir, `.staging_${batchPrefix}${suffix}_${Date.now()}`);
+      fs.mkdirSync(stagingDir, { recursive: true });
+      try {
+        for (const f of batch) {
+          fs.copyFileSync(f.path, path.join(stagingDir, path.basename(f.path)));
+        }
+        for (const f of batch) {
+          const hash = f.name.replace(/\.bps$/i, '');
+          const hash2 = hash.slice(0, 2);
+          const subPath = path.join(hash2, hash);
+          const files = listExtrasUnder(extrasDir, subPath);
+          for (const rel of files) {
+            const src = path.join(extrasDir, subPath, rel);
+            const dest = path.join(stagingDir, 'extras', subPath, rel);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.copyFileSync(src, dest);
+          }
+        }
+        result = spawnSync('7z', ['a', '-t7z', '-y', '-mx=9', path.resolve(archivePath), '.'], {
+          cwd: stagingDir,
+          stdio: 'pipe',
+          encoding: 'utf8'
+        });
+      } finally {
+        try {
+          fs.rmSync(stagingDir, { recursive: true, force: true });
+        } catch (_) {}
+      }
+    } else {
+      const fileArgs = batch.map(f => f.path);
+      result = spawnSync('7z', ['a', '-t7z', '-y', '-mx=9', archivePath, ...fileArgs], {
+        cwd: path.dirname(archivePath),
+        stdio: 'pipe',
+        encoding: 'utf8'
+      });
+    }
     if (result.status !== 0) {
       throw new Error(`7z failed for ${archiveName}: ${result.stderr || result.stdout}`);
     }
@@ -148,6 +191,8 @@ function main() {
   let maxSizeMb = CONFIG.MAX_SIZE_MB;
   let dryRun = false;
   let skipSearch = false;
+  let includeExtras = true;
+  let extrasDir = CONFIG.DEFAULT_EXTRAS_DIR;
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--json-dir' && i + 1 < argv.length) jsonDir = argv[++i];
@@ -159,11 +204,14 @@ function main() {
     else if (argv[i] === '--max-size-mb' && i + 1 < argv.length) maxSizeMb = parseInt(argv[++i], 10);
     else if (argv[i] === '--dry-run') dryRun = true;
     else if (argv[i] === '--skip-search') skipSearch = true;
+    else if (argv[i] === '--no-extras') includeExtras = false;
+    else if (argv[i] === '--extras-dir' && i + 1 < argv.length) extrasDir = argv[++i];
     else if (argv[i] === '--help' || argv[i] === '-h') {
       console.log(`
 Usage: enode.sh intake_pack_and_index.js --json-dir <dir> --bps-dir <dir> [options]
 
 Pack BPS into 7z and run process_index7zs + search_build.
+By default includes extras (text/README/images) from smwc_world/extras when building 7z.
 
 Options:
   --json-dir <dir>    Directory with master JSON files
@@ -175,6 +223,8 @@ Options:
   --max-size-mb N     Target max size per 7z in MB (default: 25)
   --dry-run           Report what would run
   --skip-search       Skip search_build1 and search_build2
+  --no-extras         Do not include extras in 7z archives
+  --extras-dir <dir>  Extras root (default: jstools/smwc_world/extras)
   --help              Show this help message
 `);
       process.exit(0);
@@ -201,7 +251,11 @@ Options:
   const batches = shardIntoBatches(files, maxPer7z, maxSizeBytes);
   console.log(`Sharded ${files.length} BPS files into ${batches.length} batch(es)`);
 
-  const created = create7zArchives(bpsDir, batches, bps7zDir, batchPrefix, dryRun);
+  extrasDir = path.resolve(extrasDir);
+  const created = create7zArchives(bpsDir, batches, bps7zDir, batchPrefix, dryRun, {
+    extrasDir,
+    includeExtras
+  });
 
   fs.mkdirSync(index7zDir, { recursive: true });
   const status1 = runProcessIndex7zs(jsonDir, index7zDir, bps7zDir, dryRun);

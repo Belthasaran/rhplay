@@ -704,15 +704,15 @@ enode.sh jstools/update_waiting_index.js [--full-rebuild] [--no-copy]
 ---
 
 ### smwcw_waiting_build7z.js
-**Purpose**: Build 7z waiting packages for SMWC Waiting games (port of enter.py)
+**Purpose**: Build 7z waiting packages for SMWC Waiting games (port of enter.py). By default includes extras (text/README/images from `smwc_world/extras`) in each 7z.
 
 **Usage**:
 ```bash
 enode.sh jstools/smwcw_waiting_build7z.js <GAMEID>
-enode.sh jstools/smwcw_waiting_build7z.js --all [--dry-run]
+enode.sh jstools/smwcw_waiting_build7z.js --all [--dry-run] [--no-extras]
 ```
 
-**Options**: `--all`, `--dry-run`, `--help`
+**Options**: `--all`, `--dry-run`, `--no-extras`, `--help`
 
 **Documentation**: See `docs/SMWC_WAITING_AUTOMATION.md`
 
@@ -775,14 +775,14 @@ enode.sh jstools/intake_adhoc.js --input-dir <dir> --mode bps|zip|sfc [--metadat
 ---
 
 ### intake_pack_and_index.js
-**Purpose**: Pack BPS into 7z and run process_index7zs + search_build
+**Purpose**: Pack BPS into 7z and run process_index7zs + search_build. By default includes extras from `smwc_world/extras` (by BPS hash) in each 7z.
 
 **Usage**:
 ```bash
 enode.sh jstools/intake_pack_and_index.js --json-dir <dir> --bps-dir <dir> [options]
 ```
 
-**Options**: `--json-dir`, `--bps-dir`, `--index7z`, `--bps7z`, `--batch-prefix`, `--max-per-7z`, `--max-size-mb`, `--dry-run`, `--skip-search`, `--help`
+**Options**: `--json-dir`, `--bps-dir`, `--index7z`, `--bps7z`, `--batch-prefix`, `--max-per-7z`, `--max-size-mb`, `--dry-run`, `--skip-search`, `--no-extras`, `--extras-dir <dir>`, `--help`
 
 **Documentation**: See `docs/ADHOC_INTAKE.md`
 

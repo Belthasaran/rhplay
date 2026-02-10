@@ -16,6 +16,7 @@
  *   --skip-fetch     Skip smwcw_waiting_fetchmissing
  *   --only-build-7z  Skip compare and fetch, only run build7z
  *   --max-games N    Limit build7z to at most N games (default: unlimited)
+ *   --no-extras      Do not include extras in waiting 7z packages
  *   --help           Show this help message
  */
 
@@ -79,9 +80,10 @@ function runBuild7z(options, logStream) {
   log(`Build7z: ${limited.length} games to build (${toBuild.length} total eligible, ${completed.size} already completed)`, logStream);
   let built = 0;
   let failed = 0;
+  const buildOptions = { includeExtras: options.includeExtras };
   for (const gameid of limited) {
     try {
-      build7zForGame(gameid, false);
+      build7zForGame(gameid, false, buildOptions);
       log(`  Built upload/waiting_${gameid}.7z`, logStream);
       built++;
     } catch (e) {
@@ -99,7 +101,8 @@ function main() {
     skipCompare: false,
     skipFetch: false,
     onlyBuild7z: false,
-    maxGames: null
+    maxGames: null,
+    includeExtras: true
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -107,6 +110,7 @@ function main() {
     else if (argv[i] === '--skip-compare') options.skipCompare = true;
     else if (argv[i] === '--skip-fetch') options.skipFetch = true;
     else if (argv[i] === '--only-build-7z') options.onlyBuild7z = true;
+    else if (argv[i] === '--no-extras') options.includeExtras = false;
     else if (argv[i] === '--max-games' && i + 1 < argv.length) {
       options.maxGames = argv[++i];
     } else if (argv[i] === '--help' || argv[i] === '-h') {
@@ -122,6 +126,7 @@ Options:
   --skip-fetch     Skip smwcw_waiting_fetchmissing
   --only-build-7z  Skip compare and fetch, only run build7z
   --max-games N    Limit build7z to at most N games (default: unlimited)
+  --no-extras      Do not include extras in waiting 7z packages
   --help           Show this help message
 
 Examples:

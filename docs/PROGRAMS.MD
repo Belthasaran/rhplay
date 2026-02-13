@@ -688,14 +688,14 @@ enode.sh process_index7zs.js ~/rhplay/refmaterial/arcsfc1 ~/rhplay/refmaterial/i
 ## SMWC Waiting and Ad-Hoc Intake
 
 ### update_waiting_index.js
-**Purpose**: Update waiting_index.csv for SMWC Waiting pipeline (append/update or full rebuild)
+**Purpose**: Update waiting_index.csv for SMWC Waiting pipeline (append/update or full rebuild). Optionally updates waiting_index_ar.csv with data_txid from ArDrive waiting folder.
 
 **Usage**:
 ```bash
-enode.sh jstools/update_waiting_index.js [--full-rebuild] [--no-copy]
+enode.sh jstools/update_waiting_index.js [--full-rebuild] [--no-copy] [--no-ardrive]
 ```
 
-**Options**: `--full-rebuild` (overwrite from scratch, like make_waiting_index.py), `--no-copy` (do not copy CSV to upload/), `--help`
+**Options**: `--full-rebuild`, `--no-copy`, `--no-ardrive` (skip ArDrive stage), `--ardrive-drive-id`, `--ardrive-folder-id`, `--help`
 
 **Default**: Non-destructively appends/updates entries from games/*.json; copies result to upload/ for distribution. Use `--full-rebuild` for full rewrite.
 

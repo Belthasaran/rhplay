@@ -24,7 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { loadCompletedRegistry } = require('./smwcw_waiting_build7z');
-const { appendUpdate, copyToUpload } = require('./update_waiting_index');
+const { appendUpdate, copyToUpload, updateWaitingIndexAr } = require('./update_waiting_index');
 
 const CONFIG = {
   OUTPUT_DIR: path.join(__dirname, 'smwc_world'),
@@ -187,6 +187,11 @@ Environment:
   try {
     appendUpdate();
     copyToUpload();
+    try {
+      await updateWaitingIndexAr({ noCopy: false });
+    } catch (e) {
+      console.warn(`Warning: update_waiting_index_ar failed: ${e.message}`);
+    }
   } catch (e) {
     console.warn(`Warning: update_waiting_index failed: ${e.message}`);
   }

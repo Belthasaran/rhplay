@@ -18,7 +18,7 @@ The SMWC Waiting automation pipeline automates building and uploading waiting 7z
 1. **smwcw_waiting_compare.js** — Compares SMWC Waiting ROMs with rhdata.db, outputs `waiting_queue.json`, `waiting_processed.json`
 2. **smwcw_waiting_fetchmissing.js** — Downloads games from queue, creates BPS, bpsindex JSON, games JSON, images
 3. **smwcw_waiting_build7z.js** — Builds `upload/waiting_<GAMEID>.7z` for each processed game (skips if in completed registry)
-4. **update_waiting_index.js** — Updates `waiting_index.csv` (append/update mode by default), copies to `upload/` for distribution. End users use the CSV to identify games by gameid and find the correct waiting 7z or BPS files.
+4. **update_waiting_index.js** — Updates `waiting_index.csv` (append/update mode by default), copies to `upload/` for distribution. Optionally (enabled by default) updates `waiting_index_ar.csv` — a clone with an extra `data_txid` column. Scans ArDrive waiting folder (drive `d3338fab-d24c-4d75-9e78-d3024befc225`, folder `2ef50675-a5bb-45a7-aea8-21cb5603eff6`) to resolve data_txid for `waiting_<GAMEID>.7z` files. Preserves existing non-blank data_txid values. Use `--no-ardrive` to skip. End users use the CSV to identify games by gameid and find the correct waiting 7z or BPS files.
 5. **smwcw_waiting_upload.js** — Updates waiting_index.csv, uploads 7z to IPFS and Pixeldrain, moves to `upload/done/`, appends GameID to completed registry
 
 ---
@@ -95,9 +95,11 @@ enode.sh jstools/smwcw_waiting_upload.js --skip-ipfs
 ```
 jstools/smwc_world/
   waiting_index.csv                 # Index of games (gameid, name, author, bps_files, etc.) — copied to upload/
+  waiting_index_ar.csv              # Same as waiting_index.csv + data_txid (ArWeave tx ID for waiting_<GAMEID>.7z)
   waiting_packages_completed.json   # PERSISTENT: GameIDs fully handled (never reprocess)
   upload/
     waiting_index.csv               # Copy of index for distribution with uploads
+    waiting_index_ar.csv            # Copy of ArDrive-enabled index for distribution
     done/                           # Ephemeral — external process expires old files
     upload_state.json               # Per-file upload status (transient)
   periodic_log_YYYYMMDD.txt         # Run logs

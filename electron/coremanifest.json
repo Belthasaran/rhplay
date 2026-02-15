@@ -17,8 +17,8 @@
     "updated" : 1770624417
  },
  "beta/bpsarchives.json" : {
-     "version" : "7",
-     "updated" : 1770624417
+     "version" : "8",
+     "updated" : 1771169927
  },
  "beta/RHPLAY/win64/portable" : {
      "pointer" : "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
@@ -67,10 +67,10 @@
  },
  "beta/MANIFEST_PKG" : {
 	 "contents" : ["dbmanifest.json", "bpsarchives.json"],
-	 "sha256" : "e7a6406a76b44f68e856a60ef69e40cd17d382bf9610212d2373f3ba27c11e54" ,
-	 "ipfs_cidv1": "bafkreihhuzagu5vuj5uoqvvgb33j4qgnc7jyfp4wcaqs2i3t6o5cpqi6kq",
-	 "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9kLzZwenpkcEVuCg==",
-	 "size" : "73524",
+	 "sha256" : "7dac5a083670ed5a7de511d57a1988e6ab0ea166ae714339ff99aedaa7e700e9",
+	 "ipfs_cidv1": "bafkreid5vrnaqntq5vnh3zir2v5btchgvmhkczvoofbtt74zv3nkpzya5e",
+	 "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS90M1JoOWJOVAo=",
+	 "size" : "73749",
 	 "priority": [
           "baddr",
           "ipfs",
@@ -78,7 +78,6 @@
          ],
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
       "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
-      "ardrive_file_name": "manifest20260201.zip",
       "ardrive_file_path": "/SMWRH/release/manifest20260201.zip",
       "ardrive_file_id": "example",
       "data_txid": "example"

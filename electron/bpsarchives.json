@@ -1,5 +1,5 @@
 {
- "lastupdated" : 1770624417,
+  "lastupdated": 1770624417,
   "rhsearch_cat.db": {
     "type": "catalogdb",
     "version": "7",
@@ -8068,6 +8068,28 @@
       "ardrive_file_path": "/MWDB/storeB/bpsxc_20260204.7z",
       "ardrive_file_id": "8b111b1c-70a0-434e-8bba-af0adf52af85",
       "data_txid": "7oUSYPoGH4LGZkWcsm8ylfh4h-EzJEANtz02xWXzBCA",
+      "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
+      "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d"
+    }
+  },
+  "bpsxc_20260215.7z": {
+    "type": "bpsarchive",
+    "version": "1",
+    "base": {
+      "file_name": "bpsxc_20260215.7z",
+      "format": "7z",
+      "sha256": "f3786c779687bf25be37264a5f8302fa127c07f7a6a52c40f26af04da214e3eb",
+      "ipfs_cidv1": "bafybeihditmpywqnyr5gtr34sk7mhntl6bz5kfprbgwncdfnfq7v3l7gja",
+      "size": "15661995",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ],
+      "ardrive_file_name": "bpsxc_20260215.7z",
+      "ardrive_file_path": "/MWDB/storeB/bpsxc_20260215.7z",
+      "ardrive_file_id": "edfae6a2-564f-4a8e-a3f7-6959d1cec371",
+      "data_txid": "V9E2AtmNhAoj352V5lYIWzhwFs0CFRVKwx-4OdT0q24",
       "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
       "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d"
     }

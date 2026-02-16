@@ -53,7 +53,7 @@ Options:
   --url <url>                   HTTPS URL
   --baddr <base64>              Base64-encoded URL (baddr)
   --ardrive-drive-id <id>       ArDrive drive ID
-  --ardrive-folder-id <id>      ArDrive folder ID
+  --ardrive-folder-id <id>      ArDrive folder ID (if set without file/path/id/data-txid, looks up file by name in folder)
   --ardrive-file-name <name>    ArDrive file name
   --ardrive-file-path <path>    ArDrive file path
   --ardrive-file-id <id>        ArDrive file ID
@@ -300,6 +300,28 @@ async function computeIpfsCid(filePath) {
   });
 }
 
+/** Fetch ArDrive folder file index (Map of filename -> file) */
+async function fetchArdriveFileIndex(folderId) {
+  const arweave = require('arweave');
+  const arDriveCore = require('ardrive-core-js');
+  const arweaveUrl = new URL('https://arweave.net:443');
+  const arweaveClient = arweave.init({
+    host: arweaveUrl.hostname,
+    protocol: arweaveUrl.protocol.replace(':', ''),
+    port: arweaveUrl.port || 443,
+    timeout: 60000
+  });
+  const arDrive = await arDriveCore.arDriveAnonymousFactory({ arweave: arweaveClient });
+  const folderEid = arDriveCore.EID(folderId);
+  const items = await arDrive.listPublicFolder({ folderId: folderEid, maxDepth: 10 });
+  const files = items.filter(item => item.entityType === 'file');
+  const index = new Map();
+  for (const file of files) {
+    index.set(file.name, file);
+  }
+  return index;
+}
+
 async function run(argv) {
   const opts = parseArguments(argv);
 
@@ -383,7 +405,7 @@ async function run(argv) {
     entry.updated = Math.floor(Date.now() / 1000);
   }
 
-  // Update ArDrive fields if provided
+  // Update ArDrive fields: explicit options first, then resolve from folder if only folder/drive given
   if (opts.ardriveDriveId) {
     entry.ardrive_drive_id = opts.ardriveDriveId;
   }
@@ -401,6 +423,28 @@ async function run(argv) {
   }
   if (opts.dataTxid) {
     entry.data_txid = opts.dataTxid;
+  }
+
+  // If ArDrive folder was specified but per-file fields were not, look up file by name in folder
+  const haveArdriveFileFromCli = opts.ardriveFileName || opts.ardriveFilePath || opts.ardriveFileId || opts.dataTxid;
+  if (opts.ardriveFolderId && !haveArdriveFileFromCli && fileName) {
+    try {
+      const ardriveIndex = await fetchArdriveFileIndex(opts.ardriveFolderId);
+      const ardriveFile = ardriveIndex.get(fileName);
+      if (ardriveFile) {
+        entry.ardrive_file_name = ardriveFile.name;
+        if (ardriveFile.path) entry.ardrive_file_path = ardriveFile.path;
+        if (ardriveFile.entityId || ardriveFile.id) entry.ardrive_file_id = ardriveFile.entityId || ardriveFile.id;
+        if (ardriveFile.dataTxId || ardriveFile.dataTxID) entry.data_txid = ardriveFile.dataTxId || ardriveFile.dataTxID;
+        if (opts.ardriveDriveId) entry.ardrive_drive_id = opts.ardriveDriveId;
+        entry.ardrive_folder_id = opts.ardriveFolderId;
+        console.log(`[update_coremf] Resolved ArDrive metadata for "${fileName}" from folder ${opts.ardriveFolderId}`);
+      } else {
+        console.warn(`[update_coremf] ArDrive file "${fileName}" not found in folder ${opts.ardriveFolderId}`);
+      }
+    } catch (err) {
+      console.warn(`[update_coremf] ArDrive folder lookup failed: ${err.message}`);
+    }
   }
 
   // Update top-level fields if requested

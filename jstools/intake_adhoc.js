@@ -45,7 +45,7 @@ function detectMode(inputDir) {
 }
 
 function runMetadataScript(inputDir, dryRun) {
-  const scriptPath = path.join(CONFIG.JTOOLS_DIR, 'intake_bps_metadata.js');
+  const scriptPath = path.join(CONFIG.JSTOOLS_DIR, 'intake_bps_metadata.js');
   const enode = path.join(CONFIG.PROJECT_ROOT, 'enode.sh');
   const args = ['--input-dir', inputDir, '--interactive'];
   if (dryRun) args.push('--dry-run');
@@ -61,6 +61,7 @@ function runMetadataScript(inputDir, dryRun) {
 function runPatchCwdBps(inputDir, dryRun) {
   const scriptPath = path.join(CONFIG.PYTOOLS_DIR, 'patch_cwd_bps_files.py');
   console.log('Running patch_cwd_bps_files.py...');
+  console.log(`inputdir=${inputDir}`)
   if (dryRun) {
     console.log('  (dry-run: would create SFC+7z from BPS in', inputDir, ')');
     return 0;
@@ -74,7 +75,7 @@ function runPatchCwdBps(inputDir, dryRun) {
 }
 
 function runProcessArcsfc(inputDir, dryRun) {
-  const scriptPath = path.join(CONFIG.JTOOLS_DIR, 'process_arcsfc_runner.js');
+  const scriptPath = path.join(CONFIG.JSTOOLS_DIR, 'process_arcsfc_runner.js');
   const enode = path.join(CONFIG.PROJECT_ROOT, 'enode.sh');
   console.log('Running process_arcsfc_runner.js...');
   if (dryRun) {

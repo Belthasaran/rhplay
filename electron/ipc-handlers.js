@@ -17428,7 +17428,18 @@ function registerDatabaseHandlers(dbManager) {
   
   const softwareUpdateManager = require('./utils/software-update-manager');
   const softwareUpdateWindow = require('./utils/software-update-window');
-  
+  const { getAboutInfo } = require('./utils/about-info');
+
+  // About dialog info
+  ipcMain.handle('about:get-info', async () => {
+    try {
+      return getAboutInfo();
+    } catch (err) {
+      console.error('[about:get-info] Error:', err);
+      return { error: err.message };
+    }
+  });
+
   // Manual update check (only handler needed here since others are registered early)
   ipcMain.handle('software-update:check-manual', async (_event) => {
     try {

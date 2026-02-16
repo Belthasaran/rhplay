@@ -110,6 +110,13 @@
                 >
                   Settings
                 </button>
+
+                <button 
+                  @click="openAboutDialog(); closeProfileDropdown()" 
+                  class="btn-secondary-small profile-action-btn"
+                >
+                  About
+                </button>
                 
                 <button 
                   @click="checkForUpdates(); closeProfileDropdown()" 
@@ -5313,6 +5320,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     </div>
   </div>
 
+  <!-- About Dialog -->
+  <AboutDialog
+    :visible="showAboutDialog"
+    @close="showAboutDialog = false"
+    @check-updates="checkForUpdates"
+  />
+
   <!-- Settings Modal -->
   <div v-if="settingsModalOpen" class="modal-backdrop" @click.self="closeSettings">
     <div class="modal settings-modal">
@@ -9444,6 +9458,7 @@ import PredictionConflictDialog from './components/PredictionConflictDialog.vue'
 import RatingFactorsHelp from './components/RatingFactorsHelp.vue';
 import SearchCatalogAcknowledgement from './components/SearchCatalogAcknowledgement.vue';
 import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.vue';
+import AboutDialog from './components/AboutDialog.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -21472,6 +21487,9 @@ async function setMyRating() {
 
 // Settings modal state and logic
 const settingsModalOpen = ref(false);
+
+// About dialog state
+const showAboutDialog = ref(false);
 const settings = reactive({
   theme: DEFAULT_THEME as ThemeName,
   textSize: DEFAULT_TEXT_SIZE as TextSize,
@@ -21514,6 +21532,10 @@ const settings = reactive({
 });
 let rhpakAssociationEnabledAtLoad = true;
 let rhpakOsListenerCleanup: (() => void) | null = null;
+
+function openAboutDialog() {
+  showAboutDialog.value = true;
+}
 
 async function openSettings() {
   settingsModalOpen.value = true;

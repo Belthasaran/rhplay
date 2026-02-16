@@ -300,11 +300,21 @@ function loadBpsarchivesManifest() {
 
 /**
  * Get dbmanifest path (userData/dbmanifest_latest.json or bundled)
- * Future: will use _latest when implemented
  */
 function getDbmanifestPath() {
-  // For now, only use bundled
-  // TODO: Add userData/dbmanifest_latest.json support
+  const userDataDir = getUserDataDir();
+  const latestPath = path.join(userDataDir, 'dbmanifest_latest.json');
+
+  const latest = loadManifestFile(latestPath);
+  if (latest.valid) {
+    return {
+      path: latestPath,
+      source: 'userData',
+      manifest: latest.manifest,
+      lastupdated: latest.lastupdated
+    };
+  }
+
   const bundledPath = getBundledDbmanifestPath();
   if (!bundledPath) {
     throw new Error('dbmanifest.json not found in bundled locations');
@@ -316,6 +326,14 @@ function getDbmanifestPath() {
     manifest: bundled.manifest,
     lastupdated: bundled.lastupdated
   };
+}
+
+/**
+ * Load dbmanifest (resolved path)
+ */
+function loadDbmanifest() {
+  const resolved = getDbmanifestPath();
+  return resolved.manifest;
 }
 
 /**
@@ -388,6 +406,7 @@ module.exports = {
   getBpsarchivesManifestPath,
   loadBpsarchivesManifest,
   getDbmanifestPath,
+  loadDbmanifest,
   bootstrapManifests,
   getBundledCoreManifestPath,
   getBundledBpsarchivesManifestPath,

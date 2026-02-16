@@ -130,7 +130,7 @@
         </div>
 
         <!-- Progress Indicator -->
-        <div v-if="updateInfo.updateState === 'downloading' || updateInfo.updateState === 'verifying' || updateInfo.updateState === 'loading'" class="progress-section">
+        <div v-if="currentUpdateState === 'downloading' || currentUpdateState === 'verifying' || currentUpdateState === 'loading'" class="progress-section">
           <h4>Update Progress</h4>
           <div class="progress-bar-container">
             <div class="progress-bar" :style="{ width: Math.max(0, Math.min(100, progressPercent)) + '%' }"></div>
@@ -151,12 +151,12 @@
         </div>
 
         <!-- Error Message -->
-        <div v-if="updateInfo.updateState === 'error'" class="error-box">
+        <div v-if="currentUpdateState === 'error'" class="error-box">
           <p><strong>Error:</strong> {{ updateInfo.error || 'Unknown error occurred' }}</p>
         </div>
 
         <!-- Success Message -->
-        <div v-if="updateInfo.updateState === 'completed'" class="success-box">
+        <div v-if="currentUpdateState === 'completed'" class="success-box">
           <p><strong>Update completed successfully!</strong></p>
           <p>The new version has been downloaded and verified.</p>
         </div>
@@ -194,13 +194,13 @@
         </template>
         
         <!-- Update Completed Buttons -->
-        <template v-else-if="updateInfo.updateState === 'completed'">
+        <template v-else-if="currentUpdateState === 'completed'">
           <button @click="handleLaunchNew" class="btn-primary" autofocus>Exit and Relaunch</button>
           <button @click="handleCancel" class="btn-secondary">Cancel</button>
         </template>
         
         <!-- Initial/Idle State Buttons -->
-        <template v-else-if="updateInfo.updateState === 'idle' || !updateInfo.updateState">
+        <template v-else-if="currentUpdateState === 'idle' || !currentUpdateState">
           <button @click="handleUpdate" class="btn-primary" autofocus :disabled="isProcessing">
             Yes, update now
           </button>
@@ -219,7 +219,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+
+// Internal state to track update state (since props are read-only)
+const internalUpdateState = ref<string | undefined>(undefined);
 
 const props = defineProps<{
   visible: boolean;
@@ -264,10 +267,14 @@ const progressHistory = ref<Array<{
   type: 'info' | 'progress' | 'success' | 'error';
 }>>([]);
 
+// Use internal state if available, otherwise fall back to prop
+const currentUpdateState = computed(() => {
+  return internalUpdateState.value !== undefined ? internalUpdateState.value : props.updateInfo.updateState;
+});
+
 const isProcessing = computed(() => {
-  return props.updateInfo.updateState === 'downloading' || 
-         props.updateInfo.updateState === 'verifying' ||
-         props.updateInfo.updateState === 'loading';
+  const state = currentUpdateState.value;
+  return state === 'downloading' || state === 'verifying' || state === 'loading';
 });
 
 const progressPercent = computed(() => {
@@ -630,5 +637,108 @@ onUnmounted(() => {
 .btn-secondary:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.progress-history-section {
+  margin-top: 20px;
+  border-top: 1px solid #444;
+  padding-top: 15px;
+}
+
+.history-toggle-btn {
+  background: transparent;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-toggle-btn:hover {
+  background: #3d3d3d;
+  border-color: #666;
+}
+
+.history-toggle-btn.expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+.progress-history {
+  border: 1px solid #555;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: #2a2a2a;
+  padding: 10px;
+}
+
+.history-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #333;
+  font-size: 12px;
+  align-items: center;
+}
+
+.history-entry:last-child {
+  border-bottom: none;
+}
+
+.history-entry.success {
+  color: #4caf50;
+}
+
+.history-entry.error {
+  color: #f44336;
+}
+
+.history-entry.progress {
+  color: #2196f3;
+}
+
+.history-entry.info {
+  color: #e0e0e0;
+}
+
+.history-time {
+  color: #888;
+  min-width: 80px;
+  font-family: monospace;
+}
+
+.history-message {
+  flex: 1;
+  min-width: 200px;
+}
+
+.history-filename {
+  color: #aaa;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.history-percent {
+  color: #4caf50;
+  font-weight: bold;
+  min-width: 50px;
+  text-align: right;
+}
+
+.history-empty {
+  color: #888;
+  font-style: italic;
+  padding: 20px;
+  text-align: center;
 }
 </style>

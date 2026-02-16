@@ -17,6 +17,7 @@
  *   --only-build-7z  Skip compare and fetch, only run build7z
  *   --max-games N    Limit build7z to at most N games (default: unlimited)
  *   --no-extras      Do not include extras in waiting 7z packages
+ *   --no-ardrive     Skip ArDrive stage (do not update waiting_index_ar.csv)
  *   --help           Show this help message
  */
 
@@ -24,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { build7zForGame, loadCompletedRegistry, getProcessedGameIds } = require('./smwcw_waiting_build7z');
-const { appendUpdate, copyToUpload } = require('./update_waiting_index');
+const { appendUpdate, copyToUpload, updateWaitingIndexAr } = require('./update_waiting_index');
 
 const CONFIG = {
   JSTOOLS_DIR: __dirname,
@@ -94,7 +95,7 @@ function runBuild7z(options, logStream) {
   return { built, failed, total: limited.length };
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const options = {
     dryRun: false,
@@ -102,7 +103,8 @@ function main() {
     skipFetch: false,
     onlyBuild7z: false,
     maxGames: null,
-    includeExtras: true
+    includeExtras: true,
+    noArdrive: false
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -111,6 +113,7 @@ function main() {
     else if (argv[i] === '--skip-fetch') options.skipFetch = true;
     else if (argv[i] === '--only-build-7z') options.onlyBuild7z = true;
     else if (argv[i] === '--no-extras') options.includeExtras = false;
+    else if (argv[i] === '--no-ardrive') options.noArdrive = true;
     else if (argv[i] === '--max-games' && i + 1 < argv.length) {
       options.maxGames = argv[++i];
     } else if (argv[i] === '--help' || argv[i] === '-h') {
@@ -127,6 +130,7 @@ Options:
   --only-build-7z  Skip compare and fetch, only run build7z
   --max-games N    Limit build7z to at most N games (default: unlimited)
   --no-extras      Do not include extras in waiting 7z packages
+  --no-ardrive     Skip ArDrive stage (do not update waiting_index_ar.csv)
   --help           Show this help message
 
 Examples:
@@ -189,6 +193,15 @@ Examples:
     log(`waiting_index.csv: ${csvResult.added} added, ${csvResult.updated} updated, ${csvResult.total} total rows`, logStream);
     copyToUpload();
     log('Copied waiting_index.csv to upload/', logStream);
+    if (!options.noArdrive) {
+      try {
+        const arResult = await updateWaitingIndexAr({ noCopy: false });
+        log(`waiting_index_ar.csv: ${arResult.resolved} resolved from ArDrive, ${arResult.preserved} preserved, ${arResult.total} total rows`, logStream);
+        log('Copied waiting_index_ar.csv to upload/', logStream);
+      } catch (e) {
+        log(`Warning: update_waiting_index_ar failed: ${e.message}`, logStream);
+      }
+    }
   } catch (e) {
     log(`Warning: update_waiting_index failed: ${e.message}`, logStream);
   }
@@ -200,7 +213,12 @@ Examples:
 }
 
 if (require.main === module) {
-  main();
+  (async () => {
+    await main();
+  })().catch(e => {
+    console.error(e);
+    process.exit(1);
+  });
 }
 
 module.exports = { main, runCompare, runFetchMissing, runBuild7z, CONFIG };

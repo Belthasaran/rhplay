@@ -85,12 +85,24 @@ function buildArWeaveUrl(txid, gateway) {
 }
 
 /**
+ * Get directory where update target should be placed (same dir as executable)
+ * For AppImage: use APPIMAGE env var so we target the actual AppImage file on disk,
+ * not the read-only mount point.
+ */
+function getExecutableDirectory() {
+  if (process.platform === 'linux' && process.env.APPIMAGE) {
+    return path.dirname(process.env.APPIMAGE);
+  }
+  return path.dirname(process.execPath);
+}
+
+/**
  * Check if new version file exists locally in same directory as running executable
  */
 function checkLocalVersionExists(entry) {
   if (!entry) return { exists: false, path: null };
   
-  const execDir = path.dirname(process.execPath);
+  const execDir = getExecutableDirectory();
   const filename = entry.target_filename || entry.source_filename;
   if (!filename) return { exists: false, path: null };
   
@@ -297,6 +309,8 @@ async function downloadUpdate(entry, progressCallback) {
 
 /**
  * Move downloaded file to target location (same directory as running executable)
+ * Uses rename when source and target are on same device; falls back to copy+delete
+ * when EXDEV (cross-device) occurs (e.g. AppImage: temp vs actual AppImage path).
  */
 function moveUpdateToTarget(downloadedPath, targetPath) {
   if (!fs.existsSync(downloadedPath)) {
@@ -311,10 +325,31 @@ function moveUpdateToTarget(downloadedPath, targetPath) {
     fs.unlinkSync(targetPath);
   }
   
-  // Move file (atomic rename)
-  fs.renameSync(downloadedPath, targetPath);
+  try {
+    fs.renameSync(downloadedPath, targetPath);
+  } catch (err) {
+    if (err.code === 'EXDEV') {
+      // Cross-device link: copy then delete (e.g. AppImage temp -> real AppImage dir)
+      fs.copyFileSync(downloadedPath, targetPath);
+      try {
+        fs.unlinkSync(downloadedPath);
+      } catch (unlinkErr) {
+        console.warn('[software-update-manager] Could not remove temp file:', unlinkErr.message);
+      }
+    } else {
+      throw err;
+    }
+  }
   
-  // Verify SHA256 after move
+  // Ensure executable on Linux
+  if (process.platform === 'linux') {
+    try {
+      fs.chmodSync(targetPath, 0o755);
+    } catch (chmodErr) {
+      console.warn('[software-update-manager] Could not set executable bit:', chmodErr.message);
+    }
+  }
+  
   const stats = fs.statSync(targetPath);
   if (!stats.isFile()) {
     throw new Error('Target path is not a file after move');
@@ -398,7 +433,7 @@ async function performUpdate(entry, progressCallback) {
   const downloadedPath = await downloadUpdate(entry, progressCallback);
   
   // Step 4: Move to target location
-  const execDir = path.dirname(process.execPath);
+  const execDir = getExecutableDirectory();
   const filename = entry.target_filename || entry.source_filename;
   const targetPath = path.join(execDir, filename);
   

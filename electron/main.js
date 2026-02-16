@@ -10,7 +10,7 @@ const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
 const { queueRhpakPath, drainRhpakQueue } = require('./rhpak-queue');
 const { SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
-const { bootstrapManifests, getDbmanifestPath } = require('./utils/manifest-resolver');
+const { bootstrapManifests, getDbmanifestPath, getUserSpecificTempBase } = require('./utils/manifest-resolver');
 const { checkForUpdates: checkCoreManifestUpdates } = require('./utils/coremanifest-updater');
 const { checkForSoftwareUpdate } = require('./utils/software-update-check');
 const softwareUpdateManager = require('./utils/software-update-manager');
@@ -78,6 +78,7 @@ function resolveLogPath() {
     const dirs = [
         process.env.TEMP,
         process.env.TMP,
+        getUserSpecificTempBase(),
         os.tmpdir(),
         path.dirname(process.execPath),
         process.cwd(),
@@ -85,6 +86,10 @@ function resolveLogPath() {
 
     for (const dir of dirs) {
         try {
+            // Ensure directory exists before trying to write
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
             const candidate = path.join(dir, 'rhtools-installer.log');
             fs.appendFileSync(candidate, '', { encoding: 'utf8' });
             return candidate;
@@ -167,7 +172,8 @@ function getUserDataDir() {
 }
 
 function getWorkingDir() {
-    const dir = path.join(app.getPath('temp'), 'RHTools', 'Provisioning');
+    const tempBase = process.platform === 'linux' ? getUserSpecificTempBase() : app.getPath('temp');
+    const dir = path.join(tempBase, 'RHTools', 'Provisioning');
     ensureDirectory(dir);
     return dir;
 }

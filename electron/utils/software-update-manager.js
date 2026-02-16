@@ -209,7 +209,7 @@ async function downloadUpdate(entry, progressCallback) {
   const spec = createDownloadSpec(entry);
   
   // Create temp directory for download
-  const tempDir = path.join(os.tmpdir(), 'rhtools-update');
+  const tempDir = path.join(manifestResolver.getUserSpecificTempBase(), 'rhtools-update');
   manifestResolver.ensureDirectory(tempDir);
   
   // Create download tracker for progress (similar to provisioner)

@@ -106,6 +106,23 @@ function getUserDataDir() {
 }
 
 /**
+ * Get user-specific temp directory base path
+ * On Linux: returns /tmp/${username}.rht to avoid conflicts between users
+ * On Windows/macOS: returns normal temp directory (already user-specific)
+ */
+function getUserSpecificTempBase() {
+  const os = require('os');
+  
+  if (process.platform === 'linux') {
+    const username = os.userInfo().username;
+    return path.join(os.tmpdir(), `${username}.rht`);
+  }
+  
+  // Windows and macOS temp dirs are already user-specific
+  return os.tmpdir();
+}
+
+/**
  * Ensure directory exists
  */
 function ensureDirectory(dirPath) {
@@ -364,6 +381,7 @@ module.exports = {
   normalizeLastUpdated,
   validateManifest,
   getUserDataDir,
+  getUserSpecificTempBase,
   ensureDirectory,
   getCoreManifestPath,
   loadCoreManifest,

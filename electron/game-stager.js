@@ -14,6 +14,7 @@ const { path7za } = require('7zip-bin');
 
 const SKIP_CLEANUP_FOR_NOW = 0;
 const gameGenieDecoder = require('./utils/gamegenie-decoder');
+const manifestResolver = require('./utils/manifest-resolver');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path
 // This is needed for Electron packaged apps where the binary is in app.asar.unpacked
@@ -171,8 +172,7 @@ async function decodeBlob(encryptedData, keyBase64) {
  * @returns {string} Path to staging folder
  */
 function getStagingBasePath(tempDirOverride = '') {
-  const os = require('os');
-  const baseDir = tempDirOverride && tempDirOverride.trim() ? tempDirOverride : os.tmpdir();
+  const baseDir = tempDirOverride && tempDirOverride.trim() ? tempDirOverride : manifestResolver.getUserSpecificTempBase();
   return path.join(baseDir, 'RHTools-Runs');
 }
 
@@ -182,8 +182,7 @@ function getStagingBasePath(tempDirOverride = '') {
  * @returns {string} Path to quick launch folder
  */
 function getQuickLaunchBasePath(tempDirOverride = '') {
-  const os = require('os');
-  const baseDir = tempDirOverride && tempDirOverride.trim() ? tempDirOverride : os.tmpdir();
+  const baseDir = tempDirOverride && tempDirOverride.trim() ? tempDirOverride : manifestResolver.getUserSpecificTempBase();
   return path.join(baseDir, 'RHTools-QuickLaunch');
 }
 

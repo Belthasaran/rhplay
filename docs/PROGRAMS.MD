@@ -41,6 +41,7 @@ cd /home/main/proj/rhtools && npx electron electron/main.js
 - `docs/ELECTRON_IPC_ARCHITECTURE.md` - IPC specifications
 - `docs/ENHANCED_RATINGS_AND_RUN_SYSTEM.md` - Rating + run system
 - `docs/CLIENTDATA_USER_ANNOTATIONS.md` - User annotation guide
+- `devdocs/SOFTWARE_UPDATE_SYSTEM.md` - Software update system documentation
 
 ---
 

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node fix-html-paths.js",
     "preview": "vite preview --port 5173"
   },
   "dependencies": {

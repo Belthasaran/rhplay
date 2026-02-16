@@ -1,5 +1,34 @@
 <template>
-  <main class="layout">
+  <!-- Debug: Always show something -->
+  <div style="position: fixed; top: 0; left: 0; z-index: 99999; background: red; color: white; padding: 10px; display: none;">
+    DEBUG: isUpdateMode={{ isUpdateMode }}, visible={{ softwareUpdateDialogVisible }}
+  </div>
+  
+  <!-- Software Update Dialog (shown when mode=update) -->
+  <div v-if="isUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+    <SoftwareUpdateDialog
+      :visible="softwareUpdateDialogVisible"
+      :update-info="softwareUpdateInfo"
+      :is-blocking="true"
+      @update="handleSoftwareUpdate"
+      @skip="handleSoftwareUpdateSkip"
+      @exit="handleSoftwareUpdateExit"
+      @launch-new="handleSoftwareUpdateLaunchNew"
+      @cancel="handleSoftwareUpdateCancel"
+    />
+    <!-- Fallback if dialog doesn't render -->
+    <div v-if="!softwareUpdateDialogVisible" style="padding: 20px; text-align: center; background: white; border: 2px solid black;">
+      <h2>Software Update (Fallback)</h2>
+      <p>Loading update information...</p>
+      <p>isUpdateMode: {{ isUpdateMode }}</p>
+      <p>softwareUpdateDialogVisible: {{ softwareUpdateDialogVisible }}</p>
+      <p>currentVersion: {{ softwareUpdateInfo.currentVersion }}</p>
+      <p>availableVersion: {{ softwareUpdateInfo.availableVersion }}</p>
+    </div>
+  </div>
+  
+  <!-- Main App (shown when not in update mode) - use v-else to ensure only one renders -->
+  <main v-else class="layout">
     <header class="toolbar">
       <div class="left-controls">
         <!-- Profile Dropdown Button -->
@@ -80,6 +109,13 @@
                   class="btn-secondary-small profile-action-btn"
                 >
                   Settings
+                </button>
+                
+                <button 
+                  @click="checkForUpdates(); closeProfileDropdown()" 
+                  class="btn-secondary-small profile-action-btn"
+                >
+                  Check for Updates
                 </button>
               </div>
 
@@ -9256,6 +9292,115 @@ Do you recommend; is the game fun and worthwhile?</span></label>
 
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+
+// Check if we're in update mode FIRST, before any reactive code runs
+// Try multiple ways to detect update mode (query params, hash, localStorage, sessionStorage, or window property)
+let mode = null;
+try {
+  // Check window property first (set by preload script or dom-ready injection)
+  if ((window as any).__UPDATE_MODE__) {
+    mode = (window as any).__UPDATE_MODE__;
+  }
+  
+  // Check URL query params
+  if (!mode) {
+    const urlParams = new URLSearchParams(window.location.search);
+    mode = urlParams.get('mode');
+  }
+  
+  // Check hash params - handle both #mode=update and #?mode=update formats
+  if (!mode && window.location.hash) {
+    // Try direct match first: #mode=update
+    const directMatch = window.location.hash.match(/[#&]mode=([^&]+)/);
+    if (directMatch) {
+      mode = directMatch[1];
+    } else {
+      // Try URLSearchParams on hash: #?mode=update
+      try {
+        const hashStr = window.location.hash.substring(1);
+        if (hashStr.includes('mode=')) {
+          const hashParams = new URLSearchParams(hashStr.startsWith('?') ? hashStr.substring(1) : hashStr);
+          mode = hashParams.get('mode');
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+  }
+  
+  // Check localStorage (set by update window before load)
+  if (!mode && typeof localStorage !== 'undefined') {
+    mode = localStorage.getItem('updateMode');
+    // Clear it after reading
+    if (mode) {
+      localStorage.removeItem('updateMode');
+    }
+  }
+  
+  // Check sessionStorage as backup
+  if (!mode && typeof sessionStorage !== 'undefined') {
+    mode = sessionStorage.getItem('updateMode');
+    if (mode) {
+      sessionStorage.removeItem('updateMode');
+    }
+  }
+} catch (e) {
+  console.warn('[App.vue] Error reading mode:', e);
+}
+
+// Check hash one more time - sometimes it's not available immediately
+if (!mode && typeof window !== 'undefined' && window.location.hash) {
+  const hash = window.location.hash;
+  if (hash.includes('mode=update')) {
+    const match = hash.match(/mode=([^&]+)/);
+    if (match) {
+      mode = match[1];
+      console.log('[App.vue] Mode detected from hash:', mode);
+    }
+  }
+}
+
+const isUpdateMode = ref(mode === 'update');
+
+// Debug logging - ALWAYS log to help diagnose
+console.log('[App.vue] ===== INITIALIZATION =====');
+console.log('[App.vue] window.location.href:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+console.log('[App.vue] window.location.search:', typeof window !== 'undefined' ? window.location.search : 'N/A');
+console.log('[App.vue] window.location.hash:', typeof window !== 'undefined' ? window.location.hash : 'N/A');
+console.log('[App.vue] window.__UPDATE_MODE__:', typeof window !== 'undefined' ? (window as any).__UPDATE_MODE__ : 'N/A');
+console.log('[App.vue] localStorage.updateMode:', typeof localStorage !== 'undefined' ? localStorage.getItem('updateMode') : 'N/A');
+console.log('[App.vue] sessionStorage.updateMode:', typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('updateMode') : 'N/A');
+console.log('[App.vue] mode detected:', mode);
+console.log('[App.vue] isUpdateMode:', isUpdateMode.value);
+console.log('[App.vue] ===========================');
+
+// Force update mode if hash contains mode=update (most reliable check)
+if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('mode=update')) {
+  if (!isUpdateMode.value) {
+    console.warn('[App.vue] Forcing update mode based on hash');
+    isUpdateMode.value = true;
+  }
+}
+
+// Software Update Dialog state (initialize early for update mode)
+// CRITICAL: Set visible to true if in update mode so dialog shows immediately
+const softwareUpdateDialogVisible = ref(isUpdateMode.value);
+const softwareUpdateInfo = ref<any>({
+  currentVersion: 'Loading...',
+  availableVersion: 'Loading...',
+  entry: null,
+  localVersionExists: false,
+  localVersionMatches: false,
+  updateState: isUpdateMode.value ? 'loading' : 'idle',
+  progress: null,
+  error: null
+});
+
+// If in update mode, ensure dialog is visible
+if (isUpdateMode.value) {
+  console.log('[App.vue] Update mode detected, setting dialog visible');
+  softwareUpdateDialogVisible.value = true;
+}
 import { nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
 import { 
@@ -9298,6 +9443,7 @@ import TwitchIntegrationSetup from './components/TwitchIntegrationSetup.vue';
 import PredictionConflictDialog from './components/PredictionConflictDialog.vue';
 import RatingFactorsHelp from './components/RatingFactorsHelp.vue';
 import SearchCatalogAcknowledgement from './components/SearchCatalogAcknowledgement.vue';
+import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.vue';
 import {
   alertDialogVisible,
   alertDialogTitle,
@@ -9658,6 +9804,8 @@ const usbOptionsWizardFirstTime = ref(false);
 const usbOptionsWizardDraftSettings = ref<any>(null);
 const permissionGrantResult = ref<{success: boolean, message: string} | null>(null);
 
+// Note: softwareUpdateDialogVisible and softwareUpdateInfo are initialized at the top of the script (line ~9281)
+
 const usb2snesSshStatusLabel = computed(() => {
   switch (usb2snesSshStatus.status) {
     case 'running':
@@ -9686,6 +9834,9 @@ const normalized = (s: string) => s.toLowerCase();
 
 
 const filteredItems = computed(() => {
+  // In update mode, return empty array to prevent watchers from running
+  if (isUpdateMode.value) return [];
+  
   const q = searchQuery.value.trim();
   return items.filter((it) => {
     // Filter out games banned from list_any (most restrictive - completely hide from list)
@@ -9699,6 +9850,8 @@ const filteredItems = computed(() => {
 
 // Sorted items based on sort option
 const sortedAndFilteredItems = computed(() => {
+  // In update mode, return empty array to prevent watchers from running
+  if (isUpdateMode.value) return [];
   const filtered = [...filteredItems.value];
   
   switch (sortOption.value) {
@@ -10001,6 +10154,8 @@ function getDifficultyValue(item: any): number {
 
 // Visible tiles with pagination
 const visibleTiles = computed(() => {
+  // In update mode, return empty array to prevent watchers from running
+  if (isUpdateMode.value) return [];
   const sorted = sortedAndFilteredItems.value;
   const endIndex = (tilesPage.value + 1) * tilesPerPage.value;
   return sorted.slice(0, endIndex).map(item => ({
@@ -10444,6 +10599,8 @@ function handleThumbnailError(item: any) {
 
 // Watch for view mode changes to load thumbnails and setup infinite scroll
 watch(viewMode, (newMode) => {
+  // Skip watcher in update mode
+  if (isUpdateMode.value) return;
   if (newMode === 'tiles') {
     nextTick(() => {
       loadThumbnailsForVisibleTiles();
@@ -10456,6 +10613,8 @@ watch(viewMode, (newMode) => {
 
 // Watch for visible tiles changes to load thumbnails and setup infinite scroll
 watch(visibleTiles, () => {
+  // Skip watcher in update mode
+  if (isUpdateMode.value) return;
   if (viewMode.value === 'tiles') {
     loadThumbnailsForVisibleTiles();
     nextTick(() => {
@@ -10466,6 +10625,8 @@ watch(visibleTiles, () => {
 
 // Watch for filtered items changes to populate difficulty cache
 watch(filteredItems, async (newItems) => {
+  // Skip watcher in update mode
+  if (isUpdateMode.value) return;
   if (newItems.length > 0) {
     await populateDifficultyCache(newItems);
   }
@@ -10630,6 +10791,8 @@ function debouncedCheckListBans(items: Item[]) {
 
 // Watch for filtered items changes to check list bans (debounced)
 watch(filteredItems, (newItems) => {
+  // Skip watcher in update mode
+  if (isUpdateMode.value) return;
   if (newItems.length > 0) {
     // Check list_any and list_title bans for filtered items
     debouncedCheckListBans(newItems);
@@ -10639,6 +10802,8 @@ watch(filteredItems, (newItems) => {
 // Watch for visible tiles changes to check bans (only in tiles mode)
 // Use debouncing to avoid excessive IPC calls during scrolling
 watch([visibleTiles, viewMode], async ([newTiles, mode]) => {
+  // Skip watcher in update mode
+  if (isUpdateMode.value) return;
   if (mode === 'tiles' && newTiles.length > 0) {
     // Only check bans for newly visible items, debounced
     debouncedCheckImageTitleBans(newTiles);
@@ -30319,6 +30484,74 @@ onMounted(async () => {
   console.log('=== APP MOUNTED ===');
   console.log('Electron API available:', isElectronAvailable());
   
+  // Check if we're in update mode (already checked at script start, but verify here)
+  if (isUpdateMode.value) {
+    console.log('[Update Mode] Initializing update dialog only');
+    console.log('[Update Mode] URL:', window.location.href);
+    console.log('[Update Mode] isUpdateMode:', isUpdateMode.value);
+    console.log('[Update Mode] softwareUpdateDialogVisible:', softwareUpdateDialogVisible.value);
+    
+    // CRITICAL: Ensure dialog is visible immediately
+    softwareUpdateDialogVisible.value = true;
+    
+    // Show a loading state in the dialog
+    softwareUpdateInfo.value.updateState = 'loading';
+    softwareUpdateInfo.value.currentVersion = 'Loading...';
+    softwareUpdateInfo.value.availableVersion = 'Loading...';
+    
+    // Load update info and show dialog
+    try {
+      const api = (window as any).electronAPI;
+      if (api && api.softwareUpdateGetInfo) {
+        const info = await api.softwareUpdateGetInfo();
+        if (info) {
+          console.log('[Update Mode] Received update info:', info);
+          softwareUpdateInfo.value = {
+            ...info,
+            updateState: info.updateState || 'idle'
+          };
+          softwareUpdateDialogVisible.value = true;
+          
+          // Listen for progress updates
+          if (api.onSoftwareUpdateProgress) {
+            api.onSoftwareUpdateProgress((progress: any) => {
+              softwareUpdateInfo.value.progress = progress;
+              if (progress.message) {
+                if (progress.message.includes('Downloading')) {
+                  softwareUpdateInfo.value.updateState = 'downloading';
+                } else if (progress.message.includes('Verifying') || progress.message.includes('Performing')) {
+                  softwareUpdateInfo.value.updateState = 'verifying';
+                }
+              }
+            });
+          }
+        } else {
+          console.warn('[Update Mode] No update info received');
+          softwareUpdateInfo.value.error = 'Failed to load update information';
+          softwareUpdateInfo.value.currentVersion = 'Unknown';
+          softwareUpdateInfo.value.availableVersion = 'Unknown';
+        }
+      } else {
+        console.error('[Update Mode] electronAPI.softwareUpdateGetInfo not available');
+        softwareUpdateInfo.value.error = 'Update API not available';
+        softwareUpdateInfo.value.currentVersion = 'Unknown';
+        softwareUpdateInfo.value.availableVersion = 'Unknown';
+      }
+    } catch (error) {
+      console.error('[Update Mode] Error loading update info:', error);
+      softwareUpdateInfo.value.error = `Error: ${error instanceof Error ? error.message : String(error)}`;
+      softwareUpdateInfo.value.currentVersion = 'Error';
+      softwareUpdateInfo.value.availableVersion = 'Error';
+    }
+    // CRITICAL: Ensure dialog is visible even if there was an error
+    softwareUpdateDialogVisible.value = true;
+    // In update mode, skip all other initialization
+    console.log('[Update Mode] Skipping normal app initialization');
+    return;
+  }
+  
+  console.log('[Normal Mode] Initializing full app');
+  
   // Add global event listeners for filter shortcuts
   window.addEventListener('keydown', handleGlobalKeydown);
   window.addEventListener('click', handleGlobalClick);
@@ -30354,8 +30587,8 @@ onMounted(async () => {
     }
   }
   
-  // Check for active run first
-  if (isElectronAvailable()) {
+  // Check for active run first (skip in update mode)
+  if (!isUpdateMode.value && isElectronAvailable()) {
     try {
       const activeRun = await (window as any).electronAPI.getActiveRun();
       if (activeRun) {
@@ -30366,6 +30599,11 @@ onMounted(async () => {
     } catch (error) {
       console.error('Error checking for active run:', error);
     }
+  }
+  
+  // Skip data loading in update mode
+  if (isUpdateMode.value) {
+    return;
   }
   
   console.log('Starting data load...');
@@ -30482,6 +30720,72 @@ onMounted(async () => {
   
   console.log('=== INITIALIZATION COMPLETE ===');
 });
+
+/**
+ * Software Update Handlers
+ */
+async function handleSoftwareUpdate() {
+  const api = (window as any).electronAPI;
+  if (api && api.softwareUpdateUserResponse) {
+    await api.softwareUpdateUserResponse({ response: 'update' });
+  }
+  // Update state will be handled by progress listener
+}
+
+async function handleSoftwareUpdateSkip() {
+  const api = (window as any).electronAPI;
+  if (api && api.softwareUpdateUserResponse) {
+    await api.softwareUpdateUserResponse({ response: 'skip' });
+  }
+  softwareUpdateDialogVisible.value = false;
+}
+
+async function handleSoftwareUpdateExit() {
+  const api = (window as any).electronAPI;
+  if (api && api.softwareUpdateUserResponse) {
+    await api.softwareUpdateUserResponse({ response: 'exit' });
+  }
+}
+
+async function handleSoftwareUpdateLaunchNew() {
+  const api = (window as any).electronAPI;
+  if (api && api.softwareUpdateUserResponse) {
+    await api.softwareUpdateUserResponse({ response: 'launch-new' });
+  }
+}
+
+async function handleSoftwareUpdateCancel() {
+  // Only allow cancel if not blocking
+  if (!isUpdateMode.value) {
+    softwareUpdateDialogVisible.value = false;
+  }
+}
+
+/**
+ * Manual check for updates
+ */
+async function checkForUpdates() {
+  try {
+    const api = (window as any).electronAPI;
+    if (!api || !api.softwareUpdateCheckManual) {
+      await showAlert('Update check is not available', 'Error');
+      return;
+    }
+    
+    const result = await api.softwareUpdateCheckManual();
+    if (result.success && result.updateAvailable) {
+      // Update dialog will be shown by the IPC handler
+      // The handler creates a separate window
+    } else if (result.success && !result.updateAvailable) {
+      showToastNotification('You are running the latest version', 'info', 3000);
+    } else {
+      await showAlert(`Update check failed: ${result.error || 'Unknown error'}`, 'Error');
+    }
+  } catch (error: any) {
+    console.error('Error checking for updates:', error);
+    await showAlert(`Error checking for updates: ${error.message || 'Unknown error'}`, 'Error');
+  }
+}
 
 /**
  * Cleanup on unmount

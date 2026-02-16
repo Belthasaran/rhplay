@@ -13,6 +13,60 @@ const { SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
 const { bootstrapManifests, getDbmanifestPath } = require('./utils/manifest-resolver');
 const { checkForUpdates: checkCoreManifestUpdates } = require('./utils/coremanifest-updater');
 const { checkForSoftwareUpdate } = require('./utils/software-update-check');
+const softwareUpdateManager = require('./utils/software-update-manager');
+const softwareUpdateWindow = require('./utils/software-update-window');
+
+/**
+ * Register software update IPC handlers early (before database initialization)
+ */
+function setupSoftwareUpdateIpc() {
+  const { ipcMain, shell } = require('electron');
+  
+  // Get update info for dialog
+  ipcMain.handle('software-update:get-info', () => {
+    return softwareUpdateWindow.getUpdateInfo();
+  });
+  
+  // Handle user response from update dialog
+  ipcMain.handle('software-update:user-response', (_event, { response }) => {
+    softwareUpdateWindow.handleUserResponse(response);
+    return { success: true };
+  });
+  
+  // Open URL in default browser
+  ipcMain.handle('software-update:open-url', (_event, { url }) => {
+    shell.openExternal(url);
+    return { success: true };
+  });
+  
+  // Open IPFS gateway URL
+  ipcMain.handle('software-update:open-ipfs', (_event, { cid, gateway }) => {
+    const url = softwareUpdateManager.buildIPFSUrl(cid, gateway);
+    if (url) {
+      shell.openExternal(url);
+    }
+    return { success: true };
+  });
+  
+  // Open ArWeave gateway URL
+  ipcMain.handle('software-update:open-arweave', (_event, { txid, gateway }) => {
+    const url = softwareUpdateManager.buildArWeaveUrl(txid, gateway);
+    if (url) {
+      shell.openExternal(url);
+    }
+    return { success: true };
+  });
+  
+  // Get IPFS gateways list
+  ipcMain.handle('software-update:get-ipfs-gateways', () => {
+    return softwareUpdateManager.getIPFSGateways();
+  });
+  
+  // Get ArWeave gateways list
+  ipcMain.handle('software-update:get-arweave-gateways', () => {
+    return softwareUpdateManager.getArWeaveGateways();
+  });
+}
 
 const DATABASE_FILES = ['clientdata.db', 'rhdata.db', 'patchbin.db', 'resource.db', 'screenshot.db', 'thumbnail_cache.db'];
 let handlersRegistered = false;
@@ -337,10 +391,24 @@ ipcMain.handle('rhpak:renderer-ready', async () => {
 // Initialize database manager
 let dbManager = null;
 
+// Track if update check is in progress
+let updateCheckInProgress = false;
+
+function setUpdateCheckInProgress(value) {
+    updateCheckInProgress = value;
+}
+
 function getOrCreateMainWindow() {
     if (mainWindow && !mainWindow.isDestroyed()) {
         return mainWindow;
     }
+    
+    // Don't create main window if update check is in progress
+    if (updateCheckInProgress) {
+        console.log('[main] Update check in progress, delaying main window creation');
+        throw new Error('Cannot create main window during update check');
+    }
+    
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -954,6 +1022,9 @@ app.whenReady().then(async () => {
         // Continue anyway - app can still work with bundled manifests
     }
 
+    // Register software update IPC handlers early (before update check)
+    setupSoftwareUpdateIpc();
+
     // Check for core manifest updates (non-blocking, background)
     (async () => {
         try {
@@ -969,20 +1040,128 @@ app.whenReady().then(async () => {
         }
     })();
 
-    // Check for software updates (non-blocking, background)
-    (async () => {
-        try {
-            const updateCheck = checkForSoftwareUpdate();
-            if (updateCheck.updateAvailable) {
-                console.log(`[main] Software update available: ${updateCheck.currentVersion} -> ${updateCheck.availableVersion}`);
-                // Phase 1: Only warn (log for now, UI warning can be added later)
-                // TODO: Show toast/notification to user
+    // Check for software updates (blocking - must respond before app continues)
+    try {
+        // Mark update check as in progress to prevent main window creation
+        setUpdateCheckInProgress(true);
+        
+        const updateCheck = softwareUpdateManager.checkForUpdate();
+        if (updateCheck.updateAvailable) {
+            console.log(`[main] Software update available: ${updateCheck.currentVersion} -> ${updateCheck.availableVersion}`);
+            
+            // Check if local version exists
+            const localCheck = softwareUpdateManager.checkLocalVersionExists(updateCheck.entry);
+            let localVersionMatches = false;
+            if (localCheck.exists) {
+                const verifyResult = softwareUpdateManager.verifyLocalVersionSHA256(
+                    localCheck.path,
+                    updateCheck.entry.sha256
+                );
+                localVersionMatches = verifyResult.matches;
             }
-        } catch (err) {
-            console.warn('[main] Software update check error:', err.message);
-            // Non-critical, continue
+            
+            const updateInfo = {
+                currentVersion: updateCheck.currentVersion,
+                availableVersion: updateCheck.availableVersion,
+                entry: updateCheck.entry,
+                localVersionExists: localCheck.exists,
+                localVersionMatches: localVersionMatches,
+                updateState: 'idle'
+            };
+            
+            // Create blocking update window (this will show immediately)
+            let updateResult = await softwareUpdateWindow.createUpdateWindow(updateInfo, null);
+            
+            if (updateResult === 'exit') {
+                // User chose to exit (old version dialog)
+                app.quit();
+                return;
+            } else if (updateResult === 'update') {
+                // User chose to update - perform update flow
+                try {
+                    // Update dialog state to downloading
+                    updateInfo.updateState = 'downloading';
+                    softwareUpdateWindow.updateProgress({
+                        message: 'Starting update...',
+                        current: 0,
+                        total: 0
+                    });
+                    
+                    const progressCallback = (progress) => {
+                        softwareUpdateWindow.updateProgress(progress);
+                        // Update state based on progress message
+                        if (progress.message && progress.message.includes('Downloading')) {
+                            updateInfo.updateState = 'downloading';
+                        } else if (progress.message && (progress.message.includes('Verifying') || progress.message.includes('Performing'))) {
+                            updateInfo.updateState = 'verifying';
+                        }
+                    };
+                    
+                    const result = await softwareUpdateManager.performUpdate(
+                        updateCheck.entry,
+                        progressCallback
+                    );
+                    
+                    if (result.success) {
+                        // Update completed - update dialog state
+                        updateInfo.updateState = 'completed';
+                        updateInfo.newExecutablePath = result.newExecutablePath;
+                        softwareUpdateWindow.updateProgress({
+                            message: 'Update completed successfully!',
+                            current: 0,
+                            total: 0
+                        });
+                        
+                        // Wait for user to click "Launch new version"
+                        updateResult = await softwareUpdateWindow.createUpdateWindow(updateInfo, null);
+                        
+                        if (updateResult === 'launch-new') {
+                            softwareUpdateManager.launchNewVersion(result.newExecutablePath);
+                            // launchNewVersion will call app.quit(), so we won't reach here
+                            return;
+                        } else if (updateResult === 'exit') {
+                            app.quit();
+                            return;
+                        }
+                        // If skip, continue with old version (user chose not to launch new version)
+                    } else {
+                        throw new Error(result.error || 'Update failed');
+                    }
+                } catch (err) {
+                    console.error('[main] Update failed:', err);
+                    // Update dialog state to show error
+                    updateInfo.updateState = 'error';
+                    updateInfo.error = err.message;
+                    softwareUpdateWindow.updateProgress({
+                        message: `Update failed: ${err.message}`,
+                        current: 0,
+                        total: 0
+                    });
+                    // Re-open dialog with error state
+                    const retryResult = await softwareUpdateWindow.createUpdateWindow(updateInfo, null);
+                    if (retryResult === 'exit') {
+                        app.quit();
+                        return;
+                    }
+                    // Otherwise continue with old version
+                }
+            } else if (updateResult === 'launch-new') {
+                // User clicked "Launch new version" after successful update
+                if (updateInfo.newExecutablePath) {
+                    softwareUpdateManager.launchNewVersion(updateInfo.newExecutablePath);
+                    return;
+                }
+            }
+            // If 'skip' or any other result, continue with normal startup
         }
-    })();
+        
+        // Update check complete, allow main window creation
+        setUpdateCheckInProgress(false);
+    } catch (err) {
+        console.warn('[main] Software update check error:', err.message);
+        // Continue anyway - non-critical
+        setUpdateCheckInProgress(false);
+    }
 
     setupProvisionerIpc();
 

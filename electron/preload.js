@@ -1,4 +1,17 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
+
+// Expose update mode detection to renderer via contextBridge
+// The update window will set this before loading
+contextBridge.exposeInMainWorld('__UPDATE_MODE__', null);
+
+// Try to detect update mode from URL (runs in preload context)
+// Note: This runs before the page loads, so we'll also check in the renderer
+try {
+  // Check if URL contains mode=update (will be available after page loads)
+  // For now, we'll rely on the main process setting localStorage before load
+} catch (e) {
+  // Ignore errors - detection happens in renderer
+}
 
 // Expose version info
 contextBridge.exposeInMainWorld('rhtools', {
@@ -1440,5 +1453,72 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('catalog:download-base-files:progress', handler);
     return () => ipcRenderer.removeListener('catalog:download-base-files:progress', handler);
+  },
+  
+  // ============================================================================
+  // Software Update
+  // ============================================================================
+  
+  /**
+   * Get update info for dialog
+   * @returns {Promise<Object>}
+   */
+  softwareUpdateGetInfo: () => ipcRenderer.invoke('software-update:get-info'),
+  
+  /**
+   * Send user response from update dialog
+   * @param {Object} params - {response: 'update' | 'skip' | 'exit' | 'launch-new'}
+   * @returns {Promise<{success: boolean}>}
+   */
+  softwareUpdateUserResponse: (params) => ipcRenderer.invoke('software-update:user-response', params),
+  
+  /**
+   * Open URL in default browser
+   * @param {Object} params - {url: string}
+   * @returns {Promise<{success: boolean}>}
+   */
+  softwareUpdateOpenURL: (params) => ipcRenderer.invoke('software-update:open-url', params),
+  
+  /**
+   * Open IPFS gateway URL
+   * @param {Object} params - {cid: string, gateway: string}
+   * @returns {Promise<{success: boolean}>}
+   */
+  softwareUpdateOpenIPFS: (params) => ipcRenderer.invoke('software-update:open-ipfs', params),
+  
+  /**
+   * Open ArWeave gateway URL
+   * @param {Object} params - {txid: string, gateway: string}
+   * @returns {Promise<{success: boolean}>}
+   */
+  softwareUpdateOpenArWeave: (params) => ipcRenderer.invoke('software-update:open-arweave', params),
+  
+  /**
+   * Get IPFS gateways list
+   * @returns {Promise<Array<string>>}
+   */
+  softwareUpdateGetIPFSGateways: () => ipcRenderer.invoke('software-update:get-ipfs-gateways'),
+  
+  /**
+   * Get ArWeave gateways list
+   * @returns {Promise<Array<string>>}
+   */
+  softwareUpdateGetArWeaveGateways: () => ipcRenderer.invoke('software-update:get-arweave-gateways'),
+  
+  /**
+   * Manual update check
+   * @returns {Promise<{success: boolean, updateAvailable: boolean, result?: string, error?: string}>}
+   */
+  softwareUpdateCheckManual: () => ipcRenderer.invoke('software-update:check-manual'),
+  
+  /**
+   * Listen for update progress
+   * @param {Function} callback - (progress) => void
+   * @returns {Function} Unsubscribe function
+   */
+  onSoftwareUpdateProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    ipcRenderer.on('software-update:progress', handler);
+    return () => ipcRenderer.removeListener('software-update:progress', handler);
   },
 });

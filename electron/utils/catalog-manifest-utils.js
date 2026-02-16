@@ -54,7 +54,7 @@ function locateBpsArchivesManifest() {
  * Uses manifest resolver to get resolved manifest
  */
 function loadBpsArchivesManifest() {
-  return manifestResolver.loadBpsArchivesManifest();
+  return manifestResolver.loadBpsarchivesManifest();
 }
 
 /**

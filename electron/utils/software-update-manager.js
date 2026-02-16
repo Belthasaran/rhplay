@@ -212,30 +212,69 @@ async function downloadUpdate(entry, progressCallback) {
   const tempDir = path.join(os.tmpdir(), 'rhtools-update');
   manifestResolver.ensureDirectory(tempDir);
   
-  // Create download tracker for progress
+  // Create download tracker for progress (similar to provisioner)
   const downloadTracker = {
     register: (s) => {
       if (progressCallback && s._progressMessage) {
-        progressCallback({ message: s._progressMessage, current: 0, total: 0 });
+        progressCallback({ 
+          message: s._progressMessage, 
+          filename: s.file_name || '',
+          current: 0, 
+          total: 0,
+          percent: 0
+        });
       }
     },
     start: (s, totalBytes) => {
       if (progressCallback) {
-        progressCallback({ message: `Downloading ${s.file_name}...`, current: 0, total: totalBytes });
+        const totalSize = formatBytes(totalBytes);
+        progressCallback({ 
+          message: `Starting download: ${s.file_name} (${totalSize})`, 
+          filename: s.file_name || '',
+          current: 0, 
+          total: totalBytes,
+          percent: 0
+        });
       }
     },
     progress: (s, currentBytes, totalBytes) => {
       if (progressCallback) {
-        progressCallback({ message: `Downloading ${s.file_name}...`, current: currentBytes, total: totalBytes });
+        const percent = totalBytes > 0 ? Math.floor((currentBytes / totalBytes) * 100) : 0;
+        progressCallback({ 
+          message: `Downloading ${s.file_name}: ${percent}%`, 
+          filename: s.file_name || '',
+          current: currentBytes, 
+          total: totalBytes,
+          percent: percent
+        });
       }
     },
     complete: (s) => {
       if (progressCallback) {
-        progressCallback({ message: `Downloaded ${s.file_name}`, current: 0, total: 0 });
+        progressCallback({ 
+          message: `Download completed: ${s.file_name}`, 
+          filename: s.file_name || '',
+          current: s.__downloadBytesTotal || 0, 
+          total: s.__downloadBytesTotal || 0,
+          percent: 100
+        });
       }
     },
     skip: () => {}
   };
+  
+  // Helper function to format bytes
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return 'unknown';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let idx = 0;
+    let value = bytes;
+    while (value >= 1024 && idx < units.length - 1) {
+      value /= 1024;
+      idx += 1;
+    }
+    return `${value.toFixed(idx === 0 ? 0 : 1)}${units[idx]}`;
+  }
   
   const userDataDir = manifestResolver.getUserDataDir();
   const downloadedPath = await ensureArtifact(
@@ -330,7 +369,7 @@ async function performUpdate(entry, progressCallback) {
   
   // Step 1: Verify coremanifest.dat signature
   if (progressCallback) {
-    progressCallback({ message: 'Verifying coremanifest signature...', current: 0, total: 0 });
+    progressCallback({ message: 'Verifying coremanifest signature...', filename: '', current: 0, total: 0, percent: 0 });
   }
   const sigVerify = await verifyCoreManifestSignature();
   if (!sigVerify.valid) {
@@ -339,7 +378,7 @@ async function performUpdate(entry, progressCallback) {
   
   // Step 2: Re-verify coremanifest.dat matches JSON
   if (progressCallback) {
-    progressCallback({ message: 'Verifying manifest integrity...', current: 0, total: 0 });
+    progressCallback({ message: 'Verifying manifest integrity...', filename: '', current: 0, total: 0, percent: 0 });
   }
   const manifest = manifestResolver.loadCoreManifest();
   if (!manifest) {
@@ -354,7 +393,7 @@ async function performUpdate(entry, progressCallback) {
   
   // Step 3: Download update
   if (progressCallback) {
-    progressCallback({ message: 'Downloading update...', current: 0, total: 0 });
+    progressCallback({ message: 'Starting download...', filename: entry.source_filename || entry.target_filename || '', current: 0, total: 0, percent: 0 });
   }
   const downloadedPath = await downloadUpdate(entry, progressCallback);
   
@@ -364,13 +403,13 @@ async function performUpdate(entry, progressCallback) {
   const targetPath = path.join(execDir, filename);
   
   if (progressCallback) {
-    progressCallback({ message: 'Moving update to target location...', current: 0, total: 0 });
+    progressCallback({ message: 'Moving update to target location...', filename: filename, current: 0, total: 0, percent: 0 });
   }
   const movedPath = moveUpdateToTarget(downloadedPath, targetPath);
   
   // Step 5: Final verification
   if (progressCallback) {
-    progressCallback({ message: 'Performing final verification...', current: 0, total: 0 });
+    progressCallback({ message: 'Performing final verification...', filename: filename, current: 0, total: 0, percent: 0 });
   }
   
   // Re-read coremanifest.dat
@@ -392,7 +431,7 @@ async function performUpdate(entry, progressCallback) {
   }
   
   if (progressCallback) {
-    progressCallback({ message: 'Update verified successfully', current: 0, total: 0 });
+    progressCallback({ message: 'Update verified successfully', filename: filename, current: 0, total: 0, percent: 100 });
   }
   
   return {

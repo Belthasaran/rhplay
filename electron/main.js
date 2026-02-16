@@ -1083,17 +1083,22 @@ app.whenReady().then(async () => {
                     updateInfo.updateState = 'downloading';
                     softwareUpdateWindow.updateProgress({
                         message: 'Starting update...',
+                        filename: updateCheck.entry.source_filename || updateCheck.entry.target_filename || '',
                         current: 0,
-                        total: 0
+                        total: 0,
+                        percent: 0
                     });
                     
                     const progressCallback = (progress) => {
+                        console.log('[main] Progress update:', progress);
                         softwareUpdateWindow.updateProgress(progress);
                         // Update state based on progress message
-                        if (progress.message && progress.message.includes('Downloading')) {
+                        if (progress.message && (progress.message.includes('Downloading') || progress.message.includes('Starting download'))) {
                             updateInfo.updateState = 'downloading';
-                        } else if (progress.message && (progress.message.includes('Verifying') || progress.message.includes('Performing'))) {
+                        } else if (progress.message && (progress.message.includes('Verifying') || progress.message.includes('Performing') || progress.message.includes('Moving'))) {
                             updateInfo.updateState = 'verifying';
+                        } else if (progress.message && progress.message.includes('completed successfully')) {
+                            updateInfo.updateState = 'completed';
                         }
                     };
                     
@@ -1108,12 +1113,27 @@ app.whenReady().then(async () => {
                         updateInfo.newExecutablePath = result.newExecutablePath;
                         softwareUpdateWindow.updateProgress({
                             message: 'Update completed successfully!',
+                            filename: '',
                             current: 0,
-                            total: 0
+                            total: 0,
+                            percent: 100
                         });
                         
-                        // Wait for user to click "Launch new version"
-                        updateResult = await softwareUpdateWindow.createUpdateWindow(updateInfo, null);
+                        // Update the existing window to show completed state
+                        // Send state update via IPC so the dialog shows "Launch new version" button
+                        const { BrowserWindow } = require('electron');
+                        const windows = BrowserWindow.getAllWindows();
+                        const updateWin = windows.find(w => w.getTitle() === 'Software Update');
+                        if (updateWin && !updateWin.isDestroyed()) {
+                            updateWin.webContents.send('software-update:state-update', {
+                                updateState: 'completed',
+                                newExecutablePath: result.newExecutablePath
+                            });
+                        }
+                        
+                        // Wait for user to click "Launch new version" button
+                        // Create a new promise that resolves when user clicks launch
+                        updateResult = await softwareUpdateWindow.waitForUserResponse();
                         
                         if (updateResult === 'launch-new') {
                             softwareUpdateManager.launchNewVersion(result.newExecutablePath);

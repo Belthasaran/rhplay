@@ -130,14 +130,23 @@
         </div>
 
         <!-- Progress Indicator -->
-        <div v-if="updateInfo.updateState === 'downloading' || updateInfo.updateState === 'verifying'" class="progress-section">
+        <div v-if="updateInfo.updateState === 'downloading' || updateInfo.updateState === 'verifying' || updateInfo.updateState === 'loading'" class="progress-section">
+          <h4>Update Progress</h4>
           <div class="progress-bar-container">
-            <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
+            <div class="progress-bar" :style="{ width: Math.max(0, Math.min(100, progressPercent)) + '%' }"></div>
           </div>
-          <div class="progress-text">{{ updateInfo.progress?.message || 'Processing...' }}</div>
+          <div class="progress-text">
+            <strong>{{ updateInfo.progress?.message || 'Processing...' }}</strong>
+          </div>
+          <div v-if="updateInfo.progress?.filename" class="progress-filename">
+            <strong>File:</strong> {{ updateInfo.progress.filename }}
+          </div>
           <div v-if="updateInfo.progress?.total > 0" class="progress-details">
-            {{ formatBytes(updateInfo.progress.current) }} / {{ formatBytes(updateInfo.progress.total) }}
+            <strong>Progress:</strong> {{ formatBytes(updateInfo.progress.current) }} / {{ formatBytes(updateInfo.progress.total) }}
             ({{ progressPercent }}%)
+          </div>
+          <div v-else-if="updateInfo.progress?.message" class="progress-details">
+            {{ updateInfo.progress.message }}
           </div>
         </div>
 
@@ -151,6 +160,31 @@
           <p><strong>Update completed successfully!</strong></p>
           <p>The new version has been downloaded and verified.</p>
         </div>
+        
+        <!-- Progress History (collapsible) -->
+        <div class="progress-history-section">
+          <button 
+            @click="showProgressHistory = !showProgressHistory" 
+            class="history-toggle-btn"
+            :class="{ expanded: showProgressHistory }"
+          >
+            {{ showProgressHistory ? '▼' : '▶' }} Progress History
+          </button>
+          <div v-if="showProgressHistory" class="progress-history">
+            <div 
+              v-for="(entry, index) in progressHistory" 
+              :key="index" 
+              class="history-entry"
+              :class="entry.type"
+            >
+              <span class="history-time">{{ entry.time }}</span>
+              <span class="history-message">{{ entry.message }}</span>
+              <span v-if="entry.filename" class="history-filename">{{ entry.filename }}</span>
+              <span v-if="entry.percent !== undefined && entry.percent > 0" class="history-percent">{{ entry.percent }}%</span>
+            </div>
+            <div v-if="progressHistory.length === 0" class="history-empty">No progress entries yet.</div>
+          </div>
+        </div>
       </section>
       <footer class="modal-footer">
         <!-- Old Version Dialog Buttons -->
@@ -161,7 +195,7 @@
         
         <!-- Update Completed Buttons -->
         <template v-else-if="updateInfo.updateState === 'completed'">
-          <button @click="handleLaunchNew" class="btn-primary" autofocus>Launch new version</button>
+          <button @click="handleLaunchNew" class="btn-primary" autofocus>Exit and Relaunch</button>
           <button @click="handleCancel" class="btn-secondary">Cancel</button>
         </template>
         
@@ -201,6 +235,8 @@ const props = defineProps<{
       current: number;
       total: number;
       message: string;
+      filename?: string;
+      percent?: number;
     };
     error?: string;
   };
@@ -219,14 +255,30 @@ const ipfsGateways = ref<string[]>([]);
 const arweaveGateways = ref<string[]>([]);
 const selectedIPFSGateway = ref<string>('');
 const selectedArWeaveGateway = ref<string>('');
+const showProgressHistory = ref(false);
+const progressHistory = ref<Array<{
+  time: string;
+  message: string;
+  filename?: string;
+  percent?: number;
+  type: 'info' | 'progress' | 'success' | 'error';
+}>>([]);
 
 const isProcessing = computed(() => {
   return props.updateInfo.updateState === 'downloading' || 
-         props.updateInfo.updateState === 'verifying';
+         props.updateInfo.updateState === 'verifying' ||
+         props.updateInfo.updateState === 'loading';
 });
 
 const progressPercent = computed(() => {
-  if (!props.updateInfo.progress || props.updateInfo.progress.total === 0) {
+  if (!props.updateInfo.progress) {
+    return 0;
+  }
+  // Use percent if available, otherwise calculate from current/total
+  if (props.updateInfo.progress.percent !== undefined) {
+    return props.updateInfo.progress.percent;
+  }
+  if (props.updateInfo.progress.total === 0 || !props.updateInfo.progress.total) {
     return 0;
   }
   return Math.round((props.updateInfo.progress.current / props.updateInfo.progress.total) * 100);
@@ -333,9 +385,21 @@ function openArWeave(txid: string, gateway: string) {
   }
 }
 
-// Load gateways on mount
+// Load gateways on mount and set up state update listener
 onMounted(async () => {
   const api = (window as any).electronAPI;
+  
+  // Listen for state updates (e.g., when update completes)
+  if (api && api.onSoftwareUpdateStateUpdate) {
+    api.onSoftwareUpdateStateUpdate((stateUpdate: any) => {
+      console.log('[SoftwareUpdateDialog] State update received:', stateUpdate);
+      if (stateUpdate.updateState) {
+        // Update the local updateInfo prop by emitting an event or updating parent
+        // Since we can't directly modify props, we'll need to handle this differently
+        // For now, the parent component should handle this via the progress listener
+      }
+    });
+  }
   if (api && api.softwareUpdateGetIPFSGateways) {
     ipfsGateways.value = await api.softwareUpdateGetIPFSGateways() || [];
     if (ipfsGateways.value.length > 0) {

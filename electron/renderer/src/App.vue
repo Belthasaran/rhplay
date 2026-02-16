@@ -30515,13 +30515,39 @@ onMounted(async () => {
           // Listen for progress updates
           if (api.onSoftwareUpdateProgress) {
             api.onSoftwareUpdateProgress((progress: any) => {
+              console.log('[Update Mode] Progress update:', progress);
               softwareUpdateInfo.value.progress = progress;
               if (progress.message) {
-                if (progress.message.includes('Downloading')) {
+                if (progress.message.includes('Downloading') || progress.message.includes('Starting download')) {
                   softwareUpdateInfo.value.updateState = 'downloading';
-                } else if (progress.message.includes('Verifying') || progress.message.includes('Performing')) {
+                } else if (progress.message.includes('Verifying') || progress.message.includes('Performing') || progress.message.includes('Verifying manifest')) {
                   softwareUpdateInfo.value.updateState = 'verifying';
+                } else if (progress.message.includes('completed successfully')) {
+                  softwareUpdateInfo.value.updateState = 'completed';
                 }
+              }
+            });
+          }
+          
+          // Listen for state updates (e.g., when update completes)
+          if (api.onSoftwareUpdateStateUpdate) {
+            api.onSoftwareUpdateStateUpdate((stateUpdate: any) => {
+              console.log('[Update Mode] State update:', stateUpdate);
+              if (stateUpdate.updateState) {
+                softwareUpdateInfo.value.updateState = stateUpdate.updateState;
+              }
+              if (stateUpdate.newExecutablePath) {
+                softwareUpdateInfo.value.newExecutablePath = stateUpdate.newExecutablePath;
+              }
+              // Update progress to show completion
+              if (stateUpdate.updateState === 'completed') {
+                softwareUpdateInfo.value.progress = {
+                  message: 'Update completed successfully!',
+                  filename: '',
+                  current: 0,
+                  total: 0,
+                  percent: 100
+                };
               }
             });
           }

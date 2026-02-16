@@ -164,9 +164,14 @@ function handleUserResponse(response) {
     updateResolve(response);
     updateResolve = null;
   }
-  if (updateWindow && !updateWindow.isDestroyed()) {
-    updateWindow.close();
+  // Don't close window immediately - let it stay open during download
+  // Only close if user explicitly exits or skips (not during 'update' or 'launch-new')
+  if (response === 'exit' || (response === 'skip' && updateInfo && updateInfo.updateState !== 'downloading' && updateInfo.updateState !== 'verifying')) {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.close();
+    }
   }
+  // For 'update' and 'launch-new', keep window open to show progress/completion
 }
 
 /**
@@ -174,7 +179,15 @@ function handleUserResponse(response) {
  */
 function updateProgress(progress) {
   if (updateWindow && !updateWindow.isDestroyed()) {
-    updateWindow.webContents.send('software-update:progress', progress);
+    // Ensure progress object has all required fields
+    const fullProgress = {
+      message: progress.message || 'Processing...',
+      filename: progress.filename || '',
+      current: progress.current || 0,
+      total: progress.total || 0,
+      percent: progress.percent !== undefined ? progress.percent : (progress.total > 0 ? Math.floor((progress.current / progress.total) * 100) : 0)
+    };
+    updateWindow.webContents.send('software-update:progress', fullProgress);
   }
 }
 
@@ -200,10 +213,31 @@ function getUpdateInfo() {
   return updateInfo;
 }
 
+/**
+ * Wait for user response from the existing update window
+ * Used after update completes to wait for "Launch new version" click
+ */
+function waitForUserResponse() {
+  return new Promise((resolve) => {
+    if (!updateResolve) {
+      // Store the resolve function
+      updateResolve = resolve;
+    } else {
+      // If there's already a pending resolve, chain it
+      const originalResolve = updateResolve;
+      updateResolve = (response) => {
+        originalResolve(response);
+        resolve(response);
+      };
+    }
+  });
+}
+
 module.exports = {
   createUpdateWindow,
   handleUserResponse,
   updateProgress,
   closeUpdateWindow,
-  getUpdateInfo
+  getUpdateInfo,
+  waitForUserResponse
 };

@@ -1,5 +1,40 @@
 // 0x43535E8280C0Ec9e845Cacb456C45f576d6D581a
 
+// Update Process:
+// 1. Open https://arbiscan.io/address/0x43535E8280C0Ec9e845Cacb456C45f576d6D581a
+//    a. Click Contract
+//    b. Click Write Contract
+//If you don’t see “Write Contract”, the contract must be verified first.
+
+//  2. Connect Your Wallet Click “Connect to Web3”   Choose wallet
+//Network = Arbitrum One
+//Account = hardware address
+
+//  3. Determine the New Version Number
+// version()
+
+// IF it says 5, then new version should be 6.  Always increment.
+
+// 4. Prepare update
+// Version n
+// SHA256   -  HEX BYTES.  Make sure to put 0x in front
+//
+// Payload Size (optional but recommended)  1392
+// CID bafkreie2la5hbdmxhts3ybwhycfkubj35beyxbhitwmb3fon7wpb5umi4a
+//
+// URL LIST:
+//   Make sure the URL list looks like a JSON-encoded string.
+//
+// ["aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9kL2FBSmY3OXpyCg==","ar://rlKavvJQZZ7zZaNNns6e62LO01cXGgL1P1TkBd0OqXw"]
+//
+// Find the function: updatePointer
+//   Fill in the fields
+//   Write
+
+
+
+
+
 //import "@openzeppelin/contracts/access/Ownable2Step.sol";
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;

@@ -354,6 +354,52 @@ function handleCancel() {
   }
 }
 
+// Watch updateInfo.progress to add entries to history and update internal state
+watch(() => props.updateInfo.progress, (newProgress) => {
+  if (newProgress && newProgress.message) {
+    const entry = {
+      time: new Date().toLocaleTimeString(),
+      message: newProgress.message,
+      filename: newProgress.filename,
+      percent: newProgress.percent,
+      type: (newProgress.message.includes('completed') || newProgress.message.includes('success')) ? 'success' :
+            (newProgress.message.includes('failed') || newProgress.message.includes('error')) ? 'error' :
+            (newProgress.percent !== undefined && newProgress.percent > 0) ? 'progress' : 'info'
+    };
+    progressHistory.value.push(entry);
+    // Keep only last 100 entries
+    if (progressHistory.value.length > 100) {
+      progressHistory.value.shift();
+    }
+    
+    // Update internal state based on progress message
+    if (newProgress.message.includes('completed successfully') || newProgress.message.includes('Update verified successfully')) {
+      internalUpdateState.value = 'completed';
+    } else if (newProgress.message.includes('Downloading') || newProgress.message.includes('Starting download')) {
+      internalUpdateState.value = 'downloading';
+    } else if (newProgress.message.includes('Verifying') || newProgress.message.includes('Performing') || newProgress.message.includes('Moving')) {
+      internalUpdateState.value = 'verifying';
+    }
+  }
+}, { deep: true });
+
+// Watch updateState to add state changes to history and sync internal state
+watch(() => props.updateInfo.updateState, (newState, oldState) => {
+  if (newState && newState !== oldState) {
+    internalUpdateState.value = newState;
+    const entry = {
+      time: new Date().toLocaleTimeString(),
+      message: `State changed to: ${newState}`,
+      type: newState === 'completed' ? 'success' : 
+            newState === 'error' ? 'error' : 'info'
+    };
+    progressHistory.value.push(entry);
+    if (progressHistory.value.length > 100) {
+      progressHistory.value.shift();
+    }
+  }
+}, { immediate: true });
+
 function openUrl(url: string) {
   const api = (window as any).electronAPI;
   if (api && api.openExternal) {
@@ -401,9 +447,48 @@ onMounted(async () => {
     api.onSoftwareUpdateStateUpdate((stateUpdate: any) => {
       console.log('[SoftwareUpdateDialog] State update received:', stateUpdate);
       if (stateUpdate.updateState) {
-        // Update the local updateInfo prop by emitting an event or updating parent
-        // Since we can't directly modify props, we'll need to handle this differently
-        // For now, the parent component should handle this via the progress listener
+        internalUpdateState.value = stateUpdate.updateState;
+        // Add to history
+        const entry = {
+          time: new Date().toLocaleTimeString(),
+          message: `State update: ${stateUpdate.updateState}`,
+          type: stateUpdate.updateState === 'completed' ? 'success' : 'info'
+        };
+        progressHistory.value.push(entry);
+        if (progressHistory.value.length > 100) {
+          progressHistory.value.shift();
+        }
+      }
+    });
+  }
+  
+  // Listen for progress updates and add to history
+  if (api && api.onSoftwareUpdateProgress) {
+    api.onSoftwareUpdateProgress((progress: any) => {
+      console.log('[SoftwareUpdateDialog] Progress received:', progress);
+      if (progress && progress.message) {
+        const entry = {
+          time: new Date().toLocaleTimeString(),
+          message: progress.message,
+          filename: progress.filename,
+          percent: progress.percent,
+          type: (progress.message.includes('completed') || progress.message.includes('success')) ? 'success' :
+                (progress.message.includes('failed') || progress.message.includes('error')) ? 'error' :
+                (progress.percent !== undefined && progress.percent > 0) ? 'progress' : 'info'
+        };
+        progressHistory.value.push(entry);
+        if (progressHistory.value.length > 100) {
+          progressHistory.value.shift();
+        }
+        
+        // Update internal state based on progress message
+        if (progress.message.includes('completed successfully') || progress.message.includes('Update verified successfully')) {
+          internalUpdateState.value = 'completed';
+        } else if (progress.message.includes('Downloading') || progress.message.includes('Starting download')) {
+          internalUpdateState.value = 'downloading';
+        } else if (progress.message.includes('Verifying') || progress.message.includes('Performing') || progress.message.includes('Moving')) {
+          internalUpdateState.value = 'verifying';
+        }
       }
     });
   }

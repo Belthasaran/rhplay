@@ -1510,6 +1510,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, updateAvailable: boolean, result?: string, error?: string}>}
    */
   softwareUpdateCheckManual: () => ipcRenderer.invoke('software-update:check-manual'),
+
+  /**
+   * Get about dialog info
+   * @returns {Promise<Object>}
+   */
+  aboutGetInfo: () => ipcRenderer.invoke('about:get-info'),
   
   /**
    * Listen for update progress

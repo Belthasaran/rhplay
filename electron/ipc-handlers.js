@@ -17420,6 +17420,64 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  // ============================================================================
+  // Software Update Handlers (Manual Check Only)
+  // Note: Most software update handlers are registered early in main.js
+  // via setupSoftwareUpdateIpc() before the update check runs
+  // ============================================================================
+  
+  const softwareUpdateManager = require('./utils/software-update-manager');
+  const softwareUpdateWindow = require('./utils/software-update-window');
+  
+  // Manual update check (only handler needed here since others are registered early)
+  ipcMain.handle('software-update:check-manual', async (_event) => {
+    try {
+      const updateCheck = softwareUpdateManager.checkForUpdate();
+      if (updateCheck.updateAvailable) {
+        // Check if local version exists
+        const localCheck = softwareUpdateManager.checkLocalVersionExists(updateCheck.entry);
+        let localVersionMatches = false;
+        if (localCheck.exists) {
+          const verifyResult = softwareUpdateManager.verifyLocalVersionSHA256(
+            localCheck.path,
+            updateCheck.entry.sha256
+          );
+          localVersionMatches = verifyResult.matches;
+        }
+        
+        const updateInfo = {
+          currentVersion: updateCheck.currentVersion,
+          availableVersion: updateCheck.availableVersion,
+          entry: updateCheck.entry,
+          localVersionExists: localCheck.exists,
+          localVersionMatches: localVersionMatches,
+          updateState: 'idle'
+        };
+        
+        // Create non-blocking window
+        const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+        const result = await softwareUpdateWindow.createUpdateWindow(updateInfo, mainWindow);
+        
+        return {
+          success: true,
+          updateAvailable: true,
+          result
+        };
+      }
+      
+      return {
+        success: true,
+        updateAvailable: false
+      };
+    } catch (err) {
+      console.error('[software-update:check-manual] Error:', err);
+      return {
+        success: false,
+        error: err.message
+      };
+    }
+  });
+
   console.log('IPC handlers registered successfully');
 }
 // Helper function to sanitize file names

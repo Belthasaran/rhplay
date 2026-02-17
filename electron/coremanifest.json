@@ -1,10 +1,10 @@
 {
-  "lastupdated": 1770624416,
-  "versionid": 1,
-  "version_string": "1",
+  "lastupdated": 1771285633,
+  "versionid": 2,
+  "version_string": "2",
   "waiting_ardrive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
   "waiting_ardrive_folder": "2ef50675-a5bb-45a7-aea8-21cb5603eff6",
-  "waiting_index_data_txid": "4BTP_CyVaCZjKei8sq2bc7LbeIFAbPKqPZSJvrBFveI",
+  "waiting_index_data_txid": "5IWgtt10TyGgmpPWTuGAj0Ig9E9TS66jjvf6asntF90",
   "coremanifest": {
     "signer_keys": [
       {
@@ -15,22 +15,22 @@
   },
   "beta/dbmanifest.json": {
     "version": "14",
-    "updated": 1771266044
+    "updated": 1771285633
   },
   "beta/bpsarchives.json": {
     "version": "9",
-    "updated": 1771266044
+    "updated": 1771285633
   },
   "beta/RHPLAY/win64/portable": {
     "pointer": "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
     "source_filename": "RHTools-0.1.21-beta-portable.exe",
     "version": "0.1.21beta",
-    "updated": 1771266234,
+    "updated": 1771286620,
     "target_filename": "RHTools-0.1.21-beta-portable.exe",
     "sha256": "c47cacbecca8725faa790c429d5ab6a342e01c43f8e35a5066ce0fbee08fe1f8",
     "size": "250757638",
     "ipfs_cidv1": "bafybeiap3zl5f6bmity6gwhg7rba75l7b7a74z2zqrdyqvbiyeenu3hlk4",
-    "baddr": "",
+    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9iaVAzOENzbQo=",
     "priority": [
       "baddr",
       "ipfs",
@@ -38,18 +38,21 @@
     ],
     "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
     "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
-    "ardrive_file_name": "RHTools-0.1.21-beta-portable.exe"
+    "ardrive_file_name": "RHTools-0.1.21-beta-portable.exe",
+    "ardrive_file_path": "/SMWRH/release/0.1.21beta/RHTools-0.1.21-beta-portable.exe",
+    "ardrive_file_id": "6ae9c984-8ec9-4b0c-b2d9-4dca25c64398",
+    "data_txid": "p34Jua7QufNOns1hSEHXDtAtCUva1-M91EMmINDeKdM"
   },
   "beta/RHPLAY/linux64/AppImage": {
     "pointer": "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
     "source_filename": "RHTools-0.1.21-beta.AppImage",
     "version": "0.1.21beta",
-    "updated": 1771266399,
+    "updated": 1771286739,
     "target_filename": "RHTools-0.1.21-beta.AppImage",
     "sha256": "5dce79db9e6cd9cdf09ef1886e333e88b7c82e140dd1aa085f5d9c702b3163df",
     "size": "307278615",
     "ipfs_cidv1": "bafybeicbbcjf7djfrkbt7cvsjjqf5btkaad4lzqcjnizmaslryyohxxde4",
-    "baddr": "",
+    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9FUFVOb1B2RQo=",
     "priority": [
       "baddr",
       "ipfs",
@@ -57,16 +60,19 @@
     ],
     "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
     "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
-    "ardrive_file_name": "RHTools-0.1.21-beta.AppImage"
+    "ardrive_file_name": "RHTools-0.1.21-beta.AppImage",
+    "ardrive_file_path": "/SMWRH/release/0.1.21beta/RHTools-0.1.21-beta.AppImage",
+    "ardrive_file_id": "e4b97a95-c555-4b7a-b7db-8ef45d21419c",
+    "data_txid": "fNKCQbXHQ8aUntQeKFw2z54ST0I2xvRxRP-UHXabSUE"
   },
   "beta/MANIFEST_PKG": {
     "contents": [
       "dbmanifest.json",
       "bpsarchives.json"
     ],
-    "sha256": "1306f64b353b0d6dd890e2786fc2b7071f02c41554dd505dc042e45158257f85",
-    "ipfs_cidv1": "bafkreiata33ewnj3bvw5rehcpbx4fnyhd4bmifku3vif3qcc4rivqjl7qu",
-    "baddr": "",
+    "sha256": "40567f15329ef37102489ac9e89940aad3bcf71a78753974ef821b13a0c21d0c",
+    "ipfs_cidv1": "bafkreicakz7rkmu66nyqese2zhujsqfk2o6pogtyou4xj34cdmj2bqq5bq",
+    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9HekJ6UGZ5RQo=",
     "size": "73742",
     "priority": [
       "baddr",

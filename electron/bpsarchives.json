@@ -8095,13 +8095,13 @@
   },
   "bpsxc_20260218.7z": {
     "type": "bpsarchive",
-    "version": "1",
+    "version": "2",
     "base": {
       "file_name": "bpsxc_20260218.7z",
       "format": "7z",
-      "sha256": "122e381b109bdec62cbcc6d7b19ffb65873c921e58786bf02067ea45b4d5d703",
-      "ipfs_cidv1": "bafybeigcydv4t6iw2dfcm7hghqke3rulhrn7efmkjiyxit7gp6tllyjrbm",
-      "size": "10131065",
+      "sha256": "bd1f25928969e529682fee0d2bd4a5957ca4221a7c07c697161ddff836e97386",
+      "ipfs_cidv1": "bafybeigqi7bmgo3xfn4uc5gd4mnzevqfbviwho7dx34ub776pcv2gjmsty",
+      "size": "15501060",
       "priority": [
         "baddr",
         "ipfs",
@@ -8111,7 +8111,7 @@
       "ardrive_file_name": "bpsxc_20260218.7z",
       "ardrive_file_path": "/MWDB/storeA/bpsxc_20260218.7z",
       "ardrive_file_id": "4df5fc59-06a3-4130-a6fc-e56e33f739bd",
-      "data_txid": "0CJV781H2YbjCEanWlpASWA_4l8kfvO5q18SLoj-nfI",
+      "data_txid": "3Uf73sznvnyrCur8X8IgNG-y0WFzqeOeYGaO_TKWtOw",
       "ardrive_drive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
       "ardrive_folder_id": "a6130936-d92e-45ac-a004-273d96e9ec9d"
     }

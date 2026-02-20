@@ -469,7 +469,7 @@ async function processGameFolder(gameFolder, gameid, screenshotDb, resourceDb) {
       downloaded++;
       
     } catch (error) {
-      console.error(`    [${i + 1}/${imageUrls.length}] ✗ Failed: ${error.message}`);
+      console.error(`    [${i + 1}/${imageUrls.length}] [${imageUrls[i]}] ✗ Failed: ${error.message}`); //Log failed URL
     }
   }
   
@@ -810,7 +810,7 @@ async function processDatabaseGame(gameid, gvuuid, gvjsondata, screenshotDb, res
       console.log(`      ✓ Saved encrypted screenshot: ${rsuuid} (sequence_no: ${currentSequenceNo})`);
       
     } catch (error) {
-      console.error(`    [${i + 1}/${imageUrls.length}] ✗ Failed: ${error.message}`);
+      console.error(`    [${i + 1}/${imageUrls.length}]  [${imageUrls[i]}]  ✗ Failed: ${error.message}`);  //Log failed URL
     }
   }
   

@@ -1,5 +1,5 @@
 {
-  "lastupdated" : "1771285633",
+  "lastupdated": "1771285633",
   "greetings": {
     "message": "No announcement has been specified"
   },
@@ -53,7 +53,6 @@
   "resource.db": {
     "version": "13",
     "base": {
-      "source_path": "packed_db/resource.db.initial.xz",
       "file_name": "resource.db.initial.xz",
       "format": "xz",
       "sha256": "31ecf773f00d550426423df3cdad9981974af22facdc7654f0f244e091b24f81",
@@ -81,6 +80,14 @@
         "data_txid": "wI0LE_aoqmp9drsWgQWfJod3DCqnC-oDsYbOV3GUk2s",
         "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
         "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      },
+      {
+        "file_name": "res13_to_14.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "cf67dedcc4be638f0f401addea2366f7640cfbbc54ef353513b512d9aa6ff3de",
+        "ipfs_cidv1": "bafybeia4ssw3qzj5g3xjdxwqv5nwjdbqzmad355lnpkporrzva7s6qv5vm",
+        "size": "18910264"
       }
     ]
   },
@@ -479,15 +486,15 @@
     ]
   },
   "rhdata.db": {
-    "version": "13",
+    "version": "14",
     "base": {
-      "file_name": "rhdata-f12-20251228.tar.xz",
+      "file_name": "rhdata-202602019.tar.xz",
       "format": "tar+xz",
       "extract_file": "rhdata.db",
-      "sha256": "726973ecade2f6015c8eb2eac002190aa2c2a6ff2003e688a8d0af92fca9c2c7",
-      "ipfs_cidv1": "bafybeigqabiwobsstvpvjvoc7pipjdsovr7df2y2krozd5jfhjcc6b7mci",
-      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9wbmk2RFE0Rw==",
-      "size": "30866376",
+      "sha256": "3df115e8f9194bf5c18a9f823847e31e912c66dc3149a2737ec1ecec9142333a",
+      "ipfs_cidv1": "bafybeifgywexpezou457gstonahubrrs4qjz4hi2g7nxw7mez7cyfv74we",
+      "baddr": "",
+      "size": "30668920",
       "priority": [
         "baddr",
         "ipfs",
@@ -495,31 +502,15 @@
       ],
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
       "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
-      "ardrive_file_name": "rhdata-f12-20251228.tar.xz",
-      "ardrive_file_path": "/SMWRH/db/patch/rhdata-f12-20251228.tar.xz",
-      "ardrive_file_id": "c865d4ba-3825-4647-b94b-7df16e93cdee",
-      "data_txid": "DnlxSNMUafsIPM46UisYEfeq2T-v0n6ibrgjMZFjlhM"
+      "ardrive_file_name": "rhdata-202602019.tar.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/rhdata-202602019.tar.xz",
+      "ardrive_file_id": "2f5b96aa-6894-4c3d-b9e2-cbeb7a9c5ca2",
+      "data_txid": "0kf0V98Zz8VaUz7lZoVXsOU18ILOUQUynxC50RcpD5s"
     },
-    "sqlpatches": [
-      {
-        "file_name": "rhd12_to_13.sql.xz",
-        "format": "xz",
-        "type": "sql",
-        "sha256": "27931ba9065a85ba30c613aebaadc38d7b04b59c335ddb7a29e6ac7eba2917d3",
-        "ipfs_cidv1": "bafkreibhsmn2sbs2qw5dbrqtv25k3q4npmcllhbtlxnxukpgvr7lukix2m",
-        "size": "40268",
-        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS82Uzdka3l5Ywo=",
-        "ardrive_file_name": "rhd12_to_13.sql.xz",
-        "ardrive_file_path": "/SMWRH/db/patch/rhd12_to_13.sql.xz",
-        "ardrive_file_id": "4dddc464-91f2-4519-80ac-ed5e0c73818f",
-        "data_txid": "V2VfSNtLds18YWbc-y0cOmfLwmn54cUnwV8CbjYIyYQ",
-        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
-        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
-      }
-    ]
+    "sqlpatches": []
   },
   "patchbin.db": {
-    "version": "13",
+    "version": "14",
     "base": {
       "file_name": "bare_patchbin_2025_11_01.tar.xz",
       "format": "tar+xz",
@@ -853,6 +844,14 @@
         "data_txid": "LQeahZahwwofQhlv8qpaq0H_L2rznqXmjG9rdiWZc3s",
         "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
         "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      },
+      {
+        "file_name": "pbin13_to14.sql.xz",
+        "format": "xz",
+        "type": "sql",
+        "sha256": "310667bfaa44f7ddcd7987f032807ad4381f4394368fbf3e33565f764a29dc15",
+        "ipfs_cidv1": "bafybeic7hfhcf66xcc2kfjnr7exa3gkdkpcwy7btfuo4lvpji4rq6iquui",
+        "size": "12751240"
       }
     ]
   }

@@ -51,7 +51,7 @@
     }
   },
   "resource.db": {
-    "version": "13",
+    "version": "14",
     "base": {
       "file_name": "resource.db.initial.xz",
       "format": "xz",
@@ -87,7 +87,13 @@
         "type": "sql",
         "sha256": "cf67dedcc4be638f0f401addea2366f7640cfbbc54ef353513b512d9aa6ff3de",
         "ipfs_cidv1": "bafybeia4ssw3qzj5g3xjdxwqv5nwjdbqzmad355lnpkporrzva7s6qv5vm",
-        "size": "18910264"
+        "size": "18910264",
+        "ardrive_file_name": "res13_to_14.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/res13_to_14.sql.xz",
+        "ardrive_file_id": "6e1093c7-6555-42b5-ae16-a53358e16631",
+        "data_txid": "vXVcVJ6XUObVHOr4sr_55n1zi752LnbzW5XuDDHTJe4",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
       }
     ]
   },
@@ -851,7 +857,13 @@
         "type": "sql",
         "sha256": "310667bfaa44f7ddcd7987f032807ad4381f4394368fbf3e33565f764a29dc15",
         "ipfs_cidv1": "bafybeic7hfhcf66xcc2kfjnr7exa3gkdkpcwy7btfuo4lvpji4rq6iquui",
-        "size": "12751240"
+        "size": "12751240",
+        "ardrive_file_name": "pbin13_to14.sql.xz",
+        "ardrive_file_path": "/SMWRH/db/patch/pbin13_to14.sql.xz",
+        "ardrive_file_id": "ece41ddc-264c-42a6-8cb5-5bfdbcfb0a49",
+        "data_txid": "Y4RNaUO1UPkqHb6W-DTGy5zrw19loFLdL7mKegj_0zs",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
       }
     ]
   }

@@ -486,6 +486,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   savePreset: (params) => ipcRenderer.invoke('extra-patches:save-preset', params),
   deletePreset: (params) => ipcRenderer.invoke('extra-patches:delete-preset', params),
   
+  /**
+   * Get highest valid game version for +Patch default selection
+   * @param {Object} params - { gameId: string, verifyDecodable?: boolean }
+   * @returns {Promise<{success: boolean, version: number|null, triedVersions: number[], error?: string}>}
+   */
+  getHighestValidVersion: (params) => ipcRenderer.invoke('db:game:get-highest-valid-version', params),
+  
   // =============================
   // Game Stages Operations
   // =============================

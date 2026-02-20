@@ -21166,12 +21166,29 @@ async function startSelected() {
   }
 }
 
-function openAdvancedPatchModal() {
+async function openAdvancedPatchModal() {
   const it = getSingleSelected();
   if (!it) return;
+  
   advancedPatchGameId.value = it.Id;
-  advancedPatchGameVersion.value = it.Version || 1;
   advancedPatchGameName.value = it.Name || '';
+  
+  // Default to highest valid version (with patchblob + attachment) so +Patch
+  // doesn't accidentally target a missing/incomplete version (e.g., v1).
+  let resolvedVersion: number = it.CurrentVersion || it.Version || 1;
+  try {
+    const api = (window as any)?.electronAPI;
+    if (api?.getHighestValidVersion) {
+      const result = await api.getHighestValidVersion({ gameId: it.Id });
+      if (result?.success && typeof result.version === 'number') {
+        resolvedVersion = result.version;
+      }
+    }
+  } catch (e) {
+    console.warn('[openAdvancedPatchModal] Failed to resolve highest valid version:', e);
+  }
+  
+  advancedPatchGameVersion.value = resolvedVersion;
   advancedPatchModalOpen.value = true;
 }
 

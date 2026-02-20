@@ -4697,6 +4697,24 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get highest valid game version for +Patch default selection
+   * Channel: db:game:get-highest-valid-version
+   */
+  ipcMain.handle('db:game:get-highest-valid-version', async (_event, { gameId, verifyDecodable } = {}) => {
+    try {
+      const result = await gameStager.getHighestValidVersion({
+        dbManager,
+        gameId,
+        verifyDecodable: verifyDecodable !== false,
+      });
+      return result;
+    } catch (error) {
+      console.error('Error getting highest valid version:', error);
+      return { success: false, version: null, triedVersions: [], error: error.message };
+    }
+  });
+
+  /**
    * Get available extra patches for a game
    * Channel: extra-patches:get-available
    */

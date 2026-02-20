@@ -324,6 +324,99 @@ async function createPatchedSFC(params) {
   }
 }
 
+/**
+ * Find the highest game version that has patch data available and decodable.
+ * This is used by the +Patch flow to avoid defaulting to version 1 when it
+ * doesn't exist or doesn't have patchblob/attachment data.
+ *
+ * "Valid" means:
+ * - gameversions row exists
+ * - patchblob1_name exists and resolves to a patchblobs row (providing key)
+ * - attachments row exists for file_name=patchblob1_name with non-null file_data
+ * - (optional) blob can be decoded using patchblob key; if decoded_hash_sha224 is
+ *   present, it must match
+ *
+ * @param {Object} params
+ * @param {Object} params.dbManager - Database manager
+ * @param {string} params.gameId - Game ID
+ * @param {boolean} [params.verifyDecodable=true] - Attempt decode validation
+ * @returns {Promise<{success: boolean, version: number|null, triedVersions: number[], error?: string}>}
+ */
+async function getHighestValidVersion(params) {
+  const { dbManager, gameId, verifyDecodable = true } = params || {};
+  if (!dbManager) {
+    return { success: false, version: null, triedVersions: [], error: 'dbManager is required' };
+  }
+  if (!gameId) {
+    return { success: false, version: null, triedVersions: [], error: 'gameId is required' };
+  }
+  
+  try {
+    const rhdb = dbManager.getConnection('rhdata');
+    const patchbinDb = dbManager.getConnection('patchbin');
+    
+    // Get candidate versions (highest first) with patchblob name + key
+    const candidates = rhdb.prepare(`
+      SELECT gv.version, gv.patchblob1_name, pb.patchblob1_key
+      FROM gameversions gv
+      LEFT JOIN patchblobs pb ON gv.patchblob1_name = pb.patchblob1_name
+      WHERE gv.gameid = ?
+      ORDER BY gv.version DESC
+    `).all(gameId);
+    
+    if (!candidates || candidates.length === 0) {
+      return { success: true, version: null, triedVersions: [] };
+    }
+    
+    const triedVersions = [];
+    
+    for (const row of candidates) {
+      const version = row?.version;
+      if (typeof version !== 'number') continue;
+      triedVersions.push(version);
+      
+      const patchblobName = row?.patchblob1_name;
+      const patchKey = row?.patchblob1_key;
+      
+      if (!patchblobName || !patchKey) continue;
+      
+      const attachment = patchbinDb.prepare(`
+        SELECT file_data, decoded_hash_sha224
+        FROM attachments
+        WHERE file_name = ?
+      `).get(patchblobName);
+      
+      if (!attachment || !attachment.file_data) continue;
+      
+      if (verifyDecodable) {
+        try {
+          const decodedData = await decodeBlob(attachment.file_data, patchKey);
+          if (!decodedData || !Buffer.isBuffer(decodedData) || decodedData.length === 0) {
+            continue;
+          }
+          
+          // If a decoded hash is present, enforce it
+          if (attachment.decoded_hash_sha224) {
+            const actualDecodedHash = crypto.createHash('sha224').update(decodedData).digest('hex');
+            if (actualDecodedHash !== attachment.decoded_hash_sha224) {
+              continue;
+            }
+          }
+        } catch (e) {
+          // Decode failed; try next lower version
+          continue;
+        }
+      }
+      
+      return { success: true, version, triedVersions };
+    }
+    
+    return { success: true, version: null, triedVersions };
+  } catch (error) {
+    return { success: false, version: null, triedVersions: [], error: error.message };
+  }
+}
+
 function stripleadingzeros(strval) {
         return strval.replace(/^0+/, '');
 }
@@ -2286,6 +2379,7 @@ module.exports = {
   getQuickLaunchBasePath,
   generateRunFolderName,
   getActiveRun,
+  getHighestValidVersion,
   getAvailableExtraPatches,
   buildPlusPatchedGame,
   isRunPaused,

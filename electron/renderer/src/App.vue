@@ -4,8 +4,19 @@
     DEBUG: isUpdateMode={{ isUpdateMode }}, visible={{ softwareUpdateDialogVisible }}
   </div>
   
+  <!-- Database Update Dialog (shown when mode=db-update) -->
+  <div v-else-if="isDbUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+    <DatabaseUpdateDialog
+      :visible="databaseUpdateDialogVisible"
+      :update-info="databaseUpdateInfo"
+      :is-blocking="true"
+      @skip="handleDatabaseUpdateSkip"
+      @update="handleDatabaseUpdate"
+      @reprovision="handleDatabaseUpdateReprovision"
+    />
+  </div>
   <!-- Software Update Dialog (shown when mode=update) -->
-  <div v-if="isUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+  <div v-else-if="isUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
     <SoftwareUpdateDialog
       :visible="softwareUpdateDialogVisible"
       :update-info="softwareUpdateInfo"
@@ -9375,6 +9386,7 @@ if (!mode && typeof window !== 'undefined' && window.location.hash) {
 }
 
 const isUpdateMode = ref(mode === 'update');
+const isDbUpdateMode = ref(mode === 'db-update');
 
 // Debug logging - ALWAYS log to help diagnose
 console.log('[App.vue] ===== INITIALIZATION =====');
@@ -9393,6 +9405,12 @@ if (typeof window !== 'undefined' && window.location.hash && window.location.has
   if (!isUpdateMode.value) {
     console.warn('[App.vue] Forcing update mode based on hash');
     isUpdateMode.value = true;
+  }
+}
+// Force db-update mode if URL contains mode=db-update
+if (typeof window !== 'undefined' && (window.location.search?.includes('mode=db-update') || window.location.hash?.includes('mode=db-update'))) {
+  if (!isDbUpdateMode.value) {
+    isDbUpdateMode.value = true;
   }
 }
 
@@ -9414,6 +9432,19 @@ const softwareUpdateInfo = ref<any>({
 if (isUpdateMode.value) {
   console.log('[App.vue] Update mode detected, setting dialog visible');
   softwareUpdateDialogVisible.value = true;
+}
+
+// Database Update Dialog state
+const databaseUpdateDialogVisible = ref(isDbUpdateMode.value);
+const databaseUpdateInfo = ref<any>({
+  updates: [],
+  updatesAvailable: false,
+  updateState: 'idle',
+  progress: null,
+  error: null
+});
+if (isDbUpdateMode.value) {
+  databaseUpdateDialogVisible.value = true;
 }
 import { nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
@@ -9458,6 +9489,7 @@ import PredictionConflictDialog from './components/PredictionConflictDialog.vue'
 import RatingFactorsHelp from './components/RatingFactorsHelp.vue';
 import SearchCatalogAcknowledgement from './components/SearchCatalogAcknowledgement.vue';
 import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.vue';
+import DatabaseUpdateDialog from './components/DatabaseUpdateDialog.vue';
 import AboutDialog from './components/AboutDialog.vue';
 import {
   alertDialogVisible,
@@ -30614,6 +30646,34 @@ onMounted(async () => {
     console.log('[Update Mode] Skipping normal app initialization');
     return;
   }
+
+  // Database update mode
+  if (isDbUpdateMode.value) {
+    databaseUpdateDialogVisible.value = true;
+    try {
+      const api = (window as any).electronAPI;
+      if (api && api.databaseUpdateGetInfo) {
+        const info = await api.databaseUpdateGetInfo();
+        if (info) {
+          databaseUpdateInfo.value = { ...info, updateState: info.updateState || 'idle' };
+        }
+        if (api.onDatabaseUpdateProgress) {
+          api.onDatabaseUpdateProgress((progress: any) => {
+            databaseUpdateInfo.value.progress = progress;
+            if (progress.updateState) {
+              databaseUpdateInfo.value.updateState = progress.updateState;
+            } else if (progress.message?.includes('completed')) {
+              databaseUpdateInfo.value.updateState = 'completed';
+            }
+          });
+        }
+      }
+    } catch (error) {
+      databaseUpdateInfo.value.error = error instanceof Error ? error.message : String(error);
+    }
+    databaseUpdateDialogVisible.value = true;
+    return;
+  }
   
   console.log('[Normal Mode] Initializing full app');
   
@@ -30823,6 +30883,28 @@ async function handleSoftwareUpdateCancel() {
   // Only allow cancel if not blocking
   if (!isUpdateMode.value) {
     softwareUpdateDialogVisible.value = false;
+  }
+}
+
+async function handleDatabaseUpdateSkip() {
+  const api = (window as any).electronAPI;
+  if (api && api.databaseUpdateUserResponse) {
+    await api.databaseUpdateUserResponse({ response: 'skip' });
+  }
+  databaseUpdateDialogVisible.value = false;
+}
+
+async function handleDatabaseUpdate() {
+  const api = (window as any).electronAPI;
+  if (api && api.databaseUpdateUserResponse) {
+    await api.databaseUpdateUserResponse({ response: 'update' });
+  }
+}
+
+async function handleDatabaseUpdateReprovision() {
+  const api = (window as any).electronAPI;
+  if (api && api.databaseUpdateUserResponse) {
+    await api.databaseUpdateUserResponse({ response: 'reprovision' });
   }
 }
 

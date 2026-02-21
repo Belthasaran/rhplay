@@ -76,6 +76,10 @@
           <button class="btn-primary" @click="handleRebuildAffected">Rebuild Database</button>
           <button class="btn-secondary" @click="handleSkip">Use old Database Version</button>
         </template>
+        <template v-else-if="updateInfo.updateState === 'error'">
+          <button class="btn-primary" @click="handleReprovision">Re-provision databases</button>
+          <button class="btn-secondary" @click="handleSkip">Use old Database Version</button>
+        </template>
         <template v-else-if="!isProcessing">
           <button class="btn-primary" @click="handleUpdate" :disabled="false">
             Attempt to Update the databases

@@ -1,5 +1,7 @@
 - P20260209
 
+- **Database Update Relaunch Button**: After database update or re-provision completes successfully, added "Click to Relaunch Program" button (primary) alongside "Continue". Relaunch exits and restarts the app, same as Software Update's "Exit and Relaunch".
+
 - **Database Update Error Flow Fix**: When "Attempt to Update" fails completely, the full-failure branch now handles the user's choice instead of falling through to app startup. If user clicks "Re-provision databases", executeReProvision runs with progress; if "Use old Database Version", dialog closes and app continues. Added error-state UI (Re-provision + Use old buttons) distinct from the initial 3-button state.
 
 - **Re-provision Dialog Fix**: Fixed Database Update window dismissing instead of showing progress when clicking "Re-provision databases". Added updateInfoInPlace calls at start of both 'update' and 'reprovision' branches so renderer receives updateState='updating' and switches to progress view.

@@ -84,7 +84,6 @@
       {
         "file_name": "res13_to_14.sql.xz",
 	"version_before" : "13",
-	"version_after" : "14",
         "format": "xz",
         "type": "sql",
         "sha256": "cf67dedcc4be638f0f401addea2366f7640cfbbc54ef353513b512d9aa6ff3de",
@@ -857,7 +856,6 @@
       {
         "file_name": "pbin13_to14.sql.xz",
 	"version_before" : "13",
-	"version_after" : "14",
         "format": "xz",
         "type": "sql",
         "sha256": "310667bfaa44f7ddcd7987f032807ad4381f4394368fbf3e33565f764a29dc15",

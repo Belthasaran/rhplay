@@ -15,6 +15,9 @@ const { checkForUpdates: checkCoreManifestUpdates } = require('./utils/coremanif
 const { checkForSoftwareUpdate } = require('./utils/software-update-check');
 const softwareUpdateManager = require('./utils/software-update-manager');
 const softwareUpdateWindow = require('./utils/software-update-window');
+const databaseUpdateWindow = require('./utils/database-update-window');
+const { checkForDatabaseUpdates } = require('./utils/database-update-check');
+const { executeDatabaseUpdate, executeReProvision } = require('./utils/database-update-executor');
 
 /**
  * Register software update IPC handlers early (before database initialization)
@@ -65,6 +68,19 @@ function setupSoftwareUpdateIpc() {
   // Get ArWeave gateways list
   ipcMain.handle('software-update:get-arweave-gateways', () => {
     return softwareUpdateManager.getArWeaveGateways();
+  });
+}
+
+/**
+ * Register database update IPC handlers
+ */
+function setupDatabaseUpdateIpc() {
+  ipcMain.handle('database-update:get-info', () => {
+    return databaseUpdateWindow.getDatabaseUpdateInfo();
+  });
+  ipcMain.handle('database-update:user-response', (_event, { response }) => {
+    databaseUpdateWindow.handleUserResponse(response);
+    return { success: true };
   });
 }
 
@@ -1028,8 +1044,9 @@ app.whenReady().then(async () => {
         // Continue anyway - app can still work with bundled manifests
     }
 
-    // Register software update IPC handlers early (before update check)
+    // Register software update and database update IPC handlers early (before update check)
     setupSoftwareUpdateIpc();
+    setupDatabaseUpdateIpc();
 
     // Check for core manifest updates (non-blocking, background)
     (async () => {
@@ -1202,6 +1219,72 @@ app.whenReady().then(async () => {
             }
             await loadRendererMode('provisioner');
         } else {
+            // Database update check (only when all databases exist)
+            const dbUpdateCheck = checkForDatabaseUpdates();
+            if (dbUpdateCheck.updatesAvailable && dbUpdateCheck.updates && dbUpdateCheck.updates.length > 0) {
+                const dbUpdateInfo = {
+                    updates: dbUpdateCheck.updates,
+                    updatesAvailable: true,
+                    updateState: 'idle',
+                    progress: null,
+                    error: null
+                };
+                const paths = getProvisionerPaths();
+                const progressCallback = (p) => {
+                    databaseUpdateWindow.updateProgress(p);
+                };
+
+                const dbResult = await databaseUpdateWindow.createDatabaseUpdateWindow(dbUpdateInfo, null);
+
+                if (dbResult === 'update') {
+                    dbUpdateInfo.updateState = 'updating';
+                    databaseUpdateWindow.updateProgress({ message: 'Starting database update...', percent: 0 });
+                    const result = await executeDatabaseUpdate(dbUpdateCheck.updates, {
+                        manifestPath: getManifestPath(),
+                        userDataDir: getUserDataDir(),
+                        provisionerScriptPath: getProvisionerScriptPath(),
+                        workingDir: paths.workingDir,
+                        progressCallback
+                    });
+                    if (!result.success) {
+                        dbUpdateInfo.updateState = 'error';
+                        dbUpdateInfo.error = result.error;
+                        databaseUpdateWindow.updateProgress({ message: `Update failed: ${result.error}`, percent: 0 });
+                        await databaseUpdateWindow.createDatabaseUpdateWindow(dbUpdateInfo, null);
+                    } else {
+                        dbUpdateInfo.updateState = 'completed';
+                        dbUpdateInfo.error = null;
+                        databaseUpdateWindow.updateProgress({ message: 'Database update completed successfully!', percent: 100 });
+                        await databaseUpdateWindow.waitForUserResponse();
+                        databaseUpdateWindow.closeDatabaseUpdateWindow();
+                    }
+                } else if (dbResult === 'reprovision') {
+                    dbUpdateInfo.updateState = 'updating';
+                    databaseUpdateWindow.updateProgress({ message: 'Re-provisioning databases...', percent: 0 });
+                    const result = await executeReProvision({
+                        manifestPath: getManifestPath(),
+                        userDataDir: getUserDataDir(),
+                        provisionerScriptPath: getProvisionerScriptPath(),
+                        workingDir: paths.workingDir,
+                        progressCallback
+                    });
+                    if (!result.success) {
+                        dbUpdateInfo.updateState = 'error';
+                        dbUpdateInfo.error = result.error;
+                        databaseUpdateWindow.updateProgress({ message: `Re-provision failed: ${result.error}`, percent: 0 });
+                        await databaseUpdateWindow.createDatabaseUpdateWindow(dbUpdateInfo, null);
+                    } else {
+                        dbUpdateInfo.updateState = 'completed';
+                        dbUpdateInfo.error = null;
+                        databaseUpdateWindow.updateProgress({ message: 'Database re-provision completed successfully!', percent: 100 });
+                        await databaseUpdateWindow.waitForUserResponse();
+                        databaseUpdateWindow.closeDatabaseUpdateWindow();
+                    }
+                } else {
+                    databaseUpdateWindow.closeDatabaseUpdateWindow();
+                }
+            }
+
             await initializeDatabaseLayer();
             await loadRendererMode('app');
             // Start overlay web server if enabled

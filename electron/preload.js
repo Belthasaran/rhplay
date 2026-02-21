@@ -1534,4 +1534,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('software-update:progress', handler);
     return () => ipcRenderer.removeListener('software-update:progress', handler);
   },
+
+  /**
+   * Get database update info for the dialog
+   * @returns {Promise<Object|null>}
+   */
+  databaseUpdateGetInfo: () => ipcRenderer.invoke('database-update:get-info'),
+
+  /**
+   * Send user response from database update dialog
+   * @param {Object} params - { response: 'skip' | 'update' | 'reprovision' }
+   * @returns {Promise<{success: boolean}>}
+   */
+  databaseUpdateUserResponse: (params) => ipcRenderer.invoke('database-update:user-response', params),
+
+  /**
+   * Listen for database update progress
+   * @param {Function} callback - (progress) => void
+   * @returns {Function} Unsubscribe function
+   */
+  onDatabaseUpdateProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    ipcRenderer.on('database-update:progress', handler);
+    return () => ipcRenderer.removeListener('database-update:progress', handler);
+  },
 });

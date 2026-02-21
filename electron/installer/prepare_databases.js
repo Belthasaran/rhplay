@@ -488,6 +488,7 @@ function computeProvisionedHash(data) {
   const { hashdata, ...dataWithoutHash } = data;
   // Minify JSON
   const jsonString = JSON.stringify(dataWithoutHash);
+  console.log('HASH: '+jsonStringt )
   // Compute SHA256
   return crypto.createHash('sha256').update(jsonString, 'utf8').digest('hex');
 }

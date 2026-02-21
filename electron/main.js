@@ -20,6 +20,23 @@ const { checkForDatabaseUpdates } = require('./utils/database-update-check');
 const { executeDatabaseUpdate, executeReProvision, executeReProvisionAffected } = require('./utils/database-update-executor');
 
 /**
+ * Relaunch the application. Uses spawn workaround for Linux AppImage since app.relaunch() does not work correctly.
+ */
+function relaunchApp() {
+  if (process.platform === 'linux' && process.env.APPIMAGE) {
+    const child = spawn(process.env.APPIMAGE, process.argv.slice(1), {
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+    app.exit(0);
+    return;
+  }
+  app.relaunch();
+  app.exit(0);
+}
+
+/**
  * Register software update IPC handlers early (before database initialization)
  */
 function setupSoftwareUpdateIpc() {
@@ -1255,8 +1272,7 @@ app.whenReady().then(async () => {
                         databaseUpdateWindow.updateProgress({ message: 'Database update completed successfully!', percent: 100 });
                         const resp = await databaseUpdateWindow.waitForUserResponse();
                         if (resp === 'relaunch') {
-                            app.relaunch();
-                            app.exit(0);
+                            relaunchApp();
                             return;
                         }
                         databaseUpdateWindow.closeDatabaseUpdateWindow();
@@ -1286,8 +1302,7 @@ app.whenReady().then(async () => {
                                 databaseUpdateWindow.updateProgress({ message: 'Database rebuild completed successfully!', percent: 100 });
                                 const resp = await databaseUpdateWindow.waitForUserResponse();
                                 if (resp === 'relaunch') {
-                                    app.relaunch();
-                                    app.exit(0);
+                                    relaunchApp();
                                     return;
                                 }
                                 databaseUpdateWindow.closeDatabaseUpdateWindow();
@@ -1334,8 +1349,7 @@ app.whenReady().then(async () => {
                                 databaseUpdateWindow.updateProgress({ message: 'Database re-provision completed successfully!', percent: 100 });
                                 const resp = await databaseUpdateWindow.waitForUserResponse();
                                 if (resp === 'relaunch') {
-                                    app.relaunch();
-                                    app.exit(0);
+                                    relaunchApp();
                                     return;
                                 }
                                 databaseUpdateWindow.closeDatabaseUpdateWindow();
@@ -1368,8 +1382,7 @@ app.whenReady().then(async () => {
                         databaseUpdateWindow.updateProgress({ message: 'Database re-provision completed successfully!', percent: 100 });
                         const resp = await databaseUpdateWindow.waitForUserResponse();
                         if (resp === 'relaunch') {
-                            app.relaunch();
-                            app.exit(0);
+                            relaunchApp();
                             return;
                         }
                         databaseUpdateWindow.closeDatabaseUpdateWindow();

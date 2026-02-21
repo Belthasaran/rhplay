@@ -20,6 +20,10 @@
         <div v-if="updateInfo.localVersionExists && updateInfo.localVersionMatches" class="warning-box">
           <p>The file you just launched is an old version of this program (current version).</p>
           <p>You already have the new version.</p>
+          <p v-if="updateInfo.localVersionPath" class="local-version-path">
+            <span>Found at: {{ updateInfo.localVersionPath }}</span>
+            <button type="button" class="btn-open-folder" title="Open folder containing file" @click="openLocalVersionFolder">&#128193;</button>
+          </p>
         </div>
 
         <!-- Update Message -->
@@ -232,6 +236,7 @@ const props = defineProps<{
     entry?: any;
     localVersionExists?: boolean;
     localVersionMatches?: boolean;
+    localVersionPath?: string;
     updateState?: 'idle' | 'downloading' | 'verifying' | 'completed' | 'error';
     newExecutablePath?: string;
     progress?: {
@@ -351,6 +356,16 @@ function handleLaunchNew() {
 function handleCancel() {
   if (!props.isBlocking) {
     emit('cancel');
+  }
+}
+
+function openLocalVersionFolder() {
+  const p = props.updateInfo.localVersionPath || '';
+  if (!p) return;
+  const parentDir = p.replace(/[/\\][^/\\]*$/, '') || p;
+  const api = (window as any).electronAPI;
+  if (api?.shell?.openPath) {
+    api.shell.openPath(parentDir);
   }
 }
 
@@ -556,6 +571,30 @@ onUnmounted(() => {
   border: 1px solid #ffc107;
   border-radius: 4px;
   color: #856404;
+}
+
+.local-version-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.btn-open-folder {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  background: #856404;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-open-folder:hover {
+  background: #6b5103;
 }
 
 .message-box {
@@ -811,6 +850,23 @@ onUnmounted(() => {
   color: #aaa;
   font-family: monospace;
   font-size: 11px;
+}
+
+.history-percent {
+  color: #4caf50;
+  font-weight: bold;
+  min-width: 50px;
+  text-align: right;
+}
+
+.history-empty {
+  color: #888;
+  font-style: italic;
+  padding: 20px;
+  text-align: center;
+}
+</style>
+x;
 }
 
 .history-percent {

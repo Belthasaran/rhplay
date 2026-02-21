@@ -13,6 +13,7 @@
       @skip="handleDatabaseUpdateSkip"
       @update="handleDatabaseUpdate"
       @reprovision="handleDatabaseUpdateReprovision"
+      @rebuild-affected="handleDatabaseUpdateRebuildAffected"
     />
   </div>
   <!-- Software Update Dialog (shown when mode=update) -->
@@ -30665,6 +30666,20 @@ onMounted(async () => {
             } else if (progress.message?.includes('completed')) {
               databaseUpdateInfo.value.updateState = 'completed';
             }
+            if (progress.logEntries && Array.isArray(progress.logEntries)) {
+              databaseUpdateInfo.value.progressLog = databaseUpdateInfo.value.progressLog || [];
+              databaseUpdateInfo.value.progressLog.push(...progress.logEntries);
+              if (databaseUpdateInfo.value.progressLog.length > 200) {
+                databaseUpdateInfo.value.progressLog = databaseUpdateInfo.value.progressLog.slice(-200);
+              }
+            }
+          });
+        }
+        if (api.onDatabaseUpdateInfoUpdate) {
+          api.onDatabaseUpdateInfoUpdate((info: any) => {
+            if (info) {
+              databaseUpdateInfo.value = { ...databaseUpdateInfo.value, ...info };
+            }
           });
         }
       }
@@ -30905,6 +30920,13 @@ async function handleDatabaseUpdateReprovision() {
   const api = (window as any).electronAPI;
   if (api && api.databaseUpdateUserResponse) {
     await api.databaseUpdateUserResponse({ response: 'reprovision' });
+  }
+}
+
+async function handleDatabaseUpdateRebuildAffected() {
+  const api = (window as any).electronAPI;
+  if (api && api.databaseUpdateUserResponse) {
+    await api.databaseUpdateUserResponse({ response: 'rebuild-affected' });
   }
 }
 

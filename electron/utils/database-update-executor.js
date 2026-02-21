@@ -11,6 +11,9 @@ const path = require('path');
 
 const { UPDATEABLE_DATABASES } = require('./database-update-check');
 
+// When patchbin.db is re-provisioned, rhdata.db must be too (rhdata references patchbin)
+const RHDATA_PATCHBIN_COUPLED = ['rhdata.db', 'patchbin.db'];
+
 /**
  * Parse a line of stdout for progress info
  * Returns { message, filename, current, total, percent } or null
@@ -107,7 +110,31 @@ function parseProgressLine(line) {
     };
   }
 
+  // [patch-failed] patchbin.db: UNIQUE constraint...
+  const patchFailed = /\[patch-failed\] (.+?): (.+)/.exec(trimmed);
+  if (patchFailed) {
+    return {
+      message: `Failed to patch ${patchFailed[1]}: ${patchFailed[2]}`,
+      filename: patchFailed[1],
+      current: 0,
+      total: 0,
+      percent: 0,
+      isError: true
+    };
+  }
+
   return null;
+}
+
+/**
+ * Compute affected DBs for rebuild (patchbin -> rhdata coupling)
+ */
+function computeAffectedDbs(failedDbs) {
+  const set = new Set(failedDbs);
+  if (set.has('patchbin.db')) {
+    set.add('rhdata.db');
+  }
+  return Array.from(set);
 }
 
 /**
@@ -122,11 +149,17 @@ function spawnPrepareDatabases(args, progressCallback) {
 
     let lastProgress = null;
 
-    const processLine = (line) => {
+    const processLine = (line, isStderr = false) => {
       const progress = parseProgressLine(line);
       if (progress && progressCallback) {
         lastProgress = progress;
-        progressCallback(progress);
+        const payload = { ...progress };
+        if (isStderr || progress.isError) {
+          payload.logEntries = [line.trim()];
+        }
+        progressCallback(payload);
+      } else if (isStderr && progressCallback && line.trim()) {
+        progressCallback({ message: line.trim(), logEntries: [line.trim()] });
       }
     };
 
@@ -137,7 +170,7 @@ function spawnPrepareDatabases(args, progressCallback) {
       chunk
         .split(/\r?\n/)
         .filter(Boolean)
-        .forEach(processLine);
+        .forEach((line) => processLine(line, false));
     });
 
     child.stderr.on('data', (chunk) => {
@@ -145,7 +178,7 @@ function spawnPrepareDatabases(args, progressCallback) {
         .split(/\r?\n/)
         .filter(Boolean)
         .forEach((line) => {
-          processLine(line);
+          processLine(line, true);
           console.warn('[prepare_databases]', line);
         });
     });
@@ -195,9 +228,13 @@ async function executeDatabaseUpdate(updates, options) {
   const patchable = updates.filter((u) => u.canPatch && u.patchesToApply && u.patchesToApply.length > 0);
   const nonPatchable = updates.filter((u) => !u.canPatch);
 
+  let patchResults = [];
+  let failedPatchable = [];
+
   // 1. Run update mode for patchable databases
   if (patchable.length > 0) {
     const updatePlanPath = path.join(workingDir, 'db-update-plan.json');
+    const updateResultPath = path.join(workingDir, 'db-update-result.json');
     const plan = {
       updates: patchable.map((u) => ({
         dbName: u.dbName,
@@ -218,7 +255,8 @@ async function executeDatabaseUpdate(updates, options) {
       '--progress-log', progressLogPath,
       '--progress-done', progressDonePath,
       '--update-mode',
-      '--update-plan', updatePlanPath
+      '--update-plan', updatePlanPath,
+      '--update-result-path', updateResultPath
     ];
 
     const cb = (p) => {
@@ -226,15 +264,33 @@ async function executeDatabaseUpdate(updates, options) {
     };
 
     const result = await spawnPrepareDatabases(args, cb);
-    if (!result.success) {
+
+    if (fs.existsSync(updateResultPath)) {
+      try {
+        const resultJson = fs.readFileSync(updateResultPath, 'utf8');
+        patchResults = JSON.parse(resultJson).results || [];
+      } catch (err) {
+        console.warn('[database-update-executor] Failed to parse result file:', err.message);
+      }
+    }
+
+    failedPatchable = patchResults.filter((r) => !r.success).map((r) => r.dbName);
+    const anyPatchSucceeded = patchResults.some((r) => r.success);
+    const anyPatchFailed = failedPatchable.length > 0;
+
+    if (result.exitCode !== 0 && !anyPatchSucceeded) {
       return {
         success: false,
+        partialSuccess: false,
+        results: patchResults,
+        failedDbs: failedPatchable,
+        affectedDbs: computeAffectedDbs(failedPatchable),
         error: `Patch update failed with exit code ${result.exitCode || result.signal}`
       };
     }
   }
 
-  // 2. Re-provision non-patchable databases
+  // 2. Re-provision non-patchable databases (continue even when patch had partial success)
   if (nonPatchable.length > 0) {
     const overwriteList = nonPatchable.map((u) => u.dbName).join(',');
     const args = [
@@ -255,11 +311,94 @@ async function executeDatabaseUpdate(updates, options) {
 
     const result = await spawnPrepareDatabases(args, cb);
     if (!result.success) {
+      const failedNonPatchable = nonPatchable.map((u) => u.dbName);
+      const allFailed = failedPatchable.concat(failedNonPatchable);
       return {
         success: false,
+        partialSuccess: patchResults.some((r) => r.success),
+        results: patchResults.concat(failedNonPatchable.map((db) => ({ dbName: db, success: false }))),
+        failedDbs: allFailed,
+        affectedDbs: computeAffectedDbs(allFailed),
         error: `Re-provision failed with exit code ${result.exitCode || result.signal}`
       };
     }
+    patchResults = patchResults.concat(nonPatchable.map((u) => ({ dbName: u.dbName, success: true })));
+  }
+
+  const failedPatchable = patchResults.filter((r) => !r.success).map((r) => r.dbName);
+  const anyPatchFailed = failedPatchable.length > 0;
+
+  if (anyPatchFailed) {
+    return {
+      success: false,
+      partialSuccess: true,
+      results: patchResults,
+      failedDbs: failedPatchable,
+      affectedDbs: computeAffectedDbs(failedPatchable),
+      error: `Some databases failed to update: ${failedPatchable.join(', ')}`
+    };
+  }
+
+  return {
+    success: true,
+    partialSuccess: false,
+    results: patchResults,
+    failedDbs: [],
+    affectedDbs: []
+  };
+}
+
+/**
+ * Execute re-provision of specific databases only
+ *
+ * @param {string[]} affectedDbs - Database names to re-provision (e.g. ['patchbin.db', 'rhdata.db'])
+ * @param {Object} options - { manifestPath, userDataDir, provisionerScriptPath, workingDir, progressCallback }
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+async function executeReProvisionAffected(affectedDbs, options) {
+  const {
+    manifestPath,
+    userDataDir,
+    provisionerScriptPath,
+    workingDir,
+    progressCallback
+  } = options;
+
+  if (!manifestPath || !userDataDir || !provisionerScriptPath) {
+    return { success: false, error: 'Missing required paths (manifestPath, userDataDir, provisionerScriptPath)' };
+  }
+
+  if (!affectedDbs || affectedDbs.length === 0) {
+    return { success: true };
+  }
+
+  const ensureDir = (p) => {
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+  };
+  ensureDir(workingDir);
+
+  const overwriteList = affectedDbs.join(',');
+  const progressLogPath = path.join(workingDir, 'db-reprovision-affected-progress.log');
+  const progressDonePath = path.join(workingDir, 'db-reprovision-affected-progress.done.json');
+
+  const args = [
+    provisionerScriptPath,
+    '--manifest', manifestPath,
+    '--user-data-dir', userDataDir,
+    '--working-dir', workingDir,
+    '--ensure-dirs',
+    '--overwrite', overwriteList,
+    '--provision',
+    '--progress-log', progressLogPath,
+    '--progress-done', progressDonePath
+  ];
+
+  const result = await spawnPrepareDatabases(args, progressCallback);
+  if (!result.success) {
+    return {
+      success: false,
+      error: `Re-provision failed with exit code ${result.exitCode || result.signal}`
+    };
   }
 
   return { success: true };
@@ -319,5 +458,8 @@ async function executeReProvision(options) {
 module.exports = {
   executeDatabaseUpdate,
   executeReProvision,
-  parseProgressLine
+  executeReProvisionAffected,
+  computeAffectedDbs,
+  parseProgressLine,
+  RHDATA_PATCHBIN_COUPLED
 };

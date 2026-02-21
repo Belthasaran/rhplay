@@ -61,6 +61,7 @@ Options:
   --ipfs-timeout <seconds>  Timeout for IPFS downloads in seconds (default: 20)
   --update-mode             Run in-place database update (apply patches from plan)
   --update-plan <file>      JSON file with updates to apply (required with --update-mode)
+  --update-result-path <f>  Write per-db update results JSON (used with --update-mode)
   --help                    Show this help message
 
 Examples:
@@ -156,6 +157,7 @@ function parseArgs(argv) {
     ipfsTimeout: 20, // Default 20 seconds for IPFS downloads
     updateMode: false,
     updatePlanPath: null,
+    updateResultPath: null,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -235,8 +237,13 @@ function parseArgs(argv) {
     } else if (arg === '--update-plan') {
       if (i + 1 >= argv.length) exitWithError('Missing value after --update-plan');
       opts.updatePlanPath = path.resolve(argv[++i]);
+    } else if (arg === '--update-result-path') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --update-result-path');
+      opts.updateResultPath = path.resolve(argv[++i]);
     } else if (arg.startsWith('--update-plan=')) {
       opts.updatePlanPath = path.resolve(arg.substring('--update-plan='.length));
+    } else if (arg.startsWith('--update-result-path=')) {
+      opts.updateResultPath = path.resolve(arg.substring('--update-result-path='.length));
     } else if (arg.startsWith('--')) {
       exitWithError(`Unknown option "${arg}". Use --help for usage details.`);
     } else {
@@ -2237,6 +2244,7 @@ async function verifyBuild(manifest, opts) {
 /**
  * Run in-place database update (apply patches only, no full re-provision)
  * Update plan: { updates: [{ dbName, patchesToApply, manifestEntry, targetVersion }] }
+ * Continues on per-db failure; writes results to --update-result-path if provided.
  */
 async function runUpdateMode(opts, manifest) {
   const userDataDir = opts.userDataDir;
@@ -2248,12 +2256,12 @@ async function runUpdateMode(opts, manifest) {
     const planJson = fs.readFileSync(opts.updatePlanPath, 'utf8');
     plan = JSON.parse(planJson);
   } catch (err) {
-    return { success: false, error: `Failed to load update plan: ${err.message}` };
+    return { success: false, results: [], error: `Failed to load update plan: ${err.message}` };
   }
 
   const updates = plan.updates || [];
   if (updates.length === 0) {
-    return { success: true };
+    return { success: true, results: [] };
   }
 
   const downloadsDir = path.join(workingDir, 'downloads');
@@ -2268,6 +2276,7 @@ async function runUpdateMode(opts, manifest) {
   }
 
   const provisioned = loadProvisionedJson(userDataDir);
+  const results = [];
 
   for (const u of updates) {
     const { dbName, patchesToApply, manifestEntry, targetVersion } = u;
@@ -2275,58 +2284,89 @@ async function runUpdateMode(opts, manifest) {
 
     if (patches.length === 0) {
       console.log(`[update] ${dbName}: no patches to apply, skipping`);
+      results.push({ dbName, success: true });
       continue;
     }
 
     const existingPath = path.join(userDataDir, dbName);
     if (!fs.existsSync(existingPath)) {
-      return { success: false, error: `Database ${dbName} not found at ${existingPath}` };
+      const errMsg = `Database ${dbName} not found at ${existingPath}`;
+      console.log(`[patch-failed] ${dbName}: ${errMsg}`);
+      results.push({ dbName, success: false, error: errMsg });
+      continue;
     }
 
-    const tempDbPath = path.join(stagingDir, `${dbName}.tmp.db`);
-    fs.copyFileSync(existingPath, tempDbPath);
-    console.log(`[update] ${dbName}: copied existing db to staging, applying ${patches.length} patch(es)`);
+    try {
+      const tempDbPath = path.join(stagingDir, `${dbName}.tmp.db`);
+      fs.copyFileSync(existingPath, tempDbPath);
+      console.log(`[update] ${dbName}: copied existing db to staging, applying ${patches.length} patch(es)`);
 
-    let lastPatchSha256 = null;
-    let lastPatchFileName = null;
+      let lastPatchSha256 = null;
+      let lastPatchFileName = null;
 
-    for (const patch of patches) {
-      const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
-      console.log(`[patch-start] ${dbName}: applying ${patch.file_name}`);
-      const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
+      for (const patch of patches) {
+        const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
+        console.log(`[patch-start] ${dbName}: applying ${patch.file_name}`);
+        const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
 
-      const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
-      if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-        await decompressXz(patchArchivePath, sqlPath);
-        if (!fs.existsSync(sqlPath)) {
-          throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
+        const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
+        if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
+          await decompressXz(patchArchivePath, sqlPath);
+          if (!fs.existsSync(sqlPath)) {
+            throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
+          }
+          const stats = fs.statSync(sqlPath);
+          if (stats.size === 0) {
+            throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
+          }
+        } else {
+          fs.copyFileSync(patchArchivePath, sqlPath);
         }
-        const stats = fs.statSync(sqlPath);
-        if (stats.size === 0) {
-          throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
-        }
-      } else {
-        fs.copyFileSync(patchArchivePath, sqlPath);
+
+        await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
+        fs.unlinkSync(sqlPath);
+        console.log(`[patch-complete] ${dbName}: applied ${patch.file_name}`);
+        lastPatchSha256 = patch.sha256;
+        lastPatchFileName = patch.file_name;
       }
 
-      await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
-      fs.unlinkSync(sqlPath);
-      console.log(`[patch-complete] ${dbName}: applied ${patch.file_name}`);
-      lastPatchSha256 = patch.sha256;
-      lastPatchFileName = patch.file_name;
+      fs.copyFileSync(tempDbPath, existingPath);
+      fs.unlinkSync(tempDbPath);
+      console.log(`[update] ${dbName}: finalized at ${existingPath}`);
+
+      const currentEntry = provisioned.targets && provisioned.targets[dbName];
+      const baseSha256 = currentEntry && currentEntry.base_sha256 ? currentEntry.base_sha256 : null;
+      const manifestForUpdate = { ...manifestEntry, version: targetVersion || manifestEntry.version };
+      updateProvisionedEntry(userDataDir, dbName, manifestForUpdate, baseSha256, lastPatchSha256, lastPatchFileName);
+
+      results.push({ dbName, success: true });
+    } catch (err) {
+      const errMsg = err.message || String(err);
+      console.log(`[patch-failed] ${dbName}: ${errMsg}`);
+      results.push({ dbName, success: false, error: errMsg });
     }
-
-    fs.copyFileSync(tempDbPath, existingPath);
-    fs.unlinkSync(tempDbPath);
-    console.log(`[update] ${dbName}: finalized at ${existingPath}`);
-
-    const currentEntry = provisioned.targets && provisioned.targets[dbName];
-    const baseSha256 = currentEntry && currentEntry.base_sha256 ? currentEntry.base_sha256 : null;
-    const manifestForUpdate = { ...manifestEntry, version: targetVersion || manifestEntry.version };
-    updateProvisionedEntry(userDataDir, dbName, manifestForUpdate, baseSha256, lastPatchSha256, lastPatchFileName);
   }
 
-  return { success: true };
+  const anySucceeded = results.some((r) => r.success);
+  const anyFailed = results.some((r) => !r.success);
+  const success = anySucceeded && !anyFailed;
+  const partialSuccess = anySucceeded && anyFailed;
+
+  if (opts.updateResultPath) {
+    try {
+      ensureDirectory(path.dirname(opts.updateResultPath));
+      fs.writeFileSync(opts.updateResultPath, JSON.stringify({ results }, null, 2), 'utf8');
+    } catch (err) {
+      console.warn(`[update] Failed to write result file: ${err.message}`);
+    }
+  }
+
+  return {
+    success,
+    partialSuccess,
+    results,
+    error: !anySucceeded ? (results.find((r) => !r.success)?.error || 'All updates failed') : undefined
+  };
 }
 
 async function run(argv) {
@@ -2349,8 +2389,8 @@ async function run(argv) {
     // Handle update mode (in-place patch application)
     if (opts.updateMode && opts.updatePlanPath) {
       const updateResult = await runUpdateMode(opts, manifest);
-      finalizeProgress(updateResult.success);
-      if (!updateResult.success) {
+      finalizeProgress(updateResult.success || updateResult.partialSuccess);
+      if (!updateResult.success && !updateResult.partialSuccess) {
         exitWithError(updateResult.error || 'Database update failed');
       }
       return updateResult;

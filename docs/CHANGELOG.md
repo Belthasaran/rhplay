@@ -1,5 +1,7 @@
 - P20260209
 
+- **Software Update Windows Portable Fix**: Use PORTABLE_EXECUTABLE_DIR for download target and local-version check so updates go to user's folder. Expand checkLocalVersionExists to search exec dir, home, Desktop, Downloads, and %APPDATA%\\RHTools. "You already have the new version" now shows found path and Open Folder button.
+
 - **Database Update Relaunch Button**: After database update or re-provision completes successfully, added "Click to Relaunch Program" button (primary) alongside "Continue". Relaunch exits and restarts the app, same as Software Update's "Exit and Relaunch". Fixed Linux AppImage relaunch (app.relaunch() does not work; now spawns AppImage via APPIMAGE env and exits).
 
 - **Database Update Error Flow Fix**: When "Attempt to Update" fails completely, the full-failure branch now handles the user's choice instead of falling through to app startup. If user clicks "Re-provision databases", executeReProvision runs with progress; if "Use old Database Version", dialog closes and app continues. Added error-state UI (Re-provision + Use old buttons) distinct from the initial 3-button state.

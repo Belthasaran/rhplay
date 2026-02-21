@@ -88,30 +88,68 @@ function buildArWeaveUrl(txid, gateway) {
  * Get directory where update target should be placed (same dir as executable)
  * For AppImage: use APPIMAGE env var so we target the actual AppImage file on disk,
  * not the read-only mount point.
+ * For Windows portable: electron-builder sets PORTABLE_EXECUTABLE_DIR to user's folder.
  */
 function getExecutableDirectory() {
   if (process.platform === 'linux' && process.env.APPIMAGE) {
     return path.dirname(process.env.APPIMAGE);
   }
+  if (process.platform === 'win32' && process.env.PORTABLE_EXECUTABLE_DIR) {
+    return process.env.PORTABLE_EXECUTABLE_DIR;
+  }
   return path.dirname(process.execPath);
 }
 
 /**
- * Check if new version file exists locally in same directory as running executable
+ * Get directories to search for local version (exec dir + common locations)
+ */
+function getLocalVersionSearchDirectories() {
+  const dirs = [getExecutableDirectory()];
+  const home = os.homedir();
+  if (home) {
+    dirs.push(home);
+    dirs.push(path.join(home, 'Desktop'));
+    dirs.push(path.join(home, 'Downloads'));
+  }
+  try {
+    const { app } = require('electron');
+    const desktop = app.getPath('desktop');
+    const downloads = app.getPath('downloads');
+    if (desktop && !dirs.includes(desktop)) dirs.push(desktop);
+    if (downloads && !dirs.includes(downloads)) dirs.push(downloads);
+  } catch (_) {
+    // Electron not available (e.g. in test)
+  }
+  if (process.platform === 'win32' && process.env.APPDATA) {
+    dirs.push(path.join(process.env.APPDATA, 'RHTools'));
+  }
+  return dirs;
+}
+
+/**
+ * Check if new version file exists locally - searches executable dir and common locations
  */
 function checkLocalVersionExists(entry) {
-  if (!entry) return { exists: false, path: null };
+  if (!entry) return { exists: false, path: null, filename: null };
   
-  const execDir = getExecutableDirectory();
   const filename = entry.target_filename || entry.source_filename;
-  if (!filename) return { exists: false, path: null };
+  if (!filename) return { exists: false, path: null, filename: null };
   
-  const localPath = path.join(execDir, filename);
-  const exists = fs.existsSync(localPath);
+  const searchDirs = getLocalVersionSearchDirectories();
+  for (const dir of searchDirs) {
+    const localPath = path.join(dir, filename);
+    if (fs.existsSync(localPath)) {
+      return {
+        exists: true,
+        path: localPath,
+        filename
+      };
+    }
+  }
   
   return {
-    exists,
-    path: exists ? localPath : null,
+    exists: false,
+    path: null,
     filename
   };
 }

@@ -1106,6 +1106,7 @@ app.whenReady().then(async () => {
                 entry: updateCheck.entry,
                 localVersionExists: localCheck.exists,
                 localVersionMatches: localVersionMatches,
+                localVersionPath: localCheck.path,
                 updateState: 'idle'
             };
             

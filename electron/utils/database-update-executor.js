@@ -325,7 +325,7 @@ async function executeDatabaseUpdate(updates, options) {
     patchResults = patchResults.concat(nonPatchable.map((u) => ({ dbName: u.dbName, success: true })));
   }
 
-  const failedPatchable = patchResults.filter((r) => !r.success).map((r) => r.dbName);
+  failedPatchable = patchResults.filter((r) => !r.success).map((r) => r.dbName);
   const anyPatchFailed = failedPatchable.length > 0;
 
   if (anyPatchFailed) {

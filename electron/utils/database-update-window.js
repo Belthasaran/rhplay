@@ -81,7 +81,7 @@ function createDatabaseUpdateWindow(info, parentWindow = null) {
     const shouldShowImmediately = !actualParent;
     dbUpdateWindow = new BrowserWindow({
       width: 650,
-      height: 550,
+      height: 633,
       modal: actualParent ? true : false,
       parent: actualParent || undefined,
       resizable: false,

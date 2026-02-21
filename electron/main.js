@@ -1298,7 +1298,36 @@ app.whenReady().then(async () => {
                         dbUpdateInfo.affectedDbs = result.affectedDbs || [];
                         databaseUpdateWindow.updateProgress({ message: `Update failed: ${result.error}`, percent: 0 });
                         databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
-                        await databaseUpdateWindow.waitForUserResponse();
+                        const userChoice = await databaseUpdateWindow.waitForUserResponse();
+                        if (userChoice === 'reprovision') {
+                            dbUpdateInfo.updateState = 'updating';
+                            dbUpdateInfo.progressLog = dbUpdateInfo.progressLog || [];
+                            databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                            databaseUpdateWindow.updateProgress({ message: 'Re-provisioning databases...', percent: 0 });
+                            const reprovResult = await executeReProvision({
+                                manifestPath: getManifestPath(),
+                                userDataDir: getUserDataDir(),
+                                provisionerScriptPath: getProvisionerScriptPath(),
+                                workingDir: paths.workingDir,
+                                progressCallback
+                            });
+                            if (!reprovResult.success) {
+                                dbUpdateInfo.updateState = 'error';
+                                dbUpdateInfo.error = reprovResult.error;
+                                databaseUpdateWindow.updateProgress({ message: `Re-provision failed: ${reprovResult.error}`, percent: 0 });
+                                databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                                await databaseUpdateWindow.waitForUserResponse();
+                                databaseUpdateWindow.closeDatabaseUpdateWindow();
+                            } else {
+                                dbUpdateInfo.updateState = 'completed';
+                                dbUpdateInfo.error = null;
+                                databaseUpdateWindow.updateProgress({ message: 'Database re-provision completed successfully!', percent: 100 });
+                                await databaseUpdateWindow.waitForUserResponse();
+                                databaseUpdateWindow.closeDatabaseUpdateWindow();
+                            }
+                        } else {
+                            databaseUpdateWindow.closeDatabaseUpdateWindow();
+                        }
                     }
                 } else if (dbResult === 'reprovision') {
                     dbUpdateInfo.updateState = 'updating';

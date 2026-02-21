@@ -62,7 +62,8 @@ function runCompare() {
 function runFetchMissing() {
   const scriptPath = path.resolve(CONFIG.JSTOOLS_DIR, 'smwcw_waiting_fetchmissing.js');
   const enode = path.resolve(__dirname, '..', 'enode.sh');
-  const projectRoot = path.resolve(__dirname, '..');
+  //const projectRoot = path.resolve(__dirname, '..');
+  const projectRoot = path.resolve(__dirname, 'smwc_world');
   const result = spawnSync(enode, [scriptPath], {
     cwd: projectRoot,
     stdio: 'inherit',

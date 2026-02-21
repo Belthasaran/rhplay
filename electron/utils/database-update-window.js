@@ -151,7 +151,20 @@ function updateProgress(progress) {
       total: progress.total || 0,
       percent: progress.percent !== undefined ? progress.percent : (progress.total > 0 ? Math.floor((progress.current / progress.total) * 100) : 0)
     };
+    if (progress.logEntries && Array.isArray(progress.logEntries)) {
+      fullProgress.logEntries = progress.logEntries;
+    }
     dbUpdateWindow.webContents.send('database-update:progress', fullProgress);
+  }
+}
+
+/**
+ * Update info in place (no new window) - use when error/partial success to update existing dialog
+ */
+function updateInfoInPlace(info) {
+  dbUpdateInfo = info;
+  if (dbUpdateWindow && !dbUpdateWindow.isDestroyed()) {
+    dbUpdateWindow.webContents.send('database-update:info-update', info);
   }
 }
 
@@ -198,6 +211,7 @@ module.exports = {
   createDatabaseUpdateWindow,
   handleUserResponse,
   updateProgress,
+  updateInfoInPlace,
   closeDatabaseUpdateWindow,
   getDatabaseUpdateInfo,
   waitForUserResponse

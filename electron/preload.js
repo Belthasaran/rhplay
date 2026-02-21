@@ -1558,4 +1558,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('database-update:progress', handler);
     return () => ipcRenderer.removeListener('database-update:progress', handler);
   },
+
+  /**
+   * Listen for database update info update (in-place state push)
+   * @param {Function} callback - (info) => void
+   * @returns {Function} Unsubscribe function
+   */
+  onDatabaseUpdateInfoUpdate: (callback) => {
+    const handler = (_event, info) => callback(info);
+    ipcRenderer.on('database-update:info-update', handler);
+    return () => ipcRenderer.removeListener('database-update:info-update', handler);
+  },
 });

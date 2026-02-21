@@ -17,7 +17,7 @@ const softwareUpdateManager = require('./utils/software-update-manager');
 const softwareUpdateWindow = require('./utils/software-update-window');
 const databaseUpdateWindow = require('./utils/database-update-window');
 const { checkForDatabaseUpdates } = require('./utils/database-update-check');
-const { executeDatabaseUpdate, executeReProvision } = require('./utils/database-update-executor');
+const { executeDatabaseUpdate, executeReProvision, executeReProvisionAffected } = require('./utils/database-update-executor');
 
 /**
  * Register software update IPC handlers early (before database initialization)
@@ -1238,6 +1238,7 @@ app.whenReady().then(async () => {
 
                 if (dbResult === 'update') {
                     dbUpdateInfo.updateState = 'updating';
+                    dbUpdateInfo.progressLog = [];
                     databaseUpdateWindow.updateProgress({ message: 'Starting database update...', percent: 0 });
                     const result = await executeDatabaseUpdate(dbUpdateCheck.updates, {
                         manifestPath: getManifestPath(),
@@ -1246,20 +1247,61 @@ app.whenReady().then(async () => {
                         workingDir: paths.workingDir,
                         progressCallback
                     });
-                    if (!result.success) {
-                        dbUpdateInfo.updateState = 'error';
-                        dbUpdateInfo.error = result.error;
-                        databaseUpdateWindow.updateProgress({ message: `Update failed: ${result.error}`, percent: 0 });
-                        await databaseUpdateWindow.createDatabaseUpdateWindow(dbUpdateInfo, null);
-                    } else {
+                    if (result.success) {
                         dbUpdateInfo.updateState = 'completed';
                         dbUpdateInfo.error = null;
+                        dbUpdateInfo.results = result.results || [];
                         databaseUpdateWindow.updateProgress({ message: 'Database update completed successfully!', percent: 100 });
                         await databaseUpdateWindow.waitForUserResponse();
                         databaseUpdateWindow.closeDatabaseUpdateWindow();
+                    } else if (result.partialSuccess) {
+                        dbUpdateInfo.updateState = 'completedWithErrors';
+                        dbUpdateInfo.error = result.error;
+                        dbUpdateInfo.results = result.results || [];
+                        dbUpdateInfo.failedDbs = result.failedDbs || [];
+                        dbUpdateInfo.affectedDbs = result.affectedDbs || [];
+                        databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                        const rebuildChoice = await databaseUpdateWindow.waitForUserResponse();
+                        if (rebuildChoice === 'rebuild-affected' && result.affectedDbs && result.affectedDbs.length > 0) {
+                            dbUpdateInfo.updateState = 'updating';
+                            dbUpdateInfo.progressLog = dbUpdateInfo.progressLog || [];
+                            databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                            databaseUpdateWindow.updateProgress({ message: 'Re-building affected databases...', percent: 0 });
+                            const rebuildResult = await executeReProvisionAffected(result.affectedDbs, {
+                                manifestPath: getManifestPath(),
+                                userDataDir: getUserDataDir(),
+                                provisionerScriptPath: getProvisionerScriptPath(),
+                                workingDir: paths.workingDir,
+                                progressCallback
+                            });
+                            if (rebuildResult.success) {
+                                dbUpdateInfo.updateState = 'completed';
+                                dbUpdateInfo.error = null;
+                                databaseUpdateWindow.updateProgress({ message: 'Database rebuild completed successfully!', percent: 100 });
+                                await databaseUpdateWindow.waitForUserResponse();
+                                databaseUpdateWindow.closeDatabaseUpdateWindow();
+                            } else {
+                                dbUpdateInfo.updateState = 'error';
+                                dbUpdateInfo.error = rebuildResult.error;
+                                databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                                await databaseUpdateWindow.waitForUserResponse();
+                            }
+                        } else {
+                            databaseUpdateWindow.closeDatabaseUpdateWindow();
+                        }
+                    } else {
+                        dbUpdateInfo.updateState = 'error';
+                        dbUpdateInfo.error = result.error;
+                        dbUpdateInfo.results = result.results || [];
+                        dbUpdateInfo.failedDbs = result.failedDbs || [];
+                        dbUpdateInfo.affectedDbs = result.affectedDbs || [];
+                        databaseUpdateWindow.updateProgress({ message: `Update failed: ${result.error}`, percent: 0 });
+                        databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                        await databaseUpdateWindow.waitForUserResponse();
                     }
                 } else if (dbResult === 'reprovision') {
                     dbUpdateInfo.updateState = 'updating';
+                    dbUpdateInfo.progressLog = [];
                     databaseUpdateWindow.updateProgress({ message: 'Re-provisioning databases...', percent: 0 });
                     const result = await executeReProvision({
                         manifestPath: getManifestPath(),
@@ -1272,7 +1314,8 @@ app.whenReady().then(async () => {
                         dbUpdateInfo.updateState = 'error';
                         dbUpdateInfo.error = result.error;
                         databaseUpdateWindow.updateProgress({ message: `Re-provision failed: ${result.error}`, percent: 0 });
-                        await databaseUpdateWindow.createDatabaseUpdateWindow(dbUpdateInfo, null);
+                        databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
+                        await databaseUpdateWindow.waitForUserResponse();
                     } else {
                         dbUpdateInfo.updateState = 'completed';
                         dbUpdateInfo.error = null;

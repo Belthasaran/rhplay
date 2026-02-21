@@ -5,7 +5,7 @@
   </div>
   
   <!-- Database Update Dialog (shown when mode=db-update) -->
-  <div v-else-if="isDbUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+  <div v-if="isDbUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
     <DatabaseUpdateDialog
       :visible="databaseUpdateDialogVisible"
       :update-info="databaseUpdateInfo"

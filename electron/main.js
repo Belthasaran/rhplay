@@ -1239,6 +1239,7 @@ app.whenReady().then(async () => {
                 if (dbResult === 'update') {
                     dbUpdateInfo.updateState = 'updating';
                     dbUpdateInfo.progressLog = [];
+                    databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
                     databaseUpdateWindow.updateProgress({ message: 'Starting database update...', percent: 0 });
                     const result = await executeDatabaseUpdate(dbUpdateCheck.updates, {
                         manifestPath: getManifestPath(),
@@ -1302,6 +1303,7 @@ app.whenReady().then(async () => {
                 } else if (dbResult === 'reprovision') {
                     dbUpdateInfo.updateState = 'updating';
                     dbUpdateInfo.progressLog = [];
+                    databaseUpdateWindow.updateInfoInPlace(dbUpdateInfo);
                     databaseUpdateWindow.updateProgress({ message: 'Re-provisioning databases...', percent: 0 });
                     const result = await executeReProvision({
                         manifestPath: getManifestPath(),

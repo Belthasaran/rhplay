@@ -1,0 +1,24 @@
+
+pointer 0x43535E8280C0Ec9e845Cacb456C45f576d6D581a https://arbiscan.io/address/0x43535E8280C0Ec9e845Cacb456C45f576d6D581a
+newVersion (uint64)            3
+newPayloadSha256 (bytes32)     0x7908ef7248f5794ace40f4deb0654283e4e7c96c7cbfe36adbf671881c241537
+newPayloadSize (uint64)        1540
+newCid (string)                bafkreidzbdxxeshvpffm4qhu32ygkqud4tt4s3d4x7rwvw7wogebyjavg4
+newBrefs (string[])  ["aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9ZQ29uWXNGdwo=","aHR0cHM6Ly9hcndlYXZlLm5ldC96a0FqYi00aG5URS1rcWp3VUgtMkF3eHNOdkZVbWRBRTctUmtmT1VnNnVNCg==","ar://zkAjb-4hnTE-kqjwUH-2AwxsNvFUmdAE7-RkfOUg6uM"]
+
+[ latest method Response ]
+{
+  currentVersion (uint64) : 3
+  updatedAt (uint64) : 1771680999
+  payloadSha256 (bytes32) : 0x7908ef7248f5794ace40f4deb0654283e4e7c96c7cbfe36adbf671881c241537
+  payloadSize (uint64) : 1540
+  cid (string) : bafkreidzbdxxeshvpffm4qhu32ygkqud4tt4s3d4x7rwvw7wogebyjavg4
+  brefs (array) : [
+aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9ZQ29uWXNGdwo=
+aHR0cHM6Ly9hcndlYXZlLm5ldC96a0FqYi00aG5URS1rcWp3VUgtMkF3eHNOdkZVbWRBRTctUmtmT1VnNnVNCg==
+ar://zkAjb-4hnTE-kqjwUH-2AwxsNvFUmdAE7-RkfOUg6uM
+  ]
+}
+
+
+

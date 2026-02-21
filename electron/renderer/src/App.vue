@@ -14,6 +14,7 @@
       @update="handleDatabaseUpdate"
       @reprovision="handleDatabaseUpdateReprovision"
       @rebuild-affected="handleDatabaseUpdateRebuildAffected"
+      @relaunch="handleDatabaseUpdateRelaunch"
     />
   </div>
   <!-- Software Update Dialog (shown when mode=update) -->
@@ -30927,6 +30928,13 @@ async function handleDatabaseUpdateRebuildAffected() {
   const api = (window as any).electronAPI;
   if (api && api.databaseUpdateUserResponse) {
     await api.databaseUpdateUserResponse({ response: 'rebuild-affected' });
+  }
+}
+
+async function handleDatabaseUpdateRelaunch() {
+  const api = (window as any).electronAPI;
+  if (api && api.databaseUpdateUserResponse) {
+    await api.databaseUpdateUserResponse({ response: 'relaunch' });
   }
 }
 

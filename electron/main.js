@@ -1253,7 +1253,12 @@ app.whenReady().then(async () => {
                         dbUpdateInfo.error = null;
                         dbUpdateInfo.results = result.results || [];
                         databaseUpdateWindow.updateProgress({ message: 'Database update completed successfully!', percent: 100 });
-                        await databaseUpdateWindow.waitForUserResponse();
+                        const resp = await databaseUpdateWindow.waitForUserResponse();
+                        if (resp === 'relaunch') {
+                            app.relaunch();
+                            app.exit(0);
+                            return;
+                        }
                         databaseUpdateWindow.closeDatabaseUpdateWindow();
                     } else if (result.partialSuccess) {
                         dbUpdateInfo.updateState = 'completedWithErrors';
@@ -1279,7 +1284,12 @@ app.whenReady().then(async () => {
                                 dbUpdateInfo.updateState = 'completed';
                                 dbUpdateInfo.error = null;
                                 databaseUpdateWindow.updateProgress({ message: 'Database rebuild completed successfully!', percent: 100 });
-                                await databaseUpdateWindow.waitForUserResponse();
+                                const resp = await databaseUpdateWindow.waitForUserResponse();
+                                if (resp === 'relaunch') {
+                                    app.relaunch();
+                                    app.exit(0);
+                                    return;
+                                }
                                 databaseUpdateWindow.closeDatabaseUpdateWindow();
                             } else {
                                 dbUpdateInfo.updateState = 'error';
@@ -1322,7 +1332,12 @@ app.whenReady().then(async () => {
                                 dbUpdateInfo.updateState = 'completed';
                                 dbUpdateInfo.error = null;
                                 databaseUpdateWindow.updateProgress({ message: 'Database re-provision completed successfully!', percent: 100 });
-                                await databaseUpdateWindow.waitForUserResponse();
+                                const resp = await databaseUpdateWindow.waitForUserResponse();
+                                if (resp === 'relaunch') {
+                                    app.relaunch();
+                                    app.exit(0);
+                                    return;
+                                }
                                 databaseUpdateWindow.closeDatabaseUpdateWindow();
                             }
                         } else {
@@ -1351,7 +1366,12 @@ app.whenReady().then(async () => {
                         dbUpdateInfo.updateState = 'completed';
                         dbUpdateInfo.error = null;
                         databaseUpdateWindow.updateProgress({ message: 'Database re-provision completed successfully!', percent: 100 });
-                        await databaseUpdateWindow.waitForUserResponse();
+                        const resp = await databaseUpdateWindow.waitForUserResponse();
+                        if (resp === 'relaunch') {
+                            app.relaunch();
+                            app.exit(0);
+                            return;
+                        }
                         databaseUpdateWindow.closeDatabaseUpdateWindow();
                     }
                 } else {

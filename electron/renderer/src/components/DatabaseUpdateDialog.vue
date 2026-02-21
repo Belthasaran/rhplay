@@ -70,7 +70,8 @@
       </section>
       <footer class="modal-footer">
         <template v-if="updateInfo.updateState === 'completed'">
-          <button class="btn-primary" @click="handleContinue">Continue</button>
+          <button class="btn-primary" @click="handleRelaunch" autofocus>Click to Relaunch Program</button>
+          <button class="btn-secondary" @click="handleContinue">Continue</button>
         </template>
         <template v-else-if="isCompletedWithErrors">
           <button class="btn-primary" @click="handleRebuildAffected">Rebuild Database</button>
@@ -136,6 +137,7 @@ const emit = defineEmits<{
   (e: 'update'): void;
   (e: 'reprovision'): void;
   (e: 'rebuild-affected'): void;
+  (e: 'relaunch'): void;
 }>();
 
 const isProcessing = computed(() => {
@@ -201,6 +203,10 @@ function handleReprovision() {
 
 function handleRebuildAffected() {
   emit('rebuild-affected');
+}
+
+function handleRelaunch() {
+  emit('relaunch');
 }
 
 function handleContinue() {

@@ -1543,7 +1543,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   /**
    * Send user response from database update dialog
-   * @param {Object} params - { response: 'skip' | 'update' | 'reprovision' }
+   * @param {Object} params - { response: 'skip' | 'update' | 'reprovision' | 'relaunch' }
    * @returns {Promise<{success: boolean}>}
    */
   databaseUpdateUserResponse: (params) => ipcRenderer.invoke('database-update:user-response', params),

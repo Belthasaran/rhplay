@@ -507,8 +507,8 @@
       "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9id1kxaUI1Qwo=",
       "size": "30668920",
       "priority": [
+	"ipfs",
         "baddr",
-        "ipfs",
         "ardrive"
       ],
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",

@@ -20,7 +20,7 @@
                 type="radio"
                 value="helia-http"
               />
-              <span class="radio-label">Helia IPFS Fetch</span>
+              <span class="radio-label">Helia IPFS Fetch (EXPERIMENTAL)</span>
             </label>
             <div class="radio-suboptions">
               <label class="radio-option indent">
@@ -30,7 +30,7 @@
                   value="http"
                   :disabled="ipfsOption !== 'helia-http' && ipfsOption !== 'helia-rpc'"
                 />
-                <span class="radio-label">HTTP-only Verified Fetch using web-based gateways (default)</span>
+                <span class="radio-label">HTTP-only Verified Fetch using web-based gateways</span>
               </label>
               <label class="radio-option indent">
                 <input
@@ -45,12 +45,12 @@
 
             <label class="radio-option">
               <input v-model="ipfsOption" type="radio" value="basic" />
-              <span class="radio-label">Basic IPFS Fetch using HTTP Only (Slow)</span>
+              <span class="radio-label">Basic IPFS Fetch using HTTP Only (default, Recommended for now)</span>
             </label>
 
             <label class="radio-option">
-              <input v-model="ipfsOption" type="radio" value="manual" />
-              <span class="radio-label">I will manually launch a local IPFS server (e.g. IPFS Desktop or Kubo) before using this program</span>
+              <input v-model="ipfsOption" type="radio" value="manual" disabled />
+              <span class="radio-label">(Not yet available) I will manually launch a local IPFS server (e.g. IPFS Desktop or Kubo) before using this program</span>
             </label>
           </div>
         </div>
@@ -98,7 +98,7 @@ const emit = defineEmits<{
   (e: 'saved'): void;
 }>();
 
-const ipfsOption = ref<'helia-http' | 'helia-rpc' | 'basic' | 'manual'>('helia-http');
+const ipfsOption = ref<'helia-http' | 'helia-rpc' | 'basic' | 'manual'>('basic');
 const heliaMode = ref<'http' | 'rpc'>('http');
 const p2pOptIn = ref(false);
 const saving = ref(false);

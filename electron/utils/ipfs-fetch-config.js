@@ -30,7 +30,7 @@ const STANDARD_GATEWAYS = [
 
 const DEFAULT_CONFIG = {
   ipfs: {
-    fetch_mode: 'helia',
+    fetch_mode: 'basic',  /* revert default to basic for now */
     helia_mode: 'http',
     parallel: 5,
     gateway_selection: 'standard',
@@ -288,6 +288,7 @@ async function createHeliaVerifiedFetch() {
       return match ? match[1] : g.replace(/\/ipfs\/?$/, '');
     });
     const { createVerifiedFetch } = await import('@helia/verified-fetch');
+    console.log(`[createHeliaVerifiedFetch] gatewayBases=${JSON.stringify(gatewayBases)}`)  // debug
     return createVerifiedFetch({
       gateways: gatewayBases.length > 0 ? gatewayBases : ['https://trustless-gateway.link'],
       routers: ['https://delegated-ipfs.dev'],

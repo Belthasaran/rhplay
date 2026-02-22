@@ -1082,6 +1082,9 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
       }
     } catch (err) {
       lastError = err;
+      if (source.type === 'ipfs') {
+        console.error(`[download-error] ${spec.file_name} via ipfs -> ${err.message}`);
+      }
     }
   }
 

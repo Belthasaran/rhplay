@@ -1,6 +1,6 @@
 {
   "name": "rhtools",
-  "version": "0.1.23beta",
+  "version": "0.1.21ptest",
   "description": "RHTools - ROM HackPlay Tools Application",
   "author": "RHTools Team <143627208+Belthasaran@users.noreply.github.com>",
   "main": "electron/main.js",
@@ -76,6 +76,8 @@
     "upload:list-ardrive": "node list-unuploaded-blobs.js --provider=ardrive"
   },
   "dependencies": {
+    "@helia/http": "^3.0.0",
+    "@helia/verified-fetch": "^7.0.0",
     "@ceramicnetwork/http-client": "^6.4.0",
     "@didtools/pkh-ethereum": "^0.6.0",
     "@electron/fuses": "^2.0.0",
@@ -157,6 +159,7 @@
       "!electron/**/*.db-shm",
       "!electron/**/*.db-wal",
       "!electron/**/*.db_bak",
+      "!electron/t",
       "!electron/rhdata.db",
       "!electron/patchbin.db",
       "!electron/screenshot.db",
@@ -305,7 +308,8 @@
       "native-modules/serialport-nonblock/build/**/*",
       "jsutils/**/*",
       "electron/sql/migrations/**/*",
-      "electron/installer/**/*"
+      "electron/installer/**/*",
+      "electron/utils/ipfs-fetch-config.js"
     ],
     "win": {
       "target": [

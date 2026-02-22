@@ -1033,10 +1033,13 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
 
   let lastError = null;
 
+  console.log(`[ensureArtifact] remote-download: sources ${JSON.stringify(sources)}`)
   for (const source of sources) {
     try {
       if (source.type === 'ipfs') {
         const userDataDirForConfig = userDataDir || detectUserDataDir();
+
+        console.log(`[ensureArtifact] ipfs  fetch cid  ${source.cid}`)
         await ipfsFetchConfig.fetchFromIpfs({
           cid: source.cid,
           destPath,

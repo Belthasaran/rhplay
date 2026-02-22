@@ -42,6 +42,7 @@ const DEFAULT_CONFIG = {
 let cachedConfig = null;
 let cachedGateways = null;
 let heliaVerifiedFetchPromise = null;
+let heliaUnavailable = false;
 
 /**
  * Get user data directory (works in Electron and standalone Node)
@@ -340,18 +341,47 @@ async function fetchFromIpfs(options) {
   const gateways = getResolvedGateways(userDataDir);
   const parallel = getParallelCount(userDataDir);
 
-  if (mode === 'helia') {
-    return fetchFromIpfsHelia({
-      cid,
-      destPath,
-      expectedSha256,
-      spec,
-      downloadTracker,
-      ipfsTimeout,
-      progressCallback,
-      gateways,
-      parallel,
-    });
+  if (mode === 'helia' && !heliaUnavailable) {
+    try {
+      return await fetchFromIpfsHelia({
+        cid,
+        destPath,
+        expectedSha256,
+        spec,
+        downloadTracker,
+        ipfsTimeout,
+        progressCallback,
+        gateways,
+        parallel,
+      });
+    } catch (err) {
+      const isModuleError = err && (
+        (typeof err.message === 'string' && (
+          err.message.includes('Cannot find package') ||
+          err.message.includes('Cannot find module')
+        )) ||
+        err.code === 'ERR_MODULE_NOT_FOUND'
+      );
+      if (isModuleError) {
+        heliaUnavailable = true;
+        heliaVerifiedFetchPromise = null;
+        console.warn(
+          `[ipfs-fetch-config] Helia verified-fetch unavailable (${err.message}), falling back to basic fetch`
+        );
+        return fetchFromIpfsBasic({
+          cid,
+          destPath,
+          expectedSha256,
+          spec,
+          downloadTracker,
+          ipfsTimeout,
+          progressCallback,
+          gateways,
+          parallel,
+        });
+      }
+      throw err;
+    }
   }
   return fetchFromIpfsBasic({
     cid,
@@ -554,6 +584,7 @@ function clearConfigCache() {
   cachedConfig = null;
   cachedGateways = null;
   heliaVerifiedFetchPromise = null;
+  heliaUnavailable = false;
 }
 
 module.exports = {

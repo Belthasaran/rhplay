@@ -20699,8 +20699,22 @@ async function checkCatalogFiles(item: any) {
   
   // Set up progress listener
   let progressUnsubscribe: (() => void) | null = null;
+  let downloadCompleteReceived = false;
   if ((window as any).electronAPI.onCatalogFindFilesProgress) {
     progressUnsubscribe = (window as any).electronAPI.onCatalogFindFilesProgress((progressData: any) => {
+      // When download completes, clear progress bar immediately and ignore stale progress
+      if (progressData.downloadComplete === true) {
+        downloadCompleteReceived = true;
+        addGameFromCatalogState.value.downloading = false;
+        addGameFromCatalogState.value.downloadProgress = undefined;
+        if (progressData.message) {
+          addStatusMessage(progressData.message);
+        }
+        return;
+      }
+      if (downloadCompleteReceived && (progressData.downloaded !== undefined || progressData.total !== undefined)) {
+        return; // Ignore stale progress events after completion
+      }
       if (progressData.message) {
         addStatusMessage(progressData.message);
       }

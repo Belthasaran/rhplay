@@ -16533,13 +16533,22 @@ function registerDatabaseHandlers(dbManager) {
                 return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
               }
               
-              // Override progress method to send updates to renderer
+              // Override progress method to send updates to renderer (throttled to avoid IPC backlog)
               const originalProgress = downloadTracker.progress;
+              let lastIpcPercent = -1;
+              let lastIpcTime = 0;
+              const IPC_THROTTLE_MS = 250;
               downloadTracker.progress = (spec, downloaded, total) => {
                 if (originalProgress) originalProgress(spec, downloaded, total);
                 const percent = total > 0 ? Math.round((downloaded / total) * 100) : 0;
-                sendProgress(`Downloading ${spec.file_name}: ${percent}% (${formatBytes(downloaded)} / ${formatBytes(total)})`);
-                if (event.sender && !event.sender.isDestroyed()) {
+                const now = Date.now();
+                const shouldSend = total > 0
+                  ? (percent >= 100 || percent >= lastIpcPercent + 5)
+                  : (now - lastIpcTime >= IPC_THROTTLE_MS);
+                if (shouldSend && event.sender && !event.sender.isDestroyed()) {
+                  if (total > 0) lastIpcPercent = percent;
+                  lastIpcTime = now;
+                  sendProgress(`Downloading ${spec.file_name}: ${percent}% (${formatBytes(downloaded)} / ${formatBytes(total)})`);
                   event.sender.send('catalog:find-files:progress', {
                     message: `Downloading ${spec.file_name}...`,
                     filename: spec.file_name,
@@ -16612,6 +16621,12 @@ function registerDatabaseHandlers(dbManager) {
               );
               
               sevenZPath = downloadedPath;
+              if (event.sender && !event.sender.isDestroyed()) {
+                event.sender.send('catalog:find-files:progress', {
+                  message: `✓ Download completed: ${index7zName}`,
+                  downloadComplete: true
+                });
+              }
               sendProgress(`✓ Download completed: ${index7zName}`);
               console.log(`[catalog:find-files] Downloaded and installed ${index7zName} to ${downloadedPath}`);
             } else {

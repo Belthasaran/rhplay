@@ -866,20 +866,3 @@ onUnmounted(() => {
   text-align: center;
 }
 </style>
-x;
-}
-
-.history-percent {
-  color: #4caf50;
-  font-weight: bold;
-  min-width: 50px;
-  text-align: right;
-}
-
-.history-empty {
-  color: #888;
-  font-style: italic;
-  padding: 20px;
-  text-align: center;
-}
-</style>

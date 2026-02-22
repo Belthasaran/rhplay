@@ -4617,6 +4617,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
         <!-- Step 1: Profile Information -->
         <div v-if="profileCreationWizardStep === 1" class="wizard-step" :key="'wizard-step-1'">
           <p class="wizard-description">
+            <span style="font-size: 20px;">EXPERIMENTAL Nostr Profile Setup. Click "Stay Offline for Now" to omit a Social link and Create Offline-Only UID.</span><br>
             Let's set up your basic profile information. You can always edit this later.
           </p>
           

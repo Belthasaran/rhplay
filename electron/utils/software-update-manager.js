@@ -13,16 +13,7 @@ const { checkForSoftwareUpdate } = require('./software-update-check');
 const manifestResolver = require('./manifest-resolver');
 const { verifyCoreManifestDat } = require('./verify-coremf-dat-internal');
 const { ensureArtifact } = require('./catalog-download-manager');
-
-// IPFS gateways (same as catalog-download-manager)
-const IPFS_GATEWAYS = [
-  'https://ipfs.4everland.io/ipfs/',
-  'https://w3s.link/ipfs/',
-  'https://cloudflare-ipfs.com/ipfs/',
-  'https://ipfs.io/ipfs/',
-  'https://gateway.pinata.cloud/ipfs/',
-  'https://rhtools.4everland.link/ipfs/'
-];
+const ipfsFetchConfig = require('./ipfs-fetch-config');
 
 // ArWeave gateways
 const ARWEAVE_GATEWAYS = [
@@ -53,10 +44,10 @@ function formatTimestamp(timestamp) {
 }
 
 /**
- * Get IPFS gateways list
+ * Get IPFS gateways list (from config: user file + env + defaults)
  */
 function getIPFSGateways() {
-  return IPFS_GATEWAYS;
+  return ipfsFetchConfig.getResolvedGateways();
 }
 
 /**

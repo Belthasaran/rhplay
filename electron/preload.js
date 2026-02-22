@@ -1569,4 +1569,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('database-update:info-update', handler);
     return () => ipcRenderer.removeListener('database-update:info-update', handler);
   },
+
+  /**
+   * Fetch settings: get current config (merged from file + env)
+   * @returns {Promise<Object>}
+   */
+  fetchSettingsGetConfig: () => ipcRenderer.invoke('fetch-settings:get-config'),
+
+  /**
+   * Fetch settings: save config to user-fetch-settings.json
+   * @param {Object} config - Fetch settings object
+   * @returns {Promise<{success: boolean}>}
+   */
+  fetchSettingsSave: (config) => ipcRenderer.invoke('fetch-settings:save-config', config),
 });

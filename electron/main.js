@@ -16,6 +16,8 @@ const { checkForSoftwareUpdate } = require('./utils/software-update-check');
 const softwareUpdateManager = require('./utils/software-update-manager');
 const softwareUpdateWindow = require('./utils/software-update-window');
 const databaseUpdateWindow = require('./utils/database-update-window');
+const fetchSettingsWindow = require('./utils/fetch-settings-window');
+const ipfsFetchConfig = require('./utils/ipfs-fetch-config');
 const { checkForDatabaseUpdates } = require('./utils/database-update-check');
 const { executeDatabaseUpdate, executeReProvision, executeReProvisionAffected } = require('./utils/database-update-executor');
 
@@ -98,6 +100,24 @@ function setupDatabaseUpdateIpc() {
   ipcMain.handle('database-update:user-response', (_event, { response }) => {
     databaseUpdateWindow.handleUserResponse(response);
     return { success: true };
+  });
+}
+
+/**
+ * Register fetch settings IPC handlers
+ */
+function setupFetchSettingsIpc() {
+  ipcMain.handle('fetch-settings:get-config', () => {
+    return ipfsFetchConfig.getFetchConfig();
+  });
+  ipcMain.handle('fetch-settings:save-config', (_event, config) => {
+    try {
+      fetchSettingsWindow.handleSave(config);
+      return { success: true };
+    } catch (err) {
+      console.error('[main] Failed to save fetch settings:', err);
+      return { success: false, error: err.message };
+    }
   });
 }
 
@@ -1061,9 +1081,20 @@ app.whenReady().then(async () => {
         // Continue anyway - app can still work with bundled manifests
     }
 
-    // Register software update and database update IPC handlers early (before update check)
+    // Register software update, database update, and fetch settings IPC handlers early
     setupSoftwareUpdateIpc();
     setupDatabaseUpdateIpc();
+    setupFetchSettingsIpc();
+
+    // First-run: blocking fetch settings dialog if user-fetch-settings.json does not exist
+    if (!ipfsFetchConfig.fetchSettingsPathExists()) {
+      try {
+        await fetchSettingsWindow.createFetchSettingsWindow(null);
+      } catch (err) {
+        console.warn('[main] Fetch settings dialog failed:', err.message);
+        // Continue anyway - app will use defaults
+      }
+    }
 
     // Check for core manifest updates (non-blocking, background)
     (async () => {

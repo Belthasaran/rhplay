@@ -1,3 +1,7 @@
+- P20260222
+
+- **IPFS Helia Verified Fetch and Fetch Settings**: Added optional Helia verified-fetch support for IPFS retrieval. New `@helia/verified-fetch` and `@helia/http` dependencies. Created `electron/utils/ipfs-fetch-config.js` for centralized IPFS fetch config (env vars, `user-fetch-settings.json`, defaults). Configurable fetch modes: helia (default, HTTP verified fetch) or basic (legacy). Environment variables: `IPFS_FETCH_MODE`, `IPFS_PARALLEL_FETCH`, `IPFS_GATEWAY_SELECTION`, `IPFS_GATEWAY_LIST`. First-run blocking dialog if `user-fetch-settings.json` missing; "File Transfer and Peer-to-Peer Settings" row in Settings with reopen option. Modified `catalog-download-manager.js`, `software-update-manager.js`, and `prepare_databases.js` to use configurable IPFS fetch. See `docs/PROGRAMS.MD` for user-fetch-settings and env var details.
+
 - P20260209
 
 - **Software Update Windows Portable Fix**: Use PORTABLE_EXECUTABLE_DIR for download target and local-version check so updates go to user's folder. Expand checkLocalVersionExists to search exec dir, home, Desktop, Downloads, and %APPDATA%\\RHTools. "You already have the new version" now shows found path and Open Folder button.

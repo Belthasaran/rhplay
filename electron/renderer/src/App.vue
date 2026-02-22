@@ -17,6 +17,16 @@
       @relaunch="handleDatabaseUpdateRelaunch"
     />
   </div>
+  <!-- Fetch Settings Dialog (shown when mode=fetch-settings, first-run) -->
+  <div v-else-if="isFetchSettingsMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+    <FetchSettingsDialog
+      :visible="fetchSettingsDialogVisible"
+      :is-blocking="true"
+      :standalone="true"
+      @close="handleFetchSettingsClose"
+      @saved="handleFetchSettingsSaved"
+    />
+  </div>
   <!-- Software Update Dialog (shown when mode=update) -->
   <div v-else-if="isUpdateMode" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
     <SoftwareUpdateDialog
@@ -5341,6 +5351,16 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     @check-updates="checkForUpdates"
   />
 
+  <!-- Fetch Settings Overlay (opened from Settings) -->
+  <FetchSettingsDialog
+    v-if="fetchSettingsOverlayOpen"
+    :visible="fetchSettingsOverlayOpen"
+    :is-blocking="false"
+    :standalone="false"
+    @close="fetchSettingsOverlayOpen = false"
+    @saved="fetchSettingsOverlayOpen = false"
+  />
+
   <!-- Settings Modal -->
   <div v-if="settingsModalOpen" class="modal-backdrop" @click.self="closeSettings">
     <div class="modal settings-modal">
@@ -5391,6 +5411,15 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
           <div class="setting-caption">
             Adjust the text size throughout the application.
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="setting-row">
+            <label class="setting-label">File Transfer and Peer-to-Peer Settings</label>
+            <div class="setting-control">
+              <button @click="openFetchSettingsDialog">Open File Transfer Settings</button>
+            </div>
           </div>
         </div>
 
@@ -9390,6 +9419,7 @@ if (!mode && typeof window !== 'undefined' && window.location.hash) {
 
 const isUpdateMode = ref(mode === 'update');
 const isDbUpdateMode = ref(mode === 'db-update');
+const isFetchSettingsMode = ref(mode === 'fetch-settings');
 
 // Debug logging - ALWAYS log to help diagnose
 console.log('[App.vue] ===== INITIALIZATION =====');
@@ -9416,6 +9446,11 @@ if (typeof window !== 'undefined' && (window.location.search?.includes('mode=db-
     isDbUpdateMode.value = true;
   }
 }
+if (typeof window !== 'undefined' && (window.location.search?.includes('mode=fetch-settings') || window.location.hash?.includes('mode=fetch-settings'))) {
+  if (!isFetchSettingsMode.value) {
+    isFetchSettingsMode.value = true;
+  }
+}
 
 // Software Update Dialog state (initialize early for update mode)
 // CRITICAL: Set visible to true if in update mode so dialog shows immediately
@@ -9437,6 +9472,9 @@ if (isUpdateMode.value) {
   softwareUpdateDialogVisible.value = true;
 }
 
+// Fetch Settings Dialog state (first-run standalone window)
+const fetchSettingsDialogVisible = ref(isFetchSettingsMode.value);
+
 // Database Update Dialog state
 const databaseUpdateDialogVisible = ref(isDbUpdateMode.value);
 const databaseUpdateInfo = ref<any>({
@@ -9448,6 +9486,9 @@ const databaseUpdateInfo = ref<any>({
 });
 if (isDbUpdateMode.value) {
   databaseUpdateDialogVisible.value = true;
+}
+if (isFetchSettingsMode.value) {
+  fetchSettingsDialogVisible.value = true;
 }
 import { nip19 } from 'nostr-tools';
 import { Buffer } from 'buffer';
@@ -9493,6 +9534,7 @@ import RatingFactorsHelp from './components/RatingFactorsHelp.vue';
 import SearchCatalogAcknowledgement from './components/SearchCatalogAcknowledgement.vue';
 import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.vue';
 import DatabaseUpdateDialog from './components/DatabaseUpdateDialog.vue';
+import FetchSettingsDialog from './components/FetchSettingsDialog.vue';
 import AboutDialog from './components/AboutDialog.vue';
 import {
   alertDialogVisible,
@@ -21539,6 +21581,7 @@ async function setMyRating() {
 
 // Settings modal state and logic
 const settingsModalOpen = ref(false);
+const fetchSettingsOverlayOpen = ref(false);
 
 // About dialog state
 const showAboutDialog = ref(false);
@@ -21654,6 +21697,10 @@ async function openSettings() {
 
 function closeSettings() {
   settingsModalOpen.value = false;
+}
+
+function openFetchSettingsDialog() {
+  fetchSettingsOverlayOpen.value = true;
 }
 
 function handleRhpakOpenFromOS(filePath: string) {
@@ -30901,6 +30948,14 @@ async function handleSoftwareUpdateCancel() {
   if (!isUpdateMode.value) {
     softwareUpdateDialogVisible.value = false;
   }
+}
+
+function handleFetchSettingsClose() {
+  fetchSettingsDialogVisible.value = false;
+}
+
+function handleFetchSettingsSaved() {
+  fetchSettingsDialogVisible.value = false;
 }
 
 async function handleDatabaseUpdateSkip() {

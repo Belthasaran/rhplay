@@ -831,6 +831,8 @@ enode.sh electron/installer/prepare_databases.js \
   --overwrite rhdata.db,patchbin.db
 ```
 
+**IPFS / Fetch Configuration**: Uses `user-fetch-settings.json` in user data directory (when present) for IPFS gateway and fetch mode. Environment variables override file: `IPFS_FETCH_MODE` (basic|helia), `IPFS_PARALLEL_FETCH` (0=sequential, N=concurrency), `IPFS_GATEWAY_SELECTION` (standard|replace|append|prepend), `IPFS_GATEWAY_LIST` (comma-separated or JSON array).
+
 **Key Options**:
 - `--manifest <path>` - Path to manifest (defaults to `electron/dbmanifest.json`).
 - `--user-data-dir <path>` - Override detected settings directory.

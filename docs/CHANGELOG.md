@@ -1,5 +1,7 @@
 - P20260222
 
+- **IPFS Helia Fallback for Packaged App**: When @helia/verified-fetch cannot be loaded (e.g. "Cannot find package" in packaged AppImage/executable), ipfs-fetch-config now falls back to basic HTTP gateway fetch so IPFS downloads still work.
+
 - **prepare_databases IPFS Error Logging**: When IPFS download fails and prepare_databases falls back to url/ardrive, the IPFS failure is now logged with `[download-error] ... via ipfs -> ...` so users can see why the fallback occurred.
 
 - **Catalog Download Progress UI Lag Fix**: Fixed "Add Game from Catalog" Step 2 showing download progress advancing for almost a minute after the download actually finished. Root cause: main process sent an IPC event for every stream chunk (~240 for a 15MB file), creating an IPC backlog that the renderer processed slowly. Solution: throttle progress IPC to every 5% change (or 250ms for unknown total); send explicit `downloadComplete: true` when download finishes; renderer handles `downloadComplete` to clear progress bar immediately and ignores stale progress events.

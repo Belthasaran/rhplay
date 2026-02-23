@@ -62,12 +62,12 @@
             <button class="btn-secondary" @click="openBrowserPage">
               Open Page
             </button>
-            <button class="btn-secondary" @click="scrapePageMetadata" :disabled="!browserWebContentsId">
-              Scrape Metadata
-            </button>
           </div>
+          <p v-if="downloadFeedback" class="download-feedback">
+            {{ downloadFeedback }}
+          </p>
           <p v-if="downloadedFilePath" class="download-status">
-            Downloaded: {{ getFileNameFromPath(downloadedFilePath) }} – ready for Add Test Pack
+            {{ getFileNameFromPath(downloadedFilePath) }} – ready for Add Test Pack
           </p>
         </div>
 
@@ -163,6 +163,7 @@ const metadataByBps = ref<Record<string, { gameid?: string; name?: string; autho
 
 const downloadedFilePath = ref('');
 const browserWebContentsId = ref<number | null>(null);
+const downloadFeedback = ref('');
 
 const error = ref('');
 const success = ref('');
@@ -184,10 +185,38 @@ watch(() => props.visible, (v) => {
 let unsubscribeDownloadComplete: (() => void) | null = null;
 onMounted(() => {
   const electronAPI = (window as any).electronAPI;
-  unsubscribeDownloadComplete = electronAPI?.onLoadManualDownloadComplete?.((data: { tempPath: string; suggestedFilename?: string }) => {
+  unsubscribeDownloadComplete = electronAPI?.onLoadManualDownloadComplete?.(async (data: {
+    tempPath: string;
+    suggestedFilename?: string;
+    webContentsId?: number | null;
+  }) => {
+    error.value = '';
     downloadedFilePath.value = data.tempPath;
     filePath.value = data.tempPath;
-    inspectSelectedFile(data.tempPath);
+    downloadFeedback.value = 'Download successful.';
+
+    const wcId = data.webContentsId;
+    if (wcId != null) {
+      downloadFeedback.value = 'Download successful. Scraping metadata...';
+      try {
+        const scraped = await electronAPI.loadManualScrapePage({ webContentsId: wcId });
+        if (scraped && !scraped.error) {
+          if (scraped.name) name.value = scraped.name;
+          if (scraped.authors) author.value = scraped.authors;
+          if (scraped.difficulty) difficulty.value = scraped.difficulty;
+          if (scraped.type) type.value = scraped.type;
+          downloadFeedback.value = 'Download successful. Metadata scraped from page.';
+        } else {
+          downloadFeedback.value = 'Download successful. (Metadata scrape skipped.)';
+        }
+      } catch {
+        downloadFeedback.value = 'Download successful. (Metadata scrape skipped.)';
+      }
+      electronAPI.loadManualCloseBrowserWindow?.();
+      browserWebContentsId.value = null;
+    }
+
+    await inspectSelectedFile(data.tempPath);
   }) ?? null;
 });
 onUnmounted(() => {
@@ -307,24 +336,6 @@ async function openBrowserPage() {
   }
 }
 
-async function scrapePageMetadata() {
-  if (!browserWebContentsId.value) return;
-  error.value = '';
-  try {
-    const data = await api.value.loadManualScrapePage({ webContentsId: browserWebContentsId.value });
-    if (data?.error) {
-      error.value = data.error;
-      return;
-    }
-    if (data?.name) name.value = data.name;
-    if (data?.authors) author.value = data.authors;
-    if (data?.difficulty) difficulty.value = data.difficulty;
-    if (data?.type) type.value = data.type;
-  } catch (e: any) {
-    error.value = e?.message || 'Scrape failed';
-  }
-}
-
 async function addTestPack() {
   error.value = '';
   success.value = '';
@@ -393,6 +404,7 @@ function reset() {
   metadataByBps.value = {};
   downloadedFilePath.value = '';
   browserWebContentsId.value = null;
+  downloadFeedback.value = '';
   error.value = '';
   success.value = '';
   activeTab.value = 'file';
@@ -409,18 +421,19 @@ defineExpose({ reset });
   display: flex;
   gap: 4px;
   padding: 8px 16px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--border-primary);
 }
 .tab-btn {
   padding: 8px 16px;
   border: none;
-  background: #f0f0f0;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   border-radius: 4px;
 }
 .tab-btn.active {
-  background: #2196f3;
-  color: white;
+  background: var(--accent-primary);
+  color: var(--button-text);
 }
 .load-manual-mode {
   margin-bottom: 16px;
@@ -428,6 +441,7 @@ defineExpose({ reset });
 .mode-controls {
   display: flex;
   flex-direction: column;
+  font-size: 24px;
   gap: 8px;
 }
 .file-path-row {
@@ -487,20 +501,34 @@ defineExpose({ reset });
 }
 .load-manual-error {
   color: #d32f2f;
-  margin-top: 12px;
+  margin-top: 22px;
 }
 .load-manual-success {
   color: #2e7d32;
-  margin-top: 12px;
+  margin-top: 22px;
 }
 .page-actions {
   display: flex;
   gap: 8px;
   margin-top: 8px;
 }
+.download-feedback {
+  color: #1565c0;
+  font-size: 24px;
+  margin-top: 12px;
+  font-weight: 500;
+}
 .download-status {
   color: #2e7d32;
-  font-size: 14px;
-  margin-top: 12px;
+  font-size: 24px;
+  margin-top: 8px;
+}
+.mode-controls input, .url-input {
+  height: 30px;
+  font-size: 24px;
+}
+.metadata-grid input {
+  height: 25px;
+  font-size: 24px;
 }
 </style>

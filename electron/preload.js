@@ -430,6 +430,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadManualCreateFromUrl: (params) => ipcRenderer.invoke('loadManual:create-rhpak-from-url', params),
   loadManualCreateBrowserWindow: (params) => ipcRenderer.invoke('loadManual:create-browser-window', params),
   loadManualScrapePage: (params) => ipcRenderer.invoke('loadManual:scrape-page', params),
+  loadManualCloseBrowserWindow: () => ipcRenderer.invoke('loadManual:close-browser-window'),
   onLoadManualDownloadComplete: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const handler = (_event, data) => callback(data);

@@ -134,12 +134,24 @@
               </div>
             </div>
 
+            <div class="patch-filter-row">
+              <input
+                v-model="availablePatchesFilter"
+                type="text"
+                placeholder="Filter by name, code, or description..."
+                class="patch-filter-input"
+              />
+              <button @click="availablePatchesFilter = ''" :disabled="!availablePatchesFilter.trim()" class="btn-clear-filter">Clear</button>
+            </div>
             <div v-if="availablePatches.length === 0" class="empty-message">
               No patches available for this game.
             </div>
+            <div v-else-if="filteredAvailablePatches.length === 0" class="empty-message">
+              No patches match your filter.
+            </div>
             <div v-else class="patches-list">
               <div 
-                v-for="patch in availablePatches" 
+                v-for="patch in filteredAvailablePatches" 
                 :key="patch.epuuid"
                 class="patch-item"
                 :class="{ 'has-params': patch.requires_parameters }"
@@ -225,10 +237,23 @@
           </div>
 
           <div v-if="loadingPatches" class="loading-message">Loading patches...</div>
-          
-          <div v-else class="patches-editor-list">
+
+          <template v-else>
+            <div class="patch-filter-row">
+              <input
+                v-model="allPatchesFilter"
+                type="text"
+                placeholder="Filter by name, code, or description..."
+                class="patch-filter-input"
+              />
+              <button @click="allPatchesFilter = ''" :disabled="!allPatchesFilter.trim()" class="btn-clear-filter">Clear</button>
+            </div>
+            <div v-if="allPatches.length > 0 && filteredAllPatches.length === 0" class="empty-message">
+              No patches match your filter.
+            </div>
+            <div v-else class="patches-editor-list">
             <div 
-              v-for="patch in allPatches" 
+              v-for="patch in filteredAllPatches" 
               :key="patch.epuuid"
               class="patch-editor-item"
             >
@@ -251,6 +276,7 @@
               No patches defined. Click "Add New Patch" to create one.
             </div>
           </div>
+          </template>
 
           <!-- Add/Edit Patch Form Modal -->
           <div v-if="showAddPatchForm || editingPatch" class="patch-form-modal">
@@ -560,6 +586,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { matchesPatchFilter } from '@/utils/patchFilter';
 import GameStagesDialog from './GameStagesDialog.vue';
 import AlertDialog from './AlertDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
@@ -642,6 +669,10 @@ const emit = defineEmits<{
 const activeTab = ref<'apply' | 'edit'>('apply');
 const loading = ref(false);
 const availablePatches = ref<ExtraPatch[]>([]);
+const availablePatchesFilter = ref('');
+const filteredAvailablePatches = computed(() =>
+  availablePatches.value.filter((p) => matchesPatchFilter(p, availablePatchesFilter.value))
+);
 const selectedPatches = ref<string[]>([]);
 const globalParams = ref({
   glevelnum: '',
@@ -661,6 +692,10 @@ const showGameStagesDialog = ref(false);
 // Editor tab state
 const loadingPatches = ref(false);
 const allPatches = ref<ExtraPatch[]>([]);
+const allPatchesFilter = ref('');
+const filteredAllPatches = computed(() =>
+  allPatches.value.filter((p) => matchesPatchFilter(p, allPatchesFilter.value))
+);
 const showAddPatchForm = ref(false);
 const editingPatch = ref<ExtraPatch | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -796,6 +831,8 @@ watch(() => props.isOpen, async (newVal) => {
     editingPatch.value = null;
     presetsDropdownOpen.value = false;
     showSavePresetDialog.value = false;
+    availablePatchesFilter.value = '';
+    allPatchesFilter.value = '';
   }
 });
 
@@ -1823,6 +1860,33 @@ async function deletePreset(preset: Preset) {
   font-size: var(--small-font-size);
   min-width: 14px;
   text-align: center;
+}
+
+.patch-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.patch-filter-input {
+  flex: 1;
+  padding: var(--input-padding);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: var(--base-font-size);
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.patch-filter-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.btn-clear-filter {
+  padding: var(--button-padding);
+  white-space: nowrap;
 }
 
 .patches-list {

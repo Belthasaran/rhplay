@@ -11013,6 +11013,16 @@ function openLoadManualDialog() {
 function closeLoadManualDialog() {
   loadManualDialogOpen.value = false;
 }
+
+function selectGameByGameid(gameid: string) {
+  if (!gameid) return;
+  const game = items.find((item: any) => item.Id === gameid);
+  if (game) {
+    selectedIds.value.clear();
+    selectedIds.value.add(gameid);
+  }
+}
+
 async function handleLoadManualAdded(gameid: string | null) {
   await loadGames();
   if (gameid) {

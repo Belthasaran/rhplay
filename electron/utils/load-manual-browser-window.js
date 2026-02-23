@@ -53,6 +53,7 @@ function createLoadManualBrowserWindow(opts = {}) {
           mainWindow.webContents.send('loadManual:download-complete', {
             tempPath,
             suggestedFilename: suggestedName,
+            webContentsId: browserWindow && !browserWindow.isDestroyed() ? browserWindow.webContents.id : null,
           });
         }
       } else if (state === 'interrupted') {

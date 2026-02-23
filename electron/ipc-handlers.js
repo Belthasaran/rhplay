@@ -17605,6 +17605,16 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  ipcMain.handle('loadManual:close-browser-window', async () => {
+    try {
+      loadManualBrowserWindow.closeLoadManualBrowserWindow();
+      return { success: true };
+    } catch (error) {
+      console.error('[loadManual:close-browser-window] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('loadManual:scrape-page', async (_event, { webContentsId }) => {
     try {
       const { webContents } = require('electron');

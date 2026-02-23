@@ -443,6 +443,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, rhpaks?: Array, error?: string}>}
    */
   rhpakListInstalled: () => ipcRenderer.invoke('rhpak:list'),
+  smwcmapsEnsure: () => ipcRenderer.invoke('smwcmaps:ensure'),
   
   /**
    * Uninstall an RHPAK by UUID

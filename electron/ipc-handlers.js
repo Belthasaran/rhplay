@@ -17692,6 +17692,7 @@ function registerDatabaseHandlers(dbManager) {
   const softwareUpdateManager = require('./utils/software-update-manager');
   const softwareUpdateWindow = require('./utils/software-update-window');
   const { getAboutInfo } = require('./utils/about-info');
+  const smwcmapsManager = require('./utils/smwcmaps-manager');
 
   // About dialog info
   ipcMain.handle('about:get-info', async () => {
@@ -17700,6 +17701,16 @@ function registerDatabaseHandlers(dbManager) {
     } catch (err) {
       console.error('[about:get-info] Error:', err);
       return { error: err.message };
+    }
+  });
+
+  // SMWC Maps Reference - ensure maps data cached (fetch from IPFS if stale)
+  ipcMain.handle('smwcmaps:ensure', async () => {
+    try {
+      return await smwcmapsManager.ensureMapsData();
+    } catch (err) {
+      console.error('[smwcmaps:ensure] Error:', err);
+      return { success: false, error: err.message };
     }
   });
 

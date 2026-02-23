@@ -926,6 +926,9 @@
                 <button @click="openChallengesModal" :disabled="!usb2snesStatus.connected" class="action-btn">
                   🏆 Challenges
                 </button>
+                <button @click="openMapsReferenceModal" class="action-btn">
+                  🗺 Maps Reference
+                </button>
               </div>
             </div>
 
@@ -2750,7 +2753,21 @@
         <div v-else-if="installedRhpaksError" class="inline-status error">{{ installedRhpaksError }}</div>
         <div v-else-if="installedRhpaks.length === 0" class="inline-status">No rhpaks are currently installed.</div>
         <template v-else>
-          <div class="installed-rhpak-table-wrapper">
+          <div class="installed-rhpak-filter-row">
+            <input
+              v-model="installedRhpaksFilter"
+              type="text"
+              placeholder="Filter by Name, UUID, or JSON File…"
+              class="filter-search-input"
+            />
+            <button @click="installedRhpaksFilter = ''" :disabled="!installedRhpaksFilter.trim()" class="btn-clear-filter">
+              Clear RHPAK Display Filters
+            </button>
+          </div>
+          <div v-if="installedRhpaks.length > 0 && filteredInstalledRhpaks.length === 0" class="inline-status">
+            No rhpaks match your filter.
+          </div>
+          <div v-else class="installed-rhpak-table-wrapper">
             <table class="data-table installed-rhpak-table">
               <thead>
                 <tr>
@@ -2768,7 +2785,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="rhpak in installedRhpaks" :key="rhpak.rhpakuuid">
+                <tr v-for="rhpak in filteredInstalledRhpaks" :key="rhpak.rhpakuuid">
                   <td class="col-check">
                     <input 
                       type="checkbox"
@@ -8483,10 +8500,22 @@ Do you recommend; is the game fun and worthwhile?</span></label>
       <div class="global-conditions-content">
         <h4>Global Patch Codes</h4>
         <p class="info-message">Select patch codes to apply to all games and stages in this run:</p>
+
+        <div class="global-conditions-filter-row">
+          <input
+            v-model="globalConditionsFilter"
+            type="text"
+            placeholder="Filter by name, code, or description..."
+            class="filter-search-input"
+          />
+          <button @click="globalConditionsFilter = ''" :disabled="!globalConditionsFilter.trim()" class="btn-clear-filter">Clear</button>
+        </div>
         
         <div class="patches-list" v-if="availablePatchesForGlobal.length > 0">
+          <div v-if="filteredAvailablePatchesForGlobal.length === 0" class="info-message">No patches match your filter.</div>
+          <template v-else>
           <label 
-            v-for="patch in availablePatchesForGlobal" 
+            v-for="patch in filteredAvailablePatchesForGlobal" 
             :key="patch.epuuid"
             class="patch-checkbox-label"
           >
@@ -8499,6 +8528,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             <span class="patch-code">({{ patch.patch_code }})</span>
             <span v-if="patch.description" class="patch-description">{{ patch.description }}</span>
           </label>
+          </template>
         </div>
         <div v-else class="info-message">No patches available.</div>
         
@@ -8689,6 +8719,11 @@ Do you recommend; is the game fun and worthwhile?</span></label>
       </footer>
     </div>
   </div>
+
+  <MapsReferenceDialog
+    :visible="mapsReferenceModalOpen"
+    @close="closeMapsReferenceModal"
+  />
 
   <!-- Challenges Modal -->
   <div v-if="challengesModalOpen" class="modal-backdrop" @click.self="closeChallengesModal">
@@ -9512,6 +9547,7 @@ import {
   type TextSize 
 } from './themeConfig';
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
+import { matchesPatchFilter } from './utils/patchFilter';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
@@ -9545,6 +9581,7 @@ import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.vue';
 import DatabaseUpdateDialog from './components/DatabaseUpdateDialog.vue';
 import FetchSettingsDialog from './components/FetchSettingsDialog.vue';
 import LoadManualDialog from './components/LoadManualDialog.vue';
+import MapsReferenceDialog from './components/MapsReferenceDialog.vue';
 import AboutDialog from './components/AboutDialog.vue';
 import {
   alertDialogVisible,
@@ -9844,8 +9881,20 @@ const selectedInstalledRhpaks = ref<Set<string>>(new Set());
 const rhpakUninstallInProgress = ref(false);
 const rhpakListMessage = ref('');
 const rhpakListMessageType = ref<'success' | 'error' | ''>('');
+const installedRhpaksFilter = ref('');
+const filteredInstalledRhpaks = computed(() => {
+  const q = installedRhpaksFilter.value.trim().toLowerCase();
+  if (!q) return installedRhpaks.value;
+  return installedRhpaks.value.filter((r) => {
+    const name = (r.name || '').toLowerCase();
+    const uuid = (r.rhpakuuid || '').toLowerCase();
+    const jsfilename = (r.jsfilename || '').toLowerCase();
+    return name.includes(q) || uuid.includes(q) || jsfilename.includes(q);
+  });
+});
 const allInstalledRhpaksSelected = computed(() => {
-  return installedRhpaks.value.length > 0 && selectedInstalledRhpaks.value.size === installedRhpaks.value.length;
+  const filtered = filteredInstalledRhpaks.value;
+  return filtered.length > 0 && filtered.every((r) => selectedInstalledRhpaks.value.has(r.rhpakuuid));
 });
 
 // USB2SNES Tools modal state
@@ -11167,6 +11216,7 @@ function openInstalledRhpaksModal() {
 
 function closeInstalledRhpaksModal() {
   installedRhpaksModalOpen.value = false;
+  installedRhpaksFilter.value = '';
   selectedInstalledRhpaks.value = new Set();
 }
 
@@ -11208,10 +11258,14 @@ function toggleInstalledRhpakSelection(uuid: string, event?: Event) {
 
 function toggleSelectAllInstalledRhpaks(event: Event) {
   const target = event.target as HTMLInputElement | null;
+  const filtered = filteredInstalledRhpaks.value;
   if (target?.checked) {
-    selectedInstalledRhpaks.value = new Set(installedRhpaks.value.map((r) => r.rhpakuuid));
+    const next = new Set(selectedInstalledRhpaks.value);
+    for (const r of filtered) next.add(r.rhpakuuid);
+    selectedInstalledRhpaks.value = next;
   } else {
-    selectedInstalledRhpaks.value = new Set();
+    const filteredUuids = new Set(filtered.map((r) => r.rhpakuuid));
+    selectedInstalledRhpaks.value = new Set(Array.from(selectedInstalledRhpaks.value).filter((u) => !filteredUuids.has(u)));
   }
 }
 
@@ -12592,6 +12646,7 @@ const isPinging = ref(false);
 const uploadFileModalOpen = ref(false);
 const cheatsModalOpen = ref(false);
 const challengesModalOpen = ref(false);
+const mapsReferenceModalOpen = ref(false);
 const fullChatModalOpen = ref(false);
 
 // Mini Chat State (for dropdown)
@@ -19494,6 +19549,15 @@ function closeChallengesModal() {
   challengesModalOpen.value = false;
 }
 
+function openMapsReferenceModal() {
+  usb2snesDropdownOpen.value = false;
+  mapsReferenceModalOpen.value = true;
+}
+
+function closeMapsReferenceModal() {
+  mapsReferenceModalOpen.value = false;
+}
+
 function openFullChatModal() {
   usb2snesDropdownOpen.value = false;
   fullChatModalOpen.value = true;
@@ -22728,6 +22792,10 @@ const globalRunConditions = ref<ChallengeCondition[]>([]);  // Global conditions
 const globalRunPatchCodes = ref<string[]>([]);  // Global patch codes to apply to all games/stages in run
 const showGlobalConditionsDialog = ref(false);  // Dialog for editing global conditions and patch codes
 const availablePatchesForGlobal = ref<any[]>([]);  // Available patches for selection in global conditions
+const globalConditionsFilter = ref('');
+const filteredAvailablePatchesForGlobal = computed(() =>
+  availablePatchesForGlobal.value.filter((p) => matchesPatchFilter(p, globalConditionsFilter.value))
+);
 
 // Win Rules state
 const showWinRulesDropdown = ref(false);  // Win rules dropdown visibility
@@ -27125,6 +27193,7 @@ async function editGlobalConditions() {
 
 function closeGlobalConditionsDialog() {
   showGlobalConditionsDialog.value = false;
+  globalConditionsFilter.value = '';
 }
 
 // Get display name for win rules
@@ -35696,6 +35765,12 @@ button:disabled {
   max-width: 95vw;
 }
 
+.installed-rhpak-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .installed-rhpak-table-wrapper {
   max-height: 320px;
   overflow-y: auto;
@@ -40423,6 +40498,12 @@ button:disabled {
 
 .global-conditions-content {
   padding: 16px;
+}
+
+.global-conditions-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .global-conditions-content h4 {

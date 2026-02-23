@@ -411,6 +411,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, output?: string, error?: string}>}
    */
   rhpakImport: (filePath, options) => ipcRenderer.invoke('rhpak:import', { filePath, ...options }),
+
+  /**
+   * Load Manual: inspect archive (7z/ZIP) for BPS entries and metadata
+   */
+  loadManualInspectArchive: (params) => ipcRenderer.invoke('loadManual:inspect-archive', params),
+  /**
+   * Load Manual: inspect RHPAK for metadata pre-population
+   */
+  loadManualInspectRhpak: (params) => ipcRenderer.invoke('loadManual:inspect-rhpak', params),
+  /**
+   * Load Manual: create RHPAK from file and install
+   */
+  loadManualCreateFromFile: (params) => ipcRenderer.invoke('loadManual:create-rhpak-from-file', params),
+  /**
+   * Load Manual: create RHPAK from URL (download then create)
+   */
+  loadManualCreateFromUrl: (params) => ipcRenderer.invoke('loadManual:create-rhpak-from-url', params),
+  loadManualCreateBrowserWindow: (params) => ipcRenderer.invoke('loadManual:create-browser-window', params),
+  loadManualScrapePage: (params) => ipcRenderer.invoke('loadManual:scrape-page', params),
+  onLoadManualDownloadComplete: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('loadManual:download-complete', handler);
+    return () => ipcRenderer.removeListener('loadManual:download-complete', handler);
+  },
   
   /**
    * List installed RHPAK packages

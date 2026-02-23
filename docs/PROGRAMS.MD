@@ -21,6 +21,7 @@ cd /home/main/proj/rhtools && npx electron electron/main.js
 ```
 
 **Features**:
+- Load Manual: add games from local BPS/ZIP/7z/RHPAK or URL, with BPS picker and metadata pre-population from JSON
 - Browse 3,168+ SMW ROM hacks from database
 - Triple rating system (Difficulty, Review, Skill Level)
 - Version management with version-specific annotations

@@ -17454,6 +17454,226 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   // ============================================================================
+  // Load Manual Dialog IPC Handlers
+  // ============================================================================
+  const loadManualUtils = require('./utils/load-manual-utils');
+
+  async function loadManualCreateFromFile(filePath, opts = {}) {
+    const { selectedBpsPath, gameid, name, author, difficulty, type } = opts;
+    const os = require('os');
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found' };
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    let bpsPath = null;
+
+    if (ext === '.bps') {
+      bpsPath = filePath;
+    } else if (ext === '.rhpak') {
+      const importConfig = buildNewgameConfig({
+        packageInput: filePath,
+        packageBaseDir: path.dirname(path.resolve(filePath)),
+        forceGameids: false,
+        forceExtrapatches: false,
+      });
+      await newgameHandleImportPackage(importConfig);
+      return { success: true, gameid: null };
+    } else if (ext === '.zip' || ext === '.7z') {
+      const AdmZip = require('adm-zip');
+      const tempDir = path.join(os.tmpdir(), `load-manual-${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+      try {
+        let chosen = selectedBpsPath;
+        if (!chosen) {
+          const inspect = loadManualUtils.inspectArchive(filePath);
+          if (inspect.error) throw new Error(inspect.error);
+          if (inspect.bpsEntries && inspect.bpsEntries.length === 1) chosen = inspect.bpsEntries[0].path;
+          else if (inspect.bpsEntries && inspect.bpsEntries.length > 1) throw new Error('Multiple BPS files: please select one in the dialog');
+          else throw new Error('No BPS file found in archive');
+        }
+        if (ext === '.zip') {
+          const zip = new AdmZip(filePath);
+          const entry = zip.getEntry(chosen) || zip.getEntries().find(e => !e.isDirectory && (e.entryName.replace(/\\/g, '/') === chosen || e.entryName.endsWith(path.basename(chosen))));
+          if (!entry) throw new Error(`BPS entry not found: ${chosen}`);
+          const dest = path.join(tempDir, path.basename(chosen));
+          fs.writeFileSync(dest, entry.getData());
+          bpsPath = dest;
+        } else {
+          loadManualUtils.extractAllFrom7z(filePath, tempDir);
+          const findBps = (dir, depth = 0) => {
+            if (depth > 10) return null;
+            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, e.name);
+              if (e.isDirectory()) { const f = findBps(full, depth + 1); if (f) return f; }
+              else if (e.name === path.basename(chosen) || full.replace(/\\/g, '/').endsWith(chosen.replace(/\\/g, '/'))) return full;
+            }
+            return null;
+          };
+          bpsPath = findBps(tempDir) || path.join(tempDir, path.basename(chosen));
+          if (!fs.existsSync(bpsPath)) throw new Error(`BPS not found after extract: ${chosen}`);
+        }
+      } catch (err) {
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+        throw err;
+      }
+    } else {
+      return { success: false, error: 'Unsupported file type. Use BPS, ZIP, 7z, or RHPAK.' };
+    }
+
+    if (!bpsPath) return { success: false, error: 'No BPS file' };
+
+    const manualGameid = gameid || `manual_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
+    const itemJson = {
+      gameversion: {
+        gameid: manualGameid,
+        name: name || path.basename(bpsPath).replace(/\.bps$/i, ''),
+        author: author || 'Unknown',
+        difficulty: difficulty || 'Intermediate',
+        gametype: type || 'Standard',
+        type: type || 'Standard',
+        fields_type: type || 'Standard'
+      },
+      sfc_rom_sha256_hash: crypto.createHash('sha256').update(manualGameid).digest('hex').substring(0, 64)
+    };
+
+    const createRes = await loadManualUtils.createTempRhpakFromBps(bpsPath, itemJson);
+    if (!createRes.success) return createRes;
+
+    const importConfig = buildNewgameConfig({
+      packageInput: createRes.rhpakPath,
+      packageBaseDir: path.dirname(createRes.rhpakPath),
+      forceGameids: false,
+      forceExtrapatches: false,
+    });
+    await newgameHandleImportPackage(importConfig);
+    return { success: true, gameid: createRes.gameid };
+  }
+
+  ipcMain.handle('loadManual:inspect-archive', async (_event, { filePath }) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) {
+        return { error: 'File not found' };
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext !== '.zip' && ext !== '.7z') {
+        return { error: 'Not a ZIP or 7z archive' };
+      }
+      return loadManualUtils.inspectArchive(filePath);
+    } catch (error) {
+      console.error('[loadManual:inspect-archive] Error:', error);
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle('loadManual:inspect-rhpak', async (_event, { filePath }) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) {
+        return { error: 'File not found' };
+      }
+      const meta = loadManualUtils.inspectRhpak(filePath);
+      return meta || { error: 'Could not read RHPAK metadata' };
+    } catch (error) {
+      console.error('[loadManual:inspect-rhpak] Error:', error);
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle('loadManual:create-rhpak-from-file', async (_event, params) => {
+    try {
+      return await loadManualCreateFromFile(params.filePath, params);
+    } catch (error) {
+      console.error('[loadManual:create-rhpak-from-file] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  const loadManualBrowserWindow = require('./utils/load-manual-browser-window');
+
+  ipcMain.handle('loadManual:create-browser-window', async (_event, { url, mainWindowId }) => {
+    try {
+      const mainWin = mainWindowId
+        ? BrowserWindow.fromId(mainWindowId)
+        : BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+      const result = loadManualBrowserWindow.createLoadManualBrowserWindow({
+        url: url || 'about:blank',
+        mainWindowId: mainWin && !mainWin.isDestroyed() ? mainWin.id : undefined,
+      });
+      return { success: true, windowId: result.windowId, webContentsId: result.webContentsId };
+    } catch (error) {
+      console.error('[loadManual:create-browser-window] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('loadManual:scrape-page', async (_event, { webContentsId }) => {
+    try {
+      const { webContents } = require('electron');
+      const wc = webContents.fromId(webContentsId);
+      if (!wc || wc.isDestroyed()) return { error: 'WebContents not found' };
+      const result = await wc.executeJavaScript(`
+        (function() {
+          const sel = (s) => (document.querySelector(s) || {}).textContent || '';
+          return {
+            name: (document.querySelector('h2.title') || {}).textContent?.trim() || '',
+            authors: Array.from(document.querySelectorAll('span.authors span.un-outer')).map(el => el.title || el.textContent).join(', ').trim() || '',
+            difficulty: (document.querySelector('div#difficulty-section a.difficulty-ranking') || {}).textContent?.trim() || '',
+            type: (document.querySelector('div#type-section a.hack-type, div#type-section a.type-standard') || {}).textContent?.trim() || ''
+          };
+        })();
+      `);
+      return result;
+    } catch (error) {
+      console.error('[loadManual:scrape-page] Error:', error);
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle('loadManual:create-rhpak-from-url', async (_event, { url, selectedBpsPath, gameid, name, author, difficulty, type }) => {
+    const os = require('os');
+    const https = require('https');
+    const http = require('http');
+    let tempFile = null;
+    try {
+      if (!url || !url.startsWith('http')) {
+        return { success: false, error: 'Invalid URL' };
+      }
+      const urlPath = new URL(url).pathname;
+      const ext = path.extname(urlPath) || (urlPath.match(/\.(zip|7z|bps)$/i)?.[0]) || '.zip';
+      tempFile = path.join(os.tmpdir(), `load-manual-dl-${Date.now()}${ext}`);
+      await new Promise((resolve, reject) => {
+        const mod = url.startsWith('https') ? https : http;
+        const req = mod.get(url, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            req.destroy();
+            return mod.get(res.headers.location, (r2) => {
+              const out = fs.createWriteStream(tempFile);
+              r2.pipe(out).on('finish', () => { out.close(); resolve(); }).on('error', reject);
+            }).on('error', reject);
+          }
+          const out = fs.createWriteStream(tempFile);
+          res.pipe(out).on('finish', () => { out.close(); resolve(); }).on('error', reject);
+        });
+        req.on('error', reject);
+      });
+      return await loadManualCreateFromFile(tempFile, {
+        selectedBpsPath,
+        gameid,
+        name,
+        author,
+        difficulty,
+        type
+      });
+    } catch (error) {
+      console.error('[loadManual:create-rhpak-from-url] Error:', error);
+      return { success: false, error: error.message };
+    } finally {
+      if (tempFile && fs.existsSync(tempFile)) {
+        try { fs.unlinkSync(tempFile); } catch (_) {}
+      }
+    }
+  });
+
+  // ============================================================================
   // Software Update Handlers (Manual Check Only)
   // Note: Most software update handlers are registered early in main.js
   // via setupSoftwareUpdateIpc() before the update check runs

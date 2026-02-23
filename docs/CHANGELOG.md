@@ -1,5 +1,7 @@
 - P20260222
 
+- **Load Manual Dialog**: Added "Load Manual" button (left of "Add to Run") that opens a modal to create a temporary RHPAK and install games from local files (BPS, ZIP, 7z, RHPAK), direct URL, or via browser (From Page / From SMWC Game ID). Pre-checks 7z/ZIP archives: lists BPS files, shows BPS picker when multiple BPS exist, extracts metadata from matching JSON (bpsindex/<hash>.json, games/<id>.json) and pre-populates Game ID, Name, Author, Difficulty, Type. RHPAK metadata also pre-populates. From Page/SMWC: opens a browser window, intercepts downloads, then inspects and installs. "Scrape Metadata" button extracts name, authors, difficulty, type from SMWC page DOM. New component LoadManualDialog.vue, IPC handlers loadManual:inspect-archive, loadManual:inspect-rhpak, loadManual:create-rhpak-from-file, loadManual:create-rhpak-from-url, loadManual:create-browser-window, loadManual:scrape-page. See electron/utils/load-manual-utils.js, load-manual-browser-window.js.
+
 - **IPFS Helia Fallback for Packaged App**: When @helia/verified-fetch cannot be loaded (e.g. "Cannot find package" in packaged AppImage/executable), ipfs-fetch-config now falls back to basic HTTP gateway fetch so IPFS downloads still work.
 
 - **prepare_databases IPFS Error Logging**: When IPFS download fails and prepare_databases falls back to url/ardrive, the IPFS failure is now logged with `[download-error] ... via ipfs -> ...` so users can see why the fallback occurred.

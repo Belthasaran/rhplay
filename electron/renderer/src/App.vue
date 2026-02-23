@@ -1146,6 +1146,7 @@
           </div>
         </div>
 
+        <button @click="openLoadManualDialog">Load Manual</button>
         <button @click="addSelectedToRun" :disabled="numChecked === 0">Add to Run</button>
       </div>
 
@@ -2049,6 +2050,14 @@
       </footer>
     </div>
   </div>
+
+  <!-- Load Manual Dialog -->
+  <LoadManualDialog
+    v-if="loadManualDialogOpen"
+    :visible="loadManualDialogOpen"
+    @close="closeLoadManualDialog"
+    @added="handleLoadManualAdded"
+  />
 
   <!-- Catalog Search Modal -->
   <div v-if="catalogSearchModalOpen" class="modal-backdrop catalog-search-backdrop" style="z-index: 20001;">
@@ -9535,6 +9544,7 @@ import SearchCatalogAcknowledgement from './components/SearchCatalogAcknowledgem
 import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.vue';
 import DatabaseUpdateDialog from './components/DatabaseUpdateDialog.vue';
 import FetchSettingsDialog from './components/FetchSettingsDialog.vue';
+import LoadManualDialog from './components/LoadManualDialog.vue';
 import AboutDialog from './components/AboutDialog.vue';
 import {
   alertDialogVisible,
@@ -9792,6 +9802,7 @@ const selectDropdownOpen = ref(false);
 // Manage dropdown state
 const manageDropdownOpen = ref(false);
 const installRhpakModalOpen = ref(false);
+const loadManualDialogOpen = ref(false);
 const installRhpakState = reactive<{
   selectedFile: string;
   status: InstallRhpakStatus;
@@ -10994,6 +11005,19 @@ function openInstallRhpakModal() {
 function closeInstallRhpakModal() {
   installRhpakModalOpen.value = false;
   resetInstallRhpakState();
+}
+
+function openLoadManualDialog() {
+  loadManualDialogOpen.value = true;
+}
+function closeLoadManualDialog() {
+  loadManualDialogOpen.value = false;
+}
+async function handleLoadManualAdded(gameid: string | null) {
+  await loadGames();
+  if (gameid) {
+    selectGameByGameid(gameid);
+  }
 }
 
 async function chooseRhpakFile() {

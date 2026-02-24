@@ -2,7 +2,7 @@
   <div v-if="visible" class="modal-backdrop" @click.self="$emit('close')">
     <div class="modal maps-reference-modal large-modal">
       <header class="modal-header">
-        <h3>Maps Reference</h3>
+        <h3>Maps Reference,    Note: [Archive version. For current data, see: <A HREF="https://www.smwcentral.net/?p=memorymap&game=smw&u=0&address=&sizeOperation=%3D&sizeValue=&region[]=ram&type=*&description=" TARGET="_blank">SMWCEntral.net</A>]</h3>
         <button class="close" @click="$emit('close')">✕</button>
       </header>
 

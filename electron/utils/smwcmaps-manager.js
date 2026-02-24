@@ -11,7 +11,9 @@ const AdmZip = require('adm-zip');
 const manifestResolver = require('./manifest-resolver');
 const ipfsFetchConfig = require('./ipfs-fetch-config');
 
-const FALLBACK_CID = 'bafybeibtobdikzquow5z65fgxqjd3xmk53pgytglp55ysxjyn6fbglf3hu';
+//const FALLBACK_CID = 'bafybeibtobdikzquow5z65fgxqjd3xmk53pgytglp55ysxjyn6fbglf3hu';
+//const FALLBACK_CID = 'bafybeibl6dwmqjqsufsw24dlxximwod6nlxtfjicyyjubx67ebwgpkduci';
+const FALLBACK_CID = 'bafybeihwif5t4y6lkb6r5ad6gbffhkjelxdh72glliuo6zplkk7x22p4ka';
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const EXPECTED_FILES = ['smwrammap.json', 'smwrommap.json', 'smwregs.json', 'smwsram.json', 'smwhijacks.json', 'smwtables.json'];
 

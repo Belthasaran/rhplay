@@ -62,6 +62,16 @@
             <button class="btn-secondary" @click="openBrowserPage">
               Open Page
             </button>
+            <template v-if="activeTab === 'page'">
+              <button
+                v-for="chip in pageQuickChips"
+                :key="chip.label"
+                class="page-quick-chip"
+                @click="openQuickChip(chip)"
+              >
+                {{ chip.label }}
+              </button>
+            </template>
           </div>
           <p v-if="downloadFeedback" class="download-feedback">
             {{ downloadFeedback }}
@@ -145,6 +155,14 @@ const tabs = [
   { id: 'url' as const, label: 'Load Raw URL' },
   { id: 'page' as const, label: 'From Page' },
   { id: 'smwc' as const, label: 'From SMWC Game ID' },
+];
+
+const pageQuickChips: { label: string; url: string }[] = [
+  { label: 'SMWC', url: 'https://www.smwcentral.net/?p=section&s=smwhacks' },
+  { label: 'RHDN', url: 'https://www.romhacking.net/?page=hacks&category=&platform=&game=714&order=&perpage=20&dir=&title=&search=Go' },
+  { label: 'SMWC_W', url: 'https://smwcworld.com/' },
+  { label: 'SMWDB', url: 'https://smwdb.me/' },
+  { label: 'RHR', url: 'https://www.romhackraces.com/eventlevels.php' },
 ];
 
 const filePath = ref('');
@@ -318,8 +336,12 @@ async function openBrowserPage() {
   let targetUrl = '';
   if (activeTab.value === 'smwc') {
     const id = smwcGameId.value.trim();
-    if (!id) { error.value = 'Enter SMWC Game ID'; return; }
-    targetUrl = `https://www.smwcentral.net/?p=section&a=details&id=${id}`;
+    //if (!id) { error.value = 'Enter SMWC Game ID'; return; }
+    if (id) { 
+        targetUrl = `https://www.smwcentral.net/?p=section&a=details&id=${id}`;
+    } else {
+        targetUrl = 'https://www.smwcentral.net/?p=section&s=smwhacks';
+    }
   } else {
     targetUrl = pageUrl.value.trim();
     if (!targetUrl) { error.value = 'Enter page URL'; return; }
@@ -334,6 +356,11 @@ async function openBrowserPage() {
   } catch (e: any) {
     error.value = e?.message || 'Failed to open browser';
   }
+}
+
+function openQuickChip(chip: { label: string; url: string }) {
+  pageUrl.value = chip.url;
+  openBrowserPage();
 }
 
 async function addTestPack() {
@@ -511,6 +538,21 @@ defineExpose({ reset });
   display: flex;
   gap: 8px;
   margin-top: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.page-quick-chip {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  border-radius: 16px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.page-quick-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-secondary);
 }
 .download-feedback {
   color: #1565c0;

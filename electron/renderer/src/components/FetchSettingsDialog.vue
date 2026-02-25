@@ -18,7 +18,7 @@
               <input
                 v-model="ipfsOption"
                 type="radio"
-                value="helia-http"
+                value="helia-http" disabled
               />
               <span class="radio-label">Helia IPFS Fetch (EXPERIMENTAL)</span>
             </label>

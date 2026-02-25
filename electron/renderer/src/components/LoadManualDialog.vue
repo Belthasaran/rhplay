@@ -159,6 +159,7 @@ const tabs = [
 
 const pageQuickChips: { label: string; url: string }[] = [
   { label: 'SMWC', url: 'https://www.smwcentral.net/?p=section&s=smwhacks' },
+  [ label: 'W_A', url: 'https://waiting_smwresource.arweave.net/' },
   { label: 'RHDN', url: 'https://www.romhacking.net/?page=hacks&category=&platform=&game=714&order=&perpage=20&dir=&title=&search=Go' },
   { label: 'SMWC_W', url: 'https://smwcworld.com/' },
   { label: 'SMWDB', url: 'https://smwdb.me/' },

@@ -5377,15 +5377,16 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     @check-updates="checkForUpdates"
   />
 
-  <!-- Fetch Settings Overlay (opened from Settings) -->
-  <FetchSettingsDialog
-    v-if="fetchSettingsOverlayOpen"
-    :visible="fetchSettingsOverlayOpen"
-    :is-blocking="false"
-    :standalone="false"
-    @close="fetchSettingsOverlayOpen = false"
-    @saved="fetchSettingsOverlayOpen = false"
-  />
+  <!-- Fetch Settings Overlay (opened from Settings); z-index so it appears above Settings modal -->
+  <div v-if="fetchSettingsOverlayOpen" class="fetch-settings-overlay-on-top">
+    <FetchSettingsDialog
+      :visible="fetchSettingsOverlayOpen"
+      :is-blocking="false"
+      :standalone="false"
+      @close="fetchSettingsOverlayOpen = false"
+      @saved="fetchSettingsOverlayOpen = false"
+    />
+  </div>
 
   <!-- Settings Modal -->
   <div v-if="settingsModalOpen" class="modal-backdrop" @click.self="closeSettings">
@@ -33321,6 +33322,12 @@ button:disabled {
   align-items: center; 
   justify-content: center; 
   z-index: 20000; 
+}
+
+.fetch-settings-overlay-on-top {
+  position: fixed;
+  inset: 0;
+  z-index: 20010;
 }
 
 /* Alert and Confirm dialogs should be on top of everything */

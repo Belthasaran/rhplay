@@ -37,7 +37,7 @@
           <div v-if="filteredRows.length === 0" class="empty-message">
             {{ currentData.length === 0 ? 'No entries in this map.' : 'No entries match your filter.' }}
           </div>
-          <div v-else class="maps-table-wrapper">
+          <div v-else class="maps-table-wrapper" @click="handleHtmlLinkClick">
             <table class="data-table maps-table">
               <thead>
                 <tr>
@@ -88,7 +88,7 @@
           <h4>{{ detailPopupLabel }}</h4>
           <button class="close-small" @click="detailPopupKey = null">✕</button>
         </div>
-        <div class="detail-popup-body" v-html="detailPopupContent"></div>
+        <div class="detail-popup-body" v-html="detailPopupContent" @click="handleHtmlLinkClick"></div>
       </div>
     </div>
   </div>
@@ -188,6 +188,23 @@ function escapeHtml(s: string): string {
 function openDetailPopup(key: string, label: string) {
   detailPopupKey.value = key;
   detailPopupLabel.value = label;
+}
+
+function openUrlInBrowser(url: string) {
+  const api = (window as any)?.electronAPI;
+  if (api?.shell?.openExternal) api.shell.openExternal(url);
+}
+
+function handleHtmlLinkClick(event: MouseEvent) {
+  const link = (event.target as HTMLElement).closest('a[href]');
+  if (!link) return;
+  const href = (link as HTMLAnchorElement).href || link.getAttribute('href');
+  if (!href) return;
+  if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) {
+    event.preventDefault();
+    event.stopPropagation();
+    openUrlInBrowser(href);
+  }
 }
 
 async function loadMaps() {

@@ -220,16 +220,16 @@ for record in items:
         #
     modclass = ""
     modemoji = ""
-    if record["moderated"] == "Moderated" :
+    if record["moderated"] == "Moderated" or re.match(r'^moderated.*', record["moderated"],re.I)  or re.match(r'^accepted.*', record["moderated"],re.I) :
         modclass = "m_moderated"
         modemoji = "✅ "
-    elif record["moderated"] == "Waiting" :
+    elif record["moderated"] == "Waiting" or re.match(r'^waiting.*', record["moderated"],re.I) :
         modclass = "m_waiting"
         modemoji = "⌛"
-    elif record["moderated"] == "Removed" :
+    elif record["moderated"] == "Removed" or re.match(r'^removed.*', record["moderated"],re.I) :
         modclass = "m_removed"
         modemoji = "❌"
-    elif record["moderated"] == "Rejected" :
+    elif record["moderated"] == "Rejected" or re.match(r'^rejected.*', record["moderated"],re.I) :
         modemoji = "❌"
         modclass = "m_rejected"
     else:

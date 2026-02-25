@@ -119,7 +119,7 @@ function extractMetadataFromJson(jsonObj) {
  * Inspect a 7z or ZIP archive: list BPS and JSON, parse matching JSON for metadata.
  * Returns { bpsEntries, jsonEntries, metadataByBps }.
  */
-function inspectArchive(filePath) {
+async function inspectArchive(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const bpsEntries = [];
   const jsonEntries = [];
@@ -189,7 +189,7 @@ function inspectArchive(filePath) {
   } else {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'load-manual-inspect-'));
     try {
-      extractAllFrom7z(filePath, tempDir);
+      await extractAllFrom7z(filePath, tempDir);
       const readJsonAt = (relPath) => {
         const full = path.join(tempDir, relPath);
         if (fs.existsSync(full)) {

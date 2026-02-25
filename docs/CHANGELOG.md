@@ -4,6 +4,8 @@
 
 - **Load Manual Open Page download file type detection**: When downloading via Load Manual "Open Page", 7z files were misdetected as ZIP (causing "Invalid or unsupported zip format"). Now uses Content-Type header (getMimeType), filename extension, and magic-byte fallback to correctly identify 7z, ZIP, BPS, and RHPAK. Preserves .rhpak extension; renames mislabeled files after download. Added BPS handling in inspectSelectedFile for standalone .bps downloads.
 
+- **Load Manual 7z BPS extraction and metadata**: Fixed "BPS not found after extract" when using 7z archives: extractAllFrom7z was not awaited in loadManualCreateFromFile, so findBps ran before extraction completed. Also made inspectArchive async and await extractAllFrom7z so metadata from bpsindex/*.json is read after extraction, enabling Name/Author/Difficulty/Type prepopulation from gameversion in 7z archives.
+
 - **File Transfer Settings on top of Settings**: "Open File Transfer Settings" from the Settings dialog now opens the File Transfer and Peer-to-Peer Settings modal above the Settings dialog (fixed z-index stacking so it is no longer hidden behind Settings).
 
 - **Maps Reference Dialog**: Added SMWCentral.net "Maps Reference" to USB2SNES Quick Actions. Opens a modal to browse SMW memory map JSON files (RAM Map, ROM Map, Registers, SRAM, SMWhijacks). Data fetched from IPFS (CID from coremanifest smwcmaps, fallback default), cached in userData/smwcmaps (max once per day). Tabs, filter, large table with address/size/type/context/details/description. Clickable detail links open popup with smwtables content (table or HTML). New electron/utils/smwcmaps-manager.js, MapsReferenceDialog.vue, smwcmaps:ensure IPC.

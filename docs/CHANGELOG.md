@@ -2,6 +2,8 @@
 
 - **Load Manual 7z in packaged app**: Load Manual "From File" with a 7z archive failed in packaged Electron (AppImage) with "7za not found" because list/extract used the 7za path inside app.asar. Fixed by using the same unpacked 7za path as catalog/game-stager: get7zaPath() in load-manual-utils.js loads game-stager so 7zip-min is configured for packaged apps, then uses that binary path for list7zContents and extractFileFrom7z.
 
+- **Load Manual Open Page download file type detection**: When downloading via Load Manual "Open Page", 7z files were misdetected as ZIP (causing "Invalid or unsupported zip format"). Now uses Content-Type header (getMimeType), filename extension, and magic-byte fallback to correctly identify 7z, ZIP, BPS, and RHPAK. Preserves .rhpak extension; renames mislabeled files after download. Added BPS handling in inspectSelectedFile for standalone .bps downloads.
+
 - **File Transfer Settings on top of Settings**: "Open File Transfer Settings" from the Settings dialog now opens the File Transfer and Peer-to-Peer Settings modal above the Settings dialog (fixed z-index stacking so it is no longer hidden behind Settings).
 
 - **Maps Reference Dialog**: Added SMWCentral.net "Maps Reference" to USB2SNES Quick Actions. Opens a modal to browse SMW memory map JSON files (RAM Map, ROM Map, Registers, SRAM, SMWhijacks). Data fetched from IPFS (CID from coremanifest smwcmaps, fallback default), cached in userData/smwcmaps (max once per day). Tabs, filter, large table with address/size/type/context/details/description. Clickable detail links open popup with smwtables content (table or HTML). New electron/utils/smwcmaps-manager.js, MapsReferenceDialog.vue, smwcmaps:ensure IPC.

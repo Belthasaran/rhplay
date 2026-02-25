@@ -289,6 +289,14 @@ async function inspectSelectedFile(path: string) {
     }
     return;
   }
+  if (ext === 'bps') {
+    const fileName = path.replace(/\\/g, '/').split('/').pop() || path;
+    const baseName = fileName.replace(/\.bps$/i, '');
+    bpsEntries.value = [{ path: path, baseName }];
+    selectedBpsPath.value = path;
+    metadataByBps.value = {};
+    return;
+  }
   if (ext === 'zip' || ext === '7z') {
     try {
       const result = await api.value.loadManualInspectArchive({ filePath: path });

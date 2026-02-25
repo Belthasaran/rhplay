@@ -4,6 +4,8 @@
     "section": "smwhacks",
     "name": "Flying High Again",
     "time": 1685924250,
+    "submitted_at": 1685924250,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
@@ -15,6 +17,7 @@
       "id": 54602,
       "name": "Noise"
     },
+    "moderator": null,
     "tags": [
       "cape",
       "glitch",
@@ -30,7 +33,7 @@
     ],
     "rating": 5,
     "size": 565170,
-    "downloads": 308,
+    "downloads": 325,
     "download_url": "https://dl.smwcentral.net/34054/Flying_High_Again_1.1.bps.zip",
     "obsoleted_by": null,
     "fields": {
@@ -64,6 +67,8 @@
     "section": "smwhacks",
     "name": "The Pit Level 3",
     "time": 1703598057,
+    "submitted_at": 1703598057,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
@@ -75,6 +80,7 @@
       "id": 26310,
       "name": "IgorOliveira666"
     },
+    "moderator": null,
     "tags": [
       "custom backgrounds",
       "custom blocks",
@@ -94,7 +100,7 @@
     ],
     "rating": 5,
     "size": 1295053,
-    "downloads": 211,
+    "downloads": 222,
     "download_url": "https://dl.smwcentral.net/35777/TPL3.zip",
     "obsoleted_by": null,
     "fields": {
@@ -124,68 +130,12 @@
     }
   },
   {
-    "id": 40288,
-    "section": "smwhacks",
-    "name": "Jumpscare",
-    "time": 1755389203,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 63275,
-        "name": "Gasterus155"
-      }
-    ],
-    "submitter": {
-      "id": 63275,
-      "name": "Gasterus155"
-    },
-    "tags": [
-      "custom",
-      "do not play it if you dont like trolls",
-      "maaaaaaaaariiiiiiiiiiiiiiiisssssssssaaaaaaaaa",
-      "music",
-      "troll"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/117320.png",
-      "https://dl.smwcentral.net/image/117321.png",
-      "https://dl.smwcentral.net/image/117322.png"
-    ],
-    "rating": 0,
-    "size": 673925,
-    "downloads": 91,
-    "download_url": "https://dl.smwcentral.net/40288/Jumpsc.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "hof": "No",
-      "length": "12 exit(s)",
-      "demo": "No",
-      "sa1": "Yes",
-      "collab": "No",
-      "difficulty": "Master",
-      "type": "Kaizo",
-      "warnings": "",
-      "description": "A troll and kaizo at the same time<br>\r\nthis hack is focuses at the troll of hidden enimies that suddenly appear from unexpected places to kill player....although i went out of this goal later in some levels......it requier the sufficient patience at the unexpected deaths......and some kaizo experience and knowledg of some original geme janks/glitches<br>\r\n.<br>\r\nthis hack contains lot of things that most players hate.......like unexpected deaths and hard setups and blind jumps without indecators (Which I consider it to be a troll).....and some other thins<br>\r\n.<br>\r\nis there any other type of trolls? yes<br>\r\n.<br>\r\nthe game will always auto save anytime you back to overworld<br>\r\nstart + select to return to overworld.......pressing select during retry prompt will also work<br>\r\n.<br>\r\ngame will not freez during retry prompt.........so you can know exactly what,s the thing that killed you......even if that would sopile some trolls......but no matter<br>\r\n.<br>\r\nyou can consider yourself beat this hack when you win in the finale level......no matter how you would reach it since it didn,t happen with tools or cheats<br>\r\n.<br>\r\ni know that its possible to hide the objects by using emulator features and see where the enimies are hidden.....but i will consider this a tool/cheat clear and not RTA<br>\r\n.<br>\r\nand that,s all<br>\r\nGood Luck"
-    },
-    "raw_fields": {
-      "hof": false,
-      "length": 12,
-      "demo": false,
-      "sa1": true,
-      "collab": false,
-      "difficulty": "diff_6",
-      "type": [
-        "kaizo"
-      ],
-      "warnings": [],
-      "description": "A troll and kaizo at the same time\r\nthis hack is focuses at the troll of hidden enimies that suddenly appear from unexpected places to kill player....although i went out of this goal later in some levels......it requier the sufficient patience at the unexpected deaths......and some kaizo experience and knowledg of some original geme janks/glitches\r\n.\r\nthis hack contains lot of things that most players hate.......like unexpected deaths and hard setups and blind jumps without indecators (Which I consider it to be a troll).....and some other thins\r\n.\r\nis there any other type of trolls? yes\r\n.\r\nthe game will always auto save anytime you back to overworld\r\nstart + select to return to overworld.......pressing select during retry prompt will also work\r\n.\r\ngame will not freez during retry prompt.........so you can know exactly what,s the thing that killed you......even if that would sopile some trolls......but no matter\r\n.\r\nyou can consider yourself beat this hack when you win in the finale level......no matter how you would reach it since it didn,t happen with tools or cheats\r\n.\r\ni know that its possible to hide the objects by using emulator features and see where the enimies are hidden.....but i will consider this a tool/cheat clear and not RTA\r\n.\r\nand that,s all\r\nGood Luck"
-    }
-  },
-  {
     "id": 40631,
     "section": "smwhacks",
     "name": "Really Neat Gimmicks",
     "time": 1757876544,
+    "submitted_at": 1757876544,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
@@ -197,6 +147,7 @@
       "id": 71580,
       "name": "Jeffw"
     },
+    "moderator": null,
     "tags": [
       "bosses",
       "custom music",
@@ -215,9 +166,9 @@
       "https://dl.smwcentral.net/image/118208.png",
       "https://dl.smwcentral.net/image/118209.png"
     ],
-    "rating": 0,
+    "rating": 5,
     "size": 944663,
-    "downloads": 233,
+    "downloads": 280,
     "download_url": "https://dl.smwcentral.net/40631/gimmicks.zip",
     "obsoleted_by": null,
     "fields": {
@@ -251,6 +202,8 @@
     "section": "smwhacks",
     "name": "Super Refund World",
     "time": 1760994053,
+    "submitted_at": 1760994053,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
@@ -262,6 +215,7 @@
       "id": 32643,
       "name": "Arobam"
     },
+    "moderator": null,
     "tags": [
       "old school",
       "vanilla"
@@ -274,7 +228,7 @@
     ],
     "rating": 0,
     "size": 183202,
-    "downloads": 87,
+    "downloads": 117,
     "download_url": "https://dl.smwcentral.net/40844/Super%20Refund%20World.zip",
     "obsoleted_by": null,
     "fields": {
@@ -307,6 +261,8 @@
     "section": "smwhacks",
     "name": "Super Mario World Master Quest 4: Redrawn",
     "time": 1761610985,
+    "submitted_at": 1761610985,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
@@ -318,6 +274,7 @@
       "id": 26246,
       "name": "Mr. MS"
     },
+    "moderator": null,
     "tags": [
       "asm",
       "bosses",
@@ -354,7 +311,7 @@
     ],
     "rating": 3.6,
     "size": 844846,
-    "downloads": 4449,
+    "downloads": 4518,
     "download_url": "https://dl.smwcentral.net/40890/Super%20Mario%20World%20Master%20Quest%204%20Redrawn%20Update%201.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -383,10 +340,74 @@
     }
   },
   {
-    "id": 40947,
+    "id": 41455,
+    "section": "smwhacks",
+    "name": "Assortment Of Wyverns",
+    "time": 1768897411,
+    "submitted_at": 1768897411,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 44298,
+        "name": "SolveForX"
+      }
+    ],
+    "submitter": {
+      "id": 44298,
+      "name": "SolveForX"
+    },
+    "moderator": null,
+    "tags": [
+      "custom music",
+      "gimmick",
+      "item tech",
+      "no boss",
+      "shell"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121023.png",
+      "https://dl.smwcentral.net/image/121024.png",
+      "https://dl.smwcentral.net/image/121025.png",
+      "https://dl.smwcentral.net/image/121026.png"
+    ],
+    "rating": 5,
+    "size": 365845,
+    "downloads": 67,
+    "download_url": "https://dl.smwcentral.net/41455/AssortmentOfWyverns.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "3 exit(s)",
+      "demo": "No",
+      "sa1": "Yes",
+      "collab": "No",
+      "difficulty": "Grandmaster",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "Three stories I wrote in years past, collecting dust like me. I'm letting them free, as they deserve."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 3,
+      "demo": false,
+      "sa1": true,
+      "collab": false,
+      "difficulty": "diff_7",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Three stories I wrote in years past, collecting dust like me. I'm letting them free, as they deserve."
+    }
+  },
+  {
+    "id": 41511,
     "section": "smwhacks",
     "name": "100 Rooms Of Torment",
-    "time": 1762177190,
+    "time": 1769807982,
+    "submitted_at": 1769807982,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
@@ -398,6 +419,7 @@
       "id": 63275,
       "name": "Gasterus155"
     },
+    "moderator": null,
     "tags": [
       "banzai bill glitch is exist as usual",
       "glitches",
@@ -408,14 +430,14 @@
       "no exit"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/119327.png",
-      "https://dl.smwcentral.net/image/119328.png",
-      "https://dl.smwcentral.net/image/119329.png"
+      "https://dl.smwcentral.net/image/121184.png",
+      "https://dl.smwcentral.net/image/121185.png",
+      "https://dl.smwcentral.net/image/121186.png"
     ],
     "rating": 0,
-    "size": 1086992,
-    "downloads": 86,
-    "download_url": "https://dl.smwcentral.net/40947/100%20Torment%20of%20Rooms.zip",
+    "size": 1089839,
+    "downloads": 29,
+    "download_url": "https://dl.smwcentral.net/41511/100%20Torment%20of%20Rooms.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
@@ -425,8 +447,8 @@
       "collab": "No",
       "difficulty": "Grandmaster",
       "type": "Kaizo",
-      "warnings": "",
-      "description": "Mario went to get milk for his brother Luigi because he needed it to make a cake. Years later, Mario returned from his trip, but he was surprised to find that the way to his house was blocked by a tree stump. He had no other option but to enter the nearby castle (or building), which had 10 floors, each with 10 rooms. He would have to climb all of them to reach the roof of the building and jump from it to his house.<br>\r\n.<br>\r\nanyway<br>\r\nthe the most rooms are single screen but there is some rooms that are longer than this and looks like normal level<br>\r\n.<br>\r\nis this hack hard? yes<br>\r\nis it fun? i dont think<br>\r\nit,s a long hack i guess<br>\r\n.<br>\r\nyour progress is supposed to automaticly save after getting any midway<br>\r\n.<br>\r\nno secrets, no puzzles, just a gameplay<br>\r\nthere is some references for some other hacks<br>\r\n.<br>\r\ngood luck"
+      "warnings": "Possible Photosensitivity Triggers",
+      "description": "Mario went to get milk for his brother Luigi because he needed it to make a cake. Years later, Mario returned from his trip, but he was surprised to find that the way to his house was blocked by a tree stump. He had no other option but to enter the nearby castle (or building), which had 10 floors, each with 10 rooms. He would have to climb all of them to reach the roof of the building and jump from it to his house.<br>\r\n<br>\r\n.<br>\r\n<br>\r\nanyway<br>\r\n<br>\r\nthe the most rooms are single screen but there is some rooms that are longer than this and looks like normal level<br>\r\n<br>\r\n.<br>\r\n<br>\r\nis this hack hard? yes<br>\r\n<br>\r\nis it fun? i dont think<br>\r\n<br>\r\nit,s a long hack i guess<br>\r\n<br>\r\nif you didn,t know how to beat a section, here is a full clear of the hack:<br>\r\nhttps://youtu.be/AWOR46ZXnXA?si=q1m_5F1gsbiY_rVv<br>\r\n.<br>\r\n<br>\r\nyour progress is supposed to automaticly save after getting any midway<br>\r\n<br>\r\n.<br>\r\n<br>\r\nno secrets, no puzzles, just a gameplay<br>\r\n<br>\r\nthere is some references for some other hacks<br>\r\n<br>\r\n.<br>\r\n<br>\r\ngood luck"
     },
     "raw_fields": {
       "hof": false,
@@ -438,266 +460,622 @@
       "type": [
         "kaizo"
       ],
-      "warnings": [],
-      "description": "Mario went to get milk for his brother Luigi because he needed it to make a cake. Years later, Mario returned from his trip, but he was surprised to find that the way to his house was blocked by a tree stump. He had no other option but to enter the nearby castle (or building), which had 10 floors, each with 10 rooms. He would have to climb all of them to reach the roof of the building and jump from it to his house.\r\n.\r\nanyway\r\nthe the most rooms are single screen but there is some rooms that are longer than this and looks like normal level\r\n.\r\nis this hack hard? yes\r\nis it fun? i dont think\r\nit,s a long hack i guess\r\n.\r\nyour progress is supposed to automaticly save after getting any midway\r\n.\r\nno secrets, no puzzles, just a gameplay\r\nthere is some references for some other hacks\r\n.\r\ngood luck"
-    }
-  },
-  {
-    "id": 41279,
-    "section": "smwhacks",
-    "name": "Mario's Misadventures 2: The Black Hole Bomb",
-    "time": 1765804015,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 58714,
-        "name": "signature_steve"
-      }
-    ],
-    "submitter": {
-      "id": 58714,
-      "name": "signature_steve"
-    },
-    "tags": [
-      "asm",
-      "less efgfx",
-      "music",
-      "story",
-      "traditional"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/120281.png",
-      "https://dl.smwcentral.net/image/120282.png",
-      "https://dl.smwcentral.net/image/120283.png",
-      "https://dl.smwcentral.net/image/120284.png",
-      "https://dl.smwcentral.net/image/120285.png",
-      "https://dl.smwcentral.net/image/120286.png",
-      "https://dl.smwcentral.net/image/120287.png",
-      "https://dl.smwcentral.net/image/120288.png",
-      "https://dl.smwcentral.net/image/120289.png",
-      "https://dl.smwcentral.net/image/120290.png",
-      "https://dl.smwcentral.net/image/120291.png"
-    ],
-    "rating": 5,
-    "size": 695560,
-    "downloads": 1535,
-    "download_url": "https://dl.smwcentral.net/41279/MariosMisadventures2%20v1.2.5.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "hof": "No",
-      "length": "98 exit(s)",
-      "demo": "No",
-      "sa1": "Yes",
-      "collab": "No",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "warnings": "",
-      "description": "Following from Mario's Misadventures: The Secret of The 11 Gems, Mario enters the black hole to stop the explosive device, discovering a strange new world inside. What is going on here? Where is the explosive device? As he explores the black hole, he starts to find clues about Bowser's whereabouts and a few artifacts from the Aquarians. Why did Bowser go to war with the Aquarians? Who else could he be working with? Can our hero locate and defuse the bomb before it goes off and destroys everything?<br>\r\n<br>\r\nv1.0.5:<br>\r\nFixed the softlock in Idyllic Island 3 and Bowser's Tower<br>\r\nReassigned castles 6 and 7 to their correct levels<br>\r\nFixed the pathing issues with Rugged Ruins 4's secret exit<br>\r\nGraphical and quality of life improvements<br>\r\nFixed a graphical glitch with the message box in the Sanctum of Sorrow<br>\r\nResolved issues with sprites in certain levels<br>\r\nAdded a midway tape to the Blue Shrine<br>\r\n<br>\r\nv1.1:<br>\r\nFixed a few graphical errors in Bowser's Fortress and Bowser's Bulwark 4<br>\r\nMade some changes to the overworld map<br>\r\nAdded a text document that explains some important information about the submission<br>\r\n<br>\r\nv1.2.5: <br>\r\nAdded a dragon coin to Mystic Meadow 3 <br>\r\nFixed a potential softlock in Mystic Meadow 4 Resolved an issue with the camera in the Switch Palaces <br>\r\nChanged the music in Idyllic Island 5’s sublevel Fixed a graphical glitch in Ludwig’s Castle <br>\r\nFixed some grammatical errors in the message boxes <br>\r\nBug fixes and difficulty rebalancing<br>\r\nFixed the issue with the door to Rugged Ruins 4's secret exit<br>\r\nMade a few changes to the cutscene in Rugged Ruins 4<br>\r\nChanged the background in Mystic Meadow 4<br>\r\nQuality of life fixes in various sublevels<br>\r\nChanged the background in Dire Depot 1 and 2"
-    },
-    "raw_fields": {
-      "hof": false,
-      "length": 98,
-      "demo": false,
-      "sa1": true,
-      "collab": false,
-      "difficulty": "diff_2",
-      "type": [
-        "standard"
-      ],
-      "warnings": [],
-      "description": "Following from Mario's Misadventures: The Secret of The 11 Gems, Mario enters the black hole to stop the explosive device, discovering a strange new world inside. What is going on here? Where is the explosive device? As he explores the black hole, he starts to find clues about Bowser's whereabouts and a few artifacts from the Aquarians. Why did Bowser go to war with the Aquarians? Who else could he be working with? Can our hero locate and defuse the bomb before it goes off and destroys everything?\r\n\r\nv1.0.5:\r\nFixed the softlock in Idyllic Island 3 and Bowser's Tower\r\nReassigned castles 6 and 7 to their correct levels\r\nFixed the pathing issues with Rugged Ruins 4's secret exit\r\nGraphical and quality of life improvements\r\nFixed a graphical glitch with the message box in the Sanctum of Sorrow\r\nResolved issues with sprites in certain levels\r\nAdded a midway tape to the Blue Shrine\r\n\r\nv1.1:\r\nFixed a few graphical errors in Bowser's Fortress and Bowser's Bulwark 4\r\nMade some changes to the overworld map\r\nAdded a text document that explains some important information about the submission\r\n\r\nv1.2.5: \r\nAdded a dragon coin to Mystic Meadow 3 \r\nFixed a potential softlock in Mystic Meadow 4 Resolved an issue with the camera in the Switch Palaces \r\nChanged the music in Idyllic Island 5’s sublevel Fixed a graphical glitch in Ludwig’s Castle \r\nFixed some grammatical errors in the message boxes \r\nBug fixes and difficulty rebalancing\r\nFixed the issue with the door to Rugged Ruins 4's secret exit\r\nMade a few changes to the cutscene in Rugged Ruins 4\r\nChanged the background in Mystic Meadow 4\r\nQuality of life fixes in various sublevels\r\nChanged the background in Dire Depot 1 and 2"
-    }
-  },
-  {
-    "id": 41305,
-    "section": "smwhacks",
-    "name": "SMW Friends and Rivalry",
-    "time": 1766337764,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 21068,
-        "name": "bandicoot"
-      }
-    ],
-    "submitter": {
-      "id": 21068,
-      "name": "bandicoot"
-    },
-    "tags": [
-      "choconilla",
-      "custom asm",
-      "story line",
-      "traditional"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/120395.png",
-      "https://dl.smwcentral.net/image/120396.png",
-      "https://dl.smwcentral.net/image/120397.png",
-      "https://dl.smwcentral.net/image/120398.png",
-      "https://dl.smwcentral.net/image/120399.png",
-      "https://dl.smwcentral.net/image/120400.png",
-      "https://dl.smwcentral.net/image/120401.png",
-      "https://dl.smwcentral.net/image/120402.png",
-      "https://dl.smwcentral.net/image/120403.png",
-      "https://dl.smwcentral.net/image/120404.png",
-      "https://dl.smwcentral.net/image/120405.png"
-    ],
-    "rating": 4.7692,
-    "size": 3859941,
-    "downloads": 4163,
-    "download_url": "https://dl.smwcentral.net/41305/SMW%20Friends%20and%20Rivalry%20v1.05b.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "hof": "No",
-      "length": "118 exit(s)",
-      "demo": "No",
-      "sa1": "No",
-      "collab": "No",
-      "difficulty": "Intermediate",
-      "type": "Standard",
-      "warnings": "",
-      "description": "SMW Friends and Rivalry is a Super Mario World hack with traditional level design akin to the Mario games made by Nintendo.<br>\r\n<br>\r\nHere's a trailer for what to expect of the hack:<br>\r\nhttps://www.youtube.com/watch?v=K27NsqRDHUQ<br>\r\n<br>\r\nIt features 90+ new levels and 118 exits across 9 worlds.<br>\r\nAlso a lot of new stuff  have been added to make this hack feel like a new and grand adventure like new moves for Mario, custom sprites, custom music, graphics, lots of quality of life improvements to the gameplay like faster P-baloon and fast swiming and much more.<br>\r\n<br>\r\nStory:<br>\r\nMario and his friends were preparing for a party on Jamboree island, a resort paradise by the sea.<br>\r\nHowever Kamek comes out of nowhere and hipnotize everyone while Mario was out on the market buying some drinks for the party, now Mario must go on an adventure where he will have to face his turned-evil hipnotized friends to rescue them from the spell and defeat Kamek <br>\r\n<br>\r\nThe hack is available in English and Brazilian Portuguese translations and there are also 2 .bps patches included that allows you to play a slighty harder version of the game if you want to challenge yourself.<br>\r\n<br>\r\nI hope you enjoy the new adventure with Mario and his friends!<br>\r\n-Bandicoot"
-    },
-    "raw_fields": {
-      "hof": false,
-      "length": 118,
-      "demo": false,
-      "sa1": false,
-      "collab": false,
-      "difficulty": "diff_3",
-      "type": [
-        "standard"
-      ],
-      "warnings": [],
-      "description": "SMW Friends and Rivalry is a Super Mario World hack with traditional level design akin to the Mario games made by Nintendo.\r\n\r\nHere's a trailer for what to expect of the hack:\r\nhttps://www.youtube.com/watch?v=K27NsqRDHUQ\r\n\r\nIt features 90+ new levels and 118 exits across 9 worlds.\r\nAlso a lot of new stuff  have been added to make this hack feel like a new and grand adventure like new moves for Mario, custom sprites, custom music, graphics, lots of quality of life improvements to the gameplay like faster P-baloon and fast swiming and much more.\r\n\r\nStory:\r\nMario and his friends were preparing for a party on Jamboree island, a resort paradise by the sea.\r\nHowever Kamek comes out of nowhere and hipnotize everyone while Mario was out on the market buying some drinks for the party, now Mario must go on an adventure where he will have to face his turned-evil hipnotized friends to rescue them from the spell and defeat Kamek \r\n\r\nThe hack is available in English and Brazilian Portuguese translations and there are also 2 .bps patches included that allows you to play a slighty harder version of the game if you want to challenge yourself.\r\n\r\nI hope you enjoy the new adventure with Mario and his friends!\r\n-Bandicoot"
-    }
-  },
-  {
-    "id": 41312,
-    "section": "smwhacks",
-    "name": "Freak City",
-    "time": 1766380754,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 32517,
-        "name": "Boosius"
-      }
-    ],
-    "submitter": {
-      "id": 32517,
-      "name": "Boosius"
-    },
-    "tags": [
-      "bosses",
-      "custom music",
-      "gimmick",
-      "variety"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/120429.png",
-      "https://dl.smwcentral.net/image/120430.png",
-      "https://dl.smwcentral.net/image/120431.png",
-      "https://dl.smwcentral.net/image/120432.png",
-      "https://dl.smwcentral.net/image/120433.png",
-      "https://dl.smwcentral.net/image/120434.png",
-      "https://dl.smwcentral.net/image/120435.png",
-      "https://dl.smwcentral.net/image/120436.png",
-      "https://dl.smwcentral.net/image/120437.png",
-      "https://dl.smwcentral.net/image/120438.png",
-      "https://dl.smwcentral.net/image/120439.png",
-      "https://dl.smwcentral.net/image/120440.png",
-      "https://dl.smwcentral.net/image/120441.png",
-      "https://dl.smwcentral.net/image/120442.png",
-      "https://dl.smwcentral.net/image/120443.png",
-      "https://dl.smwcentral.net/image/120444.png",
-      "https://dl.smwcentral.net/image/120445.png",
-      "https://dl.smwcentral.net/image/120446.png",
-      "https://dl.smwcentral.net/image/120447.png"
-    ],
-    "rating": 0,
-    "size": 2004432,
-    "downloads": 132,
-    "download_url": "https://dl.smwcentral.net/41312/Freak%20City.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "hof": "No",
-      "length": "92 exit(s)",
-      "demo": "No",
-      "sa1": "Yes",
-      "collab": "No",
-      "difficulty": "Advanced",
-      "type": "Standard",
-      "warnings": "Possible Photosensitivity Triggers",
-      "description": "It was a normal day at Mario's Mario House, when all of a sudden a loud noise calls to him from outside.<br>\r\nA color-shifting pipe has emerged from the ground. The ever curious Mario jumps in, in hopes of Fame and Fortune. <br>\r\nLittle did Mario know, the Pipe would send him, any many others, to a land called Freak City.<br>\r\n<br>\r\nFreak City is a joke hack turned something i'm genuinely proud of. I do hope you'll give it a try!<br>\r\n<br>\r\nPlease be sure to read the readme.txt for a full list of credits and other info!! "
-    },
-    "raw_fields": {
-      "hof": false,
-      "length": 92,
-      "demo": false,
-      "sa1": true,
-      "collab": false,
-      "difficulty": "diff_4",
-      "type": [
-        "standard"
-      ],
       "warnings": [
         "photosensitivity"
       ],
-      "description": "It was a normal day at Mario's Mario House, when all of a sudden a loud noise calls to him from outside.\r\nA color-shifting pipe has emerged from the ground. The ever curious Mario jumps in, in hopes of Fame and Fortune. \r\nLittle did Mario know, the Pipe would send him, any many others, to a land called Freak City.\r\n\r\nFreak City is a joke hack turned something i'm genuinely proud of. I do hope you'll give it a try!\r\n\r\nPlease be sure to read the readme.txt for a full list of credits and other info!! "
+      "description": "Mario went to get milk for his brother Luigi because he needed it to make a cake. Years later, Mario returned from his trip, but he was surprised to find that the way to his house was blocked by a tree stump. He had no other option but to enter the nearby castle (or building), which had 10 floors, each with 10 rooms. He would have to climb all of them to reach the roof of the building and jump from it to his house.\r\n\r\n.\r\n\r\nanyway\r\n\r\nthe the most rooms are single screen but there is some rooms that are longer than this and looks like normal level\r\n\r\n.\r\n\r\nis this hack hard? yes\r\n\r\nis it fun? i dont think\r\n\r\nit,s a long hack i guess\r\n\r\nif you didn,t know how to beat a section, here is a full clear of the hack:\r\nhttps://youtu.be/AWOR46ZXnXA?si=q1m_5F1gsbiY_rVv\r\n.\r\n\r\nyour progress is supposed to automaticly save after getting any midway\r\n\r\n.\r\n\r\nno secrets, no puzzles, just a gameplay\r\n\r\nthere is some references for some other hacks\r\n\r\n.\r\n\r\ngood luck"
     }
   },
   {
-    "id": 41326,
+    "id": 41515,
     "section": "smwhacks",
-    "name": "Stackup (Demo #0)",
-    "time": 1766657469,
+    "name": "Jumpscare",
+    "time": 1769899013,
+    "submitted_at": 1769899013,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 8006,
-        "name": "Katrina"
+        "id": 63275,
+        "name": "Gasterus155"
       }
     ],
     "submitter": {
-      "id": 8006,
-      "name": "Katrina"
+      "id": 63275,
+      "name": "Gasterus155"
     },
+    "moderator": null,
     "tags": [
-      "bosses",
-      "custom music",
-      "luigi",
-      "original graphics"
+      "custom",
+      "do not play it if you dont like trolls",
+      "maaaaaaaaariiiiiiiiiiiiiiiisssssssssaaaaaaaaa",
+      "music",
+      "troll"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/120467.png",
-      "https://dl.smwcentral.net/image/120468.png",
-      "https://dl.smwcentral.net/image/120469.png",
-      "https://dl.smwcentral.net/image/120470.png",
-      "https://dl.smwcentral.net/image/120471.png",
-      "https://dl.smwcentral.net/image/120472.png"
+      "https://dl.smwcentral.net/image/121196.png",
+      "https://dl.smwcentral.net/image/121197.png",
+      "https://dl.smwcentral.net/image/121198.png"
+    ],
+    "rating": 0,
+    "size": 674442,
+    "downloads": 30,
+    "download_url": "https://dl.smwcentral.net/41515/Jumpsc.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "12 exit(s)",
+      "demo": "No",
+      "sa1": "Yes",
+      "collab": "No",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "A troll and kaizo at the same time<br>\r\nthis hack is focuses at the troll of hidden enimies that suddenly appear from unexpected places to kill player....although i went out of this goal later in some levels......it requier the sufficient patience at the unexpected deaths......and some kaizo experience and knowledg of some original geme janks/glitches<br>\r\n.<br>\r\nthis hack contains lot of things that most players hate.......like unexpected deaths and hard setups and blind jumps without indecators (Which I consider it to be a troll).....and some other thins<br>\r\n.<br>\r\nis there any other type of trolls? yes<br>\r\n.<br>\r\nthe game will always auto save anytime you back to overworld<br>\r\nstart + select to return to overworld.......pressing select during retry prompt will also work<br>\r\n.<br>\r\ngame will not freez during retry prompt.........so you can know exactly what,s the thing that killed you......even if that would sopile some trolls......but no matter<br>\r\n.<br>\r\nyou can consider yourself beat this hack when you win in the finale level......no matter how you would reach it since it didn,t happen with tools or cheats<br>\r\n.<br>\r\ni know that its possible to hide the objects by using emulator features and see where the enimies are hidden.....but i will consider this a tool/cheat clear and not RTA<br>\r\n.<br>\r\nand that,s all<br>\r\nGood Luck<br>\r\n.<br>\r\nin this version, i fixed a major issue that was in the first level in the previous level<br>\r\nalso some minor issues are fixed now"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 12,
+      "demo": false,
+      "sa1": true,
+      "collab": false,
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "A troll and kaizo at the same time\r\nthis hack is focuses at the troll of hidden enimies that suddenly appear from unexpected places to kill player....although i went out of this goal later in some levels......it requier the sufficient patience at the unexpected deaths......and some kaizo experience and knowledg of some original geme janks/glitches\r\n.\r\nthis hack contains lot of things that most players hate.......like unexpected deaths and hard setups and blind jumps without indecators (Which I consider it to be a troll).....and some other thins\r\n.\r\nis there any other type of trolls? yes\r\n.\r\nthe game will always auto save anytime you back to overworld\r\nstart + select to return to overworld.......pressing select during retry prompt will also work\r\n.\r\ngame will not freez during retry prompt.........so you can know exactly what,s the thing that killed you......even if that would sopile some trolls......but no matter\r\n.\r\nyou can consider yourself beat this hack when you win in the finale level......no matter how you would reach it since it didn,t happen with tools or cheats\r\n.\r\ni know that its possible to hide the objects by using emulator features and see where the enimies are hidden.....but i will consider this a tool/cheat clear and not RTA\r\n.\r\nand that,s all\r\nGood Luck\r\n.\r\nin this version, i fixed a major issue that was in the first level in the previous level\r\nalso some minor issues are fixed now"
+    }
+  },
+  {
+    "id": 41530,
+    "section": "smwhacks",
+    "name": "Super AgeVerrly World",
+    "time": 1770141085,
+    "submitted_at": 1770141085,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 44530,
+        "name": "ageVerrly"
+      }
+    ],
+    "submitter": {
+      "id": 44530,
+      "name": "ageVerrly"
+    },
+    "moderator": null,
+    "tags": [
+      "custom music",
+      "gauntlet",
+      "glitch",
+      "joke",
+      "precision",
+      "vanilla",
+      "variety"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121245.png",
+      "https://dl.smwcentral.net/image/121246.png",
+      "https://dl.smwcentral.net/image/121247.png",
+      "https://dl.smwcentral.net/image/121248.png",
+      "https://dl.smwcentral.net/image/121249.png",
+      "https://dl.smwcentral.net/image/121250.png",
+      "https://dl.smwcentral.net/image/121251.png",
+      "https://dl.smwcentral.net/image/121252.png",
+      "https://dl.smwcentral.net/image/121253.png",
+      "https://dl.smwcentral.net/image/121254.png",
+      "https://dl.smwcentral.net/image/121255.png",
+      "https://dl.smwcentral.net/image/121256.png",
+      "https://dl.smwcentral.net/image/121257.png",
+      "https://dl.smwcentral.net/image/121258.png"
+    ],
+    "rating": 0,
+    "size": 155427,
+    "downloads": 50,
+    "download_url": "https://dl.smwcentral.net/41530/AHHHHH.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "39 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Grandmaster",
+      "type": "Kaizo",
+      "warnings": "Suggestive Content or Language, Crude Content or Language, Possible Photosensitivity Triggers, Sexual Content, Violence",
+      "description": "y y y y y y y "
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 39,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_7",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [
+        "suggestive_content",
+        "crude_content",
+        "photosensitivity",
+        "sexual_content",
+        "violence"
+      ],
+      "description": "y y y y y y y "
+    }
+  },
+  {
+    "id": 41532,
+    "section": "smwhacks",
+    "name": "Obstacle Courses for Anti-Gravity Horses",
+    "time": 1770156044,
+    "submitted_at": 1770156044,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 58873,
+        "name": "IkeSMB"
+      },
+      {
+        "id": 52803,
+        "name": "NixKillsMyths"
+      },
+      {
+        "id": 44262,
+        "name": "flips_bad"
+      },
+      {
+        "id": 60478,
+        "name": "magicker72"
+      }
+    ],
+    "submitter": {
+      "id": 52803,
+      "name": "NixKillsMyths"
+    },
+    "moderator": null,
+    "tags": [
+      "cape",
+      "custom music",
+      "gauntlet",
+      "gimmick",
+      "glitch",
+      "no boss",
+      "non-platformer",
+      "yoshi"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121278.png",
+      "https://dl.smwcentral.net/image/121279.png",
+      "https://dl.smwcentral.net/image/121280.png",
+      "https://dl.smwcentral.net/image/121281.png",
+      "https://dl.smwcentral.net/image/121282.png",
+      "https://dl.smwcentral.net/image/121283.png",
+      "https://dl.smwcentral.net/image/121284.png",
+      "https://dl.smwcentral.net/image/121285.png",
+      "https://dl.smwcentral.net/image/121286.png"
     ],
     "rating": 5,
-    "size": 482835,
-    "downloads": 47,
-    "download_url": "https://dl.smwcentral.net/41326/stackup.zip",
+    "size": 366310,
+    "downloads": 58,
+    "download_url": "https://dl.smwcentral.net/41532/Obstacle%20Courses%20for%20Anti-Gravity%20Horses.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "13 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "Yes",
+      "difficulty": "Grandmaster",
+      "type": "Standard, Kaizo",
+      "warnings": "",
+      "description": "You exit from your last-played level victorious. The design was fine, if not familiar, but engaging and fun. You jumped over the pits, you avoided the munchers, and touching the goal tape felt satisfying enough. The gimmicks were really neat, and some of the more unique elements ignited your imagination about the yet unplayed levels that await on the road ahead. What new obstacles would the creator expect you to overcome? As you ponder this, traversing the overworld of the hack you are currently playing, you see a streak of green and yellow flash across the sky. Is it a bird? Is it a plane? No, it’s a caped union plumber indulging in aerodynamic equestrianism! At first they look ridiculous and awkward. It doesn’t even look fun, but, you can’t stop watching. How are they even doing that? It looks hard, but also kind of interesting. Their horse doesn’t even have wings! Why does it keep sticking its tongue out?! You think to yourself, “Could I do it too?” A disembodied voice whispers back into your thoughts, “You can, if you try.”<br>\r\n<br>\r\nChinese astrology says the Year of the Horse is upon us! This first of its kind <s>Yoshi</s> horse flight hack comes as an unlikely collaboration between 4 joint 2006 Time Magazine ‘Person of the Year’ award recipients. The premise is simple, in every level you must eat the 5 golden berries and then hatch and collect your prize. The path to credits has 9 levels, and there are 4 bonus levels after the credits that include 3 guest levels. This hack is not a tutorial. It is a challenge that tests your understanding and consistency of control, and allows you to improve as you go. There is a simple practice level within the hack that provides a space to work on your horse and horseless flight fundamentals freely.<br>\r\n<br>\r\nGood luck, and safe flying. We believe in you."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 13,
+      "demo": false,
+      "sa1": false,
+      "collab": true,
+      "difficulty": "diff_7",
+      "type": [
+        "standard",
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "You exit from your last-played level victorious. The design was fine, if not familiar, but engaging and fun. You jumped over the pits, you avoided the munchers, and touching the goal tape felt satisfying enough. The gimmicks were really neat, and some of the more unique elements ignited your imagination about the yet unplayed levels that await on the road ahead. What new obstacles would the creator expect you to overcome? As you ponder this, traversing the overworld of the hack you are currently playing, you see a streak of green and yellow flash across the sky. Is it a bird? Is it a plane? No, it’s a caped union plumber indulging in aerodynamic equestrianism! At first they look ridiculous and awkward. It doesn’t even look fun, but, you can’t stop watching. How are they even doing that? It looks hard, but also kind of interesting. Their horse doesn’t even have wings! Why does it keep sticking its tongue out?! You think to yourself, “Could I do it too?” A disembodied voice whispers back into your thoughts, “You can, if you try.”\r\n\r\nChinese astrology says the Year of the Horse is upon us! This first of its kind [s]Yoshi[/s] horse flight hack comes as an unlikely collaboration between 4 joint 2006 Time Magazine ‘Person of the Year’ award recipients. The premise is simple, in every level you must eat the 5 golden berries and then hatch and collect your prize. The path to credits has 9 levels, and there are 4 bonus levels after the credits that include 3 guest levels. This hack is not a tutorial. It is a challenge that tests your understanding and consistency of control, and allows you to improve as you go. There is a simple practice level within the hack that provides a space to work on your horse and horseless flight fundamentals freely.\r\n\r\nGood luck, and safe flying. We believe in you."
+    }
+  },
+  {
+    "id": 41538,
+    "section": "smwhacks",
+    "name": "Super Flash World 2",
+    "time": 1770314419,
+    "submitted_at": 1770314419,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 50287,
+        "name": "Scags"
+      }
+    ],
+    "submitter": {
+      "id": 50287,
+      "name": "Scags"
+    },
+    "moderator": null,
+    "tags": [
+      "asm",
+      "chocolate",
+      "custom music",
+      "custom overworld",
+      "goon nation"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121302.png",
+      "https://dl.smwcentral.net/image/121303.png",
+      "https://dl.smwcentral.net/image/121304.png",
+      "https://dl.smwcentral.net/image/121305.png",
+      "https://dl.smwcentral.net/image/121306.png",
+      "https://dl.smwcentral.net/image/121307.png",
+      "https://dl.smwcentral.net/image/121308.png",
+      "https://dl.smwcentral.net/image/121309.png",
+      "https://dl.smwcentral.net/image/121310.png",
+      "https://dl.smwcentral.net/image/121311.png",
+      "https://dl.smwcentral.net/image/121312.png",
+      "https://dl.smwcentral.net/image/121313.png",
+      "https://dl.smwcentral.net/image/121314.png",
+      "https://dl.smwcentral.net/image/121315.png"
+    ],
+    "rating": 5,
+    "size": 1401380,
+    "downloads": 130,
+    "download_url": "https://dl.smwcentral.net/41538/FlashWorld2.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "23 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Expert",
+      "type": "Kaizo",
+      "warnings": "Crude Content or Language",
+      "description": "I started this project as a sequel to my first hack with the goals of making it smaller in scale, easier, and something that my friend Flash would enjoy more than the original. Now, nearly 3 years later, I think that I failed on every count. Oh well!"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 23,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_5",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [
+        "crude_content"
+      ],
+      "description": "I started this project as a sequel to my first hack with the goals of making it smaller in scale, easier, and something that my friend Flash would enjoy more than the original. Now, nearly 3 years later, I think that I failed on every count. Oh well!"
+    }
+  },
+  {
+    "id": 41542,
+    "section": "smwhacks",
+    "name": "Shellshock",
+    "time": 1770410388,
+    "submitted_at": 1770410388,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 56442,
+        "name": "Riu_69"
+      }
+    ],
+    "submitter": {
+      "id": 56442,
+      "name": "Riu_69"
+    },
+    "moderator": null,
+    "tags": [
+      "hard",
+      "kaizo",
+      "shells"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121331.png",
+      "https://dl.smwcentral.net/image/121332.png",
+      "https://dl.smwcentral.net/image/121333.png",
+      "https://dl.smwcentral.net/image/121334.png",
+      "https://dl.smwcentral.net/image/121335.png"
+    ],
+    "rating": 5,
+    "size": 656918,
+    "downloads": 410,
+    "download_url": "https://dl.smwcentral.net/41542/Shellshock%20V%201.3.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
       "length": "9 exit(s)",
-      "demo": "Yes",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Grandmaster",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "After 3 years, I decided to make my second hard shell hack. Most levels are long without a checkpoint.<br>\r\n<br>\r\nGood luck and have fun! :)<br>\r\n<br>\r\nVersion 1.1: <br>\r\n- fixed the camera in a few levels<br>\r\n- fixed an overworld error, please redownload if you have the old version<br>\r\n<br>\r\nVersion 1.2: <br>\r\n- removes the very tight Yoshi shell jump in the level \"Shells in the Night\"<br>\r\n- nerfed a setup in the final castle <br>\r\n<br>\r\nVersion 1.3:<br>\r\n- changed the camera<br>\r\n- changed the retry system<br>\r\n- added some new palettes <br>\r\n- changed the motorskill asm"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 9,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_7",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "After 3 years, I decided to make my second hard shell hack. Most levels are long without a checkpoint.\r\n\r\nGood luck and have fun! :)\r\n\r\nVersion 1.1: \r\n- fixed the camera in a few levels\r\n- fixed an overworld error, please redownload if you have the old version\r\n\r\nVersion 1.2: \r\n- removes the very tight Yoshi shell jump in the level \"Shells in the Night\"\r\n- nerfed a setup in the final castle \r\n\r\nVersion 1.3:\r\n- changed the camera\r\n- changed the retry system\r\n- added some new palettes \r\n- changed the motorskill asm"
+    }
+  },
+  {
+    "id": 41548,
+    "section": "smwhacks",
+    "name": "Valuable and Beautiful",
+    "time": 1770557724,
+    "submitted_at": 1770557724,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 36167,
+        "name": "CarlSagan42"
+      }
+    ],
+    "submitter": {
+      "id": 36167,
+      "name": "CarlSagan42"
+    },
+    "moderator": null,
+    "tags": [],
+    "images": [
+      "https://dl.smwcentral.net/image/121361.png",
+      "https://dl.smwcentral.net/image/121362.png",
+      "https://dl.smwcentral.net/image/121363.png"
+    ],
+    "rating": 4,
+    "size": 799187,
+    "downloads": 70,
+    "download_url": "https://dl.smwcentral.net/41548/ValuableAndBeautiful.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "11 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "This is a hack, which I've worked on for over 5 years, is about my journey in life, speedrunning and kaizo. I hope you find something in it valuable and beautiful.<br>\r\n<br>\r\nClear video: https://www.youtube.com/watch?v=Ryv-NwJ2ZNo<br>\r\n<br>\r\nNote that this hack was designed without indicators, because I prefer how it looks without them. Please use the clear video instead if you would like to see how to perform a particular section."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 11,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "This is a hack, which I've worked on for over 5 years, is about my journey in life, speedrunning and kaizo. I hope you find something in it valuable and beautiful.\r\n\r\nClear video: https://www.youtube.com/watch?v=Ryv-NwJ2ZNo\r\n\r\nNote that this hack was designed without indicators, because I prefer how it looks without them. Please use the clear video instead if you would like to see how to perform a particular section."
+    }
+  },
+  {
+    "id": 41558,
+    "section": "smwhacks",
+    "name": "10yumps",
+    "time": 1770668601,
+    "submitted_at": 1770668601,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 42439,
+        "name": "Fyre150"
+      }
+    ],
+    "submitter": {
+      "id": 42439,
+      "name": "Fyre150"
+    },
+    "moderator": null,
+    "tags": [
+      "consistency",
+      "music",
+      "p-switch",
+      "precision",
+      "variety"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121409.png",
+      "https://dl.smwcentral.net/image/121410.png",
+      "https://dl.smwcentral.net/image/121411.png",
+      "https://dl.smwcentral.net/image/121412.png",
+      "https://dl.smwcentral.net/image/121413.png",
+      "https://dl.smwcentral.net/image/121414.png",
+      "https://dl.smwcentral.net/image/121415.png",
+      "https://dl.smwcentral.net/image/121416.png",
+      "https://dl.smwcentral.net/image/121417.png",
+      "https://dl.smwcentral.net/image/121418.png",
+      "https://dl.smwcentral.net/image/121419.png",
+      "https://dl.smwcentral.net/image/121420.png",
+      "https://dl.smwcentral.net/image/121421.png",
+      "https://dl.smwcentral.net/image/121422.png",
+      "https://dl.smwcentral.net/image/121423.png",
+      "https://dl.smwcentral.net/image/121424.png"
+    ],
+    "rating": 5,
+    "size": 1507806,
+    "downloads": 58,
+    "download_url": "https://dl.smwcentral.net/41558/10yumps%28real%29.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "56 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "The Age of Filebin Hacks has been a cultural movement that emerged in recent years, with various authors releasing certain hacks to their filebins instead of submitting them to the hacks section. Reasons for keeping their works out of the public eye may vary from author to author, be it fear of potential notoriety, avoiding unwanted commentary, or creating something too self-indulgent for general audiences. With filebin releases having less eyes on them, authors were more inclined to release hacks that were experimental or raw — at least when compared to public works — without fear of harsh judgement or needless criticism. Nevertheless, there have been a number of notable filebin hacks over the years that still managed to reach many people by word-of-mouth.<br>\r\n<br>\r\nAs of recent, it seems that a few brave creators — authors who pioneered the Age of Filebin Hacks — have sacrificed notable works from their respective filebins to the hacks section, thereby bringing forth the beginning of the end. And so I, in solidarity, will also do my part. Let us put to rest this age of old, without need of any dusty old 'bin to express ourselves. On this page, I present this offering of mine: ...10yumps.<br>\r\n<br>\r\n...so, anyway...<br>\r\n<br>\r\nOriginally released in my filebin at the start of 2023, 10yumps was simply a collection of silly consistency challenges, or just dumb levels, that I made for some friends — I even made a dull sequel to it a year later. This new version is a curated consolidation of both hacks, with barely any changes to the levels themselves.<br>\r\n<br>\r\nFor those that played and enjoyed the originals: I appreciate you, even if you have poor taste in hacks.<br>\r\n<br>\r\nIf you’re unfamiliar with the hack and happen to be interested in it: Difficulty from level to level can vary wildly. Good luck, and I’m (not really) sorry. <br>\r\n<br>\r\nThat said, I hope you have fun."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 56,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "The Age of Filebin Hacks has been a cultural movement that emerged in recent years, with various authors releasing certain hacks to their filebins instead of submitting them to the hacks section. Reasons for keeping their works out of the public eye may vary from author to author, be it fear of potential notoriety, avoiding unwanted commentary, or creating something too self-indulgent for general audiences. With filebin releases having less eyes on them, authors were more inclined to release hacks that were experimental or raw — at least when compared to public works — without fear of harsh judgement or needless criticism. Nevertheless, there have been a number of notable filebin hacks over the years that still managed to reach many people by word-of-mouth.\r\n\r\nAs of recent, it seems that a few brave creators — authors who pioneered the Age of Filebin Hacks — have sacrificed notable works from their respective filebins to the hacks section, thereby bringing forth the beginning of the end. And so I, in solidarity, will also do my part. Let us put to rest this age of old, without need of any dusty old 'bin to express ourselves. On this page, I present this offering of mine: ...10yumps.\r\n\r\n...so, anyway...\r\n\r\nOriginally released in my filebin at the start of 2023, 10yumps was simply a collection of silly consistency challenges, or just dumb levels, that I made for some friends — I even made a dull sequel to it a year later. This new version is a curated consolidation of both hacks, with barely any changes to the levels themselves.\r\n\r\nFor those that played and enjoyed the originals: I appreciate you, even if you have poor taste in hacks.\r\n\r\nIf you’re unfamiliar with the hack and happen to be interested in it: Difficulty from level to level can vary wildly. Good luck, and I’m (not really) sorry. \r\n\r\nThat said, I hope you have fun."
+    }
+  },
+  {
+    "id": 41559,
+    "section": "smwhacks",
+    "name": "Absolute Authenticity",
+    "time": 1770674282,
+    "submitted_at": 1770674282,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 40527,
+        "name": "MarsAmPear"
+      }
+    ],
+    "submitter": {
+      "id": 40527,
+      "name": "MarsAmPear"
+    },
+    "moderator": null,
+    "tags": [
+      "gimmick",
+      "precision"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121425.png",
+      "https://dl.smwcentral.net/image/121426.png",
+      "https://dl.smwcentral.net/image/121427.png"
+    ],
+    "rating": 0,
+    "size": 222065,
+    "downloads": 40,
+    "download_url": "https://dl.smwcentral.net/41559/Absolute%20Authenticity.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "0 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Grandmaster",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "Riding on the wave of newly-liberated filebin hacks, here's something I put out a year ago that, as far as I know, no one's had the guts to beat yet. So, to any completionists out there, consider this submission a formal triple-dog dare. It should be identical to the file version.<br>\r\n<br>\r\nThis is the Big Sprawling Input Block Olympus level I wasn’t experienced enough to make in 2022, the third and final incarnation of the idea first seen in the Trans Liberation demo. It’s comprised of 4 sections of some returning setups from the Trans Liberation versions and some newer ones, incorporating all 7 block types (A, B, X/Y, LEFT, RIGHT, and the widely beloved UP and DOWN). It doesn’t explore every facet of the gimmick’s potential (you can find a much more extensive use in Eden’s The Possibility of an Island), but it will still probably make you play in ways you never have before.<br>\r\n<br>\r\nReviews of the original material speak for themselves:<br>\r\n“I’m sadly not smart enough” -Eden<br>\r\n“This is a brain-bender” -GlitchCat<br>\r\n“This is the most mindfucked thing I have ever played” -Lungfish<br>\r\n“Holy mother of god this might be the hardest level I’ve ever cleared” -Revolug<br>\r\n“Well this seems about as hard as trans liberation so appropriate” -Maddy<br>\r\n“This is some bottom of the SMW iceberg shit” -Jonah<br>\r\n“I’m sending the SMWC admins to your house” -Mason<br>\r\n“You are one sick motherfucker” -Le4che<br>\r\n<br>\r\nThis is definitely the most extreme level I have ever made or will ever make. After this and Safespace Challenge, I lost all appetite for exploring ultra-high tightness/density, as I feel I was flying too close to the sun. I barely even recognize this as my own anymore, but I still think it's good and at least worth playing with tools. Proceed with caution either way.<br>\r\n<br>\r\nLevel ASM by ShadowMistressYuko; music porting by Jonah and Fyre."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 0,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_7",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Riding on the wave of newly-liberated filebin hacks, here's something I put out a year ago that, as far as I know, no one's had the guts to beat yet. So, to any completionists out there, consider this submission a formal triple-dog dare. It should be identical to the file version.\r\n\r\nThis is the Big Sprawling Input Block Olympus level I wasn’t experienced enough to make in 2022, the third and final incarnation of the idea first seen in the Trans Liberation demo. It’s comprised of 4 sections of some returning setups from the Trans Liberation versions and some newer ones, incorporating all 7 block types (A, B, X/Y, LEFT, RIGHT, and the widely beloved UP and DOWN). It doesn’t explore every facet of the gimmick’s potential (you can find a much more extensive use in Eden’s The Possibility of an Island), but it will still probably make you play in ways you never have before.\r\n\r\nReviews of the original material speak for themselves:\r\n“I’m sadly not smart enough” -Eden\r\n“This is a brain-bender” -GlitchCat\r\n“This is the most mindfucked thing I have ever played” -Lungfish\r\n“Holy mother of god this might be the hardest level I’ve ever cleared” -Revolug\r\n“Well this seems about as hard as trans liberation so appropriate” -Maddy\r\n“This is some bottom of the SMW iceberg shit” -Jonah\r\n“I’m sending the SMWC admins to your house” -Mason\r\n“You are one sick motherfucker” -Le4che\r\n\r\nThis is definitely the most extreme level I have ever made or will ever make. After this and Safespace Challenge, I lost all appetite for exploring ultra-high tightness/density, as I feel I was flying too close to the sun. I barely even recognize this as my own anymore, but I still think it's good and at least worth playing with tools. Proceed with caution either way.\r\n\r\nLevel ASM by ShadowMistressYuko; music porting by Jonah and Fyre."
+    }
+  },
+  {
+    "id": 41560,
+    "section": "smwhacks",
+    "name": "Super Maizen Sisters 3: Our Friend Maron.",
+    "time": 1770691346,
+    "submitted_at": 1770691346,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 65990,
+        "name": "thatwaterblockrk"
+      }
+    ],
+    "submitter": {
+      "id": 65990,
+      "name": "thatwaterblockrk"
+    },
+    "moderator": null,
+    "tags": [
+      "are",
+      "best song",
+      "block",
+      "good",
+      "long game",
+      "okay",
+      "that",
+      "traditional",
+      "two players",
+      "water"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121429.png",
+      "https://dl.smwcentral.net/image/121430.png",
+      "https://dl.smwcentral.net/image/121433.png",
+      "https://dl.smwcentral.net/image/121434.png",
+      "https://dl.smwcentral.net/image/121435.png",
+      "https://dl.smwcentral.net/image/121436.png",
+      "https://dl.smwcentral.net/image/121437.png",
+      "https://dl.smwcentral.net/image/121438.png",
+      "https://dl.smwcentral.net/image/121439.png",
+      "https://dl.smwcentral.net/image/121440.png",
+      "https://dl.smwcentral.net/image/121441.png"
+    ],
+    "rating": 0,
+    "size": 814468,
+    "downloads": 64,
+    "download_url": "https://dl.smwcentral.net/41560/SMS%203%20Maron.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "47 exit(s)",
+      "demo": "No",
       "sa1": "No",
       "collab": "No",
       "difficulty": "Intermediate",
       "type": "Standard",
       "warnings": "",
-      "description": "After years of work left incomplete due to perfectionism, I've finally lowered my standards enough to finish a demo of a romhack! I don't recommend waiting for the full version; this took over a year and I may have overcommitted!<br>\r\n<br>\r\nThis hack features:<br>\r\n- Multiple custom bosses<br>\r\n- Multiple player characters<br>\r\n- Multiple weird orders in which to complete levels<br>\r\n- Multiple enemies intentionally designed to be sort of annoying<br>\r\n- Multiple levels taking place on mountains<br>\r\n- (probably) Multiple bugs which will require me to re-submit the demo at least once<br>\r\n<br>\r\nUpdate (2025-12-26): fixed some oversights (thanks Ringo), replaced Nintendo Presents screen"
+      "description": "Another adventure begins with not just JJ himself--but with a new friend named Mikey! They must save Maron from the kidnapping from President Zenmai! But not too fast viewers! For his employees are waiting too. Will you save Maron in time?<br>\r\n<br>\r\n<br>\r\nTwo people must be played, you don't need seperate controllers though. Think of it as a board game. Would be great to play in National Best Friend Day! Also you can play with one player too, but you'll just end up playing as JJ and Mikey.<br>\r\n<br>\r\nOne more thing! THIS GAME IS NOT OFFICALLY MADE BY MAIZEN, THEY MAY OR MAY NOT APPROVE THIS. Would be cool though :)"
     },
     "raw_fields": {
       "hof": false,
-      "length": 9,
-      "demo": true,
+      "length": 47,
+      "demo": false,
       "sa1": false,
       "collab": false,
       "difficulty": "diff_3",
@@ -705,109 +1083,447 @@
         "standard"
       ],
       "warnings": [],
-      "description": "After years of work left incomplete due to perfectionism, I've finally lowered my standards enough to finish a demo of a romhack! I don't recommend waiting for the full version; this took over a year and I may have overcommitted!\r\n\r\nThis hack features:\r\n- Multiple custom bosses\r\n- Multiple player characters\r\n- Multiple weird orders in which to complete levels\r\n- Multiple enemies intentionally designed to be sort of annoying\r\n- Multiple levels taking place on mountains\r\n- (probably) Multiple bugs which will require me to re-submit the demo at least once\r\n\r\nUpdate (2025-12-26): fixed some oversights (thanks Ringo), replaced Nintendo Presents screen"
+      "description": "Another adventure begins with not just JJ himself--but with a new friend named Mikey! They must save Maron from the kidnapping from President Zenmai! But not too fast viewers! For his employees are waiting too. Will you save Maron in time?\r\n\r\n\r\nTwo people must be played, you don't need seperate controllers though. Think of it as a board game. Would be great to play in National Best Friend Day! Also you can play with one player too, but you'll just end up playing as JJ and Mikey.\r\n\r\nOne more thing! THIS GAME IS NOT OFFICALLY MADE BY MAIZEN, THEY MAY OR MAY NOT APPROVE THIS. Would be cool though :)"
     }
   },
   {
-    "id": 41328,
+    "id": 41561,
     "section": "smwhacks",
-    "name": "A Second X Thing: Gaiden: Gaiden",
-    "time": 1766703847,
+    "name": "Kaizo no Notam",
+    "time": 1770716267,
+    "submitted_at": 1770716267,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 25537,
-        "name": "Heraga"
-      },
-      {
-        "id": null,
-        "name": "talkhaus"
+        "id": 4341,
+        "name": "cozyduck"
       }
     ],
     "submitter": {
-      "id": 25537,
-      "name": "Heraga"
+      "id": 4341,
+      "name": "cozyduck"
     },
-    "tags": [
-      "bosses",
-      "collab",
-      "custom music",
-      "gimmick",
-      "holiday",
-      "original graphics",
-      "puzzle"
-    ],
+    "moderator": null,
+    "tags": [],
     "images": [
-      "https://dl.smwcentral.net/image/120475.png",
-      "https://dl.smwcentral.net/image/120476.png",
-      "https://dl.smwcentral.net/image/120477.png",
-      "https://dl.smwcentral.net/image/120478.png",
-      "https://dl.smwcentral.net/image/120479.png",
-      "https://dl.smwcentral.net/image/120480.png",
-      "https://dl.smwcentral.net/image/120481.png"
+      "https://dl.smwcentral.net/image/121442.png",
+      "https://dl.smwcentral.net/image/121443.png",
+      "https://dl.smwcentral.net/image/121444.png",
+      "https://dl.smwcentral.net/image/121445.png",
+      "https://dl.smwcentral.net/image/121446.png",
+      "https://dl.smwcentral.net/image/121447.png",
+      "https://dl.smwcentral.net/image/121448.png"
     ],
     "rating": 5,
-    "size": 1546775,
-    "downloads": 162,
-    "download_url": "https://dl.smwcentral.net/41328/a2xtgaidengaiden.zip",
+    "size": 776666,
+    "downloads": 43,
+    "download_url": "https://dl.smwcentral.net/41561/Notam.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
-      "length": "26 exit(s)",
+      "length": "10 exit(s)",
       "demo": "No",
       "sa1": "Yes",
-      "collab": "Yes",
-      "difficulty": "Intermediate",
-      "type": "Standard",
-      "warnings": "Suggestive Content or Language",
-      "description": "Christmas is quickly approaching and Demo's in search of a sleigh-- help her find one pronto!<br>\r\n<br>\r\nThis is an Advent Calendar in SMW form created by the talkhaus community (who previously worked on <a href=\"https://www.smwcentral.net/?p=viewthread&t=127972\">And Another Thing</a>, which you should check out as well!) as a surprise for raocow this year, and can be seen as a successor to the earlier SMBX-related ones. Each level is its own individual \"present\" ranging from small gags to tough challenges to puzzles and everything in-between. While it contains a plethora of talkhaus and raocow-related humor and in-jokes, knowledge of any of them are not required in order to complete the hack. <br>\r\n<br>\r\nThe version submitted here to SMWC is slightly different from the version raocow received for the holidays-- collectable coins save at midways/goals and display on the overworld, and various levels have received small QoL changes. Beyond that, the experience should be basically identical. <br>\r\n<br>\r\nWe hope you enjoy playing this as much as we had making this!"
+      "collab": "No",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "Possible Photosensitivity Triggers",
+      "description": "To those of you who had been waiting for so long for another hack by me, I apologize that this is the one you're getting. Yes, it's 10 exits of p-balloon. No, I don't know why I thought this would be a good idea.<br>\r\n<br>\r\nHere's a clear vid:<br>\r\n<a href=\"https://youtu.be/ze_nTHmZGEc?si=7QXr2syEcBPt50KV\" rel=\"nofollow\">https://youtu.be/ze_nTHmZGEc?si=7QXr2syEcBPt50KV</a><br>\r\n"
     },
     "raw_fields": {
       "hof": false,
-      "length": 26,
+      "length": 10,
       "demo": false,
       "sa1": true,
-      "collab": true,
+      "collab": false,
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [
+        "photosensitivity"
+      ],
+      "description": "To those of you who had been waiting for so long for another hack by me, I apologize that this is the one you're getting. Yes, it's 10 exits of p-balloon. No, I don't know why I thought this would be a good idea.\r\n\r\nHere's a clear vid:\r\n[url=https://youtu.be/ze_nTHmZGEc?si=7QXr2syEcBPt50KV][/url]\r\n"
+    }
+  },
+  {
+    "id": 41585,
+    "section": "smwhacks",
+    "name": "New Super Mario World 3: Peach's Double Trouble",
+    "time": 1771005642,
+    "submitted_at": 1771005642,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 40670,
+        "name": "Bullymario"
+      }
+    ],
+    "submitter": {
+      "id": 40670,
+      "name": "Bullymario"
+    },
+    "moderator": null,
+    "tags": [
+      "asm",
+      "cutscenes",
+      "exgfx",
+      "hdma",
+      "music"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121585.png",
+      "https://dl.smwcentral.net/image/121586.png",
+      "https://dl.smwcentral.net/image/121587.png",
+      "https://dl.smwcentral.net/image/121588.png",
+      "https://dl.smwcentral.net/image/121589.png",
+      "https://dl.smwcentral.net/image/121590.png",
+      "https://dl.smwcentral.net/image/121591.png",
+      "https://dl.smwcentral.net/image/121592.png",
+      "https://dl.smwcentral.net/image/121593.png",
+      "https://dl.smwcentral.net/image/121594.png",
+      "https://dl.smwcentral.net/image/121595.png"
+    ],
+    "rating": 0,
+    "size": 1551783,
+    "downloads": 573,
+    "download_url": "https://dl.smwcentral.net/41585/NSMW3%20v2.0.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "93 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "warnings": "",
+      "description": "Princess Peach decides to go on a adventure with Wario in some new world. Some new villain wants to conquer the Mushroom Kingdom and then the world. Sequel of the previous 2 NSMW.<br>\r\n<br>\r\nVersion 2.0<br>\r\n<br>\r\nThis is a 2014-ish style hack, so everything you see not gonna have stuff that's newer than 2014.<br>\r\n<br>\r\nMore Info in the Readme.txt"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 93,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
       "difficulty": "diff_3",
       "type": [
         "standard"
       ],
-      "warnings": [
-        "suggestive_content"
-      ],
-      "description": "Christmas is quickly approaching and Demo's in search of a sleigh-- help her find one pronto!\r\n\r\nThis is an Advent Calendar in SMW form created by the talkhaus community (who previously worked on [url=https://www.smwcentral.net/?p=viewthread&t=127972]And Another Thing[/url], which you should check out as well!) as a surprise for raocow this year, and can be seen as a successor to the earlier SMBX-related ones. Each level is its own individual \"present\" ranging from small gags to tough challenges to puzzles and everything in-between. While it contains a plethora of talkhaus and raocow-related humor and in-jokes, knowledge of any of them are not required in order to complete the hack. \r\n\r\nThe version submitted here to SMWC is slightly different from the version raocow received for the holidays-- collectable coins save at midways/goals and display on the overworld, and various levels have received small QoL changes. Beyond that, the experience should be basically identical. \r\n\r\nWe hope you enjoy playing this as much as we had making this!"
+      "warnings": [],
+      "description": "Princess Peach decides to go on a adventure with Wario in some new world. Some new villain wants to conquer the Mushroom Kingdom and then the world. Sequel of the previous 2 NSMW.\r\n\r\nVersion 2.0\r\n\r\nThis is a 2014-ish style hack, so everything you see not gonna have stuff that's newer than 2014.\r\n\r\nMore Info in the Readme.txt"
     }
   },
   {
-    "id": 41330,
+    "id": 41586,
     "section": "smwhacks",
-    "name": "Aventureiro Mario - Especial de Natal",
-    "time": 1766716452,
+    "name": "No exit theory",
+    "time": 1771013462,
+    "submitted_at": 1771013462,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 72828,
-        "name": "Dev154"
-      },
-      {
-        "id": 12762,
-        "name": "dev15"
+        "id": 56569,
+        "name": "Pizzagamer9791"
       }
     ],
     "submitter": {
-      "id": 72828,
-      "name": "Dev154"
+      "id": 56569,
+      "name": "Pizzagamer9791"
     },
-    "tags": [],
+    "moderator": null,
+    "tags": [
+      "hard",
+      "shell"
+    ],
     "images": [
-      "https://dl.smwcentral.net/image/120483.png",
-      "https://dl.smwcentral.net/image/120484.png",
-      "https://dl.smwcentral.net/image/120485.png"
+      "https://dl.smwcentral.net/image/121597.png",
+      "https://dl.smwcentral.net/image/121598.png",
+      "https://dl.smwcentral.net/image/121599.png",
+      "https://dl.smwcentral.net/image/121600.png",
+      "https://dl.smwcentral.net/image/121601.png",
+      "https://dl.smwcentral.net/image/121602.png",
+      "https://dl.smwcentral.net/image/121603.png",
+      "https://dl.smwcentral.net/image/121604.png",
+      "https://dl.smwcentral.net/image/121605.png"
     ],
     "rating": 0,
-    "size": 969833,
-    "downloads": 51,
-    "download_url": "https://dl.smwcentral.net/41330/Aventureiro%20Mario%20-%20Especial%20de%20Natal.zip",
+    "size": 499716,
+    "downloads": 27,
+    "download_url": "https://dl.smwcentral.net/41586/No%20exit%20theory.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "7 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Grandmaster",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "This hack took 5 months to make; it's harder than the previous one, Labyrinth of Shadows. It has 7 exits, spanning 3 levels and being longer. I hope you enjoy playing it. Here are the videos if you have any questions: https://www.youtube.com/watch?v=iU9cpKDksjs&list=PL5yt8JGCpKjzomI4jw0VBTHaOLK0JjUIn&pp=sAgC"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 7,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_7",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "This hack took 5 months to make; it's harder than the previous one, Labyrinth of Shadows. It has 7 exits, spanning 3 levels and being longer. I hope you enjoy playing it. Here are the videos if you have any questions: https://www.youtube.com/watch?v=iU9cpKDksjs&list=PL5yt8JGCpKjzomI4jw0VBTHaOLK0JjUIn&pp=sAgC"
+    }
+  },
+  {
+    "id": 41627,
+    "section": "smwhacks",
+    "name": "TaleSpin",
+    "time": 1771403138,
+    "submitted_at": 1771403138,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 55748,
+        "name": "uriel2k3"
+      }
+    ],
+    "submitter": {
+      "id": 55748,
+      "name": "uriel2k3"
+    },
+    "moderator": null,
+    "tags": [
+      "cape",
+      "kaizo",
+      "no boss",
+      "yoshi"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121714.png",
+      "https://dl.smwcentral.net/image/121715.png",
+      "https://dl.smwcentral.net/image/121716.png",
+      "https://dl.smwcentral.net/image/121717.png",
+      "https://dl.smwcentral.net/image/121718.png",
+      "https://dl.smwcentral.net/image/121719.png",
+      "https://dl.smwcentral.net/image/121720.png",
+      "https://dl.smwcentral.net/image/121721.png",
+      "https://dl.smwcentral.net/image/121722.png",
+      "https://dl.smwcentral.net/image/121723.png",
+      "https://dl.smwcentral.net/image/121724.png",
+      "https://dl.smwcentral.net/image/121725.png",
+      "https://dl.smwcentral.net/image/121726.png"
+    ],
+    "rating": 5,
+    "size": 559795,
+    "downloads": 42,
+    "download_url": "https://dl.smwcentral.net/41627/TaleSpin.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "11 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Grandmaster",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "Small warning:<br>\r\nVisuals and music are nearly identicall to \"ESCAPE FROM LA PLUME\" - the gameplay couldnt be any more different though :)<br>\r\n<br>\r\nAn idea born from a funny bug in \"ESCAPE FROM LA PLUME\" inspired me to turn this beginner experience into a full on yoshiflight hack. Dont be scared off the difficulty rating - yoshiflight is hard and requires knowledge and experience to be mastered. Parity manipulation is not needed, but sure makes life easier in some levels. The difficulty starts rather fair, but will soon ramp up as the obstacles become harder too maneuver and the enemies more fierce. This hack is intended as a good starting point for all cape friends, that want to give our favorite horse a go.<br>\r\n<br>\r\nFeatures:<br>\r\n\t- Yoshiflight only hack (tongue and tongueless) - none of that running and jumping stuff<br>\r\n\t- gorgeous Overworld made by Stivi<br>\r\n\t- beautiful levels with visuals from bonjoursauce<br>\r\n\t- 11 exits (most on the shorter side)<br>\r\n\t- friendly shoutout rooms (no progress is lost on entering) with new and old friends<br>\r\n\t<br>\r\nI want to take the time and thank sauce for all his help throughout the process, you pushed me to keep on doing more then I did and offered so much creativity, help and awesomeness - this hack would not be the same without you. I really think you have outdone yourself with the visuals in the levels and I hope you are as proud of this little funny project as I am.<br>\r\n<br>\r\nBig shoutouts to Stivi for making this wonderful Overworld - and for being incredibly patient and helpful for this cool project :)<br>\r\n<br>\r\n<br>\r\nEnjoy \"TaleSpin\" and lets hope you never go into tailspin."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 11,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_7",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Small warning:\r\nVisuals and music are nearly identicall to \"ESCAPE FROM LA PLUME\" - the gameplay couldnt be any more different though :)\r\n\r\nAn idea born from a funny bug in \"ESCAPE FROM LA PLUME\" inspired me to turn this beginner experience into a full on yoshiflight hack. Dont be scared off the difficulty rating - yoshiflight is hard and requires knowledge and experience to be mastered. Parity manipulation is not needed, but sure makes life easier in some levels. The difficulty starts rather fair, but will soon ramp up as the obstacles become harder too maneuver and the enemies more fierce. This hack is intended as a good starting point for all cape friends, that want to give our favorite horse a go.\r\n\r\nFeatures:\r\n\t- Yoshiflight only hack (tongue and tongueless) - none of that running and jumping stuff\r\n\t- gorgeous Overworld made by Stivi\r\n\t- beautiful levels with visuals from bonjoursauce\r\n\t- 11 exits (most on the shorter side)\r\n\t- friendly shoutout rooms (no progress is lost on entering) with new and old friends\r\n\t\r\nI want to take the time and thank sauce for all his help throughout the process, you pushed me to keep on doing more then I did and offered so much creativity, help and awesomeness - this hack would not be the same without you. I really think you have outdone yourself with the visuals in the levels and I hope you are as proud of this little funny project as I am.\r\n\r\nBig shoutouts to Stivi for making this wonderful Overworld - and for being incredibly patient and helpful for this cool project :)\r\n\r\n\r\nEnjoy \"TaleSpin\" and lets hope you never go into tailspin."
+    }
+  },
+  {
+    "id": 41657,
+    "section": "smwhacks",
+    "name": "SMW Voce Pode Pegar Todas?",
+    "time": 1771458055,
+    "submitted_at": 1771458055,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 73845,
+        "name": "Total Player Silva"
+      }
+    ],
+    "submitter": {
+      "id": 73845,
+      "name": "Total Player Silva"
+    },
+    "moderator": null,
+    "tags": [
+      "glich",
+      "metroidvania",
+      "puzzle"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121748.png",
+      "https://dl.smwcentral.net/image/121749.png",
+      "https://dl.smwcentral.net/image/121750.png",
+      "https://dl.smwcentral.net/image/121751.png"
+    ],
+    "rating": 0,
+    "size": 32419,
+    "downloads": 25,
+    "download_url": "https://dl.smwcentral.net/41657/SMW%20voce%20pode%20pegar%20todas.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "7 exit(s)",
+      "demo": "Yes",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Advanced",
+      "type": "Puzzle",
+      "warnings": "",
+      "description": "Voce consegue achar todas as saidas?"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 7,
+      "demo": true,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_4",
+      "type": [
+        "puzzle"
+      ],
+      "warnings": [],
+      "description": "Voce consegue achar todas as saidas?"
+    }
+  },
+  {
+    "id": 41690,
+    "section": "smwhacks",
+    "name": "Sauna Mario World 2",
+    "time": 1771581629,
+    "submitted_at": 1771581629,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 49139,
+        "name": "pnaha"
+      }
+    ],
+    "submitter": {
+      "id": 49139,
+      "name": "pnaha"
+    },
+    "moderator": null,
+    "tags": [
+      "exgfx",
+      "hdma",
+      "music",
+      "traditional"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121806.png",
+      "https://dl.smwcentral.net/image/121807.png",
+      "https://dl.smwcentral.net/image/121808.png",
+      "https://dl.smwcentral.net/image/121809.png",
+      "https://dl.smwcentral.net/image/121810.png",
+      "https://dl.smwcentral.net/image/121811.png",
+      "https://dl.smwcentral.net/image/121812.png",
+      "https://dl.smwcentral.net/image/121813.png"
+    ],
+    "rating": 4.9474,
+    "size": 2084401,
+    "downloads": 2705,
+    "download_url": "https://dl.smwcentral.net/41690/Sauna%20Mario%20World%202%20v1.31.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "21 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Expert",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "Sauna is back! Compared to my first hack this one has more levels, more chocolate, more secrets, more silliness, and it’s probably a bit more difficult. My goal was similar: to keep levels intuitive and fun, but I let myself get a bit crazier with level themes and ideas.<br>\r\n<br>\r\nThere are some secret exits with hints that will guide you in the right direction, though they aren’t that hard to find even without the hints. Also, portrait rooms are back for people who enjoy looking around for secrets.<br>\r\n<br>\r\nGet comfortable, grab your chilled beverage of choice, and get ready for löyly. I hope you’ll have a good time!<br>\r\n<br>\r\nCover art made by Dangil, tracklist and changelog are included.<br>\r\nSNES Classic compatibility version is available in my filebin.<br>\r\n<br>\r\nVersion 1.0 - November 30th, 2024<br>\r\nVersion 1.1 - February 5th, 2025<br>\r\nVersion 1.2 - February 25th, 2025<br>\r\nVersion 1.3 - January 5th, 2026<br>\r\nVersion 1.31 - February 20th, 2026"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 21,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_5",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Sauna is back! Compared to my first hack this one has more levels, more chocolate, more secrets, more silliness, and it’s probably a bit more difficult. My goal was similar: to keep levels intuitive and fun, but I let myself get a bit crazier with level themes and ideas.\r\n\r\nThere are some secret exits with hints that will guide you in the right direction, though they aren’t that hard to find even without the hints. Also, portrait rooms are back for people who enjoy looking around for secrets.\r\n\r\nGet comfortable, grab your chilled beverage of choice, and get ready for löyly. I hope you’ll have a good time!\r\n\r\nCover art made by Dangil, tracklist and changelog are included.\r\nSNES Classic compatibility version is available in my filebin.\r\n\r\nVersion 1.0 - November 30th, 2024\r\nVersion 1.1 - February 5th, 2025\r\nVersion 1.2 - February 25th, 2025\r\nVersion 1.3 - January 5th, 2026\r\nVersion 1.31 - February 20th, 2026"
+    }
+  },
+  {
+    "id": 41691,
+    "section": "smwhacks",
+    "name": "Super BanzaiChuck World",
+    "time": 1771582288,
+    "submitted_at": 1771582288,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 49131,
+        "name": "DoktorGroove"
+      }
+    ],
+    "submitter": {
+      "id": 49131,
+      "name": "DoktorGroove"
+    },
+    "moderator": null,
+    "tags": [
+      "bosses",
+      "custom music",
+      "gimmick"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121814.gif",
+      "https://dl.smwcentral.net/image/121815.png",
+      "https://dl.smwcentral.net/image/121816.png",
+      "https://dl.smwcentral.net/image/121817.png",
+      "https://dl.smwcentral.net/image/121818.png",
+      "https://dl.smwcentral.net/image/121819.png",
+      "https://dl.smwcentral.net/image/121820.png",
+      "https://dl.smwcentral.net/image/121821.png",
+      "https://dl.smwcentral.net/image/121822.png",
+      "https://dl.smwcentral.net/image/121823.png",
+      "https://dl.smwcentral.net/image/121824.png",
+      "https://dl.smwcentral.net/image/121825.png",
+      "https://dl.smwcentral.net/image/121826.png",
+      "https://dl.smwcentral.net/image/121827.png",
+      "https://dl.smwcentral.net/image/121828.png",
+      "https://dl.smwcentral.net/image/121829.png",
+      "https://dl.smwcentral.net/image/121830.png",
+      "https://dl.smwcentral.net/image/121831.png",
+      "https://dl.smwcentral.net/image/121832.png"
+    ],
+    "rating": 0,
+    "size": 2050821,
+    "downloads": 61,
+    "download_url": "https://dl.smwcentral.net/41691/SBCW_V1_1.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
@@ -815,10 +1531,10 @@
       "demo": "No",
       "sa1": "No",
       "collab": "No",
-      "difficulty": "Advanced",
-      "type": "Standard",
-      "warnings": "",
-      "description": ""
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "Possible Photosensitivity Triggers",
+      "description": "Welcome to Super BanzaiChuck World, an ambitious Kaizo journey dedicated to the German YouTuber and streamer BanzaiChuck to simply say thank you for his constantly committed and high-quality entertainment, with which he makes many people a little happier in their lives.<br>\r\nYou are a little Bonzai (-chuck) who sets out into the wide world to follow the Way Of The Banzai and thereby become a True BanzaiChuck.<br>\r\nBut to walk this path you have to surpass yourself, because it is physical perfection balanced with sublime genius that a True BanzaiChuck strives for.<br>\r\nEach level is another step on your journey, specializing in a particular gimmick/mechanic or special sprites/blocks. At the beginning you have the choice of either entering a small tutorial section to learn the respective level topic and special mechanics, or diving straight into the level and putting your skills to the test.<br>\r\nAre you ready to walk this path and become a True BanzaiChuck?<br>\r\n<br>\r\n<br>\r\nSuper BanzaiChuck World features:<br>\r\n<br>\r\n- a challenging but fair Kaizo journey <br>\r\n  --&gt; length: 20 exits, some with several subsections <br>\r\n  --&gt; difficulty: some parts are in the intermediate range while some things also reach into the low Kaizo expert range)<br>\r\n- typical QoL features (retry, autosave, ...) <br>\r\n- optional tutorials and custom music<br>\r\n- a semi-open overworld  <br>\r\n- 4 switch palaces that unlock the further path of the Banzai<br>\r\n- 2 custom bosses<br>\r\n- a bonus mini-game that is unlocked after completing the hack<br>\r\n- 3 hidden scrolls containing clues to a secret area (for all explorers and completionists)<br>\r\n<br>\r\n<i>PS: Don't judge a creator by their first hack (my first attempt really wasn't a great job!)<br>\r\n<br>\r\nPPS: To get a better impression you can watch the playthrough of BanzaiChuck (V1.0) here:</i><br>\r\n<a href=\"https://www.youtube.com/playlist?list=PLowCpocefzgxCwiA6eBIPzpf2DDYWV5ik\" rel=\"nofollow\">https://www.youtube.com/playlist?list=PLowCpocefzgxCwiA6eBIPzpf2DDYWV5ik</a><br>\r\n<br>\r\n<i>V1.1 (02/2026)<br>\r\n- a handful of smaller adjustments and modifications<br>\r\n- ability to reset checkpoints<br>\r\n- partially removed the BanzaiChuck personalized part of the hack (Bonus Area) and incorporated it into the hack elsewhere<br>\r\n<br>\r\nV1.0 (09/2025)<br>\r\n- exclusive hack release for BanzaiChuck with a highly personalized bonus part at the end of the hack</i><br>\r\n<br>\r\n"
     },
     "raw_fields": {
       "hof": false,
@@ -826,128 +1542,65 @@
       "demo": false,
       "sa1": false,
       "collab": false,
-      "difficulty": "diff_4",
+      "difficulty": "diff_6",
       "type": [
-        "standard"
+        "kaizo"
       ],
-      "warnings": [],
-      "description": ""
+      "warnings": [
+        "photosensitivity"
+      ],
+      "description": "Welcome to Super BanzaiChuck World, an ambitious Kaizo journey dedicated to the German YouTuber and streamer BanzaiChuck to simply say thank you for his constantly committed and high-quality entertainment, with which he makes many people a little happier in their lives.\r\nYou are a little Bonzai (-chuck) who sets out into the wide world to follow the Way Of The Banzai and thereby become a True BanzaiChuck.\r\nBut to walk this path you have to surpass yourself, because it is physical perfection balanced with sublime genius that a True BanzaiChuck strives for.\r\nEach level is another step on your journey, specializing in a particular gimmick/mechanic or special sprites/blocks. At the beginning you have the choice of either entering a small tutorial section to learn the respective level topic and special mechanics, or diving straight into the level and putting your skills to the test.\r\nAre you ready to walk this path and become a True BanzaiChuck?\r\n\r\n\r\nSuper BanzaiChuck World features:\r\n\r\n- a challenging but fair Kaizo journey \r\n  --> length: 20 exits, some with several subsections \r\n  --> difficulty: some parts are in the intermediate range while some things also reach into the low Kaizo expert range)\r\n- typical QoL features (retry, autosave, ...) \r\n- optional tutorials and custom music\r\n- a semi-open overworld  \r\n- 4 switch palaces that unlock the further path of the Banzai\r\n- 2 custom bosses\r\n- a bonus mini-game that is unlocked after completing the hack\r\n- 3 hidden scrolls containing clues to a secret area (for all explorers and completionists)\r\n\r\n[i]PS: Don't judge a creator by their first hack (my first attempt really wasn't a great job!)\r\n\r\nPPS: To get a better impression you can watch the playthrough of BanzaiChuck (V1.0) here:[/i]\r\n[url=https://www.youtube.com/playlist?list=PLowCpocefzgxCwiA6eBIPzpf2DDYWV5ik][/url]\r\n\r\n[i]V1.1 (02/2026)\r\n- a handful of smaller adjustments and modifications\r\n- ability to reset checkpoints\r\n- partially removed the BanzaiChuck personalized part of the hack (Bonus Area) and incorporated it into the hack elsewhere\r\n\r\nV1.0 (09/2025)\r\n- exclusive hack release for BanzaiChuck with a highly personalized bonus part at the end of the hack[/i]\r\n\r\n"
     }
   },
   {
-    "id": 41357,
+    "id": 41726,
     "section": "smwhacks",
-    "name": "Super Fish World",
-    "time": 1767169219,
+    "name": "Can't Stop Won't Stop",
+    "time": 1771708731,
+    "submitted_at": 1771708731,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 73137,
-        "name": "Perkward"
+        "id": 50261,
+        "name": "brown_tower"
       }
     ],
     "submitter": {
-      "id": 73137,
-      "name": "Perkward"
+      "id": 50261,
+      "name": "brown_tower"
     },
+    "moderator": null,
     "tags": [
-      "fish",
-      "story",
-      "troll"
+      "custom music",
+      "gimmick"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/120543.png",
-      "https://dl.smwcentral.net/image/120544.png",
-      "https://dl.smwcentral.net/image/120545.png",
-      "https://dl.smwcentral.net/image/120546.png",
-      "https://dl.smwcentral.net/image/120547.png"
+      "https://dl.smwcentral.net/image/121878.png",
+      "https://dl.smwcentral.net/image/121879.png",
+      "https://dl.smwcentral.net/image/121880.png",
+      "https://dl.smwcentral.net/image/121881.png",
+      "https://dl.smwcentral.net/image/121882.png"
     ],
     "rating": 0,
-    "size": 269936,
-    "downloads": 22,
-    "download_url": "https://dl.smwcentral.net/41357/Follow%20the%20Fish.zip",
+    "size": 360054,
+    "downloads": 34,
+    "download_url": "https://dl.smwcentral.net/41726/CantStopWontStop_v1.1.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
-      "length": "1 exit(s)",
-      "demo": "No",
-      "sa1": "No",
-      "collab": "No",
-      "difficulty": "Casual",
-      "type": "Puzzle",
-      "warnings": "",
-      "description": "Mario has been invited to visit Fish World, the <b>super</b> aquarium theme park! However, to go, he must pass the Fish Trials...<br>\r\n<br>\r\nThis is my submission for the <a href=\"https://smwtrolls.com/contest/\" rel=\"nofollow\">SMW Troll Hack Contest</a>, being my first finished troll hack and general SMW hack. <br>\r\n<br>\r\n"
-    },
-    "raw_fields": {
-      "hof": false,
-      "length": 1,
-      "demo": false,
-      "sa1": false,
-      "collab": false,
-      "difficulty": "diff_2",
-      "type": [
-        "puzzle"
-      ],
-      "warnings": [],
-      "description": "Mario has been invited to visit Fish World, the [b]super[/b] aquarium theme park! However, to go, he must pass the Fish Trials...\r\n\r\nThis is my submission for the [url=https://smwtrolls.com/contest/]SMW Troll Hack Contest[/url], being my first finished troll hack and general SMW hack. \r\n\r\n"
-    }
-  },
-  {
-    "id": 41359,
-    "section": "smwhacks",
-    "name": "Uncharted World",
-    "time": 1767197676,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 51262,
-        "name": "will___"
-      }
-    ],
-    "submitter": {
-      "id": 51262,
-      "name": "will___"
-    },
-    "tags": [
-      "bosses",
-      "custom music",
-      "gimmick",
-      "puzzle",
-      "traditional",
-      "variety"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/120554.png",
-      "https://dl.smwcentral.net/image/120555.png",
-      "https://dl.smwcentral.net/image/120556.png",
-      "https://dl.smwcentral.net/image/120557.png",
-      "https://dl.smwcentral.net/image/120558.png",
-      "https://dl.smwcentral.net/image/120559.png",
-      "https://dl.smwcentral.net/image/120560.png",
-      "https://dl.smwcentral.net/image/120561.png",
-      "https://dl.smwcentral.net/image/120562.png",
-      "https://dl.smwcentral.net/image/120563.png",
-      "https://dl.smwcentral.net/image/120564.png"
-    ],
-    "rating": 5,
-    "size": 2284074,
-    "downloads": 1043,
-    "download_url": "https://dl.smwcentral.net/41359/UnchartedWorld.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "hof": "No",
-      "length": "63 exit(s)",
+      "length": "6 exit(s)",
       "demo": "No",
       "sa1": "No",
       "collab": "No",
       "difficulty": "Advanced",
       "type": "Standard, Kaizo",
       "warnings": "",
-      "description": "Uncharted World is a hack focused on challenging platforming. Most levels were designed to encourage improvisational gameplay, containing obstacles that can be completed in multiple ways. As a change of pace, you will also find some levels with more linear obstacle design as well as some more puzzling levels.<br>\r\n<br>\r\nThere is an open-ended overworld, with many possible routes to reach the credits. Although there are 63 exits in total, you can reach the credits in about 30 - 35 exits. Naturally, there is lot of additional content to play for those who are interested.<br>\r\n<br>\r\nThe hack has quality of life features (such as fast retry, infinite lives, autosave, and bug fixes) as well as custom music.<br>\r\n<br>\r\nHave fun!"
+      "description": "This is a short but challenging 6-exit autowalk hack.<br>\r\n<br>\r\nI spent a good chunk of 2025 working on a \"normal\" hack, but developed a form of thumb tendonitis that has left me unable to use a controller with my left thumb for a few months. I decided to make a set of  levels that I could play with without my left thumb, and I decided that the best way to do that is to let Mario do the walkin for me. <br>\r\n<br>\r\nThis hack contains sufficiently few dpad inputs that I was able to map all required dpad inputs to L/R, so it is possible to beat all 6 exits of this hack without ever touching the dpad (dpad is still enabled, this is just an accessibility/challenge option for controller users).<br>\r\n<br>\r\nThis hack contains no secrets, no secret exits, and no shell jumps, key jumps, or block grabs. This hack does contain a few L/R gimmicks (aside from the optional dpad remaps), and does contain a few slightly puzzly setups.<br>\r\n<br>\r\nUpdate v1.1:<br>\r\n  ASM jank in level 4 fixed by NewPointless"
     },
     "raw_fields": {
       "hof": false,
-      "length": 63,
+      "length": 6,
       "demo": false,
       "sa1": false,
       "collab": false,
@@ -957,185 +1610,463 @@
         "kaizo"
       ],
       "warnings": [],
-      "description": "Uncharted World is a hack focused on challenging platforming. Most levels were designed to encourage improvisational gameplay, containing obstacles that can be completed in multiple ways. As a change of pace, you will also find some levels with more linear obstacle design as well as some more puzzling levels.\r\n\r\nThere is an open-ended overworld, with many possible routes to reach the credits. Although there are 63 exits in total, you can reach the credits in about 30 - 35 exits. Naturally, there is lot of additional content to play for those who are interested.\r\n\r\nThe hack has quality of life features (such as fast retry, infinite lives, autosave, and bug fixes) as well as custom music.\r\n\r\nHave fun!"
+      "description": "This is a short but challenging 6-exit autowalk hack.\r\n\r\nI spent a good chunk of 2025 working on a \"normal\" hack, but developed a form of thumb tendonitis that has left me unable to use a controller with my left thumb for a few months. I decided to make a set of  levels that I could play with without my left thumb, and I decided that the best way to do that is to let Mario do the walkin for me. \r\n\r\nThis hack contains sufficiently few dpad inputs that I was able to map all required dpad inputs to L/R, so it is possible to beat all 6 exits of this hack without ever touching the dpad (dpad is still enabled, this is just an accessibility/challenge option for controller users).\r\n\r\nThis hack contains no secrets, no secret exits, and no shell jumps, key jumps, or block grabs. This hack does contain a few L/R gimmicks (aside from the optional dpad remaps), and does contain a few slightly puzzly setups.\r\n\r\nUpdate v1.1:\r\n  ASM jank in level 4 fixed by NewPointless"
     }
   },
   {
-    "id": 41362,
+    "id": 41728,
     "section": "smwhacks",
-    "name": "Big Bad Danger Mountain",
-    "time": 1767235210,
+    "name": "Lazycro",
+    "time": 1771723865,
+    "submitted_at": 1771723865,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 73024,
-        "name": "Gwusbwth"
+        "id": 65563,
+        "name": "MarioFan1337"
       }
     ],
     "submitter": {
-      "id": 73024,
-      "name": "Gwusbwth"
+      "id": 65563,
+      "name": "MarioFan1337"
     },
-    "tags": [],
+    "moderator": null,
+    "tags": [
+      "custom asm",
+      "custom graphics",
+      "custom music",
+      "gimmick"
+    ],
     "images": [
-      "https://dl.smwcentral.net/image/120584.png",
-      "https://dl.smwcentral.net/image/120585.png",
-      "https://dl.smwcentral.net/image/120586.png",
-      "https://dl.smwcentral.net/image/120587.png",
-      "https://dl.smwcentral.net/image/120588.png"
+      "https://dl.smwcentral.net/image/121886.png",
+      "https://dl.smwcentral.net/image/121887.png",
+      "https://dl.smwcentral.net/image/121888.png",
+      "https://dl.smwcentral.net/image/121889.png",
+      "https://dl.smwcentral.net/image/121890.png",
+      "https://dl.smwcentral.net/image/121891.png",
+      "https://dl.smwcentral.net/image/121892.png",
+      "https://dl.smwcentral.net/image/121893.png",
+      "https://dl.smwcentral.net/image/121894.png"
     ],
     "rating": 0,
-    "size": 353396,
-    "downloads": 14,
-    "download_url": "https://dl.smwcentral.net/41362/T2Dsubmit.zip",
+    "size": 1009698,
+    "downloads": 24,
+    "download_url": "https://dl.smwcentral.net/41728/Lazycro.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
-      "length": "5 exit(s)",
+      "length": "26 exit(s)",
       "demo": "No",
       "sa1": "No",
       "collab": "No",
-      "difficulty": "Intermediate",
-      "type": "Standard",
+      "difficulty": "Advanced",
+      "type": "Kaizo",
       "warnings": "",
-      "description": "will make you angry if you take the level seriously. will make you want to use save states to save progress, though there are door checkpoints in the levels. I hope you have fun!"
+      "description": "Lazycro is a fantastic hack, appearing out of nowhere. It features Custom ASM, Custom Graphics, and Custom Music, and the levels are excellent and more obvious."
     },
     "raw_fields": {
       "hof": false,
-      "length": 5,
+      "length": 26,
       "demo": false,
       "sa1": false,
       "collab": false,
-      "difficulty": "diff_3",
+      "difficulty": "diff_4",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Lazycro is a fantastic hack, appearing out of nowhere. It features Custom ASM, Custom Graphics, and Custom Music, and the levels are excellent and more obvious."
+    }
+  },
+  {
+    "id": 41739,
+    "section": "smwhacks",
+    "name": "The Crimson Castle",
+    "time": 1771759007,
+    "submitted_at": 1771759007,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 57015,
+        "name": "Redspyda9"
+      }
+    ],
+    "submitter": {
+      "id": 57015,
+      "name": "Redspyda9"
+    },
+    "moderator": null,
+    "tags": [
+      "custom music",
+      "vanilla"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121918.png",
+      "https://dl.smwcentral.net/image/121919.png",
+      "https://dl.smwcentral.net/image/121920.png",
+      "https://dl.smwcentral.net/image/121921.png",
+      "https://dl.smwcentral.net/image/121922.png",
+      "https://dl.smwcentral.net/image/121923.png",
+      "https://dl.smwcentral.net/image/121924.png",
+      "https://dl.smwcentral.net/image/121925.png",
+      "https://dl.smwcentral.net/image/121926.png",
+      "https://dl.smwcentral.net/image/121927.png"
+    ],
+    "rating": 0,
+    "size": 880371,
+    "downloads": 29,
+    "download_url": "https://dl.smwcentral.net/41739/The%20Crimson%20Castle.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "13 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "Mario goes forth to a Great Castle where an unknown darkness has taken over. He will face many foes and obstacles on his way to try find the source of the evil. Mario's perilous adventure awaits...<br>\r\n<br>\r\n-Instant Retry<br>\r\n-Custom Music<br>\r\n-Trolls<br>\r\n-No Shell Jumps"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 13,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Mario goes forth to a Great Castle where an unknown darkness has taken over. He will face many foes and obstacles on his way to try find the source of the evil. Mario's perilous adventure awaits...\r\n\r\n-Instant Retry\r\n-Custom Music\r\n-Trolls\r\n-No Shell Jumps"
+    }
+  },
+  {
+    "id": 41740,
+    "section": "smwhacks",
+    "name": "Vanilla Hour - a collection of one-hour levels",
+    "time": 1771772861,
+    "submitted_at": 1771772861,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 48312,
+        "name": "Nitrogen"
+      }
+    ],
+    "submitter": {
+      "id": 48312,
+      "name": "Nitrogen"
+    },
+    "moderator": null,
+    "tags": [
+      "one-hour",
+      "traditional",
+      "vanilla"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/121928.png",
+      "https://dl.smwcentral.net/image/121929.png",
+      "https://dl.smwcentral.net/image/121930.png"
+    ],
+    "rating": 5,
+    "size": 23470,
+    "downloads": 138,
+    "download_url": "https://dl.smwcentral.net/41740/Vanilla%20Hour%20-%20a%20collection%20of%20one-hour%20levels.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "12 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Advanced",
+      "type": "Standard",
+      "warnings": "",
+      "description": "A collection of 10 vanilla levels made under one hour or so during 3 weeks. <br>\r\n<br>\r\nImportant notes:<br>\r\n-The hack <u>only saves once you beat the castle/final level</u> so the hack must be played in one sitting before saving. I'd recommend playing the final level last.<br>\r\n-Despite its simple level design, the hack rewards observation and exploration: there's a lot of lives to get so be sure to collect coins, Dragon Coins as well to find hidden 1-UP blocks and 1-UP checkpoints!"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 12,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_4",
       "type": [
         "standard"
       ],
       "warnings": [],
-      "description": "will make you angry if you take the level seriously. will make you want to use save states to save progress, though there are door checkpoints in the levels. I hope you have fun!"
+      "description": "A collection of 10 vanilla levels made under one hour or so during 3 weeks. \r\n\r\nImportant notes:\r\n-The hack [u]only saves once you beat the castle/final level[/u] so the hack must be played in one sitting before saving. I'd recommend playing the final level last.\r\n-Despite its simple level design, the hack rewards observation and exploration: there's a lot of lives to get so be sure to collect coins, Dragon Coins as well to find hidden 1-UP blocks and 1-UP checkpoints!"
     }
   },
   {
-    "id": 41363,
+    "id": 41743,
     "section": "smwhacks",
-    "name": "Super Fern World",
-    "time": 1767256778,
+    "name": "Shell Or Die",
+    "time": 1771778682,
+    "submitted_at": 1771778682,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 69349,
-        "name": "Fernchess"
+        "id": 71773,
+        "name": "BielDusty"
       }
     ],
     "submitter": {
-      "id": 69349,
-      "name": "Fernchess"
+      "id": 71773,
+      "name": "BielDusty"
     },
+    "moderator": null,
+    "tags": [],
+    "images": [
+      "https://dl.smwcentral.net/image/121931.png",
+      "https://dl.smwcentral.net/image/121932.png",
+      "https://dl.smwcentral.net/image/121933.png",
+      "https://dl.smwcentral.net/image/121934.png",
+      "https://dl.smwcentral.net/image/121935.png",
+      "https://dl.smwcentral.net/image/121936.png",
+      "https://dl.smwcentral.net/image/121937.png",
+      "https://dl.smwcentral.net/image/121938.png",
+      "https://dl.smwcentral.net/image/121939.png",
+      "https://dl.smwcentral.net/image/121940.png",
+      "https://dl.smwcentral.net/image/121941.png",
+      "https://dl.smwcentral.net/image/121942.png",
+      "https://dl.smwcentral.net/image/121943.png",
+      "https://dl.smwcentral.net/image/121944.png",
+      "https://dl.smwcentral.net/image/121945.png",
+      "https://dl.smwcentral.net/image/121946.png"
+    ],
+    "rating": 5,
+    "size": 809454,
+    "downloads": 38,
+    "download_url": "https://dl.smwcentral.net/41743/ShellOrDie.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "15 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "warnings": "",
+      "description": "Hello, I made this hack with a lot of dedication, I hope you like it and have fun.. Good luck"
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 15,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [],
+      "description": "Hello, I made this hack with a lot of dedication, I hope you like it and have fun.. Good luck"
+    }
+  },
+  {
+    "id": 41773,
+    "section": "smwhacks",
+    "name": "Delirium",
+    "time": 1771900624,
+    "submitted_at": 1771900624,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 50165,
+        "name": "LightAligns"
+      }
+    ],
+    "submitter": {
+      "id": 50165,
+      "name": "LightAligns"
+    },
+    "moderator": null,
     "tags": [
-      "troll"
+      "custom music",
+      "gimmick",
+      "no boss"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/120589.png",
-      "https://dl.smwcentral.net/image/120590.png",
-      "https://dl.smwcentral.net/image/120591.png"
+      "https://dl.smwcentral.net/image/121977.png",
+      "https://dl.smwcentral.net/image/121978.png",
+      "https://dl.smwcentral.net/image/121979.png",
+      "https://dl.smwcentral.net/image/121980.png",
+      "https://dl.smwcentral.net/image/121981.png",
+      "https://dl.smwcentral.net/image/121982.png",
+      "https://dl.smwcentral.net/image/121983.png",
+      "https://dl.smwcentral.net/image/121984.png",
+      "https://dl.smwcentral.net/image/121985.png",
+      "https://dl.smwcentral.net/image/121986.png",
+      "https://dl.smwcentral.net/image/121987.png"
     ],
     "rating": 0,
-    "size": 178795,
-    "downloads": 8,
-    "download_url": "https://dl.smwcentral.net/41363/SuperFW.zip",
+    "size": 945282,
+    "downloads": 30,
+    "download_url": "https://dl.smwcentral.net/41773/Delirium.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "hof": "No",
+      "length": "9 exit(s)",
+      "demo": "No",
+      "sa1": "No",
+      "collab": "No",
+      "difficulty": "Expert",
+      "type": "Kaizo",
+      "warnings": "Possible Photosensitivity Triggers",
+      "description": "This hack is composed of 9 short, one section levels - some of them involving gimmicks.   The level REPRIEVE may effect the photosensitive, but it can also be bypassed as it doesn't count as an exit.<br>\r\n<br>\r\nIf you liked Chirality, you might like this.   If you didn't like Chirality, who knows.  You still might like this.  <br>\r\n<br>\r\nGood luck, have fun."
+    },
+    "raw_fields": {
+      "hof": false,
+      "length": 9,
+      "demo": false,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_5",
+      "type": [
+        "kaizo"
+      ],
+      "warnings": [
+        "photosensitivity"
+      ],
+      "description": "This hack is composed of 9 short, one section levels - some of them involving gimmicks.   The level REPRIEVE may effect the photosensitive, but it can also be bypassed as it doesn't count as an exit.\r\n\r\nIf you liked Chirality, you might like this.   If you didn't like Chirality, who knows.  You still might like this.  \r\n\r\nGood luck, have fun."
+    }
+  },
+  {
+    "id": 41782,
+    "section": "smwhacks",
+    "name": "PATHMAKER",
+    "time": 1771937931,
+    "submitted_at": 1771937931,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 25442,
+        "name": "Tob"
+      }
+    ],
+    "submitter": {
+      "id": 25442,
+      "name": "Tob"
+    },
+    "moderator": null,
+    "tags": [
+      "gimmick",
+      "puzzle",
+      "short"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/122017.png",
+      "https://dl.smwcentral.net/image/122018.png",
+      "https://dl.smwcentral.net/image/122019.png",
+      "https://dl.smwcentral.net/image/122020.png",
+      "https://dl.smwcentral.net/image/122021.png",
+      "https://dl.smwcentral.net/image/122022.png"
+    ],
+    "rating": 0,
+    "size": 245544,
+    "downloads": 14,
+    "download_url": "https://dl.smwcentral.net/41782/PATHMAKERv1.0.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
       "length": "5 exit(s)",
       "demo": "No",
-      "sa1": "No",
+      "sa1": "Yes",
       "collab": "No",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "warnings": "Possible Photosensitivity Triggers",
-      "description": "My First Hack In the 2026! Short levels with vanilla. with a sprinkle of chocolate from the retry patch."
+      "difficulty": "Intermediate",
+      "type": "Puzzle",
+      "warnings": "",
+      "description": "PATHMAKER is a short <b>5-exit puzzle hack</b> in which you need to MAKE a PATH for Mario. Incredible.<br>\r\n<br>\r\nThis spawned from a silly idea that I had half a month ago and that <span class=\"un-outer\" title=\"Donut\"><span title=\"Staff Member\" class=\"icon icon-staff\"></span><a href=\"/?p=profile&amp;id=48514\" style=\"color: #ea589f;\" class=\"un\">Donut</a></span> happened to have code made for. That code forces Mario to reenact the Titlescreen Movement on command. And I made this little puzzle hack around that premise. Your goal is to clear out the levels in a way that Mario can collect the orb at the end, as he repeats the movements of the titlescreen. This is my first attempt at making a puzzle hack and I had some trouble coming up with fun ideas, which is why this hack ended up on the short side. But all things considered I think I turned this idea into a fun little brainteaser.<br>\r\n<br>\r\n<div class=\"collapse\"><div class=\"collapse-header\"><span>Credits</span></div><div class=\"collapse-content\">Graphics, Leveldesign, Idea<br>\r\nby <span class=\"un-outer\" title=\"Tob\"><a href=\"/?p=profile&amp;id=25442\" style=\"color: var(--user-color-1);\" class=\"un\">Tob</a></span><br>\r\n<br>\r\nMajor ASM<br>\r\n- Titlescreen movement code by <span class=\"un-outer\" title=\"Donut\"><span title=\"Staff Member\" class=\"icon icon-staff\"></span><a href=\"/?p=profile&amp;id=48514\" style=\"color: #ea589f;\" class=\"un\">Donut</a></span>.<br>\r\n- Statusbar by <span class=\"un-outer\" title=\"Arinsu\"><span title=\"Arinsu donated $6.00.\" class=\"icon icon-donor\"></span><span title=\"Team Leader\" class=\"icon icon-leader\"></span><a href=\"/?p=profile&amp;id=17672\" style=\"color: #ffffff;\" class=\"un\">Arinsu</a></span><br>\r\n<br>\r\nAdditional ASM<br>\r\nby Kevin, ASMagician Maks, imamelia, Sonikku<br>\r\n<br>\r\nCustom Music<br>\r\nby MercuryPenny, icrawfish, NamyX, MidiGuy, brickblock369, Tamaki, Samantha<br>\r\n<br>\r\nSpecial Thanks to the testers:<br>\r\nbebn legg, Arinsu, You :&gt;</div></div>"
     },
     "raw_fields": {
       "hof": false,
       "length": 5,
       "demo": false,
-      "sa1": false,
+      "sa1": true,
       "collab": false,
-      "difficulty": "diff_2",
+      "difficulty": "diff_3",
       "type": [
-        "standard"
+        "puzzle"
       ],
-      "warnings": [
-        "photosensitivity"
-      ],
-      "description": "My First Hack In the 2026! Short levels with vanilla. with a sprinkle of chocolate from the retry patch."
+      "warnings": [],
+      "description": "PATHMAKER is a short [b]5-exit puzzle hack[/b] in which you need to MAKE a PATH for Mario. Incredible.\r\n\r\nThis spawned from a silly idea that I had half a month ago and that [user=48514] happened to have code made for. That code forces Mario to reenact the Titlescreen Movement on command. And I made this little puzzle hack around that premise. Your goal is to clear out the levels in a way that Mario can collect the orb at the end, as he repeats the movements of the titlescreen. This is my first attempt at making a puzzle hack and I had some trouble coming up with fun ideas, which is why this hack ended up on the short side. But all things considered I think I turned this idea into a fun little brainteaser.\r\n\r\n[collapse=Credits]Graphics, Leveldesign, Idea\r\nby [user=25442]\r\n\r\nMajor ASM\r\n- Titlescreen movement code by [user=48514].\r\n- Statusbar by [user=17672]\r\n\r\nAdditional ASM\r\nby Kevin, ASMagician Maks, imamelia, Sonikku\r\n\r\nCustom Music\r\nby MercuryPenny, icrawfish, NamyX, MidiGuy, brickblock369, Tamaki, Samantha\r\n\r\nSpecial Thanks to the testers:\r\nbebn legg, Arinsu, You :>[/collapse]"
     }
   },
   {
-    "id": 41367,
+    "id": 41787,
     "section": "smwhacks",
-    "name": "Super Mario's Wacky Worlds SD Happy new Year 2026!!",
-    "time": 1767299259,
+    "name": "Precision86 Part II : The Forgotten Kingdom (DEMO)",
+    "time": 1771952331,
+    "submitted_at": 1771952331,
+    "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 60358,
-        "name": "figuiDOS"
+        "id": 32207,
+        "name": "Nowieso"
       }
     ],
     "submitter": {
-      "id": 60358,
-      "name": "figuiDOS"
+      "id": 32207,
+      "name": "Nowieso"
     },
+    "moderator": null,
     "tags": [
-      "asm",
-      "epilepsy warning",
-      "exgfx",
-      "hdma",
-      "msu-1",
-      "music",
-      "needs remoderation",
-      "original soundtrack",
-      "philips cdi",
-      "remake",
-      "traditional"
+      "bosses",
+      "custom music",
+      "gimmick",
+      "precision",
+      "story",
+      "traditional",
+      "variety"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/120603.png",
-      "https://dl.smwcentral.net/image/120605.png",
-      "https://dl.smwcentral.net/image/120606.png",
-      "https://dl.smwcentral.net/image/120607.png",
-      "https://dl.smwcentral.net/image/120608.png"
+      "https://dl.smwcentral.net/image/122033.png",
+      "https://dl.smwcentral.net/image/122034.png",
+      "https://dl.smwcentral.net/image/122035.png",
+      "https://dl.smwcentral.net/image/122036.png",
+      "https://dl.smwcentral.net/image/122037.png"
     ],
-    "rating": 5,
-    "size": 4275595,
-    "downloads": 1455,
-    "download_url": "https://dl.smwcentral.net/41367/Super%20Mario%27s%20Wacky%20Worlds%20SD.zip",
+    "rating": 0,
+    "size": 1096982,
+    "downloads": 17,
+    "download_url": "https://dl.smwcentral.net/41787/Precision86%20Part%20II%20Demo.zip",
     "obsoleted_by": null,
     "fields": {
       "hof": "No",
-      "length": "25 exit(s)",
-      "demo": "No",
+      "length": "7 exit(s)",
+      "demo": "Yes",
       "sa1": "Yes",
       "collab": "No",
-      "difficulty": "Casual",
-      "type": "Standard",
+      "difficulty": "Expert",
+      "type": "Kaizo",
       "warnings": "Possible Photosensitivity Triggers",
-      "description": "!warning this hack may contain scenarios that cause nausea and photosensitivity!<br>\r\n<br>\r\nIMPORTANT: This hack uses the MSU-1 and Sa-1 chip, so not all emulators will work correctly. Recommended emulators are snes9x, bsnes, higan (not sure if I spelled higan correctly)<br>\r\n<br>\r\n<br>\r\n!Compile Instructions!<br>\r\n<br>\r\nStep (1): Download the MSU-1 music zip file from this link: [url]https:https://drive.google.com/file/d/1kbKnnGsZev8w6XJQNsup9a7TpmpHsNcH/view?usp=drive_link<br>\r\n<br>\r\nOtherwise, the game may have no sound or play super mario world music.<br>\r\n<br>\r\n(Note that this file is 700MB in memory because of the pcm audios, a standard in hacks that use the MSU-1 chip).<br>\r\n<br>\r\n<br>\r\nStep(2): After downloading the zip file, extract it and move the Super Mario's Wacky Worlds SD.smc hack to the SMWWSD folder along with the .pcm and .msu files"
+      "description": "Dear Explorer,<br>\r\nthis once-proud kingdom has fallen long ago, but why? Please help us explore these ruins. Uncover their secrets. Slay the corrupted beasts that plague these lands, and find out what truly happened in the past.<br>\r\n<br>\r\nPrecision86 Part II : The Forgotten Kingdom is a direct sequel to Precision86, a Kaizo ROMHack that focuses mostly on precision-platforming, new gimmicks and custom bossfights. It is dedicated to Dennsen86.<br>\r\n<br>\r\nThis ROMHack is full of new, fresh ideas and innovative systems and bossfights, while staying close to the design philosophy of the first game. The full version will still take some time, but I hope you'll enjoy the demo in the meantime!"
     },
     "raw_fields": {
       "hof": false,
-      "length": 25,
-      "demo": false,
+      "length": 7,
+      "demo": true,
       "sa1": true,
       "collab": false,
-      "difficulty": "diff_2",
+      "difficulty": "diff_5",
       "type": [
-        "standard"
+        "kaizo"
       ],
       "warnings": [
         "photosensitivity"
       ],
-      "description": "!warning this hack may contain scenarios that cause nausea and photosensitivity!\r\n\r\nIMPORTANT: This hack uses the MSU-1 and Sa-1 chip, so not all emulators will work correctly. Recommended emulators are snes9x, bsnes, higan (not sure if I spelled higan correctly)\r\n\r\n\r\n!Compile Instructions!\r\n\r\nStep (1): Download the MSU-1 music zip file from this link: [url]https:https://drive.google.com/file/d/1kbKnnGsZev8w6XJQNsup9a7TpmpHsNcH/view?usp=drive_link\r\n\r\nOtherwise, the game may have no sound or play super mario world music.\r\n\r\n(Note that this file is 700MB in memory because of the pcm audios, a standard in hacks that use the MSU-1 chip).\r\n\r\n\r\nStep(2): After downloading the zip file, extract it and move the Super Mario's Wacky Worlds SD.smc hack to the SMWWSD folder along with the .pcm and .msu files"
+      "description": "Dear Explorer,\r\nthis once-proud kingdom has fallen long ago, but why? Please help us explore these ruins. Uncover their secrets. Slay the corrupted beasts that plague these lands, and find out what truly happened in the past.\r\n\r\nPrecision86 Part II : The Forgotten Kingdom is a direct sequel to Precision86, a Kaizo ROMHack that focuses mostly on precision-platforming, new gimmicks and custom bossfights. It is dedicated to Dennsen86.\r\n\r\nThis ROMHack is full of new, fresh ideas and innovative systems and bossfights, while staying close to the design philosophy of the first game. The full version will still take some time, but I hope you'll enjoy the demo in the meantime!"
     }
   }
 ]

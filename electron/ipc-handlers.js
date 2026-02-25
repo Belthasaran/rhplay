@@ -17485,7 +17485,7 @@ function registerDatabaseHandlers(dbManager) {
       try {
         let chosen = selectedBpsPath;
         if (!chosen) {
-          const inspect = loadManualUtils.inspectArchive(filePath);
+          const inspect = await loadManualUtils.inspectArchive(filePath);
           if (inspect.error) throw new Error(inspect.error);
           if (inspect.bpsEntries && inspect.bpsEntries.length === 1) chosen = inspect.bpsEntries[0].path;
           else if (inspect.bpsEntries && inspect.bpsEntries.length > 1) throw new Error('Multiple BPS files: please select one in the dialog');
@@ -17499,7 +17499,7 @@ function registerDatabaseHandlers(dbManager) {
           fs.writeFileSync(dest, entry.getData());
           bpsPath = dest;
         } else {
-          loadManualUtils.extractAllFrom7z(filePath, tempDir);
+          await loadManualUtils.extractAllFrom7z(filePath, tempDir);
           const findBps = (dir, depth = 0) => {
             if (depth > 10) return null;
             for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -17558,7 +17558,7 @@ function registerDatabaseHandlers(dbManager) {
       if (ext !== '.zip' && ext !== '.7z') {
         return { error: 'Not a ZIP or 7z archive' };
       }
-      return loadManualUtils.inspectArchive(filePath);
+      return await loadManualUtils.inspectArchive(filePath);
     } catch (error) {
       console.error('[loadManual:inspect-archive] Error:', error);
       return { error: error.message };

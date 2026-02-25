@@ -12,10 +12,22 @@ const AdmZip = require('adm-zip');
 const { path7za } = require('7zip-bin');
 
 /**
+ * Return 7za binary path valid in packaged Electron (uses unpacked path when inside app.asar).
+ * Load game-stager so 7zip-min is configured for packaged apps, then use its binary path.
+ */
+function get7zaPath() {
+  require('../game-stager'); // ensures 7zip-min is configured for packaged app
+  const sevenZip = require('7zip-min');
+  const cfg = sevenZip.getConfig();
+  return (cfg && cfg.binaryPath) ? cfg.binaryPath : path7za;
+}
+
+/**
  * List contents of a 7z archive. Returns array of { path, baseName, type }.
  */
 function list7zContents(archivePath) {
-  const result = execSync(`"${path7za}" l -slt "${archivePath}"`, { encoding: 'utf8' });
+  const bin = get7zaPath();
+  const result = execSync(`"${bin}" l -slt "${archivePath}"`, { encoding: 'utf8' });
   const lines = result.split('\n');
   const files = [];
   let currentFile = null;
@@ -55,7 +67,8 @@ function list7zContents(archivePath) {
  */
 function extractFileFrom7z(archivePath, entryPath, outputDir) {
   fs.mkdirSync(outputDir, { recursive: true });
-  execSync(`"${path7za}" x -y -o"${outputDir}" "${archivePath}" "${entryPath}"`, { stdio: 'pipe' });
+  const bin = get7zaPath();
+  execSync(`"${bin}" x -y -o"${outputDir}" "${archivePath}" "${entryPath}"`, { stdio: 'pipe' });
   const fileName = path.basename(entryPath);
   const candidates = [
     path.join(outputDir, entryPath),

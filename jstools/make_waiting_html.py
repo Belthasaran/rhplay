@@ -235,7 +235,9 @@ for record in items:
     else:
         modclass = ""
 
-
+    if x ==0 :
+        modclass = ""
+        modemoji = ""
     record["modclass"] = modclass
     record["modemoji"] = modemoji
     f.write('<tr> <td>{timeStr}</td>  <td class="{modclass}">{modemoji}{moderated}</td>  <td><a href="https://arweave.net/{data_txid}">{gameid}</a></td> <td><a href="https://arweave.net/{data_txid}">{name}</a></td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))

@@ -229,7 +229,8 @@ function parseExistingCsvAr() {
 async function fetchArdriveFileIndex(folderId) {
   const arweave = require('arweave');
   const arDriveCore = require('ardrive-core-js');
-  const arweaveUrl = new URL('https://arweave.net:443');
+  //const arweaveUrl = new URL('https://arweave.net:443');
+  const   arweaveUrl = new URL('https://ardrive.net:443');
   const arweaveClient = arweave.init({
     host: arweaveUrl.hostname,
     protocol: arweaveUrl.protocol.replace(':', ''),
@@ -238,10 +239,13 @@ async function fetchArdriveFileIndex(folderId) {
   });
   const arDrive = await arDriveCore.arDriveAnonymousFactory({ arweave: arweaveClient });
   const folderEid = arDriveCore.EID(folderId);
+  console.log(`arDrive.listPublicFolder({ folderId: ${folderId}  eid ${folderEid}, maxdepth: 10 })`)
   const items = await arDrive.listPublicFolder({ folderId: folderEid, maxDepth: 10 });
   const files = items.filter(item => item.entityType === 'file');
   const index = new Map();
   for (const file of files) {
+    console.log(`index.set(file.name, ${JSON.stringify(file)})`)
+    console.log(`FILE_ENTRY   path=${file.path}  dataTxId=${file.dataTxId}  txIdPath=${file.txIdPath}`)
     index.set(file.name, file);
   }
   return index;

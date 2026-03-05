@@ -58,6 +58,11 @@ body {
   padding: 0;
 }
 
+.m_alert {
+color: cyan;
+font-weight: bold;
+}
+
 .m_removed {
   color: red;
   font-weight: bold;
@@ -232,6 +237,9 @@ for record in items:
     elif record["moderated"] == "Rejected" or re.match(r'^rejected.*', record["moderated"],re.I) :
         modemoji = "❌"
         modclass = "m_rejected"
+    elif record["moderated"] == "Alert" or re.match(r'^alert.*', record['moderated'],re.I):
+        modemoji = "[‼️]"
+        modclass = "m_alert"
     else:
         modclass = ""
 

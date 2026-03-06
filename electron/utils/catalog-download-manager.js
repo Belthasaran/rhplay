@@ -196,11 +196,13 @@ async function downloadFromArDrive(spec, destPath, downloadTracker, userDataDir)
   // Note: Full ArDrive API implementation would require ardrive-core-js
   // For now, we use the data_txid if available, or construct URL from file_id metadata
   if (spec.ardrive_file_id) {
+    let lastErr = null;
     if (spec.data_txid) {
       try {
         await arweaveFetchConfig.fetchFromArweave({ ...opts, txid: spec.data_txid, sourceLabel: 'arweave:file_id' });
         return;
       } catch (err) {
+        lastErr = err;
         console.error(`[download-error] ${spec.file_name} via arweave:file_id -> ${err.message}`);
       }
     }
@@ -209,8 +211,12 @@ async function downloadFromArDrive(spec, destPath, downloadTracker, userDataDir)
         await arweaveFetchConfig.fetchFromArweave({ ...opts, path: spec.ardrive_file_path, sourceLabel: 'arweave:file_id_path' });
         return;
       } catch (err) {
+        lastErr = err;
         console.error(`[download-error] ${spec.file_name} via arweave:file_id_path -> ${err.message}`);
       }
+    }
+    if (lastErr) {
+      throw lastErr;
     }
     throw new Error(`ArDrive file_id download requires data_txid or ardrive_file_path (file_id: ${spec.ardrive_file_id})`);
   }

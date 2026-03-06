@@ -332,7 +332,15 @@
       "node_modules/base64url/**/*",
       "node_modules/tmp-promise/**/*",
       "node_modules/multistream/*",
-      "node_modules/arweave-stream-tx/**/*"
+      "node_modules/arweave-stream-tx/**/*",
+      "node_modules/axios/**/*",
+      "node_modules/zone/**/*",
+      "node_modules/arconnect/**/*",
+      "node_modules/asn1.js/**/*",
+      "node_modules/bignumber.js/**/*",
+      "node_modules/@noble/ed25519/**/*",
+      "node_modules/bs58/**/*"
+
     ],
     "win": {
       "target": [

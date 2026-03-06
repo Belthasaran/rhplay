@@ -253,7 +253,9 @@ async function fetchFromArweave(options) {
     response = await fetch(url, { signal: controller.signal });
   } catch (err) {
     clearTimeout(timeout);
-    throw err;
+    const hint = err.cause ? ` (${String(err.cause.code || err.cause.message || err.cause)})` : '';
+    const urlHint = typeof url === 'string' ? ` url=${url.replace(/^https?:\/\//, '').substring(0, 80)}...` : '';
+    throw new Error(`fetch failed${hint}${urlHint}`, { cause: err });
   }
   clearTimeout(timeout);
 

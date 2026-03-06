@@ -328,7 +328,11 @@
       "node_modules/@opentelemetry/sdk-trace-base/**/*",
       "node_modules/@opentelemetry/sdk-trace-node/**/*",
       "node_modules/@opentelemetry/sdk-trace-web/**/*",
-      "node_modules/@opentelemetry/semantic-conventions/**/*"
+      "node_modules/@opentelemetry/semantic-conventions/**/*",
+      "node_modules/base64url/**/*",
+      "node_modules/tmp-promise/**/*",
+      "node_modules/multistream/*",
+      "node_modules/arweave-stream-tx/**/*"
     ],
     "win": {
       "target": [

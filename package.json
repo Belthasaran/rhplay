@@ -316,7 +316,19 @@
       "node_modules/@ar.io/wayfinder-core/**/*",
       "node_modules/plimit-lit/**/*",
       "node_modules/queue-lit/**/*",
-      "node_modules/arweave/**/*"
+      "node_modules/arweave/**/*",
+      "node_modules/@dha-team/arbundles/**/*",
+      "node_modules/eventemitter3/**/*",
+      "node_modules/rfc4648/**/*",
+      "node_modules/@opentelemetry/api/**/*",
+      "node_modules/@opentelemetry/context-zone/**/*",
+      "node_modules/@opentelemetry/exporter-trace-otlp-http/**/*",
+      "node_modules/@opentelemetry/exporter-trace-otlp-http/**/*",
+      "node_modules/@opentelemetry/resources/**/*",
+      "node_modules/@opentelemetry/sdk-trace-base/**/*",
+      "node_modules/@opentelemetry/sdk-trace-node/**/*",
+      "node_modules/@opentelemetry/sdk-trace-web/**/*",
+      "node_modules/@opentelemetry/semantic-conventions/**/*"
     ],
     "win": {
       "target": [

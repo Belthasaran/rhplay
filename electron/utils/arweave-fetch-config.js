@@ -128,6 +128,9 @@ async function createWayfinderClient(userDataDir) {
     } = await import('@ar.io/wayfinder-core');
     const gatewaysProvider = await createResilientGatewaysProvider(userDataDir);
     return createClient({
+     telemetrySettings: {
+        enabled: false
+     },
       routingStrategy: createRoutingStrategy({
         strategy: 'random',
         gatewaysProvider,

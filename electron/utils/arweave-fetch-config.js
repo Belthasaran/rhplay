@@ -68,18 +68,70 @@ function getArweaveGatewaysForDisplay(userDataDir) {
   return ['Wayfinder (dynamic)'];
 }
 
+/** Default trusted gateways for Wayfinder peer discovery (fetches /ar-io/peers). Order = fallback sequence. */
+const DEFAULT_WAYFINDER_TRUSTED_GATEWAYS = [
+  'https://permagate.io',
+  'https://ardrive.net',
+  'https://ar-io.net',
+  'https://arweave.net',
+];
+
 /**
- * Create Wayfinder client (lazy, cached). Uses RandomRoutingStrategy and default NetworkGatewaysProvider.
+ * Get list of trusted gateways for Wayfinder peer discovery (from config or defaults).
+ * @param {string} [userDataDir]
+ * @returns {string[]}
+ */
+function getWayfinderTrustedGateways(userDataDir) {
+  const cfg = ipfsFetchConfig.getFetchConfig(userDataDir);
+  const list = cfg.arweave?.wayfinder_trusted_gateways;
+  if (Array.isArray(list) && list.length > 0) {
+    return list.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim());
+  }
+  return DEFAULT_WAYFINDER_TRUSTED_GATEWAYS;
+}
+
+/**
+ * Create a resilient gateways provider that tries multiple trusted peers in sequence.
+ * If one host (e.g. arweave.net) is down, discovery still works via others.
+ * @param {string} [userDataDir]
  * @returns {Promise<object>}
  */
-async function createWayfinderClient() {
+async function createResilientGatewaysProvider(userDataDir) {
+  const gateways = getWayfinderTrustedGateways(userDataDir);
+  const {
+    CompositeGatewaysProvider,
+    TrustedPeersGatewaysProvider,
+    SimpleCacheGatewaysProvider,
+  } = await import('@ar.io/wayfinder-core');
+  const providers = gateways.map((g) => new TrustedPeersGatewaysProvider({ trustedGateway: g }));
+  const composite = new CompositeGatewaysProvider({ providers });
+  return new SimpleCacheGatewaysProvider({
+    gatewaysProvider: composite,
+    ttlSeconds: 300,
+  });
+}
+
+/**
+ * Create Wayfinder client (lazy, cached). Uses RandomRoutingStrategy with a resilient
+ * gateways provider that tries multiple trusted peers (permagate, ardrive, ar-io, arweave).
+ * @param {string} [userDataDir]
+ * @returns {Promise<object>}
+ */
+async function createWayfinderClient(userDataDir) {
   if (wayfinderClientPromise) {
     return wayfinderClientPromise;
   }
   wayfinderClientPromise = (async () => {
-    const { createWayfinderClient: createClient, createRoutingStrategy } = await import('@ar.io/wayfinder-core');
+    const {
+      createWayfinderClient: createClient,
+      createRoutingStrategy,
+    } = await import('@ar.io/wayfinder-core');
+    const gatewaysProvider = await createResilientGatewaysProvider(userDataDir);
     return createClient({
-      routingStrategy: createRoutingStrategy({ strategy: 'random' }),
+      routingStrategy: createRoutingStrategy({
+        strategy: 'random',
+        gatewaysProvider,
+      }),
     });
   })();
   return wayfinderClientPromise;
@@ -116,7 +168,7 @@ async function resolveArweaveDownloadUrl(options) {
   }
 
   try {
-    const wayfinder = await createWayfinderClient();
+    const wayfinder = await createWayfinderClient(userDataDir);
     if (txid) {
       const resolved = await wayfinder.resolveUrl({ txId: txid });
       if (typeof resolved === 'string') return resolved;

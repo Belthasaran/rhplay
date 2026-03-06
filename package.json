@@ -76,6 +76,8 @@
     "upload:list-ardrive": "node list-unuploaded-blobs.js --provider=ardrive"
   },
   "dependencies": {
+    "@ar.io/sdk": "^3.23.1",
+    "@ar.io/wayfinder-core": "^1.9.1",
     "@helia/http": "^3.0.0",
     "@helia/verified-fetch": "^7.0.0",
     "@ceramicnetwork/http-client": "^6.4.0",

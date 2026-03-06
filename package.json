@@ -311,7 +311,8 @@
       "jsutils/**/*",
       "electron/sql/migrations/**/*",
       "electron/installer/**/*",
-      "electron/utils/ipfs-fetch-config.js"
+      "electron/utils/ipfs-fetch-config.js",
+      "electron/utils/arweave-fetch-config.js"
     ],
     "win": {
       "target": [

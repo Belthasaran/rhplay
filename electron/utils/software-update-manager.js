@@ -14,13 +14,7 @@ const manifestResolver = require('./manifest-resolver');
 const { verifyCoreManifestDat } = require('./verify-coremf-dat-internal');
 const { ensureArtifact } = require('./catalog-download-manager');
 const ipfsFetchConfig = require('./ipfs-fetch-config');
-
-// ArWeave gateways
-const ARWEAVE_GATEWAYS = [
-  'https://arweave.net',
-  'https://ar-io.net',
-  'https://arweave.live'
-];
+const arweaveFetchConfig = require('./arweave-fetch-config');
 
 /**
  * Calculate SHA256 hash of a file
@@ -51,10 +45,10 @@ function getIPFSGateways() {
 }
 
 /**
- * Get ArWeave gateways list
+ * Get ArWeave gateways list (from config: legacy gateway or "Wayfinder (dynamic)")
  */
 function getArWeaveGateways() {
-  return ARWEAVE_GATEWAYS;
+  return arweaveFetchConfig.getArweaveGatewaysForDisplay();
 }
 
 /**
@@ -67,11 +61,15 @@ function buildIPFSUrl(cid, gateway) {
 }
 
 /**
- * Build ArWeave gateway URL
+ * Build ArWeave gateway URL (for open-in-browser). If gateway is "Wayfinder (dynamic)", use configured legacy gateway.
  */
 function buildArWeaveUrl(txid, gateway) {
   if (!txid || !gateway) return null;
-  const base = gateway.endsWith('/') ? gateway.slice(0, -1) : gateway;
+  let base = gateway;
+  if (gateway === 'Wayfinder (dynamic)') {
+    base = arweaveFetchConfig.getArweaveLegacyGateway();
+  }
+  base = base.endsWith('/') ? base.slice(0, -1) : base;
   return `${base}/${txid}`;
 }
 

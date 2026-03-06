@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 const { Readable, Transform } = require('stream');
 const ipfsFetchConfig = require('./ipfs-fetch-config');
+const arweaveFetchConfig = require('./arweave-fetch-config');
 
 const DEFAULT_BPS_DRIVE_ID = 'd3338fab-d24c-4d75-9e78-d3024befc225';
 const DEFAULT_BPS_FOLDER_ID = 'a6130936-d92e-45ac-a004-273d96e9ec9d';
@@ -171,23 +172,20 @@ async function downloadFromUrl(url, destPath, expectedSha256, spec, downloadTrac
   await fs.promises.rename(tempPath, destPath);
 }
 
-async function downloadFromArDrive(spec, destPath, downloadTracker) {
-  // Try data_txid first (direct Arweave transaction)
+async function downloadFromArDrive(spec, destPath, downloadTracker, userDataDir) {
+  const opts = { destPath, expectedSha256: spec.sha256, spec, downloadTracker, userDataDir };
   if (spec.data_txid) {
-    const url = `https://arweave.net/${spec.data_txid}`;
     try {
-      await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:data_txid');
+      await arweaveFetchConfig.fetchFromArweave({ ...opts, txid: spec.data_txid, sourceLabel: 'arweave:data_txid' });
       return;
     } catch (err) {
       console.error(`[download-error] ${spec.file_name} via arweave:data_txid -> ${err.message}`);
     }
   }
   
-  // Try ardrive_file_path (ArDrive path-based download)
   if (spec.ardrive_file_path) {
-    const url = `https://arweave.net${spec.ardrive_file_path}`;
     try {
-      await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:ardrive_path');
+      await arweaveFetchConfig.fetchFromArweave({ ...opts, path: spec.ardrive_file_path, sourceLabel: 'arweave:ardrive_path' });
       return;
     } catch (err) {
       console.error(`[download-error] ${spec.file_name} via arweave:ardrive_path -> ${err.message}`);
@@ -198,34 +196,22 @@ async function downloadFromArDrive(spec, destPath, downloadTracker) {
   // Note: Full ArDrive API implementation would require ardrive-core-js
   // For now, we use the data_txid if available, or construct URL from file_id metadata
   if (spec.ardrive_file_id) {
-    // If we have a data_txid, use it (most reliable)
     if (spec.data_txid) {
-      const url = `https://arweave.net/${spec.data_txid}`;
       try {
-        await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:file_id');
+        await arweaveFetchConfig.fetchFromArweave({ ...opts, txid: spec.data_txid, sourceLabel: 'arweave:file_id' });
         return;
       } catch (err) {
         console.error(`[download-error] ${spec.file_name} via arweave:file_id -> ${err.message}`);
       }
     }
-    
-    // If we have ardrive_file_path, use it
     if (spec.ardrive_file_path) {
-      const url = `https://arweave.net${spec.ardrive_file_path}`;
       try {
-        await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:file_id_path');
+        await arweaveFetchConfig.fetchFromArweave({ ...opts, path: spec.ardrive_file_path, sourceLabel: 'arweave:file_id_path' });
         return;
       } catch (err) {
         console.error(`[download-error] ${spec.file_name} via arweave:file_id_path -> ${err.message}`);
       }
     }
-    
-    // TODO: Full ArDrive API implementation using ardrive-core-js
-    // This would require:
-    // 1. ArDrive authentication (if needed)
-    // 2. File metadata lookup by file_id
-    // 3. Download using ArDrive API
-    // For now, throw error if no fallback available
     throw new Error(`ArDrive file_id download requires data_txid or ardrive_file_path (file_id: ${spec.ardrive_file_id})`);
   }
   
@@ -351,7 +337,7 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
         }
       } else if (source.type === 'ardrive') {
         try {
-          await downloadFromArDrive(spec, destPath, downloadTracker);
+          await downloadFromArDrive(spec, destPath, downloadTracker, userDataDir);
           return destPath;
         } catch (err) {
           lastError = err;

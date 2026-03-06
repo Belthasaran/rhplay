@@ -315,7 +315,8 @@
       "electron/utils/arweave-fetch-config.js",
       "node_modules/@ar.io/wayfinder-core/**/*",
       "node_modules/plimit-lit/**/*",
-      "node_modules/queue-lit/**/*"
+      "node_modules/queue-lit/**/*",
+      "node_modules/arweave/**/*"
     ],
     "win": {
       "target": [

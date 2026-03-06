@@ -329,6 +329,11 @@
       "node_modules/@opentelemetry/sdk-trace-node/**/*",
       "node_modules/@opentelemetry/sdk-trace-web/**/*",
       "node_modules/@opentelemetry/semantic-conventions/**/*",
+      "node_modules/@ethersproject/hash/**/*",
+      "node_modules/@ethersproject/bytes/**/*",
+      "node_modules/@ethersproject/providers/**/*",
+      "node_modules/@ethersproject/signing-key/**/*",
+      "node_modules/@ethersproject/wallet/**/*",
       "node_modules/base64url/**/*",
       "node_modules/tmp-promise/**/*",
       "node_modules/multistream/*",
@@ -339,7 +344,8 @@
       "node_modules/asn1.js/**/*",
       "node_modules/bignumber.js/**/*",
       "node_modules/@noble/ed25519/**/*",
-      "node_modules/bs58/**/*"
+      "node_modules/bs58/**/*",
+      "node_modules/form-data/**/*"
 
     ],
     "win": {

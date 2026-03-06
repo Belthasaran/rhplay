@@ -56,6 +56,36 @@
         </div>
 
         <div class="settings-section">
+          <h4>Arweave / ArDrive fetch</h4>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input
+                v-model="arweaveOption"
+                type="radio"
+                value="legacy"
+              />
+              <span class="radio-label">Legacy ArDrive fetch (fixed gateway)</span>
+            </label>
+            <div class="radio-suboptions">
+              <label class="radio-option indent">
+                <select v-model="arweaveLegacyGateway" :disabled="arweaveOption !== 'legacy'" class="gateway-select">
+                  <option value="https://arweave.net:443">https://arweave.net:443</option>
+                  <option value="https://ardrive.net:443">https://ardrive.net:443</option>
+                </select>
+              </label>
+            </div>
+            <label class="radio-option">
+              <input
+                v-model="arweaveOption"
+                type="radio"
+                value="wayfinder"
+              />
+              <span class="radio-label">Fetch using Wayfinder client (dynamic gateways, recommended)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <label class="checkbox-option">
             <input v-model="p2pOptIn" type="checkbox" />
             <span class="checkbox-label">
@@ -100,6 +130,8 @@ const emit = defineEmits<{
 
 const ipfsOption = ref<'helia-http' | 'helia-rpc' | 'basic' | 'manual'>('basic');
 const heliaMode = ref<'http' | 'rpc'>('http');
+const arweaveOption = ref<'legacy' | 'wayfinder'>('legacy');
+const arweaveLegacyGateway = ref('https://arweave.net:443');
 const p2pOptIn = ref(false);
 const saving = ref(false);
 
@@ -130,6 +162,9 @@ function buildConfig() {
     helia_mode = ipfsOption.value === 'helia-rpc' ? 'rpc' : 'http';
   }
 
+  const arweaveFetchMode = arweaveOption.value === 'wayfinder' ? 'wayfinder' : 'legacy';
+  const arweaveLegacy = arweaveLegacyGateway.value || 'https://arweave.net:443';
+
   return {
     ipfs: {
       fetch_mode,
@@ -137,6 +172,10 @@ function buildConfig() {
       parallel: 5,
       gateway_selection: 'standard' as const,
       gateway_list: [] as string[],
+    },
+    arweave: {
+      fetch_mode: arweaveFetchMode,
+      legacy_gateway: arweaveLegacy,
     },
     p2p_opt_in: p2pOptIn.value,
   };
@@ -193,6 +232,17 @@ async function loadConfig() {
     }
     if (typeof config.p2p_opt_in === 'boolean') {
       p2pOptIn.value = config.p2p_opt_in;
+    }
+  }
+  if (config?.arweave && typeof config.arweave === 'object') {
+    const am = config.arweave.fetch_mode;
+    if (am === 'wayfinder') {
+      arweaveOption.value = 'wayfinder';
+    } else {
+      arweaveOption.value = 'legacy';
+    }
+    if (config.arweave.legacy_gateway) {
+      arweaveLegacyGateway.value = config.arweave.legacy_gateway;
     }
   }
 }
@@ -274,6 +324,13 @@ watch(() => props.visible, (v) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.gateway-select {
+  margin-left: 24px;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  min-width: 220px;
 }
 
 .checkbox-option {

@@ -36,6 +36,12 @@ const DEFAULT_CONFIG = {
     gateway_selection: 'standard',
     gateway_list: [],
   },
+  arweave: {
+    fetch_mode: 'legacy',
+    legacy_gateway: 'https://arweave.net:443',
+    wayfinder_routing_strategy: 'random',
+    wayfinder_gateways_provider: 'network',
+  },
   p2p_opt_in: false,
 };
 
@@ -139,6 +145,7 @@ function getFetchConfig(userDataDir) {
   const userConfig = loadUserConfig(dir);
 
   const ipfs = { ...DEFAULT_CONFIG.ipfs };
+  const arweave = { ...DEFAULT_CONFIG.arweave };
 
   if (userConfig && userConfig.ipfs && typeof userConfig.ipfs === 'object') {
     if (userConfig.ipfs.fetch_mode) ipfs.fetch_mode = userConfig.ipfs.fetch_mode;
@@ -148,7 +155,22 @@ function getFetchConfig(userDataDir) {
     if (Array.isArray(userConfig.ipfs.gateway_list)) ipfs.gateway_list = userConfig.ipfs.gateway_list;
   }
 
+  if (userConfig && userConfig.arweave && typeof userConfig.arweave === 'object') {
+    if (userConfig.arweave.fetch_mode) arweave.fetch_mode = userConfig.arweave.fetch_mode;
+    if (userConfig.arweave.legacy_gateway) arweave.legacy_gateway = userConfig.arweave.legacy_gateway;
+    if (userConfig.arweave.wayfinder_routing_strategy) arweave.wayfinder_routing_strategy = userConfig.arweave.wayfinder_routing_strategy;
+    if (userConfig.arweave.wayfinder_gateways_provider) arweave.wayfinder_gateways_provider = userConfig.arweave.wayfinder_gateways_provider;
+  }
+
   // Environment overrides
+  if (process.env.ARWEAVE_FETCH_MODE) {
+    const m = process.env.ARWEAVE_FETCH_MODE.toLowerCase();
+    if (m === 'legacy' || m === 'wayfinder') arweave.fetch_mode = m;
+  }
+  if (process.env.ARWEAVE_LEGACY_GATEWAY && typeof process.env.ARWEAVE_LEGACY_GATEWAY === 'string') {
+    const g = process.env.ARWEAVE_LEGACY_GATEWAY.trim();
+    if (g) arweave.legacy_gateway = g;
+  }
   if (process.env.IPFS_FETCH_MODE) {
     const m = process.env.IPFS_FETCH_MODE.toLowerCase();
     if (m === 'basic' || m === 'helia') ipfs.fetch_mode = m;
@@ -172,6 +194,7 @@ function getFetchConfig(userDataDir) {
 
   const config = {
     ipfs,
+    arweave,
     p2p_opt_in: (userConfig && userConfig.p2p_opt_in === true) || false,
   };
   if (!userDataDir) {
@@ -254,8 +277,9 @@ function fetchSettingsPathExists(userDataDir) {
 }
 
 /**
- * Write user-fetch-settings.json
- * @param {object} config
+ * Write user-fetch-settings.json.
+ * Merges incoming config with existing file so top-level keys not in the payload (e.g. arweave when UI sends only ipfs) are preserved.
+ * @param {object} config - Partial or full config from UI
  * @param {string} [userDataDir]
  */
 function saveFetchSettings(config, userDataDir) {
@@ -265,7 +289,21 @@ function saveFetchSettings(config, userDataDir) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf8');
+    const existing = loadUserConfig(dir);
+    const merged = {
+      ...(existing && typeof existing === 'object' ? existing : {}),
+      ...(config && typeof config === 'object' ? config : {}),
+    };
+    if (config && config.ipfs && typeof config.ipfs === 'object') {
+      merged.ipfs = { ...(existing && existing.ipfs) || {}, ...config.ipfs };
+    }
+    if (config && config.arweave && typeof config.arweave === 'object') {
+      merged.arweave = { ...(existing && existing.arweave) || {}, ...config.arweave };
+    }
+    if (typeof (config && config.p2p_opt_in) === 'boolean') {
+      merged.p2p_opt_in = config.p2p_opt_in;
+    }
+    fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), 'utf8');
     clearConfigCache();
   } catch (err) {
     throw new Error(`Failed to save fetch settings: ${err.message}`);

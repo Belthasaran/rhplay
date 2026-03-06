@@ -35,6 +35,7 @@ const lzma = require('lzma-native');
 const tar = require('tar');
 const Database = require('better-sqlite3');
 const ipfsFetchConfig = require('../utils/ipfs-fetch-config');
+const arweaveFetchConfig = require('../utils/arweave-fetch-config');
 
 const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
@@ -1059,25 +1060,21 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
           console.error(`[download-error] ${spec.file_name} via url.${source.index} -> ${err.message}`);
         }
       } else if (source.type === 'ardrive') {
-        // Existing ArDrive logic
-        if (source.txid) {
-          const url = `https://arweave.net/${source.txid}`;
-          try {
-            await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:data_txid');
-            return destPath;
-          } catch (err) {
-            lastError = err;
-            console.error(`[download-error] ${spec.file_name} via arweave:data_txid -> ${err.message}`);
-          }
-        } else if (source.path) {
-          const url = `https://arweave.net${source.path}`;
-          try {
-            await downloadFromUrl(url, destPath, spec.sha256, spec, downloadTracker, 'arweave:ardrive_path');
-            return destPath;
-          } catch (err) {
-            lastError = err;
-            console.error(`[download-error] ${spec.file_name} via arweave:ardrive_path -> ${err.message}`);
-          }
+        const userDataDirForConfig = userDataDir || detectUserDataDir();
+        try {
+          await arweaveFetchConfig.fetchFromArweave({
+            txid: source.txid,
+            path: source.path,
+            destPath,
+            expectedSha256: spec.sha256,
+            spec,
+            downloadTracker,
+            userDataDir: userDataDirForConfig,
+          });
+          return destPath;
+        } catch (err) {
+          lastError = err;
+          console.error(`[download-error] ${spec.file_name} via ardrive -> ${err.message}`);
         }
       }
     } catch (err) {
@@ -1803,23 +1800,26 @@ async function verifyFileSpec(spec, context, opts = {}) {
             downloadedFromSource = sourceLabel;
           }
         } else if (source.type === 'ardrive') {
-          if (source.txid) {
-            url = `https://arweave.net/${source.txid}`;
-            sourceLabel = 'arweave:data_txid';
-          } else if (source.path) {
-            url = `https://arweave.net${source.path}`;
-            sourceLabel = 'arweave:ardrive_path';
-          }
-          if (url) {
+          sourceLabel = source.txid ? 'arweave:data_txid' : 'arweave:ardrive_path';
+          try {
             console.log(`    Trying ${sourceLabel}...`);
-            await downloadFromUrl(url, tempPathForSource, null, spec, null, sourceLabel);
+            await arweaveFetchConfig.fetchFromArweave({
+              txid: source.txid,
+              path: source.path,
+              destPath: tempPathForSource,
+              expectedSha256: null,
+              spec,
+              downloadTracker: null,
+              userDataDir,
+            });
             sourceResults.push({ source: sourceLabel, success: true });
             if (!downloaded) {
-              // Use first successful download for hash verification
               fs.copyFileSync(tempPathForSource, tempPath);
               downloaded = true;
               downloadedFromSource = sourceLabel;
             }
+          } catch (err) {
+            sourceResults.push({ source: sourceLabel, success: false, error: err.message });
           }
         }
 

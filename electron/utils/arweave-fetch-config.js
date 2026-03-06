@@ -169,16 +169,24 @@ async function resolveArweaveDownloadUrl(options) {
 
   try {
     const wayfinder = await createWayfinderClient(userDataDir);
+    /** @param {string|URL|{url?:string}} resolved */
+    const toUrlString = (resolved) => {
+      if (typeof resolved === 'string') return resolved;
+      if (resolved && typeof resolved.href === 'string') return resolved.href;
+      if (resolved && resolved.url) return resolved.url;
+      return null;
+    };
     if (txid) {
       const resolved = await wayfinder.resolveUrl({ txId: txid });
-      if (typeof resolved === 'string') return resolved;
-      if (resolved && resolved.url) return resolved.url;
+      const urlStr = toUrlString(resolved);
+      if (urlStr) return urlStr;
     }
     if (pathPart && typeof pathPart === 'string') {
-      const legacyUrl = `${base}${pathPart.startsWith('/') ? pathPart : '/' + pathPart}`;
+      const pathNorm = pathPart.startsWith('/') ? pathPart : '/' + pathPart;
+      const legacyUrl = `https://arweave.net${pathNorm}`;
       const resolved = await wayfinder.resolveUrl({ originalUrl: legacyUrl });
-      if (typeof resolved === 'string') return resolved;
-      if (resolved && resolved.url) return resolved.url;
+      const urlStr = toUrlString(resolved);
+      if (urlStr) return urlStr;
     }
   } catch (err) {
     const isModuleError = err && (

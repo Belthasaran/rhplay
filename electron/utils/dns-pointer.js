@@ -48,15 +48,22 @@ function resolveDnshostPointer(manifest) {
   return hostnames;
 }
 
+const COREMF_TXT_PREFIX = 'coremf ';
+
 /**
- * Parse TXT record content: currentVersion=4 updatedat=1771707248 size=1540 sha256=0x... cid=...
- * @param {string} txt - Raw TXT content
+ * Parse TXT record content. Supports formats:
+ * - Legacy: "currentVersion=4 updatedat=1771707248 size=1540 sha256=0x... cid=..."
+ * - New:    "coremf currentVersion=6 updatedat=1772872293 size=1676 sha256=0x... cid=..."
+ * @param {string} txt - Raw TXT content (may start with "coremf ")
  * @returns {Object|null} { currentVersion, updatedat, size, sha256, cid } or null
  */
 function parseTxtRecord(txt) {
   if (!txt || typeof txt !== 'string') return null;
+  const stripped = txt.startsWith(COREMF_TXT_PREFIX)
+    ? txt.slice(COREMF_TXT_PREFIX.length)
+    : txt;
   const result = {};
-  const parts = txt.split(/\s+/);
+  const parts = stripped.split(/\s+/);
   for (const part of parts) {
     const eq = part.indexOf('=');
     if (eq <= 0) continue;
@@ -91,13 +98,18 @@ async function queryDnsTxt(hostname, options = {}) {
       { endpoints, timeout }
     );
     if (!response.answers || response.answers.length === 0) return null;
-    const txtAnswer = response.answers.find(a => a.type === 'TXT' || a.type === 16);
-    if (!txtAnswer || !txtAnswer.data) return null;
-    const data = txtAnswer.data;
-    const txtStr = Array.isArray(data) && combineTXT
-      ? combineTXT(data)
-      : (typeof data === 'string' ? data : (Buffer.isBuffer(data) || data instanceof Uint8Array ? Buffer.from(data).toString('utf8') : ''));
-    return parseTxtRecord(txtStr);
+    const txtAnswers = (response.answers || []).filter(a => (a.type === 'TXT' || a.type === 16) && a.data);
+    for (const answer of txtAnswers) {
+      const data = answer.data;
+      const txtStr = Array.isArray(data) && combineTXT
+        ? combineTXT(data)
+        : (typeof data === 'string' ? data : (Buffer.isBuffer(data) || data instanceof Uint8Array ? Buffer.from(data).toString('utf8') : ''));
+      if (txtStr.startsWith(COREMF_TXT_PREFIX)) {
+        const parsed = parseTxtRecord(txtStr);
+        if (parsed) return parsed;
+      }
+    }
+    return null;
   } catch (err) {
     console.warn(`[dns-pointer] TXT query failed for ${hostname}:`, err.message);
     return null;

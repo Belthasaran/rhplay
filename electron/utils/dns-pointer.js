@@ -91,12 +91,12 @@ async function queryDnsTxt(hostname, options = {}) {
       { endpoints, timeout }
     );
     if (!response.answers || response.answers.length === 0) return null;
-    const combined = combineTXT ? combineTXT(response.answers[0].data) : response.answers[0].data;
-    const txtStr = typeof combined === 'string'
-      ? combined
-      : (Buffer.isBuffer(combined) || combined instanceof Uint8Array
-        ? Buffer.from(combined).toString('utf8')
-        : (Array.isArray(combined) ? combined.map(c => typeof c === 'string' ? c : Buffer.from(c).toString('utf8')).join('') : ''));
+    const txtAnswer = response.answers.find(a => a.type === 'TXT' || a.type === 16);
+    if (!txtAnswer || !txtAnswer.data) return null;
+    const data = txtAnswer.data;
+    const txtStr = Array.isArray(data) && combineTXT
+      ? combineTXT(data)
+      : (typeof data === 'string' ? data : (Buffer.isBuffer(data) || data instanceof Uint8Array ? Buffer.from(data).toString('utf8') : ''));
     return parseTxtRecord(txtStr);
   } catch (err) {
     console.warn(`[dns-pointer] TXT query failed for ${hostname}:`, err.message);

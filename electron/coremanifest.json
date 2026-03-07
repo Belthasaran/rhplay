@@ -1,12 +1,13 @@
 {
-  "lastupdated": 1772104019,
-  "versionid": 5,
-  "version_string": "4",
+  "lastupdated": 1772872293,
+  "versionid": 6,
+  "version_string": "6",
   "waiting_ardrive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
   "waiting_ardrive_folder": "2ef50675-a5bb-45a7-aea8-21cb5603eff6",
   "waiting_index_data_txid": "V3meKuFxBtyRlFQXa-Qj1BvuhBAca9N6hnV48DKGjlI",
   "waiting_index_cid" : "bafybeifl2wscldmtq7554gtpo6x4kavjq46ldjgyy7c725cetjumxnq7oe",
   "smwcmaps" : "bafybeihwif5t4y6lkb6r5ad6gbffhkjelxdh72glliuo6zplkk7x22p4ka",
+  "dnshost_pointer" : [ "beta.coremanifest.smwresource.net" ],
   "coremanifest": {
     "signer_keys": [
       {
@@ -25,6 +26,7 @@
   },
   "beta/RHPLAY/win64/portable": {
     "pointer": "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
+    "dnshost_pointer" : [ "b_win64_p.coremanifest.smwresource.net" ],
     "source_filename": "RHTools-0.1.23-beta-portable.exe",
     "version": "0.1.23beta",
     "updated": 1771695907,
@@ -47,6 +49,7 @@
   },
   "beta/RHPLAY/linux64/AppImage": {
     "pointer": "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
+    "dnshost_pointer" : [ "b_linux64_p.smwresource.net" ],
     "source_filename": "RHTools-0.1.23-beta.AppImage",
     "version": "0.1.23beta",
     "updated": 1771695945,

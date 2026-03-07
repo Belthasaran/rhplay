@@ -78,11 +78,11 @@
   "dependencies": {
     "@ar.io/sdk": "^3.23.1",
     "@ar.io/wayfinder-core": "^1.9.1",
-    "@helia/http": "^3.0.0",
-    "@helia/verified-fetch": "^7.0.0",
     "@ceramicnetwork/http-client": "^6.4.0",
     "@didtools/pkh-ethereum": "^0.6.0",
     "@electron/fuses": "^2.0.0",
+    "@helia/http": "^3.0.0",
+    "@helia/verified-fetch": "^7.0.0",
     "@noble/curves": "^2.0.1",
     "@noble/post-quantum": "^0.5.2",
     "@noble/secp256k1": "^3.0.0",
@@ -103,6 +103,7 @@
     "crc": "^4.3.2",
     "crc-32": "^1.2.2",
     "did-session": "^4.0.0",
+    "dns-query": "^0.11.2",
     "dotenv": "^16.6.1",
     "ethers": "^6.16.0",
     "express": "^4.21.2",
@@ -137,7 +138,7 @@
   "build": {
     "appId": "com.rhtools.app",
     "electronFuses": {
-      "enableEmbeddedAsarIntegrityValidation" : true,
+      "enableEmbeddedAsarIntegrityValidation": true,
       "enableCookieEncryption": true
     },
     "productName": "RHTools",
@@ -352,18 +353,17 @@
       "node_modules/@ethersproject/keccak256/**/*",
       "node_modules/@ethersproject/networks/**/*",
       "node_modules/@ethersproject/logger/**/*",
-       "node_modules/@ethersproject/properties/**/*",
-       "node_modules/@ethersproject/strings/**/*",
-       "node_modules/@ethersproject/abstract-signer/**/*",
-       "node_modules/@ethersproject/abstract-provider/**/*",
-       "node_modules/@ethersproject/transactions/**/*",
-       "node_modules/@ethersproject/web/**/*",
-       "node_modules/@ethersproject/constants/**/*",
-       "node_modules/@ethersproject/bignumber/**/*",
-       "node_modules/@ethersproject/base64/**/*",
-       "node_modules/component-emitter/**/*",
-       "node_modules/wrappy/**/*",
-
+      "node_modules/@ethersproject/properties/**/*",
+      "node_modules/@ethersproject/strings/**/*",
+      "node_modules/@ethersproject/abstract-signer/**/*",
+      "node_modules/@ethersproject/abstract-provider/**/*",
+      "node_modules/@ethersproject/transactions/**/*",
+      "node_modules/@ethersproject/web/**/*",
+      "node_modules/@ethersproject/constants/**/*",
+      "node_modules/@ethersproject/bignumber/**/*",
+      "node_modules/@ethersproject/base64/**/*",
+      "node_modules/component-emitter/**/*",
+      "node_modules/wrappy/**/*",
       "node_modules/bn.js/**/*",
       "node_modules/base64url/**/*",
       "node_modules/tmp-promise/**/*",
@@ -490,8 +490,6 @@
       "node_modules/@protobufjs/pool/**/*",
       "node_modules/@protobufjs/utf8/**/*",
       "node_modules/@opentelemetry/sdk-metrics/**/*"
-
-
     ],
     "win": {
       "target": [

@@ -8,8 +8,8 @@
 
 const { getCurrentChannel, getCurrentPlatform } = require('./software-update-check');
 
-// URI record type per RFC 7553
-const DNS_TYPE_URI = 256;
+// URI record type per RFC 7553. Use string for dns-query/dns-packet (toType expects string).
+const DNS_TYPE_URI = 'UNKNOWN_256';
 
 /**
  * Resolve dnshost_pointer from manifest: section-specific or top-level
@@ -117,15 +117,14 @@ async function queryDnsTxt(hostname, options = {}) {
 }
 
 /**
- * Parse URI record RDATA per RFC 7553: priority weight "target"
- * dns-query returns answers with data - structure depends on record type
- * @param {*} data - URI record data from dns-query response
+ * Parse URI record RDATA per RFC 7553: priority (2) weight (2) target (char-string)
+ * dns-packet returns unknown types as raw Buffer via runknown
+ * @param {Buffer|Uint8Array|*} data - URI record rdata
  * @returns {Array<{priority:number, weight:number, target:string}>}
  */
 function parseUriRecords(data) {
   const out = [];
   if (!data) return out;
-  // dns-query / dns-packet may return URI as { priority, weight, target } or encoded
   if (typeof data === 'object' && data.priority != null && data.target) {
     out.push({
       priority: Number(data.priority) || 0,
@@ -136,8 +135,23 @@ function parseUriRecords(data) {
   }
   if (Array.isArray(data)) {
     for (const item of data) {
-      const parsed = parseUriRecords(item);
-      out.push(...parsed);
+      out.push(...parseUriRecords(item));
+    }
+    return out;
+  }
+  const buf = Buffer.isBuffer(data) ? data : (data instanceof Uint8Array ? Buffer.from(data) : null);
+  if (buf && buf.length >= 5) {
+    const priority = buf.readUInt16BE(0);
+    const weight = buf.readUInt16BE(2);
+    const targetLen = buf[4];
+    let target;
+    if (5 + targetLen <= buf.length) {
+      target = buf.slice(5, 5 + targetLen).toString('utf8');
+    } else {
+      target = buf.slice(4).toString('utf8');
+    }
+    if (target) {
+      out.push({ priority, weight, target: target.replace(/^"|"$/g, '') });
     }
   }
   return out;
@@ -162,7 +176,9 @@ async function queryDnsUri(hostname, options = {}) {
     if (!response.answers || response.answers.length === 0) return [];
 
     const records = [];
-    for (const ans of response.answers) {
+    const uriAnswers = (response.answers || []).filter(a =>
+      (a.type === 'URI' || a.type === 256 || a.type === 'UNKNOWN_256') && a.data);
+    for (const ans of uriAnswers) {
       const parsed = parseUriRecords(ans.data);
       records.push(...parsed);
     }

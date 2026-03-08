@@ -36,6 +36,52 @@
     "41451" : "Moderated",
     "41440" : "Obsoleted",
     "41420" : "Removed",
+
+
+"41830" : "Moderated",
+"41830_" : { "moderator" :"YouFailMe", "link":"https://smwc.me/1659063", "t" :"TaleSpin by by uriel2k3 (3/5/2026)", "result":"Accepted" },
+"41828" : "Moderated",
+"41828_": { "t":"Super Ordinary World by Pottsie (3/7/2026)", "moderator" :"YouFailMe", "link":"https://smwc.me/165906","result":"Accepted" },
+
+"41815" : "Moderated",
+"41815_" : { "t":"Hage World 2 (2026-03-06)", "moderator":"katun24", "result":"Accepted", "link":"https://smwc.me/1659104" },
+
+"41805" : "Rejected",
+"41805_" : { "t" :"- BALL BUSTER by NerDose (2/28/2026)", "moderator" :"ShadowBoxer_Sandshrew", "link":"https://smwc.me/1659501", "thread":"https://www.smwcentral.net/?p=viewthread&t=131986&page=1&pid=1663043#p1663043", "note":"Rejected at creators request to fix issues found after submission."  },
+
+"41782" : "???",
+"41782_" : {},
+
+"41773" : "Moderated",
+"41773_" : { "t" : "- Delirium by LightAligns (2/28/2026)", "result" : "Accepted", "link":"https://smwc.me/1659501"},
+
+"41740" : "Moderated",
+"41740_" : { "t":"Vanilla Hour - a collection of one-hour levels (2/20/2026)", "result":"Accepted", "moderator":"Stucat", "link":"https://smwc.me/1659093" },
+
+"41728" : "Rejected",
+"41728_" : { "t":"Lazycro (2026-02-22)", "result":"Rejected", "link":"https://smwc.me/1659104", "thread":"https://www.smwcentral.net/?p=viewthread&t=131941","moderator":"katun24", "note":"Thank you for submitting this hack. Unfortunately I have to reject it due to a violation of core value 8: 'Hacks should give the impression they have been well-tested'." },
+
+"41726" : "Moderated",
+"41726_" : { "moderator":"katun24", "link":"https://smwc.me/1659104", "result":"Accepted" },
+
+"41690" : "Moderated",
+"41690_" : { "t":"Sauna Mario World 2 - Pnaha - Feb 28 2026", "link":"https://smwc.me/1659465", "moderator":"LightAligns" },
+
+"41627" : "Rejected",
+"41627_" : { "t":"TaleSpin by uriel2k3 (2/17/2026)", "link":"https://smwc.me/1659063", "thread":"https://smwc.me/1661190", "note":"Removed at the creator's request so they can make updates" },
+
+"41558" : "Moderated",
+"41558_" : { "result":"Accepted", "moderator":"Shoujo", "link":"https://smwc.me/1659044", "t":"10yumps by Fyre150 (2026-03-05)" },
+
+"41548" : "Moderated",
+"41548_" : { "result":"Accepted", "moderator":"katun24", "link":"https://smwc.me/1659104", "t":"Valuable and Beautiful (2026-02-28)" },
+
+"41542" :"Moderated",
+"41542_" : { "t":"Shellshock by Riu_69 (2026-03-02)", "result":"Accepted", "moderator":"Shoujo", "link":"https://smwc.me/1659044"},
+
+"41413": "Moderated",
+"41413_": { "moderator":"Stucat", "t":"Lost Paths (1/16/2026)", "result":"Accepted", "link":"https://smwc.me/1659093" },
+
     "c6b7ca7ef563c5a4202071398984efd5544a5af1" : "Moderated",
     "8f4f7d05f58b1a6cfe3ac55b256795e3b4bc97c6" : "Rejected",
     "bd6d79c1a2e38dbba22b34000457afb7505cd596" : "Rejected",

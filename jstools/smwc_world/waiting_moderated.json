@@ -6,11 +6,12 @@
     "41531" : "Rejected",
     "41409" : "Rejected",
     "41429" : "Alert",
-    "41429_" : { "thread" :"https://www.smwcentral.net/?p=viewthread&t=131635", "link", "moderator":"AmperSam",
+    "41429_" : { "thread" :"https://www.smwcentral.net/?p=viewthread&t=131635", "link":"https://smwc.me/1659945", "moderator":"AmperSam",
+	         "nolog" : "true",
 	         "t":"Valuable and Beautiful by CarlSagan42",
                  "note" :"Removed from the waiting queue for a violation of B6 based on author's own admission and credible information shared with staff about the use of AI. This was discussed with the author directly before action was taken.", "result":"Removed" },
     "41390" : "Alert",
-    "41390_" : { "t":"Tis A Silly Place by CarlSagan42", "thread":"https://smwc.me/1659946", "link":"https://www.smwcentral.net/?p=viewthread&t=131636",
+    "41390_" : { "nolog" : "true", "t":"Tis A Silly Place by CarlSagan42", "thread":"https://smwc.me/1659946", "link":"https://www.smwcentral.net/?p=viewthread&t=131636",
         "result":"Removed", "moderator":"AmperSam", "note":"Removed from the section for a violation of B6 based on author's own admission and credible information shared with staff about the use of AI. This was discussed with the author directly before action was taken. "},
     "41362" : "Rejected",
     "41363" : "Rejected",
@@ -55,7 +56,7 @@
 "41805_" : { "t" :"- BALL BUSTER by NerDose (2/28/2026)", "moderator" :"ShadowBoxer_Sandshrew", "link":"https://smwc.me/1659501", "thread":"https://www.smwcentral.net/?p=viewthread&t=131986&page=1&pid=1663043#p1663043", "note":"Rejected at creators request to fix issues found after submission."  },
 
 "41782" : "???",
-"41782_" : {},
+"41782_" : { "nolog":"true" },
 
 "41773" : "Moderated",
 "41773_" : { "t" : "- Delirium by LightAligns (2/28/2026)", "result" : "Accepted", "link":"https://smwc.me/1659501"},

@@ -49,6 +49,47 @@ f.write("""
  <head>
     <title>Waiting Archive Index</title>
  </head>
+<script>
+ var openButton = null;
+ var closeButton = null;
+ var dialog = null;
+ var dialogMessage = null
+
+ document.addEventListener('DOMContentLoaded', (event) => {
+ openButton = document.getElementById('openDialogButton');
+ closeButton = document.getElementById('closeDialogButton');
+ dialog = document.getElementById('acknowledgmentDialog');
+ dialogMessage = document.getElementById('dialogMessage');
+
+ closeButton.addEventListener('click', () => {
+    dialog = document.getElementById('acknowledgmentDialog');
+    dialog.close();
+  });
+
+ })
+
+//openButton.addEventListener('click', () => {
+//    dialog.showModal();
+//});
+
+
+
+
+ function showNote(text) {
+ dialog.showModal()
+ p = document.createElement('p')
+ texto = document.createTextNode(text)
+ p.appendChild(texto)
+ dialogMessage.innerHTML = p.innerHTML.replaceAll("\\n","<br>")
+
+ //alert(text)
+ }
+
+ function modData(el) {
+ //alert(" GameID: " + el.parentElement.getAttribute("data-gameid"))
+ showNote(`GameID: ${el.parentElement.getAttribute("data-gameid")}\\nName: ${el.parentElement.getAttribute("data-name")}\\nResult: ${el.parentElement.getAttribute("data-mod-result")}\\nModerator: ${el.parentElement.getAttribute("data-mod-moderator")}\\nNote: ${el.parentElement.getAttribute("data-mod-note")}\\nLink: ${el.parentElement.getAttribute("data-mod-link")}\\nThread: ${el.parentElement.getAttribute("data-mod-thread")}\\nT:${el.parentElement.getAttribute("data-mod-t")}  `)
+ }
+</script>
 <style>
 body {
   background-color: #1e1e28;
@@ -59,22 +100,22 @@ body {
 }
 
 .m_alert {
-color: cyan;
+color: cyan !important;
 font-weight: bold;
 }
 
 .m_removed {
-  color: red;
+  color: red !important;
   font-weight: bold;
 }
 
 .m_waiting {
-  color: orange;
+  color: orange !important;
   font-weight: bold;
 }
 
 .m_moderated {
-   color: darkgreen;
+   color: darkgreen !important;
    font-weight: bold;
 }
 
@@ -160,6 +201,13 @@ ol {
 </style>
 
 <body>
+
+<dialog id="acknowledgmentDialog">
+    <p id="dialogMessage">This is a non-editable message for the user to acknowledge.</p>
+    <button id="closeDialogButton">OK</button>
+</dialog>
+
+
 """)
 
 
@@ -189,6 +237,9 @@ for record in items:
                     raise Exception("Found status")
                 elif record["gameid"] in status:
                     record["moderated"] = status[ record["gameid"] ]
+                    #
+                    if str(record["gameid"])+"_"  in status:
+                        record["moderated_d"] = status[ str(record["gameid"]) + "_" ]
                     raise Exception("Found status")
                 jsonf = open(os.path.join(indexdir, json_file), 'r')
                 jsond = json.load(jsonf)
@@ -225,6 +276,9 @@ for record in items:
         #
     modclass = ""
     modemoji = ""
+    moddata = {}
+    if "moderated_d" in record:
+        moddata = record["moderated_d"]
     if record["moderated"] == "Moderated" or re.match(r'^moderated.*', record["moderated"],re.I)  or re.match(r'^accepted.*', record["moderated"],re.I) :
         modclass = "m_moderated"
         modemoji = "✅ "
@@ -248,7 +302,16 @@ for record in items:
         modemoji = ""
     record["modclass"] = modclass
     record["modemoji"] = modemoji
-    f.write('<tr> <td>{timeStr}</td>  <td class="{modclass}">{modemoji}{moderated}</td>  <td><a href="https://arweave.net/{data_txid}">{gameid}</a></td> <td><a href="https://arweave.net/{data_txid}">{name}</a></td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))
+    record["moddata_s"] = ""
+    moddata_s = ' data-gameid="' + html.escape(str(record["gameid"]))  + '"'
+    moddata_s = moddata_s + ' data-name="' + html.escape(str(record["name"])) + '"'
+    for w in ['link','thread','moderator','t','note','result']:
+        if w in moddata:
+            moddata_s = moddata_s + " data-mod-" + w + '="' + html.escape(moddata[w])  + '"'
+        pass
+    record["moddata_s"] = moddata_s
+    f.write('<tr> <td>{timeStr}</td>  <td class="{modclass}"{moddata_s}>{modemoji}<a class="{modclass}" href="#" onclick="event.preventDefault(); modData(this)">{moderated}</a></td>  <td><a href="https://arweave.net/{data_txid}">{gameid}</a></td> <td><a href="https://ardrive.net/{data_txid}">{name}</a></td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))
+    f.write("\n")
     if x == 0:
         f.write('</thead><tbody>')
     f.write('\n')

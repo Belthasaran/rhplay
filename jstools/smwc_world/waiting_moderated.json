@@ -43,6 +43,35 @@
     "41440" : "Obsoleted",
     "41420" : "Removed",
 
+    "41561" :"Moderated",
+    "41561_" : { "t":"Kaizo no Notam (2026-03-13)", "result":"Accepted", "moderator":"katun24", "link":"https://smwc.me/1659104" },
+
+    "41538" : "Moderated",
+    "41538_" : { "t":"Super Flash World 2 (2026-03-08)", "result":"Accepted", "moderator":"katun24", "link":"https://smwc.me/1659104" },
+
+    "41691"  : "Moderated",
+    "41691" : { "t":"Super BanzaiChuck World (3/13/2026)", "moderator":"Stucat", "result":"Accepted", "link": "https://smwc.me/1659093"  },
+
+    "41808" : "Moderated",
+    "41808_" : { "t":"(Mar-11-26) Adventure in Gemstone Islands by Burst Man (Update)", "result" : "Accepted", "moderator":"Big Brawler", "link":"https://smwc.me/1659046" },
+"41906" : "Moderated",
+"41906_" : { "t" : "(Mar-13-26) Walkabout by SgN4T4N (Update)", "moderator":"Big Brawler", "result":"Accepted", "link":"https://smwc.me/1659046",
+   "note" :"https://www.smwcentral.net/?p=viewthread&t=131441&page=1&pid=1659942#p1659942" },
+
+"41898" : "Moderated",
+"41898_" : { "t":"(Mar-13-26) Tangle's Trip by sholmes", "moderator":"Big Brawler", "result":"Accepted", "link":"https://smwc.me/1659046"},
+
+"41895" : "Moderated",
+"41895_" : { "t":"echoestopia (2026-03-12)", "moderator" :"katun24", "result":"Accepted", "link":"https://smwc.me/1659104"},
+
+"41888" : "Moderated",
+"41888_" : { "t":"(Mar-11-26) Run Away from Mario's Past by Green Jerry", "moderator" :"Big Brawler", "link":"https://smwc.me/1659046"},
+
+"41839" : "Moderated",
+"41839_" : { "t":"PATHMAKER by Tob - 3/11/26", "moderator" : "BuzzerPop", "result" : "Accepted", "link":"https://smwc.me/1663331" },
+
+"41821" : "Moderated",
+"41821_" : { "t":"Sakaya Sanctuary by Neidoodle (Mar-12-2026)", "status":"Accepted", "moderator" :"MauroMufas", "link":"https://smwc.me/1663340"},
 
 "41830" : "Moderated",
 "41830_" : { "moderator" :"YouFailMe", "link":"https://smwc.me/1659063", "t" :"TaleSpin by by uriel2k3 (3/5/2026)", "result":"Accepted" },

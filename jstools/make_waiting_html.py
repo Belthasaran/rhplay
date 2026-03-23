@@ -7,11 +7,16 @@ import html
 import json
 import ast
 import traceback
+import shutil
+#from zipfile import ZipFile
+import py7zr
 from datetime import datetime, timezone
 
 basedir = pathlib.Path(__file__).parent.resolve()
 gamesdir = os.path.join(basedir)
 indexdir = os.path.join(basedir, '..', 'refmaterial', 'index7z')
+worlddir = os.path.join(basedir, 'smwc_world')
+uploaddir = os.path.join(worlddir, 'upload')
 status = {}
 
 cols = ['moderated','time','date','gameid','name','demo','sa1','collab','author','authors','submitter','combinedtype','length','fields_type','difficulty','warnings','url','section','tags','bps_files','json_files','data_txid']
@@ -47,6 +52,7 @@ f = open('waiting_index_ar.html', 'w')
 f.write("""
 <html>
  <head>
+    <meta charset="UTF-8">
     <title>Waiting Archive Index</title>
  </head>
 <script>
@@ -294,6 +300,10 @@ for record in items:
     elif record["moderated"] == "Alert" or re.match(r'^alert.*', record['moderated'],re.I):
         modemoji = "[‼️]"
         modclass = "m_alert"
+    elif record["moderated"] == "":
+        modemoji = "❓"
+        record["moderated"] = "Unknown"
+        modclass = ""
     else:
         modclass = ""
 
@@ -323,6 +333,24 @@ f.write("""
         </body>
         </html>
         """)
+
+
+#print(uploaddir)
+
+shutil.copy( os.path.join(worlddir, 'waiting_index_ar.html'),  uploaddir )
+#shutil.copy( os.path.join(worlddir, 'waiting_moderated.json'), uploaddir )
+shutil.copy( os.path.join(worlddir, 'waiting_packages_completed.json'), uploaddir)
+
+with py7zr.SevenZipFile(os.path.join(uploaddir,'waiting_metadata.bin'), 'w') as archive:
+    archive.write('waiting_moderated.json')
+    archive.write('waiting_processed.json')
+    archive.write('waiting_packages_completed.json')
+    archive.write('alreadyhave.json')
+    archive.write('needed.json')
+    archive.write('waiting.json')
+    archive.write('waiting_needed.json')
+    archive.write('waiting_queue.json')
+    #archive.write('games/'+gameid+'.json')
 
 
 

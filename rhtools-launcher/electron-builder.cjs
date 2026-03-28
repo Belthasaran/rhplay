@@ -7,10 +7,26 @@ const path = require('path');
 
 const rootDir = path.join(__dirname, '..');
 
+/**
+ * electron-builder uses --projectDir rhtools-launcher (no electron in that folder's node_modules).
+ * Pin the runtime version from the repo root install (same Electron as the main app).
+ */
+function getElectronVersionFromRoot() {
+  try {
+    const pkgPath = path.join(rootDir, 'node_modules', 'electron', 'package.json');
+    return require(pkgPath).version;
+  } catch (err) {
+    throw new Error(
+      'Could not read electron version from repo root node_modules/electron. Run npm install at the repository root.'
+    );
+  }
+}
+
 module.exports = {
   appId: 'com.rhtools.launcher',
   productName: 'RHTools Launcher',
   copyright: 'Copyright © RHTools',
+  electronVersion: getElectronVersionFromRoot(),
   directories: {
     output: path.join(rootDir, 'dist-builds-launcher'),
     buildResources: path.join(__dirname, 'build')
@@ -55,7 +71,8 @@ module.exports = {
     {
       from: path.join(rootDir, 'node_modules'),
       to: 'node_modules',
-      filter: ['**/*']
+      // Omit .bin trees: npm CLI stubs are not needed at runtime; broken symlinks here break packaging (e.g. stale serial-number).
+      filter: ['**/*', '!.bin/**', '!**/.bin/**']
     }
   ],
   extraResources: [

@@ -76,6 +76,8 @@ Examples:
 let progressLogStream = null;
 let progressDonePath = null;
 let progressLoggingInitialized = false;
+let savedConsoleLog = null;
+let savedConsoleError = null;
 
 function initProgressLogging(opts) {
   if (progressLoggingInitialized) {
@@ -94,15 +96,15 @@ function initProgressLogging(opts) {
     ensureDirectory(path.dirname(progressDonePath));
   }
 
-  const origLog = console.log.bind(console);
-  const origError = console.error.bind(console);
+  savedConsoleLog = console.log.bind(console);
+  savedConsoleError = console.error.bind(console);
 
   console.log = (...args) => {
     const message = args.join(' ');
     if (progressLogStream) {
       progressLogStream.write(`${message}\n`);
     }
-    origLog(...args);
+    savedConsoleLog(...args);
   };
 
   console.error = (...args) => {
@@ -110,7 +112,7 @@ function initProgressLogging(opts) {
     if (progressLogStream) {
       progressLogStream.write(`[error] ${message}\n`);
     }
-    origError(...args);
+    savedConsoleError(...args);
   };
 }
 
@@ -128,12 +130,23 @@ function finalizeProgress(success) {
     } catch (err) {
       // ignore fs errors on finalize
     }
+    progressDonePath = null;
   }
+  if (savedConsoleLog && savedConsoleError) {
+    console.log = savedConsoleLog;
+    console.error = savedConsoleError;
+    savedConsoleLog = null;
+    savedConsoleError = null;
+  }
+  progressLoggingInitialized = false;
 }
 
 function exitWithError(message) {
   if (progressLoggingInitialized) {
     finalizeProgress(false);
+  }
+  if (process.env.RHPLAY_PREPARE_DB_THROW === '1') {
+    throw new Error(message);
   }
   const errorPayload = { success: false, error: message };
   console.error(JSON.stringify(errorPayload));

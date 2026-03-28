@@ -1,3 +1,8 @@
+- 2026-03-28: core manifest (documentation only — no SQL migration)
+  - Description: Documented optional `rhtools-launcher` app and future manifest key pattern for launcher self-updates (e.g. `beta/RHToolsLauncher/win64/portable` alongside existing `beta/RHPLAY/...`). The existing `launcher_allowlist` array of `[note, sha256]` remains the registry of allowed SHA256 hashes for past official binaries.
+  - Rationale: Separates minimal launcher distribution from full RHPlay; launch gate checks manifest entry `sha256` and `launcher_allowlist`.
+  - Tables/columns: none (JSON manifest only in `coremanifest.json` / `coremanifest.dat` payload).
+
 - 2025-01-XX: screenshot - Screenshot Sequence Number
   - Description: Add sequence_no column to res_screenshots table to track screenshot ordering
   - Rationale: The images array in source metadata has an ordering where the first entry is typically the main screenshot or title. This column preserves that ordering when screenshots are inserted into the database.

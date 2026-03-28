@@ -102,6 +102,20 @@ function findManifestEntry(manifest, channel, platform, format) {
 }
 
 /**
+ * Find manifest entry for an arbitrary app id (e.g. RHPLAY, RHToolsLauncher).
+ */
+function findManifestEntryForApp(manifest, channel, appId, platform, format) {
+  const key = `${channel}/${appId}/${platform}/${format}`;
+  const normalizedKey = key.toLowerCase();
+  for (const manifestKey of Object.keys(manifest)) {
+    if (manifestKey.toLowerCase() === normalizedKey) {
+      return { key: manifestKey, entry: manifest[manifestKey] };
+    }
+  }
+  return null;
+}
+
+/**
  * Check for software updates
  * 
  * @returns {Object} { updateAvailable: boolean, currentVersion: string, availableVersion: string|null, entry: object|null, error?: string }
@@ -201,5 +215,6 @@ module.exports = {
   getCurrentAppVersion,
   getCurrentChannel,
   getCurrentPlatform,
-  compareVersions
+  compareVersions,
+  findManifestEntryForApp
 };

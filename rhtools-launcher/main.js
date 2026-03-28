@@ -146,35 +146,54 @@ function sendOperationProgress(payload) {
   }
 }
 
+const progressPagePath = path.join(__dirname, 'progress-window.html');
+
+/**
+ * Opens or reopens the progress window and resolves when the page has finished loading
+ * (required so IPC listeners are ready and a new operation gets a fresh log).
+ */
 function openProgressWindow(title) {
-  if (progressWindow && !progressWindow.isDestroyed()) {
-    progressWindow.setTitle(title || 'Progress');
-    progressWindow.focus();
-    return;
-  }
   const preloadPath = path.join(__dirname, 'preload.js');
-  /** Self-contained `progress-window.html` (no Vite): avoids blank window from ES-module / chunk load failures in a second BrowserWindow (file:// or dev-server edge cases). */
-  const progressPagePath = path.join(__dirname, 'progress-window.html');
-  progressWindow = new BrowserWindow({
-    parent: mainWindow || undefined,
-    modal: !!mainWindow,
-    width: 580,
-    height: 520,
-    show: true,
-    backgroundColor: '#1a1d23',
-    webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false
-    },
-    title: title || 'Progress'
-  });
-  progressWindow.webContents.on('did-fail-load', (_event, code, desc, url) => {
-    console.error('[launcher] progress window did-fail-load:', code, desc, url);
-  });
-  progressWindow.loadFile(progressPagePath);
-  progressWindow.on('closed', () => {
-    progressWindow = null;
+  return new Promise((resolve, reject) => {
+    const onFail = (_e, code, desc, url) => {
+      console.error('[launcher] progress window did-fail-load:', code, desc, url);
+      reject(new Error(desc || `progress window load failed (${code})`));
+    };
+    const onLoad = () => resolve();
+
+    if (progressWindow && !progressWindow.isDestroyed()) {
+      progressWindow.setTitle(title || 'Progress');
+      progressWindow.webContents.once('did-finish-load', onLoad);
+      progressWindow.webContents.once('did-fail-load', onFail);
+      progressWindow.loadFile(progressPagePath);
+      progressWindow.focus();
+      return;
+    }
+
+    progressWindow = new BrowserWindow({
+      parent: mainWindow || undefined,
+      modal: !!mainWindow,
+      width: 580,
+      height: 520,
+      show: true,
+      backgroundColor: '#1a1d23',
+      webPreferences: {
+        preload: preloadPath,
+        contextIsolation: true,
+        nodeIntegration: false
+      },
+      title: title || 'Progress'
+    });
+    progressWindow.webContents.on('did-fail-load', (_event, code, desc, url) => {
+      console.error('[launcher] progress window did-fail-load:', code, desc, url);
+    });
+    progressWindow.webContents.once('did-finish-load', onLoad);
+    progressWindow.webContents.once('did-fail-load', onFail);
+    progressWindow.loadFile(progressPagePath);
+    progressWindow.on('closed', () => {
+      releaseLongOperationLock();
+      progressWindow = null;
+    });
   });
 }
 
@@ -185,19 +204,25 @@ function closeProgressWindow() {
   progressWindow = null;
 }
 
-function beginLongOperation(title) {
+async function beginLongOperation(title) {
   if (longOperationActive) {
     return false;
   }
   longOperationActive = true;
-  openProgressWindow(title);
+  try {
+    await openProgressWindow(title);
+  } catch (err) {
+    longOperationActive = false;
+    console.error('[launcher] beginLongOperation:', err.message);
+    return false;
+  }
   sendOperationProgress({ title: title || 'Progress', message: 'Starting…' });
   return true;
 }
 
-function endLongOperation() {
+/** Allow starting another operation; does not close the progress window (user closes manually). */
+function releaseLongOperationLock() {
   longOperationActive = false;
-  closeProgressWindow();
 }
 
 function bootstrapManifestsSafe() {
@@ -295,19 +320,29 @@ function registerIpc() {
   });
 
   ipcMain.handle('launcher:download-rhplay', async () => {
-    if (!beginLongOperation('Download RHPlay')) {
+    if (!(await beginLongOperation('Download RHPlay'))) {
       return { success: false, error: 'Another operation is already in progress.' };
     }
     const cfg = readLauncherConfig();
     const { platform, format } = getCurrentPlatform();
     const manifest = manifestResolver.loadCoreManifest();
     if (!manifest) {
-      endLongOperation();
+      sendOperationProgress({
+        kind: 'download',
+        message: 'No core manifest loaded',
+        error: true
+      });
+      releaseLongOperationLock();
       return { success: false, error: 'No core manifest loaded' };
     }
     const found = findManifestEntryForApp(manifest, cfg.channel || 'beta', 'RHPLAY', platform, format);
     if (!found || !found.entry) {
-      endLongOperation();
+      sendOperationProgress({
+        kind: 'download',
+        message: 'No RHPLAY manifest entry for this platform',
+        error: true
+      });
+      releaseLongOperationLock();
       return { success: false, error: 'No RHPLAY manifest entry for this platform' };
     }
     const entry = found.entry;
@@ -331,7 +366,7 @@ function registerIpc() {
       });
       return { success: false, error: err.message || String(err) };
     } finally {
-      endLongOperation();
+      releaseLongOperationLock();
     }
   });
 
@@ -484,18 +519,30 @@ function registerIpc() {
   });
 
   ipcMain.handle('launcher:provision-databases', async () => {
-    if (!beginLongOperation('Provision databases')) {
+    if (!(await beginLongOperation('Provision databases'))) {
       return { success: false, error: 'Another operation is already in progress.' };
     }
     sendOperationProgress({ kind: 'db', operation: 'provision', message: 'Starting…' });
     const manifestPath = getDbManifestPathForLauncher();
     const scriptPath = getPrepareDatabasesScriptPath();
     if (!manifestPath || !fs.existsSync(manifestPath)) {
-      endLongOperation();
+      sendOperationProgress({
+        kind: 'db',
+        operation: 'provision',
+        message: `dbmanifest not found: ${manifestPath || '(missing)'}`,
+        error: true
+      });
+      releaseLongOperationLock();
       return { success: false, error: `dbmanifest not found: ${manifestPath || '(missing)'}` };
     }
     if (!fs.existsSync(scriptPath)) {
-      endLongOperation();
+      sendOperationProgress({
+        kind: 'db',
+        operation: 'provision',
+        message: `prepare_databases not found: ${scriptPath}`,
+        error: true
+      });
+      releaseLongOperationLock();
       return { success: false, error: `prepare_databases not found: ${scriptPath}` };
     }
     const userDataDir = getUserDataDir();
@@ -513,7 +560,7 @@ function registerIpc() {
     } catch (err) {
       return { success: false, error: err.message || String(err) };
     } finally {
-      endLongOperation();
+      releaseLongOperationLock();
     }
   });
 
@@ -530,7 +577,7 @@ function registerIpc() {
     if (!check.updatesAvailable || !check.updates || check.updates.length === 0) {
       return { success: true, message: 'No database updates pending', skipped: true };
     }
-    if (!beginLongOperation('Apply database updates')) {
+    if (!(await beginLongOperation('Apply database updates'))) {
       return { success: false, error: 'Another operation is already in progress.' };
     }
     sendOperationProgress({ kind: 'db', operation: 'update', message: 'Applying updates…' });
@@ -550,23 +597,35 @@ function registerIpc() {
     } catch (err) {
       return { success: false, error: err.message || String(err) };
     } finally {
-      endLongOperation();
+      releaseLongOperationLock();
     }
   });
 
   ipcMain.handle('launcher:reprovision-databases', async () => {
-    if (!beginLongOperation('Re-provision databases')) {
+    if (!(await beginLongOperation('Re-provision databases'))) {
       return { success: false, error: 'Another operation is already in progress.' };
     }
     sendOperationProgress({ kind: 'db', operation: 'reprovision', message: 'Starting…' });
     const manifestPath = getDbManifestPathForLauncher();
     const scriptPath = getPrepareDatabasesScriptPath();
     if (!manifestPath || !fs.existsSync(manifestPath)) {
-      endLongOperation();
+      sendOperationProgress({
+        kind: 'db',
+        operation: 'reprovision',
+        message: `dbmanifest not found: ${manifestPath || '(missing)'}`,
+        error: true
+      });
+      releaseLongOperationLock();
       return { success: false, error: `dbmanifest not found: ${manifestPath || '(missing)'}` };
     }
     if (!fs.existsSync(scriptPath)) {
-      endLongOperation();
+      sendOperationProgress({
+        kind: 'db',
+        operation: 'reprovision',
+        message: `prepare_databases not found: ${scriptPath}`,
+        error: true
+      });
+      releaseLongOperationLock();
       return { success: false, error: `prepare_databases not found: ${scriptPath}` };
     }
     const userDataDir = getUserDataDir();
@@ -583,11 +642,12 @@ function registerIpc() {
     } catch (err) {
       return { success: false, error: err.message || String(err) };
     } finally {
-      endLongOperation();
+      releaseLongOperationLock();
     }
   });
 
   ipcMain.handle('launcher:close-progress-window', async () => {
+    releaseLongOperationLock();
     closeProgressWindow();
     return { success: true };
   });

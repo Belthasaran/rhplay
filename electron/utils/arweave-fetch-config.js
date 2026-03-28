@@ -289,10 +289,6 @@ async function fetchFromArweave(options) {
   await pipeline(bodyStream, tracker, writeStream);
   writeStream.close();
 
-  if (downloadTracker) {
-    downloadTracker.complete(spec);
-  }
-
   if (expectedSha256) {
     const actualSha = sha256File(tempPath);
     if (actualSha !== expectedSha256) {
@@ -302,6 +298,10 @@ async function fetchFromArweave(options) {
   }
 
   await fs.promises.rename(tempPath, destPath);
+
+  if (downloadTracker) {
+    downloadTracker.complete(spec);
+  }
 }
 
 function clearArweaveConfigCache() {

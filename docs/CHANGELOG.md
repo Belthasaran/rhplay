@@ -1,4 +1,4 @@
-- **RHTools Launcher — progress window (AppImage)**: `progress-window.html` is in `extraResources`, `asarUnpack`, and path resolution tries `resources/`, `resources/app.asar.unpacked/`, and `app.asar`→`app.asar.unpacked` next to main (no `app.isPackaged` gate). The window loads via `loadURL(pathToFileURL(...))` instead of `loadFile`.
+- **RHTools Launcher — progress window (AppImage)**: `electron-builder` `files` now uses an explicit FileSet `from: __dirname` with a `filter` so `progress-window.html` is copied into the app (bare string entries did not reliably include it). `asarUnpack` includes `progress-window.html`; `main.js` resolves `app.asar.unpacked/progress-window.html` when needed and uses `loadFile`.
 
 - **RHTools Launcher — database paths**: Launcher `app.setPath('userData')` incorrectly used `RHTools`; the main app uses Electron’s default from package.json `name` (`rhtools`). Launcher now resolves the same folder as RHTools for `provisioned.json` / `*.db`. UI shows **Database folder** and `provisioned.json` path under dbmanifest. Non-Electron fallback in `manifest-resolver.getUserDataDir()` updated to `rhtools` for parity.
 

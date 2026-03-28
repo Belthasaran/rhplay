@@ -4,12 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RHTools</title>
-    <script type="module" crossorigin src="./assets/index-DY2xViHt.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CpUzyvKR.css">
+    <script>
+      // Debug script that runs immediately
+      console.log('[index.html] Script tag executing');
+      console.log('[index.html] window.location.href:', window.location.href);
+      console.log('[index.html] window.location.search:', window.location.search);
+      window.addEventListener('DOMContentLoaded', () => {
+        console.log('[index.html] DOMContentLoaded fired');
+        console.log('[index.html] #app element exists:', !!document.getElementById('app'));
+      });
+      window.addEventListener('load', () => {
+        console.log('[index.html] Window load event fired');
+      });
+    </script>
+    <script type="module" crossorigin src="./assets/index-BaMPOM3O.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DtFS189x.css">
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- Fallback content if Vue doesn't mount -->
+      <div style="padding: 20px; background: yellow; color: black; display: none;" id="vue-fallback">
+        <h1>Vue Not Mounted</h1>
+        <p>If you see this, Vue failed to mount.</p>
+        <p>Check console for errors.</p>
+      </div>
+    </div>
+    <script>
+      // Show fallback if Vue doesn't mount within 2 seconds
+      setTimeout(() => {
+        const app = document.getElementById('app');
+        if (app && app.children.length === 1 && app.children[0].id === 'vue-fallback') {
+          document.getElementById('vue-fallback').style.display = 'block';
+          console.error('[index.html] Vue did not mount - showing fallback');
+        }
+      }, 2000);
+    </script>
   </body>
-  </html>
+</html>
 
 

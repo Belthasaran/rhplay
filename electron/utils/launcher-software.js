@@ -7,7 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const manifestResolver = require('./manifest-resolver');
 const softwareUpdateManager = require('./software-update-manager');
-const { compareVersions } = require('./software-update-check');
+const { compareVersions, findManifestEntryForApp } = require('./software-update-check');
 
 const RELEASES_DIR = 'releases';
 
@@ -136,6 +136,39 @@ function listInstalledReleases(userDataDir, appId) {
   return out;
 }
 
+/**
+ * Newest installed RHPlay build whose version is >= manifest version and passes SHA256 allowlist.
+ * Installed list is sorted newest-first; returns first matching row.
+ */
+function findBestLaunchCandidate(userDataDir, manifest, channel, platform, format) {
+  if (!manifest) {
+    return null;
+  }
+  const found = findManifestEntryForApp(manifest, channel, 'RHPLAY', platform, format);
+  if (!found || !found.entry) {
+    return null;
+  }
+  const manifestVersion = found.entry.version != null ? String(found.entry.version).trim() : '';
+  if (!manifestVersion) {
+    return null;
+  }
+  const installed = listInstalledReleases(userDataDir, 'RHPLAY');
+  for (const item of installed) {
+    if (compareVersions(item.version, manifestVersion) < 0) {
+      continue;
+    }
+    const gate = isExecutableAllowedToRun(item.path, manifest, found.entry);
+    if (gate.ok) {
+      return {
+        path: item.path,
+        version: item.version,
+        filename: item.filename
+      };
+    }
+  }
+  return null;
+}
+
 module.exports = {
   RELEASES_DIR,
   getReleasesRoot,
@@ -144,5 +177,6 @@ module.exports = {
   isExecutableAllowedToRun,
   buildAllowedSha256Set,
   listInstalledReleases,
+  findBestLaunchCandidate,
   sha256File
 };

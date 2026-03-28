@@ -19,7 +19,9 @@
   "launcher_allowlist" : [
 	  ["note1", "adb0b0a13cfd4954ada79a589c2d11814f847e0a8f833f2f3aa72393a9448d20"],
 	  ["note2", "e1df9fdf2e2454a70477af6f22140e5017c9415fe6feed03fb1053d81cd89efd"],
-	  ["note3", "10c2b5b6fd0db4fcd62501028db8f73cb3a2b36a146d4c4279574c5a1976a851"]
+	  ["note3", "10c2b5b6fd0db4fcd62501028db8f73cb3a2b36a146d4c4279574c5a1976a851"],
+	  ["0.1.28beta.l", "e34b47263276b38ac037e8517b7d35d34c219759b324147506e509a19a1951b1"],
+          ["0.1.28betae.w", "c2ee665f79c433f264172ea04c5ad520538a93f0e0cef9ae95f91c48f60ae0c6"]
   ],
   "beta/dbmanifest.json": {
     "version": "15",

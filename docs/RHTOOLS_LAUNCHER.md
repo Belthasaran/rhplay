@@ -6,7 +6,7 @@ The RHTools Launcher is an optional Electron application in `rhtools-launcher/`.
 
 - Download RHPlay (and future apps) from the signed `coremanifest.json` into `releases/<AppId>/<version>/` under program data.
 - Enforce launch safety: an executable is only started if its SHA256 matches the manifest entry for that platform or appears in `launcher_allowlist` (past official builds).
-- Run database provisioning and in-place updates using `prepare_databases.run()` in-process (no CLI subprocess), via `electron/utils/database-update-inprocess.js`.
+- Run database provisioning and in-place updates by spawning `prepare_databases.js` via `electron/utils/database-update-executor.js` (same streaming progress as the main app’s Database Update flow), with a modal progress window (`rhtools-launcher/renderer/progress.html`) fed by `launcher:operation-progress`. In-process `database-update-inprocess.js` remains available for tooling/tests.
 - Prompt for the Super Mario World ROM when required, using the same legal notice and warranty text as the Database Provisioner (`electron/utils/smw-rom.js`, UI aligned with `Provisioner.vue`).
 - Channel selection (`beta` / `stable`) is stored in `launcher-config.json`; only beta entries exist in the manifest today.
 
@@ -40,5 +40,6 @@ Artifacts are written to `dist-builds-launcher/` (e.g. `rhtools-launcher-<versio
 
 - `electron/utils/launcher-software.js` — releases paths, download-to-releases, allowlist checks.
 - `electron/utils/smw-rom.js` — shared ROM validation and copy.
-- `electron/utils/database-update-inprocess.js` — `prepare_databases` integration.
+- `electron/utils/database-update-executor.js` — spawn `prepare_databases` for provision/update/reprovision (launcher uses this).
+- `electron/utils/database-update-inprocess.js` — optional in-process `prepare_databases.run()` for tests/tooling.
 - `electron/installer/prepare_databases.js` — `RHPLAY_PREPARE_DB_THROW=1` causes `exitWithError` to throw instead of `process.exit` when embedded in-process.

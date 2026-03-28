@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('launcherAPI', {
   onDownloadProgress: (cb) => {
     ipcRenderer.on('launcher:download-progress', (_e, payload) => cb(payload));
   },
+  onOperationProgress: (cb) => {
+    ipcRenderer.on('launcher:operation-progress', (_e, payload) => cb(payload));
+  },
+  closeProgressWindow: () => ipcRenderer.invoke('launcher:close-progress-window'),
   pickExecutable: () => ipcRenderer.invoke('launcher:pick-executable'),
   launchRhplay: (exePath) => ipcRenderer.invoke('launcher:launch-rhplay', exePath),
   checkRom: () => ipcRenderer.invoke('launcher:check-rom'),

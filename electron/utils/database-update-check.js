@@ -172,8 +172,81 @@ function checkForDatabaseUpdates() {
   }
 }
 
+/**
+ * Per-database row for UI: current vs manifest target and coarse status.
+ * @returns {{ rows: Array<{dbName, currentVersion, targetVersion, status}>, updatesAvailable: boolean, error?: string }}
+ */
+function getDatabaseProvisionStatus() {
+  try {
+    const userDataDir = manifestResolver.getUserDataDir();
+    const provisioned = loadProvisionedJson(userDataDir);
+    let dbmanifest;
+    try {
+      dbmanifest = manifestResolver.loadDbmanifest();
+    } catch (err) {
+      return {
+        rows: [],
+        updatesAvailable: false,
+        error: err.message || String(err)
+      };
+    }
+    if (!dbmanifest) {
+      return { rows: [], updatesAvailable: false, error: 'No dbmanifest loaded' };
+    }
+
+    const rows = [];
+    let updatesAvailable = false;
+
+    for (const dbName of UPDATEABLE_DATABASES) {
+      const manifestEntry = dbmanifest[dbName];
+      if (!manifestEntry) {
+        rows.push({
+          dbName,
+          currentVersion: '—',
+          targetVersion: '—',
+          status: 'unknown'
+        });
+        continue;
+      }
+
+      const targetVersion = String(manifestEntry.version != null ? manifestEntry.version : '0').trim();
+      const provisionedEntry = provisioned.targets && provisioned.targets[dbName];
+      const currentVersion = provisionedEntry
+        ? String(provisionedEntry.version != null ? provisionedEntry.version : '0').trim()
+        : '0';
+
+      let status;
+      if (!provisionedEntry) {
+        status = 'not-provisioned';
+        updatesAvailable = true;
+      } else if (compareVersions(currentVersion, targetVersion) >= 0) {
+        status = 'up-to-date';
+      } else {
+        status = 'update-available';
+        updatesAvailable = true;
+      }
+
+      rows.push({
+        dbName,
+        currentVersion,
+        targetVersion,
+        status
+      });
+    }
+
+    return { rows, updatesAvailable };
+  } catch (err) {
+    return {
+      rows: [],
+      updatesAvailable: false,
+      error: err.message || String(err)
+    };
+  }
+}
+
 module.exports = {
   checkForDatabaseUpdates,
+  getDatabaseProvisionStatus,
   canPatchDatabase,
   getPatchesToApply,
   loadProvisionedJson,

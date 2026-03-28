@@ -99,6 +99,33 @@
 
     <section class="card">
       <h2>Databases</h2>
+      <p v-if="dbmanifestError" class="error">dbmanifest: {{ dbmanifestError }}</p>
+      <p v-else-if="dbmanifestPath" class="meta hint">
+        Manifest file: <code>{{ dbmanifestPath }}</code>
+        <span v-if="dbmanifestSource"> ({{ dbmanifestSource }})</span>
+      </p>
+      <p v-if="dbStatus?.error" class="error">{{ dbStatus.error }}</p>
+      <div v-else-if="dbStatus?.rows?.length" class="db-table-wrap">
+        <table class="db-table">
+          <thead>
+            <tr>
+              <th>Database</th>
+              <th>Installed</th>
+              <th>Target</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, idx) in dbStatus.rows" :key="idx">
+              <td class="db-name">{{ row.dbName }}</td>
+              <td>{{ row.currentVersion }}</td>
+              <td>{{ row.targetVersion }}</td>
+              <td :class="statusClass(row.status)">{{ formatDbStatus(row.status) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="dbStatus.updatesAvailable" class="hint warn">One or more databases need an update or provisioning.</p>
+      </div>
       <div class="actions">
         <button type="button" @click="doProvision" :disabled="busy">Provision databases</button>
         <button type="button" @click="doDbUpdate" :disabled="busy">Apply database updates</button>
@@ -130,6 +157,33 @@ const bestLaunchCandidate = ref(null);
 const busy = ref(false);
 const downloadMsg = ref('');
 const dbMsg = ref('');
+const dbmanifestPath = ref('');
+const dbmanifestSource = ref('');
+const dbmanifestError = ref(null);
+const dbStatus = ref(null);
+
+function formatDbStatus(status) {
+  switch (status) {
+    case 'up-to-date':
+      return 'Up to date';
+    case 'update-available':
+      return 'Update available';
+    case 'not-provisioned':
+      return 'Not provisioned';
+    case 'unknown':
+      return 'Unknown';
+    default:
+      return status || '—';
+  }
+}
+
+function statusClass(status) {
+  return {
+    'st-ok': status === 'up-to-date',
+    'st-warn': status === 'update-available' || status === 'not-provisioned',
+    'st-muted': status === 'unknown'
+  };
+}
 
 async function refreshState() {
   const s = await api.getState();
@@ -140,6 +194,10 @@ async function refreshState() {
   entryError.value = s.entryError || null;
   installedRhplay.value = s.installedRhplay || [];
   bestLaunchCandidate.value = s.bestLaunchCandidate || null;
+  dbmanifestPath.value = s.dbmanifestPath || '';
+  dbmanifestSource.value = s.dbmanifestSource || '';
+  dbmanifestError.value = s.dbmanifestError || null;
+  dbStatus.value = s.dbStatus || null;
 }
 
 async function ensureRom() {
@@ -170,8 +228,10 @@ async function browseRomFile() {
 
 onMounted(async () => {
   await refreshState();
-  api.onDownloadProgress((p) => {
-    downloadMsg.value = p.message || JSON.stringify(p);
+  api.onOperationProgress((p) => {
+    if (p.kind === 'download' && p.message) {
+      downloadMsg.value = p.message;
+    }
   });
   await ensureRom();
 });
@@ -234,6 +294,7 @@ async function doProvision() {
   try {
     const r = await api.provisionDatabases();
     dbMsg.value = r.success ? 'Provision finished.' : r.error || JSON.stringify(r);
+    await refreshState();
   } finally {
     busy.value = false;
   }
@@ -247,6 +308,7 @@ async function doDbUpdate() {
     const r = await api.runDbUpdate();
     dbMsg.value =
       r.success === false ? r.error || JSON.stringify(r) : r.message || JSON.stringify(r);
+    await refreshState();
   } finally {
     busy.value = false;
   }
@@ -260,6 +322,7 @@ async function doReprovision() {
   try {
     const r = await api.reprovisionDatabases();
     dbMsg.value = r.success ? 'Re-provision finished.' : r.error || JSON.stringify(r);
+    await refreshState();
   } finally {
     busy.value = false;
   }
@@ -345,6 +408,42 @@ button.small {
   white-space: pre-wrap;
   margin-top: 0.5rem;
   color: #bdc;
+}
+.db-table-wrap {
+  margin: 0.75rem 0 1rem;
+  overflow-x: auto;
+}
+.db-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.db-table th,
+.db-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #2a3140;
+}
+.db-table th {
+  color: #9aa;
+  font-weight: 600;
+}
+.db-name {
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+.st-ok {
+  color: #8dcf8d;
+}
+.st-warn {
+  color: #e8c070;
+}
+.st-muted {
+  color: #778;
+}
+.warn {
+  color: #e8c070;
+  margin-top: 0.5rem;
 }
 .install-list {
   list-style: none;

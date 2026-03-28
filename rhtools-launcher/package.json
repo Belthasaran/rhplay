@@ -1,0 +1,25 @@
+{
+  "name": "rhtools-launcher",
+  "version": "0.1.0-beta",
+  "description": "RHTools Launcher — download and manage RHTools apps",
+  "main": "main.js",
+  "author": "RHTools Team",
+  "license": "MIT",
+  "scripts": {
+    "renderer:dev": "vite --config vite.config.cjs",
+    "renderer:build": "vite build --config vite.config.cjs",
+    "start": "cross-env ELECTRON_RUN_AS_NODE= ../node_modules/.bin/electron .",
+    "start:dev": "cross-env ELECTRON_RUN_AS_NODE= ELECTRON_START_URL=http://localhost:5174 ../node_modules/.bin/electron .",
+    "build:win": "npm run renderer:build && ../node_modules/.bin/electron-builder --win portable --config electron-builder.cjs",
+    "build:linux": "npm run renderer:build && ../node_modules/.bin/electron-builder --linux AppImage --config electron-builder.cjs"
+  },
+  "dependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0"
+  }
+}

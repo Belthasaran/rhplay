@@ -44,6 +44,28 @@ cd /home/main/proj/rhtools && npx electron electron/main.js
 - `docs/CLIENTDATA_USER_ANNOTATIONS.md` - User annotation guide
 - `devdocs/SOFTWARE_UPDATE_SYSTEM.md` - Software update system documentation
 
+### RHTools Launcher (`rhtools-launcher/`)
+
+**Purpose**: Optional separate Electron app to download RHPlay into the program data `releases/` folder, run database provisioning/updates in-process (no `prepare_databases` subprocess), and launch verified binaries (SHA256 must match the manifest entry or `launcher_allowlist`).
+
+**Development** (from repo root; clears `ELECTRON_RUN_AS_NODE` so `require('electron')` resolves to the real API):
+
+```bash
+npm run launcher:renderer:build   # first time / after UI changes
+npm run launcher:dev              # Vite URL on 5174 + launcher main
+# or
+./rhtools-launcher/smart-start.sh
+```
+
+**Production builds** (outputs under `dist-builds-launcher/`):
+
+```bash
+npm run build:launcher:win
+npm run build:launcher:linux
+```
+
+**Documentation**: `docs/RHTOOLS_LAUNCHER.md`
+
 ---
 
 ### updategames.js

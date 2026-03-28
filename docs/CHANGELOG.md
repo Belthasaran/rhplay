@@ -1,3 +1,5 @@
+- **RHTools Launcher (optional)** — New app in `rhtools-launcher/`: download RHPlay to program data `releases/`, DB provision/update via in-process `prepare_databases`, launch with SHA256 allowlist (`launcher_allowlist` + manifest entry), SMW ROM parity with provisioner, channel `beta`/`stable` in `launcher-config.json`. Build: `npm run build:launcher:win` / `build:launcher:linux`. See [`docs/RHTOOLS_LAUNCHER.md`](RHTOOLS_LAUNCHER.md).
+
 - **0.1.28beta (2026-03-08)** – Release summary: [`docs/RELEASE_0.1.28beta_20260308.md`](RELEASE_0.1.28beta_20260308.md). Highlights: DNS pointer for core manifest, Arweave/Wayfinder resiliency, Load Manual dialog and fixes (7z packaged app, Open Page file-type detection), IPFS improvements and progress throttle, Maps Reference in USB2SNES, moderation results for waiting queue.
 
 - P20260222

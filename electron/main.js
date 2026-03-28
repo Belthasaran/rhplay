@@ -9,7 +9,7 @@ const { DatabaseManager } = require('./database-manager');
 const { registerDatabaseHandlers } = require('./ipc-handlers');
 const StartupPathValidator = require('./startup-path-validator');
 const { queueRhpakPath, drainRhpakQueue } = require('./rhpak-queue');
-const { SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
+const smwRom = require('./utils/smw-rom');
 const { bootstrapManifests, getDbmanifestPath, getUserSpecificTempBase } = require('./utils/manifest-resolver');
 const { checkForUpdates: checkCoreManifestUpdates } = require('./utils/coremanifest-updater');
 const { checkForSoftwareUpdate } = require('./utils/software-update-check');
@@ -861,103 +861,24 @@ async function runProvisionerHelper({ provision }) {
     });
 }
 
-/**
- * Check for SMW ROM file without relying on clientdata.db
- * Only checks program data directory and common locations
- */
 function checkSmwRomWithoutDb() {
-    const userDataDir = getUserDataDir();
-    const skipRomPath = path.join(userDataDir, 'skiprom.txt');
-    
-    // Check for skiprom.txt flag
-    if (fs.existsSync(skipRomPath)) {
-        console.log('[ROM Check] skiprom.txt found, skipping ROM check');
-        return { found: true, path: null, skipped: true };
-    }
-    
-    const checks = [
-        // Program data directory
-        { name: 'Program data directory', fn: () => path.join(userDataDir, 'smw.sfc') },
-        // Environment variable
-        { name: 'Environment variable', fn: () => process.env.SMW_SFC_PATH },
-        // Common ROM directories
-        { name: 'Common ROM dir 1', fn: () => path.join(userDataDir, 'rom', 'smw.sfc') },
-        { name: 'Common ROM dir 2', fn: () => path.join(userDataDir, 'roms', 'smw.sfc') },
-        // Current working directory
-        { name: 'Current directory', fn: () => path.join(process.cwd(), 'smw.sfc') },
-        // Project root (if in development)
-        { name: 'Project root', fn: () => path.join(__dirname, '..', 'smw.sfc') },
-    ];
-    
-    for (const check of checks) {
-        try {
-            const romPath = check.fn();
-            if (romPath && fs.existsSync(romPath)) {
-                // Validate SHA224 hash
-                try {
-                    const romData = fs.readFileSync(romPath);
-                    const hash = crypto.createHash('sha224').update(romData).digest('hex');
-                    
-                    if (hash === SMW_EXPECTED_SHA224) {
-                        console.log(`[ROM Check] ✓ Found valid SMW ROM via ${check.name}: ${romPath}`);
-                        return { found: true, path: romPath, hash };
-                    } else {
-                        console.log(`[ROM Check] ✗ ROM found at ${romPath} but hash mismatch (expected ${SMW_EXPECTED_SHA224}, got ${hash})`);
-                    }
-                } catch (error) {
-                    console.warn(`[ROM Check] Failed to validate ROM at ${romPath}:`, error.message);
-                }
-            }
-        } catch (error) {
-            // Silently continue to next check
-        }
-    }
-    
-    return { found: false, path: null };
+    return smwRom.checkSmwRomWithoutDb(getUserDataDir, {
+        projectRootForDevCheck: path.join(__dirname, '..')
+    });
 }
 
-/**
- * Validate SMW ROM file by checking SHA224 hash
- */
 function validateSmwRom(romPath) {
-    try {
-        const romData = fs.readFileSync(romPath);
-        const hash = crypto.createHash('sha224').update(romData).digest('hex');
-        
-        return {
-            valid: hash === SMW_EXPECTED_SHA224,
-            hash: hash,
-            expected: SMW_EXPECTED_SHA224,
-            size: romData.length
-        };
-    } catch (error) {
-        return {
-            valid: false,
-            error: error.message
-        };
-    }
+    return smwRom.validateSmwRom(romPath);
 }
 
-/**
- * Copy SMW ROM file to program data directory
- */
 function copySmwRomToDataDir(sourcePath) {
-    const userDataDir = getUserDataDir();
-    const targetPath = path.join(userDataDir, 'smw.sfc');
-    
-    try {
-        // Ensure directory exists
-        ensureDirectory(userDataDir);
-        
-        // Copy file
-        fs.copyFileSync(sourcePath, targetPath);
-        
-        console.log(`[ROM Check] ✓ Copied SMW ROM to ${targetPath}`);
-        return { success: true, path: targetPath };
-    } catch (error) {
-        console.error(`[ROM Check] ✗ Failed to copy ROM:`, error);
-        return { success: false, error: error.message };
+    const r = smwRom.copySmwRomToDataDir(getUserDataDir, sourcePath, ensureDirectory);
+    if (r.success) {
+        console.log(`[ROM Check] ✓ Copied SMW ROM to ${r.path}`);
+    } else {
+        console.error(`[ROM Check] ✗ Failed to copy ROM:`, r.error);
     }
+    return r;
 }
 
 function setupProvisionerIpc() {
@@ -996,7 +917,7 @@ function setupProvisionerIpc() {
             success: validation.valid,
             path: selectedPath,
             validation: validation,
-            error: validation.valid ? null : `SHA224 hash mismatch. Expected: ${SMW_EXPECTED_SHA224}, Got: ${validation.hash}`
+            error: validation.valid ? null : `SHA224 hash mismatch. Expected: ${smwRom.SMW_EXPECTED_SHA224}, Got: ${validation.hash}`
         };
     });
     

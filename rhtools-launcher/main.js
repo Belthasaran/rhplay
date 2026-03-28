@@ -177,13 +177,26 @@ function sendOperationProgress(payload) {
   }
 }
 
-const progressPagePath = path.join(__dirname, 'progress-window.html');
+/**
+ * Progress HTML: packaged builds copy it to `resources/progress-window.html` (see electron-builder extraResources)
+ * because loading this file from app.asar fails on some Linux AppImage mounts (ERR_FILE_NOT_FOUND).
+ */
+function getProgressWindowHtmlPath() {
+  if (app.isPackaged && process.resourcesPath) {
+    const external = path.join(process.resourcesPath, 'progress-window.html');
+    if (fs.existsSync(external)) {
+      return external;
+    }
+  }
+  return path.join(__dirname, 'progress-window.html');
+}
 
 /**
  * Opens or reopens the progress window and resolves when the page has finished loading
  * (required so IPC listeners are ready and a new operation gets a fresh log).
  */
 function openProgressWindow(title) {
+  const progressPagePath = getProgressWindowHtmlPath();
   const preloadPath = path.join(__dirname, 'preload.js');
   return new Promise((resolve, reject) => {
     const onFail = (_e, code, desc, url) => {

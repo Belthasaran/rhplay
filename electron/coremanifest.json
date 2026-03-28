@@ -63,7 +63,7 @@
     ],
     "source_filename": "RHTools-0.1.29-beta-portable.exe",
     "version": "0.1.29beta",
-    "updated": 1774722393,
+    "updated": 1774722966,
     "target_filename": "RHTools-0.1.29-beta-portable.exe",
     "sha256": "b9689493e0c37958c0debf45d56f774cded554761723ac472c8a7fcc826ff0e0",
     "size": "151776156",
@@ -77,7 +77,9 @@
     "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
     "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
     "ardrive_file_name": "RHTools-0.1.29-beta-portable.exe",
-    "ardrive_file_path": "/SMWRH/release/0.1.29beta/RHTools-0.1.29-beta-portable.exe"
+    "ardrive_file_path": "/SMWRH/release/0.1.29beta/RHTools-0.1.29-beta-portable.exe",
+    "ardrive_file_id": "4ed79633-9db3-4e51-ae42-c77501477e74",
+    "data_txid": "929hAXKY3aoIYWYBWi46ChWGg6fyjgaqJ81NMJJiKX4"
   },
   "beta/RHPLAY/linux64/AppImage": {
     "pointer": "0x43535E8280C0Ec9e845Cacb456C45f576d6D581a",
@@ -86,7 +88,7 @@
     ],
     "source_filename": "RHTools-0.1.29-beta.AppImage",
     "version": "0.1.29beta",
-    "updated": 1774722805,
+    "updated": 1774722866,
     "target_filename": "RHTools-0.1.29-beta.AppImage",
     "sha256": "dcdbcba5e85effd3028cfdebfc833c6ae5c4372f6ea2dbbaf86c33f17693b38b",
     "size": "263936103",
@@ -101,8 +103,8 @@
     "ardrive_folder_id": "eb87554f-6669-433b-9fb6-1204e018031c",
     "ardrive_file_name": "RHTools-0.1.29-beta.AppImage",
     "ardrive_file_path": "/SMWRH/release/0.1.29beta/RHTools-0.1.29-beta.AppImage",
-    "ardrive_file_id": "c55392fc-d9bc-48dc-bb97-15832ab9e443",
-    "data_txid": "fGvNDqkMu8M8PCB1K2Fvp4do1IJ686uUIKolKR9dhgc"
+    "ardrive_file_id": "314bde61-5487-412f-b251-b275293d94f0",
+    "data_txid": "jK9ZbEhZyyRusbxgLdVnjcWg4GbiHJiPVhK2fWrfwCU"
   },
   "beta/MANIFEST_PKG": {
     "contents": [

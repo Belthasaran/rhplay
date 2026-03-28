@@ -104,6 +104,15 @@
         Manifest file: <code>{{ dbmanifestPath }}</code>
         <span v-if="dbmanifestSource"> ({{ dbmanifestSource }})</span>
       </p>
+      <p v-if="databaseDir" class="meta hint">
+        Database folder: <code>{{ databaseDir }}</code>
+        <span class="db-path-note"> — RHTools stores <code>*.db</code> and <code>provisioned.json</code> here (same as program data).</span>
+      </p>
+      <p v-if="provisionedJsonPath" class="meta hint provisioned-line">
+        <code>{{ provisionedJsonPath }}</code>
+        <span v-if="provisionedJsonExists" class="st-ok"> — found</span>
+        <span v-else class="st-warn"> — not found (not provisioned in this folder)</span>
+      </p>
       <p v-if="dbStatus?.error" class="error">{{ dbStatus.error }}</p>
       <div v-else-if="dbStatus?.rows?.length" class="db-table-wrap">
         <table class="db-table">
@@ -160,6 +169,9 @@ const dbMsg = ref('');
 const dbmanifestPath = ref('');
 const dbmanifestSource = ref('');
 const dbmanifestError = ref(null);
+const databaseDir = ref('');
+const provisionedJsonPath = ref('');
+const provisionedJsonExists = ref(false);
 const dbStatus = ref(null);
 
 function formatDbStatus(status) {
@@ -260,6 +272,9 @@ async function refreshState() {
   dbmanifestPath.value = s.dbmanifestPath || '';
   dbmanifestSource.value = s.dbmanifestSource || '';
   dbmanifestError.value = s.dbmanifestError || null;
+  databaseDir.value = s.databaseDir || s.userDataDir || '';
+  provisionedJsonPath.value = s.provisionedJsonPath || '';
+  provisionedJsonExists.value = !!s.provisionedJsonExists;
   dbStatus.value = s.dbStatus || null;
 }
 
@@ -434,6 +449,13 @@ async function doReprovision() {
 }
 .meta {
   font-size: 0.9rem;
+}
+.db-path-note {
+  color: #8a9;
+  font-size: 0.85rem;
+}
+.provisioned-line {
+  font-size: 0.82rem;
 }
 .hash {
   display: block;

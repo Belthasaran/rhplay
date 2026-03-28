@@ -44,16 +44,37 @@ const {
   executeReProvision
 } = requireFromElectron(path.join('utils', 'database-update-executor.js'));
 
+/**
+ * Must match the main RHTools app: Electron `app.getPath('userData')` uses the root
+ * package.json `name` field (`"rhtools"`), not `productName`. Using `RHTools` here
+ * pointed the launcher at a different folder than provisioned.json / *.db files.
+ */
+const RHTOOLS_USER_DATA_DIR_NAME = 'rhtools';
+
 function getRhtoolsUserDataPath() {
   if (process.platform === 'win32') {
     const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-    return path.join(base, 'RHTools');
+    return path.join(base, RHTOOLS_USER_DATA_DIR_NAME);
   }
   if (process.platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'RHTools');
+    return path.join(os.homedir(), 'Library', 'Application Support', RHTOOLS_USER_DATA_DIR_NAME);
   }
   const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(configHome, 'RHTools');
+  return path.join(configHome, RHTOOLS_USER_DATA_DIR_NAME);
+}
+
+/** Old launcher builds used `RHTools`; migrate launcher-config.json once. */
+function getLegacyLauncherUserDataPath() {
+  const legacy = 'RHTools';
+  if (process.platform === 'win32') {
+    const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(base, legacy);
+  }
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', legacy);
+  }
+  const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(configHome, legacy);
 }
 
 const LAUNCHER_CONFIG_NAME = 'launcher-config.json';
@@ -67,6 +88,16 @@ function readLauncherConfig() {
     const p = getLauncherConfigPath();
     if (fs.existsSync(p)) {
       return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+    const legacyP = path.join(getLegacyLauncherUserDataPath(), LAUNCHER_CONFIG_NAME);
+    if (fs.existsSync(legacyP)) {
+      const cfg = JSON.parse(fs.readFileSync(legacyP, 'utf8'));
+      try {
+        writeLauncherConfig(cfg);
+      } catch (err) {
+        console.warn('[launcher] migrate launcher-config from legacy RHTools path failed:', err.message);
+      }
+      return cfg;
     }
   } catch (err) {
     console.warn('[launcher] config read failed:', err.message);
@@ -91,7 +122,7 @@ function getWorkingDirForDb() {
     process.platform === 'linux'
       ? manifestResolver.getUserSpecificTempBase()
       : app.getPath('temp');
-  return path.join(base, 'RHTools', 'LauncherDbWork');
+  return path.join(base, RHTOOLS_USER_DATA_DIR_NAME, 'LauncherDbWork');
 }
 
 function resolveDbmanifestPathForLauncher() {
@@ -284,8 +315,12 @@ function registerIpc() {
     }
     const dbManifestInfo = resolveDbmanifestPathForLauncher();
     const dbStatus = getDatabaseProvisionStatus();
+    const provisionedJsonPath = path.join(ud, 'provisioned.json');
     return {
       userDataDir: ud,
+      databaseDir: ud,
+      provisionedJsonPath,
+      provisionedJsonExists: fs.existsSync(provisionedJsonPath),
       releasesDir: launcherSoftware.getReleasesRoot(ud),
       channel: cfg.channel || 'beta',
       platform,

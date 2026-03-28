@@ -279,17 +279,18 @@ function parseOverwriteList(set, csv) {
 
 function detectUserDataDir() {
   const platform = process.platform;
+  const name = 'rhtools';
   if (platform === 'win32') {
     const base =
       process.env.APPDATA ||
       path.join(os.homedir(), 'AppData', 'Roaming');
-    return path.join(base, 'RHTools');
+    return path.join(base, name);
   }
   if (platform === 'darwin') {
-    return path.join(os.homedir(), 'Library', 'Application Support', 'RHTools');
+    return path.join(os.homedir(), 'Library', 'Application Support', name);
   }
   const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(configHome, 'RHTools');
+  return path.join(configHome, name);
 }
 
 function defaultWorkingDir(userDataDir) {

@@ -67,13 +67,13 @@ function getUserDataDir(userDataDirOverride) {
     const platform = process.platform;
     if (platform === 'win32') {
       const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-      return path.join(base, 'RHTools');
+      return path.join(base, 'rhtools');
     }
     if (platform === 'darwin') {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'RHTools');
+      return path.join(os.homedir(), 'Library', 'Application Support', 'rhtools');
     }
     const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-    return path.join(configHome, 'RHTools');
+    return path.join(configHome, 'rhtools');
   }
 }
 

@@ -10,6 +10,7 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const os = require('os');
 const { spawn } = require('child_process');
 
@@ -178,17 +179,36 @@ function sendOperationProgress(payload) {
 }
 
 /**
- * Progress HTML: packaged builds copy it to `resources/progress-window.html` (see electron-builder extraResources)
- * because loading this file from app.asar fails on some Linux AppImage mounts (ERR_FILE_NOT_FOUND).
+ * Resolve progress-window.html for packaged and dev builds. Do not rely on `app.isPackaged` alone — it can be
+ * false in some runs; also the file is often not inside `app.asar` (use extraResources + asarUnpack).
  */
 function getProgressWindowHtmlPath() {
-  if (app.isPackaged && process.resourcesPath) {
-    const external = path.join(process.resourcesPath, 'progress-window.html');
-    if (fs.existsSync(external)) {
-      return external;
+  const candidates = [];
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'progress-window.html'));
+    candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'progress-window.html'));
+  }
+  if (typeof __dirname === 'string' && __dirname.includes('app.asar')) {
+    const unpacked = __dirname.replace(/app\.asar\/?$/, 'app.asar.unpacked');
+    candidates.push(path.join(unpacked, 'progress-window.html'));
+  }
+  candidates.push(path.join(__dirname, 'progress-window.html'));
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) {
+        return p;
+      }
+    } catch (_) {
+      /* ignore */
     }
   }
+  console.warn('[launcher] progress-window.html missing; tried:', candidates);
   return path.join(__dirname, 'progress-window.html');
+}
+
+function loadProgressWindowPage(win, absolutePath) {
+  const u = pathToFileURL(absolutePath).href;
+  return win.loadURL(u);
 }
 
 /**
@@ -209,7 +229,7 @@ function openProgressWindow(title) {
       progressWindow.setTitle(title || 'Progress');
       progressWindow.webContents.once('did-finish-load', onLoad);
       progressWindow.webContents.once('did-fail-load', onFail);
-      progressWindow.loadFile(progressPagePath);
+      loadProgressWindowPage(progressWindow, progressPagePath);
       progressWindow.focus();
       return;
     }
@@ -233,7 +253,7 @@ function openProgressWindow(title) {
     });
     progressWindow.webContents.once('did-finish-load', onLoad);
     progressWindow.webContents.once('did-fail-load', onFail);
-    progressWindow.loadFile(progressPagePath);
+    loadProgressWindowPage(progressWindow, progressPagePath);
     progressWindow.on('closed', () => {
       releaseLongOperationLock();
       progressWindow = null;

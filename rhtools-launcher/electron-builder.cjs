@@ -104,6 +104,7 @@ module.exports = {
     }
   ],
   asarUnpack: [
+    'progress-window.html',
     'node_modules/better-sqlite3/**/*',
     'node_modules/lzma-native/**/*',
     'node_modules/tar/**/*',

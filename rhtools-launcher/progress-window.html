@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'" />
+    <title>Progress</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #1a1d23;
+        color: #e8e8e8;
+        min-height: 100vh;
+        padding: 16px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .progress-bar-wrap {
+        width: 100%;
+        height: 18px;
+        background: #2a2f38;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #3d8bfd, #5cb3ff);
+        transition: width 0.15s ease;
+      }
+      .status-line {
+        margin: 0 0 6px;
+        font-weight: 600;
+        min-height: 1.2em;
+      }
+      .filename-line {
+        margin: 0 0 10px;
+        font-size: 0.85rem;
+        color: #9aa;
+        word-break: break-all;
+      }
+      .log-scroll {
+        min-height: 220px;
+        max-height: 360px;
+        overflow: auto;
+        background: #0f1114;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.45;
+        font-family: ui-monospace, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .log-line {
+        border-bottom: 1px solid #222;
+        padding: 2px 0;
+      }
+      .footer-actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .btn-close {
+        padding: 6px 14px;
+        cursor: pointer;
+        background: #2a3140;
+        color: #e8e8e8;
+        border: 1px solid #444;
+        border-radius: 4px;
+      }
+      .btn-close:hover {
+        background: #343d50;
+      }
+      #preload-err {
+        color: #f88;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">Progress</h1>
+    <div class="progress-bar-wrap">
+      <div id="bar" class="progress-bar"></div>
+    </div>
+    <p id="status" class="status-line">Starting…</p>
+    <p id="filename" class="filename-line"></p>
+    <div id="log" class="log-scroll"></div>
+    <div class="footer-actions">
+      <button type="button" class="btn-close" id="btn-close">Close</button>
+    </div>
+    <script>
+      (function () {
+        var api = window.launcherAPI;
+        var titleEl = document.getElementById('title');
+        var barEl = document.getElementById('bar');
+        var statusEl = document.getElementById('status');
+        var fileEl = document.getElementById('filename');
+        var logEl = document.getElementById('log');
+        var lines = 0;
+        var MAX = 2000;
+
+        function setPercent(p) {
+          var n = typeof p === 'number' && !isNaN(p) ? Math.max(0, Math.min(100, p)) : 0;
+          barEl.style.width = n + '%';
+        }
+
+        function pushLog(text) {
+          if (!text) return;
+          var div = document.createElement('div');
+          div.className = 'log-line';
+          div.textContent = text;
+          logEl.appendChild(div);
+          lines += 1;
+          while (lines > MAX) {
+            logEl.removeChild(logEl.firstChild);
+            lines -= 1;
+          }
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function applyPayload(p) {
+          if (!p) return;
+          if (p.title) titleEl.textContent = p.title;
+          if (p.message && !p.kind) statusEl.textContent = p.message;
+
+          if (p.kind === 'download') {
+            if (p.message) {
+              statusEl.textContent = p.message;
+              pushLog(p.message);
+            }
+            var dp = p.percent;
+            if (dp != null && dp !== '') setPercent(Number(dp));
+            else if (p.total > 0 && p.current != null)
+              setPercent(Math.floor((p.current / p.total) * 100));
+            return;
+          }
+
+          if (p.message) statusEl.textContent = p.message;
+          if (p.filename !== undefined) fileEl.textContent = p.filename || '';
+
+          if (p.percent != null && p.percent !== '') setPercent(Number(p.percent));
+          else if (p.total > 0 && p.current != null)
+            setPercent(Math.round((p.current / p.total) * 100));
+
+          var raw = p.rawLine || (p.kind === 'log' ? p.message : null);
+          if (raw) pushLog(raw);
+          if (p.logEntries && p.logEntries.length) {
+            p.logEntries.forEach(function (l) {
+              pushLog(l);
+            });
+          }
+        }
+
+        if (!api || !api.onOperationProgress) {
+          document.body.insertAdjacentHTML(
+            'afterbegin',
+            '<p id="preload-err">Progress UI: launcherAPI is not available (preload).</p>'
+          );
+          return;
+        }
+
+        api.onOperationProgress(applyPayload);
+
+        document.getElementById('btn-close').addEventListener('click', function () {
+          if (api.closeProgressWindow) api.closeProgressWindow();
+        });
+      })();
+    </script>
+  </body>
+</html>

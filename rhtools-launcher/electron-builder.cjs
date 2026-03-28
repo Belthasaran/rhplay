@@ -32,12 +32,18 @@ module.exports = {
     buildResources: path.join(__dirname, 'build')
   },
   files: [
-    'main.js',
-    'preload.js',
-    'paths.js',
-    'progress-window.html',
-    'electron-builder.cjs',
-    'renderer/dist/**/*',
+    {
+      // Explicit FileSet: bare string entries were not reliably copied into app.asar (progress-window.html was missing).
+      from: path.join(__dirname),
+      filter: [
+        'main.js',
+        'preload.js',
+        'paths.js',
+        'progress-window.html',
+        'electron-builder.cjs',
+        'renderer/dist/**/*'
+      ]
+    },
     {
       from: path.join(rootDir, 'electron', 'utils'),
       to: 'electron/utils',
@@ -76,11 +82,6 @@ module.exports = {
     }
   ],
   extraResources: [
-    {
-      // Secondary BrowserWindow loadFile() from app.asar can fail to resolve on Linux AppImage; keep outside asar.
-      from: path.join(__dirname, 'progress-window.html'),
-      to: 'progress-window.html'
-    },
     {
       from: path.join(rootDir, 'electron', 'dbmanifest.json'),
       to: 'db/dbmanifest.json'

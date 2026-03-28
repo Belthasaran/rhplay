@@ -10,7 +10,6 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { pathToFileURL } = require('url');
 const os = require('os');
 const { spawn } = require('child_process');
 
@@ -179,36 +178,21 @@ function sendOperationProgress(payload) {
 }
 
 /**
- * Resolve progress-window.html for packaged and dev builds. Do not rely on `app.isPackaged` alone — it can be
- * false in some runs; also the file is often not inside `app.asar` (use extraResources + asarUnpack).
+ * With `asarUnpack: ['progress-window.html']`, the file lives under `app.asar.unpacked/` while
+ * `__dirname` points at `app.asar`; resolve the real path for loadFile.
  */
 function getProgressWindowHtmlPath() {
-  const candidates = [];
+  const nextToMain = path.join(__dirname, 'progress-window.html');
+  if (fs.existsSync(nextToMain)) {
+    return nextToMain;
+  }
   if (process.resourcesPath) {
-    candidates.push(path.join(process.resourcesPath, 'progress-window.html'));
-    candidates.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'progress-window.html'));
-  }
-  if (typeof __dirname === 'string' && __dirname.includes('app.asar')) {
-    const unpacked = __dirname.replace(/app\.asar\/?$/, 'app.asar.unpacked');
-    candidates.push(path.join(unpacked, 'progress-window.html'));
-  }
-  candidates.push(path.join(__dirname, 'progress-window.html'));
-  for (const p of candidates) {
-    try {
-      if (p && fs.existsSync(p)) {
-        return p;
-      }
-    } catch (_) {
-      /* ignore */
+    const unpacked = path.join(process.resourcesPath, 'app.asar.unpacked', 'progress-window.html');
+    if (fs.existsSync(unpacked)) {
+      return unpacked;
     }
   }
-  console.warn('[launcher] progress-window.html missing; tried:', candidates);
-  return path.join(__dirname, 'progress-window.html');
-}
-
-function loadProgressWindowPage(win, absolutePath) {
-  const u = pathToFileURL(absolutePath).href;
-  return win.loadURL(u);
+  return nextToMain;
 }
 
 /**
@@ -229,7 +213,7 @@ function openProgressWindow(title) {
       progressWindow.setTitle(title || 'Progress');
       progressWindow.webContents.once('did-finish-load', onLoad);
       progressWindow.webContents.once('did-fail-load', onFail);
-      loadProgressWindowPage(progressWindow, progressPagePath);
+      progressWindow.loadFile(progressPagePath);
       progressWindow.focus();
       return;
     }
@@ -253,7 +237,7 @@ function openProgressWindow(title) {
     });
     progressWindow.webContents.once('did-finish-load', onLoad);
     progressWindow.webContents.once('did-fail-load', onFail);
-    loadProgressWindowPage(progressWindow, progressPagePath);
+    progressWindow.loadFile(progressPagePath);
     progressWindow.on('closed', () => {
       releaseLongOperationLock();
       progressWindow = null;

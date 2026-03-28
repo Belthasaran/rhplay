@@ -90,18 +90,20 @@ function getUserDataDir() {
     const { app } = require('electron');
     return app.getPath('userData');
   } catch (err) {
-    // If electron is not available (e.g., in Node.js script), use default
+    // If electron is not available (e.g., in Node.js script), mirror Electron's default:
+    // userData uses package.json `name` (root project is "rhtools"), not productName.
     const os = require('os');
     const platform = process.platform;
+    const name = 'rhtools';
     if (platform === 'win32') {
       const base = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-      return path.join(base, 'RHTools');
+      return path.join(base, name);
     }
     if (platform === 'darwin') {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'RHTools');
+      return path.join(os.homedir(), 'Library', 'Application Support', name);
     }
     const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-    return path.join(configHome, 'RHTools');
+    return path.join(configHome, name);
   }
 }
 

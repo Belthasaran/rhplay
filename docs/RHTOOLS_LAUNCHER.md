@@ -1,6 +1,6 @@
 # RHTools Launcher
 
-The RHTools Launcher is an optional Electron application in `rhtools-launcher/`. It shares the same RHTools program data directory as the main RHPlay app (`%APPDATA%/RHTools` on Windows, `~/.config/RHTools` on Linux).
+The RHTools Launcher is an optional Electron application in `rhtools-launcher/`. It shares the same program data directory as the main RHTools app: Electron `userData` follows the root `package.json` **`name`** (`rhtools`) — e.g. `%APPDATA%\rhtools` on Windows, `~/.config/rhtools` on Linux, `~/Library/Application Support/rhtools` on macOS. Older launcher builds incorrectly used `RHTools`; `launcher-config.json` is migrated from that folder when present.
 
 ## Purpose
 

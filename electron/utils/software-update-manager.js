@@ -110,7 +110,7 @@ function getLocalVersionSearchDirectories() {
     // Electron not available (e.g. in test)
   }
   if (process.platform === 'win32' && process.env.APPDATA) {
-    dirs.push(path.join(process.env.APPDATA, 'RHTools'));
+    dirs.push(path.join(process.env.APPDATA, 'rhtools'));
   }
   return dirs;
 }

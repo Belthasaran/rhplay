@@ -498,7 +498,9 @@ async function fetchFromIpfsBasic(options) {
           writeStream.close();
           if (expectedSha256) {
             const actualSha = sha256File(tempPath);
-            if (actualSha !== expectedSha256) {
+            if (
+              String(actualSha || '').toLowerCase() !== String(expectedSha256).trim().toLowerCase()
+            ) {
               fs.unlinkSync(tempPath);
               throw new Error(`SHA-256 mismatch (expected ${expectedSha256}, got ${actualSha})`);
             }
@@ -603,7 +605,9 @@ async function fetchFromIpfsHelia(options) {
 
     if (expectedSha256) {
       const actualSha = sha256File(tempPath);
-      if (actualSha !== expectedSha256) {
+      if (
+        String(actualSha || '').toLowerCase() !== String(expectedSha256).trim().toLowerCase()
+      ) {
         fs.unlinkSync(tempPath);
         throw new Error(`SHA-256 mismatch (expected ${expectedSha256}, got ${actualSha})`);
       }

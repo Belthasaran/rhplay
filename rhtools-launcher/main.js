@@ -153,13 +153,15 @@ function openProgressWindow(title) {
     return;
   }
   const preloadPath = path.join(__dirname, 'preload.js');
-  const devUrl = process.env.ELECTRON_START_URL || process.env.VITE_DEV_SERVER_URL;
+  /** Self-contained `progress-window.html` (no Vite): avoids blank window from ES-module / chunk load failures in a second BrowserWindow (file:// or dev-server edge cases). */
+  const progressPagePath = path.join(__dirname, 'progress-window.html');
   progressWindow = new BrowserWindow({
     parent: mainWindow || undefined,
     modal: !!mainWindow,
     width: 580,
     height: 520,
     show: true,
+    backgroundColor: '#1a1d23',
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -167,12 +169,10 @@ function openProgressWindow(title) {
     },
     title: title || 'Progress'
   });
-  if (devUrl) {
-    const base = devUrl.replace(/\/$/, '');
-    progressWindow.loadURL(`${base}/progress.html`);
-  } else {
-    progressWindow.loadFile(path.join(__dirname, 'renderer', 'dist', 'progress.html'));
-  }
+  progressWindow.webContents.on('did-fail-load', (_event, code, desc, url) => {
+    console.error('[launcher] progress window did-fail-load:', code, desc, url);
+  });
+  progressWindow.loadFile(progressPagePath);
   progressWindow.on('closed', () => {
     progressWindow = null;
   });

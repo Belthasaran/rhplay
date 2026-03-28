@@ -19,6 +19,7 @@ module.exports = {
     'main.js',
     'preload.js',
     'paths.js',
+    'progress-window.html',
     'electron-builder.cjs',
     'renderer/dist/**/*',
     {

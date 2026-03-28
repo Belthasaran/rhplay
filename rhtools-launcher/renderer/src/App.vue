@@ -185,6 +185,69 @@ function statusClass(status) {
   };
 }
 
+function dbNeedsMaintenance(status) {
+  if (!status) return false;
+  if (status.error) return true;
+  return !!status.updatesAvailable;
+}
+
+/**
+ * After a successful RHPlay download, offer database updates / provisioning if the manifest reports work is needed.
+ */
+async function maybePromptDatabaseMaintenance() {
+  await refreshState();
+  const s = await api.getState();
+  const st = s.dbStatus;
+  if (!dbNeedsMaintenance(st)) return;
+
+  const lines = (st.rows || [])
+    .filter((r) => r.status === 'update-available' || r.status === 'not-provisioned')
+    .map(
+      (r) =>
+        `${r.dbName}: ${formatDbStatus(r.status)} (installed ${r.currentVersion} → target ${r.targetVersion})`
+    );
+  const errLine = st.error ? `Note: ${st.error}\n\n` : '';
+  const msg =
+    errLine +
+    'Your databases need provisioning or updates for RHTools to work correctly.\n\n' +
+    (lines.length ? lines.join('\n') : 'Action recommended.') +
+    '\n\nRun database updates and provisioning now?';
+  if (!window.confirm(msg)) return;
+
+  if (!(await ensureRom())) return;
+
+  busy.value = true;
+  dbMsg.value = '';
+  try {
+    const chk = await api.checkDbUpdates();
+    if (chk.success && chk.updatesAvailable && chk.updates?.length) {
+      const r = await api.runDbUpdate();
+      if (!r.success) {
+        dbMsg.value = r.error || 'Database update failed.';
+        window.alert(dbMsg.value);
+        await refreshState();
+        return;
+      }
+    }
+    await refreshState();
+    const s2 = await api.getState();
+    if (dbNeedsMaintenance(s2.dbStatus)) {
+      const r2 = await api.provisionDatabases();
+      dbMsg.value = r2.success
+        ? 'Database provisioning finished.'
+        : r2.error || 'Provisioning failed.';
+      if (!r2.success && r2.error) {
+        window.alert(r2.error);
+      }
+    } else {
+      dbMsg.value = 'Database maintenance finished.';
+    }
+    await refreshState();
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function refreshState() {
   const s = await api.getState();
   userDataDir.value = s.userDataDir || '';
@@ -261,6 +324,9 @@ async function downloadRhplay() {
     const r = await api.downloadRhplay();
     downloadMsg.value = r.success ? `Saved: ${r.path}` : r.error || 'Failed';
     await refreshState();
+    if (r.success) {
+      await maybePromptDatabaseMaintenance();
+    }
   } finally {
     busy.value = false;
   }

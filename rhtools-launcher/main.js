@@ -34,12 +34,15 @@ const {
 const softwareUpdateManager = requireFromElectron(path.join('utils', 'software-update-manager.js'));
 const launcherSoftware = requireFromElectron(path.join('utils', 'launcher-software.js'));
 const smwRom = requireFromElectron(path.join('utils', 'smw-rom.js'));
-const { checkForDatabaseUpdates } = requireFromElectron(path.join('utils', 'database-update-check.js'));
 const {
-  executeDatabaseUpdateInProcess,
-  executeReProvisionInProcess,
-  executeProvisionFullInProcess
-} = requireFromElectron(path.join('utils', 'database-update-inprocess.js'));
+  checkForDatabaseUpdates,
+  getDatabaseProvisionStatus
+} = requireFromElectron(path.join('utils', 'database-update-check.js'));
+const {
+  executeDatabaseUpdate,
+  executeProvisionFull,
+  executeReProvision
+} = requireFromElectron(path.join('utils', 'database-update-executor.js'));
 
 function getRhtoolsUserDataPath() {
   if (process.platform === 'win32') {
@@ -91,8 +94,110 @@ function getWorkingDirForDb() {
   return path.join(base, 'RHTools', 'LauncherDbWork');
 }
 
+function resolveDbmanifestPathForLauncher() {
+  try {
+    const r = manifestResolver.getDbmanifestPath();
+    if (!r || !r.path) {
+      return { path: null, source: null, lastupdated: null, error: null };
+    }
+    return {
+      path: r.path,
+      source: r.source,
+      lastupdated: r.lastupdated,
+      error: null
+    };
+  } catch (err) {
+    return {
+      path: null,
+      source: null,
+      lastupdated: null,
+      error: err.message || String(err)
+    };
+  }
+}
+
 function getDbManifestPathForLauncher() {
-  return manifestResolver.getDbmanifestPath();
+  const r = resolveDbmanifestPathForLauncher();
+  return r.path;
+}
+
+function getPrepareDatabasesScriptPath() {
+  return path.join(electronRoot, 'installer', 'prepare_databases.js');
+}
+
+let progressWindow = null;
+let longOperationActive = false;
+
+function getProgressBroadcastWindows() {
+  const wins = [];
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    wins.push(mainWindow);
+  }
+  if (progressWindow && !progressWindow.isDestroyed()) {
+    wins.push(progressWindow);
+  }
+  return wins;
+}
+
+function sendOperationProgress(payload) {
+  const data = { ...payload };
+  for (const win of getProgressBroadcastWindows()) {
+    win.webContents.send('launcher:operation-progress', data);
+  }
+}
+
+function openProgressWindow(title) {
+  if (progressWindow && !progressWindow.isDestroyed()) {
+    progressWindow.setTitle(title || 'Progress');
+    progressWindow.focus();
+    return;
+  }
+  const preloadPath = path.join(__dirname, 'preload.js');
+  const devUrl = process.env.ELECTRON_START_URL || process.env.VITE_DEV_SERVER_URL;
+  progressWindow = new BrowserWindow({
+    parent: mainWindow || undefined,
+    modal: !!mainWindow,
+    width: 580,
+    height: 520,
+    show: true,
+    webPreferences: {
+      preload: preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false
+    },
+    title: title || 'Progress'
+  });
+  if (devUrl) {
+    const base = devUrl.replace(/\/$/, '');
+    progressWindow.loadURL(`${base}/progress.html`);
+  } else {
+    progressWindow.loadFile(path.join(__dirname, 'renderer', 'dist', 'progress.html'));
+  }
+  progressWindow.on('closed', () => {
+    progressWindow = null;
+  });
+}
+
+function closeProgressWindow() {
+  if (progressWindow && !progressWindow.isDestroyed()) {
+    progressWindow.close();
+  }
+  progressWindow = null;
+}
+
+function beginLongOperation(title) {
+  if (longOperationActive) {
+    return false;
+  }
+  longOperationActive = true;
+  openProgressWindow(title);
+  sendOperationProgress({ title: title || 'Progress', message: 'Starting…' });
+  return true;
+}
+
+function endLongOperation() {
+  longOperationActive = false;
+  closeProgressWindow();
 }
 
 function bootstrapManifestsSafe() {
@@ -152,6 +257,8 @@ function registerIpc() {
         format
       );
     }
+    const dbManifestInfo = resolveDbmanifestPathForLauncher();
+    const dbStatus = getDatabaseProvisionStatus();
     return {
       userDataDir: ud,
       releasesDir: launcherSoftware.getReleasesRoot(ud),
@@ -163,7 +270,11 @@ function registerIpc() {
       entryError,
       installedRhplay: installed,
       bestLaunchCandidate,
-      workingDir: getWorkingDirForDb()
+      workingDir: getWorkingDirForDb(),
+      dbmanifestPath: dbManifestInfo.path,
+      dbmanifestSource: dbManifestInfo.source,
+      dbmanifestError: dbManifestInfo.error,
+      dbStatus
     };
   });
 
@@ -183,23 +294,25 @@ function registerIpc() {
     }
   });
 
-  ipcMain.handle('launcher:download-rhplay', async (_event, progress) => {
+  ipcMain.handle('launcher:download-rhplay', async () => {
+    if (!beginLongOperation('Download RHPlay')) {
+      return { success: false, error: 'Another operation is already in progress.' };
+    }
     const cfg = readLauncherConfig();
     const { platform, format } = getCurrentPlatform();
     const manifest = manifestResolver.loadCoreManifest();
     if (!manifest) {
+      endLongOperation();
       return { success: false, error: 'No core manifest loaded' };
     }
     const found = findManifestEntryForApp(manifest, cfg.channel || 'beta', 'RHPLAY', platform, format);
     if (!found || !found.entry) {
+      endLongOperation();
       return { success: false, error: 'No RHPLAY manifest entry for this platform' };
     }
     const entry = found.entry;
-    const win = BrowserWindow.getFocusedWindow() || mainWindow;
     const progressCallback = (payload) => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('launcher:download-progress', payload);
-      }
+      sendOperationProgress({ kind: 'download', ...payload });
     };
     try {
       const result = await launcherSoftware.performDownloadToReleases(
@@ -208,9 +321,17 @@ function registerIpc() {
         getUserDataDir(),
         progressCallback
       );
+      sendOperationProgress({ kind: 'download', message: 'Download finished.', done: true });
       return { success: true, ...result };
     } catch (err) {
+      sendOperationProgress({
+        kind: 'download',
+        message: err.message || String(err),
+        error: true
+      });
       return { success: false, error: err.message || String(err) };
+    } finally {
+      endLongOperation();
     }
   });
 
@@ -363,63 +484,112 @@ function registerIpc() {
   });
 
   ipcMain.handle('launcher:provision-databases', async () => {
+    if (!beginLongOperation('Provision databases')) {
+      return { success: false, error: 'Another operation is already in progress.' };
+    }
+    sendOperationProgress({ kind: 'db', operation: 'provision', message: 'Starting…' });
     const manifestPath = getDbManifestPathForLauncher();
+    const scriptPath = getPrepareDatabasesScriptPath();
     if (!manifestPath || !fs.existsSync(manifestPath)) {
-      return { success: false, error: `dbmanifest not found: ${manifestPath}` };
+      endLongOperation();
+      return { success: false, error: `dbmanifest not found: ${manifestPath || '(missing)'}` };
+    }
+    if (!fs.existsSync(scriptPath)) {
+      endLongOperation();
+      return { success: false, error: `prepare_databases not found: ${scriptPath}` };
     }
     const userDataDir = getUserDataDir();
     const workingDir = getWorkingDirForDb();
     manifestResolver.ensureDirectory(workingDir);
     try {
-      const r = await executeProvisionFullInProcess({
+      return await executeProvisionFull({
         manifestPath,
         userDataDir,
+        provisionerScriptPath: scriptPath,
         workingDir,
-        overwrite: null
+        overwrite: null,
+        progressCallback: (p) => sendOperationProgress({ kind: 'db', operation: 'provision', ...p })
       });
-      return r;
     } catch (err) {
       return { success: false, error: err.message || String(err) };
+    } finally {
+      endLongOperation();
     }
   });
 
   ipcMain.handle('launcher:run-db-update', async () => {
-    const manifestPath = getDbManifestPathForLauncher();
-    if (!manifestPath || !fs.existsSync(manifestPath)) {
-      return { success: false, error: `dbmanifest not found: ${manifestPath}` };
+    const manifestPathEarly = getDbManifestPathForLauncher();
+    const scriptPathEarly = getPrepareDatabasesScriptPath();
+    if (!manifestPathEarly || !fs.existsSync(manifestPathEarly)) {
+      return { success: false, error: `dbmanifest not found: ${manifestPathEarly || '(missing)'}` };
     }
+    if (!fs.existsSync(scriptPathEarly)) {
+      return { success: false, error: `prepare_databases not found: ${scriptPathEarly}` };
+    }
+    const check = checkForDatabaseUpdates();
+    if (!check.updatesAvailable || !check.updates || check.updates.length === 0) {
+      return { success: true, message: 'No database updates pending', skipped: true };
+    }
+    if (!beginLongOperation('Apply database updates')) {
+      return { success: false, error: 'Another operation is already in progress.' };
+    }
+    sendOperationProgress({ kind: 'db', operation: 'update', message: 'Applying updates…' });
+    const manifestPath = manifestPathEarly;
+    const scriptPath = scriptPathEarly;
     const userDataDir = getUserDataDir();
     const workingDir = getWorkingDirForDb();
     manifestResolver.ensureDirectory(workingDir);
     try {
-      const check = checkForDatabaseUpdates();
-      if (!check.updatesAvailable || !check.updates || check.updates.length === 0) {
-        return { success: true, message: 'No database updates pending', skipped: true };
-      }
-      const result = await executeDatabaseUpdateInProcess(check.updates, {
+      return await executeDatabaseUpdate(check.updates, {
         manifestPath,
         userDataDir,
-        workingDir
+        provisionerScriptPath: scriptPath,
+        workingDir,
+        progressCallback: (p) => sendOperationProgress({ kind: 'db', operation: 'update', ...p })
       });
-      return result;
     } catch (err) {
       return { success: false, error: err.message || String(err) };
+    } finally {
+      endLongOperation();
     }
   });
 
   ipcMain.handle('launcher:reprovision-databases', async () => {
+    if (!beginLongOperation('Re-provision databases')) {
+      return { success: false, error: 'Another operation is already in progress.' };
+    }
+    sendOperationProgress({ kind: 'db', operation: 'reprovision', message: 'Starting…' });
     const manifestPath = getDbManifestPathForLauncher();
+    const scriptPath = getPrepareDatabasesScriptPath();
     if (!manifestPath || !fs.existsSync(manifestPath)) {
-      return { success: false, error: `dbmanifest not found: ${manifestPath}` };
+      endLongOperation();
+      return { success: false, error: `dbmanifest not found: ${manifestPath || '(missing)'}` };
+    }
+    if (!fs.existsSync(scriptPath)) {
+      endLongOperation();
+      return { success: false, error: `prepare_databases not found: ${scriptPath}` };
     }
     const userDataDir = getUserDataDir();
     const workingDir = getWorkingDirForDb();
     manifestResolver.ensureDirectory(workingDir);
     try {
-      return await executeReProvisionInProcess({ manifestPath, userDataDir, workingDir });
+      return await executeReProvision({
+        manifestPath,
+        userDataDir,
+        provisionerScriptPath: scriptPath,
+        workingDir,
+        progressCallback: (p) => sendOperationProgress({ kind: 'db', operation: 'reprovision', ...p })
+      });
     } catch (err) {
       return { success: false, error: err.message || String(err) };
+    } finally {
+      endLongOperation();
     }
+  });
+
+  ipcMain.handle('launcher:close-progress-window', async () => {
+    closeProgressWindow();
+    return { success: true };
   });
 
   ipcMain.handle('shell:open-path', async (_e, p) => {

@@ -138,28 +138,47 @@ function computeAffectedDbs(failedDbs) {
 }
 
 /**
- * Spawn prepare_databases and stream stdout/stderr, calling progressCallback for progress lines
+ * Spawn prepare_databases and stream stdout/stderr, calling progressCallback for parsed and raw lines.
+ * @param {object} [options]
+ * @param {object} [options.env] - merged into base child env (base strips ELECTRON_START_URL / VITE_DEV_SERVER_URL)
  */
-function spawnPrepareDatabases(args, progressCallback) {
+function spawnPrepareDatabases(args, progressCallback, options = {}) {
   return new Promise((resolve, reject) => {
+    const baseEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+    delete baseEnv.ELECTRON_START_URL;
+    delete baseEnv.VITE_DEV_SERVER_URL;
+    const childEnv = options.env ? { ...baseEnv, ...options.env } : baseEnv;
+
     const child = spawn(process.execPath, args, {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      env: childEnv,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    let lastProgress = null;
-
     const processLine = (line, isStderr = false) => {
+      const trimmed = line.trim();
+      if (!trimmed || !progressCallback) {
+        return;
+      }
       const progress = parseProgressLine(line);
-      if (progress && progressCallback) {
-        lastProgress = progress;
-        const payload = { ...progress };
+      if (progress) {
+        const payload = { ...progress, rawLine: trimmed, kind: 'progress', isStderr };
         if (isStderr || progress.isError) {
-          payload.logEntries = [line.trim()];
+          payload.logEntries = [trimmed];
         }
         progressCallback(payload);
-      } else if (isStderr && progressCallback && line.trim()) {
-        progressCallback({ message: line.trim(), logEntries: [line.trim()] });
+      } else if (isStderr) {
+        progressCallback({
+          kind: 'log',
+          message: trimmed,
+          rawLine: trimmed,
+          isStderr: true
+        });
+      } else {
+        progressCallback({
+          kind: 'log',
+          message: trimmed,
+          rawLine: trimmed
+        });
       }
     };
 
@@ -278,14 +297,14 @@ async function executeDatabaseUpdate(updates, options) {
     const anyPatchSucceeded = patchResults.some((r) => r.success);
     const anyPatchFailed = failedPatchable.length > 0;
 
-    if (result.exitCode !== 0 && !anyPatchSucceeded) {
+    if (!result.success && !anyPatchSucceeded) {
       return {
         success: false,
         partialSuccess: false,
         results: patchResults,
         failedDbs: failedPatchable,
         affectedDbs: computeAffectedDbs(failedPatchable),
-        error: `Patch update failed with exit code ${result.exitCode || result.signal}`
+        error: `Patch update failed with exit code ${result.exitCode != null ? result.exitCode : result.signal}`
       };
     }
   }
@@ -405,6 +424,65 @@ async function executeReProvisionAffected(affectedDbs, options) {
 }
 
 /**
+ * Initial / full provision (same argv as database-update-inprocess executeProvisionFullInProcess).
+ *
+ * @param {Object} options - { manifestPath, userDataDir, provisionerScriptPath, workingDir, progressCallback, overwrite?: string|string[] }
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+async function executeProvisionFull(options) {
+  const {
+    manifestPath,
+    userDataDir,
+    provisionerScriptPath,
+    workingDir,
+    progressCallback,
+    overwrite
+  } = options;
+
+  if (!manifestPath || !userDataDir || !provisionerScriptPath) {
+    return { success: false, error: 'Missing required paths (manifestPath, userDataDir, provisionerScriptPath)' };
+  }
+
+  const ensureDir = (p) => {
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+  };
+  ensureDir(workingDir);
+
+  const progressLogPath = path.join(workingDir, 'db-provision-progress.log');
+  const progressDonePath = path.join(workingDir, 'db-provision-progress.done.json');
+
+  const args = [
+    provisionerScriptPath,
+    '--manifest',
+    manifestPath,
+    '--user-data-dir',
+    userDataDir,
+    '--working-dir',
+    workingDir,
+    '--ensure-dirs',
+    '--provision',
+    '--progress-log',
+    progressLogPath,
+    '--progress-done',
+    progressDonePath
+  ];
+
+  if (overwrite && overwrite.length) {
+    args.push('--overwrite', Array.isArray(overwrite) ? overwrite.join(',') : overwrite);
+  }
+
+  const result = await spawnPrepareDatabases(args, progressCallback);
+  if (!result.success) {
+    return {
+      success: false,
+      error: `Provision failed with exit code ${result.exitCode != null ? result.exitCode : result.signal}`
+    };
+  }
+
+  return { success: true };
+}
+
+/**
  * Execute full re-provision of updateable databases (excludes clientdata.db)
  *
  * @param {Object} options - { manifestPath, userDataDir, provisionerScriptPath, workingDir, progressCallback }
@@ -457,9 +535,11 @@ async function executeReProvision(options) {
 
 module.exports = {
   executeDatabaseUpdate,
+  executeProvisionFull,
   executeReProvision,
   executeReProvisionAffected,
   computeAffectedDbs,
   parseProgressLine,
+  spawnPrepareDatabases,
   RHDATA_PATCHBIN_COUPLED
 };

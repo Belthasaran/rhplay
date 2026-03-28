@@ -77,6 +77,11 @@ module.exports = {
   ],
   extraResources: [
     {
+      // Secondary BrowserWindow loadFile() from app.asar can fail to resolve on Linux AppImage; keep outside asar.
+      from: path.join(__dirname, 'progress-window.html'),
+      to: 'progress-window.html'
+    },
+    {
       from: path.join(rootDir, 'electron', 'dbmanifest.json'),
       to: 'db/dbmanifest.json'
     },

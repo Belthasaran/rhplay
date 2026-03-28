@@ -1,3 +1,5 @@
+- **RHTools Launcher build**: `electron-builder` with `--projectDir rhtools-launcher` could not infer Electron (it is only installed at the repo root). `electron-builder.cjs` now sets `electronVersion` from `../node_modules/electron/package.json`.
+
 - **RHTools Launcher**: Progress window stays open until the user clicks Close (releases the long-op lock without auto-closing). `beginLongOperation` reloads `progress-window.html` when starting a new operation so the log resets. Catalog/Arweave HTTP downloads only call `downloadTracker.complete` after SHA-256 verify and rename, so a hash failure no longer triggers a fallback download to the next source (e.g. IPFS). After a successful RHPlay download, the launcher prompts to run DB updates then full provisioning if still needed.
 
 - **Software update download progress**: In `electron/utils/software-update-manager.js` `downloadUpdate`, progress callbacks for the same integer percent are limited to at most once per 500ms (launcher and main app downloads).

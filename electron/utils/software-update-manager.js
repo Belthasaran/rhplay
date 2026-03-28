@@ -250,6 +250,11 @@ async function downloadUpdate(entry, progressCallback) {
   // Create temp directory for download
   const tempDir = path.join(manifestResolver.getUserSpecificTempBase(), 'rhtools-update');
   manifestResolver.ensureDirectory(tempDir);
+
+  /** When floor(percent) is unchanged, limit progress callbacks to once per this interval (chunk spam). */
+  let lastProgressPercentSent = null;
+  let lastProgressSamePercentAt = 0;
+  const PROGRESS_SAME_PERCENT_MIN_MS = 500;
   
   // Create download tracker for progress (similar to provisioner)
   const downloadTracker = {
@@ -265,6 +270,9 @@ async function downloadUpdate(entry, progressCallback) {
       }
     },
     start: (s, totalBytes) => {
+      const t = Date.now();
+      lastProgressPercentSent = 0;
+      lastProgressSamePercentAt = t;
       if (progressCallback) {
         const totalSize = formatBytes(totalBytes);
         progressCallback({ 
@@ -277,16 +285,25 @@ async function downloadUpdate(entry, progressCallback) {
       }
     },
     progress: (s, currentBytes, totalBytes) => {
-      if (progressCallback) {
-        const percent = totalBytes > 0 ? Math.floor((currentBytes / totalBytes) * 100) : 0;
-        progressCallback({ 
-          message: `Downloading ${s.file_name}: ${percent}%`, 
-          filename: s.file_name || '',
-          current: currentBytes, 
-          total: totalBytes,
-          percent: percent
-        });
+      if (!progressCallback) {
+        return;
       }
+      const percent = totalBytes > 0 ? Math.floor((currentBytes / totalBytes) * 100) : 0;
+      const now = Date.now();
+      if (lastProgressPercentSent === percent) {
+        if (now - lastProgressSamePercentAt < PROGRESS_SAME_PERCENT_MIN_MS) {
+          return;
+        }
+      }
+      lastProgressPercentSent = percent;
+      lastProgressSamePercentAt = now;
+      progressCallback({ 
+        message: `Downloading ${s.file_name}: ${percent}%`, 
+        filename: s.file_name || '',
+        current: currentBytes, 
+        total: totalBytes,
+        percent: percent
+      });
     },
     complete: (s) => {
       if (progressCallback) {

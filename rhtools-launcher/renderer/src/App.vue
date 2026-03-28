@@ -62,6 +62,15 @@
         <span v-if="rhplayEntry.sha256" class="hash">SHA256: {{ rhplayEntry.sha256.slice(0, 16) }}…</span>
       </p>
       <div class="actions">
+        <button
+          v-if="bestLaunchCandidate"
+          type="button"
+          class="primary"
+          :disabled="busy"
+          @click="launch(bestLaunchCandidate.path)"
+        >
+          Launch
+        </button>
         <button type="button" class="primary" :disabled="busy || !rhplayEntry" @click="downloadRhplay">
           {{ busy ? 'Working…' : 'Download / update RHPlay' }}
         </button>
@@ -117,6 +126,7 @@ const releasesDir = ref('');
 const rhplayEntry = ref(null);
 const entryError = ref(null);
 const installedRhplay = ref([]);
+const bestLaunchCandidate = ref(null);
 const busy = ref(false);
 const downloadMsg = ref('');
 const dbMsg = ref('');
@@ -129,6 +139,7 @@ async function refreshState() {
   rhplayEntry.value = s.rhplayEntry || null;
   entryError.value = s.entryError || null;
   installedRhplay.value = s.installedRhplay || [];
+  bestLaunchCandidate.value = s.bestLaunchCandidate || null;
 }
 
 async function ensureRom() {

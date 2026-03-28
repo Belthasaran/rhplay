@@ -140,10 +140,21 @@ function registerIpc() {
         entryError = `No manifest entry for ${cfg.channel}/RHPLAY/${platform}/${format}`;
       }
     }
-    const installed = launcherSoftware.listInstalledReleases(getUserDataDir(), 'RHPLAY');
+    const ud = getUserDataDir();
+    const installed = launcherSoftware.listInstalledReleases(ud, 'RHPLAY');
+    let bestLaunchCandidate = null;
+    if (manifest && platform && format) {
+      bestLaunchCandidate = launcherSoftware.findBestLaunchCandidate(
+        ud,
+        manifest,
+        cfg.channel || 'beta',
+        platform,
+        format
+      );
+    }
     return {
-      userDataDir: getUserDataDir(),
-      releasesDir: launcherSoftware.getReleasesRoot(getUserDataDir()),
+      userDataDir: ud,
+      releasesDir: launcherSoftware.getReleasesRoot(ud),
       channel: cfg.channel || 'beta',
       platform,
       format,
@@ -151,6 +162,7 @@ function registerIpc() {
       rhplayEntry: entry,
       entryError,
       installedRhplay: installed,
+      bestLaunchCandidate,
       workingDir: getWorkingDirForDb()
     };
   });
@@ -219,29 +231,92 @@ function registerIpc() {
   });
 
   ipcMain.handle('launcher:launch-rhplay', async (_e, exePath) => {
-    const manifest = manifestResolver.loadCoreManifest();
-    if (!manifest) {
-      return { success: false, error: 'No manifest' };
+    /**
+     * Env for spawning RHPlay from this process. Must not inherit:
+     * - ELECTRON_START_URL / VITE_DEV_SERVER_URL: launcher dev uses these (e.g. port 5174); RHPlay's main.js
+     *   would load that URL and show the launcher UI again instead of the packaged renderer.
+     * - ELECTRON_RUN_AS_NODE
+     * - On Linux, parent AppImage vars (APPDIR, …) — see docs.appimage.org packaging guide.
+     */
+    function childEnvForSpawnedRhplay(resolvedPath) {
+      const env = { ...process.env };
+      delete env.ELECTRON_RUN_AS_NODE;
+      delete env.ELECTRON_START_URL;
+      delete env.VITE_DEV_SERVER_URL;
+      if (process.platform === 'linux') {
+        const lower = resolvedPath.toLowerCase();
+        delete env.APDIR;
+        delete env.OWD;
+        delete env.ARGV0;
+        delete env.APPIMAGE;
+        if (lower.endsWith('.appimage')) {
+          env.APPIMAGE = resolvedPath;
+        }
+      }
+      return env;
     }
-    const cfg = readLauncherConfig();
-    const { platform, format } = getCurrentPlatform();
-    const found = findManifestEntryForApp(manifest, cfg.channel || 'beta', 'RHPLAY', platform, format);
-    const gate = launcherSoftware.isExecutableAllowedToRun(exePath, manifest, found ? found.entry : null);
-    if (!gate.ok) {
-      return { success: false, error: gate.error || 'Not allowed to run' };
-    }
+
     try {
+      let manifest;
+      try {
+        manifest = manifestResolver.loadCoreManifest();
+      } catch (err) {
+        return { success: false, error: err.message || String(err) };
+      }
+      if (!manifest) {
+        return { success: false, error: 'No manifest' };
+      }
+      const cfg = readLauncherConfig();
+      const { platform, format } = getCurrentPlatform();
+      const found = findManifestEntryForApp(manifest, cfg.channel || 'beta', 'RHPLAY', platform, format);
+      const gate = launcherSoftware.isExecutableAllowedToRun(exePath, manifest, found ? found.entry : null);
+      if (!gate.ok) {
+        return { success: false, error: gate.error || 'Not allowed to run' };
+      }
+
+      const resolved = path.resolve(exePath);
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File does not exist' };
+      }
+
       if (process.platform === 'linux') {
         try {
-          fs.chmodSync(exePath, 0o755);
+          fs.chmodSync(resolved, 0o755);
         } catch (_) {
           /* ignore */
         }
+        const child = spawn(resolved, [], {
+          detached: true,
+          stdio: 'ignore',
+          env: childEnvForSpawnedRhplay(resolved)
+        });
+        child.on('error', (err) => console.error('[launcher] spawn error:', err.message));
+        child.unref();
+        return { success: true };
       }
-      const child = spawn(exePath, [], { detached: true, stdio: 'ignore' });
+
+      if (process.platform === 'win32') {
+        const child = spawn(resolved, [], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: false,
+          env: childEnvForSpawnedRhplay(resolved)
+        });
+        child.on('error', (err) => console.error('[launcher] spawn error:', err.message));
+        child.unref();
+        return { success: true };
+      }
+
+      const child = spawn(resolved, [], {
+        detached: true,
+        stdio: 'ignore',
+        env: childEnvForSpawnedRhplay(resolved)
+      });
+      child.on('error', (err) => console.error('[launcher] spawn error:', err.message));
       child.unref();
       return { success: true };
     } catch (err) {
+      console.error('[launcher] launch-rhplay:', err);
       return { success: false, error: err.message || String(err) };
     }
   });

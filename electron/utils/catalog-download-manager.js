@@ -29,6 +29,19 @@ function sha256File(filePath) {
   }
 }
 
+function normalizeSha256Hex(hex) {
+  if (hex == null) return '';
+  return String(hex).trim().toLowerCase();
+}
+
+/** Compare manifest / on-disk SHA256 hex (case-insensitive; avoids false "mismatch" then fallback to IPFS). */
+function sha256MatchesExpected(filePath, expectedHex) {
+  if (!expectedHex) return true;
+  const actual = sha256File(filePath);
+  if (!actual) return false;
+  return normalizeSha256Hex(actual) === normalizeSha256Hex(expectedHex);
+}
+
 function decodeBaddr(b64) {
   try {
     const decoded = Buffer.from(b64, 'base64').toString('utf8');
@@ -159,7 +172,7 @@ async function downloadFromUrl(url, destPath, expectedSha256, spec, downloadTrac
 
   if (expectedSha256) {
     const actualSha = sha256File(tempPath);
-    if (actualSha !== expectedSha256) {
+    if (normalizeSha256Hex(actualSha) !== normalizeSha256Hex(expectedSha256)) {
       fs.unlinkSync(tempPath);
       throw new Error(`SHA-256 mismatch (expected ${expectedSha256}, got ${actualSha})`);
     }
@@ -239,7 +252,7 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
   if (downloadTracker) {
     downloadTracker.register(spec);
   }
-  if (fs.existsSync(destPath) && (!spec.sha256 || sha256File(destPath) === spec.sha256)) {
+  if (fs.existsSync(destPath) && (!spec.sha256 || sha256MatchesExpected(destPath, spec.sha256))) {
     console.log(`[download-cached] ${spec.file_name} already present with matching hash.`);
     if (downloadTracker) {
       downloadTracker.skip(spec);
@@ -271,7 +284,7 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
             if (entry.isDirectory()) {
               const found = findFile(fullPath);
               if (found) return found;
-            } else if (entry.name === spec.file_name || (spec.sha256 && sha256File(fullPath) === spec.sha256)) {
+            } else if (entry.name === spec.file_name || (spec.sha256 && sha256MatchesExpected(fullPath, spec.sha256))) {
               return fullPath;
             }
           }
@@ -290,7 +303,7 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
           fs.mkdirSync(destDir, { recursive: true });
         }
         fs.copyFileSync(localFile, destPath);
-        if (spec.sha256 && sha256File(destPath) !== spec.sha256) {
+        if (spec.sha256 && !sha256MatchesExpected(destPath, spec.sha256)) {
           fs.unlinkSync(destPath);
           throw new Error(`Local file hash mismatch for ${spec.file_name}`);
         }
@@ -305,12 +318,16 @@ async function ensureArtifact(spec, workingDir, downloadTracker, userDataDir, ip
   // Parse priority and attempt downloads
   const urlArray = getUrlsFromSpec(spec);
   const hasUrls = urlArray.length > 0;
-  const priority = spec.priority || (hasUrls ? ['ipfs', 'url', 'ardrive'] : ['ipfs', 'ardrive']);
+  // Prefer HTTP(S) before IPFS when both exist — only try the next method if the previous one failed.
+  const priority = spec.priority || (hasUrls ? ['url', 'ipfs', 'ardrive'] : ['ipfs', 'ardrive']);
   const sources = parsePriority(priority, spec);
 
   let lastError = null;
 
   for (const source of sources) {
+    if (fs.existsSync(destPath) && spec.sha256 && sha256MatchesExpected(destPath, spec.sha256)) {
+      return destPath;
+    }
     try {
       if (source.type === 'ipfs') {
         let ipfsProgressCallback = spec._ipfsProgressCallback;

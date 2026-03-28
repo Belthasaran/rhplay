@@ -1,3 +1,5 @@
+- **Catalog / software-update downloads**: Default source order when URLs exist is now `url` → `ipfs` → `ardrive` (HTTP tried before IPFS). SHA256 checks are case-insensitive so a verified HTTP download is not treated as a mismatch and retried via IPFS. Each `ensureArtifact` source pass returns early if `destPath` already matches the manifest hash.
+
 - **RHTools Launcher — progress window (AppImage)**: `electron-builder` `files` now uses an explicit FileSet `from: __dirname` with a `filter` so `progress-window.html` is copied into the app (bare string entries did not reliably include it). `asarUnpack` includes `progress-window.html`; `main.js` resolves `app.asar.unpacked/progress-window.html` when needed and uses `loadFile`.
 
 - **RHTools Launcher — database paths**: Launcher `app.setPath('userData')` incorrectly used `RHTools`; the main app uses Electron’s default from package.json `name` (`rhtools`). Launcher now resolves the same folder as RHTools for `provisioned.json` / `*.db`. UI shows **Database folder** and `provisioned.json` path under dbmanifest. Non-Electron fallback in `manifest-resolver.getUserDataDir()` updated to `rhtools` for parity.

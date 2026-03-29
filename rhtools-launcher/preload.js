@@ -21,5 +21,7 @@ contextBridge.exposeInMainWorld('launcherAPI', {
   provisionDatabases: () => ipcRenderer.invoke('launcher:provision-databases'),
   runDbUpdate: () => ipcRenderer.invoke('launcher:run-db-update'),
   reprovisionDatabases: () => ipcRenderer.invoke('launcher:reprovision-databases'),
-  openPath: (p) => ipcRenderer.invoke('shell:open-path', p)
+  openPath: (p) => ipcRenderer.invoke('shell:open-path', p),
+  fetchSettingsGetConfig: () => ipcRenderer.invoke('fetch-settings:get-config'),
+  fetchSettingsSave: (config) => ipcRenderer.invoke('fetch-settings:save-config', config)
 });

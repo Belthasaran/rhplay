@@ -43,6 +43,7 @@ const {
   executeProvisionFull,
   executeReProvision
 } = requireFromElectron(path.join('utils', 'database-update-executor.js'));
+const ipfsFetchConfig = requireFromElectron(path.join('utils', 'ipfs-fetch-config.js'));
 
 /**
  * Must match the main RHTools app: Electron `app.getPath('userData')` uses the root
@@ -708,6 +709,19 @@ function registerIpc() {
     if (!p) return { success: false };
     const err = await shell.openPath(p);
     return err ? { success: false, error: err } : { success: true };
+  });
+
+  ipcMain.handle('fetch-settings:get-config', () => {
+    return ipfsFetchConfig.getFetchConfig();
+  });
+  ipcMain.handle('fetch-settings:save-config', (_event, config) => {
+    try {
+      ipfsFetchConfig.saveFetchSettings(config);
+      return { success: true };
+    } catch (err) {
+      console.error('[launcher] Failed to save fetch settings:', err);
+      return { success: false, error: err.message };
+    }
   });
 }
 

@@ -23,6 +23,8 @@ If `require('electron')` fails with `app` undefined, ensure `ELECTRON_RUN_AS_NOD
 
 ## Builds
 
+Production builds install **launcher-local** runtime dependencies (`npm install --prefix rhtools-launcher`), rebuild native modules (`npm run launcher:install-app-deps`), strip devDependencies used only for the Vite UI (`npm run launcher:prune-for-pack`), then run electron-builder. Do not skip these steps; the launcher no longer ships the full repository `node_modules` tree.
+
 ```bash
 npm run build:launcher:win
 npm run build:launcher:linux

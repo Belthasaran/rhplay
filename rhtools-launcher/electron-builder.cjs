@@ -62,7 +62,7 @@ module.exports = {
     {
       from: path.join(rootDir, 'lib'),
       to: 'lib',
-      filter: ['**/*.js']
+      filter: ['binary-finder.js']
     },
     {
       from: path.join(rootDir, 'jsutils'),
@@ -73,23 +73,9 @@ module.exports = {
       from: path.join(rootDir, 'electron', 'sql', 'migrations'),
       to: 'electron/sql/migrations',
       filter: ['**/*']
-    },
-    {
-      from: path.join(rootDir, 'node_modules'),
-      to: 'node_modules',
-      // Omit .bin trees: npm CLI stubs are not needed at runtime; broken symlinks here break packaging (e.g. stale serial-number).
-      // Omit build-only packages (same as root package.json build.files); shipped Electron runtime is not node_modules/electron.
-      filter: [
-        '**/*',
-        '!.bin/**',
-        '!**/.bin/**',
-        '!electron/**',
-        '!app-builder-bin/**',
-        '!electron-builder/**',
-        '!dmg-builder/**',
-        '!builder-util/**'
-      ]
     }
+    // node_modules: do not add a FileSet here — electron-builder already bundles production
+    // dependencies from rhtools-launcher/package.json; duplicating node_modules causes EEXIST.
   ],
   extraResources: [
     {
@@ -108,10 +94,6 @@ module.exports = {
     {
       from: path.join(rootDir, 'electron', 'installer', 'prepare_databases.js'),
       to: 'db/prepare_databases.js'
-    },
-    {
-      from: path.join(rootDir, 'node_modules', '7zip-min'),
-      to: 'app.asar.unpacked/node_modules/7zip-min'
     }
   ],
   asarUnpack: [

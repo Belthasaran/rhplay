@@ -1,1 +1,58 @@
-[]
+[
+  {
+    "gameid": "42066",
+    "authors_json": [
+      {
+        "id": 73958,
+        "name": "Redguy"
+      }
+    ],
+    "authors": "Redguy",
+    "author": "Redguy",
+    "submitter_json": {
+      "id": 73958,
+      "name": "Redguy"
+    },
+    "submitter": "Redguy",
+    "length": "11 exit(s)",
+    "difficulty": "Casual",
+    "fields_type": "Standard",
+    "gametype": "Standard",
+    "demo": "Yes",
+    "sa1": "No",
+    "collab": "No",
+    "description": "Mario goes on an epical adventure to go save the princess yet again. This is my second finished hack. Yeah. Also to be honest these screenshots kind of look like a creepypasta hack from how low quality they are.",
+    "raw_difficulty": "diff_2",
+    "warnings": "",
+    "raw_fields": {
+      "hof": false,
+      "length": 11,
+      "demo": true,
+      "sa1": false,
+      "collab": false,
+      "difficulty": "diff_2",
+      "type": [
+        "standard"
+      ],
+      "warnings": [],
+      "description": "Mario goes on an epical adventure to go save the princess yet again. This is my second finished hack. Yeah. Also to be honest these screenshots kind of look like a creepypasta hack from how low quality they are."
+    },
+    "combinedtype": "Standard: Casual (diff_2) (standard)",
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=42066",
+    "name": "Mario's Epical Adventure DEMO",
+    "section": "smwhacks",
+    "time": 1774754720,
+    "moderated": null,
+    "tags": [],
+    "images": [
+      "https://dl.smwcentral.net/image/122872.png",
+      "https://dl.smwcentral.net/image/122873.png",
+      "https://dl.smwcentral.net/image/122874.png"
+    ],
+    "rating": null,
+    "size": 67536,
+    "downloads": 1,
+    "download_url": "https://dl.smwcentral.net/42066/MariosEpicalAdventureDEMO.zip",
+    "obsoleted_by": null
+  }
+]

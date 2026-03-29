@@ -64,7 +64,7 @@ npm run build:launcher:win
 npm run build:launcher:linux
 ```
 
-Helper scripts (also invoked by the build lines above): `launcher:install-app-deps`, `launcher:prune-for-pack`.
+Helper scripts (also invoked by the build lines above): `launcher:install-app-deps` (uses repo `scripts/launcher-install-app-deps.cjs` so Windows `cmd.exe` does not break on `../node_modules/.bin/...`), `launcher:prune-for-pack`.
 
 **Documentation**: `docs/RHTOOLS_LAUNCHER.md`
 

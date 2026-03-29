@@ -185,7 +185,12 @@
       "Flips/dll/asar.dll",
       "bin/asar",
       "bin/flips",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/electron/**",
+      "!node_modules/app-builder-bin/**",
+      "!node_modules/electron-builder/**",
+      "!node_modules/dmg-builder/**",
+      "!node_modules/builder-util/**"
     ],
     "extraResources": [
       {
@@ -229,64 +234,12 @@
         "to": "db/prepare_databases.js"
       },
       {
-        "from": "node_modules/7zip-mini",
-        "to": "app.asar.unpacked/node_modules/7zip-mini"
-      },
-      {
-        "from": "node_modules/readable-stream",
-        "to": "app.asar.unpacked/node_modules/readable-stream"
+        "from": "node_modules/7zip-min",
+        "to": "app.asar.unpacked/node_modules/7zip-min"
       },
       {
         "from": "node_modules/bindings",
         "to": "app.asar.unpacked/node_modules/bindings"
-      },
-      {
-        "from": "node_modules/inherits",
-        "to": "app.asar.unpacked/node_modules/inherits"
-      },
-      {
-        "from": "node_modules/string_decoder",
-        "to": "app.asar.unpacked/node_modules/string_decoder"
-      },
-      {
-        "from": "node_modules/util-deprecate",
-        "to": "app.asar.unpacked/node_modules/util-deprecate"
-      },
-      {
-        "from": "node_modules/node-gyp-build",
-        "to": "app.asar.unpacked/node_modules/node-gyp-build"
-      },
-      {
-        "from": "node_modules/tar",
-        "to": "app.asar.unpacked/node_modules/tar"
-      },
-      {
-        "from": "node_modules/chownr",
-        "to": "app.asar.unpacked/node_modules/chownr"
-      },
-      {
-        "from": "node_modules/fs-minipass",
-        "to": "app.asar.unpacked/node_modules/fs-minipass"
-      },
-      {
-        "from": "node_modules/minipass",
-        "to": "app.asar.unpacked/node_modules/minipass"
-      },
-      {
-        "from": "node_modules/minizlib",
-        "to": "app.asar.unpacked/node_modules/minizlib"
-      },
-      {
-        "from": "node_modules/mkdirp",
-        "to": "app.asar.unpacked/node_modules/mkdirp"
-      },
-      {
-        "from": "node_modules/yallist",
-        "to": "app.asar.unpacked/node_modules/yallist"
-      },
-      {
-        "from": "node_modules/file-uri-to-path",
-        "to": "app.asar.unpacked/node_modules/file-uri-to-path"
       },
       {
         "from": "electron/installer/prepare_databases.js",

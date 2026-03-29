@@ -78,7 +78,17 @@ module.exports = {
       from: path.join(rootDir, 'node_modules'),
       to: 'node_modules',
       // Omit .bin trees: npm CLI stubs are not needed at runtime; broken symlinks here break packaging (e.g. stale serial-number).
-      filter: ['**/*', '!.bin/**', '!**/.bin/**']
+      // Omit build-only packages (same as root package.json build.files); shipped Electron runtime is not node_modules/electron.
+      filter: [
+        '**/*',
+        '!.bin/**',
+        '!**/.bin/**',
+        '!electron/**',
+        '!app-builder-bin/**',
+        '!electron-builder/**',
+        '!dmg-builder/**',
+        '!builder-util/**'
+      ]
     }
   ],
   extraResources: [
@@ -100,8 +110,8 @@ module.exports = {
       to: 'db/prepare_databases.js'
     },
     {
-      from: path.join(rootDir, 'node_modules', '7zip-mini'),
-      to: 'app.asar.unpacked/node_modules/7zip-mini'
+      from: path.join(rootDir, 'node_modules', '7zip-min'),
+      to: 'app.asar.unpacked/node_modules/7zip-min'
     }
   ],
   asarUnpack: [

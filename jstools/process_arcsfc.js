@@ -17,14 +17,35 @@
  * - K:\snesheader.exe available via wine
  * - flips utility available
  * - 7z utility available
+ * - `os-lock` (optional npm dependency; installs on Linux, skipped on Windows if build fails)
  */
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { lock, unlock } = require('os-lock');
 const { spawnSync, execSync, spawn } = require('child_process');
+
+/** Optional native module — not bundled for Electron; may be absent on Windows after npm install. */
+let lock;
+let unlock;
+try {
+  const osLock = require('os-lock');
+  lock = osLock.lock;
+  unlock = osLock.unlock;
+} catch (err) {
+  lock = null;
+  unlock = null;
+}
+
+function assertOsLock() {
+  if (typeof lock !== 'function' || typeof unlock !== 'function') {
+    throw new Error(
+      'os-lock is not available (optional dependency). On Linux run `npm install` at the repo root; if still missing: `npm install os-lock`. ' +
+        'This script is not supported on platforms where os-lock does not install.'
+    );
+  }
+}
 
 // Constants
 const SMW_BASE_ROM = process.env.PATH_BASE_ROM || '/home/me/smwdb/smw.sfc';
@@ -63,6 +84,7 @@ async function ensureDir(dirPath) {
 
 // Helper function to acquire exclusive lock with retry
 async function acquireLock(lockPath, maxRetries = 10, retryDelay = 500) {
+  assertOsLock();
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const fd = await fs.open(lockPath, 'w+');
@@ -91,7 +113,9 @@ async function acquireLock(lockPath, maxRetries = 10, retryDelay = 500) {
 async function releaseLock(lockFd, lockPath) {
   if (lockFd) {
     try {
-      await unlock(lockFd.fd);
+      if (typeof unlock === 'function') {
+        await unlock(lockFd.fd);
+      }
       await lockFd.close();
       console.log(`lock Released ${lockPath}`)
     } catch (e) {

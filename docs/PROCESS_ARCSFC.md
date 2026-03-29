@@ -26,6 +26,7 @@ This script automates the process of:
 - **snesheader.exe** - Must be available at `K:\snesheader.exe` (accessible via Wine)
 - **flips** - BPS patch creation utility (must be in PATH)
 - **7z** - Archive extraction utility (must be in PATH)
+- **os-lock** - Optional npm package at the repo root (listed under `optionalDependencies` in `package.json`). Used for inter-process locking; installs on Linux. On Windows it may be skipped so `npm install` does not fail; this tool is not intended to run on Windows anyway.
 
 ### File System
 - Script must be run from a subdirectory of `/home/me/smwdb/`

@@ -577,6 +577,7 @@ node process_arcsfc.js --help
 - `flips` utility in PATH
 - `7z` utility in PATH
 - Must be run from a subdirectory of `/home/me/smwdb/`
+- **`os-lock`** — optional npm dependency at repo root (`optionalDependencies`); installs on Linux for file locking. Omitted on Windows when the native build fails so `npm install` still succeeds; this script is Linux-only.
 
 **Output Files**:
 - `output/<sha1_hash>.bps` - BPS patch file

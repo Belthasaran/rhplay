@@ -1,3 +1,5 @@
+- **0.1.29beta (2026-03-29)** – Release summary: [`docs/RELEASE_0.1.29beta_20260329.md`](RELEASE_0.1.29beta_20260329.md). Highlights: RHTools Launcher (download, DB provision, packaging), shared `rhtools` userData, catalog download order and SHA256 behavior, fetch-settings parity, tooling.
+
 - **RHTools Launcher — download / fetch settings**: Added **Change Download Settings** next to **Refresh core manifest**, opening the same **File Transfer and Peer-to-Peer** options as the main app (reads/writes shared `user-fetch-settings.json` via `fetch-settings:get-config` / `fetch-settings:save-config` IPC and [`electron/utils/ipfs-fetch-config.js`](electron/utils/ipfs-fetch-config.js)) so users can adjust IPFS/Arweave behavior before RHPlay is installed.
 
 - **`os-lock` (optional dependency)**: Moved from `dependencies` to `optionalDependencies` so a failed native install on Windows does not break `npm install` for the main project. Used only by `jstools/process_arcsfc.js` (Linux-oriented tooling, not the Electron app). That script loads `os-lock` with try/catch and errors clearly if locking is needed but the module is missing.

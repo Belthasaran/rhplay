@@ -13,11 +13,22 @@
     "build:win": "npm run renderer:build && ../node_modules/.bin/electron-builder --win portable --config electron-builder.cjs",
     "build:linux": "npm run renderer:build && ../node_modules/.bin/electron-builder --linux AppImage --config electron-builder.cjs"
   },
+  "dependencies": {
+    "@ar.io/wayfinder-core": "^1.9.1",
+    "@helia/http": "^3.0.0",
+    "@helia/verified-fetch": "^7.0.0",
+    "better-sqlite3": "^12.4.1",
+    "dns-query": "^0.11.2",
+    "ethers": "^6.16.0",
+    "lzma-native": "^8.0.6",
+    "tar": "^6.2.0"
+  },
   "devDependencies": {
-    "vue": "^3.4.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "cross-env": "^7.0.3",
+    "electron": "^36.9.5",
     "typescript": "^5.4.0",
-    "vite": "^5.0.0"
+    "vite": "^5.0.0",
+    "vue": "^3.4.0"
   }
 }

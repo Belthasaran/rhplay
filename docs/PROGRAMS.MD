@@ -57,12 +57,14 @@ npm run launcher:dev              # Vite URL on 5174 + launcher main
 ./rhtools-launcher/smart-start.sh
 ```
 
-**Production builds** (outputs under `dist-builds-launcher/`):
+**Production builds** (outputs under `dist-builds-launcher/`): installs `rhtools-launcher` production deps, `launcher:install-app-deps`, `launcher:prune-for-pack`, then packages.
 
 ```bash
 npm run build:launcher:win
 npm run build:launcher:linux
 ```
+
+Helper scripts (also invoked by the build lines above): `launcher:install-app-deps`, `launcher:prune-for-pack`.
 
 **Documentation**: `docs/RHTOOLS_LAUNCHER.md`
 

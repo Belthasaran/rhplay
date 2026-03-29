@@ -68,7 +68,7 @@
     "sha256": "b9689493e0c37958c0debf45d56f774cded554761723ac472c8a7fcc826ff0e0",
     "size": "151776156",
     "ipfs_cidv1": "bafybeiff2ksy4slay36admq3zf3xr6a7ulg46dpmxbz3mwj5ksqsxhuepe",
-    "baddr": "",
+    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vTkJoRVVYRAo=",
     "priority": [
       "baddr",
       "ipfs",
@@ -93,7 +93,7 @@
     "sha256": "dcdbcba5e85effd3028cfdebfc833c6ae5c4372f6ea2dbbaf86c33f17693b38b",
     "size": "263936103",
     "ipfs_cidv1": "bafybeic2lflhsuhaz53mxa6k52e5nbypsz2hhwh5jlggrkunna4umnvsge",
-    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS83WlJnaWs0YQo=",
+    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS81M0diblBNUwo=",
     "priority": [
       "baddr",
       "ipfs",

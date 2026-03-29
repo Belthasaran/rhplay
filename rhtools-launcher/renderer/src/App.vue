@@ -75,6 +75,7 @@
           {{ busy ? 'Working…' : 'Download / update RHPlay' }}
         </button>
         <button type="button" @click="refreshManifest" :disabled="busy">Refresh core manifest</button>
+        <button type="button" @click="fetchSettingsOpen = true" :disabled="busy">Change Download Settings</button>
         <button type="button" @click="openReleasesFolder">Open releases folder</button>
       </div>
       <p v-if="downloadMsg" class="log">{{ downloadMsg }}</p>
@@ -146,11 +147,22 @@
     <footer class="footer">
       <span>Program data: {{ userDataDir }}</span>
     </footer>
+
+    <div v-if="fetchSettingsOpen" class="fetch-settings-overlay">
+      <FetchSettingsDialog
+        :visible="true"
+        :is-blocking="false"
+        :standalone="false"
+        @close="fetchSettingsOpen = false"
+        @saved="fetchSettingsOpen = false"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import FetchSettingsDialog from './components/FetchSettingsDialog.vue';
 
 const api = window.launcherAPI;
 
@@ -173,6 +185,7 @@ const databaseDir = ref('');
 const provisionedJsonPath = ref('');
 const provisionedJsonExists = ref(false);
 const dbStatus = ref(null);
+const fetchSettingsOpen = ref(false);
 
 function formatDbStatus(status) {
   switch (status) {
@@ -606,5 +619,10 @@ button.small {
 }
 .rom-check-actions {
   margin-top: 1rem;
+}
+.fetch-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
 }
 </style>

@@ -1,6 +1,6 @@
 {
   "name": "rhtools-launcher",
-  "version": "0.1.0-beta",
+  "version": "0.1.30-beta",
   "description": "RHTools Launcher — download and manage RHTools apps",
   "main": "main.js",
   "author": "RHTools Team",

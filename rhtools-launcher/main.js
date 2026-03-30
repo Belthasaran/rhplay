@@ -45,6 +45,13 @@ const {
 } = requireFromElectron(path.join('utils', 'database-update-executor.js'));
 const ipfsFetchConfig = requireFromElectron(path.join('utils', 'ipfs-fetch-config.js'));
 
+function parseArgValue(argv, name) {
+  const idx = argv.indexOf(name);
+  if (idx === -1) return null;
+  const v = argv[idx + 1];
+  return v && !v.startsWith('--') ? v : '';
+}
+
 /**
  * Must match the main RHTools app: Electron `app.getPath('userData')` uses the root
  * package.json `name` field (`"rhtools"`), not `productName`. Using `RHTools` here
@@ -62,6 +69,62 @@ function getRhtoolsUserDataPath() {
   }
   const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(configHome, RHTOOLS_USER_DATA_DIR_NAME);
+}
+
+/**
+ * Windows portable EXE typically has no attached console.
+ * Provide an opt-in backend log file for debugging:
+ *   - `rhtools-launcher-...-portable.exe --log-file <path>`
+ *   - or set `RH_LAUNCHER_LOG=1` (writes to userData/launcher-backend.log)
+ */
+function initLauncherFileLogging() {
+  try {
+    const argPath = parseArgValue(process.argv, '--log-file');
+    const enabled = process.env.RH_LAUNCHER_LOG === '1' || argPath !== null;
+    if (!enabled) return null;
+
+    const logPath =
+      argPath && String(argPath).trim()
+        ? String(argPath).trim()
+        : path.join(getRhtoolsUserDataPath(), 'launcher-backend.log');
+
+    const dir = path.dirname(logPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const stream = fs.createWriteStream(logPath, { flags: 'a' });
+    const savedLog = console.log.bind(console);
+    const savedErr = console.error.bind(console);
+    const savedWarn = console.warn ? console.warn.bind(console) : savedLog;
+
+    const writeLine = (prefix, args) => {
+      try {
+        const ts = new Date().toISOString();
+        stream.write(`${ts} ${prefix} ${args.join(' ')}\n`);
+      } catch (_e) {
+        // ignore file logging errors
+      }
+    };
+
+    console.log = (...args) => {
+      writeLine('[log]', args);
+      savedLog(...args);
+    };
+    console.error = (...args) => {
+      writeLine('[err]', args);
+      savedErr(...args);
+    };
+    console.warn = (...args) => {
+      writeLine('[warn]', args);
+      savedWarn(...args);
+    };
+
+    console.log('[launcher] Backend logging enabled:', logPath);
+    return { logPath };
+  } catch (_err) {
+    return null;
+  }
 }
 
 /** Old launcher builds used `RHTools`; migrate launcher-config.json once. */
@@ -365,7 +428,21 @@ function registerIpc() {
 
   ipcMain.handle('launcher:refresh-core-manifest', async () => {
     try {
+      bootstrapManifestsSafe();
       const result = await checkCoreManifestUpdates(null, { forceCheck: true });
+      const ud = getUserDataDir();
+      const datPath = path.join(ud, 'coremanifest_latest.dat');
+      if (!fs.existsSync(datPath)) {
+        return {
+          success: false,
+          error:
+            'Core manifest refresh did not produce coremanifest_latest.dat (signed). This usually means the launcher build did not include bundled electron/coremanifest.dat, so bootstrap cannot create it on fresh installs.',
+          result
+        };
+      }
+      if (result && result.error) {
+        return { success: false, error: result.error, result };
+      }
       return { success: true, result };
     } catch (err) {
       return { success: false, error: err.message || String(err) };
@@ -726,6 +803,7 @@ function registerIpc() {
 }
 
 app.setPath('userData', getRhtoolsUserDataPath());
+initLauncherFileLogging();
 
 app.whenReady().then(async () => {
   bootstrapManifestsSafe();

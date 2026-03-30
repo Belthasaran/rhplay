@@ -57,7 +57,9 @@ module.exports = {
     {
       from: path.join(rootDir, 'electron'),
       to: 'electron',
-      filter: ['coremanifest.json', 'dbmanifest.json', 'bpsarchives.json']
+      // coremanifest.dat is required so the launcher can bootstrap userData/coremanifest_latest.dat
+      // for signature verification on fresh installs (Windows portable has no console logs).
+      filter: ['coremanifest.json', 'coremanifest.dat', 'dbmanifest.json', 'bpsarchives.json']
     },
     {
       from: path.join(rootDir, 'lib'),

@@ -385,54 +385,19 @@ async function checkForUpdates(contractAddress = null, options = {}) {
       (pointer.updatedAt > (currentLastupdated ?? 0))
     );
 
-    // Short-circuit: if not forceCheck and on-chain says we're up to date (same version)
-    if (!forceCheck && !mustDownloadBecauseLocalInvalid && pointer && !isOnChainNewer) {
-      console.log('[coremanifest-updater] On-chain up to date (version/updatedAt not newer than manifest)');
-      // Fall through to DNS check
-    } else if (pointer && (isOnChainNewer || mustDownloadBecauseLocalInvalid)) {
-      console.log('[coremanifest-updater] On-chain indicates update (version: %s, updatedAt: %s)', pointer.currentVersion, pointer.updatedAt);
-      try {
-        const downloadedBytes = await downloadCoremanifestDat(pointer, 30000);
-        verifyOnChainSha256(downloadedBytes, pointer.payloadSha256);
-        const verifyResult = await verifyCoreManifestDat(downloadedBytes);
-        if (!verifyResult.valid) {
-          throw new Error(verifyResult.error || 'verification failed');
-        }
-        const newManifest = verifyResult.manifest;
-        const newLastupdated = manifestResolver.normalizeLastUpdated(newManifest.lastupdated);
-        const now = Math.floor(Date.now() / 1000);
-        if (newLastupdated > now) {
-          throw new Error(`New manifest lastupdated is in the future: ${newLastupdated} > ${now}`);
-        }
-        if (!mustDownloadBecauseLocalInvalid && currentLastupdated !== null && newLastupdated <= currentLastupdated) {
-          console.log('[coremanifest-updater] New manifest not newer than current, skipping');
-        } else {
-          applyManifestBytes(downloadedBytes, verifyResult);
-          saveCorepointerCache({
-            currentVersion: pointer.currentVersion,
-            updatedAt: pointer.updatedAt,
-            payloadSha256: pointer.payloadSha256,
-            lastChecked: Math.floor(Date.now() / 1000)
-          });
-          console.log('[coremanifest-updater] ✓ Update applied from on-chain');
-          return {
-            updated: true,
-            currentVersion: pointer.currentVersion,
-            newVersion: pointer.currentVersion,
-            lastupdated: newLastupdated,
-            source: 'onchain'
-          };
-        }
-      } catch (err) {
-        console.warn('[coremanifest-updater] On-chain download/verify failed:', err.message);
-        // Fall through to DNS check
-      }
-    }
-
     // ---- Step 2: DNS pointer (secondary) ----
     const hostnames = resolveDnshostPointer(currentManifest);
     if (hostnames.length === 0) {
       console.log(`[coremanifest-updater] DNS: No dnshost_pointer configured`)
+      // If local is invalid and we cannot consult DNS, never downgrade to an older on-chain manifest.
+      if (mustDownloadBecauseLocalInvalid) {
+        return {
+          updated: false,
+          currentVersion: pointer?.currentVersion ?? null,
+          newVersion: null,
+          error: 'Local core manifest files are missing/invalid and no dnshost_pointer is configured to repair them.'
+        };
+      }
       return {
         updated: false,
         currentVersion: pointer?.currentVersion ?? null,
@@ -458,55 +423,148 @@ async function checkForUpdates(contractAddress = null, options = {}) {
       (dnsPointer.currentVersion > (currentVersionId ?? 0)) ||
       (dnsPointer.updatedat > (currentLastupdated ?? 0));
 
-    if (!isDnsNewer && !mustDownloadBecauseLocalInvalid) {
-      console.log(`[coremanifest-updater] DNS coremanifest version same or less`)
+    // Decide which pointer to use. We never apply a manifest that is older than the currently loaded manifest.
+    // When forceCheck is requested, we still avoid downgrades; we just force queries/download attempts.
+    const candidates = [];
+    if (pointer) {
+      candidates.push({
+        source: 'onchain',
+        currentVersion: pointer.currentVersion ?? null,
+        updatedAt: pointer.updatedAt ?? null,
+        sha256: pointer.payloadSha256 ?? null,
+        raw: pointer
+      });
+    }
+    if (dnsPointer) {
+      candidates.push({
+        source: 'dns',
+        currentVersion: dnsPointer.currentVersion ?? null,
+        updatedAt: dnsPointer.updatedat ?? null,
+        sha256: dnsPointer.sha256 ?? null,
+        raw: dnsPointer
+      });
+    }
+    candidates.sort((a, b) => {
+      const va = typeof a.currentVersion === 'number' ? a.currentVersion : -1;
+      const vb = typeof b.currentVersion === 'number' ? b.currentVersion : -1;
+      if (vb !== va) return vb - va;
+      const ua = typeof a.updatedAt === 'number' ? a.updatedAt : -1;
+      const ub = typeof b.updatedAt === 'number' ? b.updatedAt : -1;
+      return ub - ua;
+    });
+
+    const best = candidates[0] || null;
+    const bestIsNewerThanCurrent =
+      best &&
+      (
+        (typeof best.currentVersion === 'number' && best.currentVersion > (currentVersionId ?? 0)) ||
+        (typeof best.updatedAt === 'number' && best.updatedAt > (currentLastupdated ?? 0))
+      );
+
+    if (!best) {
       return {
         updated: false,
         currentVersion: pointer?.currentVersion ?? null,
+        newVersion: null,
+        error: 'No on-chain or DNS pointer result available.'
+      };
+    }
+
+    // If local is missing/invalid and the best pointer is not newer, do not downgrade.
+    if (mustDownloadBecauseLocalInvalid && !bestIsNewerThanCurrent) {
+      return {
+        updated: false,
+        currentVersion: best.currentVersion ?? null,
+        newVersion: null,
+        error: `Local core manifest files are missing/invalid, but the latest pointer (${best.source}) is not newer than the current manifest; refusing to downgrade.`
+      };
+    }
+
+    // If not forceCheck and no pointer is newer, nothing to do.
+    if (!forceCheck && !bestIsNewerThanCurrent) {
+      return {
+        updated: false,
+        currentVersion: best.currentVersion ?? null,
         newVersion: null
       };
     }
 
-    console.log('[coremanifest-updater] DNS indicates update (version: %s, updatedat: %s)', dnsPointer.currentVersion, dnsPointer.updatedat);
-    try {
-      const downloadedBytes = await downloadCoremanifestDat(dnsPointer, 30000);
-      verifyOnChainSha256(downloadedBytes, dnsPointer.sha256);
-      const verifyResult = await verifyCoreManifestDat(downloadedBytes);
-      if (!verifyResult.valid) {
-        throw new Error(verifyResult.error || 'verification failed');
+    // Try candidates in best-first order; do not "assume" DNS availability just because it reports a newer version.
+    // A DNS pointer only counts if we can download and verify the corresponding coremanifest.dat (sha256 + signature).
+    let lastAttemptError = null;
+    for (const candidate of candidates) {
+      const candidateIsNewerThanCurrent =
+        (typeof candidate.currentVersion === 'number' && candidate.currentVersion > (currentVersionId ?? 0)) ||
+        (typeof candidate.updatedAt === 'number' && candidate.updatedAt > (currentLastupdated ?? 0));
+
+      // Under normal operation we only attempt newer candidates. Under forceCheck we still refuse to apply
+      // downgrades, but attempting a download of an older candidate provides no benefit, so skip it.
+      if (!candidateIsNewerThanCurrent) {
+        continue;
       }
-      const newManifest = verifyResult.manifest;
-      const newLastupdated = manifestResolver.normalizeLastUpdated(newManifest.lastupdated);
-      const now = Math.floor(Date.now() / 1000);
-      if (newLastupdated > now) {
-        throw new Error(`New manifest lastupdated is in the future: ${newLastupdated} > ${now}`);
-      }
-      if (!mustDownloadBecauseLocalInvalid && currentLastupdated !== null && newLastupdated <= currentLastupdated) {
-        console.log('[coremanifest-updater] New manifest from DNS not newer than current, skipping');
-      } else {
+
+      console.log(
+        '[coremanifest-updater] Attempting %s pointer (version: %s, updatedAt: %s)',
+        candidate.source,
+        candidate.currentVersion,
+        candidate.updatedAt
+      );
+
+      try {
+        const downloadedBytes = await downloadCoremanifestDat(candidate.raw, 30000);
+        verifyOnChainSha256(downloadedBytes, candidate.sha256);
+        const verifyResult = await verifyCoreManifestDat(downloadedBytes);
+        if (!verifyResult.valid) {
+          throw new Error(verifyResult.error || 'verification failed');
+        }
+        const newManifest = verifyResult.manifest;
+        const newLastupdated = manifestResolver.normalizeLastUpdated(newManifest.lastupdated);
+        const now = Math.floor(Date.now() / 1000);
+        if (newLastupdated > now) {
+          throw new Error(`New manifest lastupdated is in the future: ${newLastupdated} > ${now}`);
+        }
+        if (currentLastupdated !== null && newLastupdated <= currentLastupdated) {
+          // Never apply a downgrade or same-version write (even if pointer claimed "newer").
+          console.log('[coremanifest-updater] Downloaded manifest not newer than current; skipping apply.');
+          continue;
+        }
+
         applyManifestBytes(downloadedBytes, verifyResult);
-        saveDnsCorepointerCache({
-          currentVersion: dnsPointer.currentVersion,
-          updatedat: dnsPointer.updatedat,
-          lastChecked: Math.floor(Date.now() / 1000)
-        });
-        console.log('[coremanifest-updater] ✓ Update applied from DNS');
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (candidate.source === 'onchain') {
+          saveCorepointerCache({
+            currentVersion: candidate.currentVersion,
+            updatedAt: candidate.updatedAt,
+            payloadSha256: candidate.sha256,
+            lastChecked: nowSec
+          });
+        } else {
+          saveDnsCorepointerCache({
+            currentVersion: candidate.currentVersion,
+            updatedat: candidate.updatedAt,
+            lastChecked: nowSec
+          });
+        }
+        console.log('[coremanifest-updater] ✓ Update applied from %s', candidate.source);
         return {
           updated: true,
-          currentVersion: dnsPointer.currentVersion,
-          newVersion: dnsPointer.currentVersion,
+          currentVersion: candidate.currentVersion,
+          newVersion: candidate.currentVersion,
           lastupdated: newLastupdated,
-          source: 'dns'
+          source: candidate.source
         };
+      } catch (err) {
+        lastAttemptError = err.message || String(err);
+        console.warn('[coremanifest-updater] %s download/verify failed:', candidate.source, lastAttemptError);
+        // Try next candidate (e.g., DNS might be ahead but temporarily unavailable; on-chain might still work).
       }
-    } catch (err) {
-      console.warn('[coremanifest-updater] DNS download/verify failed:', err.message);
     }
 
     return {
       updated: false,
-      currentVersion: pointer?.currentVersion ?? null,
-      newVersion: null
+      currentVersion: best.currentVersion ?? null,
+      newVersion: null,
+      error: lastAttemptError || 'No viable core manifest update candidate could be downloaded and verified.'
     };
   } catch (err) {
     console.error('[coremanifest-updater] Update check failed:', err);

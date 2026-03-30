@@ -1,4 +1,4 @@
-- **0.1.29beta (2026-03-29)** – Release summary: [`docs/RELEASE_0.1.29beta_20260329.md`](RELEASE_0.1.29beta_20260329.md). Highlights: RHTools Launcher (download, DB provision, packaging), shared `rhtools` userData, catalog download order and SHA256 behavior, fetch-settings parity, tooling.
+- **0.1.29beta (2026-03-29)** – Release summary: [`docs/RELEASE_0.1.29beta_20260329.md`](RELEASE_0.1.29beta_20260329.md). Highlights: RHTools Launcher (download, DB provision, packaging), shared `rhtools` userData, catalog download order and hex SHA-256 string comparison, fetch-settings parity, tooling.
 
 - **RHTools Launcher — download / fetch settings**: Added **Change Download Settings** next to **Refresh core manifest**, opening the same **File Transfer and Peer-to-Peer** options as the main app (reads/writes shared `user-fetch-settings.json` via `fetch-settings:get-config` / `fetch-settings:save-config` IPC and [`electron/utils/ipfs-fetch-config.js`](electron/utils/ipfs-fetch-config.js)) so users can adjust IPFS/Arweave behavior before RHPlay is installed.
 
@@ -10,7 +10,7 @@
 
 - **Packaging (electron-builder)**: `build.files` (main app) and the launcher `node_modules` FileSet filter exclude build-only packages (`electron`, `app-builder-bin`, `electron-builder`, `dmg-builder`, `builder-util`) so they are not shipped inside `app.asar` for AppImage, portable EXE, and other targets using the same config. `extraResources` now use the correct `7zip-min` path and no longer duplicate packages already unpacked via `asarUnpack`. Launcher: `vue` is a devDependency only (renderer is pre-built), avoiding duplicate dependency copies when packaging.
 
-- **Catalog / software-update downloads**: Default source order when URLs exist is now `url` → `ipfs` → `ardrive` (HTTP tried before IPFS). SHA256 checks are case-insensitive so a verified HTTP download is not treated as a mismatch and retried via IPFS. Each `ensureArtifact` source pass returns early if `destPath` already matches the manifest hash.
+- **Catalog / software-update downloads**: Default source order when URLs exist is now `url` → `ipfs` → `ardrive` (HTTP tried before IPFS). SHA-256 verification compares **hex string** forms with **case-insensitive** `A`–`F` / `a`–`f` (the 32-byte digest itself is not “case folded”). That way a verified HTTP download is not treated as a mismatch and retried via IPFS when only hex letter case differs. Each `ensureArtifact` source pass returns early if `destPath` already matches the manifest hash.
 
 - **RHTools Launcher — progress window (AppImage)**: `electron-builder` `files` now uses an explicit FileSet `from: __dirname` with a `filter` so `progress-window.html` is copied into the app (bare string entries did not reliably include it). `asarUnpack` includes `progress-window.html`; `main.js` resolves `app.asar.unpacked/progress-window.html` when needed and uses `loadFile`.
 

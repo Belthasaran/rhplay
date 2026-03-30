@@ -184,6 +184,23 @@ function getBundledCoreManifestPath() {
 }
 
 /**
+ * Get bundled coremanifest.dat path (signed binary payload used for verification)
+ */
+function getBundledCoreManifestDatPath() {
+  const candidates = [
+    'electron/coremanifest.dat',
+    'coremanifest.dat'
+  ];
+  for (const candidate of candidates) {
+    const resolved = resolveResourcePath(candidate);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+/**
  * Get bundled bpsarchives.json path
  */
 function getBundledBpsarchivesManifestPath() {
@@ -370,6 +387,23 @@ function bootstrapManifests() {
     }
   }
 
+  // Bootstrap coremanifest_latest.dat
+  // The updater may choose not to download/apply a new coremanifest.dat when "up to date".
+  // However, other code paths verify signatures against userData/coremanifest_latest.dat.
+  // On a brand-new install, ensure we have a baseline signed .dat from the bundled app payload.
+  const bundledDatPath = getBundledCoreManifestDatPath();
+  if (bundledDatPath) {
+    const latestDatPath = path.join(userDataDir, 'coremanifest_latest.dat');
+    if (!fs.existsSync(latestDatPath)) {
+      try {
+        fs.copyFileSync(bundledDatPath, latestDatPath);
+        console.log('[manifest-resolver] Bootstrapped coremanifest_latest.dat from bundled');
+      } catch (err) {
+        console.error('[manifest-resolver] Failed to bootstrap coremanifest_latest.dat:', err.message);
+      }
+    }
+  }
+
   // Bootstrap bpsarchives_latest.json
   const bundledBpsPath = getBundledBpsarchivesManifestPath();
   if (bundledBpsPath) {
@@ -405,6 +439,7 @@ module.exports = {
   ensureDirectory,
   getCoreManifestPath,
   loadCoreManifest,
+  getBundledCoreManifestDatPath,
   getBpsarchivesManifestPath,
   loadBpsarchivesManifest,
   getDbmanifestPath,

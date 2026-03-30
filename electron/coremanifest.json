@@ -49,8 +49,8 @@
     ]
   ],
   "beta/dbmanifest.json": {
-    "version": "15",
-    "updated": 1771663061
+    "version": "16",
+    "updated": 1774913386
   },
   "beta/bpsarchives.json": {
     "version": "15",
@@ -111,10 +111,10 @@
       "dbmanifest.json",
       "bpsarchives.json"
     ],
-    "sha256": "10c2b5b6fd0db4fcd62501028db8f73cb3a2b36a146d4c4279574c5a1976a851",
-    "ipfs_cidv1": "bafkreiaqyk23n7inwt6nmjibakg3r5z4worlg2qunvgee6kxjrnbs5vike",
-    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS82U3kxa0RWeAo=",
-    "size": "97702",
+    "sha256" : "75a44d39f2cdb4bd33cdd703e06d3441f2971c77af9c02977a63d69fc00d6b0c",
+    "ipfs_cidv1": "bafkreidvurgtt4wnws6thtoxapqg2ncb6klry55ptqbjo6td22p4adllbq",
+    "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS90amZZeXh6Wgo=",
+    "size": "97757",
     "priority": [
       "baddr",
       "ipfs",
@@ -122,9 +122,9 @@
     ],
     "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
     "ardrive_folder_id": "58f5feb4-f3d6-430b-b428-dcc3b7da90f0",
-    "ardrive_file_path": "/SMWRH/rhmanifest/manifest20260219.zip",
-    "ardrive_file_name": "manifest20260219.zip",
-    "ardrive_file_id": "d1b218f5-e2ae-4f16-9421-b39a1e429af5",
-    "data_txid": "UadJtlm7-tuBjf3t9tGZJU6y4WOmu2j32zh7qa5SdlY"
+    "ardrive_file_path": "/SMWRH/rhmanifest/",
+    "ardrive_file_name": "",
+    "ardrive_file_id": "",
+    "data_txid": ""
   }
 }

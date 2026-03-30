@@ -13,6 +13,81 @@ const { verifyCoreManifestDat } = require('./verify-coremf-dat-internal');
 const arweaveFetchConfig = require('./arweave-fetch-config');
 const { resolveDnshostPointer, queryDnsPointer } = require('./dns-pointer');
 
+function normalizeVersionId(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.floor(v);
+  if (typeof v === 'string') {
+    const p = parseInt(v.trim(), 10);
+    return Number.isFinite(p) ? p : null;
+  }
+  return null;
+}
+
+/**
+ * Ensure userData/coremanifest_latest.dat exists and verifies, and that
+ * userData/coremanifest_latest.json is consistent with the verified .dat payload.
+ *
+ * Returns:
+ *  - { ok: true, repaired: boolean }
+ *  - { ok: false, needsNetwork: true, reason: string }
+ */
+async function ensureLocalCoremanifestLatestConsistent() {
+  const userDataDir = manifestResolver.getUserDataDir();
+  const datPath = path.join(userDataDir, 'coremanifest_latest.dat');
+  const jsonPath = path.join(userDataDir, 'coremanifest_latest.json');
+
+  if (!fs.existsSync(datPath)) {
+    return { ok: false, needsNetwork: true, reason: 'coremanifest_latest.dat missing' };
+  }
+
+  let fileData;
+  try {
+    fileData = fs.readFileSync(datPath);
+  } catch (err) {
+    return { ok: false, needsNetwork: true, reason: `coremanifest_latest.dat unreadable: ${err.message}` };
+  }
+
+  const verifyResult = await verifyCoreManifestDat(fileData);
+  if (!verifyResult || !verifyResult.valid || !verifyResult.manifest) {
+    return {
+      ok: false,
+      needsNetwork: true,
+      reason: verifyResult && verifyResult.error ? verifyResult.error : 'coremanifest_latest.dat signature verification failed'
+    };
+  }
+
+  // If JSON is missing/invalid, or inconsistent with verified DAT, rewrite JSON from DAT.
+  const datManifest = verifyResult.manifest;
+  const datLastupdated = manifestResolver.normalizeLastUpdated(datManifest.lastupdated);
+  const datVersionId = normalizeVersionId(datManifest.versionid);
+
+  const jsonInfo = (() => {
+    try {
+      if (!fs.existsSync(jsonPath)) return { valid: false, manifest: null };
+      const raw = fs.readFileSync(jsonPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const v = manifestResolver.validateManifest(parsed);
+      return { valid: v.valid, manifest: parsed };
+    } catch (_err) {
+      return { valid: false, manifest: null };
+    }
+  })();
+
+  let inconsistent = !jsonInfo.valid;
+  if (!inconsistent && jsonInfo.manifest) {
+    const jsonLastupdated = manifestResolver.normalizeLastUpdated(jsonInfo.manifest.lastupdated);
+    const jsonVersionId = normalizeVersionId(jsonInfo.manifest.versionid);
+    if ((datLastupdated ?? null) !== (jsonLastupdated ?? null)) inconsistent = true;
+    if ((datVersionId ?? null) !== (jsonVersionId ?? null)) inconsistent = true;
+  }
+
+  if (inconsistent) {
+    applyManifestBytes(fileData, verifyResult);
+    return { ok: true, repaired: true };
+  }
+
+  return { ok: true, repaired: false };
+}
+
 /**
  * Get corepointer cache path
  */
@@ -271,6 +346,20 @@ async function checkForUpdates(contractAddress = null, options = {}) {
   const { forceCheck = false, customRpcUrl = null } = options;
 
   try {
+    // Step 0: Ensure local coremanifest_latest.{dat,json} are present, valid, and consistent.
+    // Refresh should never "skip" when files are missing/damaged/inconsistent.
+    let mustDownloadBecauseLocalInvalid = false;
+    try {
+      const local = await ensureLocalCoremanifestLatestConsistent();
+      if (!local.ok && local.needsNetwork) {
+        mustDownloadBecauseLocalInvalid = true;
+        console.warn('[coremanifest-updater] Local coremanifest latest invalid:', local.reason);
+      }
+    } catch (err) {
+      mustDownloadBecauseLocalInvalid = true;
+      console.warn('[coremanifest-updater] Local coremanifest latest check failed:', err.message);
+    }
+
     const currentManifest = manifestResolver.loadCoreManifest();
     if (!currentManifest) {
       throw new Error('Failed to load current core manifest');
@@ -297,10 +386,10 @@ async function checkForUpdates(contractAddress = null, options = {}) {
     );
 
     // Short-circuit: if not forceCheck and on-chain says we're up to date (same version)
-    if (!forceCheck && pointer && !isOnChainNewer) {
+    if (!forceCheck && !mustDownloadBecauseLocalInvalid && pointer && !isOnChainNewer) {
       console.log('[coremanifest-updater] On-chain up to date (version/updatedAt not newer than manifest)');
       // Fall through to DNS check
-    } else if (isOnChainNewer) {
+    } else if (pointer && (isOnChainNewer || mustDownloadBecauseLocalInvalid)) {
       console.log('[coremanifest-updater] On-chain indicates update (version: %s, updatedAt: %s)', pointer.currentVersion, pointer.updatedAt);
       try {
         const downloadedBytes = await downloadCoremanifestDat(pointer, 30000);
@@ -315,7 +404,7 @@ async function checkForUpdates(contractAddress = null, options = {}) {
         if (newLastupdated > now) {
           throw new Error(`New manifest lastupdated is in the future: ${newLastupdated} > ${now}`);
         }
-        if (currentLastupdated !== null && newLastupdated <= currentLastupdated) {
+        if (!mustDownloadBecauseLocalInvalid && currentLastupdated !== null && newLastupdated <= currentLastupdated) {
           console.log('[coremanifest-updater] New manifest not newer than current, skipping');
         } else {
           applyManifestBytes(downloadedBytes, verifyResult);
@@ -369,7 +458,7 @@ async function checkForUpdates(contractAddress = null, options = {}) {
       (dnsPointer.currentVersion > (currentVersionId ?? 0)) ||
       (dnsPointer.updatedat > (currentLastupdated ?? 0));
 
-    if (!isDnsNewer) {
+    if (!isDnsNewer && !mustDownloadBecauseLocalInvalid) {
       console.log(`[coremanifest-updater] DNS coremanifest version same or less`)
       return {
         updated: false,
@@ -392,7 +481,7 @@ async function checkForUpdates(contractAddress = null, options = {}) {
       if (newLastupdated > now) {
         throw new Error(`New manifest lastupdated is in the future: ${newLastupdated} > ${now}`);
       }
-      if (currentLastupdated !== null && newLastupdated <= currentLastupdated) {
+      if (!mustDownloadBecauseLocalInvalid && currentLastupdated !== null && newLastupdated <= currentLastupdated) {
         console.log('[coremanifest-updater] New manifest from DNS not newer than current, skipping');
       } else {
         applyManifestBytes(downloadedBytes, verifyResult);

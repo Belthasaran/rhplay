@@ -1,7 +1,7 @@
 {
-  "lastupdated": 1774722393,
-  "versionid": 7,
-  "version_string": "7",
+  "lastupdated": 1774914828,
+  "versionid": 8,
+  "version_string": "8",
   "waiting_ardrive_id": "d3338fab-d24c-4d75-9e78-d3024befc225",
   "waiting_ardrive_folder": "2ef50675-a5bb-45a7-aea8-21cb5603eff6",
   "waiting_index_data_txid": "V3meKuFxBtyRlFQXa-Qj1BvuhBAca9N6hnV48DKGjlI",
@@ -111,7 +111,7 @@
       "dbmanifest.json",
       "bpsarchives.json"
     ],
-    "sha256" : "75a44d39f2cdb4bd33cdd703e06d3441f2971c77af9c02977a63d69fc00d6b0c",
+    "sha256": "75a44d39f2cdb4bd33cdd703e06d3441f2971c77af9c02977a63d69fc00d6b0c",
     "ipfs_cidv1": "bafkreidvurgtt4wnws6thtoxapqg2ncb6klry55ptqbjo6td22p4adllbq",
     "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS90amZZeXh6Wgo=",
     "size": "97757",
@@ -122,9 +122,9 @@
     ],
     "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
     "ardrive_folder_id": "58f5feb4-f3d6-430b-b428-dcc3b7da90f0",
-    "ardrive_file_path": "/SMWRH/rhmanifest/",
-    "ardrive_file_name": "",
-    "ardrive_file_id": "",
-    "data_txid": ""
+    "ardrive_file_path": "/SMWRH/rhmanifest/manifest20260329.zip",
+    "ardrive_file_name": "manifest20260329.zip",
+    "ardrive_file_id": "699f1c09-fb90-4289-a497-dcdb298855d0",
+    "data_txid": "XziDIcUqxXj2EzHYArRASFDhgZObHL3OoJvGIeqTfr8"
   }
 }

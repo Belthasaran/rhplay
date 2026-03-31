@@ -397,6 +397,22 @@ function registerIpc() {
     const dbManifestInfo = resolveDbmanifestPathForLauncher();
     const dbStatus = getDatabaseProvisionStatus();
     const provisionedJsonPath = path.join(ud, 'provisioned.json');
+
+    let coreManifest = null;
+    if (manifest) {
+      const lu = manifestResolver.normalizeLastUpdated(manifest.lastupdated);
+      const vs =
+        manifest.version_string != null && String(manifest.version_string).trim() !== ''
+          ? String(manifest.version_string).trim()
+          : null;
+      const vid = typeof manifest.versionid === 'number' ? manifest.versionid : null;
+      coreManifest = {
+        versionString: vs,
+        versionid: vid,
+        lastupdated: lu
+      };
+    }
+
     return {
       userDataDir: ud,
       databaseDir: ud,
@@ -407,6 +423,7 @@ function registerIpc() {
       platform,
       format,
       manifestLoaded: !!manifest,
+      coreManifest,
       rhplayEntry: entry,
       entryError,
       installedRhplay: installed,

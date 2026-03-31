@@ -1,3 +1,5 @@
+- **RHTools Launcher UI**: RHPlay section shows **active core manifest** `version_string` / `versionid` and **`lastupdated`** (Unix + local time) above the RHPlay manifest entry line.
+
 - **0.1.29beta (2026-03-29)** – Release summary: [`docs/RELEASE_0.1.29beta_20260329.md`](RELEASE_0.1.29beta_20260329.md). Highlights: RHTools Launcher (download, DB provision, packaging), shared `rhtools` userData, catalog download order and hex SHA-256 string comparison, fetch-settings parity, tooling.
 
 - **RHTools Launcher — download / fetch settings**: Added **Change Download Settings** next to **Refresh core manifest**, opening the same **File Transfer and Peer-to-Peer** options as the main app (reads/writes shared `user-fetch-settings.json` via `fetch-settings:get-config` / `fetch-settings:save-config` IPC and [`electron/utils/ipfs-fetch-config.js`](electron/utils/ipfs-fetch-config.js)) so users can adjust IPFS/Arweave behavior before RHPlay is installed.

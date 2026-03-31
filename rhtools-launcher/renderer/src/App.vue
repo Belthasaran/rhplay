@@ -57,8 +57,17 @@
     <section class="card">
       <h2>RHPlay</h2>
       <p v-if="entryError" class="error">{{ entryError }}</p>
+      <p v-if="manifestLoaded && coreManifest" class="meta core-manifest-active">
+        <span class="core-mf-label">Active core manifest</span>
+        <strong class="core-mf-ver">{{ coreManifestVersionLabel }}</strong>
+        <span v-if="coreManifest.lastupdated != null" class="core-mf-ts">
+          · lastupdated <code>{{ coreManifest.lastupdated }}</code>
+          <span v-if="coreManifestLastUpdatedLocal">({{ coreManifestLastUpdatedLocal }})</span>
+        </span>
+      </p>
+      <p v-else-if="!manifestLoaded" class="meta hint">Core manifest not loaded.</p>
       <p v-if="rhplayEntry" class="meta">
-        Manifest version: <strong>{{ rhplayEntry.version }}</strong>
+        Manifest entry version: <strong>{{ rhplayEntry.version }}</strong>
         <span v-if="rhplayEntry.sha256" class="hash">SHA256: {{ rhplayEntry.sha256.slice(0, 16) }}…</span>
       </p>
       <div class="actions">
@@ -161,7 +170,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import FetchSettingsDialog from './components/FetchSettingsDialog.vue';
 
 const api = window.launcherAPI;
@@ -169,6 +178,8 @@ const api = window.launcherAPI;
 const romCheckModalOpen = ref(false);
 const romValidationError = ref(null);
 const channel = ref('beta');
+const manifestLoaded = ref(false);
+const coreManifest = ref(null);
 const userDataDir = ref('');
 const releasesDir = ref('');
 const rhplayEntry = ref(null);
@@ -186,6 +197,27 @@ const provisionedJsonPath = ref('');
 const provisionedJsonExists = ref(false);
 const dbStatus = ref(null);
 const fetchSettingsOpen = ref(false);
+
+const coreManifestVersionLabel = computed(() => {
+  const c = coreManifest.value;
+  if (!c) return '—';
+  const vs = c.versionString;
+  const vid = c.versionid;
+  if (vs && vid != null) return `${vs} (versionid ${vid})`;
+  if (vs) return vs;
+  if (vid != null) return `versionid ${vid}`;
+  return '—';
+});
+
+const coreManifestLastUpdatedLocal = computed(() => {
+  const c = coreManifest.value;
+  if (!c || c.lastupdated == null || !Number.isFinite(c.lastupdated)) return '';
+  try {
+    return new Date(c.lastupdated * 1000).toLocaleString();
+  } catch (_e) {
+    return '';
+  }
+});
 
 function formatDbStatus(status) {
   switch (status) {
@@ -278,6 +310,8 @@ async function refreshState() {
   userDataDir.value = s.userDataDir || '';
   releasesDir.value = s.releasesDir || '';
   channel.value = s.channel || 'beta';
+  manifestLoaded.value = !!s.manifestLoaded;
+  coreManifest.value = s.coreManifest || null;
   rhplayEntry.value = s.rhplayEntry || null;
   entryError.value = s.entryError || null;
   installedRhplay.value = s.installedRhplay || [];
@@ -470,6 +504,29 @@ async function doReprovision() {
 .provisioned-line {
   font-size: 0.82rem;
 }
+.core-manifest-active {
+  margin-bottom: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: #1e222a;
+  border-radius: 6px;
+  border: 1px solid #3a4150;
+}
+.core-mf-label {
+  color: #9aa;
+  margin-right: 0.35rem;
+}
+.core-mf-ver {
+  color: #cfe;
+}
+.core-mf-ts {
+  color: #9aa;
+  font-size: 0.85rem;
+}
+.core-mf-ts code {
+  font-size: 0.82rem;
+  color: #bdc;
+}
+
 .hash {
   display: block;
   font-family: ui-monospace, monospace;

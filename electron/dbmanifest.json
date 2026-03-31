@@ -1,5 +1,5 @@
 {
-  "lastupdated": "1771663061",
+  "lastupdated": "1774913386",
   "greetings": {
     "message": "No announcement has been specified"
   },
@@ -35,10 +35,11 @@
   "clientdata.db": {
     "final_sha256": "b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8",
     "base": {
-      "source_path": "packed_db/clientdata.db.initial.xz",
+      "x__source_path": "packed_db/clientdata.db.initial.xz",
       "file_name": "clientdata.db.initial.xz",
       "format": "xz",
       "sha256": "51f93fe10acfe1669799156255ef0a4f35a5763c5d5dbf72c6bddbf1960df50c",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9pNGFKWDNIbwo=",
       "ipfs_cidv1": "bafkreicr7e76ccwp4ftjpgivmjk66cspgwsxmpc5lw7xfrv53pyzmdpvbq",
       "ardrive_file_path": "/SMWRH/db/clientdata.db.initial.xz",
       "ardrive_file_name": "clientdata.db.initial.xz",
@@ -55,6 +56,7 @@
     "base": {
       "file_name": "resource.db.initial.xz",
       "format": "xz",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS96anRrb2t2Tgo=",
       "sha256": "31ecf773f00d550426423df3cdad9981974af22facdc7654f0f244e091b24f81",
       "ipfs_cidv1": "bafybeicmghwppy6vwgysxbu5hw3yfryeuzguqnngyqmthr52nmybllupgi",
       "size": "37453636",
@@ -103,9 +105,10 @@
   "screenshot.db": {
     "version": "13",
     "base": {
-      "source_path": "packed_db/screenshot.db.initial.xz",
+      "x__source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
       "format": "xz",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vcnliNTRhcgo=",
       "sha256": "9ee9f45f88656f840fa0fc8e30e24338459dff32d08de87046bfa76322a04fe7",
       "ipfs_cidv1": "bafkreie65h2f7cdfn6ca7ih4ryyoeqzyiwo76mwqrxuharv7u5rsficp44",
       "size": "138440",

@@ -75,10 +75,10 @@
           v-if="bestLaunchCandidate"
           type="button"
           class="primary"
-          :disabled="busy"
+          :disabled="busy || launching"
           @click="launch(bestLaunchCandidate.path)"
         >
-          Launch
+          {{ launching && launchingPath === bestLaunchCandidate.path ? 'Launching…' : 'Launch' }}
         </button>
         <button type="button" class="primary" :disabled="busy || !rhplayEntry" @click="downloadRhplay">
           {{ busy ? 'Working…' : 'Download / update RHPlay' }}
@@ -97,7 +97,9 @@
         <li v-for="(it, idx) in installedRhplay" :key="idx + it.path">
           <span class="ver">{{ it.version }}</span>
           <span class="fname">{{ it.filename }}</span>
-          <button type="button" class="small" @click="launch(it.path)">Launch</button>
+          <button type="button" class="small" :disabled="busy || launching" @click="launch(it.path)">
+            {{ launching && launchingPath === it.path ? 'Launching…' : 'Launch' }}
+          </button>
         </li>
       </ul>
       <details class="advanced">
@@ -197,6 +199,9 @@ const provisionedJsonPath = ref('');
 const provisionedJsonExists = ref(false);
 const dbStatus = ref(null);
 const fetchSettingsOpen = ref(false);
+const launching = ref(false);
+const launchingPath = ref('');
+let launchFeedbackTimer = null;
 
 const coreManifestVersionLabel = computed(() => {
   const c = coreManifest.value;
@@ -218,6 +223,21 @@ const coreManifestLastUpdatedLocal = computed(() => {
     return '';
   }
 });
+
+function setLaunchFeedback(path, message) {
+  launching.value = true;
+  launchingPath.value = path || '';
+  if (message) {
+    downloadMsg.value = message;
+  }
+  if (launchFeedbackTimer) {
+    clearTimeout(launchFeedbackTimer);
+  }
+  launchFeedbackTimer = setTimeout(() => {
+    launching.value = false;
+    launchingPath.value = '';
+  }, 4000);
+}
 
 function formatDbStatus(status) {
   switch (status) {
@@ -396,10 +416,15 @@ async function downloadRhplay() {
 
 async function launch(exePath) {
   if (!(await ensureRom())) return;
+  setLaunchFeedback(exePath, 'Launching RHPlay… (this can take a while on Windows)');
   const r = await api.launchRhplay(exePath);
   if (!r.success) {
+    launching.value = false;
+    launchingPath.value = '';
     alert(r.error || 'Launch failed');
+    return;
   }
+  setLaunchFeedback(exePath, 'Launch requested. If the window does not appear, check your releases build and logs.');
 }
 
 async function pickExecutable() {

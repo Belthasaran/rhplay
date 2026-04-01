@@ -80,20 +80,46 @@ f.write("""
 
 
 
+ function escapeP(text) {
+    p = document.createElement('p')
+    texto = document.createTextNode(text)
+    p.appendChild(texto)
+    return p.innerHTML.replaceAll("\\n","<br>")
+ }
+
+ function escH(text) {
+    p = document.createElement('p')
+    texto = document.createTextNode(text)
+    p.appendChild(texto)
+    return p.innerHTML;
+ }
+
 
  function showNote(text) {
  dialog.showModal()
- p = document.createElement('p')
- texto = document.createTextNode(text)
- p.appendChild(texto)
- dialogMessage.innerHTML = p.innerHTML.replaceAll("\\n","<br>")
-
+ dialogMessage.innerHTML =  (text);
  //alert(text)
  }
 
  function modData(el) {
  //alert(" GameID: " + el.parentElement.getAttribute("data-gameid"))
- showNote(`GameID: ${el.parentElement.getAttribute("data-gameid")}\\nName: ${el.parentElement.getAttribute("data-name")}\\nResult: ${el.parentElement.getAttribute("data-mod-result")}\\nModerator: ${el.parentElement.getAttribute("data-mod-moderator")}\\nNote: ${el.parentElement.getAttribute("data-mod-note")}\\nLink: ${el.parentElement.getAttribute("data-mod-link")}\\nThread: ${el.parentElement.getAttribute("data-mod-thread")}\\nT:${el.parentElement.getAttribute("data-mod-t")}  `)
+ linkData = escH(el.parentElement.getAttribute("data-mod-link"));
+ threadData = escH(el.parentElement.getAttribute("data-mod-thread"));
+ gameId = escH(el.parentElement.getAttribute("data-gameid"))
+
+ html_gameid = `<A HREF="https://www.smwcentral.net/?p=section&a=details&id=${gameId}" TARGET="_new">${gameId}</A>`;
+ html_link = `<A HREF="${linkData}" target="_new">${linkData}</A>`;
+ html_thread  = `<A HREF="${threadData}" target="_new">${threadData}</A>`;
+
+ if (!linkData) {
+   html_link = "null";
+ };
+ if (!threadData) {
+ html_link = "null";
+ }
+
+
+ showNote(`GameID: ${html_gameid}\\nName: ${escH(el.parentElement.getAttribute("data-name"))}\\nResult: ${escH(el.parentElement.getAttribute("data-mod-result"))}\\nModerator: ${escH(el.parentElement.getAttribute("data-mod-moderator"))}\\nNote: ${escH(el.parentElement.getAttribute("data-mod-note"))}\\nLink: ${html_link}\\nThread: ${html_thread}\\nT:${escH(el.parentElement.getAttribute("data-mod-t"))}  `.replaceAll("\\n","<br>"))
  }
 </script>
 <style>

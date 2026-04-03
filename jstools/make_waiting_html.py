@@ -326,6 +326,9 @@ for record in items:
     elif record["moderated"] == "Alert" or re.match(r'^alert.*', record['moderated'],re.I):
         modemoji = "[‼️]"
         modclass = "m_alert"
+    elif record["moderated"] == "Unlogged" or  re.match(r'^unlogged.*', record['moderated'],re.I):
+        modemoji = "❓"
+        modclass = "m_alert"
     elif record["moderated"] == "":
         modemoji = "❓"
         record["moderated"] = "Unknown"

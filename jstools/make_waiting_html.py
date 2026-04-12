@@ -327,6 +327,7 @@ for record in items:
     modclass = ""
     modemoji = ""
     moddata = {}
+    blockentry = False
     if "moderated_d" in record:
         moddata = record["moderated_d"]
     if record["moderated"] == "Moderated" or re.match(r'^moderated.*', record["moderated"],re.I)  or re.match(r'^accepted.*', record["moderated"],re.I) :
@@ -335,12 +336,16 @@ for record in items:
     elif record["moderated"] == "Waiting" or re.match(r'^waiting.*', record["moderated"],re.I) :
         modclass = "m_waiting"
         modemoji = "⌛"
-    elif record["moderated"] == "Removed" or re.match(r'^removed.*', record["moderated"],re.I) :
+    elif record["moderated"] == "Removed" or re.match(r'^removed.*', record["moderated"],re.I)  or re.match(r'^block.*', record["moderated"], re.I) :
         modclass = "m_removed"
         modemoji = "❌"
     elif record["moderated"] == "Rejected" or re.match(r'^rejected.*', record["moderated"],re.I) :
         modemoji = "❌"
         modclass = "m_rejected"
+    elif record["moderated"] == "A3" or re.match(r'^a3.*', record["moderated"],re.I) :
+        modclass = "m_removed"
+        modemoji = "❌❌"
+        blockentry = True
     elif record["moderated"] == "Alert" or re.match(r'^alert.*', record['moderated'],re.I):
         modemoji = "[‼️]"
         modclass = "m_alert"
@@ -367,7 +372,13 @@ for record in items:
             moddata_s = moddata_s + " data-mod-" + w + '="' + html.escape(moddata[w])  + '"'
         pass
     record["moddata_s"] = moddata_s
-    f.write('<tr> <td>{timeStr}</td>  <td class="{modclass}"{moddata_s}>{modemoji}<a class="{modclass}" href="#" onclick="event.preventDefault(); modData(this)">{moderated}</a></td>  <td><a href="https://arweave.net/{data_txid}">{gameid}</a></td> <td><a href="https://ardrive.net/{data_txid}">{name}</a></td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))
+    record["waiting_anchor"]='<a href="https://arweave.net/{data_txid}">'.format(**record);
+    record["end_waiting_anchor"]='</a>'
+    if blockentry:
+        record["waiting_anchor"]=""
+        record["end_waiting_anchor"]=""
+
+    f.write('<tr> <td>{timeStr}</td>  <td class="{modclass}"{moddata_s}>{modemoji}<a class="{modclass}" href="#" onclick="event.preventDefault(); modData(this)">{moderated}</a></td>  <td>{waiting_anchor}{gameid}{end_waiting_anchor}</td> <td>{waiting_anchor}{name}{end_waiting_anchor}</td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))
     f.write("\n")
     if x == 0:
         f.write('</thead><tbody>')

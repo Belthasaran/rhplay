@@ -94,6 +94,18 @@ const HARDCODED_BANS = [
     active: 1
   },
   {
+	  gameid: null,
+	  match_column: 'author',
+	  match_pattern: 'regex:/^Alann64Z$/',
+	  sense: '*',
+	  required_acknowledgments: '',
+	  starting_at: null,
+	  reason: 'excluded',
+	  warningtext: 'excluded',
+	  sequence_no: 3,
+	  active: 1
+  },
+  {
      gameid: 40470,
     match_column: 'gameid',
     match_pattern: 'exact:40470',

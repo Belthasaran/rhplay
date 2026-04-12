@@ -118,8 +118,26 @@ f.write("""
  html_link = "null";
  }
 
+ mod_result = (el.parentElement.getAttribute("data-mod-result"));
+ if (mod_result && mod_result !== "") {
+     esc_mod_result = escH(mod_result);
+ } else {
+     esc_mod_result = "";
+ }
 
- showNote(`GameID: ${html_gameid}\\nName: ${escH(el.parentElement.getAttribute("data-name"))}\\nResult: ${escH(el.parentElement.getAttribute("data-mod-result"))}\\nModerator: ${escH(el.parentElement.getAttribute("data-mod-moderator"))}\\nNote: ${escH(el.parentElement.getAttribute("data-mod-note"))}\\nLink: ${html_link}\\nThread: ${html_thread}\\nT:${escH(el.parentElement.getAttribute("data-mod-t"))}  `.replaceAll("\\n","<br>"))
+ mod_status  = (el.parentElement.getAttribute("data-mod-status"));
+ if (mod_status && mod_status !== "") {
+     esc_mod_status = escH(mod_status);
+ } else {
+    esc_mod_status = "";
+ }
+
+if (esc_mod_result === "" && esc_mod_status !== "") {
+    esc_mod_result = esc_mod_status;
+}
+
+
+ showNote(`GameID: ${html_gameid}\\nName: ${escH(el.parentElement.getAttribute("data-name"))}\\nResult: ${esc_mod_result}\\nModerator: ${escH(el.parentElement.getAttribute("data-mod-moderator"))}\\nNote: ${escH(el.parentElement.getAttribute("data-mod-note"))}\\nLink: ${html_link}\\nThread: ${html_thread}\\nT:${escH(el.parentElement.getAttribute("data-mod-t"))}  `.replaceAll("\\n","<br>"))
  }
 </script>
 <style>
@@ -344,7 +362,7 @@ for record in items:
     record["moddata_s"] = ""
     moddata_s = ' data-gameid="' + html.escape(str(record["gameid"]))  + '"'
     moddata_s = moddata_s + ' data-name="' + html.escape(str(record["name"])) + '"'
-    for w in ['link','thread','moderator','t','note','result']:
+    for w in ['link','thread','moderator','t','note','result','status']:
         if w in moddata:
             moddata_s = moddata_s + " data-mod-" + w + '="' + html.escape(moddata[w])  + '"'
         pass

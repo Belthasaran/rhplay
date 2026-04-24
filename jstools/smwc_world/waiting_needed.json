@@ -1,1 +1,139 @@
-[]
+[
+  {
+    "id": 42245,
+    "section": "smwhacks",
+    "name": "Super Mario Mushroom Kingdom Madness",
+    "time": 1776976052,
+    "submitted_at": 1776976052,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 72663,
+        "name": "Greeeen"
+      }
+    ],
+    "submitter": {
+      "id": 72663,
+      "name": "Greeeen"
+    },
+    "moderator": null,
+    "tags": [],
+    "images": [
+      "https://dl.smwcentral.net/image/123417.png",
+      "https://dl.smwcentral.net/image/123418.png",
+      "https://dl.smwcentral.net/image/123419.png",
+      "https://dl.smwcentral.net/image/123420.png",
+      "https://dl.smwcentral.net/image/123421.png",
+      "https://dl.smwcentral.net/image/123422.png",
+      "https://dl.smwcentral.net/image/123423.png",
+      "https://dl.smwcentral.net/image/123424.png"
+    ],
+    "rating": 5,
+    "size": 513307,
+    "downloads": 715,
+    "download_url": "https://dl.smwcentral.net/42245/SM%20Mushroom%20Kingdom%20Madness%20Demo.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "2",
+      "changelog": "New name, one more world, new graphics, more content.",
+      "difficulty": "Casual",
+      "type": "Standard",
+      "length": "30 exit(s)",
+      "hof": "No",
+      "demo": "Yes",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Super Mario Super Quest is now Mushroom Kingdom Madness, a classic adventure around the mushroom kingdom to save the princess Peach."
+    },
+    "raw_fields": {
+      "version": "2",
+      "changelog": "New name, one more world, new graphics, more content.",
+      "difficulty": "diff_2",
+      "type": [
+        "standard"
+      ],
+      "length": 30,
+      "hof": false,
+      "demo": true,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Super Mario Super Quest is now Mushroom Kingdom Madness, a classic adventure around the mushroom kingdom to save the princess Peach."
+    }
+  },
+  {
+    "id": 42246,
+    "section": "smwhacks",
+    "name": "New Super Mario World 3: Peach's Double Trouble",
+    "time": 1776981719,
+    "submitted_at": 1776981719,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 40670,
+        "name": "Bullymario"
+      }
+    ],
+    "submitter": {
+      "id": 40670,
+      "name": "Bullymario"
+    },
+    "moderator": null,
+    "tags": [
+      "asm",
+      "cutscenes",
+      "exgfx",
+      "hdma",
+      "music"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/123425.png",
+      "https://dl.smwcentral.net/image/123426.png",
+      "https://dl.smwcentral.net/image/123427.png",
+      "https://dl.smwcentral.net/image/123428.png",
+      "https://dl.smwcentral.net/image/123429.png",
+      "https://dl.smwcentral.net/image/123430.png",
+      "https://dl.smwcentral.net/image/123431.png",
+      "https://dl.smwcentral.net/image/123432.png",
+      "https://dl.smwcentral.net/image/123433.png",
+      "https://dl.smwcentral.net/image/123434.png",
+      "https://dl.smwcentral.net/image/123435.png"
+    ],
+    "rating": 0,
+    "size": 1628424,
+    "downloads": 12,
+    "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "93 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Princess Peach decides to go on a adventure with Wario in some new world. Some new villain wants to conquer the Mushroom Kingdom and then the world. Sequel of the previous 2 NSMW.<br>\r\n<br>\r\nVersion 2.1.2<br>\r\n<br>\r\nThis is a 2014-ish style hack, so everything you see not gonna have stuff that's newer than 2014.<br>\r\n<br>\r\nMore Info in the Readme.txt"
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_3",
+      "type": [
+        "standard"
+      ],
+      "length": 93,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Princess Peach decides to go on a adventure with Wario in some new world. Some new villain wants to conquer the Mushroom Kingdom and then the world. Sequel of the previous 2 NSMW.\r\n\r\nVersion 2.1.2\r\n\r\nThis is a 2014-ish style hack, so everything you see not gonna have stuff that's newer than 2014.\r\n\r\nMore Info in the Readme.txt"
+    }
+  }
+]

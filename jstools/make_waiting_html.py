@@ -136,8 +136,25 @@ if (esc_mod_result === "" && esc_mod_status !== "") {
     esc_mod_result = esc_mod_status;
 }
 
+ // cols = ['moderated','time','date','gameid','name','demo','sa1','collab','author','authors','submitter','combinedtype','length','fields_type','difficulty','warnings','url','section','tags','bps_files','json_files','data_txid']
 
- showNote(`GameID: ${html_gameid}\\nName: ${escH(el.parentElement.getAttribute("data-name"))}\\nResult: ${esc_mod_result}\\nModerator: ${escH(el.parentElement.getAttribute("data-mod-moderator"))}\\nNote: ${escH(el.parentElement.getAttribute("data-mod-note"))}\\nLink: ${html_link}\\nThread: ${html_thread}\\nT:${escH(el.parentElement.getAttribute("data-mod-t"))}  `.replaceAll("\\n","<br>"))
+ rowElement = el.parentElement.parentElement
+ html_authors = escH(rowElement.getAttribute("data-authors"))
+ html_submitter = escH(rowElement.getAttribute("data-submitter"))
+ html_demo = escH(rowElement.getAttribute("data-demo"))
+ html_sa1 =  escH(rowElement.getAttribute("data-sa1"))
+ html_collab = escH(rowElement.getAttribute("data-collab"))
+ html_combinedtype = escH(rowElement.getAttribute("data-combinedtype"))
+ html_tags = escH(rowElement.getAttribute("data-tags"));
+ html_tags = html_tags.replaceAll("&amp;#x27;", '"')
+ html_timeStr = escH(rowElement.getAttribute("data-timeStr"))
+
+ showNote((`GameID: ${html_gameid},  Time: ${html_timeStr}\\n` +
+   `Submitter: ${html_submitter}`+
+   `, Authors: ${html_authors}\\n` + 
+   `demo: ${html_demo}, sa1: ${html_sa1}, collab: ${html_collab}\\n` +
+   `Type: ${html_combinedtype}, Tags: ${html_tags}\\n` +
+   `Name: ${escH(el.parentElement.getAttribute("data-name"))}\\nResult: ${esc_mod_result}\\nModerator: ${escH(el.parentElement.getAttribute("data-mod-moderator"))}\\nNote: ${escH(el.parentElement.getAttribute("data-mod-note"))}\\nLink: ${html_link}\\nThread: ${html_thread}\\nT:${escH(el.parentElement.getAttribute("data-mod-t"))}  `).replaceAll("\\n","<br>"))
  }
 </script>
 <style>
@@ -374,11 +391,17 @@ for record in items:
     record["moddata_s"] = moddata_s
     record["waiting_anchor"]='<a href="https://arweave.net/{data_txid}">'.format(**record);
     record["end_waiting_anchor"]='</a>'
+    rowdata_s = ""
+    rowdata_s = rowdata_s + ' data-time="' + html.escape( record["time"]  ) + '"'
+    for ufield in ['demo','sa1','collab','author','authors','submitter','combinedtype','length','fields_type','difficulty','warnings','tags','timeStr']:
+        rowdata_s = rowdata_s + ' data-'+ufield+'="' + html.escape( record[ ufield ] ) + '"'
+    #rowdata_s = rowdata_s + ' data-x="' + html.escape("") + '"'
     if blockentry:
         record["waiting_anchor"]=""
         record["end_waiting_anchor"]=""
+    record["rowdata_s"] = rowdata_s
 
-    f.write('<tr> <td>{timeStr}</td>  <td class="{modclass}"{moddata_s}>{modemoji}<a class="{modclass}" href="#" onclick="event.preventDefault(); modData(this)">{moderated}</a></td>  <td>{waiting_anchor}{gameid}{end_waiting_anchor}</td> <td>{waiting_anchor}{name}{end_waiting_anchor}</td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))
+    f.write('<tr {rowdata_s}> <td>{timeStr}</td>  <td class="{modclass}"{moddata_s}>{modemoji}<a class="{modclass}" href="#" onclick="event.preventDefault(); modData(this)">{moderated}</a></td>  <td>{waiting_anchor}{gameid}{end_waiting_anchor}</td> <td>{waiting_anchor}{name}{end_waiting_anchor}</td> <td>{demo}</td> <td>{sa1}</td> <td>{collab}</td> <td>{author}</td> <td>{authors}</td> <td>{submitter}</td> <td>{combinedtype}</td> <td>{length}</td> <td>{fields_type}</td> <td>{difficulty}</td> <td>{warnings}</td> <td>{tags}</td> </tr>'.format(**record))
     f.write("\n")
     if x == 0:
         f.write('</thead><tbody>')

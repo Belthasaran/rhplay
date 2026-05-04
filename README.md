@@ -1,7 +1,7 @@
 # Purpose of this Program
 This program assists with managing and launching SMW Romhack files by automating download, patching, local file management.
 
-A searchable cache database is provided, allowing any hack in the database to be automatically downloaded, patched and loaded into RetroArch or consoles  on demand - by searching and specifying the patch number.
+A searchable cache database is provided, allowing any hack in the database to be automatically downloaded, patched and loaded into RetroArch or consoles on demand  (Currently only USB2SNES with the CrowdControl app running is supported.  Launching games on emulators without a USB2SNES server has not yet been implemented.) - by searching and specifying the patch number.
 
 The database collected allows automating operations such as "Choose and launch a random game from the collection based on criteria X, Y, and Z"
 

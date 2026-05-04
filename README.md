@@ -137,7 +137,7 @@ For example: If you decide to use Twitch integration features, then security tok
 
   - **Twitch Predictions Integration**: Full-featured integration with Twitch's Prediction API for challenge runs. Supports three prediction modes:
     - **Individual Item (Current)**: Create predictions for the current challenge item as you play
-    - **Individual Item (Next)**: Create predictions for the next challenge item before you start it
+    - **Individual Item (Next) deprecated **: This was an experiment to test Creating predictions for the next challenge item before you start it.  Prediction window time was created to address worries about finishing or failing too early instead (Prediction will be cancelled if the challenge is won or skipped within the defined number of seconds).
     - **Whole Challenge**: Create a single prediction for the entire challenge run
     - Supports **Yes/No** predictions (e.g., "Will the player complete this challenge?")
     - Supports **Time Range** predictions (e.g., "How long will this challenge take?") with configurable ranges based on win rules, rollover time, and grace periods

@@ -11,6 +11,7 @@ EXAMPLE:
 
 ``
 "stage_uuid","gameid","levelnumber","levelname","versions","submapid","translevel_13bf","tile_x","tile_y","tile_value","requisites","playable","rando","difficulty","mainexit","keyhole","credits","ghouse","spalace","castle","water","boss","secret","troll","final","lock","playlevel_patch_code","excluded_patchcodes","stagetags","rhpakuuid","extradescription"
+
 "8c813c4a5e71c6a3a0a36497ae13bd1e","16059","001","Mystery Stage","*","","01","","","","infliv","0","0","10","0","0","0","0","0","0","0","0","0","0","0","0","1lvno","","","",""
 "e19982aa50a3d374d64da4caf2dcfdad","16059","002","The River Dyx","*","","02","","","","pall,infliv","1","1","5","1","0","0","0","0","0","0","0","0","0","0","0","1lvno","","","",""
 "c11fcea676c6d35109b86e82757d8cd5","16059","003","Extra Special Stage","*","","03","","","","infliv","1","0","0","1","0","0","1","0","0","0","0","0","0","0","0","1lvno","","","",""

@@ -5,22 +5,21 @@ GAMESTAGES
 
 VERSION 1   .CSV Format Columns  (For Data Interchange)
 
-stage_uuid,gameid,levelnumber,levelname,versions,submapid,translevel_13bf,tile_x,tile_y,tile_value,
-requisites,playable,rando,difficulty,mainexit,keyhole,credits,ghouse,spalace,castle,water,boss,secret,troll,final,lock,playlevel_patch_code,excluded_patchcodes,stagetags,rhpakuuid,extradescription
+stage_uuid,gameid,levelnumber,levelname,versions,submapid,translevel_13bf,tile_x,tile_y,tile_value,requisites,playable,rando,difficulty,mainexit,keyhole,credits,ghouse,spalace,castle,water,boss,secret,troll,final,lock,playlevel_patch_code,excluded_patchcodes,stagetags,rhpakuuid,extradescription
 
 EXAMPLE:
 
 ``
-8c813c4a5e71c6a3a0a36497ae13bd1e,16059,001,"Mystery Stage",*,,01,,,,infliv,0,0,10,0,0,0,0,0,0,0,0,0,0,0,0,1lvno,,,,
-e19982aa50a3d374d64da4caf2dcfdad,16059,002,"The River Dyx",*,,02,,,,"pall,infliv",1,1,5,1,0,0,0,0,0,0,0,0,0,0,0,1lvno,,,,
-c11fcea676c6d35109b86e82757d8cd5,16059,003,"Extra Special Stage",*,,03,,,,infliv,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1lvno,,,,
-f31692a3d3e85c45ea1499a526690d1d,16059,004,"Aneha's House",*,,04,,,,infliv,1,1,5,1,0,0,1,0,0,0,0,0,0,0,0,1lvno,,,,
-998de6b0d13a7dc23ed3a6d981980fbc,16059,007,"#2 MORTON'S CASTLE",*,,07,,,,infliv,1,1,6,1,0,0,0,0,1,0,0,0,0,0,0,1lvno,,,,
-4d4101e6d07973675f3e2232d77e6659,16059,009,"Cerulean Cave",*,,09,,,,infliv,1,1,5,1,0,0,0,0,0,0,0,0,0,0,0,1lvno,,,,
-c7bce2490bd1a179686fe8fdf1faaa43,16059,011,"Dead Sea",*,,11,,,,infliv,1,1,5,1,0,0,0,0,0,1,0,0,0,0,0,1lvno,,,,
-792b9aa78a5d948865344f880e3b8c57,16059,013,"DONUT SECRET HOUSE",*,,13,,,,infliv,1,1,5,1,0,0,1,0,0,0,0,0,0,0,0,1lvno,,,,
-12104a7faa931a41cbb66e4e811d118f,16059,014,"Death Palace",*,,14,,,,infliv,1,1,5,1,0,0,0,1,0,0,0,0,0,0,0,1lvno,,,,
-8c4c25d1632bfd67a5ab9fc6eae435fe,16059,01A,-vanilla,*,,1A,,,,infliv,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1lvno,,,,
+"stage_uuid","gameid","levelnumber","levelname","versions","submapid","translevel_13bf","tile_x","tile_y","tile_value","requisites","playable","rando","difficulty","mainexit","keyhole","credits","ghouse","spalace","castle","water","boss","secret","troll","final","lock","playlevel_patch_code","excluded_patchcodes","stagetags","rhpakuuid","extradescription"
+"8c813c4a5e71c6a3a0a36497ae13bd1e","16059","001","Mystery Stage","*","","01","","","","infliv","0","0","10","0","0","0","0","0","0","0","0","0","0","0","0","1lvno","","","",""
+"e19982aa50a3d374d64da4caf2dcfdad","16059","002","The River Dyx","*","","02","","","","pall,infliv","1","1","5","1","0","0","0","0","0","0","0","0","0","0","0","1lvno","","","",""
+"c11fcea676c6d35109b86e82757d8cd5","16059","003","Extra Special Stage","*","","03","","","","infliv","1","0","0","1","0","0","1","0","0","0","0","0","0","0","0","1lvno","","","",""
+"f31692a3d3e85c45ea1499a526690d1d","16059","004","Aneha's House","*","","04","","","","infliv","1","1","5","1","0","0","1","0","0","0","0","0","0","0","0","1lvno","","","",""
+"998de6b0d13a7dc23ed3a6d981980fbc","16059","007","#2 MORTON'S CASTLE","*","","07","","","","infliv","1","1","6","1","0","0","0","0","1","0","0","0","0","0","0","1lvno","","","",""
+"4d4101e6d07973675f3e2232d77e6659","16059","009","Cerulean Cave","*","","09","","","","infliv","1","1","5","1","0","0","0","0","0","0","0","0","0","0","0","1lvno","","","",""
+"c7bce2490bd1a179686fe8fdf1faaa43","16059","011","Dead Sea","*","","11","","","","infliv","1","1","5","1","0","0","0","0","0","1","0","0","0","0","0","1lvno","","","",""
+"792b9aa78a5d948865344f880e3b8c57","16059","013","DONUT SECRET HOUSE","*","","13","","","","infliv","1","1","5","1","0","0","1","0","0","0","0","0","0","0","0","1lvno","","","",""
+
 ``
 
 

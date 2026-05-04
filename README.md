@@ -29,7 +29,7 @@ technical features not working as they appear intended to work, but not loophole
 
 - **Additional Patches/Burned-In Cheats System with built-in patch presets** - Automatically add specified patches burned into ROM: including Game Genie codes and ASAR patch templates.  Built-in patch templates such as Start every level Cape, No Yoshi Ditch, One-Hit KO, "Infinite Lives" (Useful for Kaizo Mario World,  Some games or patch/addons may have limited compatibility with each other)
 - **Automated Challenge Runs** (ALPHA): Create timed challenge runs with multiple random games or stages, complete with win conditions, rollover time mechanics, and real-time timer overlays for streaming
-- **USB2SNES Auto-Completion**: Revolutionary USB polling system that connects to SD2SNES flash carts (EXPERIMENTAL); Monitors the progress of your challenge runs to verify your actual gameplay: automatically detects when you complete a challenge by monitoring SNES memory, advancing to the next challenge and launching it automatically - no manual button presses needed
+- **USB2SNES Auto-Completion**: Experimental USB polling system that connects to SD2SNES flash carts (EXPERIMENTAL); Monitors the progress of your challenge runs to verify your actual gameplay: automatically detects when you complete a challenge by monitoring SNES memory, advancing to the next challenge and launching it automatically - no manual button presses needed
 - **Twitch Predictions Integration** (NEW Experimental system): Seamlessly integrate with Twitch to create, manage, and resolve predictions for your challenge runs - supports Yes/No, Time Range, and Whole Challenge prediction types with automatic resolution
 - **Live Cheats System**: Using the USB port of USB2SNES: You can make certain live tweaks for your challenges, such as Turn current level into water level, Warp to a different level, Grant Star or Cape.  OR create additional challenges, such as Poll and reduce game timer.
 
@@ -149,11 +149,11 @@ For example: If you decide to use Twitch integration features, then security tok
     - Configurable prediction windows, delays, and outcome options
     - Status messages and warnings for prediction management
 
-  - **USB Polling Auto-Completion**: Revolutionary feature that automatically detects challenge completion by polling SNES memory addresses:
+  - **USB Polling Auto-Completion**: Experimental feature that automatically detects challenge completion by polling SNES memory addresses:
     - Monitors game state (animation, level status, timers, switches, etc.) every second
     - Automatically detects goal events (level completion, boss defeat, keyhole entry, switch activation, etc.)
     - Automatically advances to the next challenge when completion is detected
-    - Automatically launches the next challenge's game file
+    - Click launch to launch the next challenge's game file
     - Visual feedback with color-coded button status (blue = good performance, red = slow, orange = wrong game file)
     - Condition A system ensures stable game state before enabling goal detection
     - Respects pause/unpause and run lifecycle

@@ -40,7 +40,10 @@ This program is incomplete and a work in progress.
 ![Rhplay Settings](/img/rhtools-rhplay-ss1.png "Settings Window")
 
 # Running the program
-   This program is based on Python 3.10.x.  NodeJS, and Electron
+   This program is based on Python 3.10.x.  NodeJS, and Electron.
+   Binary builds should contain everything needed to run the app.
+
+   To build or launch the app from source code, as a developer:
    *  Please install the pre-requisites Including: Flips, Asar,
       and a Legally-acquired original SMW rom as discussed in the Section Pre-requisites.
  Download

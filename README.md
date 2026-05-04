@@ -41,7 +41,7 @@ This program is incomplete and a work in progress.
 
 # Running the program
    This program is based on Python 3.10.x.  NodeJS, and Electron.
-   Binary builds should contain everything needed to run the app.
+   Binary builds should contain everything needed to run the app, except for the actual ROM.  Flips, ASAR, and UberASM will be automatically downloaded on first run of the program.
 
    To build or launch the app from source code, as a developer:
    *  Please install the pre-requisites Including: Flips, Asar,

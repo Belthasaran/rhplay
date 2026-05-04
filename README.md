@@ -1,7 +1,7 @@
 # Purpose of this Program
 This program assists with managing and launching SMW Romhack files by automating download, patching, local file management.
 
-A searchable cache database is provided, allowing any hack in the database to be automatically downloaded, patched and loaded into RetroArch or consoles  on demand - by searching and specifying the patch number.
+A searchable cache database is provided, allowing any hack in the database to be automatically downloaded, patched and loaded into RetroArch or consoles on demand  (Currently only USB2SNES with the CrowdControl app running is supported.  Launching games on emulators without a USB2SNES server has not yet been implemented.) - by searching and specifying the patch number.
 
 The database collected allows automating operations such as "Choose and launch a random game from the collection based on criteria X, Y, and Z"
 
@@ -29,7 +29,7 @@ technical features not working as they appear intended to work, but not loophole
 
 - **Additional Patches/Burned-In Cheats System with built-in patch presets** - Automatically add specified patches burned into ROM: including Game Genie codes and ASAR patch templates.  Built-in patch templates such as Start every level Cape, No Yoshi Ditch, One-Hit KO, "Infinite Lives" (Useful for Kaizo Mario World,  Some games or patch/addons may have limited compatibility with each other)
 - **Automated Challenge Runs** (ALPHA): Create timed challenge runs with multiple random games or stages, complete with win conditions, rollover time mechanics, and real-time timer overlays for streaming
-- **USB2SNES Auto-Completion**: Revolutionary USB polling system that connects to SD2SNES flash carts (EXPERIMENTAL); Monitors the progress of your challenge runs to verify your actual gameplay: automatically detects when you complete a challenge by monitoring SNES memory, advancing to the next challenge and launching it automatically - no manual button presses needed
+- **USB2SNES Auto-Completion**: Experimental USB polling system that connects to SD2SNES flash carts (EXPERIMENTAL); Monitors the progress of your challenge runs to verify your actual gameplay: automatically detects when you complete a challenge by monitoring SNES memory, advancing to the next challenge and launching it automatically - no manual button presses needed
 - **Twitch Predictions Integration** (NEW Experimental system): Seamlessly integrate with Twitch to create, manage, and resolve predictions for your challenge runs - supports Yes/No, Time Range, and Whole Challenge prediction types with automatic resolution
 - **Live Cheats System**: Using the USB port of USB2SNES: You can make certain live tweaks for your challenges, such as Turn current level into water level, Warp to a different level, Grant Star or Cape.  OR create additional challenges, such as Poll and reduce game timer.
 
@@ -40,7 +40,10 @@ This program is incomplete and a work in progress.
 ![Rhplay Settings](/img/rhtools-rhplay-ss1.png "Settings Window")
 
 # Running the program
-   This program is based on Python 3.10.x.  NodeJS, and Electron
+   This program is based on Python 3.10.x.  NodeJS, and Electron.
+   Binary builds should contain everything needed to run the app, except for the actual ROM.  Flips, ASAR, and UberASM will be automatically downloaded on first run of the program.
+
+   To build or launch the app from source code, as a developer:
    *  Please install the pre-requisites Including: Flips, Asar,
       and a Legally-acquired original SMW rom as discussed in the Section Pre-requisites.
  Download
@@ -132,9 +135,9 @@ For example: If you decide to use Twitch integration features, then security tok
 
   - Optional built-in web server (utility process) that can help serve the overlay locally or remotely for easy OBS Access - http://localhost:2599/runview.html
 
-  - **Twitch Predictions Integration**: Full-featured integration with Twitch's Prediction API for challenge runs. Supports three prediction modes:
+  - **Optional Twitch Predictions Integration** (Experimental): Full-featured integration with Twitch's Prediction API for challenge runs. Supports three prediction modes:
     - **Individual Item (Current)**: Create predictions for the current challenge item as you play
-    - **Individual Item (Next)**: Create predictions for the next challenge item before you start it
+    - **Individual Item (Next) deprecated **: This was an experiment to test Creating predictions for the next challenge item before you start it.  Prediction window time was created to address worries about finishing or failing too early instead (Prediction will be cancelled if the challenge is won or skipped within the defined number of seconds).
     - **Whole Challenge**: Create a single prediction for the entire challenge run
     - Supports **Yes/No** predictions (e.g., "Will the player complete this challenge?")
     - Supports **Time Range** predictions (e.g., "How long will this challenge take?") with configurable ranges based on win rules, rollover time, and grace periods
@@ -146,11 +149,11 @@ For example: If you decide to use Twitch integration features, then security tok
     - Configurable prediction windows, delays, and outcome options
     - Status messages and warnings for prediction management
 
-  - **USB Polling Auto-Completion**: Revolutionary feature that automatically detects challenge completion by polling SNES memory addresses:
+  - **USB Polling Auto-Completion**: Experimental feature that automatically detects challenge completion by polling SNES memory addresses:
     - Monitors game state (animation, level status, timers, switches, etc.) every second
     - Automatically detects goal events (level completion, boss defeat, keyhole entry, switch activation, etc.)
     - Automatically advances to the next challenge when completion is detected
-    - Automatically launches the next challenge's game file
+    - Click launch to launch the next challenge's game file
     - Visual feedback with color-coded button status (blue = good performance, red = slow, orange = wrong game file)
     - Condition A system ensures stable game state before enabling goal detection
     - Respects pause/unpause and run lifecycle

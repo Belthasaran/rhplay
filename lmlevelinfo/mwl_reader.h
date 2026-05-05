@@ -43,9 +43,16 @@ typedef struct {
 } MwlLayer1;
 
 typedef struct {
+  // Raw sprite bytes for the level (section payload).
+  uint8_t *bytes;
+  size_t len;
+} MwlSprites;
+
+typedef struct {
   MwlFileInfo file;
   MwlLevelInfo level;
   MwlLayer1 layer1;
+  MwlSprites sprites;
 } MwlParsed;
 
 void mwl_parsed_free(MwlParsed *p);

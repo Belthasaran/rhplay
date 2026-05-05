@@ -76,6 +76,225 @@ static void decode_sprite_header(uint8_t b, SpriteHeader *h) {
   h->sprite_memory = b & 0x1F;
 }
 
+static int sprite_ext_table_enabled(const Rom *rom, uint32_t *out_size_table_snes) {
+  if (!out_size_table_snes) return 0;
+  *out_size_table_snes = 0;
+  if (!rom) return 0;
+
+  uint8_t b = 0;
+  if (!rom_read8_snes(rom, ((uint32_t)0x0E << 16) | 0xF30F, &b)) return 0;
+  if (b != 0x42) return 0;
+  uint32_t p = 0;
+  if (!rom_read24_snes(rom, ((uint32_t)0x0E << 16) | 0xF30C, &p)) return 0;
+  *out_size_table_snes = p;
+  return 1;
+}
+
+static int sprite_ext_len_lookup(const Rom *rom, uint32_t size_table_snes, uint8_t extra_bits, uint8_t sprite_id,
+                                 uint8_t *out_len) {
+  if (!out_len) return 0;
+  *out_len = 0;
+  if (!rom || !size_table_snes) return 1;
+  uint8_t v = 0;
+  uint32_t idx = (uint32_t)extra_bits * 0x100u + (uint32_t)sprite_id;
+  if (!rom_read8_snes(rom, size_table_snes + idx, &v)) return 0;
+  // Table stores total sprite record size (base 3 bytes + extension bytes), up to 15.
+  // Convert to extension length, clamping invalid small sizes to 0.
+  if (v <= 3) {
+    *out_len = 0;
+  } else {
+    *out_len = (uint8_t)(v - 3);
+  }
+  return 1;
+}
+
+static int parse_sprites_from_buf(const uint8_t *buf, size_t len,
+                                  const Rom *rom_for_ext,
+                                  SpriteHeader *out_hdr,
+                                  LevelSprite **out_sprites, size_t *out_count,
+                                  char *err, size_t errcap) {
+  if (!buf || len < 1 || !out_hdr || !out_sprites || !out_count) {
+    seterr(err, errcap, "parse_sprites_from_buf: invalid args");
+    return 0;
+  }
+  *out_sprites = NULL;
+  *out_count = 0;
+
+  decode_sprite_header(buf[0], out_hdr);
+
+  uint32_t size_table_snes = 0;
+  (void)sprite_ext_table_enabled(rom_for_ext, &size_table_snes);
+
+  size_t i = 1;
+  uint8_t y_jump_high7 = 0;
+  uint32_t sprite_index = 0;
+
+  while (i < len) {
+    if (sprite_index > 100000) {
+      seterr(err, errcap, "Sprite parse runaway");
+      return 0;
+    }
+
+    uint8_t b0 = buf[i];
+
+    if (!out_hdr->new_sprite_system) {
+      if (b0 == 0xFF) break; // legacy terminator
+      if (i + 3 > len) {
+        seterr(err, errcap, "Truncated sprite record");
+        return 0;
+      }
+      uint8_t b1 = buf[i + 1];
+      uint8_t b2 = buf[i + 2];
+      size_t rec_off = i;
+      i += 3;
+
+      LevelSprite sp;
+      memset(&sp, 0, sizeof(sp));
+      sp.index = sprite_index++;
+      sp.byte_offset = (uint32_t)rec_off;
+      sp.raw3[0] = b0; sp.raw3[1] = b1; sp.raw3[2] = b2;
+
+      uint8_t y_low5 = (uint8_t)((((b0 >> 4) & 0xF) << 1) | (b0 & 0x1));
+      sp.extra_bits = (uint8_t)((b0 >> 2) & 0x3);
+      sp.screen = (uint8_t)((((b0 >> 1) & 0x1) << 4) | (b1 & 0xF));
+      sp.x = (uint8_t)((b1 >> 4) & 0xF);
+      sp.sprite_id = b2;
+      sp.y = y_low5;
+
+      uint8_t ext_len = 0;
+      if (!sprite_ext_len_lookup(rom_for_ext, size_table_snes, sp.extra_bits, sp.sprite_id, &ext_len)) {
+        seterr(err, errcap, "Failed reading sprite extension length");
+        return 0;
+      }
+      if (ext_len > 12) {
+        seterr(err, errcap, "Sprite extension length too large");
+        return 0;
+      }
+      if (i + ext_len > len) {
+        seterr(err, errcap, "Truncated sprite extension bytes");
+        return 0;
+      }
+      sp.ext_len = ext_len;
+      if (ext_len) memcpy(sp.ext_bytes, buf + i, ext_len);
+      i += ext_len;
+
+      LevelSprite *tmp = (LevelSprite *)realloc(*out_sprites, (*out_count + 1) * sizeof(LevelSprite));
+      if (!tmp) {
+        seterr(err, errcap, "Out of memory parsing sprites");
+        return 0;
+      }
+      *out_sprites = tmp;
+      (*out_sprites)[*out_count] = sp;
+      (*out_count)++;
+      continue;
+    }
+
+    // New sprite system commands
+    if (b0 == 0xFF) {
+      if (i + 2 > len) {
+        seterr(err, errcap, "Truncated sprite command");
+        return 0;
+      }
+      uint8_t cmd = buf[i + 1];
+      i += 2;
+      if (cmd <= 0x7F) {
+        y_jump_high7 = cmd;
+        continue;
+      }
+      if (cmd == 0xFE) break;
+      if (cmd != 0xFF) continue;
+
+      // cmd == 0xFF means a normal sprite whose first byte is 0xFF.
+      b0 = 0xFF;
+    } else {
+      i += 1; // consume b0 for normal sprite
+    }
+
+    if (i + 2 > len) {
+      seterr(err, errcap, "Truncated sprite record");
+      return 0;
+    }
+    uint8_t b1 = buf[i + 0];
+    uint8_t b2 = buf[i + 1];
+    size_t rec_off = i - 1; // start of record (first byte)
+    i += 2;
+
+    LevelSprite sp;
+    memset(&sp, 0, sizeof(sp));
+    sp.index = sprite_index++;
+    sp.byte_offset = (uint32_t)rec_off;
+    sp.raw3[0] = b0; sp.raw3[1] = b1; sp.raw3[2] = b2;
+
+    uint8_t y_low5 = (uint8_t)((((b0 >> 4) & 0xF) << 1) | (b0 & 0x1));
+    sp.extra_bits = (uint8_t)((b0 >> 2) & 0x3);
+    sp.screen = (uint8_t)((((b0 >> 1) & 0x1) << 4) | (b1 & 0xF));
+    sp.x = (uint8_t)((b1 >> 4) & 0xF);
+    sp.sprite_id = b2;
+    sp.y = (uint16_t)(((uint16_t)y_jump_high7 << 5) | (uint16_t)y_low5);
+
+    uint8_t ext_len = 0;
+    if (!sprite_ext_len_lookup(rom_for_ext, size_table_snes, sp.extra_bits, sp.sprite_id, &ext_len)) {
+      seterr(err, errcap, "Failed reading sprite extension length");
+      return 0;
+    }
+    if (ext_len > 12) {
+      seterr(err, errcap, "Sprite extension length too large");
+      return 0;
+    }
+    if (i + ext_len > len) {
+      seterr(err, errcap, "Truncated sprite extension bytes");
+      return 0;
+    }
+    sp.ext_len = ext_len;
+    if (ext_len) memcpy(sp.ext_bytes, buf + i, ext_len);
+    i += ext_len;
+
+    LevelSprite *tmp = (LevelSprite *)realloc(*out_sprites, (*out_count + 1) * sizeof(LevelSprite));
+    if (!tmp) {
+      seterr(err, errcap, "Out of memory parsing sprites");
+      return 0;
+    }
+    *out_sprites = tmp;
+    (*out_sprites)[*out_count] = sp;
+    (*out_count)++;
+  }
+
+  return 1;
+}
+
+int parse_level_sprites_from_rom(const Rom *rom, const LmTables *tables, uint16_t level_id,
+                                 uint32_t sprite_ptr_snes, SpriteHeader *out_hdr,
+                                 LevelSprite **out_sprites, size_t *out_count,
+                                 char *err, size_t errcap) {
+  (void)tables;
+  (void)level_id;
+  if (!rom || !rom->data) {
+    seterr(err, errcap, "parse_level_sprites_from_rom: invalid rom");
+    return 0;
+  }
+  uint32_t pc = 0;
+  if (!snes_lorom_to_pc(rom, sprite_ptr_snes, &pc)) {
+    seterr(err, errcap, "Sprite pointer unmappable");
+    return 0;
+  }
+  const size_t HARD_CAP = 0x20000;
+  size_t avail = rom->size - pc;
+  if (avail > HARD_CAP) avail = HARD_CAP;
+  if (avail < 1) {
+    seterr(err, errcap, "Sprite data too small");
+    return 0;
+  }
+  return parse_sprites_from_buf(rom->data + pc, avail, rom, out_hdr, out_sprites, out_count, err, errcap);
+}
+
+int parse_level_sprites_from_bytes(const uint8_t *bytes, size_t len,
+                                   const Rom *rom,
+                                   SpriteHeader *out_hdr,
+                                   LevelSprite **out_sprites, size_t *out_count,
+                                   char *err, size_t errcap) {
+  return parse_sprites_from_buf(bytes, len, rom, out_hdr, out_sprites, out_count, err, errcap);
+}
+
 static void decode_secondary(const SecondaryLevelHeader *h, SecondaryDecoded *d) {
   memset(d, 0, sizeof(*d));
   if (!h || !h->present) return;
@@ -485,6 +704,9 @@ void levelinfo_free(LevelInfo *info) {
   free(info->objects);
   info->objects = NULL;
   info->objects_count = 0;
+  free(info->sprites);
+  info->sprites = NULL;
+  info->sprites_count = 0;
 }
 
 int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, LevelInfo *out,
@@ -530,10 +752,16 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
   uint32_t sprite_ptr = 0;
   if (read_sprite_ptr(rom, tables, level_id, &sprite_ptr)) {
     out->sprite_data_ptr_snes = sprite_ptr;
-    uint8_t sh = 0;
-    if (rom_read8_snes(rom, sprite_ptr, &sh)) {
-      decode_sprite_header(sh, &out->sprite_header);
+    LevelSprite *sprites = NULL;
+    size_t sprites_count = 0;
+    SpriteHeader hdr;
+    memset(&hdr, 0, sizeof(hdr));
+    if (parse_level_sprites_from_rom(rom, tables, level_id, sprite_ptr, &hdr, &sprites, &sprites_count, err, errcap)) {
+      out->sprite_header = hdr;
+      out->sprites = sprites;
+      out->sprites_count = sprites_count;
     } else {
+      // If sprite parsing fails, leave sprite header absent and continue.
       out->sprite_header.present = 0;
     }
   }

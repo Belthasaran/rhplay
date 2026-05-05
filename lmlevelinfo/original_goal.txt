@@ -1,7 +1,7 @@
 
 
 Similar to the  ~/rhplay/lmlevelnames/  subdir we created before I want to create a  ~/rhplay/lmlevelinfo  To host resources for
-analyzing actual Level Data from a ROMfile  instead of just level names.
+analyzing actual Level Data from a ROMfile  instead of just level names from overworld.
 
 Please look over the code in ~/rhplay/refmaterial/snesrev_smw/assets/
 And the following files:

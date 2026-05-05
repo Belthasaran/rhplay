@@ -365,10 +365,62 @@ static int run_quickieworld_suite(void) {
   return 1;
 }
 
+static int run_suite_dir(const char *suite_name, const char *rom_path, const char *dir_path, const char *prefix) {
+  DIR *d = opendir(dir_path);
+  if (!d) {
+    failf("[%s] Could not open test directory: %s", suite_name, dir_path);
+    return 0;
+  }
+
+  int total = 0;
+  int failed = 0;
+
+  struct dirent *de;
+  while ((de = readdir(d)) != NULL) {
+    const char *name = de->d_name;
+    if (strncmp(name, prefix, strlen(prefix)) != 0) continue;
+    size_t nlen = strlen(name);
+    if (nlen < 5) continue;
+    if (strcmp(name + (nlen - 4), ".mwl") != 0) continue;
+
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir_path, name);
+
+    char label[512];
+    snprintf(label, sizeof(label), "%s %s", suite_name, name);
+
+    int before = failures;
+    (void)run_case(rom_path, path, label, 0);
+    total++;
+    if (failures != before) {
+      failed++;
+      fprintf(stderr, "FAIL: %s/%s\n", suite_name, name);
+    } else {
+      printf("PASS: %s/%s\n", suite_name, name);
+    }
+  }
+  closedir(d);
+
+  if (total == 0) {
+    failf("[%s] No MWL files found (prefix '%s')", suite_name, prefix);
+    return 0;
+  }
+
+  if (failed) {
+    fprintf(stderr, "%s suite: %d/%d failed\n", suite_name, failed, total);
+    return 0;
+  }
+
+  printf("%s suite: %d/%d passed\n", suite_name, total, total);
+  return 1;
+}
+
 int main(void) {
   int ok1 = run_akogare_level109();
   int ok2 = run_quickieworld_suite();
-  if (failures == 0 && ok1 && ok2) {
+  int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
+  int ok4 = run_suite_dir("acidtapes", "test/acidtapes/acidtapes.sfc", "test/acidtapes", "acidtapes ");
+  if (failures == 0 && ok1 && ok2 && ok3 && ok4) {
     printf("ALL PASS\n");
     return 0;
   }

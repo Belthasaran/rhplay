@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "layer1_validate.h"
+
 static void seterr(char *err, size_t cap, const char *msg) {
   if (!err || cap == 0) return;
   snprintf(err, cap, "%s", msg ? msg : "error");
@@ -160,6 +162,41 @@ static size_t object_len_for_extended(uint8_t ext_id) {
   if (ext_id == 0x00) return 4; // screen exit
   if (ext_id == 0x02) return 5; // 15-bit screen exit
   return 3;
+}
+
+int layer1_blob_looks_valid(const uint8_t *p, size_t len) {
+  if (!p || len < 6) return 0;
+  if (p[0] == 0xFF && p[1] == 0xFF && p[2] == 0xFF && p[3] == 0xFF && p[4] == 0xFF) return 0;
+
+  size_t max = len;
+  if (max > 0x20000) max = 0x20000;
+
+  size_t i = 5;
+  size_t objs = 0;
+  while (i < max) {
+    uint8_t b0 = p[i];
+    if (b0 == 0xFF) return 1;
+    if (i + 3 > max) return 0;
+
+    uint8_t bb = (b0 >> 5) & 0x3;
+    uint8_t b1 = p[i + 1];
+    uint8_t b2 = p[i + 2];
+    uint8_t bbbb = (b1 >> 4) & 0xF;
+    uint8_t standard_id = (uint8_t)((bb << 4) | bbbb);
+
+    size_t olen = 0;
+    if (standard_id == 0x00) {
+      olen = object_len_for_extended(b2);
+    } else {
+      olen = object_len_for_standard(standard_id, p + i, max - i);
+    }
+    if (olen == 0) return 0;
+    if (i + olen > max) return 0;
+    i += olen;
+    objs++;
+    if (objs > 200000) return 0;
+  }
+  return 0;
 }
 
 static int parse_objects(const Rom *rom, uint32_t layer1_ptr_snes, int is_vertical,

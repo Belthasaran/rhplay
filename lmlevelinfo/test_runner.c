@@ -632,7 +632,13 @@ int main(void) {
   int ok2 = run_quickieworld_suite();
   int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
   int ok4 = run_suite_dir("acidtapes", "test/acidtapes/acidtapes.sfc", "test/acidtapes", "acidtapes ");
-  if (failures == 0 && ok1 && ok1b && okS && ok2 && ok3 && ok4) {
+  int ok5 = run_suite_dir("albatros", "test/albatros/albatros.sfc", "test/albatros", "albatros ");
+  int ok6 = run_suite_dir("mania", "test/mania/mania.sfc", "test/mania", "mania ");
+  int ok7 = run_suite_dir("mq2", "test/mq2/mq2.sfc", "test/mq2", "mq2 ");
+  int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
+  int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
+  int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
+  if (failures == 0 && ok1 && ok1b && okS && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");
     return 0;
   }

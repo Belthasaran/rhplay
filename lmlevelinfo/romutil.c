@@ -8,6 +8,23 @@ static void seterr(char *err, size_t cap, const char *msg) {
   snprintf(err, cap, "%s", msg ? msg : "error");
 }
 
+static uint8_t guess_map_mode(const Rom *rom) {
+  // Best-effort guess: prefer a sane value from the likely header location.
+  // LoROM header at 0x7FD5, HiROM at 0xFFD5, ExHiROM at 0x40FFD5.
+  static const uint8_t sane[] = { 0x20, 0x21, 0x23, 0x30, 0x31, 0x32, 0x35 };
+  if (!rom || !rom->data) return 0;
+  uint8_t cands[3] = { 0, 0, 0 };
+  if (rom->size > 0x7FD5) cands[0] = rom->data[0x7FD5];
+  if (rom->size > 0xFFD5) cands[1] = rom->data[0xFFD5];
+  if (rom->size > 0x40FFD5) cands[2] = rom->data[0x40FFD5];
+  for (size_t i = 0; i < sizeof(cands); i++) {
+    for (size_t j = 0; j < sizeof(sane); j++) {
+      if (cands[i] == sane[j]) return cands[i];
+    }
+  }
+  return cands[0] ? cands[0] : cands[1];
+}
+
 int rom_load(Rom *rom, const char *path, char *err, size_t errcap) {
   if (!rom || !path) {
     seterr(err, errcap, "rom_load: invalid args");
@@ -70,6 +87,7 @@ int rom_load(Rom *rom, const char *path, char *err, size_t errcap) {
     rom->data = trim;
     rom->size = newSize;
   }
+  rom->map_mode = guess_map_mode(rom);
   return 1;
 }
 
@@ -85,14 +103,76 @@ int snes_lorom_to_pc(const Rom *rom, uint32_t snes24, uint32_t *pc_out) {
   if (!rom || !rom->data || rom->size == 0 || !pc_out) return 0;
   uint32_t bank = (snes24 >> 16) & 0xFF;
   uint32_t addr = snes24 & 0xFFFF;
-  if (addr < 0x8000) return 0;
 
-  // Same mapping used by snesrev_smw/assets/util.py:
-  // ea = ((ea >> 16) & 0x7f) * 0x8000 + (ea & 0x7fff)
-  uint32_t pc = (bank & 0x7F) * 0x8000u + (addr & 0x7FFFu);
-  if (pc >= rom->size) return 0;
-  *pc_out = pc;
-  return 1;
+  // SA-1 / ExROM LoROM mapping (common in large SMW hacks).
+  // - Banks 00-3F and 80-BF:8000-FFFF map as LoROM into the first 4MB.
+  // - Banks C0-FF:0000-FFFF map as HiROM-style mirror into the upper half (when present).
+  if (rom->map_mode == 0x23) {
+    if (addr >= 0x8000 && ((bank <= 0x3F) || (bank >= 0x80 && bank <= 0xBF))) {
+      uint32_t pc = (bank & 0x3Fu) * 0x8000u + (addr & 0x7FFFu);
+      if (pc < rom->size) {
+        *pc_out = pc;
+        return 1;
+      }
+      return 0;
+    }
+    if (bank >= 0xC0) {
+      uint32_t pc = (bank & 0x3Fu) * 0x10000u + addr;
+      if (rom->size > 0x400000) {
+        uint32_t pc2 = pc + 0x400000u;
+        if (pc2 < rom->size) {
+          *pc_out = pc2;
+          return 1;
+        }
+      }
+      if (pc < rom->size) {
+        *pc_out = pc;
+        return 1;
+      }
+      return 0;
+    }
+    return 0;
+  }
+
+  // Primary path: LoROM mapping (and ExLoROM extension for > 4MB ROMs).
+  if (addr >= 0x8000) {
+    // Mirror high bit first (00-7F == 80-FF for standard LoROM).
+    uint32_t bank7 = bank & 0x7Fu;
+
+    // ExLoROM for >4MB:
+    //   pc = ((bank7 & 0x3F) * 0x8000) + (addr & 0x7FFF) + (bank7 >= 0x40 ? 0x400000 : 0)
+    // Classic LoROM (<=4MB):
+    //   pc = (bank7 * 0x8000) + (addr & 0x7FFF)
+    uint32_t pc = 0;
+    if (rom->size > 0x400000) {
+      pc = (bank7 & 0x3Fu) * 0x8000u + (addr & 0x7FFFu);
+      if (bank7 >= 0x40) pc += 0x400000u;
+    } else {
+      pc = bank7 * 0x8000u + (addr & 0x7FFFu);
+    }
+    if (pc >= rom->size) return 0;
+    *pc_out = pc;
+    return 1;
+  }
+
+  // Fallback path: some ROMs (notably SA-1 / ExROM variants) place ROM mirrors
+  // into HiROM-style banks, where pointers may land in $C0-FF:0000-7FFF.
+  if (bank >= 0xC0) {
+    uint32_t pc = (bank & 0x3Fu) * 0x10000u + addr;
+    if (rom->size > 0x400000) {
+      uint32_t pc2 = pc + 0x400000u;
+      if (pc2 < rom->size) {
+        *pc_out = pc2;
+        return 1;
+      }
+    }
+    if (pc < rom->size) {
+      *pc_out = pc;
+      return 1;
+    }
+  }
+
+  return 0;
 }
 
 static int rom_read_pc(const Rom *rom, uint32_t pc, uint8_t *out, size_t n) {

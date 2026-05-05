@@ -7,6 +7,7 @@ typedef struct {
   uint8_t *data;
   size_t size;
   int has_smc_header;
+  uint8_t map_mode; // SNES header $FFD5 / $7FD5 (best-effort)
 } Rom;
 
 int rom_load(Rom *rom, const char *path, char *err, size_t errcap);

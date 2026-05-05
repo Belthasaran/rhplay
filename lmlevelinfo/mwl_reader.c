@@ -26,6 +26,9 @@ void mwl_parsed_free(MwlParsed *p) {
   free(p->layer1.bytes);
   p->layer1.bytes = NULL;
   p->layer1.len = 0;
+  free(p->sprites.bytes);
+  p->sprites.bytes = NULL;
+  p->sprites.len = 0;
 }
 
 static int file_read_all(const char *path, uint8_t **out_buf, size_t *out_len, char *err, size_t errcap) {
@@ -192,6 +195,27 @@ int mwl_parse_file(const char *path, MwlParsed *out, char *err, size_t errcap) {
   }
   memcpy(out->layer1.bytes, l1 + 8, l1_payload);
   out->layer1.len = l1_payload;
+
+  // Section 3: Sprite data (MWL pointer index 3)
+  // Lunar Magic exports this as a raw section payload; we keep it as-is and decode in tests/tools.
+  MwlPtr s3 = out->file.ptrs[3];
+  if (s3.off != 0) {
+    if (s3.size < 8 || s3.off + s3.size > len) {
+      free(buf);
+      seterr(err, errcap, "MWL Sprite section invalid");
+      return 0;
+    }
+    const uint8_t *sp = buf + s3.off;
+    size_t sp_payload = s3.size - 8; // skip 8-byte section header
+    out->sprites.bytes = (uint8_t *)malloc(sp_payload);
+    if (!out->sprites.bytes) {
+      free(buf);
+      seterr(err, errcap, "Out of memory copying Sprite data");
+      return 0;
+    }
+    memcpy(out->sprites.bytes, sp + 8, sp_payload);
+    out->sprites.len = sp_payload;
+  }
 
   free(buf);
   return 1;

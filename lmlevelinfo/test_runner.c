@@ -60,6 +60,28 @@ typedef struct {
 } NormObj;
 
 typedef struct {
+  uint16_t y;
+  uint8_t x;
+  uint8_t screen;
+  uint8_t extra_bits;
+  uint8_t sprite_id;
+  uint8_t ext_len;
+  uint8_t ext_bytes[12];
+} NormSprite;
+
+static int norm_sprite_cmp(const void *aa, const void *bb) {
+  const NormSprite *a = (const NormSprite *)aa;
+  const NormSprite *b = (const NormSprite *)bb;
+  if (a->sprite_id != b->sprite_id) return (int)a->sprite_id - (int)b->sprite_id;
+  if (a->extra_bits != b->extra_bits) return (int)a->extra_bits - (int)b->extra_bits;
+  if (a->screen != b->screen) return (int)a->screen - (int)b->screen;
+  if (a->x != b->x) return (int)a->x - (int)b->x;
+  if (a->y != b->y) return (int)a->y - (int)b->y;
+  if (a->ext_len != b->ext_len) return (int)a->ext_len - (int)b->ext_len;
+  return memcmp(a->ext_bytes, b->ext_bytes, a->ext_len);
+}
+
+typedef struct {
   NormObj *items;
   size_t len;
 } NormList;
@@ -240,6 +262,67 @@ static int cmp_objects(const LevelInfo *rom, const LevelInfo *mwl) {
   return ok;
 }
 
+static int cmp_sprites(const LevelInfo *rom, const LevelInfo *mwl) {
+  if (rom->sprite_header.present != mwl->sprite_header.present) {
+    failf("Mismatch sprite_header.present: %d != %d", rom->sprite_header.present, mwl->sprite_header.present);
+    return 0;
+  }
+  if (rom->sprite_header.present && rom->sprite_header.raw != mwl->sprite_header.raw) {
+    failf("Mismatch sprite_header.raw: 0x%02X != 0x%02X", rom->sprite_header.raw, mwl->sprite_header.raw);
+  }
+
+  if (rom->sprites_count != mwl->sprites_count) {
+    failf("Mismatch sprites_count: %zu != %zu", rom->sprites_count, mwl->sprites_count);
+    return 0;
+  }
+  size_t n = rom->sprites_count;
+  NormSprite *a = (NormSprite *)calloc(n ? n : 1, sizeof(NormSprite));
+  NormSprite *b = (NormSprite *)calloc(n ? n : 1, sizeof(NormSprite));
+  if (!a || !b) {
+    free(a);
+    free(b);
+    failf("Out of memory comparing sprites");
+    return 0;
+  }
+
+  for (size_t i = 0; i < n; i++) {
+    const LevelSprite *s = &rom->sprites[i];
+    a[i].y = s->y;
+    a[i].x = s->x;
+    a[i].screen = s->screen;
+    a[i].extra_bits = s->extra_bits;
+    a[i].sprite_id = s->sprite_id;
+    a[i].ext_len = s->ext_len;
+    memcpy(a[i].ext_bytes, s->ext_bytes, s->ext_len);
+  }
+  for (size_t i = 0; i < n; i++) {
+    const LevelSprite *s = &mwl->sprites[i];
+    b[i].y = s->y;
+    b[i].x = s->x;
+    b[i].screen = s->screen;
+    b[i].extra_bits = s->extra_bits;
+    b[i].sprite_id = s->sprite_id;
+    b[i].ext_len = s->ext_len;
+    memcpy(b[i].ext_bytes, s->ext_bytes, s->ext_len);
+  }
+
+  qsort(a, n, sizeof(NormSprite), norm_sprite_cmp);
+  qsort(b, n, sizeof(NormSprite), norm_sprite_cmp);
+  int ok = 1;
+  for (size_t i = 0; i < n; i++) {
+    if (norm_sprite_cmp(&a[i], &b[i]) != 0) {
+      failf("NormSprite[%zu] mismatch: id=0x%02X eb=%u scr=%u x=%u y=%u ext_len=%u", i,
+            a[i].sprite_id, a[i].extra_bits, a[i].screen, a[i].x, a[i].y, a[i].ext_len);
+      ok = 0;
+      break;
+    }
+  }
+
+  free(a);
+  free(b);
+  return ok;
+}
+
 static int run_case(const char *rom_path, const char *mwl_path, const char *label, uint16_t expected_level_id_or_0) {
   char err[512];
 
@@ -269,6 +352,25 @@ static int run_case(const char *rom_path, const char *mwl_path, const char *labe
     levelinfo_free(&mwl_dec);
     mwl_parsed_free(&mwl);
     return 0;
+  }
+
+  // Decode MWL sprite bytes (requires ROM for extension-size lookup parity with ROM decode).
+  if (mwl.sprites.bytes && mwl.sprites.len) {
+    LevelSprite *mwl_sprites = NULL;
+    size_t mwl_sprites_count = 0;
+    SpriteHeader mwl_hdr;
+    memset(&mwl_hdr, 0, sizeof(mwl_hdr));
+    if (!parse_level_sprites_from_bytes(mwl.sprites.bytes, mwl.sprites.len, &rom, &mwl_hdr,
+                                        &mwl_sprites, &mwl_sprites_count, err, sizeof(err))) {
+      failf("[%s] Parse MWL sprite data failed: %s", label, err);
+      rom_free(&rom);
+      levelinfo_free(&mwl_dec);
+      mwl_parsed_free(&mwl);
+      return 0;
+    }
+    mwl_dec.sprite_header = mwl_hdr;
+    mwl_dec.sprites = mwl_sprites;
+    mwl_dec.sprites_count = mwl_sprites_count;
   }
   LmTables tables;
   if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
@@ -301,6 +403,8 @@ static int run_case(const char *rom_path, const char *mwl_path, const char *labe
 
   // Objects/screen exits
   cmp_objects(&rom_dec, &mwl_dec);
+  // Sprites
+  cmp_sprites(&rom_dec, &mwl_dec);
 
   levelinfo_free(&rom_dec);
   rom_free(&rom);

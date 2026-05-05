@@ -114,6 +114,25 @@ static void print_sprite_header(const SpriteHeader *h) {
   printf("    Sprite_Memory: %u\n", h->sprite_memory);
 }
 
+static void print_sprites(const LevelInfo *info) {
+  printf("  Level_Sprite_Data\n");
+  for (size_t i = 0; i < info->sprites_count; i++) {
+    const LevelSprite *s = &info->sprites[i];
+    printf("    Sprite %zu: Y=%u Extra_Bits=%u X=%u Screen=%u Sprite_ID=0x%02X XY_Swapped=%u",
+           i, (unsigned)s->y, (unsigned)s->extra_bits, (unsigned)s->x, (unsigned)s->screen,
+           (unsigned)s->sprite_id, (unsigned)s->xy_swapped);
+    if (s->ext_len) {
+      printf(" Ext=[");
+      for (uint8_t k = 0; k < s->ext_len; k++) {
+        if (k) printf(" ");
+        printf("%02X", s->ext_bytes[k]);
+      }
+      printf("]");
+    }
+    printf("\n");
+  }
+}
+
 static void print_objects(const LevelInfo *info) {
   printf("  Layer1_Object_Data\n");
   for (size_t i = 0; i < info->objects_count; i++) {
@@ -268,6 +287,30 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
   }
   jsonw_obj_end(w);
 
+  jsonw_key(w, "sprite_data");
+  jsonw_obj_begin(w);
+  jsonw_key(w, "sprites");
+  jsonw_arr_begin(w);
+  for (size_t i = 0; i < info->sprites_count; i++) {
+    const LevelSprite *s = &info->sprites[i];
+    jsonw_obj_begin(w);
+    jsonw_key(w, "y"); jsonw_uint(w, s->y);
+    jsonw_key(w, "extra_bits"); jsonw_uint(w, s->extra_bits);
+    jsonw_key(w, "x"); jsonw_uint(w, s->x);
+    jsonw_key(w, "screen"); jsonw_uint(w, s->screen);
+    jsonw_key(w, "sprite_id"); jsonw_uint(w, s->sprite_id);
+    jsonw_key(w, "xy_swapped"); jsonw_uint(w, s->xy_swapped);
+    jsonw_key(w, "ext_bytes");
+    jsonw_arr_begin(w);
+    for (uint8_t k = 0; k < s->ext_len; k++) {
+      jsonw_uint(w, s->ext_bytes[k]);
+    }
+    jsonw_arr_end(w);
+    jsonw_obj_end(w);
+  }
+  jsonw_arr_end(w);
+  jsonw_obj_end(w);
+
   jsonw_obj_end(w);
 }
 
@@ -401,6 +444,7 @@ int main(int argc, char **argv) {
   print_sprite_header(&info.sprite_header);
 
   if (!data_none) {
+    print_sprites(&info);
     print_objects(&info);
   }
 

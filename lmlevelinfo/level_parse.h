@@ -78,6 +78,26 @@ typedef struct {
 } SpriteHeader;
 
 typedef struct {
+  uint32_t index;
+  uint32_t byte_offset; // offset within sprite payload where this sprite begins (after sprite header)
+
+  // Raw base record bytes (3 bytes: yyyyEESY, XXXXssss, id)
+  uint8_t raw3[3];
+
+  // Decoded fields
+  uint16_t y;         // includes y-jump high bits when new sprite system is active
+  uint8_t x;          // 0..15
+  uint8_t screen;     // 0..31
+  uint8_t extra_bits; // 0..3
+  uint8_t sprite_id;  // 0..255
+  uint8_t xy_swapped; // best-effort heuristic (0/1)
+
+  // Optional Lunar Magic extension bytes (0..12)
+  uint8_t ext_len;
+  uint8_t ext_bytes[12];
+} LevelSprite;
+
+typedef struct {
   uint32_t pc_offset;
   uint8_t bytes[16];
   size_t len;
@@ -131,6 +151,10 @@ typedef struct {
   // objects
   LevelObject *objects;
   size_t objects_count;
+
+  // sprites
+  LevelSprite *sprites;
+  size_t sprites_count;
 } LevelInfo;
 
 void levelinfo_free(LevelInfo *info);
@@ -144,4 +168,19 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
 // `layer1_bytes` must start with the primary header and include the object stream.
 int parse_level_info_from_layer1_bytes(const uint8_t *layer1_bytes, size_t layer1_len, uint16_t level_id,
                                       LevelInfo *out, char *err, size_t errcap);
+
+// Parse sprite stream from ROM at `sprite_ptr_snes` (points to sprite header byte).
+// Decodes sprite header and sprite records (including LM commands and extension bytes when enabled).
+int parse_level_sprites_from_rom(const Rom *rom, const LmTables *tables, uint16_t level_id,
+                                 uint32_t sprite_ptr_snes, SpriteHeader *out_hdr,
+                                 LevelSprite **out_sprites, size_t *out_count,
+                                 char *err, size_t errcap);
+
+// Parse sprite stream from an in-memory buffer (must start with sprite header byte).
+// Uses `rom` only for optional LM extension size table lookup (may be NULL to disable extensions).
+int parse_level_sprites_from_bytes(const uint8_t *bytes, size_t len,
+                                   const Rom *rom,
+                                   SpriteHeader *out_hdr,
+                                   LevelSprite **out_sprites, size_t *out_count,
+                                   char *err, size_t errcap);
 

@@ -139,14 +139,17 @@ static size_t object_len_for_standard(uint8_t obj_id, const uint8_t *buf, size_t
   if (obj_id == 0x2D) return 5;
   if (obj_id == 0x27 || obj_id == 0x29) {
     // Need at least 5 bytes to decide.
-    if (!buf) return 5;
+    if (!buf || avail < 5) return 5;
+    // For object 27/29, the variant selector lives in the top 2 bits of byte 3 (0-based):
+    //   byte3: 00BBBBBB / 01BBBBBB / 10BBBBBB / 11BBBBBB ...
+    // Conditional-direct-map16 is indicated by bit7 of byte2 (1WWWWWWW).
     uint8_t b2 = buf[2];
-    uint8_t mode = (b2 >> 6) & 0x3;
+    uint8_t b3 = buf[3];
+    uint8_t mode = (b3 >> 6) & 0x3;
     if (mode == 0x0) return 5;        // single-screen, single tile
     if (mode == 0x1) return 5;        // multiple tiles unstretched
     if (mode == 0x2) return 6;        // single-screen, multiple tiles
     // mode == 3: multi-screen or conditional direct map16
-    // If bit7 of b2 is set, it's conditional direct map16 (adds 1 byte)
     return (b2 & 0x80) ? 8 : 7;
   }
   // Object 28 is 3 bytes (time bypass) in wiki format.
@@ -172,7 +175,8 @@ static int parse_objects(const Rom *rom, uint32_t layer1_ptr_snes, int is_vertic
   const size_t HARD_CAP = 0x20000;
   size_t max = rom->size - pc;
   if (max > HARD_CAP) max = HARD_CAP;
-  if (max < 8) {
+  // Minimum viable blob: 5-byte primary header + 0xFF terminator = 6 bytes.
+  if (max < 6) {
     seterr(err, errcap, "Layer1 data too small");
     return 0;
   }
@@ -215,20 +219,20 @@ static int parse_objects(const Rom *rom, uint32_t layer1_ptr_snes, int is_vertic
     if (i + 3 > max) break;
 
     uint8_t new_screen = (b0 >> 7) & 0x1;
-    uint8_t obj_id = (b0 >> 5) & 0x3;          // BB
-    uint8_t obj_low = b0 & 0x1F;               // bbbbb
+    uint8_t bb = (b0 >> 5) & 0x3;              // BB
+    uint8_t y = b0 & 0x1F;                     // YYYYY
     uint8_t b1 = p[i + 1];
     uint8_t b2 = p[i + 2];
-
-    uint8_t x = b1 & 0x0F;
-    uint8_t y = b0 & 0x1F;
+    uint8_t bbbb = (b1 >> 4) & 0xF;            // bbbb
+    uint8_t x = b1 & 0x0F;                     // XXXX
     uint8_t settings = b2;
 
-    uint8_t standard_id = (uint8_t)((obj_id << 5) | obj_low);
+    uint8_t standard_id = (uint8_t)((bb << 4) | bbbb); // BBbbbb
 
     LevelObject obj;
     memset(&obj, 0, sizeof(obj));
     obj.index = (uint32_t)obj_index;
+    obj.byte_offset = (uint32_t)i;
     obj.new_screen = new_screen;
     obj.x_position = x;
     obj.y_position = y;
@@ -313,7 +317,8 @@ static int parse_objects(const Rom *rom, uint32_t layer1_ptr_snes, int is_vertic
 
 static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
                                   LevelInfo *out, char *err, size_t errcap) {
-  if (!p || max < 8 || !out) {
+  // Minimum viable buffer: 5-byte primary header + 0xFF terminator = 6 bytes.
+  if (!p || max < 6 || !out) {
     seterr(err, errcap, "Layer1 buffer too small");
     return 0;
   }
@@ -351,19 +356,20 @@ static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
     if (i + 3 > max) break;
 
     uint8_t new_screen = (b0 >> 7) & 0x1;
-    uint8_t obj_id = (b0 >> 5) & 0x3;
-    uint8_t obj_low = b0 & 0x1F;
+    uint8_t bb = (b0 >> 5) & 0x3;
+    uint8_t y = b0 & 0x1F;
     uint8_t b1 = p[i + 1];
     uint8_t b2 = p[i + 2];
+    uint8_t bbbb = (b1 >> 4) & 0xF;
 
     uint8_t x = b1 & 0x0F;
-    uint8_t y = b0 & 0x1F;
     uint8_t settings = b2;
-    uint8_t standard_id = (uint8_t)((obj_id << 5) | obj_low);
+    uint8_t standard_id = (uint8_t)((bb << 4) | bbbb);
 
     LevelObject obj;
     memset(&obj, 0, sizeof(obj));
     obj.index = (uint32_t)obj_index;
+    obj.byte_offset = (uint32_t)i;
     obj.new_screen = new_screen;
     obj.x_position = x;
     obj.y_position = y;

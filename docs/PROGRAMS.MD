@@ -685,6 +685,7 @@ enode.sh process_index7zs.js --help
 - `/home/me/smwdb/smw.sfc` (for --checkrom option)
 - Python scripts: `try_lmfilter.py`, `findtranslevels/find_translevels.py` (for --try-* options)
 - `level_reader` binary (for --try-levelread option)
+- `lmlevelinfo/level_info1` binary (optional; inspect LM level headers/object data and export MWL)
 - `ipfs-only-hash` package (for IPFS CID calculation)
 - `ardrive-core-js` and `arweave` packages (for --update-ardrive option)
 

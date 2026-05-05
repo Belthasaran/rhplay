@@ -1,5 +1,7 @@
 - **RHTools Launcher UI**: RHPlay section shows **active core manifest** `version_string` / `versionid` and **`lastupdated`** (Unix + local time) above the RHPlay manifest entry line.
 
+- **lmlevelinfo**: Added `lmlevelinfo/level_info1` (CLI) to inspect Lunar Magic level headers and Layer 1 object data for a ROM’s Level ID, with optional JSON output and minimal MWL export.
+
 - **0.1.30beta (2026-03-31)** – Release summary: [`docs/RELEASE_0.1.30beta_20260331.md`](RELEASE_0.1.30beta_20260331.md). Highlights: coremanifest `.dat` bootstrap/refresh fixes for Windows portable, updater hardening (no downgrades; DNS must prove availability), launcher logging + launch feedback UI.
 
 - **0.1.29beta (2026-03-29)** – Release summary: [`docs/RELEASE_0.1.29beta_20260329.md`](RELEASE_0.1.29beta_20260329.md). Highlights: RHTools Launcher (download, DB provision, packaging), shared `rhtools` userData, catalog download order and hex SHA-256 string comparison, fetch-settings parity, tooling.

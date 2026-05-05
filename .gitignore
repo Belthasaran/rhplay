@@ -80,3 +80,5 @@ games0/
 games2/
 games3/
 backups/
+*.json.backup
+

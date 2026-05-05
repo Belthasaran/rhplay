@@ -33,7 +33,7 @@
     ],
     "rating": 5,
     "size": 565170,
-    "downloads": 347,
+    "downloads": 350,
     "download_url": "https://dl.smwcentral.net/34054/Flying_High_Again_1.1.bps.zip",
     "obsoleted_by": null,
     "fields": {
@@ -104,7 +104,7 @@
     ],
     "rating": 5,
     "size": 1295053,
-    "downloads": 243,
+    "downloads": 247,
     "download_url": "https://dl.smwcentral.net/35777/TPL3.zip",
     "obsoleted_by": null,
     "fields": {
@@ -135,93 +135,6 @@
       "sa1": false,
       "warnings": [],
       "description": "Well, after a long time, The Pit Level 3 has been completed. \r\n\r\nThis hack was started in 2015 and I worked hard on it until mid-2017. For personal reasons, I was forced to interrupt progress and it was practically stopped until 2022. From 2022 onwards I managed to work hard on it again and finish it.\r\n\r\nThe focus of this hack was not difficulty, although it is somewhat complex. My goal was to make a fun hack. Because it was mostly made between 2015 and 2017, this hack is made up of many shelljumps, yumps, keyjumps and things like that. Nowadays, that's not as cool as it was in 2015, but I didn't have much of a choice. I managed to change many rooms and eliminate some repeated shelljumps, but overall if I were to change everything, I would have to do a new hack.\r\n\r\nFULL HACK VIDEO: https://youtu.be/mrlO3VQiz9U\r\n\r\nAnyway, that was the most I could do. Although this hack is full of shelljumps/keyjumps, it also has some cool tricks, as you will see in some rooms.\r\n\r\nNOTE: The water room (room 112) is different from what appears in the video. I changed it because it was generating a lot of lag, but unfortunately I couldn't change it in the video, as the TAS was desyncing.\r\n\r\nNOTE 2: The crash at the end of the video was for pure fun, it is not mandatory. The hack ends as soon as you kill the boss. \r\n\r\nThat's it, download and enjoy!"
-    }
-  },
-  {
-    "id": 40890,
-    "section": "smwhacks",
-    "name": "Super Mario World Master Quest 4: Redrawn",
-    "time": 1761610985,
-    "submitted_at": 1761610985,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 812,
-        "name": "Alex No"
-      }
-    ],
-    "submitter": {
-      "id": 26246,
-      "name": "Mr. MS"
-    },
-    "moderator": null,
-    "tags": [
-      "asm",
-      "bosses",
-      "exgfx",
-      "fixme",
-      "gimmick",
-      "huge level",
-      "music",
-      "needs remoderation",
-      "traditional"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/119074",
-      "https://dl.smwcentral.net/image/119075",
-      "https://dl.smwcentral.net/image/119076",
-      "https://dl.smwcentral.net/image/119077",
-      "https://dl.smwcentral.net/image/119078",
-      "https://dl.smwcentral.net/image/119079",
-      "https://dl.smwcentral.net/image/119080",
-      "https://dl.smwcentral.net/image/119081",
-      "https://dl.smwcentral.net/image/119082",
-      "https://dl.smwcentral.net/image/119083",
-      "https://dl.smwcentral.net/image/119084",
-      "https://dl.smwcentral.net/image/119085",
-      "https://dl.smwcentral.net/image/119086",
-      "https://dl.smwcentral.net/image/119087",
-      "https://dl.smwcentral.net/image/119088",
-      "https://dl.smwcentral.net/image/119089",
-      "https://dl.smwcentral.net/image/119090",
-      "https://dl.smwcentral.net/image/119091",
-      "https://dl.smwcentral.net/image/119092",
-      "https://dl.smwcentral.net/image/119093",
-      "https://dl.smwcentral.net/image/119094"
-    ],
-    "rating": 3.6,
-    "size": 844846,
-    "downloads": 4585,
-    "download_url": "https://dl.smwcentral.net/40890/Super%20Mario%20World%20Master%20Quest%204%20Redrawn%20Update%201.2.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Intermediate",
-      "type": "Standard",
-      "length": "70 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "This is Super Mario World Master Quest 4 Redrawn Update 1.2<br>\r\n<br>\r\nNews:<br>\r\nextended levels<br>\r\n1 new level<br>\r\nslowdown fix<br>\r\npallet fix.<br>\r\nHarder Lakitu boss<br>\r\nnew music.<br>\r\nand more.<br>\r\n<br>\r\nEnjoy my game"
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_3",
-      "type": [
-        "standard"
-      ],
-      "length": 70,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "This is Super Mario World Master Quest 4 Redrawn Update 1.2\r\n\r\nNews:\r\nextended levels\r\n1 new level\r\nslowdown fix\r\npallet fix.\r\nHarder Lakitu boss\r\nnew music.\r\nand more.\r\n\r\nEnjoy my game"
     }
   },
   {
@@ -259,7 +172,7 @@
     ],
     "rating": 0,
     "size": 1089839,
-    "downloads": 59,
+    "downloads": 64,
     "download_url": "https://dl.smwcentral.net/41511/100%20Torment%20of%20Rooms.zip",
     "obsoleted_by": null,
     "fields": {
@@ -326,7 +239,7 @@
     ],
     "rating": 0,
     "size": 674442,
-    "downloads": 54,
+    "downloads": 59,
     "download_url": "https://dl.smwcentral.net/41515/Jumpsc.zip",
     "obsoleted_by": null,
     "fields": {
@@ -412,7 +325,7 @@
     ],
     "rating": 5,
     "size": 366310,
-    "downloads": 95,
+    "downloads": 99,
     "download_url": "https://dl.smwcentral.net/41532/Obstacle%20Courses%20for%20Anti-Gravity%20Horses.zip",
     "obsoleted_by": null,
     "fields": {
@@ -443,152 +356,6 @@
       "sa1": false,
       "warnings": [],
       "description": "You exit from your last-played level victorious. The design was fine, if not familiar, but engaging and fun. You jumped over the pits, you avoided the munchers, and touching the goal tape felt satisfying enough. The gimmicks were really neat, and some of the more unique elements ignited your imagination about the yet unplayed levels that await on the road ahead. What new obstacles would the creator expect you to overcome? As you ponder this, traversing the overworld of the hack you are currently playing, you see a streak of green and yellow flash across the sky. Is it a bird? Is it a plane? No, it’s a caped union plumber indulging in aerodynamic equestrianism! At first they look ridiculous and awkward. It doesn’t even look fun, but, you can’t stop watching. How are they even doing that? It looks hard, but also kind of interesting. Their horse doesn’t even have wings! Why does it keep sticking its tongue out?! You think to yourself, “Could I do it too?” A disembodied voice whispers back into your thoughts, “You can, if you try.”\r\n\r\nChinese astrology says the Year of the Horse is upon us! This first of its kind [s]Yoshi[/s] horse flight hack comes as an unlikely collaboration between 4 joint 2006 Time Magazine ‘Person of the Year’ award recipients. The premise is simple, in every level you must eat the 5 golden berries and then hatch and collect your prize. The path to credits has 9 levels, and there are 4 bonus levels after the credits that include 3 guest levels. This hack is not a tutorial. It is a challenge that tests your understanding and consistency of control, and allows you to improve as you go. There is a simple practice level within the hack that provides a space to work on your horse and horseless flight fundamentals freely.\r\n\r\nGood luck, and safe flying. We believe in you."
-    }
-  },
-  {
-    "id": 42028,
-    "section": "smwhacks",
-    "name": "Precision86 Part II : The Forgotten Kingdom (DEMO)",
-    "time": 1774409422,
-    "submitted_at": 1774409422,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 32207,
-        "name": "Nowieso"
-      }
-    ],
-    "submitter": {
-      "id": 32207,
-      "name": "Nowieso"
-    },
-    "moderator": null,
-    "tags": [
-      "bosses",
-      "custom music",
-      "gimmick",
-      "precision",
-      "story",
-      "traditional",
-      "variety"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/122757.png",
-      "https://dl.smwcentral.net/image/122758.png",
-      "https://dl.smwcentral.net/image/122759.png",
-      "https://dl.smwcentral.net/image/122760.png",
-      "https://dl.smwcentral.net/image/122761.png"
-    ],
-    "rating": 0,
-    "size": 1098568,
-    "downloads": 43,
-    "download_url": "https://dl.smwcentral.net/42028/Precision86%20Part%20II%20Demo%20V1_2.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Master",
-      "type": "Kaizo",
-      "length": "7 exit(s)",
-      "hof": "No",
-      "demo": "Yes",
-      "collab": "No",
-      "sa1": "Yes",
-      "warnings": "Possible Photosensitivity Triggers",
-      "description": "Dear Explorer,<br>\r\nthis once-proud kingdom has fallen long ago, but why? Please help us explore these ruins. Uncover their secrets. Slay the corrupted beasts that plague these lands, and find out what truly happened in the past.<br>\r\n<br>\r\nPrecision86 Part II : The Forgotten Kingdom is a direct sequel to Precision86, a Kaizo ROMHack that focuses mostly on precision-platforming, new gimmicks and custom bossfights. It is dedicated to Dennsen86.<br>\r\n<br>\r\nThis ROMHack is full of new, fresh ideas and innovative systems and bossfights, while staying close to the design philosophy of the first game. The full version will still take some time, but I hope you'll enjoy the demo in the meantime!<br>\r\n<br>\r\nv1.2<br>\r\n<br>\r\n- reduced HDMA brightness<br>\r\n- replaced HUD toggle with weapon button toggle option<br>\r\n- your attribute of choice is now visible on the overworld<br>\r\n- lots of smaller, quality of life adjustments based on demo feedback<br>\r\n- improved indicators<br>\r\n- bugfixes<br>\r\n<br>\r\nV1.1: Tiny adjustment to the final boss<br>\r\n<br>\r\nWatch a full playthrough here: https://www.youtube.com/watch?v=B42Ymk6o03w"
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_6",
-      "type": [
-        "kaizo"
-      ],
-      "length": 7,
-      "hof": false,
-      "demo": true,
-      "collab": false,
-      "sa1": true,
-      "warnings": [
-        "photosensitivity"
-      ],
-      "description": "Dear Explorer,\r\nthis once-proud kingdom has fallen long ago, but why? Please help us explore these ruins. Uncover their secrets. Slay the corrupted beasts that plague these lands, and find out what truly happened in the past.\r\n\r\nPrecision86 Part II : The Forgotten Kingdom is a direct sequel to Precision86, a Kaizo ROMHack that focuses mostly on precision-platforming, new gimmicks and custom bossfights. It is dedicated to Dennsen86.\r\n\r\nThis ROMHack is full of new, fresh ideas and innovative systems and bossfights, while staying close to the design philosophy of the first game. The full version will still take some time, but I hope you'll enjoy the demo in the meantime!\r\n\r\nv1.2\r\n\r\n- reduced HDMA brightness\r\n- replaced HUD toggle with weapon button toggle option\r\n- your attribute of choice is now visible on the overworld\r\n- lots of smaller, quality of life adjustments based on demo feedback\r\n- improved indicators\r\n- bugfixes\r\n\r\nV1.1: Tiny adjustment to the final boss\r\n\r\nWatch a full playthrough here: https://www.youtube.com/watch?v=B42Ymk6o03w"
-    }
-  },
-  {
-    "id": 42114,
-    "section": "smwhacks",
-    "name": "YNT MARIO",
-    "time": 1775207084,
-    "submitted_at": 1775207084,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": null,
-        "name": "YNT"
-      },
-      {
-        "id": 74392,
-        "name": "astm"
-      }
-    ],
-    "submitter": {
-      "id": 74392,
-      "name": "astm"
-    },
-    "moderator": null,
-    "tags": [
-      "bosses",
-      "custom music",
-      "puzzle",
-      "translated"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/123033.png",
-      "https://dl.smwcentral.net/image/123034.png",
-      "https://dl.smwcentral.net/image/123035.png",
-      "https://dl.smwcentral.net/image/123036.png",
-      "https://dl.smwcentral.net/image/123037.png",
-      "https://dl.smwcentral.net/image/123038.png",
-      "https://dl.smwcentral.net/image/123039.png",
-      "https://dl.smwcentral.net/image/123040.png",
-      "https://dl.smwcentral.net/image/123041.png",
-      "https://dl.smwcentral.net/image/123042.png"
-    ],
-    "rating": 3,
-    "size": 2346700,
-    "downloads": 430,
-    "download_url": "https://dl.smwcentral.net/42114/ynt_mario_en_v1.0.3.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Advanced",
-      "type": "Standard",
-      "length": "113 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "Yes",
-      "sa1": "Yes",
-      "warnings": "",
-      "description": "This game, with a total of 113 goals, took 11 years to complete.<br>\r\n<br>\r\nIt was made by two Japanese people.<br>\r\n<br>\r\nThe quality of the stages varies depending on when they were created, but<br>\r\nwe would be grateful if you would play it!<br>\r\n<br>\r\n■Update v1.0.1<br>\r\nFixed Graphics issue.<br>\r\n■Update v1.0.2<br>\r\nFixed the freezing issue.<br>\r\n■Update v1.0.3<br>\r\nFixed an issue related to SRAM in Dragon Coin."
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_4",
-      "type": [
-        "standard"
-      ],
-      "length": 113,
-      "hof": false,
-      "demo": false,
-      "collab": true,
-      "sa1": true,
-      "warnings": [],
-      "description": "This game, with a total of 113 goals, took 11 years to complete.\r\n\r\nIt was made by two Japanese people.\r\n\r\nThe quality of the stages varies depending on when they were created, but\r\nwe would be grateful if you would play it!\r\n\r\n■Update v1.0.1\r\nFixed Graphics issue.\r\n■Update v1.0.2\r\nFixed the freezing issue.\r\n■Update v1.0.3\r\nFixed an issue related to SRAM in Dragon Coin."
     }
   },
   {
@@ -623,7 +390,7 @@
     ],
     "rating": 0,
     "size": 476797,
-    "downloads": 23,
+    "downloads": 29,
     "download_url": "https://dl.smwcentral.net/42155/GrandShell.zip",
     "obsoleted_by": null,
     "fields": {
@@ -695,7 +462,7 @@
     ],
     "rating": 5,
     "size": 819160,
-    "downloads": 232,
+    "downloads": 240,
     "download_url": "https://dl.smwcentral.net/42160/ShellOrDie.zip",
     "obsoleted_by": null,
     "fields": {
@@ -766,7 +533,7 @@
     ],
     "rating": 0,
     "size": 711782,
-    "downloads": 41,
+    "downloads": 52,
     "download_url": "https://dl.smwcentral.net/42188/tearsjoyandhappiness.zip",
     "obsoleted_by": null,
     "fields": {
@@ -799,11 +566,11 @@
     }
   },
   {
-    "id": 42191,
+    "id": 42245,
     "section": "smwhacks",
-    "name": "Super Mario Super Quest Demo V.1.2",
-    "time": 1776198899,
-    "submitted_at": 1776198899,
+    "name": "Super Mario Mushroom Kingdom Madness",
+    "time": 1776976052,
+    "submitted_at": 1776976052,
     "moderated_at": null,
     "moderated": false,
     "authors": [
@@ -819,27 +586,105 @@
     "moderator": null,
     "tags": [],
     "images": [
-      "https://dl.smwcentral.net/image/123266.png",
-      "https://dl.smwcentral.net/image/123267.png",
-      "https://dl.smwcentral.net/image/123268.png"
+      "https://dl.smwcentral.net/image/123417.png",
+      "https://dl.smwcentral.net/image/123418.png",
+      "https://dl.smwcentral.net/image/123419.png",
+      "https://dl.smwcentral.net/image/123420.png",
+      "https://dl.smwcentral.net/image/123421.png",
+      "https://dl.smwcentral.net/image/123422.png",
+      "https://dl.smwcentral.net/image/123423.png",
+      "https://dl.smwcentral.net/image/123424.png"
+    ],
+    "rating": 5,
+    "size": 513307,
+    "downloads": 751,
+    "download_url": "https://dl.smwcentral.net/42245/SM%20Mushroom%20Kingdom%20Madness%20Demo.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "2",
+      "changelog": "New name, one more world, new graphics, more content.",
+      "difficulty": "Casual",
+      "type": "Standard",
+      "length": "30 exit(s)",
+      "hof": "No",
+      "demo": "Yes",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Super Mario Super Quest is now Mushroom Kingdom Madness, a classic adventure around the mushroom kingdom to save the princess Peach."
+    },
+    "raw_fields": {
+      "version": "2",
+      "changelog": "New name, one more world, new graphics, more content.",
+      "difficulty": "diff_2",
+      "type": [
+        "standard"
+      ],
+      "length": 30,
+      "hof": false,
+      "demo": true,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Super Mario Super Quest is now Mushroom Kingdom Madness, a classic adventure around the mushroom kingdom to save the princess Peach."
+    }
+  },
+  {
+    "id": 42246,
+    "section": "smwhacks",
+    "name": "New Super Mario World 3: Peach's Double Trouble",
+    "time": 1776981719,
+    "submitted_at": 1776981719,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 40670,
+        "name": "Bullymario"
+      }
+    ],
+    "submitter": {
+      "id": 40670,
+      "name": "Bullymario"
+    },
+    "moderator": null,
+    "tags": [
+      "asm",
+      "cutscenes",
+      "exgfx",
+      "hdma",
+      "music"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/123425.png",
+      "https://dl.smwcentral.net/image/123426.png",
+      "https://dl.smwcentral.net/image/123427.png",
+      "https://dl.smwcentral.net/image/123428.png",
+      "https://dl.smwcentral.net/image/123429.png",
+      "https://dl.smwcentral.net/image/123430.png",
+      "https://dl.smwcentral.net/image/123431.png",
+      "https://dl.smwcentral.net/image/123432.png",
+      "https://dl.smwcentral.net/image/123433.png",
+      "https://dl.smwcentral.net/image/123434.png",
+      "https://dl.smwcentral.net/image/123435.png"
     ],
     "rating": 0,
-    "size": 472286,
-    "downloads": 38,
-    "download_url": "https://dl.smwcentral.net/42191/Super%20Mario%20Super%20Quest%201.2.zip",
+    "size": 1628424,
+    "downloads": 88,
+    "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
     "obsoleted_by": null,
     "fields": {
       "version": "",
       "changelog": "",
       "difficulty": "Intermediate",
       "type": "Standard",
-      "length": "27 exit(s)",
+      "length": "93 exit(s)",
       "hof": "No",
-      "demo": "Yes",
+      "demo": "No",
       "collab": "No",
       "sa1": "No",
       "warnings": "",
-      "description": "New version of Super Mario Super Quest with new graffics, colors and new levels."
+      "description": "Princess Peach decides to go on a adventure with Wario in some new world. Some new villain wants to conquer the Mushroom Kingdom and then the world. Sequel of the previous 2 NSMW.<br>\r\n<br>\r\nVersion 2.1.2<br>\r\n<br>\r\nThis is a 2014-ish style hack, so everything you see not gonna have stuff that's newer than 2014.<br>\r\n<br>\r\nMore Info in the Readme.txt"
     },
     "raw_fields": {
       "version": "",
@@ -848,284 +693,204 @@
       "type": [
         "standard"
       ],
-      "length": 27,
-      "hof": false,
-      "demo": true,
-      "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "New version of Super Mario Super Quest with new graffics, colors and new levels."
-    }
-  },
-  {
-    "id": 42206,
-    "section": "smwhacks",
-    "name": "Nakama",
-    "time": 1776480326,
-    "submitted_at": 1776480326,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 66145,
-        "name": "D_O_M"
-      }
-    ],
-    "submitter": {
-      "id": 66145,
-      "name": "D_O_M"
-    },
-    "moderator": null,
-    "tags": [
-      "kaizo"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/123313.png",
-      "https://dl.smwcentral.net/image/123314.png",
-      "https://dl.smwcentral.net/image/123315.png",
-      "https://dl.smwcentral.net/image/123316.png",
-      "https://dl.smwcentral.net/image/123317.png",
-      "https://dl.smwcentral.net/image/123318.png",
-      "https://dl.smwcentral.net/image/123319.png",
-      "https://dl.smwcentral.net/image/123320.png"
-    ],
-    "rating": 4.8,
-    "size": 1782760,
-    "downloads": 624,
-    "download_url": "https://dl.smwcentral.net/42206/Nakama1.1.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "1.1",
-      "changelog": "This hack no longer needs the photosensitivity warning. ",
-      "difficulty": "Advanced",
-      "type": "Kaizo",
-      "length": "34 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "Possible Photosensitivity Triggers",
-      "description": "04/17/2026 -&gt; 1.1<br>\r\n<br>\r\nWith Arcadia off of my plate, I return to Nakama in an attempt to salvage what I can of this Rom. Hopefully it plays easier on the hands and eyes.<br>\r\n<br>\r\n34/34 Exits received changes, including: <br>\r\n<br>\r\nImproved Palettes/Backgrounds/Visibility in most levels, fixed janky camera in many levels, made setups more lenient/less awkward in every single level.  A lot of levels are shorter and/or easier. <br>\r\n<br>\r\nAlso, the bubble suit palette was removed since it was causing graphical issues.<br>\r\n<br>\r\nI polished up as much as I could while still leaving most of the awkward stank it released with. Arcadia is still far more of a well-made hack. <br>\r\n<br>\r\n--------------------------------------------------------------------------------------------------<br>\r\n<br>\r\nNakama is an action-packed introduction to a plethora of chocolate. <br>\r\n<br>\r\nThis hack contains many custom sprites, mechanics, and blocks, paired with semi restrictive platforming and fairly short sections. Also, a fully custom soundtrack and many custom backgrounds. <br>\r\n<br>\r\nIf you want to branch out a tiny bit passed beginner hacks, this is the spot for you. Those with more Kaizo experience should not struggle much with this hack. <br>\r\n<br>\r\nThis was essentially my Lunar Magic learning project, and my sophomore year of college lol. <br>\r\n<br>\r\nAll levels and overworld designed by D_O_M"
-    },
-    "raw_fields": {
-      "version": "1.1",
-      "changelog": "This hack no longer needs the photosensitivity warning. ",
-      "difficulty": "diff_4",
-      "type": [
-        "kaizo"
-      ],
-      "length": 34,
+      "length": 93,
       "hof": false,
       "demo": false,
       "collab": false,
       "sa1": false,
-      "warnings": [
-        "photosensitivity"
-      ],
-      "description": "04/17/2026 -> 1.1\r\n\r\nWith Arcadia off of my plate, I return to Nakama in an attempt to salvage what I can of this Rom. Hopefully it plays easier on the hands and eyes.\r\n\r\n34/34 Exits received changes, including: \r\n\r\nImproved Palettes/Backgrounds/Visibility in most levels, fixed janky camera in many levels, made setups more lenient/less awkward in every single level.  A lot of levels are shorter and/or easier. \r\n\r\nAlso, the bubble suit palette was removed since it was causing graphical issues.\r\n\r\nI polished up as much as I could while still leaving most of the awkward stank it released with. Arcadia is still far more of a well-made hack. \r\n\r\n--------------------------------------------------------------------------------------------------\r\n\r\nNakama is an action-packed introduction to a plethora of chocolate. \r\n\r\nThis hack contains many custom sprites, mechanics, and blocks, paired with semi restrictive platforming and fairly short sections. Also, a fully custom soundtrack and many custom backgrounds. \r\n\r\nIf you want to branch out a tiny bit passed beginner hacks, this is the spot for you. Those with more Kaizo experience should not struggle much with this hack. \r\n\r\nThis was essentially my Lunar Magic learning project, and my sophomore year of college lol. \r\n\r\nAll levels and overworld designed by D_O_M"
+      "warnings": [],
+      "description": "Princess Peach decides to go on a adventure with Wario in some new world. Some new villain wants to conquer the Mushroom Kingdom and then the world. Sequel of the previous 2 NSMW.\r\n\r\nVersion 2.1.2\r\n\r\nThis is a 2014-ish style hack, so everything you see not gonna have stuff that's newer than 2014.\r\n\r\nMore Info in the Readme.txt"
     }
   },
   {
-    "id": 42230,
+    "id": 42272,
     "section": "smwhacks",
-    "name": "Paths",
-    "time": 1776737674,
-    "submitted_at": 1776737674,
+    "name": "Yoshi's Island by Zorrito",
+    "time": 1777253817,
+    "submitted_at": 1777253817,
     "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 55615,
-        "name": "FiveFactor"
+        "id": 74700,
+        "name": "ZorritoKF"
       }
     ],
     "submitter": {
-      "id": 55615,
-      "name": "FiveFactor"
+      "id": 74700,
+      "name": "ZorritoKF"
     },
     "moderator": null,
-    "tags": [],
-    "images": [
-      "https://dl.smwcentral.net/image/123375.png",
-      "https://dl.smwcentral.net/image/123376.png",
-      "https://dl.smwcentral.net/image/123377.png",
-      "https://dl.smwcentral.net/image/123378.png",
-      "https://dl.smwcentral.net/image/123379.png",
-      "https://dl.smwcentral.net/image/123380.png",
-      "https://dl.smwcentral.net/image/123381.png",
-      "https://dl.smwcentral.net/image/123382.png",
-      "https://dl.smwcentral.net/image/123383.png",
-      "https://dl.smwcentral.net/image/123384.png",
-      "https://dl.smwcentral.net/image/123385.png",
-      "https://dl.smwcentral.net/image/123386.png",
-      "https://dl.smwcentral.net/image/123387.png",
-      "https://dl.smwcentral.net/image/123388.png",
-      "https://dl.smwcentral.net/image/123389.png",
-      "https://dl.smwcentral.net/image/123390.png",
-      "https://dl.smwcentral.net/image/123391.png",
-      "https://dl.smwcentral.net/image/123392.png",
-      "https://dl.smwcentral.net/image/123393.png"
+    "tags": [
+      "troll"
     ],
-    "rating": 5,
-    "size": 878105,
-    "downloads": 302,
-    "download_url": "https://dl.smwcentral.net/42230/Paths%201.2.zip",
+    "images": [
+      "https://dl.smwcentral.net/image/123521.png",
+      "https://dl.smwcentral.net/image/123522.png",
+      "https://dl.smwcentral.net/image/123523.png"
+    ],
+    "rating": 0,
+    "size": 29745,
+    "downloads": 22,
+    "download_url": "https://dl.smwcentral.net/42272/Yoshis_Island.zip",
     "obsoleted_by": null,
     "fields": {
-      "version": "1.2",
-      "changelog": "See Changes.txt",
+      "version": "",
+      "changelog": "",
       "difficulty": "Expert",
-      "type": "Kaizo",
-      "length": "18 exit(s)",
+      "type": "Puzzle",
+      "length": "1 exit(s)",
       "hof": "No",
       "demo": "No",
       "collab": "No",
       "sa1": "No",
       "warnings": "",
-      "description": "18 exits and 4 switch palaces are required for 100% and a star on your save file. Only 14 exits and 2 switch palaces are required for credits. All levels are single sections so the hack plays shorter than the exit count would suggest.<br>\r\n<br>\r\nSemi-open overworld with some progress checks. No Secrets.<br>\r\n<br>\r\nBuilt with the RHR baserom so the hack uses the typical QOL patches and custom elements associated with that. Some additional custom elements/gimmicks but nothing too wild."
+      "description": "Spaghetti factory. Antis included."
     },
     "raw_fields": {
-      "version": "1.2",
-      "changelog": "See Changes.txt",
+      "version": "",
+      "changelog": "",
       "difficulty": "diff_5",
       "type": [
-        "kaizo"
+        "puzzle"
       ],
-      "length": 18,
+      "length": 1,
       "hof": false,
       "demo": false,
       "collab": false,
       "sa1": false,
       "warnings": [],
-      "description": "18 exits and 4 switch palaces are required for 100% and a star on your save file. Only 14 exits and 2 switch palaces are required for credits. All levels are single sections so the hack plays shorter than the exit count would suggest.\r\n\r\nSemi-open overworld with some progress checks. No Secrets.\r\n\r\nBuilt with the RHR baserom so the hack uses the typical QOL patches and custom elements associated with that. Some additional custom elements/gimmicks but nothing too wild."
+      "description": "Spaghetti factory. Antis included."
     }
   },
   {
-    "id": 42235,
+    "id": 42295,
     "section": "smwhacks",
-    "name": "Super Mario Mania",
-    "time": 1776824095,
-    "submitted_at": 1776824095,
+    "name": "Yoshi Commits Tax Fraud",
+    "time": 1777675153,
+    "submitted_at": 1777675153,
     "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 73149,
-        "name": "OiMuka"
+        "id": 74387,
+        "name": "Ember the Mediocre"
       }
     ],
     "submitter": {
-      "id": 73149,
-      "name": "OiMuka"
+      "id": 74387,
+      "name": "Ember the Mediocre"
     },
     "moderator": null,
     "tags": [
-      "daisy",
-      "demo",
-      "luigi",
-      "mario",
-      "sa-1"
+      "joke",
+      "precision",
+      "shell",
+      "yoshi"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/123404.png",
-      "https://dl.smwcentral.net/image/123405.png",
-      "https://dl.smwcentral.net/image/123406.png",
-      "https://dl.smwcentral.net/image/123407.png"
+      "https://dl.smwcentral.net/image/123581.png",
+      "https://dl.smwcentral.net/image/123582.png",
+      "https://dl.smwcentral.net/image/123583.png"
     ],
-    "rating": 5,
-    "size": 1831409,
-    "downloads": 400,
-    "download_url": "https://dl.smwcentral.net/42235/SMM%20-%20Demo%20V1.1.zip",
+    "rating": 0,
+    "size": 761057,
+    "downloads": 19,
+    "download_url": "https://dl.smwcentral.net/42295/YCTF.zip",
     "obsoleted_by": null,
     "fields": {
       "version": "",
       "changelog": "",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "length": "9 exit(s)",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "length": "16 exit(s)",
       "hof": "No",
-      "demo": "Yes",
+      "demo": "No",
       "collab": "No",
-      "sa1": "Yes",
+      "sa1": "No",
       "warnings": "",
-      "description": "Disclaimers: <br>\r\n<br>\r\nEveryone that was created the resource that i used in my Hack Rom was credited, even the ones that didn't required credits.<br>\r\n<br>\r\nThis is a DEMO hack<br>\r\n<br>\r\nDo not confuse this hack with the hammerer's Mario Mania Hack.<br>\r\n<br>\r\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br>\r\n<br>\r\nStory: Oh No!! Poppy (a Fanon character that is the younger sister of Daisy) has kidnapped from Bowser, now Mario, Luigi and Daisy need to save her!!"
+      "description": "This hack is very self-explanatory, being based on the \"Yoshi Commits Tax Fraud\" meme being the main inspiration for this hack.<br>\r\n<br>\r\nYoshi is free, for he knows true meaning; tax fraud is love, tax fraud is life, and tax fraud means more clean money in his hands than dirty money to the IRS. Yoshi is freedom and therefore is also a Deltarune reference.<br>\r\n<br>\r\n<b>WARNING!</b> there is quite a lot of swearing in this hack. You have been warned."
     },
     "raw_fields": {
       "version": "",
       "changelog": "",
-      "difficulty": "diff_2",
+      "difficulty": "diff_6",
+      "type": [
+        "kaizo"
+      ],
+      "length": 16,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "This hack is very self-explanatory, being based on the \"Yoshi Commits Tax Fraud\" meme being the main inspiration for this hack.\r\n\r\nYoshi is free, for he knows true meaning; tax fraud is love, tax fraud is life, and tax fraud means more clean money in his hands than dirty money to the IRS. Yoshi is freedom and therefore is also a Deltarune reference.\r\n\r\n[b]WARNING![/b] there is quite a lot of swearing in this hack. You have been warned."
+    }
+  },
+  {
+    "id": 42311,
+    "section": "smwhacks",
+    "name": "Super Erre >:D",
+    "time": 1777962691,
+    "submitted_at": 1777962691,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 74094,
+        "name": "PIRITOO_KING"
+      }
+    ],
+    "submitter": {
+      "id": 74094,
+      "name": "PIRITOO_KING"
+    },
+    "moderator": null,
+    "tags": [
+      "absurd",
+      "humor",
+      "standard",
+      "story",
+      "weird"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/123597.png",
+      "https://dl.smwcentral.net/image/123598.png",
+      "https://dl.smwcentral.net/image/123599.png",
+      "https://dl.smwcentral.net/image/123600.png"
+    ],
+    "rating": 0,
+    "size": 249997,
+    "downloads": 4,
+    "download_url": "https://dl.smwcentral.net/42311/Pirithous.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "20 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "My dad took a weird hair woman<br>\r\nNow I have to deal with all this  <br>\r\n<br>\r\n<br>\r\n:c"
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_3",
       "type": [
         "standard"
       ],
-      "length": 9,
-      "hof": false,
-      "demo": true,
-      "collab": false,
-      "sa1": true,
-      "warnings": [],
-      "description": "Disclaimers: \r\n\r\nEveryone that was created the resource that i used in my Hack Rom was credited, even the ones that didn't required credits.\r\n\r\nThis is a DEMO hack\r\n\r\nDo not confuse this hack with the hammerer's Mario Mania Hack.\r\n\r\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n\r\nStory: Oh No!! Poppy (a Fanon character that is the younger sister of Daisy) has kidnapped from Bowser, now Mario, Luigi and Daisy need to save her!!"
-    }
-  },
-  {
-    "id": 42238,
-    "section": "smwhacks",
-    "name": "Oblivion",
-    "time": 1776905403,
-    "submitted_at": 1776905403,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 47134,
-        "name": "Bruno_Peixoto"
-      }
-    ],
-    "submitter": {
-      "id": 47134,
-      "name": "Bruno_Peixoto"
-    },
-    "moderator": null,
-    "tags": [],
-    "images": [
-      "https://dl.smwcentral.net/image/123408.png",
-      "https://dl.smwcentral.net/image/123409.png",
-      "https://dl.smwcentral.net/image/123410.png",
-      "https://dl.smwcentral.net/image/123411.png",
-      "https://dl.smwcentral.net/image/123412.png",
-      "https://dl.smwcentral.net/image/123413.png"
-    ],
-    "rating": 5,
-    "size": 681579,
-    "downloads": 94,
-    "download_url": "https://dl.smwcentral.net/42238/Oblivion.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Expert",
-      "type": "Kaizo",
-      "length": "15 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "Mario e Luigi caminham juntos nessa jornada.<br>\r\n<br>\r\n<br>\r\n<br>\r\nEspero que todos se divirtam.<br>\r\n<br>\r\n<br>\r\n<br>\r\nBom jogo!"
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_5",
-      "type": [
-        "kaizo"
-      ],
-      "length": 15,
+      "length": 20,
       "hof": false,
       "demo": false,
       "collab": false,
       "sa1": false,
       "warnings": [],
-      "description": "Mario e Luigi caminham juntos nessa jornada.\r\n\r\n\r\n\r\nEspero que todos se divirtam.\r\n\r\n\r\n\r\nBom jogo!"
+      "description": "My dad took a weird hair woman\r\nNow I have to deal with all this  \r\n\r\n\r\n:c"
     }
   }
 ]

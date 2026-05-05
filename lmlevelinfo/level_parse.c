@@ -311,6 +311,132 @@ static int parse_objects(const Rom *rom, uint32_t layer1_ptr_snes, int is_vertic
   return 1;
 }
 
+static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
+                                  LevelInfo *out, char *err, size_t errcap) {
+  if (!p || max < 8 || !out) {
+    seterr(err, errcap, "Layer1 buffer too small");
+    return 0;
+  }
+
+  size_t i = 0;
+  decode_primary(p, &out->primary);
+  if (!is_vertical) {
+    switch (out->primary.level_mode) {
+      case 0x08:
+      case 0x09:
+      case 0x0A:
+      case 0x0B:
+      case 0x0C:
+      case 0x0D:
+      case 0x1A:
+      case 0x1B:
+        is_vertical = 1;
+        break;
+      default:
+        break;
+    }
+  }
+  i += 5;
+
+  size_t obj_index = 0;
+  out->objects = NULL;
+  out->objects_count = 0;
+
+  while (i < max) {
+    uint8_t b0 = p[i];
+    if (b0 == 0xFF) {
+      i += 1;
+      break;
+    }
+    if (i + 3 > max) break;
+
+    uint8_t new_screen = (b0 >> 7) & 0x1;
+    uint8_t obj_id = (b0 >> 5) & 0x3;
+    uint8_t obj_low = b0 & 0x1F;
+    uint8_t b1 = p[i + 1];
+    uint8_t b2 = p[i + 2];
+
+    uint8_t x = b1 & 0x0F;
+    uint8_t y = b0 & 0x1F;
+    uint8_t settings = b2;
+    uint8_t standard_id = (uint8_t)((obj_id << 5) | obj_low);
+
+    LevelObject obj;
+    memset(&obj, 0, sizeof(obj));
+    obj.index = (uint32_t)obj_index;
+    obj.new_screen = new_screen;
+    obj.x_position = x;
+    obj.y_position = y;
+    obj.settings = settings;
+    obj.xy_swapped = is_vertical ? 1 : 0;
+
+    if (standard_id == 0x00) {
+      uint8_t ext_id = b2;
+      size_t olen = object_len_for_extended(ext_id);
+      if (i + olen > max) {
+        seterr(err, errcap, "Truncated extended object");
+        return 0;
+      }
+      obj.kind = (ext_id == 0x00) ? OBJ_SCREEN_EXIT : OBJ_EXTENDED;
+      obj.object_number = ext_id;
+      obj.raw_len = olen;
+      memcpy(obj.raw, p + i, olen);
+
+      if (ext_id == 0x00 && olen >= 4) {
+        uint8_t e0 = p[i + 0];
+        uint8_t e1 = p[i + 1];
+        uint8_t e3 = p[i + 3];
+        obj.screen_number = e0 & 0x1F;
+        obj.lm_midway_water = (e1 >> 3) & 0x1;
+        obj.lm_modified = (e1 >> 2) & 0x1;
+        obj.secondary_exit_flag = (e1 >> 1) & 0x1;
+        obj.secondary_exit_id_or_dest = (uint16_t)((e1 & 0x1) << 8) | e3;
+      } else if (ext_id == 0x02 && olen >= 5) {
+        uint8_t e0 = p[i + 0];
+        uint8_t e4 = p[i + 4];
+        obj.screen_number = e0 & 0x1F;
+        obj.lm_midway_water = (e4 >> 2) & 0x1;
+        obj.secondary_exit_flag = 1;
+        obj.secondary_exit_id_or_dest = (uint16_t)((e4 & 0x1) << 8) | p[i + 3];
+      }
+
+      i += olen;
+    } else {
+      size_t olen = object_len_for_standard(standard_id, p + i, max - i);
+      if (i + olen > max) {
+        seterr(err, errcap, "Truncated standard object");
+        return 0;
+      }
+      obj.kind = OBJ_STANDARD;
+      obj.object_number = standard_id;
+      obj.raw_len = olen;
+      memcpy(obj.raw, p + i, olen);
+      i += olen;
+    }
+
+    size_t want = out->objects_count + 1;
+    LevelObject *tmp = (LevelObject *)realloc(out->objects, want * sizeof(LevelObject));
+    if (!tmp) {
+      seterr(err, errcap, "Out of memory parsing objects");
+      return 0;
+    }
+    out->objects = tmp;
+    out->objects[out->objects_count] = obj;
+    out->objects_count = want;
+    obj_index++;
+
+    if (obj_index > 200000) {
+      seterr(err, errcap, "Object parse runaway");
+      return 0;
+    }
+  }
+
+  // For MWL, layer1_blob is not used.
+  out->layer1_blob.pc_offset = 0;
+  out->layer1_blob.len = i;
+  return 1;
+}
+
 void levelinfo_free(LevelInfo *info) {
   if (!info) return;
   free(info->objects);
@@ -381,5 +507,22 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
   }
 
   return 1;
+}
+
+int parse_level_info_from_layer1_bytes(const uint8_t *layer1_bytes, size_t layer1_len, uint16_t level_id,
+                                      LevelInfo *out, char *err, size_t errcap) {
+  if (!layer1_bytes || !out) {
+    seterr(err, errcap, "parse_level_info_from_layer1_bytes: invalid args");
+    return 0;
+  }
+  memset(out, 0, sizeof(*out));
+  out->level_id = level_id;
+  out->layer1_data_ptr_snes = 0;
+  out->sprite_data_ptr_snes = 0;
+  out->secondary.present = 0;
+  out->sprite_header.present = 0;
+  out->secondary_decoded.present = 0;
+
+  return parse_objects_from_buf(layer1_bytes, layer1_len, 0, out, err, errcap);
 }
 

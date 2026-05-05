@@ -139,3 +139,8 @@ void levelinfo_free(LevelInfo *info);
 int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, LevelInfo *out,
                      char *err, size_t errcap);
 
+// Parse headers+objects from a raw Layer1 buffer (as in MWL Layer1 section payload).
+// `layer1_bytes` must start with the primary header and include the object stream.
+int parse_level_info_from_layer1_bytes(const uint8_t *layer1_bytes, size_t layer1_len, uint16_t level_id,
+                                      LevelInfo *out, char *err, size_t errcap);
+

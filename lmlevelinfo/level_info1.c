@@ -24,7 +24,11 @@ static void usage(FILE *fp) {
           "  default: objects included (same as --data=objects)\n"
           "  --data=none          headers only\n"
           "  --data=objects       include object lists\n"
-          "  --data=allobjects    alias of objects\n");
+          "  --data=allobjects    alias of objects\n"
+          "  --data=midway        include Midway entrance tables (if present)\n"
+          "  --data=layer2        include Layer2 objects or BG tilemap summary\n"
+          "  --data=fulldata      include large raw data (e.g., full BG tilemap grid)\n"
+          "  You can combine keys with commas, e.g. --data=objects,midway,layer2\n");
 }
 
 static int parse_level_id(const char *s, uint16_t *out) {
@@ -114,6 +118,66 @@ static void print_sprite_header(const SpriteHeader *h) {
   printf("    Sprite_Memory: %u\n", h->sprite_memory);
 }
 
+static void print_midway(const LevelInfo *info) {
+  if (!info->midway_present) {
+    printf("  Midway_Entrance: Missing\n");
+    return;
+  }
+  printf("  Midway_Entrance: Found\n");
+  printf("    Raw: b1=0x%02X b2=0x%02X b3=0x%02X", info->midway_b1, info->midway_b2, info->midway_b3);
+  if (info->midway_b4) printf(" b4=0x%02X\n", info->midway_b4);
+  else printf("\n");
+  printf("    Decoded\n");
+  printf("      Slippery_I: %u\n", info->midway_slippery_i);
+  printf("      Water_W: %u\n", info->midway_water_w);
+  printf("      Separate_H: %u\n", info->midway_separate_h);
+  printf("      ScreenBit4_M: %u\n", info->midway_screen_bit4_m);
+  printf("      Action_AAA: %u\n", info->midway_action_aaa);
+  printf("      X_low4: %u\n", info->midway_x);
+  printf("      Y_low4: %u\n", info->midway_y);
+  printf("      Relative_R: %u\n", info->midway_relative_r);
+  printf("      FG_FF: %u\n", info->midway_fg_ff);
+  printf("      BG_BB: %u\n", info->midway_bg_bb);
+  printf("      FaceLeft_L: %u\n", info->midway_face_left_l);
+  printf("      Redirect_E: %u\n", info->midway_redirect_e);
+  if (info->midway_redirect_e) {
+    printf("      Redirect_Target_Level: 0x%03X\n", info->midway_redirect_target_level);
+  }
+}
+
+static void print_layer2(const LevelInfo *info, int full) {
+  if (!info->layer2_data_ptr_snes) {
+    printf("  Layer2_Data: Missing\n");
+    return;
+  }
+  printf("  Layer2_Data\n");
+  printf("    layer2_data_ptr_snes: 0x%06X\n", info->layer2_data_ptr_snes);
+  if (info->layer2_bg_flags_0ef310) {
+    printf("    bg_flags_0ef310: 0x%02X\n", info->layer2_bg_flags_0ef310);
+  }
+  if (info->layer2_is_bg_tilemap) {
+    printf("    kind: bg_tilemap\n");
+    if (info->layer2_bg_tiles && info->layer2_bg_width && info->layer2_bg_height) {
+      printf("    tilemap: %ux%u Map16 tiles\n", info->layer2_bg_width, info->layer2_bg_height);
+      if (full) {
+        for (uint8_t y = 0; y < info->layer2_bg_height; y++) {
+          printf("    row%02u:", y);
+          for (uint8_t x = 0; x < info->layer2_bg_width; x++) {
+            uint16_t t = info->layer2_bg_tiles[(size_t)y * info->layer2_bg_width + x];
+            printf(" %04X", (unsigned)t);
+          }
+          printf("\n");
+        }
+      }
+    } else {
+      printf("    tilemap: (not available)\n");
+    }
+  } else {
+    printf("    kind: objects\n");
+    printf("    objects_count: %zu\n", info->layer2_objects_count);
+  }
+}
+
 static void print_sprites(const LevelInfo *info) {
   printf("  Level_Sprite_Data\n");
   for (size_t i = 0; i < info->sprites_count; i++) {
@@ -161,6 +225,9 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
 
   jsonw_key(w, "layer1_data_ptr_snes");
   jsonw_uint(w, info->layer1_data_ptr_snes);
+
+  jsonw_key(w, "layer2_data_ptr_snes");
+  jsonw_uint(w, info->layer2_data_ptr_snes);
 
   jsonw_key(w, "sprite_data_ptr_snes");
   jsonw_uint(w, info->sprite_data_ptr_snes);
@@ -275,6 +342,52 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
 
   jsonw_obj_end(w); // layer1
 
+  // midway (optional)
+  jsonw_key(w, "midway_entrance");
+  jsonw_obj_begin(w);
+  jsonw_key(w, "present"); jsonw_bool(w, info->midway_present);
+  if (info->midway_present) {
+    jsonw_key(w, "b1"); jsonw_uint(w, info->midway_b1);
+    jsonw_key(w, "b2"); jsonw_uint(w, info->midway_b2);
+    jsonw_key(w, "b3"); jsonw_uint(w, info->midway_b3);
+    jsonw_key(w, "b4"); jsonw_uint(w, info->midway_b4);
+    jsonw_key(w, "decoded");
+    jsonw_obj_begin(w);
+    jsonw_key(w, "slippery_i"); jsonw_uint(w, info->midway_slippery_i);
+    jsonw_key(w, "water_w"); jsonw_uint(w, info->midway_water_w);
+    jsonw_key(w, "separate_h"); jsonw_uint(w, info->midway_separate_h);
+    jsonw_key(w, "screen_bit4_m"); jsonw_uint(w, info->midway_screen_bit4_m);
+    jsonw_key(w, "action_aaa"); jsonw_uint(w, info->midway_action_aaa);
+    jsonw_key(w, "x_low4"); jsonw_uint(w, info->midway_x);
+    jsonw_key(w, "y_low4"); jsonw_uint(w, info->midway_y);
+    jsonw_key(w, "relative_r"); jsonw_uint(w, info->midway_relative_r);
+    jsonw_key(w, "fg_ff"); jsonw_uint(w, info->midway_fg_ff);
+    jsonw_key(w, "bg_bb"); jsonw_uint(w, info->midway_bg_bb);
+    jsonw_key(w, "face_left_l"); jsonw_uint(w, info->midway_face_left_l);
+    jsonw_key(w, "redirect_e"); jsonw_uint(w, info->midway_redirect_e);
+    if (info->midway_redirect_e) {
+      jsonw_key(w, "redirect_target_level"); jsonw_uint(w, info->midway_redirect_target_level);
+    }
+    jsonw_obj_end(w);
+  }
+  jsonw_obj_end(w);
+
+  // layer2 (optional)
+  jsonw_key(w, "layer2");
+  jsonw_obj_begin(w);
+  jsonw_key(w, "present"); jsonw_bool(w, info->layer2_data_ptr_snes != 0);
+  if (info->layer2_data_ptr_snes) {
+    jsonw_key(w, "is_bg_tilemap"); jsonw_bool(w, info->layer2_is_bg_tilemap);
+    jsonw_key(w, "bg_flags_0ef310"); jsonw_uint(w, info->layer2_bg_flags_0ef310);
+    if (info->layer2_is_bg_tilemap) {
+      jsonw_key(w, "width"); jsonw_uint(w, info->layer2_bg_width);
+      jsonw_key(w, "height"); jsonw_uint(w, info->layer2_bg_height);
+    } else {
+      jsonw_key(w, "objects_count"); jsonw_uint(w, info->layer2_objects_count);
+    }
+  }
+  jsonw_obj_end(w);
+
   // sprite header
   jsonw_key(w, "sprite_header");
   jsonw_obj_begin(w);
@@ -318,6 +431,9 @@ int main(int argc, char **argv) {
   int want_json = 0;
   int want_mwl = 0;
   int data_none = 0;
+  int include_midway = 0;
+  int include_layer2 = 0;
+  int include_fulldata = 0;
   const char *out_path = NULL;
 
   const char *rom_path = NULL;
@@ -334,11 +450,31 @@ int main(int argc, char **argv) {
       want_mwl = 1;
     } else if (!strncmp(a, "--data=", 7)) {
       const char *v = a + 7;
-      if (!strcmp(v, "none")) data_none = 1;
-      else if (!strcmp(v, "objects") || !strcmp(v, "allobjects") || !strcmp(v, "all")) {
+      if (!strcmp(v, "none")) {
+        data_none = 1;
+        include_midway = 0;
+        include_layer2 = 0;
+        include_fulldata = 0;
+      } else if (!strcmp(v, "objects") || !strcmp(v, "allobjects") || !strcmp(v, "all")) {
         data_none = 0;
+        include_midway = 0;
+        include_layer2 = 0;
+        include_fulldata = 0;
       } else {
-        // accept future keys without failing
+        // Comma-separated keys
+        data_none = 0;
+        const char *p = v;
+        while (*p) {
+          while (*p == ',' ) p++;
+          const char *q = p;
+          while (*q && *q != ',') q++;
+          size_t n = (size_t)(q - p);
+          if (n == 6 && !strncmp(p, "midway", n)) include_midway = 1;
+          else if (n == 6 && !strncmp(p, "layer2", n)) include_layer2 = 1;
+          else if (n == 8 && !strncmp(p, "fulldata", n)) include_fulldata = 1;
+          else if (n == 7 && !strncmp(p, "objects", n)) {/* already default */}
+          p = q;
+        }
       }
     } else if (!strcmp(a, "-o")) {
       if (i + 1 >= argc) {
@@ -446,6 +582,12 @@ int main(int argc, char **argv) {
   if (!data_none) {
     print_sprites(&info);
     print_objects(&info);
+  }
+  if (include_midway) {
+    print_midway(&info);
+  }
+  if (include_layer2) {
+    print_layer2(&info, include_fulldata);
   }
 
   printf("\n[Table detection]\n");

@@ -190,6 +190,22 @@ int lm_resolve_tables(const Rom *rom, LmTables *out, char *err, size_t errcap) {
     }
   }
 
+  // Midway table 4 (LM 3.00+): not explicitly exposed in LevelTables.asm.
+  // Best-effort: if tables 1..3 are contiguous, assume table 4 follows.
+  if (out->has_midway_hijack) {
+    uint32_t cand = 0;
+    if (out->midway_byte2 == out->midway_byte1 + 0x200 && out->midway_byte3 == out->midway_byte1 + 0x400) {
+      cand = out->midway_byte1 + 0x600;
+    } else {
+      cand = out->midway_byte3 + 0x200;
+    }
+    uint8_t tmp2 = 0;
+    if (cand && rom_read8_snes(rom, cand, &tmp2)) {
+      out->midway_byte4 = cand;
+      out->has_midway_table4 = 1;
+    }
+  }
+
   // ---- Secondary header extra bytes (LM 3.00+/3.40+) ----
   // From Level_Data_Format: additional per-level bytes at $06FA00, $06FC00, $06FE00.
   // These are fixed addresses when present. We treat them as present if mapping works and ROM is large enough.

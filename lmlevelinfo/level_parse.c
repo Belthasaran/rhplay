@@ -25,6 +25,21 @@ static int read_layer_ptr24(const Rom *rom, uint32_t table_snes, uint16_t level_
   return 1;
 }
 
+static int read_layer2_flags_0ef310(const Rom *rom, uint16_t level_id, uint8_t *out_flags) {
+  if (!out_flags) return 0;
+  *out_flags = 0;
+  if (!rom) return 0;
+  // LM places BG tilemap info table at $0EF310 (512 bytes).
+  return rom_read8_snes(rom, ((uint32_t)0x0E << 16) | (uint32_t)(0xF310 + level_id), out_flags);
+}
+
+static int layer2_is_bg_tilemap_from_flags(uint8_t flags) {
+  // Format: bbBBVFCT (wiki). If V or C set, Layer2 uses a BG tilemap.
+  uint8_t v = (flags >> 3) & 0x1;
+  uint8_t c = (flags >> 1) & 0x1;
+  return (v || c) ? 1 : 0;
+}
+
 static int read_sprite_ptr(const Rom *rom, const LmTables *tables, uint16_t level_id, uint32_t *out_ptr_snes) {
   // Sprite pointer table is 2 bytes per level. Bank byte is either from bank table, or default 0x07.
   uint32_t entry = tables->sprite_ptr_table + (uint32_t)level_id * 2u;
@@ -39,6 +54,57 @@ static int read_sprite_ptr(const Rom *rom, const LmTables *tables, uint16_t leve
   }
   *out_ptr_snes = ((uint32_t)bank << 16) | (uint32_t)off;
   return 1;
+}
+
+static int read_midway_byte(const Rom *rom, const LmTables *tables, uint16_t level_id,
+                            uint8_t *b1, uint8_t *b2, uint8_t *b3, uint8_t *b4) {
+  if (!rom || !tables || !b1 || !b2 || !b3 || !b4) return 0;
+  *b1 = *b2 = *b3 = *b4 = 0;
+  if (!tables->has_midway_hijack || !tables->midway_byte1 || !tables->midway_byte2 || !tables->midway_byte3) return 0;
+  if (!rom_read8_snes(rom, tables->midway_byte1 + level_id, b1)) return 0;
+  if (!rom_read8_snes(rom, tables->midway_byte2 + level_id, b2)) return 0;
+  if (!rom_read8_snes(rom, tables->midway_byte3 + level_id, b3)) return 0;
+  if (tables->has_midway_table4 && tables->midway_byte4) {
+    (void)rom_read8_snes(rom, tables->midway_byte4 + level_id, b4);
+  }
+  return 1;
+}
+
+static void decode_midway(LevelInfo *out) {
+  // Best-effort decode based on wiki formats.
+  // Table1 <3.00: IWIMYAAA; 3.00+: IWHMXAAA
+  uint8_t t1 = out->midway_b1;
+  uint8_t t2 = out->midway_b2;
+  uint8_t t3 = out->midway_b3;
+  uint8_t t4 = out->midway_b4;
+
+  out->midway_slippery_i = (t1 >> 7) & 0x1;
+  out->midway_water_w = (t1 >> 6) & 0x1;
+  out->midway_separate_h = (t1 >> 5) & 0x1;
+  out->midway_screen_bit4_m = (t1 >> 4) & 0x1;
+  out->midway_action_aaa = t1 & 0x7;
+
+  out->midway_y = (uint16_t)t2;           // low bits only; high bits are LM-dependent
+  out->midway_x = (uint8_t)(t2 & 0x0F);   // placeholder; refined below
+
+  // Table2 is yyyyxxxx in both formats (low bits)
+  out->midway_y = (uint16_t)((t2 >> 4) & 0x0F);
+  out->midway_x = (uint8_t)(t2 & 0x0F);
+
+  // Table3 differs by version; in 3.00+ includes RLE-ffbb.
+  out->midway_relative_r = (t3 >> 5) & 0x1;
+  out->midway_face_left_l = (t3 >> 4) & 0x1;
+  out->midway_redirect_e = (t3 >> 3) & 0x1;
+  out->midway_fg_ff = (t3 >> 2) & 0x3;
+  out->midway_bg_bb = (t3 & 0x3);
+  out->midway_fg_bg_offset_f = (t4 >> 6) & 0x1; // best-effort (3.00+ table4 -FYYYYYY)
+
+  // Redirect target (best-effort): if E set, destination level uses table2 as low8 and bit0 of table3 as high bit.
+  if (out->midway_redirect_e) {
+    uint16_t dest = (uint16_t)t2;
+    dest |= (uint16_t)((t3 & 0x1) << 8);
+    out->midway_redirect_target_level = dest;
+  }
 }
 
 static void decode_primary(const uint8_t raw[5], PrimaryLevelHeader *h) {
@@ -699,11 +765,207 @@ static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
   return 1;
 }
 
+static int parse_layer2_objects_from_rom(const Rom *rom, uint32_t layer2_ptr_snes, LevelInfo *out,
+                                        char *err, size_t errcap) {
+  uint32_t pc;
+  if (!snes_lorom_to_pc(rom, layer2_ptr_snes, &pc)) {
+    seterr(err, errcap, "Layer2 pointer unmappable");
+    return 0;
+  }
+  const size_t HARD_CAP = 0x20000;
+  size_t max = rom->size - pc;
+  if (max > HARD_CAP) max = HARD_CAP;
+  if (max < 6) {
+    seterr(err, errcap, "Layer2 data too small");
+    return 0;
+  }
+  // Layer2 object data includes a 5-byte primary header, but it is skipped/ignored.
+  // We still reuse the same object record parsing logic by faking a primary header (the bytes are present),
+  // then returning the parsed objects into out->layer2_objects.
+  LevelInfo tmp;
+  memset(&tmp, 0, sizeof(tmp));
+  if (!parse_objects_from_buf(rom->data + pc, max, 0, &tmp, err, errcap)) {
+    levelinfo_free(&tmp);
+    return 0;
+  }
+  // Steal parsed objects; discard headers/primary.
+  out->layer2_objects = tmp.objects;
+  out->layer2_objects_count = tmp.objects_count;
+  tmp.objects = NULL;
+  tmp.objects_count = 0;
+  levelinfo_free(&tmp);
+  return 1;
+}
+
+static int lc_rle1_decompress(const uint8_t *src, size_t srclen,
+                              uint8_t **out_bytes, size_t *out_len,
+                              size_t *out_consumed,
+                              char *err, size_t errcap) {
+  if (!out_bytes || !out_len || !out_consumed) {
+    seterr(err, errcap, "lc_rle1_decompress: invalid args");
+    return 0;
+  }
+  *out_bytes = NULL;
+  *out_len = 0;
+  *out_consumed = 0;
+  if (!src || srclen == 0) {
+    seterr(err, errcap, "lc_rle1_decompress: empty input");
+    return 0;
+  }
+
+  size_t cap = 1024;
+  uint8_t *dst = (uint8_t *)malloc(cap);
+  if (!dst) {
+    seterr(err, errcap, "lc_rle1_decompress: out of memory");
+    return 0;
+  }
+
+  size_t i = 0;
+  size_t j = 0;
+  while (i < srclen) {
+    uint8_t lenb = src[i++];
+    if (lenb == 0xFF) break; // end marker (LM convention)
+    uint8_t rle = (lenb >> 7) & 0x1;
+    size_t len = (size_t)(lenb & 0x7F) + 1u;
+    if (!rle) {
+      if (i + len > srclen) {
+        free(dst);
+        seterr(err, errcap, "lc_rle1_decompress: truncated literal");
+        return 0;
+      }
+      if (j + len > cap) {
+        while (j + len > cap) cap *= 2;
+        uint8_t *tmp = (uint8_t *)realloc(dst, cap);
+        if (!tmp) {
+          free(dst);
+          seterr(err, errcap, "lc_rle1_decompress: out of memory");
+          return 0;
+        }
+        dst = tmp;
+      }
+      memcpy(dst + j, src + i, len);
+      i += len;
+      j += len;
+    } else {
+      if (i >= srclen) {
+        free(dst);
+        seterr(err, errcap, "lc_rle1_decompress: truncated run byte");
+        return 0;
+      }
+      uint8_t v = src[i++];
+      if (j + len > cap) {
+        while (j + len > cap) cap *= 2;
+        uint8_t *tmp = (uint8_t *)realloc(dst, cap);
+        if (!tmp) {
+          free(dst);
+          seterr(err, errcap, "lc_rle1_decompress: out of memory");
+          return 0;
+        }
+        dst = tmp;
+      }
+      memset(dst + j, v, len);
+      j += len;
+    }
+    // Safety: avoid runaway on corrupt data.
+    if (j > 0x200000u) {
+      free(dst);
+      seterr(err, errcap, "lc_rle1_decompress: output too large");
+      return 0;
+    }
+  }
+
+  *out_bytes = dst;
+  *out_len = j;
+  *out_consumed = i;
+  return 1;
+}
+
+static int parse_layer2_bg_tilemap_from_rom(const Rom *rom, uint32_t layer2_ptr_snes, LevelInfo *out,
+                                           char *err, size_t errcap) {
+  uint8_t bank = (uint8_t)((layer2_ptr_snes >> 16) & 0xFF);
+  if (bank == 0xFF) {
+    // Vanilla BG tilemap (no ROM pointer)
+    return 1;
+  }
+
+  uint32_t pc;
+  if (!snes_lorom_to_pc(rom, layer2_ptr_snes, &pc)) {
+    seterr(err, errcap, "Layer2 BG pointer unmappable");
+    return 0;
+  }
+  size_t srclen = rom->size - pc;
+  if (srclen > 0x20000) srclen = 0x20000;
+
+  uint8_t *low = NULL;
+  size_t low_len = 0, c1 = 0;
+  if (!lc_rle1_decompress(rom->data + pc, srclen, &low, &low_len, &c1, err, errcap)) return 0;
+  if (!(low_len == 864 || low_len == 1024)) {
+    free(low);
+    seterr(err, errcap, "Layer2 BG tilemap unexpected low-byte size");
+    return 0;
+  }
+
+  uint8_t *high = NULL;
+  size_t high_len = 0, c2 = 0;
+  if (pc + c1 < rom->size) {
+    size_t rem = rom->size - (pc + c1);
+    if (rem > 0x20000) rem = 0x20000;
+    // Best-effort: attempt a second LC_RLE1 stream for high bytes.
+    (void)lc_rle1_decompress(rom->data + pc + c1, rem, &high, &high_len, &c2, err, errcap);
+    if (high && high_len != low_len) {
+      free(high);
+      high = NULL;
+      high_len = 0;
+    }
+  }
+
+  uint8_t w = 32;
+  uint8_t h = (uint8_t)(low_len / 32u);
+  out->layer2_bg_width = w;
+  out->layer2_bg_height = h;
+
+  size_t tilesN = (size_t)w * (size_t)h;
+  out->layer2_bg_tiles = (uint16_t *)calloc(tilesN ? tilesN : 1, sizeof(uint16_t));
+  if (!out->layer2_bg_tiles) {
+    free(low);
+    free(high);
+    seterr(err, errcap, "Out of memory building layer2 tilemap");
+    return 0;
+  }
+
+  // LM stores as left half then right half.
+  size_t half = (size_t)16 * (size_t)h;
+  uint8_t const_high = (uint8_t)(out->layer2_bg_flags_0ef310 >> 4);
+  uint8_t f = (uint8_t)((out->layer2_bg_flags_0ef310 >> 2) & 0x1);
+
+  for (uint8_t yy = 0; yy < h; yy++) {
+    for (uint8_t xx = 0; xx < w; xx++) {
+      size_t src_i = (xx < 16) ? ((size_t)yy * 16u + (size_t)xx) : (half + (size_t)yy * 16u + (size_t)(xx - 16));
+      uint8_t lo = low[src_i];
+      uint8_t hi = 0;
+      if (high) hi = high[src_i];
+      else if (!f) hi = const_high; // only the simple documented case
+      // else: legacy/high-byte rules not fully implemented yet
+
+      out->layer2_bg_tiles[(size_t)yy * w + xx] = (uint16_t)lo | ((uint16_t)hi << 8);
+    }
+  }
+
+  free(low);
+  free(high);
+  return 1;
+}
+
 void levelinfo_free(LevelInfo *info) {
   if (!info) return;
   free(info->objects);
   info->objects = NULL;
   info->objects_count = 0;
+  free(info->layer2_objects);
+  info->layer2_objects = NULL;
+  info->layer2_objects_count = 0;
+  free(info->layer2_bg_tiles);
+  info->layer2_bg_tiles = NULL;
   free(info->sprites);
   info->sprites = NULL;
   info->sprites_count = 0;
@@ -724,6 +986,21 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
     return 0;
   }
   out->layer1_data_ptr_snes = layer1_ptr;
+
+  // Layer2 pointer
+  uint32_t layer2_ptr = 0;
+  if (read_layer_ptr24(rom, tables->layer2_ptr_table, level_id, &layer2_ptr)) {
+    out->layer2_data_ptr_snes = layer2_ptr;
+    uint8_t l2flags = 0;
+    if (read_layer2_flags_0ef310(rom, level_id, &l2flags)) {
+      out->layer2_bg_flags_0ef310 = l2flags;
+      out->layer2_is_bg_tilemap = layer2_is_bg_tilemap_from_flags(l2flags);
+    } else {
+      // Vanilla fallback: bank==0xFF indicates BG tilemap
+      uint8_t bank = (uint8_t)((layer2_ptr >> 16) & 0xFF);
+      out->layer2_is_bg_tilemap = (bank == 0xFF) ? 1 : 0;
+    }
+  }
 
   // Secondary header tables
   out->secondary.present = 1;
@@ -747,6 +1024,19 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
     (void)read_table_byte(rom, tables->sec_byte8, level_id, &out->secondary.b8);
   }
   decode_secondary(&out->secondary, &out->secondary_decoded);
+
+  // Midway entrance extra settings (optional hijack tables)
+  {
+    uint8_t mb1 = 0, mb2 = 0, mb3 = 0, mb4 = 0;
+    if (read_midway_byte(rom, tables, level_id, &mb1, &mb2, &mb3, &mb4)) {
+      out->midway_present = 1;
+      out->midway_b1 = mb1;
+      out->midway_b2 = mb2;
+      out->midway_b3 = mb3;
+      out->midway_b4 = mb4;
+      decode_midway(out);
+    }
+  }
 
   // Sprite header: read sprite blob pointer and decode first byte.
   uint32_t sprite_ptr = 0;
@@ -775,6 +1065,16 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
 
   if (!parse_objects(rom, layer1_ptr, is_vertical, out, err, errcap)) {
     return 0;
+  }
+
+  // Layer2 object parsing (only when not a BG tilemap)
+  if (out->layer2_data_ptr_snes) {
+    if (out->layer2_is_bg_tilemap) {
+      (void)parse_layer2_bg_tilemap_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
+    } else {
+      (void)parse_layer2_objects_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
+    }
+    // Best-effort: do not fail the whole parse if layer2 can't be parsed.
   }
 
   return 1;

@@ -136,8 +136,33 @@ typedef struct {
 typedef struct {
   uint16_t level_id;
 
+  // Midway entrance extra settings (optional, LM hijack)
+  int midway_present;
+  // Raw bytes (when present)
+  uint8_t midway_b1;
+  uint8_t midway_b2;
+  uint8_t midway_b3;
+  uint8_t midway_b4; // optional (LM 3.00+), 0 if unavailable
+
+  // Decoded (best-effort; fields overlap between <3.00 and 3.00+)
+  uint8_t midway_slippery_i;
+  uint8_t midway_water_w;
+  uint8_t midway_separate_h;
+  uint8_t midway_screen_bit4_m;
+  uint8_t midway_action_aaa;
+  uint16_t midway_y; // (YYYYYY)yyyy if available; else low bits
+  uint8_t midway_x;  // xxxxx
+  uint8_t midway_relative_r;
+  uint8_t midway_fg_ff;
+  uint8_t midway_bg_bb;
+  uint8_t midway_fg_bg_offset_f;
+  uint8_t midway_face_left_l;
+  uint8_t midway_redirect_e;
+  uint16_t midway_redirect_target_level;
+
   // resolved pointers
   uint32_t layer1_data_ptr_snes;
+  uint32_t layer2_data_ptr_snes;
   uint32_t sprite_data_ptr_snes;
 
   PrimaryLevelHeader primary;
@@ -151,6 +176,17 @@ typedef struct {
   // objects
   LevelObject *objects;
   size_t objects_count;
+
+  // layer2 objects (when layer2 interpreted as objects)
+  LevelObject *layer2_objects;
+  size_t layer2_objects_count;
+
+  // layer2 background tilemap (when interpreted as BG)
+  int layer2_is_bg_tilemap;
+  uint8_t layer2_bg_flags_0ef310; // LM per-level flags (0 if not readable)
+  uint8_t layer2_bg_width;  // tiles, typically 32
+  uint8_t layer2_bg_height; // 27 or 32
+  uint16_t *layer2_bg_tiles; // width*height Map16 tiles (16-bit)
 
   // sprites
   LevelSprite *sprites;

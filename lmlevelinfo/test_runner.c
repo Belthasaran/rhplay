@@ -423,6 +423,105 @@ static int run_akogare_level109(void) {
   );
 }
 
+static int run_akogare_suite(void) {
+  const char *rom_path = "test/akogare/orig_Ako.sfc";
+  const char *dir_path = "test/akogare";
+
+  DIR *d = opendir(dir_path);
+  if (!d) {
+    failf("[akogare] Could not open test directory");
+    return 0;
+  }
+
+  int total = 0;
+  int failed = 0;
+
+  struct dirent *de;
+  while ((de = readdir(d)) != NULL) {
+    const char *name = de->d_name;
+    // Accept both the historical name and the batch-export naming scheme.
+    int ok_prefix = (strncmp(name, "ako_", 4) == 0);
+    if (!ok_prefix) continue;
+    size_t nlen = strlen(name);
+    if (nlen < 5) continue;
+    if (strcmp(name + (nlen - 4), ".mwl") != 0) continue;
+
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir_path, name);
+
+    char label[512];
+    snprintf(label, sizeof(label), "akogare %s", name);
+
+    int before = failures;
+    (void)run_case(rom_path, path, label, 0);
+    total++;
+    if (failures != before) {
+      failed++;
+      fprintf(stderr, "FAIL: akogare/%s\n", name);
+    } else {
+      printf("PASS: akogare/%s\n", name);
+    }
+  }
+  closedir(d);
+
+  if (total == 0) {
+    failf("[akogare] No ako_*.mwl files found");
+    return 0;
+  }
+  if (failed) {
+    fprintf(stderr, "akogare suite: %d/%d failed\n", failed, total);
+    return 0;
+  }
+  printf("akogare suite: %d/%d passed\n", total, total);
+  return 1;
+}
+
+static int run_layer2_midway_sanity(void) {
+  const char *rom_path = "test/akogare/orig_Ako.sfc";
+  const uint16_t level_id = 0x109;
+  char err[512];
+
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, sizeof(err))) {
+    failf("[sanity] ROM load failed: %s", err);
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    failf("[sanity] ROM table resolve failed: %s", err);
+    rom_free(&rom);
+    return 0;
+  }
+  LevelInfo info;
+  if (!parse_level_info(&rom, &tables, level_id, &info, err, sizeof(err))) {
+    failf("[sanity] ROM decode failed: %s", err);
+    rom_free(&rom);
+    return 0;
+  }
+
+  int ok = 1;
+  if (!info.layer2_data_ptr_snes) {
+    failf("[sanity] expected layer2_data_ptr_snes to be nonzero");
+    ok = 0;
+  }
+  if (info.layer2_is_bg_tilemap && info.layer2_bg_tiles) {
+    if (info.layer2_bg_width != 32 || (info.layer2_bg_height != 27 && info.layer2_bg_height != 32)) {
+      failf("[sanity] unexpected layer2 tilemap dimensions: %ux%u", info.layer2_bg_width, info.layer2_bg_height);
+      ok = 0;
+    }
+  }
+  if (tables.has_midway_hijack && !info.midway_present) {
+    // Not all levels have meaningful midway settings; but if tables exist, we should at least be able to read them.
+    failf("[sanity] expected midway_present when midway hijack tables exist");
+    ok = 0;
+  }
+
+  levelinfo_free(&info);
+  rom_free(&rom);
+  if (ok) printf("PASS: sanity layer2+midway\n");
+  return ok;
+}
+
 static int run_quickieworld_suite(void) {
   const char *rom_path = "test/quickieworld/QuickieWorld_v1.12.sfc";
   const char *dir_path = "test/quickieworld";
@@ -528,10 +627,12 @@ static int run_suite_dir(const char *suite_name, const char *rom_path, const cha
 
 int main(void) {
   int ok1 = run_akogare_level109();
+  int ok1b = run_akogare_suite();
+  int okS = run_layer2_midway_sanity();
   int ok2 = run_quickieworld_suite();
   int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
   int ok4 = run_suite_dir("acidtapes", "test/acidtapes/acidtapes.sfc", "test/acidtapes", "acidtapes ");
-  if (failures == 0 && ok1 && ok2 && ok3 && ok4) {
+  if (failures == 0 && ok1 && ok1b && okS && ok2 && ok3 && ok4) {
     printf("ALL PASS\n");
     return 0;
   }

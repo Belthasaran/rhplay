@@ -25,10 +25,12 @@ typedef struct {
   uint32_t midway_byte1;
   uint32_t midway_byte2;
   uint32_t midway_byte3;
+  uint32_t midway_byte4; // optional (LM 3.00+; best-effort)
 
   // Misc flags useful for printing/debug
   int has_secondary_expansion;
   int has_midway_hijack;
+  int has_midway_table4;
   int has_sprite_bank_table;
 } LmTables;
 

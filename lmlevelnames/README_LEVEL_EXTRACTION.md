@@ -58,13 +58,13 @@ For each processed game the extractor now produces three files under `lmlevelnam
 
 ## Scripts
 
-### 1. `extract_all_levels.sh`
+### 1. `extract_all_levels2.sh`
 Extracts level information for the configured game IDs.
 
 **Usage:**
 ```bash
 cd lmlevelnames
-./extract_all_levels.sh
+./extract_all_levels2.sh
 ```
 
 **What it does:**
@@ -126,7 +126,7 @@ python3 apply_levelnames_migration.py
 ### Extract Level Data
 1. Run the extraction script to generate JSON/CSV artifacts:
    ```bash
-   ./extract_all_levels.sh
+   ./extract_all_levels2.sh
    ```
 
 ### Import Level Metadata
@@ -171,7 +171,7 @@ done
 
 ```
 lmlevelnames/
-├── extract_all_levels.sh             # Main extraction script
+├── extract_all_levels2.sh             # Main extraction script
 ├── levelname_extractor_json.py       # JSON output extractor
 ├── import_levelids.py                # Imports levelnames + lmlevels
 ├── import_detectlevels.py            # Imports detected level lists

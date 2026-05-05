@@ -93,6 +93,7 @@ typedef enum {
 typedef struct {
   ObjectKind kind;
   uint32_t index;
+  uint32_t byte_offset;      // offset within Layer1 payload where this object begins
   uint8_t raw[8];
   size_t raw_len;
 

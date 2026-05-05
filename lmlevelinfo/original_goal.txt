@@ -1,0 +1,198 @@
+
+
+Similar to the  ~/rhplay/lmlevelnames/  subdir we created before I want to create a  ~/rhplay/lmlevelinfo  To host resources for
+analyzing actual Level Data from a ROMfile  instead of just level names.
+
+Please look over the code in ~/rhplay/refmaterial/snesrev_smw/assets/
+And the following files:
+ ~/rhplay/refmaterial/snesrev_smw/assets/
+~/rhplay/refmaterial/SMW-Data/Misc/LevelTables.asm 
+
+
+And the Wiki text at  ~/rhplay/refmaterial/Level_Data_Format.txt
+For information reference about Lunar Magic headers found in SMW romhack files (.sfc) files.
+And   ~/rhplay/refmaterial/SMW-Data/Misc/MWL\ File\ Format.md 
+for some information about the MWL file format.
+
+The first goal is to create an additional utility similar to a thing like  ~/rhplay/lmlevelnames/level_reader.c 
+it would be run at command line  it would run like
+
+ level_info1 { <OPTION> |  <FILENAME> <LEVEL ID> [-o <OUTPUT FILE>] ... }
+ 
+Where  LEVEL ID is the Lunar Magic  Level ID   such as 0x10A     or 10A
+
+By default the display target is human readable, and
+     -j  or   --json    would be an option to emit the data in JSON format.
+     -m  or   --mwl     would be option to extract the level data to the same type of MWL file as used by Lunar Magic (Output file option mandatory for MWL output).
+     
+By default summary data is to be printed, and   something such as
+     --data=all
+     --data=none
+	 --data=<comma separated liskt>
+	 --data=allobjects
+
+Would be options to in the future include some or all additional data sections that may be added in the future.
+For example
+
+level_info1 --data=objects,fulldata --json example_input.sfc 0x100  -o example_output.json
+
+
+
+level_info1 example.sfc 0x100
+
+Is to display output details for level 0x100 such as:
+
+
+Level 0x100
+Layer1_Data
+ Primary_Level_Header
+   BG_Palette    (identifier)
+   _BG_Palette   (any extra human-readable info about the BG_Palette, such as the common names for the original standard palettes)
+   Length_in_Screens   (length of the actual level in number of screens, or -1)
+   Back_Area_Color (value)
+   _Back_Area_Color (human-readable interpreetation of the value)
+   Level_Mode (value)
+   _Mode_Info (human-readable interpretation of the Level_Mode value)
+   Layer3_Priority (value)
+   Music_MMM (value)
+   Sprite_GFX (value)
+   Timer_Setting (value)
+   Sprite_Palette (value)
+   _Sprite_Palette   (any extra human-readable info to describe the Sprite palette, similar concept to _BG_Palette)
+   _FG_Palette   (any extra human-readable info to describe the FG palette, similar concept to _BG_Palette)
+   Item_Memory_Set (value)
+   Vertical_Scroll_Set (value)
+   FGBG_GFX_Setting (value)
+ Secondary_Level_Header   Found
+   L2_Scroll:   Setting (value as (H)hhhh)    L2_Scroll_Bit5: (value either "0 - Normal"  or  "1 - Horizontal")
+   Main_Entrance:
+          Main_Y:                  (YYYYYY)yyyy    - Main Entrance Y position
+          Main_L3:                 (value)         - Layer 3 setting
+		  Main_Action:             AAA             - Main entrance Mario action (raw value)
+		  _Main_Action:            (text description of the Main_Action value found)
+          Main_X:                  (XX)xxx         - Main Entrance X position
+		  Midway_Screen:              (value)         - Midway entrance screen number
+		  Main_FG_Initial          (on or off)/(ff)- FG initial position, if R bit is clear
+		  Main_BG_Initial          (on or off)/(bb)- BG initial position, if R bit is clear
+		  Main_FGBG_Offset         (ono or ff)/(Fffbb) - FG/BG offset, if R bit is set
+		  Main_Skip_NoYoshiIntro   (N)             - Disable No-Yoshi Intro flag
+		  Main_Unknown_VPOS_Flag   (U)
+		  Main_VPOS_Flag           (V)       - Vertical positioning flag
+		  Main_ScreenNum           (EEEEE)   - Main entrance screen number
+		  Main_Slippery_Flag       (I)       - LM Slippery Flag
+		  Main_Water_Flag          (W)       - LM Water flag
+		  Main_XY2_Flag2           (P)       - LM Flag to use X/Y position method 2
+		  Main_SmartSpawn          (t)       - LM Smart spawn flag
+		  Main_SpriteSpawn_Range   (TT)      - LM Sprite spawn range
+		  Main_L2_SplitScrollRates (S)       - LM Flag to use separate L2 X/Y scroll rates
+		  Main_AutosetSCreens      (C)       - LM Flag to auto-set the number of screens in the level
+		  Main_L2_VerticalScroll   (on or off)/(vvvvv)   - LM L2 Vertical scroll, if S bit is set
+		  Main_BG_RelativeToFG     (O)       - LM Flag to set BG relative to FG
+		  Main_RelativeToPlayer    (R)       - LM Flag to set main entrance FG/BG setting relative to player1
+		  Main_FaceMainLeft        (L)       - LM Flag to face the main entrance left
+		  Main_BGHeight_or_Offset  (ooooo)   - BG height (-1), or relative BG offset if O bit is set (absolute 0 = 0x10)
+Expanded_Format_Header  Found
+          LMExp_L2orL3       (T)       - Indicates the level uses either Layer 2 or Layer 3
+          LMExp_BottomRow    (B)       - LM Flag to show the bottom row of the level
+		  LMExp_0           (value)   - Expected 0  (something is wrong if not zero).
+		  LMExp_Horizontal  (MMMMM)   - LM Horizontal level mode
+Midway_Entrance_Header (number)   (Repeated for each Midway header found for the  level. in JSON, the Midway_Entrances are a list of midway headers)
+          MW_Slippery (I)
+		  MW_Water    (W)
+		  MW_Separate (H)  - 	Flag to use seperate midway entrance
+		  Midway Entrance  (section only shown if MW_Separate is enabled)
+               MW_M (value)            Bit 4 of midway screen number. Bits 0-3 come from secondary header.
+		       MW_Y (value)            Midway entrance Y position
+			   MW_Action (value)       Midway entrance Mario action
+			   MW_X (value)            Midway entrance X position (bit 4 is to only be used for vertical levels)
+			   MW_RelativeToPlayer (value)    LM Set main entrance FG/BG setting relative to player
+			   MW_FGInitial (on or off)/(value)    Midway FG initial position, if R bit is clear
+			   MW_BGInitial (on or off)/(value)    Midway BG initial position, if R bit is clear
+			   MW_FGBG_Offset (on or off)/(value)  Main entrance FG/BG offset, if R bit is set
+			   MW_Left (value)         Face entrance left
+			   MW_Redirect (value)     Redirect midway entrance to other level
+			   _Redirect_Target (value)    -  if Midway redirect option is set, then we need to show the target level derived from the header
+
+			   If the E bit is set, table 2 instead serves as bits 0-7 of the destination level, and bit 0 of table 3 serves as bit 8.
+Found Level_Sprite_Header
+      Sprite_Buoyancy_S  (S value)  - LM Sprite buoyancy
+	  Sprite_Buoyancy_B  (B value)  - Sprite buoyancy (disable sprite-Layer 2 interaction)
+	  New_Sprite_System  (N value)  - New sprite system flag
+	  Sprite_Memory      (MMMMM value) - Sprite memory
+Layer1_Object Data  (Object data listings when one or more Object data sections are enabled in our CLI --data options)
+  Standard_Objects
+	   Object  New screen (N)      Object_Number (BBbbbb)    Y_Position (YYYYY)   X_Position (XXXX)   Settings (SSSSSSSS)  XY_Swapped (0 or 1)
+       - In JSON mode; the list of Objects is a list.  In human-readable mode we are to print an extra line for each object.
+       - In vertical levels, the X and Y position values are swapped in the actual game, but we show the raw fields.
+         We should display "XY_Swapped 0"   for  horizontal levels, and "XY_Swapped 1" if the level was vertical.
+
+       Extended Objects  (Excluding screen exits)
+	   Object  New Screen (N)   Y_Position (YYYYY)   X_Position (XXXX)  Ext_Object_Number (BBBBBBBB)
+
+       - In JSON mode; the list of Extended Objects is a list.  In human-readable mode we are to print an extra line for each object.
+       - In vertical levels, the X and Y position values are swapped in the actual game, but we show the raw fields.
+         We should display "XY_Swapped 0"   for  horizontal levels, and "XY_Swapped 1" if the level was vertical.
+
+   Screen_Exits -  Screen exits function as extended objects 00. Unlike the rest of object data, they're 4 bytes long rather than 3.
+  (in JSON, Screen_Exits is a list.  In human-readable mode print the following for each screen exit of this level)
+    Screen_Exit  Screen_Number (ppppp)     LM_Midway_Water (w)   LM_Modified (u)   Secondary_Exit_Flag (s)  Secondary_Exit_ID_or_Dest (hdddddddd)
+
+   Screen_Jumps
+     Screen Jump    horiz_Screen_Number (HHHHH)    Half_Vertical_Subscreen (VVVV)
+
+   LM_Object22 Tile from Map16 Page 0:  Map16tile (Bbbbbbbbb)    Y_Position (YYYYY)  X_Position (XXXX)   Height (HHHH)  Width (WWWW)  XY_Swapped (0 or 1)
+   LM_Object23 Tile from Map16 Page 1: Map16tile (Bbbbbbbbb)    Y_Position (YYYYY)  X_Position (XXXX)   Height (HHHH)  Width (WWWW)  XY_Swapped (0 or 1)
+   LM_Object24 GFX_Bypass1   New_Screen (N) SpriteGFX1 (SSSSssss) FGBG_GFX1 (FFFFFFFF)  Unused_1 (UUUUuuuu) GFX_File (AAAAAAAA)  (?)
+   LM_Object25 GFX_Bypass2   New_Screen (N) SpriteGFX1 (SSSSssss) FGBG_GFX1 (FFFFFFFF)  Unused_1 (UUUUuuuu) GFX_File (AAAAAAAA)  (?)
+   LM_Object26 Music_Bypass  SongPlus1 (MMMMMMMM)  O26_Unused (UUUUuuuu) (-)
+   LM_Object27 From Map16 00-03F: Obj_Type (Single-screen single tile  OR Multiple tiles unstretched  OR Single-screen, multiple tiles OR Multi-screen OR Conditional direct map16)
+           New_Screen (N) Map16_Tile (BBBBBBbbbbbbbb)  Y_Position (YYYYY) X_Position (XXXX)  Height (HHHH(HHHH))  Width (WWWW(WWW))
+		   Map16_S_Height (hhhh) Map16_S_Width (wwww) Map16_Conditional_Direct (CCCCCCC)  Map16_Conditional_Add (A)  XY_Swapped (0 or 1)
+   LM_Object29 From Map16 40-7F:
+          Obj_Type (Single-screen single tile  OR Multiple tiles unstretched  OR Single-screen, multiple tiles OR Multi-screen OR Conditional direct map16)
+           New_Screen (N) Map16_Tile (BBBBBBbbbbbbbb)  Y_Position (YYYYY) X_Position (XXXX)  Height (HHHH(HHHH))  Width (WWWW(WWW))
+		   Map16_S_Height (hhhh) Map16_S_Width (wwww) Map16_Conditional_Direct (CCCCCCC)  Map16_Conditional_Add (A)  XY_Swapped (0 or 1)
+   LM_Object28 Timer_Bypass  New_Screen (N)   Ones (AAAA)  Tens (BBBB) Hundreds (CCCC)  Force_Timer_Reset (R)    Unused (----)
+   
+   LM_Object2D User_Defined New_Screen (N) Y_Position (YYYYY) X_Position (XXXX) Settings (SSSSSSSS) ExtensionA (AAAAAAAA) ExtensionB (BBBBBBBB) XY_Reversed (0 or 1)
+   
+   LM_Ext02 Expanded_Screen_Exit  Screen_Number (ppppp)  Water_Flag (w)  Secondary_Exit_Id (HHHHhdddddddd)  Unused (----)
+   LM_Ext03 Expanded_Screen_Jump  Half_Vertical_Subscreen (VVVVV)  Horizontal_Screen_Number (HHHH)
+
+Layer1_Background_Data   Length (LLLLLLL)    RLE_Flag (R)
+  When Layer 2 is stored as a background tilemap, it's compressed in the LC_RLE1 format.
+  
+   ...	If the RLE flag is clear, the following (length + 1) bytes are intepreted as direct tile data.
+   If the RLE flag is set, the following byte is repeated (length + 1) times.   
+
+   (Decompressed Tilemap Data) -   To be  Shown if the background is a raw Tilemap, and the  tool is run  with --data=fulldata
+   In human readable modes, the raw bytes are to be shown as hex-encoded values just as in the JSON, such as \x00.   
+
+
+Layer2_Data
+   (for Layer2, the 5-byte Primary_Level_Header is skipped and not used)
+   ...   
+Layer2_Objects
+   ...
+Layer2_Background_Data
+   ...
+Level_Sprite_Data 
+   (Interpretation depends on whether new sprite system is in effect according to the level Sprite header)
+   Sprite_Object    Y_Position (Yyyyy) Extra_Bits (EE)  X_Position (XXXX)  Screen_Number (Sssss)  Sprite_ID (NNNNNNNN)  XY_Swapped (0 or 1)
+   Sprite_Command   Y_Position_Jump (00-7F)
+   Sprite_Object    Y_Position (Yyyyy) Extra_Bits (EE)  X_Position (XXXX)  Screen_Number (Sssss)  Sprite_ID (NNNNNNNN)  XY_Swapped (0 or 1)
+   ...
+
+Palette_Data (if applicable and palette is a selected option)
+   P0 rawB (BBBBB) rawG (GGGGG) rawR (RRRRR)   RGB (decoded and scaled 24-bit RGB value presented as hex code #xxxxxx)
+   P1 rawB (BBBBB) rawG (GGGGG) rawR (RRRRR)   RGB (decoded and scaled 24-bit RGB value presented as hex code #xxxxxx)
+   ...
+Map16_Data (if applicable and fulldata is selected)
+   ...
+ExAnimation_Data (if applicable and fulldata is selected)
+   ...
+ExGFX_Files (if applicable and fulldata is selected)
+   ...
+
+
+

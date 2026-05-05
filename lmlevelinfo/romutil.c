@@ -110,6 +110,9 @@ int snes_lorom_to_pc(const Rom *rom, uint32_t snes24, uint32_t *pc_out) {
   if (rom->map_mode == 0x23) {
     if (addr >= 0x8000 && ((bank <= 0x3F) || (bank >= 0x80 && bank <= 0xBF))) {
       uint32_t pc = (bank & 0x3Fu) * 0x8000u + (addr & 0x7FFFu);
+      // Many SA-1 hacks use $80-$BF for an alternate ROM window; empirically this maps
+      // to +0x200000 relative to the $00-$3F LoROM window for SMW hacks we test.
+      if (bank >= 0x80 && bank <= 0xBF) pc += 0x200000u;
       if (pc < rom->size) {
         *pc_out = pc;
         return 1;

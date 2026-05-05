@@ -137,7 +137,14 @@ static int build_normalized_objects(const LevelInfo *src, NormList *out) {
 
     NormObj no;
     memset(&no, 0, sizeof(no));
-    no.kind = o->kind;
+    // Treat extended 0x02 (15-bit exit) as a screen exit for comparison purposes.
+    // LM sometimes re-encodes exits differently between ROM and MWL exports, and these
+    // objects don't have meaningful map coordinates.
+    if (o->kind == OBJ_EXTENDED && o->object_number == 0x02 && o->raw_len >= 5) {
+      no.kind = OBJ_SCREEN_EXIT;
+    } else {
+      no.kind = o->kind;
+    }
     no.object_number = (uint16_t)o->object_number;
     no.screen = screen;
     no.is_command = (o->kind == OBJ_STANDARD && is_command_standard_object((uint16_t)o->object_number)) ? 1 : 0;
@@ -155,7 +162,7 @@ static int build_normalized_objects(const LevelInfo *src, NormList *out) {
     no.src_index = (uint32_t)i;
     no.src_byte_offset = o->byte_offset;
 
-    if (o->kind == OBJ_SCREEN_EXIT) {
+    if (no.kind == OBJ_SCREEN_EXIT) {
       no.screen_number = o->screen_number;
       no.lm_midway_water = o->lm_midway_water;
       no.lm_modified = o->lm_modified;

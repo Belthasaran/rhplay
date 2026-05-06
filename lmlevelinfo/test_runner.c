@@ -526,63 +526,328 @@ static int run_layer2_midway_sanity(void) {
 static int run_lm_object_decode_sanity(void) {
   char err[512];
   LevelInfo out;
-
-  // Primary header (5 bytes) + 1 object + terminator.
-  // Object 0x28 (time limit bypass): standard_id=0x28 -> bb=2, bbbb=8
-  // b0: NbbYYYYY, b1: bbbbXXXX, b2: settings
-  uint8_t buf1[] = {
-    0, 0, 0, 0, 0,
-    0x40 | 0x00, // bb=2, y=0
-    0x80 | 0x00, // bbbb=8, x=0
-    0x12,
-    0xFF
-  };
-  if (!parse_level_info_from_layer1_bytes(buf1, sizeof(buf1), 0x000, &out, err, sizeof(err))) {
-    failf("[sanity] parse_level_info_from_layer1_bytes failed (obj28): %s", err);
-    return 0;
-  }
   int ok = 1;
-  if (out.objects_count != 1) {
-    failf("[sanity] expected 1 object (obj28), got %zu", out.objects_count);
-    ok = 0;
-  } else {
-    const LevelObject *o = &out.objects[0];
-    if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_28_TIME_BYPASS) {
-      failf("[sanity] expected decoded obj28");
-      ok = 0;
+
+#define LM_SANITY_PARSE(buf, label) \
+  do { \
+    if (!parse_level_info_from_layer1_bytes((buf), sizeof(buf), 0x000, &out, err, sizeof(err))) { \
+      failf("[sanity] parse_level_info_from_layer1_bytes failed (%s): %s", (label), err); \
+      ok = 0; \
+    } \
+  } while (0)
+
+#define LM_SANITY_EXPECT_COUNT(n, label) \
+  do { \
+    if (ok && out.objects_count != (size_t)(n)) { \
+      failf("[sanity] %s: expected %d objects, got %zu", (label), (n), out.objects_count); \
+      ok = 0; \
+    } \
+  } while (0)
+
+  // Primary header (5 bytes) + objects + terminator.
+  // Standard object: b0 NbbYYYYY, b1 bbbbXXXX, b2+ payload per LM wiki.
+
+  // Extended LM screen jump 03: N00YYYYY 0000XXXX ext_id
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x0A,       // y=10, bb=0
+      0x0C,       // x=12
+      0x03,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "ext03");
+    LM_SANITY_EXPECT_COUNT(1, "ext03");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (o->kind != OBJ_EXTENDED || o->object_number != 0x03) {
+        failf("[sanity] ext03: wrong kind/id");
+        ok = 0;
+      } else if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_EXT03_SCREEN_JUMP) {
+        failf("[sanity] ext03: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.ext03.half_vert_subscreen_5b != (0x0A & 0x1F) ||
+                 o->decoded.u.ext03.horiz_screen_5b != (0x0C & 0x1F)) {
+        failf("[sanity] ext03: field mismatch");
+        ok = 0;
+      }
     }
+    levelinfo_free(&out);
   }
-  levelinfo_free(&out);
+
+  // Object 0x22 Map16 page0, 4 bytes (decoder bit layout in level_parse.c)
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x03, // bb=2, y=3
+      0x20 | 0x04, // bbbb=2, x=4
+      0x2A,
+      0x35, // H=3 W=5, map16 bit8 from bit0
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj22");
+    LM_SANITY_EXPECT_COUNT(1, "obj22");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_22_MAP16_PAGE0) {
+        failf("[sanity] obj22: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.lm22_23.map16_tile_9b != (uint16_t)(0x2A | ((0x35 & 1) << 8)) ||
+                 o->decoded.u.lm22_23.height_4b != 3 || o->decoded.u.lm22_23.width_4b != 5) {
+        failf("[sanity] obj22: map16/H/W mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x23 Map16 page1
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x00,
+      0x30 | 0x01, // bbbb=3 -> 0x23
+      0x10,
+      0x42,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj23");
+    LM_SANITY_EXPECT_COUNT(1, "obj23");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_23_MAP16_PAGE1) {
+        failf("[sanity] obj23: expected decoded");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x24 old FG/BG/SP bypass (deprecated), 3 bytes
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x43,       // N10-SSSS -> SSSS=3
+      0x45,       // 0100ssss -> ssss=5  -> sprite list+1 = 0x35
+      0x7E,       // FG/BG list+1
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj24");
+    LM_SANITY_EXPECT_COUNT(1, "obj24");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_24_OLD_FGBGSP_BYPASS) {
+        failf("[sanity] obj24: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.lm24.sprite_gfx_list_plus1 != 0x35 ||
+                 o->decoded.u.lm24.fgbg_gfx_list_plus1 != 0x7E) {
+        failf("[sanity] obj24: gfx fields mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x25 old AN2 bypass
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x4A,
+      0x5B,
+      0x33,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj25");
+    LM_SANITY_EXPECT_COUNT(1, "obj25");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_25_OLD_AN2_BYPASS) {
+        failf("[sanity] obj25: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.lm25.unused_u != (uint8_t)(((0x4A & 0x0F) << 4) | (0x5B & 0x0F)) ||
+                 o->decoded.u.lm25.an2_file_plus1 != 0x33) {
+        failf("[sanity] obj25: field mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x26 music bypass
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x41,
+      0x62,       // bbbb=6 for standard id 0x26
+      0x05,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj26");
+    LM_SANITY_EXPECT_COUNT(1, "obj26");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_26_MUSIC_BYPASS) {
+        failf("[sanity] obj26: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.lm26.song_plus1 != 0x05) {
+        failf("[sanity] obj26: song mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x27 mode 0 (single-screen single tile), 5 bytes
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x02,
+      0x70 | 0x03, // bbbb=7 -> 0x27
+      0x23,        // H=2 W=3
+      0x05,        // 00BBBBBB (mode bits 6-7 = 0)
+      0x67,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj27m0");
+    LM_SANITY_EXPECT_COUNT(1, "obj27m0");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F) {
+        failf("[sanity] obj27m0: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.lm27_29.variant != 0 || o->decoded.u.lm27_29.height != 2 ||
+                 o->decoded.u.lm27_29.width != 3) {
+        failf("[sanity] obj27m0: variant/H/W mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x27 mode 1 (multiple tiles unstretched), 5 bytes
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x00,
+      0x70 | 0x00,
+      0xFE,        // sel_h=0xF sel_w=0xE
+      0x41,        // 01BBBBBB -> mode 1
+      0x00,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj27m1");
+    LM_SANITY_EXPECT_COUNT(1, "obj27m1");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.u.lm27_29.variant != 1 ||
+          o->decoded.u.lm27_29.sel_h_4b != 0x0F || o->decoded.u.lm27_29.sel_w_4b != 0x0E) {
+        failf("[sanity] obj27m1: variant/sel mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x29 mode 0 (page 40-7F), second byte high nibble 9
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x00,
+      0x90 | 0x0E, // bbbb=9 -> 0x29
+      0x11,
+      0x02,
+      0xAB,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj29m0");
+    LM_SANITY_EXPECT_COUNT(1, "obj29m0");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F) {
+        failf("[sanity] obj29m0: expected decoded");
+        ok = 0;
+      } else if (o->decoded.u.lm27_29.variant != 0) {
+        failf("[sanity] obj29m0: variant mismatch");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x28 (time limit bypass): standard_id=0x28 -> bb=2, bbbb=8
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x00,
+      0x80 | 0x00,
+      0x12,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj28");
+    LM_SANITY_EXPECT_COUNT(1, "obj28");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_28_TIME_BYPASS) {
+        failf("[sanity] expected decoded obj28");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
 
   // Object 0x2D (user-defined): standard_id=0x2D -> bb=2, bbbb=0xD
-  uint8_t buf2[] = {
-    0, 0, 0, 0, 0,
-    0x40 | 0x01, // bb=2, y=1
-    0xD0 | 0x02, // bbbb=D, x=2
-    0x7F,        // settings
-    0xAA,        // extA
-    0x55,        // extB
-    0xFF
-  };
-  if (!parse_level_info_from_layer1_bytes(buf2, sizeof(buf2), 0x000, &out, err, sizeof(err))) {
-    failf("[sanity] parse_level_info_from_layer1_bytes failed (obj2d): %s", err);
-    return 0;
-  }
-  if (out.objects_count != 1) {
-    failf("[sanity] expected 1 object (obj2d), got %zu", out.objects_count);
-    ok = 0;
-  } else {
-    const LevelObject *o = &out.objects[0];
-    if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_2D_USER_DEFINED) {
-      failf("[sanity] expected decoded obj2d");
-      ok = 0;
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x01,
+      0xD0 | 0x02,
+      0x7F,
+      0xAA,
+      0x55,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj2d");
+    LM_SANITY_EXPECT_COUNT(1, "obj2d");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_2D_USER_DEFINED) {
+        failf("[sanity] expected decoded obj2d");
+        ok = 0;
+      } else if (o->decoded.u.lm2d.ext_a != 0xAA || o->decoded.u.lm2d.ext_b != 0x55) {
+        failf("[sanity] obj2d ext bytes mismatch");
+        ok = 0;
+      }
     }
-    if (o->decoded.u.lm2d.ext_a != 0xAA || o->decoded.u.lm2d.ext_b != 0x55) {
-      failf("[sanity] obj2d ext bytes mismatch");
-      ok = 0;
-    }
+    levelinfo_free(&out);
   }
-  levelinfo_free(&out);
+
+  // Two LM objects in one stream (ordering + lengths)
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x00,
+      0x20 | 0x00, // 0x22, 4 bytes
+      0x00,
+      0x00,
+      0x40 | 0x01,
+      0x80 | 0x00, // 0x28, 3 bytes
+      0x34,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "chain22+28");
+    LM_SANITY_EXPECT_COUNT(2, "chain22+28");
+    if (ok) {
+      if (out.objects[0].decoded.kind != OBJ_DEC_LM_22_MAP16_PAGE0 ||
+          out.objects[1].decoded.kind != OBJ_DEC_LM_28_TIME_BYPASS) {
+        failf("[sanity] chain22+28: decoded kinds");
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+#undef LM_SANITY_PARSE
+#undef LM_SANITY_EXPECT_COUNT
 
   if (ok) printf("PASS: sanity lm_object_decode\n");
   return ok;

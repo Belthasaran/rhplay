@@ -56,6 +56,82 @@ static int parse_level_id(const char *s, uint16_t *out) {
 
 static const char *yesno(int v) { return v ? "Yes" : "No"; }
 
+static const char *decoded_kind_name(ObjectDecodedKind k) {
+  switch (k) {
+    case OBJ_DEC_LM_22_MAP16_PAGE0: return "lm_obj22_map16_page0";
+    case OBJ_DEC_LM_23_MAP16_PAGE1: return "lm_obj23_map16_page1";
+    case OBJ_DEC_LM_24_OLD_FGBGSP_BYPASS: return "lm_obj24_old_fgbgsp_bypass";
+    case OBJ_DEC_LM_25_OLD_AN2_BYPASS: return "lm_obj25_old_an2_bypass";
+    case OBJ_DEC_LM_26_MUSIC_BYPASS: return "lm_obj26_music_bypass";
+    case OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F: return "lm_obj27_direct_map16_p00_3f";
+    case OBJ_DEC_LM_28_TIME_BYPASS: return "lm_obj28_time_bypass";
+    case OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F: return "lm_obj29_direct_map16_p40_7f";
+    case OBJ_DEC_LM_2D_USER_DEFINED: return "lm_obj2d_user_defined";
+    case OBJ_DEC_LM_EXT03_SCREEN_JUMP: return "lm_ext03_screen_jump";
+    case OBJ_DEC_NONE:
+    default: return "none";
+  }
+}
+
+static void json_emit_object_decoded(JsonW *w, const LevelObject *o) {
+  jsonw_key(w, "decoded");
+  jsonw_obj_begin(w);
+  jsonw_key(w, "present"); jsonw_bool(w, o->decoded.present);
+  if (!o->decoded.present) {
+    jsonw_obj_end(w);
+    return;
+  }
+  jsonw_key(w, "kind"); jsonw_str(w, decoded_kind_name(o->decoded.kind));
+  switch (o->decoded.kind) {
+    case OBJ_DEC_LM_22_MAP16_PAGE0:
+    case OBJ_DEC_LM_23_MAP16_PAGE1:
+      jsonw_key(w, "map16_tile_9b"); jsonw_uint(w, o->decoded.u.lm22_23.map16_tile_9b);
+      jsonw_key(w, "height_4b"); jsonw_uint(w, o->decoded.u.lm22_23.height_4b);
+      jsonw_key(w, "width_4b"); jsonw_uint(w, o->decoded.u.lm22_23.width_4b);
+      break;
+    case OBJ_DEC_LM_24_OLD_FGBGSP_BYPASS:
+      jsonw_key(w, "sprite_gfx_list_plus1"); jsonw_uint(w, o->decoded.u.lm24.sprite_gfx_list_plus1);
+      jsonw_key(w, "fgbg_gfx_list_plus1"); jsonw_uint(w, o->decoded.u.lm24.fgbg_gfx_list_plus1);
+      break;
+    case OBJ_DEC_LM_25_OLD_AN2_BYPASS:
+      jsonw_key(w, "unused_u"); jsonw_uint(w, o->decoded.u.lm25.unused_u);
+      jsonw_key(w, "an2_file_plus1"); jsonw_uint(w, o->decoded.u.lm25.an2_file_plus1);
+      break;
+    case OBJ_DEC_LM_26_MUSIC_BYPASS:
+      jsonw_key(w, "unused_u"); jsonw_uint(w, o->decoded.u.lm26.unused_u);
+      jsonw_key(w, "song_plus1"); jsonw_uint(w, o->decoded.u.lm26.song_plus1);
+      break;
+    case OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F:
+    case OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F:
+      jsonw_key(w, "variant"); jsonw_uint(w, o->decoded.u.lm27_29.variant);
+      jsonw_key(w, "base_map16"); jsonw_uint(w, o->decoded.u.lm27_29.base_map16);
+      jsonw_key(w, "width"); jsonw_uint(w, o->decoded.u.lm27_29.width);
+      jsonw_key(w, "height"); jsonw_uint(w, o->decoded.u.lm27_29.height);
+      jsonw_key(w, "sel_w_4b"); jsonw_uint(w, o->decoded.u.lm27_29.sel_w_4b);
+      jsonw_key(w, "sel_h_4b"); jsonw_uint(w, o->decoded.u.lm27_29.sel_h_4b);
+      jsonw_key(w, "conditional_flag_7b"); jsonw_uint(w, o->decoded.u.lm27_29.conditional_flag_7b);
+      jsonw_key(w, "conditional_add_a"); jsonw_uint(w, o->decoded.u.lm27_29.conditional_add_a);
+      break;
+    case OBJ_DEC_LM_28_TIME_BYPASS:
+      jsonw_key(w, "ones_4b"); jsonw_uint(w, o->decoded.u.lm28.ones_4b);
+      jsonw_key(w, "tens_4b"); jsonw_uint(w, o->decoded.u.lm28.tens_4b);
+      jsonw_key(w, "hundreds_4b"); jsonw_uint(w, o->decoded.u.lm28.hundreds_4b);
+      jsonw_key(w, "force_reset_r"); jsonw_uint(w, o->decoded.u.lm28.force_reset_r);
+      break;
+    case OBJ_DEC_LM_2D_USER_DEFINED:
+      jsonw_key(w, "ext_a"); jsonw_uint(w, o->decoded.u.lm2d.ext_a);
+      jsonw_key(w, "ext_b"); jsonw_uint(w, o->decoded.u.lm2d.ext_b);
+      break;
+    case OBJ_DEC_LM_EXT03_SCREEN_JUMP:
+      jsonw_key(w, "horiz_screen_5b"); jsonw_uint(w, o->decoded.u.ext03.horiz_screen_5b);
+      jsonw_key(w, "half_vert_subscreen_5b"); jsonw_uint(w, o->decoded.u.ext03.half_vert_subscreen_5b);
+      break;
+    default:
+      break;
+  }
+  jsonw_obj_end(w);
+}
+
 static void print_primary(const PrimaryLevelHeader *h) {
   printf("  Primary_Level_Header\n");
   printf("    BG_Palette: %u\n", h->bg_palette);
@@ -214,6 +290,65 @@ static void print_objects(const LevelInfo *info) {
     } else {
       printf("    Object %zu: kind=unknown raw_len=%zu\n", i, o->raw_len);
     }
+    if (o->decoded.present) {
+      printf("      Decoded: %s", decoded_kind_name(o->decoded.kind));
+      switch (o->decoded.kind) {
+        case OBJ_DEC_LM_22_MAP16_PAGE0:
+        case OBJ_DEC_LM_23_MAP16_PAGE1:
+          printf(" map16_tile_9b=0x%03X height_4b=%u width_4b=%u",
+                 (unsigned)o->decoded.u.lm22_23.map16_tile_9b,
+                 (unsigned)o->decoded.u.lm22_23.height_4b,
+                 (unsigned)o->decoded.u.lm22_23.width_4b);
+          break;
+        case OBJ_DEC_LM_24_OLD_FGBGSP_BYPASS:
+          printf(" sprite_gfx_list_plus1=%u fgbg_gfx_list_plus1=%u",
+                 (unsigned)o->decoded.u.lm24.sprite_gfx_list_plus1,
+                 (unsigned)o->decoded.u.lm24.fgbg_gfx_list_plus1);
+          break;
+        case OBJ_DEC_LM_25_OLD_AN2_BYPASS:
+          printf(" unused_u=0x%02X an2_file_plus1=%u",
+                 (unsigned)o->decoded.u.lm25.unused_u,
+                 (unsigned)o->decoded.u.lm25.an2_file_plus1);
+          break;
+        case OBJ_DEC_LM_26_MUSIC_BYPASS:
+          printf(" unused_u=0x%02X song_plus1=%u",
+                 (unsigned)o->decoded.u.lm26.unused_u,
+                 (unsigned)o->decoded.u.lm26.song_plus1);
+          break;
+        case OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F:
+        case OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F:
+          printf(" variant=%u base_map16=0x%04X w=%u h=%u sel=%ux%u cond_flag=%u cond_add=%u",
+                 (unsigned)o->decoded.u.lm27_29.variant,
+                 (unsigned)o->decoded.u.lm27_29.base_map16,
+                 (unsigned)o->decoded.u.lm27_29.width,
+                 (unsigned)o->decoded.u.lm27_29.height,
+                 (unsigned)o->decoded.u.lm27_29.sel_w_4b,
+                 (unsigned)o->decoded.u.lm27_29.sel_h_4b,
+                 (unsigned)o->decoded.u.lm27_29.conditional_flag_7b,
+                 (unsigned)o->decoded.u.lm27_29.conditional_add_a);
+          break;
+        case OBJ_DEC_LM_28_TIME_BYPASS:
+          printf(" time=%u%u%u force_reset=%u",
+                 (unsigned)o->decoded.u.lm28.hundreds_4b,
+                 (unsigned)o->decoded.u.lm28.tens_4b,
+                 (unsigned)o->decoded.u.lm28.ones_4b,
+                 (unsigned)o->decoded.u.lm28.force_reset_r);
+          break;
+        case OBJ_DEC_LM_2D_USER_DEFINED:
+          printf(" ext_a=0x%02X ext_b=0x%02X",
+                 (unsigned)o->decoded.u.lm2d.ext_a,
+                 (unsigned)o->decoded.u.lm2d.ext_b);
+          break;
+        case OBJ_DEC_LM_EXT03_SCREEN_JUMP:
+          printf(" horiz_screen_5b=%u half_vert_subscreen_5b=%u",
+                 (unsigned)o->decoded.u.ext03.horiz_screen_5b,
+                 (unsigned)o->decoded.u.ext03.half_vert_subscreen_5b);
+          break;
+        default:
+          break;
+      }
+      printf("\n");
+    }
   }
 }
 
@@ -303,6 +438,7 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
       jsonw_key(w, "x_position"); jsonw_uint(w, o->x_position);
       jsonw_key(w, "settings"); jsonw_uint(w, o->settings);
       jsonw_key(w, "xy_swapped"); jsonw_uint(w, o->xy_swapped);
+      json_emit_object_decoded(w, o);
       jsonw_obj_end(w);
     }
     jsonw_arr_end(w);
@@ -318,6 +454,7 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
       jsonw_key(w, "y_position"); jsonw_uint(w, o->y_position);
       jsonw_key(w, "x_position"); jsonw_uint(w, o->x_position);
       jsonw_key(w, "xy_swapped"); jsonw_uint(w, o->xy_swapped);
+      json_emit_object_decoded(w, o);
       jsonw_obj_end(w);
     }
     jsonw_arr_end(w);
@@ -333,6 +470,7 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
       jsonw_key(w, "lm_modified"); jsonw_uint(w, o->lm_modified);
       jsonw_key(w, "secondary_exit_flag"); jsonw_uint(w, o->secondary_exit_flag);
       jsonw_key(w, "secondary_exit_id_or_dest"); jsonw_uint(w, o->secondary_exit_id_or_dest);
+      json_emit_object_decoded(w, o);
       jsonw_obj_end(w);
     }
     jsonw_arr_end(w);

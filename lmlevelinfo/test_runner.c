@@ -517,8 +517,74 @@ static int run_layer2_midway_sanity(void) {
   }
 
   levelinfo_free(&info);
+
   rom_free(&rom);
   if (ok) printf("PASS: sanity layer2+midway\n");
+  return ok;
+}
+
+static int run_lm_object_decode_sanity(void) {
+  char err[512];
+  LevelInfo out;
+
+  // Primary header (5 bytes) + 1 object + terminator.
+  // Object 0x28 (time limit bypass): standard_id=0x28 -> bb=2, bbbb=8
+  // b0: NbbYYYYY, b1: bbbbXXXX, b2: settings
+  uint8_t buf1[] = {
+    0, 0, 0, 0, 0,
+    0x40 | 0x00, // bb=2, y=0
+    0x80 | 0x00, // bbbb=8, x=0
+    0x12,
+    0xFF
+  };
+  if (!parse_level_info_from_layer1_bytes(buf1, sizeof(buf1), 0x000, &out, err, sizeof(err))) {
+    failf("[sanity] parse_level_info_from_layer1_bytes failed (obj28): %s", err);
+    return 0;
+  }
+  int ok = 1;
+  if (out.objects_count != 1) {
+    failf("[sanity] expected 1 object (obj28), got %zu", out.objects_count);
+    ok = 0;
+  } else {
+    const LevelObject *o = &out.objects[0];
+    if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_28_TIME_BYPASS) {
+      failf("[sanity] expected decoded obj28");
+      ok = 0;
+    }
+  }
+  levelinfo_free(&out);
+
+  // Object 0x2D (user-defined): standard_id=0x2D -> bb=2, bbbb=0xD
+  uint8_t buf2[] = {
+    0, 0, 0, 0, 0,
+    0x40 | 0x01, // bb=2, y=1
+    0xD0 | 0x02, // bbbb=D, x=2
+    0x7F,        // settings
+    0xAA,        // extA
+    0x55,        // extB
+    0xFF
+  };
+  if (!parse_level_info_from_layer1_bytes(buf2, sizeof(buf2), 0x000, &out, err, sizeof(err))) {
+    failf("[sanity] parse_level_info_from_layer1_bytes failed (obj2d): %s", err);
+    return 0;
+  }
+  if (out.objects_count != 1) {
+    failf("[sanity] expected 1 object (obj2d), got %zu", out.objects_count);
+    ok = 0;
+  } else {
+    const LevelObject *o = &out.objects[0];
+    if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_2D_USER_DEFINED) {
+      failf("[sanity] expected decoded obj2d");
+      ok = 0;
+    }
+    if (o->decoded.u.lm2d.ext_a != 0xAA || o->decoded.u.lm2d.ext_b != 0x55) {
+      failf("[sanity] obj2d ext bytes mismatch");
+      ok = 0;
+    }
+  }
+  levelinfo_free(&out);
+
+  if (ok) printf("PASS: sanity lm_object_decode\n");
   return ok;
 }
 
@@ -629,6 +695,7 @@ int main(void) {
   int ok1 = run_akogare_level109();
   int ok1b = run_akogare_suite();
   int okS = run_layer2_midway_sanity();
+  int okLm = run_lm_object_decode_sanity();
   int ok2 = run_quickieworld_suite();
   int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
   int ok4 = run_suite_dir("acidtapes", "test/acidtapes/acidtapes.sfc", "test/acidtapes", "acidtapes ");
@@ -638,7 +705,7 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
+  if (failures == 0 && ok1 && ok1b && okS && okLm && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");
     return 0;
   }

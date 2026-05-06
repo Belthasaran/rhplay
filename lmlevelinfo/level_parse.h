@@ -110,6 +110,68 @@ typedef enum {
   OBJ_UNKNOWN = 4
 } ObjectKind;
 
+typedef enum {
+  OBJ_DEC_NONE = 0,
+  OBJ_DEC_LM_22_MAP16_PAGE0,
+  OBJ_DEC_LM_23_MAP16_PAGE1,
+  OBJ_DEC_LM_24_OLD_FGBGSP_BYPASS,
+  OBJ_DEC_LM_25_OLD_AN2_BYPASS,
+  OBJ_DEC_LM_26_MUSIC_BYPASS,
+  OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F,
+  OBJ_DEC_LM_28_TIME_BYPASS,
+  OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F,
+  OBJ_DEC_LM_2D_USER_DEFINED,
+  OBJ_DEC_LM_EXT03_SCREEN_JUMP
+} ObjectDecodedKind;
+
+typedef struct {
+  int present;
+  ObjectDecodedKind kind;
+  union {
+    struct {
+      uint16_t map16_tile_9b; // low 9-bit Map16 tile number
+      uint8_t height_4b;
+      uint8_t width_4b;
+    } lm22_23;
+    struct {
+      uint16_t sprite_gfx_list_plus1; // SSSSssss
+      uint8_t fgbg_gfx_list_plus1;    // FFFFFFFF
+    } lm24;
+    struct {
+      uint8_t unused_u;       // UUUUuuuu
+      uint8_t an2_file_plus1; // AAAAAAAA
+    } lm25;
+    struct {
+      uint8_t unused_u;   // UUUUuuuu
+      uint8_t song_plus1; // MMMMMMMM
+    } lm26;
+    struct {
+      uint8_t variant; // 0..4 (single, unstretched, stretched, multi, conditional)
+      uint16_t base_map16; // BBBBBBbbbbbbbb
+      uint16_t width;
+      uint16_t height;
+      uint8_t sel_w_4b;
+      uint8_t sel_h_4b;
+      uint8_t conditional_flag_7b;
+      uint8_t conditional_add_a;
+    } lm27_29;
+    struct {
+      uint8_t ones_4b;
+      uint8_t tens_4b;
+      uint8_t hundreds_4b;
+      uint8_t force_reset_r;
+    } lm28;
+    struct {
+      uint8_t ext_a;
+      uint8_t ext_b;
+    } lm2d;
+    struct {
+      uint8_t horiz_screen_5b;
+      uint8_t half_vert_subscreen_5b;
+    } ext03;
+  } u;
+} LevelObjectDecoded;
+
 typedef struct {
   ObjectKind kind;
   uint32_t index;
@@ -131,6 +193,8 @@ typedef struct {
   uint8_t lm_modified;
   uint8_t secondary_exit_flag;
   uint16_t secondary_exit_id_or_dest;
+
+  LevelObjectDecoded decoded;
 } LevelObject;
 
 typedef struct {

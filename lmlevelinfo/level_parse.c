@@ -420,7 +420,6 @@ static void decode_secondary(const SecondaryLevelHeader *h, SecondaryDecoded *d)
 }
 
 static size_t object_len_for_standard(uint8_t obj_id, const uint8_t *buf, size_t avail) {
-  (void)avail;
   // Most standard objects are 3 bytes. LM adds a few longer ones.
   if (obj_id == 0x22 || obj_id == 0x23) return 4;
   if (obj_id == 0x2D) return 5;
@@ -698,6 +697,10 @@ static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
     obj.settings = settings;
     obj.xy_swapped = is_vertical ? 1 : 0;
 
+    // Best-effort decode LM-specific objects based on raw bytes once we know the final record length.
+    // (Implemented later in this file; safe to call with partial info.)
+    // decode_lm_object_best_effort(&obj);
+
     if (standard_id == 0x00) {
       uint8_t ext_id = b2;
       size_t olen = object_len_for_extended(ext_id);
@@ -709,6 +712,16 @@ static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
       obj.object_number = ext_id;
       obj.raw_len = olen;
       memcpy(obj.raw, p + i, olen);
+
+      // Decode LM extended objects that act as commands (best-effort)
+      if (ext_id == 0x03 && olen >= 3) {
+        // Format (per goal/wiki): Half-vertical-subscr + horizontal screen.
+        // Our raw is the original 3-byte extended record, so treat raw[0] and raw[1] as payload bytes.
+        obj.decoded.present = 1;
+        obj.decoded.kind = OBJ_DEC_LM_EXT03_SCREEN_JUMP;
+        obj.decoded.u.ext03.half_vert_subscreen_5b = (uint8_t)(obj.raw[0] & 0x1F);
+        obj.decoded.u.ext03.horiz_screen_5b = (uint8_t)(obj.raw[1] & 0x1F);
+      }
 
       if (ext_id == 0x00 && olen >= 4) {
         uint8_t e0 = p[i + 0];
@@ -739,6 +752,110 @@ static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
       obj.object_number = standard_id;
       obj.raw_len = olen;
       memcpy(obj.raw, p + i, olen);
+
+      // LM standard object decode (best-effort; uses raw bytes)
+      // Common object encoding: byte0 = NbbYYYYY, byte1 = bbbbXXXX, byte2.. = settings/extra
+      if (standard_id == 0x22 || standard_id == 0x23) {
+        if (olen >= 4) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = (standard_id == 0x22) ? OBJ_DEC_LM_22_MAP16_PAGE0 : OBJ_DEC_LM_23_MAP16_PAGE1;
+          // LM 22/23: Bbbbbbbbb (9-bit) stored across bytes2..3 (per ref).
+          uint16_t map16 = (uint16_t)obj.raw[2] | (uint16_t)((obj.raw[3] & 0x01) << 8);
+          obj.decoded.u.lm22_23.map16_tile_9b = map16;
+          obj.decoded.u.lm22_23.height_4b = (uint8_t)((obj.raw[3] >> 4) & 0x0F);
+          obj.decoded.u.lm22_23.width_4b = (uint8_t)(obj.raw[3] & 0x0F);
+        }
+      } else if (standard_id == 0x24) {
+        if (olen >= 3) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = OBJ_DEC_LM_24_OLD_FGBGSP_BYPASS;
+          // obj.raw[0] and obj.raw[1] contain packed SSSSssss bits.
+          uint16_t s = (uint16_t)((obj.raw[0] & 0x0F) << 4) | (uint16_t)(obj.raw[1] & 0x0F);
+          obj.decoded.u.lm24.sprite_gfx_list_plus1 = s;
+          obj.decoded.u.lm24.fgbg_gfx_list_plus1 = obj.raw[2];
+        }
+      } else if (standard_id == 0x25) {
+        if (olen >= 3) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = OBJ_DEC_LM_25_OLD_AN2_BYPASS;
+          uint8_t u = (uint8_t)((obj.raw[0] & 0x0F) << 4) | (uint8_t)(obj.raw[1] & 0x0F);
+          obj.decoded.u.lm25.unused_u = u;
+          obj.decoded.u.lm25.an2_file_plus1 = obj.raw[2];
+        }
+      } else if (standard_id == 0x26) {
+        if (olen >= 3) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = OBJ_DEC_LM_26_MUSIC_BYPASS;
+          uint8_t u = (uint8_t)((obj.raw[0] & 0x0F) << 4) | (uint8_t)(obj.raw[1] & 0x0F);
+          obj.decoded.u.lm26.unused_u = u;
+          obj.decoded.u.lm26.song_plus1 = obj.raw[2];
+        }
+      } else if (standard_id == 0x28) {
+        if (olen >= 3) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = OBJ_DEC_LM_28_TIME_BYPASS;
+          obj.decoded.u.lm28.tens_4b = (uint8_t)(obj.raw[0] & 0x0F);
+          obj.decoded.u.lm28.ones_4b = (uint8_t)(obj.raw[1] & 0x0F);
+          obj.decoded.u.lm28.force_reset_r = (uint8_t)((obj.raw[2] >> 4) & 0x01);
+          obj.decoded.u.lm28.hundreds_4b = (uint8_t)(obj.raw[2] & 0x0F);
+        }
+      } else if (standard_id == 0x2D) {
+        if (olen >= 5) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = OBJ_DEC_LM_2D_USER_DEFINED;
+          obj.decoded.u.lm2d.ext_a = obj.raw[3];
+          obj.decoded.u.lm2d.ext_b = obj.raw[4];
+        }
+      } else if (standard_id == 0x27 || standard_id == 0x29) {
+        // LM direct Map16 family. Decode core fields and variant-specific extras.
+        if (olen >= 5) {
+          obj.decoded.present = 1;
+          obj.decoded.kind = (standard_id == 0x27) ? OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F : OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F;
+          uint8_t b2v = obj.raw[2];
+          uint8_t b3v = obj.raw[3];
+          uint8_t mode = (b3v >> 6) & 0x3;
+          uint16_t base = (uint16_t)(b3v & 0x3F) << 8 | (uint16_t)obj.raw[4];
+          obj.decoded.u.lm27_29.base_map16 = base;
+          obj.decoded.u.lm27_29.conditional_add_a = 0;
+          obj.decoded.u.lm27_29.conditional_flag_7b = 0;
+          obj.decoded.u.lm27_29.sel_w_4b = 0;
+          obj.decoded.u.lm27_29.sel_h_4b = 0;
+
+          if (mode == 0x0) {
+            obj.decoded.u.lm27_29.variant = 0;
+            obj.decoded.u.lm27_29.height = (uint16_t)((b2v >> 4) & 0x0F);
+            obj.decoded.u.lm27_29.width = (uint16_t)(b2v & 0x0F);
+          } else if (mode == 0x1) {
+            obj.decoded.u.lm27_29.variant = 1;
+            obj.decoded.u.lm27_29.sel_h_4b = (uint8_t)((b2v >> 4) & 0x0F);
+            obj.decoded.u.lm27_29.sel_w_4b = (uint8_t)(b2v & 0x0F);
+          } else if (mode == 0x2) {
+            obj.decoded.u.lm27_29.variant = 2;
+            obj.decoded.u.lm27_29.height = (uint16_t)((b2v >> 4) & 0x0F);
+            obj.decoded.u.lm27_29.width = (uint16_t)(b2v & 0x0F);
+            if (olen >= 6) {
+              obj.decoded.u.lm27_29.sel_h_4b = (uint8_t)((obj.raw[5] >> 4) & 0x0F);
+              obj.decoded.u.lm27_29.sel_w_4b = (uint8_t)(obj.raw[5] & 0x0F);
+            }
+          } else {
+            // mode == 3: multi-screen or conditional direct map16 (distinguish by bit7 of byte2)
+            int conditional = (b2v & 0x80) ? 1 : 0;
+            obj.decoded.u.lm27_29.variant = conditional ? 4 : 3;
+            obj.decoded.u.lm27_29.width = (uint16_t)(b2v & 0x7F);
+            if (olen >= 7) {
+              obj.decoded.u.lm27_29.sel_h_4b = (uint8_t)((obj.raw[5] >> 4) & 0x0F);
+              obj.decoded.u.lm27_29.sel_w_4b = (uint8_t)(obj.raw[5] & 0x0F);
+              obj.decoded.u.lm27_29.height = (uint16_t)obj.raw[6];
+            }
+            if (conditional && olen >= 8) {
+              uint8_t acc = obj.raw[7];
+              obj.decoded.u.lm27_29.conditional_add_a = (uint8_t)((acc >> 7) & 0x1);
+              obj.decoded.u.lm27_29.conditional_flag_7b = (uint8_t)(acc & 0x7F);
+            }
+          }
+        }
+      }
+
       i += olen;
     }
 

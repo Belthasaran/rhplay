@@ -1,3 +1,5 @@
+- **lmlevelinfo**: Expanded synthetic LM object-decode sanity tests (`0x22`–`0x2D` paths, extended `0x03`, chained objects) in `lmlevelinfo/test_runner.c`; README note updated.
+
 - **RHTools Launcher UI**: RHPlay section shows **active core manifest** `version_string` / `versionid` and **`lastupdated`** (Unix + local time) above the RHPlay manifest entry line.
 
 - **lmlevelinfo**: Added `lmlevelinfo/level_info1` (CLI) to inspect Lunar Magic level headers and Layer 1 object data for a ROM’s Level ID, with optional JSON output and minimal MWL export.

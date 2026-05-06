@@ -34,6 +34,14 @@ typedef struct {
   uint8_t sec_b7;
   int present_sec_b8;
   uint8_t sec_b8;
+
+  // Midway table bytes as stored in MWL "Level information" section (4 bytes).
+  // These correspond to the per-level midway entrance table bytes.
+  int present_midway;
+  uint8_t midway_b1;
+  uint8_t midway_b2;
+  uint8_t midway_b3;
+  uint8_t midway_b4;
 } MwlLevelInfo;
 
 typedef struct {
@@ -49,9 +57,19 @@ typedef struct {
 } MwlSprites;
 
 typedef struct {
+  // Raw Layer 2 bytes (section payload) plus the 8-byte section header.
+  // If the section is missing, `present` is 0 and buffers are NULL/0.
+  int present;
+  uint8_t header[8];
+  uint8_t *bytes;
+  size_t len;
+} MwlLayer2;
+
+typedef struct {
   MwlFileInfo file;
   MwlLevelInfo level;
   MwlLayer1 layer1;
+  MwlLayer2 layer2;
   MwlSprites sprites;
 } MwlParsed;
 

@@ -201,6 +201,14 @@ static int build_normalized_objects(const LevelInfo *src, NormList *out) {
   return 1;
 }
 
+static int build_normalized_objects_from_array(const LevelObject *objs, size_t objs_count, NormList *out) {
+  LevelInfo tmp;
+  memset(&tmp, 0, sizeof(tmp));
+  tmp.objects = (LevelObject *)objs; // read-only use
+  tmp.objects_count = objs_count;
+  return build_normalized_objects(&tmp, out);
+}
+
 static int cmp_objects(const LevelInfo *rom, const LevelInfo *mwl) {
   NormList a = {0}, b = {0};
   if (!build_normalized_objects(rom, &a) || !build_normalized_objects(mwl, &b)) {
@@ -259,6 +267,32 @@ static int cmp_objects(const LevelInfo *rom, const LevelInfo *mwl) {
   }
   normlist_free(&a);
   normlist_free(&b);
+  return ok;
+}
+
+static int cmp_objects_arrays(const LevelObject *a, size_t aN, const LevelObject *b, size_t bN, const char *label) {
+  NormList na = {0}, nb = {0};
+  if (!build_normalized_objects_from_array(a, aN, &na) || !build_normalized_objects_from_array(b, bN, &nb)) {
+    failf("[%s] Out of memory building normalized object list", label ? label : "objects");
+    normlist_free(&na);
+    normlist_free(&nb);
+    return 0;
+  }
+  int ok = 1;
+  if (na.len != nb.len) {
+    failf("[%s] Object count mismatch: %zu != %zu", label ? label : "objects", na.len, nb.len);
+    ok = 0;
+  }
+  size_t n = na.len < nb.len ? na.len : nb.len;
+  for (size_t i = 0; i < n; i++) {
+    if (norm_cmp(&na.items[i], &nb.items[i]) != 0) {
+      failf("[%s] Object mismatch at %zu", label ? label : "objects", i);
+      ok = 0;
+      break;
+    }
+  }
+  normlist_free(&na);
+  normlist_free(&nb);
   return ok;
 }
 
@@ -398,8 +432,49 @@ static int run_case(const char *rom_path, const char *mwl_path, const char *labe
   cmp_u8("secondary.b3", rom_dec.secondary.b3, mwl.level.sec_b3);
   cmp_u8("secondary.b4", rom_dec.secondary.b4, mwl.level.sec_b4);
 
-  // Optional fields (b5+): intentionally not asserted yet for LM 3.61 MWL exports.
-  // See lmlevelinfo/test/README.md for future expansion notes.
+  // Optional fields (b5+): assert only when the MWL version/layout is expected to match the v2.53 doc.
+  // Many fixtures are exported by newer LM; avoid brittleness by gating on a nonzero <= 2.53 version.
+  if (mwl.file.lm_version && mwl.file.lm_version <= 0x0253) {
+    if (mwl.level.present_sec_b5) cmp_u8("secondary.b5", rom_dec.secondary.b5, mwl.level.sec_b5);
+    if (mwl.level.present_sec_b6) cmp_u8("secondary.b6", rom_dec.secondary.b6, mwl.level.sec_b6);
+    if (mwl.level.present_sec_b7) cmp_u8("secondary.b7", rom_dec.secondary.b7, mwl.level.sec_b7);
+    if (mwl.level.present_sec_b8) cmp_u8("secondary.b8", rom_dec.secondary.b8, mwl.level.sec_b8);
+  }
+
+  // Layer2: compare header flags and (where possible) summary/dimensions or object list.
+  if (mwl.layer2.present && rom_dec.layer2_data_ptr_snes) {
+    uint8_t mwl_flags = mwl.layer2.header[0];
+    // ROM may not be able to read flags (0 if not readable); only compare when nonzero.
+    if (rom_dec.layer2_bg_flags_0ef310) cmp_u8("layer2.bg_flags_0ef310", rom_dec.layer2_bg_flags_0ef310, mwl_flags);
+
+    // If MWL payload looks like tilemap (16-bit tiles, width=32), compare inferred dimensions.
+    if (mwl.layer2.len >= 64 && (mwl.layer2.len % 2) == 0) {
+      size_t tilesN = mwl.layer2.len / 2;
+      if (tilesN % 32 == 0) {
+        uint8_t h = (uint8_t)(tilesN / 32);
+        if (h == 27 || h == 32) {
+          if (rom_dec.layer2_is_bg_tilemap && rom_dec.layer2_bg_width && rom_dec.layer2_bg_height) {
+            if (rom_dec.layer2_bg_width != 32 || rom_dec.layer2_bg_height != h) {
+              failf("[%s] layer2 tilemap dims mismatch ROM=%ux%u MWL=32x%u",
+                    label, rom_dec.layer2_bg_width, rom_dec.layer2_bg_height, (unsigned)h);
+            }
+          }
+        }
+      }
+    }
+
+    // If ROM parsed layer2 as objects and MWL has a non-empty payload, parse MWL layer2 objects and compare.
+    if (!rom_dec.layer2_is_bg_tilemap && rom_dec.layer2_objects && rom_dec.layer2_objects_count && mwl.layer2.len >= 6) {
+      LevelInfo mwl_l2;
+      memset(&mwl_l2, 0, sizeof(mwl_l2));
+      if (!parse_level_info_from_layer1_bytes(mwl.layer2.bytes, mwl.layer2.len, level_id, &mwl_l2, err, sizeof(err))) {
+        failf("[%s] Could not parse MWL layer2 as objects: %s", label, err);
+      } else {
+        (void)cmp_objects_arrays(rom_dec.layer2_objects, rom_dec.layer2_objects_count, mwl_l2.objects, mwl_l2.objects_count, "layer2");
+      }
+      levelinfo_free(&mwl_l2);
+    }
+  }
 
   // Objects/screen exits
   cmp_objects(&rom_dec, &mwl_dec);
@@ -509,11 +584,41 @@ static int run_layer2_midway_sanity(void) {
       failf("[sanity] unexpected layer2 tilemap dimensions: %ux%u", info.layer2_bg_width, info.layer2_bg_height);
       ok = 0;
     }
+    size_t wantN = (size_t)info.layer2_bg_width * (size_t)info.layer2_bg_height;
+    if (wantN == 0) {
+      failf("[sanity] layer2 tilemap has zero dimensions");
+      ok = 0;
+    }
+    // Quick invariant check: not all tiles should be 0 for real tilemaps.
+    if (wantN) {
+      int any_nonzero = 0;
+      size_t probe = wantN < 256 ? wantN : 256;
+      for (size_t i = 0; i < probe; i++) {
+        if (info.layer2_bg_tiles[i] != 0) { any_nonzero = 1; break; }
+      }
+      if (!any_nonzero) {
+        failf("[sanity] layer2 tilemap appears all-zero (first %zu tiles)", probe);
+        ok = 0;
+      }
+    }
+  } else if (!info.layer2_is_bg_tilemap) {
+    // If it isn't a tilemap, we expect object parsing to have produced some list (best-effort).
+    if (info.layer2_objects_count == 0 || !info.layer2_objects) {
+      failf("[sanity] layer2 objects not available (count=%zu)", info.layer2_objects_count);
+      ok = 0;
+    }
   }
   if (tables.has_midway_hijack && !info.midway_present) {
     // Not all levels have meaningful midway settings; but if tables exist, we should at least be able to read them.
     failf("[sanity] expected midway_present when midway hijack tables exist");
     ok = 0;
+  }
+  if (info.midway_present) {
+    // Basic invariant checks: decoded bits should match raw b1 for the stable flags.
+    uint8_t b1 = info.midway_b1;
+    if (((b1 >> 7) & 1) != info.midway_slippery_i) { failf("[sanity] midway slippery bit mismatch"); ok = 0; }
+    if (((b1 >> 6) & 1) != info.midway_water_w) { failf("[sanity] midway water bit mismatch"); ok = 0; }
+    if (((b1 >> 5) & 1) != info.midway_separate_h) { failf("[sanity] midway separate bit mismatch"); ok = 0; }
   }
 
   levelinfo_free(&info);

@@ -35,9 +35,11 @@ static int read_layer2_flags_0ef310(const Rom *rom, uint16_t level_id, uint8_t *
 
 static int layer2_is_bg_tilemap_from_flags(uint8_t flags) {
   // Format: bbBBVFCT (wiki). If V or C set, Layer2 uses a BG tilemap.
+  // In practice (LM 3.6x exports), the low bit T also indicates tilemap usage.
   uint8_t v = (flags >> 3) & 0x1;
   uint8_t c = (flags >> 1) & 0x1;
-  return (v || c) ? 1 : 0;
+  uint8_t t = (flags >> 0) & 0x1;
+  return (v || c || t) ? 1 : 0;
 }
 
 static int read_sprite_ptr(const Rom *rom, const LmTables *tables, uint16_t level_id, uint32_t *out_ptr_snes) {
@@ -1186,9 +1188,19 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
 
   // Layer2 object parsing (only when not a BG tilemap)
   if (out->layer2_data_ptr_snes) {
-    if (out->layer2_is_bg_tilemap) {
-      (void)parse_layer2_bg_tilemap_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
+    // Auto-detect: some hacks don’t have readable $0EF310 flags (or move the table), and bank heuristics
+    // aren’t sufficient. Try BG-tilemap parsing first; if it succeeds, treat as tilemap, otherwise fall back
+    // to object parsing.
+    int bg_ok = parse_layer2_bg_tilemap_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
+    if (bg_ok && out->layer2_bg_tiles && out->layer2_bg_width && out->layer2_bg_height) {
+      out->layer2_is_bg_tilemap = 1;
     } else {
+      // Clear any partial BG tilemap artifacts to avoid confusing downstream checks.
+      free(out->layer2_bg_tiles);
+      out->layer2_bg_tiles = NULL;
+      out->layer2_bg_width = 0;
+      out->layer2_bg_height = 0;
+      out->layer2_is_bg_tilemap = 0;
       (void)parse_layer2_objects_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
     }
     // Best-effort: do not fail the whole parse if layer2 can't be parsed.

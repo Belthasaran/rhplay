@@ -26,6 +26,10 @@ void mwl_parsed_free(MwlParsed *p) {
   free(p->layer1.bytes);
   p->layer1.bytes = NULL;
   p->layer1.len = 0;
+  free(p->layer2.bytes);
+  p->layer2.bytes = NULL;
+  p->layer2.len = 0;
+  p->layer2.present = 0;
   free(p->sprites.bytes);
   p->sprites.bytes = NULL;
   p->sprites.len = 0;
@@ -163,6 +167,23 @@ int mwl_parse_file(const char *path, MwlParsed *out, char *err, size_t errcap) {
   out->level.sec_b3 = lvl[4];
   out->level.sec_b4 = lvl[5];
   out->level.present_sec_b5 = 0;
+  out->level.present_midway = 0;
+
+  // Per MWL doc (LM v2.53): b5 is stored as the 5th secondary header byte.
+  if (s1.size >= 7) {
+    out->level.present_sec_b5 = 1;
+    out->level.sec_b5 = lvl[6];
+  }
+
+  // Midway table bytes: after secondary bytes + 2 unused bytes.
+  // Layout: [0..1]=level_id, [2..6]=sec b1..b5, [7..8]=unused, [9..12]=midway bytes, [13]=unused.
+  if (s1.size >= 13) {
+    out->level.present_midway = 1;
+    out->level.midway_b1 = lvl[9];
+    out->level.midway_b2 = lvl[10];
+    out->level.midway_b3 = lvl[11];
+    out->level.midway_b4 = lvl[12];
+  }
 
   // MWL doc: additional 3 bytes follow later:
   //   two from $06FC00 and $06FE00,
@@ -172,9 +193,9 @@ int mwl_parse_file(const char *path, MwlParsed *out, char *err, size_t errcap) {
     out->level.sec_b7 = lvl[16];
     out->level.sec_b8 = lvl[17];
     out->level.sec_b6 = lvl[18];
-    out->level.present_sec_b6 = 0;
-    out->level.present_sec_b7 = 0;
-    out->level.present_sec_b8 = 0;
+    out->level.present_sec_b6 = 1;
+    out->level.present_sec_b7 = 1;
+    out->level.present_sec_b8 = 1;
   }
 
   // Section 2: Layer 1 data
@@ -195,6 +216,33 @@ int mwl_parse_file(const char *path, MwlParsed *out, char *err, size_t errcap) {
   }
   memcpy(out->layer1.bytes, l1 + 8, l1_payload);
   out->layer1.len = l1_payload;
+
+  // Section 2b: Layer 2 data (MWL pointer index 2)
+  // We keep the raw payload and store the 8-byte header (byte0 is $0EF310 value).
+  MwlPtr s2b = out->file.ptrs[2];
+  out->layer2.present = 0;
+  memset(out->layer2.header, 0, sizeof(out->layer2.header));
+  out->layer2.bytes = NULL;
+  out->layer2.len = 0;
+  if (s2b.off != 0) {
+    if (s2b.size < 8 || s2b.off + s2b.size > len) {
+      free(buf);
+      seterr(err, errcap, "MWL Layer 2 section invalid");
+      return 0;
+    }
+    const uint8_t *l2 = buf + s2b.off;
+    memcpy(out->layer2.header, l2, 8);
+    size_t l2_payload = s2b.size - 8;
+    out->layer2.bytes = (uint8_t *)malloc(l2_payload ? l2_payload : 1);
+    if (!out->layer2.bytes) {
+      free(buf);
+      seterr(err, errcap, "Out of memory copying Layer 2 data");
+      return 0;
+    }
+    if (l2_payload) memcpy(out->layer2.bytes, l2 + 8, l2_payload);
+    out->layer2.len = l2_payload;
+    out->layer2.present = 1;
+  }
 
   // Section 3: Sprite data (MWL pointer index 3)
   // Lunar Magic exports this as a raw section payload; we keep it as-is and decode in tests/tools.

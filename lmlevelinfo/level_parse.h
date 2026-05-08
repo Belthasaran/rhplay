@@ -252,6 +252,31 @@ typedef struct {
   uint8_t layer2_bg_height; // 27 or 32
   uint16_t *layer2_bg_tiles; // width*height Map16 tiles (16-bit)
 
+  // ---- Future MWL/ROM parity sections (LM 3.63 MWL pointers 4..7) ----
+  // Palette section payload (MWL ptr[4]) — raw 16-bit SNES colors in file order.
+  // We keep bytes for parity/rewriting; higher-level helpers can decode to RGB later.
+  int palette_present;
+  uint8_t palette_header8[8];
+  uint8_t *palette_bytes;
+  size_t palette_len;
+
+  // Secondary entrances section (MWL ptr[5]) — raw records, 8 bytes each after header.
+  int secondary_entrances_present;
+  uint8_t secondary_entrances_header8[8];
+  uint8_t *secondary_entrances_bytes;
+  size_t secondary_entrances_len;
+
+  // ExAnimation section (MWL ptr[6]) — raw payload after header.
+  int exanim_present;
+  uint8_t exanim_header8[8];
+  uint8_t *exanim_bytes;
+  size_t exanim_len;
+
+  // ExGFX/bypass section (MWL ptr[7]) — raw payload (typically 16x u16 slots).
+  int exgfx_present;
+  uint8_t *exgfx_bytes;
+  size_t exgfx_len;
+
   // sprites
   LevelSprite *sprites;
   size_t sprites_count;

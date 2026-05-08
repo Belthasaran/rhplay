@@ -30,6 +30,22 @@ void mwl_parsed_free(MwlParsed *p) {
   p->layer2.bytes = NULL;
   p->layer2.len = 0;
   p->layer2.present = 0;
+  free(p->palette.bytes);
+  p->palette.bytes = NULL;
+  p->palette.len = 0;
+  p->palette.present = 0;
+  free(p->sec_entrances.bytes);
+  p->sec_entrances.bytes = NULL;
+  p->sec_entrances.len = 0;
+  p->sec_entrances.present = 0;
+  free(p->exanim.bytes);
+  p->exanim.bytes = NULL;
+  p->exanim.len = 0;
+  p->exanim.present = 0;
+  free(p->exgfx.bytes);
+  p->exgfx.bytes = NULL;
+  p->exgfx.len = 0;
+  p->exgfx.present = 0;
   free(p->sprites.bytes);
   p->sprites.bytes = NULL;
   p->sprites.len = 0;
@@ -263,6 +279,111 @@ int mwl_parse_file(const char *path, MwlParsed *out, char *err, size_t errcap) {
     }
     memcpy(out->sprites.bytes, sp + 8, sp_payload);
     out->sprites.len = sp_payload;
+  }
+
+  // Section 4: Palette data (MWL pointer index 4)
+  // 8-byte header + payload of 16-bit SNES RGB values.
+  MwlPtr s4 = out->file.ptrs[4];
+  out->palette.present = 0;
+  memset(out->palette.header, 0, sizeof(out->palette.header));
+  out->palette.bytes = NULL;
+  out->palette.len = 0;
+  if (s4.off != 0) {
+    if (s4.size < 8 || s4.off + s4.size > len) {
+      free(buf);
+      seterr(err, errcap, "MWL Palette section invalid");
+      return 0;
+    }
+    const uint8_t *pal = buf + s4.off;
+    memcpy(out->palette.header, pal, 8);
+    size_t pal_payload = s4.size - 8;
+    out->palette.bytes = (uint8_t *)malloc(pal_payload ? pal_payload : 1);
+    if (!out->palette.bytes) {
+      free(buf);
+      seterr(err, errcap, "Out of memory copying Palette data");
+      return 0;
+    }
+    if (pal_payload) memcpy(out->palette.bytes, pal + 8, pal_payload);
+    out->palette.len = pal_payload;
+    out->palette.present = 1;
+  }
+
+  // Section 5: Secondary entrances (MWL pointer index 5)
+  // 8-byte header + N * 8 bytes.
+  MwlPtr s5 = out->file.ptrs[5];
+  out->sec_entrances.present = 0;
+  memset(out->sec_entrances.header, 0, sizeof(out->sec_entrances.header));
+  out->sec_entrances.bytes = NULL;
+  out->sec_entrances.len = 0;
+  if (s5.off != 0) {
+    if (s5.size < 8 || s5.off + s5.size > len) {
+      free(buf);
+      seterr(err, errcap, "MWL Secondary entrances section invalid");
+      return 0;
+    }
+    const uint8_t *se = buf + s5.off;
+    memcpy(out->sec_entrances.header, se, 8);
+    size_t se_payload = s5.size - 8;
+    out->sec_entrances.bytes = (uint8_t *)malloc(se_payload ? se_payload : 1);
+    if (!out->sec_entrances.bytes) {
+      free(buf);
+      seterr(err, errcap, "Out of memory copying Secondary entrances data");
+      return 0;
+    }
+    if (se_payload) memcpy(out->sec_entrances.bytes, se + 8, se_payload);
+    out->sec_entrances.len = se_payload;
+    out->sec_entrances.present = 1;
+  }
+
+  // Section 6: ExAnimation (MWL pointer index 6)
+  // 8-byte header + raw bytes.
+  MwlPtr s6 = out->file.ptrs[6];
+  out->exanim.present = 0;
+  memset(out->exanim.header, 0, sizeof(out->exanim.header));
+  out->exanim.bytes = NULL;
+  out->exanim.len = 0;
+  if (s6.off != 0) {
+    if (s6.size < 8 || s6.off + s6.size > len) {
+      free(buf);
+      seterr(err, errcap, "MWL ExAnimation section invalid");
+      return 0;
+    }
+    const uint8_t *ex = buf + s6.off;
+    memcpy(out->exanim.header, ex, 8);
+    size_t ex_payload = s6.size - 8;
+    out->exanim.bytes = (uint8_t *)malloc(ex_payload ? ex_payload : 1);
+    if (!out->exanim.bytes) {
+      free(buf);
+      seterr(err, errcap, "Out of memory copying ExAnimation data");
+      return 0;
+    }
+    if (ex_payload) memcpy(out->exanim.bytes, ex + 8, ex_payload);
+    out->exanim.len = ex_payload;
+    out->exanim.present = 1;
+  }
+
+  // Section 7: ExGFX and bypass info (MWL pointer index 7)
+  // No 8-byte header per doc; payload is at least 16 u16 values.
+  MwlPtr s7 = out->file.ptrs[7];
+  out->exgfx.present = 0;
+  out->exgfx.bytes = NULL;
+  out->exgfx.len = 0;
+  if (s7.off != 0) {
+    if (s7.size == 0 || s7.off + s7.size > len) {
+      free(buf);
+      seterr(err, errcap, "MWL ExGFX/bypass section invalid");
+      return 0;
+    }
+    const uint8_t *eg = buf + s7.off;
+    out->exgfx.bytes = (uint8_t *)malloc(s7.size ? s7.size : 1);
+    if (!out->exgfx.bytes) {
+      free(buf);
+      seterr(err, errcap, "Out of memory copying ExGFX/bypass data");
+      return 0;
+    }
+    memcpy(out->exgfx.bytes, eg, s7.size);
+    out->exgfx.len = s7.size;
+    out->exgfx.present = 1;
   }
 
   free(buf);

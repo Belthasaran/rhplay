@@ -237,6 +237,16 @@ typedef struct {
   // raw layer1 data (for MWL export)
   RawBlob layer1_blob;
 
+  // raw layer2 data (for MWL export). For object-type layer2, this captures the raw
+  // stream bytes from ROM (including the 5-byte header that exists in ROM storage).
+  // For bg-tilemap layer2, this may be left empty since MWL stores an uncompressed
+  // 16-bit tile list instead.
+  RawBlob layer2_blob;
+
+  // raw sprite data (for MWL export). Captures the stream starting at the sprite header byte
+  // through the terminator command/byte.
+  RawBlob sprite_blob;
+
   // objects
   LevelObject *objects;
   size_t objects_count;

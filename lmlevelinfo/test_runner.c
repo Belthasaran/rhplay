@@ -9,6 +9,7 @@
 #include "lm_tables.h"
 #include "level_parse.h"
 #include "mwl_reader.h"
+#include "mwl_writer.h"
 #include "lc_lz2.h"
 
 static int failures = 0;
@@ -584,6 +585,7 @@ static int cmp_sprites(const LevelInfo *rom, const LevelInfo *mwl) {
 
 static int run_case(const char *rom_path, const char *mwl_path, const char *label, uint16_t expected_level_id_or_0) {
   char err[512];
+  int strict_new_sections = (mwl_path && strstr(mwl_path, "_generated_exanim_") != NULL);
 
   // Parse MWL
   MwlParsed mwl;
@@ -672,15 +674,38 @@ static int run_case(const char *rom_path, const char *mwl_path, const char *labe
     if (mwl.level.present_sec_b8) cmp_u8("secondary.b8", rom_dec.secondary.b8, mwl.level.sec_b8);
   }
 
-  // Palette (MWL ptr[4]): TODO compare MWL vs ROM once header semantics are confirmed.
-
-  // Secondary entrances (MWL ptr[5]): each record is u16 id + 6 table bytes.
-  if (mwl.sec_entrances.present && mwl.sec_entrances.bytes && mwl.sec_entrances.len) {
-    // TODO: still investigating MWL ptr[5] record mapping vs ROM dynamic tables across hacks.
-    // Keep parsing MWL bytes, but don't assert equality yet.
+  // Palette (MWL ptr[4]): only asserted for generated fixtures (header semantics vary across LM exports/hacks).
+  if (strict_new_sections && mwl.palette.present && mwl.palette.bytes && mwl.palette.len) {
+    if (!rom_dec.palette_present || !rom_dec.palette_bytes || !rom_dec.palette_len) {
+      failf("[%s] palette: MWL present but ROM extraction absent", label);
+    } else if (rom_dec.palette_len != mwl.palette.len) {
+      failf("[%s] palette: len mismatch %zu != %zu", label, rom_dec.palette_len, mwl.palette.len);
+    } else if (memcmp(rom_dec.palette_bytes, mwl.palette.bytes, mwl.palette.len) != 0) {
+      failf("[%s] palette: payload mismatch", label);
+    }
   }
 
-  // ExAnimation (MWL ptr[6]): TODO compare MWL vs ROM once header semantics are confirmed.
+  // Secondary entrances (MWL ptr[5]): only asserted for generated fixtures for now.
+  if (strict_new_sections && mwl.sec_entrances.present && mwl.sec_entrances.bytes && mwl.sec_entrances.len) {
+    if (!rom_dec.secondary_entrances_present || !rom_dec.secondary_entrances_bytes || !rom_dec.secondary_entrances_len) {
+      failf("[%s] sec_entr: MWL present but ROM extraction absent", label);
+    } else if (rom_dec.secondary_entrances_len != mwl.sec_entrances.len) {
+      failf("[%s] sec_entr: len mismatch %zu != %zu", label, rom_dec.secondary_entrances_len, mwl.sec_entrances.len);
+    } else if (memcmp(rom_dec.secondary_entrances_bytes, mwl.sec_entrances.bytes, mwl.sec_entrances.len) != 0) {
+      failf("[%s] sec_entr: payload mismatch", label);
+    }
+  }
+
+  // ExAnimation (MWL ptr[6]): only asserted for generated fixtures (length/header semantics vary across hacks).
+  if (strict_new_sections && mwl.exanim.present && mwl.exanim.bytes && mwl.exanim.len) {
+    if (!rom_dec.exanim_present || !rom_dec.exanim_bytes || !rom_dec.exanim_len) {
+      failf("[%s] exanim: MWL present but ROM extraction absent", label);
+    } else if (rom_dec.exanim_len != mwl.exanim.len) {
+      failf("[%s] exanim: len mismatch %zu != %zu", label, rom_dec.exanim_len, mwl.exanim.len);
+    } else if (memcmp(rom_dec.exanim_bytes, mwl.exanim.bytes, mwl.exanim.len) != 0) {
+      failf("[%s] exanim: payload mismatch", label);
+    }
+  }
 
   // ExGFX / bypass (MWL ptr[7]): validate 32-byte per-level table against ROM read3($0FF7FF).
   if (mwl.exgfx.present && mwl.exgfx.bytes && mwl.exgfx.len) {
@@ -696,6 +721,8 @@ static int run_case(const char *rom_path, const char *mwl_path, const char *labe
         failf("[%s] exgfx: could not read ROM table entry", label);
       } else {
         memcpy(tmp, rom.data + pc, 32u);
+        // Note: Some hacks/LM versions appear to export bypass lists that don't match the ROM table verbatim.
+        // We keep this as a sanity check on length and ROM readability, without asserting equality yet.
       }
     }
   }
@@ -843,6 +870,75 @@ static int run_case(const char *rom_path, const char *mwl_path, const char *labe
   return failures == 0;
 }
 
+static int run_generated_exanim_case(const char *rom_path, const char *label_prefix) {
+  char err[512];
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, sizeof(err))) {
+    failf("[%s] ROM load failed: %s", label_prefix ? label_prefix : "exanim-gen", err);
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    failf("[%s] ROM table resolve failed: %s", label_prefix ? label_prefix : "exanim-gen", err);
+    rom_free(&rom);
+    return 0;
+  }
+
+  int found = 0;
+  uint16_t found_level = 0;
+  LevelInfo found_info;
+  memset(&found_info, 0, sizeof(found_info));
+
+  for (uint16_t level_id = 0; level_id <= 0x1FF; level_id++) {
+    LevelInfo info;
+    memset(&info, 0, sizeof(info));
+    if (!parse_level_info(&rom, &tables, level_id, &info, err, sizeof(err))) {
+      levelinfo_free(&info);
+      continue;
+    }
+    if (info.exanim_present && info.exanim_bytes && info.exanim_len) {
+      found = 1;
+      found_level = level_id;
+      found_info = info; // shallow move (we'll free it later)
+      break;
+    }
+    levelinfo_free(&info);
+  }
+
+  if (!found) {
+    // No ExAnimation present in this ROM; treat as skip (not a failure).
+    rom_free(&rom);
+    return 1;
+  }
+
+  char mwl_path[256];
+  snprintf(mwl_path, sizeof(mwl_path), "test/_generated_exanim_%s_%03X.mwl",
+           label_prefix ? label_prefix : "suite", (unsigned)found_level);
+  FILE *fp = fopen(mwl_path, "wb");
+  if (!fp) {
+    failf("[%s] Could not open generated MWL for write: %s", label_prefix ? label_prefix : "exanim-gen", mwl_path);
+    levelinfo_free(&found_info);
+    rom_free(&rom);
+    return 0;
+  }
+  int ok_write = mwl_write_minimal(fp, &found_info, &tables, &rom);
+  fclose(fp);
+  if (!ok_write) {
+    failf("[%s] Failed writing generated ExAnimation MWL", label_prefix ? label_prefix : "exanim-gen");
+    levelinfo_free(&found_info);
+    rom_free(&rom);
+    return 0;
+  }
+
+  char label[256];
+  snprintf(label, sizeof(label), "%s generated exanim 0x%03X", label_prefix ? label_prefix : "suite", (unsigned)found_level);
+  int ok = run_case(rom_path, mwl_path, label, found_level);
+
+  levelinfo_free(&found_info);
+  rom_free(&rom);
+  return ok;
+}
+
 static int run_akogare_level109(void) {
   return run_case(
     "test/akogare/orig_Ako.sfc",
@@ -892,6 +988,9 @@ static int run_akogare_suite(void) {
     }
   }
   closedir(d);
+
+  // ExAnimation coverage: if this ROM has any ExAnimation, generate an MWL and validate parity.
+  (void)run_generated_exanim_case(rom_path, "akogare");
 
   if (total == 0) {
     failf("[akogare] No ako_*.mwl files found");
@@ -1351,6 +1450,8 @@ static int run_quickieworld_suite(void) {
   }
   closedir(d);
 
+  (void)run_generated_exanim_case(rom_path, "quickieworld");
+
   if (total == 0) {
     failf("[quickieworld] No quick *.mwl files found");
     return 0;
@@ -1400,6 +1501,8 @@ static int run_suite_dir(const char *suite_name, const char *rom_path, const cha
     }
   }
   closedir(d);
+
+  (void)run_generated_exanim_case(rom_path, suite_name);
 
   if (total == 0) {
     failf("[%s] No MWL files found (prefix '%s')", suite_name, prefix);

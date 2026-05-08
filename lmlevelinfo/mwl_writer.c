@@ -1,5 +1,6 @@
 #include "mwl_writer.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static void write_u32le(FILE *fp, uint32_t v) {
@@ -70,11 +71,64 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   // MWL doc says bytes 4-6 in header are original source address; we store the SNES pointer.
   uint8_t l1hdr[8];
   memset(l1hdr, 0, sizeof(l1hdr));
-  // byte0: bit0 indicates custom palette (unknown here); leave 0.
-  // bytes4-6: source address (24-bit)
-  l1hdr[4] = (uint8_t)(info->layer1_data_ptr_snes & 0xFF);
-  l1hdr[5] = (uint8_t)((info->layer1_data_ptr_snes >> 8) & 0xFF);
-  l1hdr[6] = (uint8_t)((info->layer1_data_ptr_snes >> 16) & 0xFF);
+  // byte0: bit0 indicates custom palette.
+  if (info->palette_present) l1hdr[0] |= 0x01;
+  // LM 3.6x exports appear to store a ROM PC offset (24-bit) in bytes4-6.
+  l1hdr[4] = (uint8_t)(info->layer1_blob.pc_offset & 0xFF);
+  l1hdr[5] = (uint8_t)((info->layer1_blob.pc_offset >> 8) & 0xFF);
+  l1hdr[6] = (uint8_t)((info->layer1_blob.pc_offset >> 16) & 0xFF);
+
+  // Section 3: Layer2 data (8-byte header + payload).
+  // MWL reader treats header byte0 as a Layer2 flags byte; other bytes are LM-defined.
+  uint8_t l2hdr[8];
+  memset(l2hdr, 0, sizeof(l2hdr));
+  l2hdr[0] = info->layer2_bg_flags_0ef310;
+  // Store best-effort ROM PC offset of layer2 blob when available.
+  l2hdr[4] = (uint8_t)(info->layer2_blob.pc_offset & 0xFF);
+  l2hdr[5] = (uint8_t)((info->layer2_blob.pc_offset >> 8) & 0xFF);
+  l2hdr[6] = (uint8_t)((info->layer2_blob.pc_offset >> 16) & 0xFF);
+
+  // Prepare a tilemap payload buffer if needed (objects payload can be streamed from ROM).
+  uint8_t *l2_tilemap_payload = NULL;
+  size_t l2_tilemap_payload_len = 0;
+  int l2_has_section = 0;
+  uint32_t l2_obj_pc = 0;
+  size_t l2_obj_len = 0;
+
+  if (info->layer2_data_ptr_snes) {
+    if (info->layer2_is_bg_tilemap && info->layer2_bg_tiles && info->layer2_bg_width == 32 &&
+        (info->layer2_bg_height == 27 || info->layer2_bg_height == 32)) {
+      // MWL tilemap payload is a flat 16-bit LE tile list in row-major order.
+      size_t tilesN = (size_t)info->layer2_bg_width * (size_t)info->layer2_bg_height;
+      l2_tilemap_payload_len = tilesN * 2u;
+      l2_tilemap_payload = (uint8_t *)malloc(l2_tilemap_payload_len ? l2_tilemap_payload_len : 1);
+      if (!l2_tilemap_payload) return 0;
+      for (size_t t = 0; t < tilesN; t++) {
+        uint16_t v = info->layer2_bg_tiles[t];
+        l2_tilemap_payload[t * 2 + 0] = (uint8_t)(v & 0xFF);
+        l2_tilemap_payload[t * 2 + 1] = (uint8_t)((v >> 8) & 0xFF);
+      }
+      l2_has_section = 1;
+    } else if (info->layer2_blob.len) {
+      l2_obj_pc = info->layer2_blob.pc_offset;
+      l2_obj_len = info->layer2_blob.len;
+      if (l2_obj_pc + l2_obj_len > rom->size) return 0;
+      l2_has_section = 1;
+    }
+  }
+
+  // Section 4: Sprites (8-byte header + raw payload).
+  // MWL reader ignores this header; we store the ROM sprite pointer in bytes4-6 for debugging.
+  uint8_t sphdr[8];
+  memset(sphdr, 0, sizeof(sphdr));
+  // Store ROM PC offset of sprite blob when available.
+  sphdr[4] = (uint8_t)(info->sprite_blob.pc_offset & 0xFF);
+  sphdr[5] = (uint8_t)((info->sprite_blob.pc_offset >> 8) & 0xFF);
+  sphdr[6] = (uint8_t)((info->sprite_blob.pc_offset >> 16) & 0xFF);
+  uint32_t sp_pc = info->sprite_blob.pc_offset;
+  size_t sp_len = info->sprite_blob.len;
+  int sp_has_section = (sp_len != 0);
+  if (sp_has_section && sp_pc + sp_len > rom->size) return 0;
 
   // Section 4: palette (if present) = 8-byte header + payload
   uint8_t palhdr[8];
@@ -120,11 +174,20 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   ptrs[1].size = (uint32_t)(sizeof(l1hdr) + len);
   cur_off += ptrs[1].size;
 
-  // 3) layer2 data (not yet available for writing in this tool)
-  // ptrs[2] = 0
+  // 3) layer2 data
+  if (l2_has_section) {
+    size_t l2pl = l2_tilemap_payload ? l2_tilemap_payload_len : l2_obj_len;
+    ptrs[2].off = cur_off;
+    ptrs[2].size = (uint32_t)(sizeof(l2hdr) + l2pl);
+    cur_off += ptrs[2].size;
+  }
 
-  // 4) sprites (not yet available for writing in this tool)
-  // ptrs[3] = 0
+  // 4) sprites
+  if (sp_has_section) {
+    ptrs[3].off = cur_off;
+    ptrs[3].size = (uint32_t)(sizeof(sphdr) + sp_len);
+    cur_off += ptrs[3].size;
+  }
 
   // 5) palette
   if (info->palette_present && info->palette_bytes && info->palette_len) {
@@ -165,6 +228,20 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   if (fwrite(l1hdr, 1, sizeof(l1hdr), fp) != sizeof(l1hdr)) return 0;
   if (fwrite(rom->data + pc, 1, len, fp) != len) return 0;
 
+  if (ptrs[2].off) {
+    if (fwrite(l2hdr, 1, sizeof(l2hdr), fp) != sizeof(l2hdr)) return 0;
+    if (l2_tilemap_payload) {
+      if (fwrite(l2_tilemap_payload, 1, l2_tilemap_payload_len, fp) != l2_tilemap_payload_len) return 0;
+    } else if (l2_obj_len) {
+      if (fwrite(rom->data + l2_obj_pc, 1, l2_obj_len, fp) != l2_obj_len) return 0;
+    }
+  }
+
+  if (ptrs[3].off) {
+    if (fwrite(sphdr, 1, sizeof(sphdr), fp) != sizeof(sphdr)) return 0;
+    if (fwrite(rom->data + sp_pc, 1, sp_len, fp) != sp_len) return 0;
+  }
+
   if (ptrs[4].off) {
     if (fwrite(palhdr, 1, sizeof(palhdr), fp) != sizeof(palhdr)) return 0;
     if (fwrite(info->palette_bytes, 1, info->palette_len, fp) != info->palette_len) return 0;
@@ -182,6 +259,7 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   }
 
   // Done. No trailing requirement.
+  free(l2_tilemap_payload);
   return 1;
 }
 

@@ -44,8 +44,13 @@ static int read_custom_palette_0ef600(const Rom *rom, uint16_t level_id,
   }
   memcpy(bytes, rom->data + pc, pal_len);
 
-  // MWL's 8-byte palette header is LM-defined; for ROM extraction we leave it as zeros and
-  // compare payload bytes for logical validation.
+  // MWL LM 3.6x exports appear to store a ROM PC offset (24-bit) in header bytes 4..6.
+  // Store that so MWL writers can round-trip more faithfully.
+  out_header8[4] = (uint8_t)(pc & 0xFF);
+  out_header8[5] = (uint8_t)((pc >> 8) & 0xFF);
+  out_header8[6] = (uint8_t)((pc >> 16) & 0xFF);
+  out_header8[7] = 0;
+
   *out_bytes = bytes;
   *out_len = pal_len;
   return 1;
@@ -257,10 +262,10 @@ static int read_level_exanim(const Rom *rom, uint16_t level_id,
   }
   memcpy(bytes, p, want);
 
-  // Match MWL-style header shape we’ve observed: last 4 bytes look like the pointer (little-endian).
-  out_header8[4] = (uint8_t)(blob_ptr & 0xFF);
-  out_header8[5] = (uint8_t)((blob_ptr >> 8) & 0xFF);
-  out_header8[6] = (uint8_t)((blob_ptr >> 16) & 0xFF);
+  // LM 3.6x exports appear to store a ROM PC offset (24-bit) in header bytes 4..6.
+  out_header8[4] = (uint8_t)(pc & 0xFF);
+  out_header8[5] = (uint8_t)((pc >> 8) & 0xFF);
+  out_header8[6] = (uint8_t)((pc >> 16) & 0xFF);
   out_header8[7] = 0;
 
   *out_bytes = bytes;
@@ -466,6 +471,7 @@ static int parse_sprites_from_buf(const uint8_t *buf, size_t len,
                                   const Rom *rom_for_ext,
                                   SpriteHeader *out_hdr,
                                   LevelSprite **out_sprites, size_t *out_count,
+                                  size_t *out_consumed,
                                   char *err, size_t errcap) {
   if (!buf || len < 1 || !out_hdr || !out_sprites || !out_count) {
     seterr(err, errcap, "parse_sprites_from_buf: invalid args");
@@ -473,6 +479,7 @@ static int parse_sprites_from_buf(const uint8_t *buf, size_t len,
   }
   *out_sprites = NULL;
   *out_count = 0;
+  if (out_consumed) *out_consumed = 0;
 
   decode_sprite_header(buf[0], out_hdr);
 
@@ -492,7 +499,10 @@ static int parse_sprites_from_buf(const uint8_t *buf, size_t len,
     uint8_t b0 = buf[i];
 
     if (!out_hdr->new_sprite_system) {
-      if (b0 == 0xFF) break; // legacy terminator
+      if (b0 == 0xFF) { // legacy terminator (single byte)
+        if (out_consumed) *out_consumed = i + 1;
+        break;
+      }
       if (i + 3 > len) {
         seterr(err, errcap, "Truncated sprite record");
         return 0;
@@ -555,7 +565,10 @@ static int parse_sprites_from_buf(const uint8_t *buf, size_t len,
         y_jump_high7 = cmd;
         continue;
       }
-      if (cmd == 0xFE) break;
+      if (cmd == 0xFE) {
+        if (out_consumed) *out_consumed = i;
+        break;
+      }
       if (cmd != 0xFF) continue;
 
       // cmd == 0xFF means a normal sprite whose first byte is 0xFF.
@@ -613,6 +626,7 @@ static int parse_sprites_from_buf(const uint8_t *buf, size_t len,
     (*out_count)++;
   }
 
+  if (out_consumed && *out_consumed == 0) *out_consumed = i;
   return 1;
 }
 
@@ -638,7 +652,7 @@ int parse_level_sprites_from_rom(const Rom *rom, const LmTables *tables, uint16_
     seterr(err, errcap, "Sprite data too small");
     return 0;
   }
-  return parse_sprites_from_buf(rom->data + pc, avail, rom, out_hdr, out_sprites, out_count, err, errcap);
+  return parse_sprites_from_buf(rom->data + pc, avail, rom, out_hdr, out_sprites, out_count, NULL, err, errcap);
 }
 
 int parse_level_sprites_from_bytes(const uint8_t *bytes, size_t len,
@@ -646,7 +660,7 @@ int parse_level_sprites_from_bytes(const uint8_t *bytes, size_t len,
                                    SpriteHeader *out_hdr,
                                    LevelSprite **out_sprites, size_t *out_count,
                                    char *err, size_t errcap) {
-  return parse_sprites_from_buf(bytes, len, rom, out_hdr, out_sprites, out_count, err, errcap);
+  return parse_sprites_from_buf(bytes, len, rom, out_hdr, out_sprites, out_count, NULL, err, errcap);
 }
 
 static void decode_secondary(const SecondaryLevelHeader *h, SecondaryDecoded *d) {
@@ -1184,6 +1198,33 @@ static int parse_layer2_objects_from_rom(const Rom *rom, uint32_t layer2_ptr_sne
     seterr(err, errcap, "Layer2 data too small");
     return 0;
   }
+
+  // Capture raw layer2 blob bytes from ROM for MWL export.
+  // Same terminator convention as Layer1: 0xFF in the first byte of an object record.
+  const uint8_t *p = rom->data + pc;
+  size_t i = 0;
+  i += 5; // skip the unused 5-byte header
+  while (i < max) {
+    uint8_t b0 = p[i];
+    if (b0 == 0xFF) { i += 1; break; }
+    if (i + 3 > max) break;
+    uint8_t bb = (b0 >> 5) & 0x3;
+    uint8_t b1 = p[i + 1];
+    uint8_t b2 = p[i + 2];
+    uint8_t bbbb = (b1 >> 4) & 0xF;
+    uint8_t standard_id = (uint8_t)((bb << 4) | bbbb);
+    size_t olen = 0;
+    if (standard_id == 0x00) olen = object_len_for_extended(b2);
+    else olen = object_len_for_standard(standard_id, p + i, max - i);
+    if (olen == 0 || i + olen > max) break;
+    i += olen;
+    if (i > 0x200000u) break;
+  }
+  out->layer2_blob.pc_offset = pc;
+  out->layer2_blob.len = i;
+  size_t copyN = i;
+  if (copyN > sizeof(out->layer2_blob.bytes)) copyN = sizeof(out->layer2_blob.bytes);
+  memcpy(out->layer2_blob.bytes, p, copyN);
   // Layer2 object data includes a 5-byte primary header, but it is skipped/ignored.
   // We still reuse the same object record parsing logic by faking a primary header (the bytes are present),
   // then returning the parsed objects into out->layer2_objects.
@@ -1400,6 +1441,10 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
   }
   memset(out, 0, sizeof(*out));
   out->level_id = level_id;
+  out->layer2_blob.pc_offset = 0;
+  out->layer2_blob.len = 0;
+  out->sprite_blob.pc_offset = 0;
+  out->sprite_blob.len = 0;
 
   uint32_t layer1_ptr = 0;
   if (!read_layer_ptr24(rom, tables->layer1_ptr_table, level_id, &layer1_ptr)) {
@@ -1471,6 +1516,32 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
       out->sprite_header = hdr;
       out->sprites = sprites;
       out->sprites_count = sprites_count;
+
+      // Capture raw sprite stream bytes for MWL export (header byte through terminator).
+      uint32_t sp_pc = 0;
+      if (snes_lorom_to_pc(rom, sprite_ptr, &sp_pc)) {
+        const size_t HARD_CAP = 0x20000;
+        size_t avail = rom->size - sp_pc;
+        if (avail > HARD_CAP) avail = HARD_CAP;
+        size_t consumed = 0;
+        SpriteHeader tmp_hdr;
+        LevelSprite *tmp_sp = NULL;
+        size_t tmp_n = 0;
+        memset(&tmp_hdr, 0, sizeof(tmp_hdr));
+        if (parse_sprites_from_buf(rom->data + sp_pc, avail, rom, &tmp_hdr,
+                                   &tmp_sp, &tmp_n, &consumed, err, errcap)) {
+          free(tmp_sp);
+          if (consumed && sp_pc + consumed <= rom->size) {
+            out->sprite_blob.pc_offset = sp_pc;
+            out->sprite_blob.len = consumed;
+            size_t copyN = consumed;
+            if (copyN > sizeof(out->sprite_blob.bytes)) copyN = sizeof(out->sprite_blob.bytes);
+            memcpy(out->sprite_blob.bytes, rom->data + sp_pc, copyN);
+          }
+        } else {
+          free(tmp_sp);
+        }
+      }
     } else {
       // If sprite parsing fails, leave sprite header absent and continue.
       out->sprite_header.present = 0;

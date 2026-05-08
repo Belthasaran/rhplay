@@ -8,10 +8,14 @@
 #include "level_parse.h"
 #include "jsonutil.h"
 #include "mwl_writer.h"
+#include "lc_lz2.h"
+
+#include <sys/stat.h>
+#include <errno.h>
 
 static void usage(FILE *fp) {
   fprintf(fp,
-          "level_info1 [--help] [--json|-j] [--mwl|-m] [--data=...] <ROMFILE> <LEVEL_ID> [-o <OUTFILE>]\n"
+          "level_info1 [--help] [--json|-j] [--mwl|-m] [--data=...] [--export-exgfx=<DIR>] <ROMFILE> <LEVEL_ID> [-o <OUTFILE>]\n"
           "\n"
           "LEVEL_ID can be like 0x10A or 10A.\n"
           "\n"
@@ -28,7 +32,10 @@ static void usage(FILE *fp) {
           "  --data=midway        include Midway entrance tables (if present)\n"
           "  --data=layer2        include Layer2 objects or BG tilemap summary\n"
           "  --data=fulldata      include large raw data (e.g., full BG tilemap grid)\n"
-          "  You can combine keys with commas, e.g. --data=objects,midway,layer2\n");
+          "  You can combine keys with commas, e.g. --data=objects,midway,layer2\n"
+          "\n"
+          "Exports:\n"
+          "  --export-exgfx=<DIR>   Export used ExGFX .bin (decompressed LC_LZ2, SNES 4bpp)\n");
 }
 
 static int parse_level_id(const char *s, uint16_t *out) {
@@ -565,6 +572,74 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
   jsonw_obj_end(w);
 }
 
+static int mkdir_p(const char *path) {
+  if (!path || !*path) return 0;
+  // Minimal: single-level mkdir; tests use simple dirs.
+  if (mkdir(path, 0777) == 0) return 1;
+  if (errno == EEXIST) return 1;
+  return 0;
+}
+
+static int export_exgfx_bins(const Rom *rom, const LevelInfo *info, const char *out_dir) {
+  if (!rom || !info || !out_dir) return 0;
+  if (!mkdir_p(out_dir)) {
+    fprintf(stderr, "Could not create output directory: %s\n", out_dir);
+    return 0;
+  }
+  if (!info->exgfx_present || !info->exgfx_bytes || info->exgfx_len < 32) {
+    fprintf(stderr, "No ExGFX/bypass data present for level.\n");
+    return 0;
+  }
+
+  // ExGFX list is 16 u16 values (little-endian) from read3($0FF7FF) table.
+  // For now we only export entries whose file id is in 0x80-0xFF (ExGFX files table at $0FF600).
+  int wrote = 0;
+  for (int slot = 0; slot < 16; slot++) {
+    uint16_t v = (uint16_t)(info->exgfx_bytes[slot * 2 + 0] | ((uint16_t)info->exgfx_bytes[slot * 2 + 1] << 8));
+    uint8_t file_id = (uint8_t)(v & 0xFF);
+    if (file_id < 0x80) continue;
+
+    uint32_t p24 = 0;
+    uint32_t entry = 0x0FF600u + (uint32_t)(file_id - 0x80u) * 3u;
+    if (!rom_read24_snes(rom, entry, &p24) || p24 == 0) {
+      fprintf(stderr, "ExGFX 0x%02X: pointer missing\n", file_id);
+      continue;
+    }
+    uint32_t pc = 0;
+    if (!snes_lorom_to_pc(rom, p24, &pc) || pc >= rom->size) {
+      fprintf(stderr, "ExGFX 0x%02X: pointer out of range\n", file_id);
+      continue;
+    }
+
+    // Decompress from ROM bytes at pc.
+    const uint8_t *src = rom->data + pc;
+    size_t srclen = rom->size - pc;
+    uint8_t *dec = NULL;
+    size_t declen = 0;
+    char err[256];
+    if (!lc_lz2_decompress(src, srclen, &dec, &declen, 0x2000u, NULL, err, sizeof(err))) {
+      fprintf(stderr, "ExGFX 0x%02X: decompress failed: %s\n", file_id, err);
+      continue;
+    }
+
+    char out_path[512];
+    snprintf(out_path, sizeof(out_path), "%s/ExGFX%02X_slot%02d.bin", out_dir, file_id, slot);
+    FILE *fp = fopen(out_path, "wb");
+    if (!fp) {
+      fprintf(stderr, "Could not write %s\n", out_path);
+      free(dec);
+      continue;
+    }
+    fwrite(dec, 1, declen, fp);
+    fclose(fp);
+    free(dec);
+    wrote++;
+  }
+
+  printf("Exported %d ExGFX file(s) to %s\n", wrote, out_dir);
+  return wrote ? 1 : 0;
+}
+
 int main(int argc, char **argv) {
   int want_json = 0;
   int want_mwl = 0;
@@ -573,6 +648,7 @@ int main(int argc, char **argv) {
   int include_layer2 = 0;
   int include_fulldata = 0;
   const char *out_path = NULL;
+  const char *export_exgfx_dir = NULL;
 
   const char *rom_path = NULL;
   const char *level_s = NULL;
@@ -586,6 +662,8 @@ int main(int argc, char **argv) {
       want_json = 1;
     } else if (!strcmp(a, "--mwl") || !strcmp(a, "-m")) {
       want_mwl = 1;
+    } else if (!strncmp(a, "--export-exgfx=", 15)) {
+      export_exgfx_dir = a + 15;
     } else if (!strncmp(a, "--data=", 7)) {
       const char *v = a + 7;
       if (!strcmp(v, "none")) {
@@ -665,6 +743,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Parse failed: %s\n", err);
     rom_free(&rom);
     return 1;
+  }
+
+  if (export_exgfx_dir) {
+    (void)export_exgfx_bins(&rom, &info, export_exgfx_dir);
   }
 
   if (want_mwl) {

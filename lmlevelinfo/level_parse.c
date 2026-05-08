@@ -51,6 +51,252 @@ static int read_custom_palette_0ef600(const Rom *rom, uint16_t level_id,
   return 1;
 }
 
+static int read_secondary_entrance_tables(const Rom *rom,
+                                         uint16_t sec_id,
+                                         uint8_t out_bytes6[6],
+                                         char *err, size_t errcap) {
+  if (!rom || !out_bytes6) return 0;
+  memset(out_bytes6, 0, 6);
+
+  // Base tables (possibly dynamically relocated in LM >=2.50).
+  // Each entry is one byte per secondary exit ID.
+  uint32_t t1 = 0x05F800u;
+  uint32_t t2 = 0x05FA00u;
+  uint32_t t3 = 0x05FC00u;
+  uint32_t t4 = 0x05FE00u;
+
+  // Dynamic relocation pointers (3-byte SNES addresses).
+  // Note: table4 uses a different pointer address per the doc.
+  uint32_t p = 0;
+  if (rom_read24_snes(rom, 0x0DE191u, &p) && p) t1 = p;
+  if (rom_read24_snes(rom, 0x0DE198u, &p) && p) t2 = p;
+  if (rom_read24_snes(rom, 0x0DE19Fu, &p) && p) t3 = p;
+  if (rom_read24_snes(rom, 0x05DC81u, &p) && p) t4 = p;
+
+  // Optional extra bytes (LM 3.00+): two more 1-byte-per-sec-id tables, pointers stored at:
+  // read3($05DC86) and read3($05DC8B)
+  uint32_t t5 = 0;
+  uint32_t t6 = 0;
+  (void)rom_read24_snes(rom, 0x05DC86u, &t5);
+  (void)rom_read24_snes(rom, 0x05DC8Bu, &t6);
+
+  if (!rom_read8_snes(rom, t1 + sec_id, &out_bytes6[0]) ||
+      !rom_read8_snes(rom, t2 + sec_id, &out_bytes6[1]) ||
+      !rom_read8_snes(rom, t3 + sec_id, &out_bytes6[2]) ||
+      !rom_read8_snes(rom, t4 + sec_id, &out_bytes6[3])) {
+    seterr(err, errcap, "Failed reading secondary entrance tables");
+    return 0;
+  }
+  if (t5) (void)rom_read8_snes(rom, t5 + sec_id, &out_bytes6[4]);
+  if (t6) (void)rom_read8_snes(rom, t6 + sec_id, &out_bytes6[5]);
+  return 1;
+}
+
+static int extract_secondary_entrances_for_level(const Rom *rom, const LevelInfo *info,
+                                                 uint8_t out_header8[8],
+                                                 uint8_t **out_bytes, size_t *out_len,
+                                                 char *err, size_t errcap) {
+  if (!rom || !info || !out_header8 || !out_bytes || !out_len) return 0;
+  *out_bytes = NULL;
+  *out_len = 0;
+  memset(out_header8, 0, 8);
+
+  // Collect unique secondary entrance IDs referenced by screen exits.
+  // Record format in MWL payload (observed LM 3.63 exports):
+  //   u16le sec_id, then 6 bytes from the secondary entrance tables.
+  uint8_t seen[0x200];
+  memset(seen, 0, sizeof(seen));
+  uint16_t ids[0x200];
+  size_t ids_n = 0;
+
+  for (size_t i = 0; i < info->objects_count; i++) {
+    const LevelObject *o = &info->objects[i];
+    if (o->kind == OBJ_SCREEN_EXIT && o->secondary_exit_flag) {
+      uint16_t sid = o->secondary_exit_id_or_dest & 0x1FFu;
+      if (!seen[sid]) {
+        seen[sid] = 1;
+        ids[ids_n++] = sid;
+      }
+    }
+  }
+  for (size_t i = 0; i < info->layer2_objects_count; i++) {
+    const LevelObject *o = &info->layer2_objects[i];
+    if (o->kind == OBJ_SCREEN_EXIT && o->secondary_exit_flag) {
+      uint16_t sid = o->secondary_exit_id_or_dest & 0x1FFu;
+      if (!seen[sid]) {
+        seen[sid] = 1;
+        ids[ids_n++] = sid;
+      }
+    }
+  }
+  if (ids_n == 0) return 1;
+
+  // Sort ids for deterministic output.
+  for (size_t i = 0; i + 1 < ids_n; i++) {
+    for (size_t j = i + 1; j < ids_n; j++) {
+      if (ids[j] < ids[i]) {
+        uint16_t tmp = ids[i];
+        ids[i] = ids[j];
+        ids[j] = tmp;
+      }
+    }
+  }
+
+  size_t rec_len = 8;
+  size_t total = ids_n * rec_len;
+  uint8_t *buf = (uint8_t *)malloc(total);
+  if (!buf) {
+    seterr(err, errcap, "Out of memory building secondary entrances");
+    return 0;
+  }
+
+  for (size_t k = 0; k < ids_n; k++) {
+    uint16_t sid = ids[k];
+    uint8_t b6[6];
+    if (!read_secondary_entrance_tables(rom, sid, b6, err, errcap)) {
+      free(buf);
+      return 0;
+    }
+    size_t off = k * rec_len;
+    buf[off + 0] = (uint8_t)(sid & 0xFF);
+    buf[off + 1] = (uint8_t)((sid >> 8) & 0xFF);
+    memcpy(buf + off + 2, b6, 6);
+  }
+
+  *out_bytes = buf;
+  *out_len = total;
+  return 1;
+}
+
+static int popcount16(uint16_t x) {
+  int c = 0;
+  while (x) { c += (x & 1u); x >>= 1; }
+  return c;
+}
+
+static int exanim_compute_length(const uint8_t *p, size_t n, size_t *out_len) {
+  if (!p || !out_len) return 0;
+  *out_len = 0;
+  if (n < 8) return 0;
+  uint8_t ss = p[0]; // highest used slot + 1
+  if (ss == 0) return 0;
+
+  uint16_t manual_mask = (uint16_t)(p[6] | ((uint16_t)p[7] << 8));
+  size_t frames_count = (size_t)popcount16(manual_mask);
+  size_t pos = 8;
+  if (pos + frames_count > n) return 0;
+  pos += frames_count;
+
+  size_t indices_off = pos;
+  size_t indices_bytes = (size_t)ss * 2u;
+  if (indices_off + indices_bytes > n) return 0;
+  pos += indices_bytes;
+
+  size_t end = pos;
+  for (uint8_t i = 0; i < ss; i++) {
+    uint16_t idx = (uint16_t)(p[indices_off + (size_t)i * 2u + 0] |
+                              ((uint16_t)p[indices_off + (size_t)i * 2u + 1] << 8));
+    if (idx == 0) continue;
+    // Doc: #$0002 refers to the byte after the first value (SS). So idx=2 -> offset 1.
+    if (idx < 2) continue;
+    size_t off = (size_t)idx - 1u;
+    if (off + 5 > n) return 0;
+    uint8_t ff = p[off + 2];
+    size_t nframes = (size_t)ff + 1u;
+    size_t slot_len = 5u + 2u * nframes;
+    if (off + slot_len > n) return 0;
+    if (off + slot_len > end) end = off + slot_len;
+  }
+
+  *out_len = end;
+  return 1;
+}
+
+static int read_level_exanim(const Rom *rom, uint16_t level_id,
+                             uint8_t out_header8[8],
+                             uint8_t **out_bytes, size_t *out_len,
+                             char *err, size_t errcap) {
+  if (!rom || !out_header8 || !out_bytes || !out_len) return 0;
+  *out_bytes = NULL;
+  *out_len = 0;
+  memset(out_header8, 0, 8);
+
+  // Pointers: read3(read3($0583ae)+$EA) gives the 24-bit pointer table to per-level exanim blobs.
+  uint32_t base = 0;
+  if (!rom_read24_snes(rom, 0x0583AEu, &base) || base == 0) return 1;
+  uint32_t table = 0;
+  if (!rom_read24_snes(rom, base + 0xEAu, &table) || table == 0) return 1;
+  uint32_t blob_ptr = 0;
+  if (!rom_read24_snes(rom, table + (uint32_t)level_id * 3u, &blob_ptr) || blob_ptr == 0) return 1;
+
+  // Heuristic from doc: if the second byte of the pointer is zero, the level doesn't have animation data.
+  if (((blob_ptr >> 8) & 0xFFu) == 0) return 1;
+
+  uint32_t pc = 0;
+  if (!snes_lorom_to_pc(rom, blob_ptr, &pc) || pc >= rom->size) {
+    seterr(err, errcap, "ExAnimation pointer out of range");
+    return 0;
+  }
+
+  // Read a bounded window and compute the actual blob length by parsing indices.
+  // Typical blobs are < 2KB; cap at 16KB to avoid runaway on corrupt pointers.
+  size_t cap = 16u * 1024u;
+  if (pc + cap > rom->size) cap = rom->size - pc;
+  const uint8_t *p = rom->data + pc;
+
+  size_t want = 0;
+  if (!exanim_compute_length(p, cap, &want) || want == 0) {
+    // If we can't parse length reliably, treat as absent rather than guessing.
+    return 1;
+  }
+
+  uint8_t *bytes = (uint8_t *)malloc(want);
+  if (!bytes) {
+    seterr(err, errcap, "Out of memory reading ExAnimation data");
+    return 0;
+  }
+  memcpy(bytes, p, want);
+
+  // Match MWL-style header shape we’ve observed: last 4 bytes look like the pointer (little-endian).
+  out_header8[4] = (uint8_t)(blob_ptr & 0xFF);
+  out_header8[5] = (uint8_t)((blob_ptr >> 8) & 0xFF);
+  out_header8[6] = (uint8_t)((blob_ptr >> 16) & 0xFF);
+  out_header8[7] = 0;
+
+  *out_bytes = bytes;
+  *out_len = want;
+  return 1;
+}
+
+static int read_level_exgfx_bypass(const Rom *rom, uint16_t level_id,
+                                   uint8_t **out_bytes, size_t *out_len,
+                                   char *err, size_t errcap) {
+  if (!rom || !out_bytes || !out_len) return 0;
+  *out_bytes = NULL;
+  *out_len = 0;
+
+  // ExGFX per-level table pointer at read3($0FF7FF), 32 bytes per level.
+  uint32_t base = 0;
+  if (!rom_read24_snes(rom, 0x0FF7FFu, &base) || base == 0) return 1;
+
+  uint32_t pc = 0;
+  uint32_t snes = base + (uint32_t)level_id * 32u;
+  if (!snes_lorom_to_pc(rom, snes, &pc) || pc + 32u > rom->size) {
+    seterr(err, errcap, "ExGFX/bypass table out of range");
+    return 0;
+  }
+
+  uint8_t *bytes = (uint8_t *)malloc(32u);
+  if (!bytes) {
+    seterr(err, errcap, "Out of memory reading ExGFX/bypass table");
+    return 0;
+  }
+  memcpy(bytes, rom->data + pc, 32u);
+  *out_bytes = bytes;
+  *out_len = 32u;
+  return 1;
+}
+
 static int read_table_byte(const Rom *rom, uint32_t base_snes, uint16_t level_id, uint8_t *out) {
   if (!base_snes) return 0;
   return rom_read8_snes(rom, base_snes + (uint32_t)level_id, out);
@@ -1255,6 +1501,52 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
       memcpy(out->palette_header8, hdr8, 8);
       out->palette_bytes = pal;
       out->palette_len = pal_len;
+    }
+  }
+
+  // Secondary entrances referenced by this level's screen exits. Best-effort: non-fatal if absent.
+  {
+    uint8_t hdr8[8];
+    uint8_t *se = NULL;
+    size_t se_len = 0;
+    if (!extract_secondary_entrances_for_level(rom, out, hdr8, &se, &se_len, err, errcap)) {
+      return 0;
+    }
+    if (se && se_len) {
+      out->secondary_entrances_present = 1;
+      memcpy(out->secondary_entrances_header8, hdr8, 8);
+      out->secondary_entrances_bytes = se;
+      out->secondary_entrances_len = se_len;
+    }
+  }
+
+  // ExAnimation per-level data. Best-effort: non-fatal if absent or unparseable.
+  {
+    uint8_t hdr8[8];
+    uint8_t *ex = NULL;
+    size_t ex_len = 0;
+    if (!read_level_exanim(rom, level_id, hdr8, &ex, &ex_len, err, errcap)) {
+      return 0;
+    }
+    if (ex && ex_len) {
+      out->exanim_present = 1;
+      memcpy(out->exanim_header8, hdr8, 8);
+      out->exanim_bytes = ex;
+      out->exanim_len = ex_len;
+    }
+  }
+
+  // ExGFX / bypass per-level list (16 slots, 32 bytes). Best-effort: non-fatal if unreadable.
+  {
+    uint8_t *eg = NULL;
+    size_t eg_len = 0;
+    if (!read_level_exgfx_bypass(rom, level_id, &eg, &eg_len, err, errcap)) {
+      return 0;
+    }
+    if (eg && eg_len) {
+      out->exgfx_present = 1;
+      out->exgfx_bytes = eg;
+      out->exgfx_len = eg_len;
     }
   }
 

@@ -22,7 +22,9 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   memset(header, 0, sizeof(header));
   header[0] = 'L';
   header[1] = 'M';
-  // version u16 at [2..3] = 0
+  // version u16 at [2..3] = 0x0363 (LM 3.63)
+  header[2] = 0x63;
+  header[3] = 0x03;
   // pointer list offset u32 at [4..7] = 0x40
   header[4] = 0x40;
   // pointer bytes u32 at [8..11] = 0x40
@@ -74,6 +76,27 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   l1hdr[5] = (uint8_t)((info->layer1_data_ptr_snes >> 8) & 0xFF);
   l1hdr[6] = (uint8_t)((info->layer1_data_ptr_snes >> 16) & 0xFF);
 
+  // Section 4: palette (if present) = 8-byte header + payload
+  uint8_t palhdr[8];
+  memset(palhdr, 0, sizeof(palhdr));
+  if (info->palette_present) {
+    memcpy(palhdr, info->palette_header8, 8);
+  }
+
+  // Section 5: secondary entrances (if present) = 8-byte header + payload
+  uint8_t sehdr[8];
+  memset(sehdr, 0, sizeof(sehdr));
+  if (info->secondary_entrances_present) {
+    memcpy(sehdr, info->secondary_entrances_header8, 8);
+  }
+
+  // Section 6: exanim (if present) = 8-byte header + payload
+  uint8_t exh[8];
+  memset(exh, 0, sizeof(exh));
+  if (info->exanim_present) {
+    memcpy(exh, info->exanim_header8, 8);
+  }
+
   // For blob: find pc offset and length from parsing.
   uint32_t pc = info->layer1_blob.pc_offset;
   size_t len = info->layer1_blob.len;
@@ -97,6 +120,40 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   ptrs[1].size = (uint32_t)(sizeof(l1hdr) + len);
   cur_off += ptrs[1].size;
 
+  // 3) layer2 data (not yet available for writing in this tool)
+  // ptrs[2] = 0
+
+  // 4) sprites (not yet available for writing in this tool)
+  // ptrs[3] = 0
+
+  // 5) palette
+  if (info->palette_present && info->palette_bytes && info->palette_len) {
+    ptrs[4].off = cur_off;
+    ptrs[4].size = (uint32_t)(sizeof(palhdr) + info->palette_len);
+    cur_off += ptrs[4].size;
+  }
+
+  // 6) secondary entrances
+  if (info->secondary_entrances_present && info->secondary_entrances_bytes && info->secondary_entrances_len) {
+    ptrs[5].off = cur_off;
+    ptrs[5].size = (uint32_t)(sizeof(sehdr) + info->secondary_entrances_len);
+    cur_off += ptrs[5].size;
+  }
+
+  // 7) exanim
+  if (info->exanim_present && info->exanim_bytes && info->exanim_len) {
+    ptrs[6].off = cur_off;
+    ptrs[6].size = (uint32_t)(sizeof(exh) + info->exanim_len);
+    cur_off += ptrs[6].size;
+  }
+
+  // 8) exgfx/bypass (payload only)
+  if (info->exgfx_present && info->exgfx_bytes && info->exgfx_len) {
+    ptrs[7].off = cur_off;
+    ptrs[7].size = (uint32_t)info->exgfx_len;
+    cur_off += ptrs[7].size;
+  }
+
   // write pointer list now
   for (int i = 0; i < 8; i++) {
     write_u32le(fp, ptrs[i].off);
@@ -107,6 +164,22 @@ int mwl_write_minimal(FILE *fp, const LevelInfo *info, const LmTables *tables, c
   if (fwrite(level_info, 1, sizeof(level_info), fp) != sizeof(level_info)) return 0;
   if (fwrite(l1hdr, 1, sizeof(l1hdr), fp) != sizeof(l1hdr)) return 0;
   if (fwrite(rom->data + pc, 1, len, fp) != len) return 0;
+
+  if (ptrs[4].off) {
+    if (fwrite(palhdr, 1, sizeof(palhdr), fp) != sizeof(palhdr)) return 0;
+    if (fwrite(info->palette_bytes, 1, info->palette_len, fp) != info->palette_len) return 0;
+  }
+  if (ptrs[5].off) {
+    if (fwrite(sehdr, 1, sizeof(sehdr), fp) != sizeof(sehdr)) return 0;
+    if (fwrite(info->secondary_entrances_bytes, 1, info->secondary_entrances_len, fp) != info->secondary_entrances_len) return 0;
+  }
+  if (ptrs[6].off) {
+    if (fwrite(exh, 1, sizeof(exh), fp) != sizeof(exh)) return 0;
+    if (fwrite(info->exanim_bytes, 1, info->exanim_len, fp) != info->exanim_len) return 0;
+  }
+  if (ptrs[7].off) {
+    if (fwrite(info->exgfx_bytes, 1, info->exgfx_len, fp) != info->exgfx_len) return 0;
+  }
 
   // Done. No trailing requirement.
   return 1;

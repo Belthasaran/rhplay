@@ -2,6 +2,7 @@ CC ?= gcc
 CFLAGS ?= -O2 -Wall -Wextra -std=c99
 
 BIN := level_info1
+VISBIN := level_visual
 TESTBIN := levelinfo_tests
 SRCS := \
   level_info1.c \
@@ -13,16 +14,19 @@ SRCS := \
   mwl_writer.c \
   mwl_reader.c
 
-all: $(BIN) $(TESTBIN)
+all: $(BIN) $(VISBIN) $(TESTBIN)
 
 $(BIN): $(SRCS)
 	$(CC) $(CFLAGS) -o $@ $(SRCS)
 
-$(TESTBIN): test_runner.c romutil.c lm_tables.c level_parse.c mwl_reader.c lc_lz2.c
-	$(CC) $(CFLAGS) -o $@ test_runner.c romutil.c lm_tables.c level_parse.c mwl_reader.c lc_lz2.c
+$(VISBIN): level_visual.c romutil.c lm_tables.c level_parse.c mwl_reader.c
+	$(CC) $(CFLAGS) -o $@ level_visual.c romutil.c lm_tables.c level_parse.c mwl_reader.c
+
+$(TESTBIN): test_runner.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c
+	$(CC) $(CFLAGS) -o $@ test_runner.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c
 
 clean:
-	rm -f $(BIN) $(TESTBIN)
+	rm -f $(BIN) $(VISBIN) $(TESTBIN)
 
 .PHONY: all clean
 

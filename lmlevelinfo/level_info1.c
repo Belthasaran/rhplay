@@ -15,7 +15,7 @@
 
 static void usage(FILE *fp) {
   fprintf(fp,
-          "level_info1 [--help] [--json|-j] [--mwl|-m] [--data=...] [--export-exgfx=<DIR>] <ROMFILE> <LEVEL_ID> [-o <OUTFILE>]\n"
+          "level_info1 [--help] [--json|-j] [--mwl|-m] [--data=...] [--export-exgfx=<DIR>] [--export-gfx=<DIR>] <ROMFILE> <LEVEL_ID> [-o <OUTFILE>]\n"
           "\n"
           "LEVEL_ID can be like 0x10A or 10A.\n"
           "\n"
@@ -35,7 +35,8 @@ static void usage(FILE *fp) {
           "  You can combine keys with commas, e.g. --data=objects,midway,layer2\n"
           "\n"
           "Exports:\n"
-          "  --export-exgfx=<DIR>   Export used ExGFX .bin (decompressed LC_LZ2, SNES 4bpp)\n");
+          "  --export-exgfx=<DIR>   Export used ExGFX .bin (decompressed LC_LZ2, SNES 4bpp)\n"
+          "  --export-gfx=<DIR>     Export all GFX + ExGFX from ROM (decompressed LC_LZ2, SNES 4bpp)\n");
 }
 
 static int parse_level_id(const char *s, uint16_t *out) {
@@ -640,6 +641,128 @@ static int export_exgfx_bins(const Rom *rom, const LevelInfo *info, const char *
   return wrote ? 1 : 0;
 }
 
+static int export_all_gfx_bins(const Rom *rom, const char *out_dir) {
+  if (!rom || !out_dir) return 0;
+  if (!mkdir_p(out_dir)) {
+    fprintf(stderr, "Could not create output directory: %s\n", out_dir);
+    return 0;
+  }
+
+  int wrote = 0;
+
+  // ---- GFX00..GFX31 (vanilla table split into low/high/bank) ----
+  for (int id = 0x00; id <= 0x31; id++) {
+    uint8_t lo = 0, hi = 0, bank = 0;
+    if (!rom_read8_snes(rom, 0x00B992u + (uint32_t)id, &lo) ||
+        !rom_read8_snes(rom, 0x00B9C4u + (uint32_t)id, &hi) ||
+        !rom_read8_snes(rom, 0x00B9F6u + (uint32_t)id, &bank)) {
+      continue;
+    }
+    uint32_t snes = ((uint32_t)bank << 16) | (uint32_t)((uint16_t)lo | ((uint16_t)hi << 8));
+    if ((snes & 0xFFFFu) < 0x8000u) continue;
+
+    uint32_t pc = 0;
+    if (!snes_lorom_to_pc(rom, snes, &pc) || pc >= rom->size) continue;
+
+    uint8_t *dec = NULL;
+    size_t declen = 0;
+    char err[256];
+    if (!lc_lz2_decompress(rom->data + pc, rom->size - pc, &dec, &declen, 0x2000u, NULL, err, sizeof(err))) {
+      continue;
+    }
+
+    char out_path[512];
+    snprintf(out_path, sizeof(out_path), "%s/GFX%02X.bin", out_dir, id);
+    FILE *fp = fopen(out_path, "wb");
+    if (!fp) { free(dec); continue; }
+    fwrite(dec, 1, declen, fp);
+    fclose(fp);
+    free(dec);
+    wrote++;
+  }
+
+  // ---- GFX60..GFX63 (24-bit pointers at $03BCC0) ----
+  for (int id = 0x60; id <= 0x63; id++) {
+    uint32_t p24 = 0;
+    uint32_t entry = 0x03BCC0u + (uint32_t)(id - 0x60u) * 3u;
+    if (!rom_read24_snes(rom, entry, &p24) || p24 == 0) continue;
+    uint32_t pc = 0;
+    if (!snes_lorom_to_pc(rom, p24, &pc) || pc >= rom->size) continue;
+
+    uint8_t *dec = NULL;
+    size_t declen = 0;
+    char err[256];
+    if (!lc_lz2_decompress(rom->data + pc, rom->size - pc, &dec, &declen, 0x2000u, NULL, err, sizeof(err))) {
+      continue;
+    }
+
+    char out_path[512];
+    snprintf(out_path, sizeof(out_path), "%s/GFX%02X.bin", out_dir, id);
+    FILE *fp = fopen(out_path, "wb");
+    if (!fp) { free(dec); continue; }
+    fwrite(dec, 1, declen, fp);
+    fclose(fp);
+    free(dec);
+    wrote++;
+  }
+
+  // ---- ExGFX80..ExGFXFF (24-bit pointers at $0FF600) ----
+  for (int id = 0x80; id <= 0xFF; id++) {
+    uint32_t p24 = 0;
+    uint32_t entry = 0x0FF600u + (uint32_t)(id - 0x80u) * 3u;
+    if (!rom_read24_snes(rom, entry, &p24) || p24 == 0) continue;
+    uint32_t pc = 0;
+    if (!snes_lorom_to_pc(rom, p24, &pc) || pc >= rom->size) continue;
+
+    uint8_t *dec = NULL;
+    size_t declen = 0;
+    char err[256];
+    if (!lc_lz2_decompress(rom->data + pc, rom->size - pc, &dec, &declen, 0x2000u, NULL, err, sizeof(err))) {
+      continue;
+    }
+
+    char out_path[512];
+    snprintf(out_path, sizeof(out_path), "%s/ExGFX%02X.bin", out_dir, id);
+    FILE *fp = fopen(out_path, "wb");
+    if (!fp) { free(dec); continue; }
+    fwrite(dec, 1, declen, fp);
+    fclose(fp);
+    free(dec);
+    wrote++;
+  }
+
+  printf("Exported %d file(s) to %s\n", wrote, out_dir);
+  return wrote ? 1 : 0;
+}
+
+static int write_level_used_gfx_manifest(const LevelInfo *info, const char *out_dir) {
+  if (!info || !out_dir) return 0;
+  if (!mkdir_p(out_dir)) return 0;
+  char path[512];
+  snprintf(path, sizeof(path), "%s/used_gfx_level_%03X.txt", out_dir, info->level_id);
+  FILE *fp = fopen(path, "wb");
+  if (!fp) return 0;
+
+  fprintf(fp, "level_id=0x%03X\n", info->level_id);
+  if (!info->exgfx_present || !info->exgfx_bytes || info->exgfx_len < 32) {
+    fprintf(fp, "exgfx_table_present=0\n");
+    fclose(fp);
+    return 1;
+  }
+  fprintf(fp, "exgfx_table_present=1\n");
+  static const char *slot_names[16] = {
+    "AN2","LT3","BG3","BG2","FG3","BG1","FG2","FG1",
+    "SP4","SP3","SP2","SP1","LG4","LG3","LG2","LG1"
+  };
+  for (int slot = 0; slot < 16; slot++) {
+    uint16_t v = (uint16_t)(info->exgfx_bytes[slot * 2 + 0] | ((uint16_t)info->exgfx_bytes[slot * 2 + 1] << 8));
+    uint8_t file_id = (uint8_t)(v & 0xFF);
+    fprintf(fp, "slot=%02d name=%s file=0x%02X raw_u16=0x%04X\n", slot, slot_names[slot], file_id, v);
+  }
+  fclose(fp);
+  return 1;
+}
+
 int main(int argc, char **argv) {
   int want_json = 0;
   int want_mwl = 0;
@@ -649,6 +772,7 @@ int main(int argc, char **argv) {
   int include_fulldata = 0;
   const char *out_path = NULL;
   const char *export_exgfx_dir = NULL;
+  const char *export_gfx_dir = NULL;
 
   const char *rom_path = NULL;
   const char *level_s = NULL;
@@ -664,6 +788,8 @@ int main(int argc, char **argv) {
       want_mwl = 1;
     } else if (!strncmp(a, "--export-exgfx=", 15)) {
       export_exgfx_dir = a + 15;
+    } else if (!strncmp(a, "--export-gfx=", 13)) {
+      export_gfx_dir = a + 13;
     } else if (!strncmp(a, "--data=", 7)) {
       const char *v = a + 7;
       if (!strcmp(v, "none")) {
@@ -747,6 +873,11 @@ int main(int argc, char **argv) {
 
   if (export_exgfx_dir) {
     (void)export_exgfx_bins(&rom, &info, export_exgfx_dir);
+    (void)write_level_used_gfx_manifest(&info, export_exgfx_dir);
+  }
+  if (export_gfx_dir) {
+    (void)export_all_gfx_bins(&rom, export_gfx_dir);
+    (void)write_level_used_gfx_manifest(&info, export_gfx_dir);
   }
 
   if (want_mwl) {

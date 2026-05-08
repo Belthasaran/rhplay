@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <dirent.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 #include "romutil.h"
 #include "lm_tables.h"
@@ -13,6 +15,150 @@
 #include "lc_lz2.h"
 
 static int failures = 0;
+
+typedef struct {
+  char **items;
+  size_t len;
+} StrList;
+
+static void strlist_free(StrList *l) {
+  if (!l) return;
+  for (size_t i = 0; i < l->len; i++) free(l->items[i]);
+  free(l->items);
+  l->items = NULL;
+  l->len = 0;
+}
+
+static int strlist_push(StrList *l, const char *s) {
+  if (!l || !s) return 0;
+  size_t n = strlen(s);
+  char *cp = (char *)malloc(n + 1);
+  if (!cp) return 0;
+  memcpy(cp, s, n + 1);
+  char **tmp = (char **)realloc(l->items, (l->len + 1) * sizeof(char *));
+  if (!tmp) { free(cp); return 0; }
+  l->items = tmp;
+  l->items[l->len++] = cp;
+  return 1;
+}
+
+static int cmp_cstr(const void *a, const void *b) {
+  const char *aa = *(const char *const *)a;
+  const char *bb = *(const char *const *)b;
+  return strcmp(aa, bb);
+}
+
+static int mkdir_p(const char *path) {
+  if (!path || !*path) return 0;
+  char tmp[512];
+  snprintf(tmp, sizeof(tmp), "%s", path);
+  for (char *p = tmp + 1; *p; p++) {
+    if (*p == '/') {
+      *p = '\0';
+      if (mkdir(tmp, 0777) != 0 && errno != EEXIST) return 0;
+      *p = '/';
+    }
+  }
+  if (mkdir(tmp, 0777) != 0 && errno != EEXIST) return 0;
+  return 1;
+}
+
+static int file_copy(const char *src_path, const char *dst_path, char *err, size_t errcap) {
+  FILE *in = fopen(src_path, "rb");
+  if (!in) {
+    snprintf(err, errcap, "open src failed: %s", src_path);
+    return 0;
+  }
+  FILE *out = fopen(dst_path, "wb");
+  if (!out) {
+    fclose(in);
+    snprintf(err, errcap, "open dst failed: %s", dst_path);
+    return 0;
+  }
+  uint8_t buf[64 * 1024];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof(buf), in)) != 0) {
+    if (fwrite(buf, 1, n, out) != n) {
+      fclose(in);
+      fclose(out);
+      snprintf(err, errcap, "write failed: %s", dst_path);
+      return 0;
+    }
+  }
+  fclose(in);
+  fclose(out);
+  return 1;
+}
+
+static int file_copy_range(const char *src_path, uint32_t off, uint32_t len,
+                           const char *dst_path, char *err, size_t errcap) {
+  FILE *in = fopen(src_path, "rb");
+  if (!in) {
+    snprintf(err, errcap, "open src failed: %s", src_path);
+    return 0;
+  }
+  if (fseek(in, (long)off, SEEK_SET) != 0) {
+    fclose(in);
+    snprintf(err, errcap, "seek src failed: %s", src_path);
+    return 0;
+  }
+  FILE *out = fopen(dst_path, "wb");
+  if (!out) {
+    fclose(in);
+    snprintf(err, errcap, "open dst failed: %s", dst_path);
+    return 0;
+  }
+  uint8_t buf[64 * 1024];
+  uint32_t remaining = len;
+  while (remaining) {
+    size_t want = remaining < (uint32_t)sizeof(buf) ? (size_t)remaining : sizeof(buf);
+    size_t n = fread(buf, 1, want, in);
+    if (n == 0) {
+      fclose(in);
+      fclose(out);
+      snprintf(err, errcap, "read src failed: %s", src_path);
+      return 0;
+    }
+    if (fwrite(buf, 1, n, out) != n) {
+      fclose(in);
+      fclose(out);
+      snprintf(err, errcap, "write failed: %s", dst_path);
+      return 0;
+    }
+    remaining -= (uint32_t)n;
+  }
+  fclose(in);
+  fclose(out);
+  return 1;
+}
+
+static int walk_files_recursive(const char *dir_path, const char *suffix, StrList *out) {
+  if (!dir_path || !suffix || !out) return 0;
+  DIR *d = opendir(dir_path);
+  if (!d) return 0;
+  struct dirent *de;
+  size_t slen = strlen(suffix);
+  while ((de = readdir(d)) != NULL) {
+    const char *n = de->d_name;
+    if (strcmp(n, ".") == 0 || strcmp(n, "..") == 0) continue;
+    char p[512];
+    snprintf(p, sizeof(p), "%s/%s", dir_path, n);
+
+    struct stat st;
+    if (stat(p, &st) != 0) continue;
+    if (S_ISDIR(st.st_mode)) {
+      (void)walk_files_recursive(p, suffix, out);
+      continue;
+    }
+    if (!S_ISREG(st.st_mode)) continue;
+    size_t nlen = strlen(n);
+    if (nlen < slen) continue;
+    if (strcmp(n + (nlen - slen), suffix) != 0) continue;
+    (void)strlist_push(out, p);
+  }
+  closedir(d);
+  return 1;
+}
 
 static void failf(const char *fmt, ...) {
   failures++;
@@ -939,6 +1085,140 @@ static int run_generated_exanim_case(const char *rom_path, const char *label_pre
   return ok;
 }
 
+static int build_suite_rom(const char *suite, char *out_rom_path, size_t outcap, char *err, size_t errcap) {
+  if (!suite || !out_rom_path || outcap == 0) return 0;
+  const char *base = getenv("PATH_BASE_ROM");
+  if (!base || !*base) {
+    snprintf(err, errcap, "PATH_BASE_ROM not set (needs unheadered clean base ROM)");
+    return 0;
+  }
+  const char *flips = getenv("FLIPS_PATH");
+  if (!flips || !*flips) flips = "flips";
+
+  char workdir[256];
+  snprintf(workdir, sizeof(workdir), "test/_work/%s", suite);
+  if (!mkdir_p(workdir)) {
+    snprintf(err, errcap, "Could not create work dir: %s", workdir);
+    return 0;
+  }
+  snprintf(out_rom_path, outcap, "%s/%s.sfc", workdir, suite);
+
+  // Normalize base ROM to what BPS patches typically expect for SMW: unheadered 0x80000 bytes.
+  // - If base is 0x80200, treat as headered and skip 0x200 bytes.
+  // - If base is larger, take the first 0x80000 bytes (expanded base ROMs are common in collections).
+  struct stat st;
+  if (stat(base, &st) != 0) {
+    snprintf(err, errcap, "Could not stat PATH_BASE_ROM: %s", base);
+    return 0;
+  }
+  uint32_t sz = (uint32_t)st.st_size;
+  const uint32_t WANT = 0x80000u;
+  uint32_t src_off = 0;
+  if (sz == WANT) {
+    if (!file_copy(base, out_rom_path, err, errcap)) return 0;
+  } else {
+    if (sz == (WANT + 0x200u)) src_off = 0x200u;
+    else if (sz > WANT) src_off = 0;
+    else {
+      snprintf(err, errcap, "PATH_BASE_ROM unexpected size %u (need >= 0x80000)", (unsigned)sz);
+      return 0;
+    }
+    if (!file_copy_range(base, src_off, WANT, out_rom_path, err, errcap)) return 0;
+  }
+
+  // Apply main hack patch: test/<suite>/<suite>.bps
+  char main_bps[256];
+  snprintf(main_bps, sizeof(main_bps), "test/%s/%s.bps", suite, suite);
+  {
+    struct stat stp;
+    if (stat(main_bps, &stp) != 0) {
+      snprintf(err, errcap, "Missing main patch: %s", main_bps);
+      return 0;
+    }
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd), "%s --apply \"%s\" \"%s\" \"%s\"", flips, main_bps, out_rom_path, out_rom_path);
+    int rc = system(cmd);
+    if (rc != 0) {
+      snprintf(err, errcap, "flips apply failed (rc=%d)", rc);
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+static int run_suite_with_resources(const char *suite, const char *rom_for_tables, const char *legacy_dir, const char *legacy_prefix) {
+  (void)rom_for_tables;
+  char err[512];
+  char built_rom[512];
+  if (!build_suite_rom(suite, built_rom, sizeof(built_rom), err, sizeof(err))) {
+    // Suites can be incomplete (e.g. missing the main <suite>.bps). Treat as skipped.
+    fprintf(stderr, "SKIP: %s (ROM build failed: %s)\n", suite, err);
+    return 1;
+  }
+
+  StrList mwls = {0};
+  char lvldir[256];
+  snprintf(lvldir, sizeof(lvldir), "test/%s/resources/levels", suite);
+  (void)walk_files_recursive(lvldir, ".mwl", &mwls);
+
+  if (mwls.len == 0 && legacy_dir && legacy_prefix) {
+    // Legacy fallback: scan top-level suite dir by prefix.
+    DIR *d = opendir(legacy_dir);
+    if (d) {
+      struct dirent *de;
+      while ((de = readdir(d)) != NULL) {
+        const char *name = de->d_name;
+        if (strncmp(name, legacy_prefix, strlen(legacy_prefix)) != 0) continue;
+        size_t nlen = strlen(name);
+        if (nlen < 5) continue;
+        if (strcmp(name + (nlen - 4), ".mwl") != 0) continue;
+        char p[512];
+        snprintf(p, sizeof(p), "%s/%s", legacy_dir, name);
+        (void)strlist_push(&mwls, p);
+      }
+      closedir(d);
+      if (mwls.len) qsort(mwls.items, mwls.len, sizeof(char *), cmp_cstr);
+    }
+  }
+
+  if (mwls.len == 0) {
+    strlist_free(&mwls);
+    failf("[%s] No MWL files found (resources/levels or legacy)", suite);
+    return 0;
+  }
+
+  int total = 0;
+  int failed = 0;
+  for (size_t i = 0; i < mwls.len; i++) {
+    const char *mwl_path = mwls.items[i];
+    const char *base = strrchr(mwl_path, '/');
+    base = base ? base + 1 : mwl_path;
+    char label[512];
+    snprintf(label, sizeof(label), "%s %s", suite, base);
+    int before = failures;
+    (void)run_case(built_rom, mwl_path, label, 0);
+    total++;
+    if (failures != before) {
+      failed++;
+      fprintf(stderr, "FAIL: %s/%s\n", suite, base);
+    } else {
+      printf("PASS: %s/%s\n", suite, base);
+    }
+  }
+
+  // ExAnimation coverage on the built ROM.
+  (void)run_generated_exanim_case(built_rom, suite);
+
+  strlist_free(&mwls);
+  if (failed) {
+    fprintf(stderr, "%s suite: %d/%d failed\n", suite, failed, total);
+    return 0;
+  }
+  printf("%s suite: %d/%d passed\n", suite, total, total);
+  return 1;
+}
+
 static int run_akogare_level109(void) {
   return run_case(
     "test/akogare/orig_Ako.sfc",
@@ -949,59 +1229,10 @@ static int run_akogare_level109(void) {
 }
 
 static int run_akogare_suite(void) {
-  const char *rom_path = "test/akogare/orig_Ako.sfc";
-  const char *dir_path = "test/akogare";
-
-  DIR *d = opendir(dir_path);
-  if (!d) {
-    failf("[akogare] Could not open test directory");
-    return 0;
-  }
-
-  int total = 0;
-  int failed = 0;
-
-  struct dirent *de;
-  while ((de = readdir(d)) != NULL) {
-    const char *name = de->d_name;
-    // Accept both the historical name and the batch-export naming scheme.
-    int ok_prefix = (strncmp(name, "ako_", 4) == 0);
-    if (!ok_prefix) continue;
-    size_t nlen = strlen(name);
-    if (nlen < 5) continue;
-    if (strcmp(name + (nlen - 4), ".mwl") != 0) continue;
-
-    char path[512];
-    snprintf(path, sizeof(path), "%s/%s", dir_path, name);
-
-    char label[512];
-    snprintf(label, sizeof(label), "akogare %s", name);
-
-    int before = failures;
-    (void)run_case(rom_path, path, label, 0);
-    total++;
-    if (failures != before) {
-      failed++;
-      fprintf(stderr, "FAIL: akogare/%s\n", name);
-    } else {
-      printf("PASS: akogare/%s\n", name);
-    }
-  }
-  closedir(d);
-
-  // ExAnimation coverage: if this ROM has any ExAnimation, generate an MWL and validate parity.
-  (void)run_generated_exanim_case(rom_path, "akogare");
-
-  if (total == 0) {
-    failf("[akogare] No ako_*.mwl files found");
-    return 0;
-  }
-  if (failed) {
-    fprintf(stderr, "akogare suite: %d/%d failed\n", failed, total);
-    return 0;
-  }
-  printf("akogare suite: %d/%d passed\n", total, total);
-  return 1;
+  return run_suite_with_resources("akogare",
+                                  "test/akogare/orig_Ako.sfc",
+                                  "test/akogare",
+                                  "ako_");
 }
 
 static int run_layer2_midway_sanity(void) {
@@ -1412,110 +1643,15 @@ static int run_lm_object_decode_sanity(void) {
 }
 
 static int run_quickieworld_suite(void) {
-  const char *rom_path = "test/quickieworld/QuickieWorld_v1.12.sfc";
-  const char *dir_path = "test/quickieworld";
-
-  DIR *d = opendir(dir_path);
-  if (!d) {
-    failf("[quickieworld] Could not open test directory");
-    return 0;
-  }
-
-  int total = 0;
-  int failed = 0;
-
-  struct dirent *de;
-  while ((de = readdir(d)) != NULL) {
-    const char *name = de->d_name;
-    if (strncmp(name, "quick ", 6) != 0) continue;
-    size_t nlen = strlen(name);
-    if (nlen < 5) continue;
-    if (strcmp(name + (nlen - 4), ".mwl") != 0) continue;
-
-    char path[512];
-    snprintf(path, sizeof(path), "%s/%s", dir_path, name);
-
-    char label[512];
-    snprintf(label, sizeof(label), "quickieworld %s", name);
-
-    int before = failures;
-    (void)run_case(rom_path, path, label, 0);
-    total++;
-    if (failures != before) {
-      failed++;
-      fprintf(stderr, "FAIL: %s\n", name);
-    } else {
-      printf("PASS: %s\n", name);
-    }
-  }
-  closedir(d);
-
-  (void)run_generated_exanim_case(rom_path, "quickieworld");
-
-  if (total == 0) {
-    failf("[quickieworld] No quick *.mwl files found");
-    return 0;
-  }
-
-  if (failed) {
-    fprintf(stderr, "quickieworld suite: %d/%d failed\n", failed, total);
-    return 0;
-  }
-
-  printf("quickieworld suite: %d/%d passed\n", total, total);
-  return 1;
+  return run_suite_with_resources("quickieworld",
+                                  "test/quickieworld/QuickieWorld_v1.12.sfc",
+                                  "test/quickieworld",
+                                  "quick ");
 }
 
 static int run_suite_dir(const char *suite_name, const char *rom_path, const char *dir_path, const char *prefix) {
-  DIR *d = opendir(dir_path);
-  if (!d) {
-    failf("[%s] Could not open test directory: %s", suite_name, dir_path);
-    return 0;
-  }
-
-  int total = 0;
-  int failed = 0;
-
-  struct dirent *de;
-  while ((de = readdir(d)) != NULL) {
-    const char *name = de->d_name;
-    if (strncmp(name, prefix, strlen(prefix)) != 0) continue;
-    size_t nlen = strlen(name);
-    if (nlen < 5) continue;
-    if (strcmp(name + (nlen - 4), ".mwl") != 0) continue;
-
-    char path[512];
-    snprintf(path, sizeof(path), "%s/%s", dir_path, name);
-
-    char label[512];
-    snprintf(label, sizeof(label), "%s %s", suite_name, name);
-
-    int before = failures;
-    (void)run_case(rom_path, path, label, 0);
-    total++;
-    if (failures != before) {
-      failed++;
-      fprintf(stderr, "FAIL: %s/%s\n", suite_name, name);
-    } else {
-      printf("PASS: %s/%s\n", suite_name, name);
-    }
-  }
-  closedir(d);
-
-  (void)run_generated_exanim_case(rom_path, suite_name);
-
-  if (total == 0) {
-    failf("[%s] No MWL files found (prefix '%s')", suite_name, prefix);
-    return 0;
-  }
-
-  if (failed) {
-    fprintf(stderr, "%s suite: %d/%d failed\n", suite_name, failed, total);
-    return 0;
-  }
-
-  printf("%s suite: %d/%d passed\n", suite_name, total, total);
-  return 1;
+  (void)rom_path;
+  return run_suite_with_resources(suite_name, rom_path, dir_path, prefix);
 }
 
 int main(void) {

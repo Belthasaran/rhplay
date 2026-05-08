@@ -11,6 +11,46 @@ static void seterr(char *err, size_t cap, const char *msg) {
   snprintf(err, cap, "%s", msg ? msg : "error");
 }
 
+static int read_custom_palette_0ef600(const Rom *rom, uint16_t level_id,
+                                      uint8_t out_header8[8],
+                                      uint8_t **out_bytes, size_t *out_len,
+                                      char *err, size_t errcap) {
+  if (!rom || !out_header8 || !out_bytes || !out_len) return 0;
+  *out_bytes = NULL;
+  *out_len = 0;
+  memset(out_header8, 0, 8);
+
+  // Per Level_Data_Format: 24-bit pointer table at $0EF600; $000000 means no custom palette.
+  uint32_t p24 = 0;
+  uint32_t entry = 0x0EF600u + (uint32_t)level_id * 3u;
+  if (!rom_read24_snes(rom, entry, &p24)) {
+    // Hack may have moved the table; treat as absent, non-fatal.
+    return 1;
+  }
+  if (p24 == 0) return 1;
+
+  // Custom palettes contain all 257 colors the level uses, first is the back area color.
+  const size_t pal_len = 257u * 2u;
+  uint32_t pc = 0;
+  if (!snes_lorom_to_pc(rom, p24, &pc) || pc + pal_len > rom->size) {
+    seterr(err, errcap, "Custom palette pointer out of range");
+    return 0;
+  }
+
+  uint8_t *bytes = (uint8_t *)malloc(pal_len);
+  if (!bytes) {
+    seterr(err, errcap, "Out of memory reading custom palette");
+    return 0;
+  }
+  memcpy(bytes, rom->data + pc, pal_len);
+
+  // MWL's 8-byte palette header is LM-defined; for ROM extraction we leave it as zeros and
+  // compare payload bytes for logical validation.
+  *out_bytes = bytes;
+  *out_len = pal_len;
+  return 1;
+}
+
 static int read_table_byte(const Rom *rom, uint32_t base_snes, uint16_t level_id, uint8_t *out) {
   if (!base_snes) return 0;
   return rom_read8_snes(rom, base_snes + (uint32_t)level_id, out);
@@ -1085,6 +1125,22 @@ void levelinfo_free(LevelInfo *info) {
   info->layer2_objects_count = 0;
   free(info->layer2_bg_tiles);
   info->layer2_bg_tiles = NULL;
+  free(info->palette_bytes);
+  info->palette_bytes = NULL;
+  info->palette_len = 0;
+  info->palette_present = 0;
+  free(info->secondary_entrances_bytes);
+  info->secondary_entrances_bytes = NULL;
+  info->secondary_entrances_len = 0;
+  info->secondary_entrances_present = 0;
+  free(info->exanim_bytes);
+  info->exanim_bytes = NULL;
+  info->exanim_len = 0;
+  info->exanim_present = 0;
+  free(info->exgfx_bytes);
+  info->exgfx_bytes = NULL;
+  info->exgfx_len = 0;
+  info->exgfx_present = 0;
   free(info->sprites);
   info->sprites = NULL;
   info->sprites_count = 0;
@@ -1184,6 +1240,22 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
 
   if (!parse_objects(rom, layer1_ptr, is_vertical, out, err, errcap)) {
     return 0;
+  }
+
+  // Palette (custom palettes only, via $0EF600 table). Best-effort: do not fail the whole parse if absent.
+  {
+    uint8_t hdr8[8];
+    uint8_t *pal = NULL;
+    size_t pal_len = 0;
+    if (!read_custom_palette_0ef600(rom, level_id, hdr8, &pal, &pal_len, err, errcap)) {
+      return 0;
+    }
+    if (pal && pal_len) {
+      out->palette_present = 1;
+      memcpy(out->palette_header8, hdr8, 8);
+      out->palette_bytes = pal;
+      out->palette_len = pal_len;
+    }
   }
 
   // Layer2 object parsing (only when not a BG tilemap)

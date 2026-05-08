@@ -66,10 +66,45 @@ typedef struct {
 } MwlLayer2;
 
 typedef struct {
+  // Raw palette section: 8-byte header + payload of 16-bit SNES colors.
+  int present;
+  uint8_t header[8];
+  uint8_t *bytes;
+  size_t len;
+} MwlPalette;
+
+typedef struct {
+  // Raw secondary entrances section: 8-byte header + N * 8-byte records.
+  int present;
+  uint8_t header[8];
+  uint8_t *bytes;
+  size_t len;
+} MwlSecondaryEntrances;
+
+typedef struct {
+  // Raw ExAnimation section: 8-byte header + raw ExAnimation bytes.
+  int present;
+  uint8_t header[8];
+  uint8_t *bytes;
+  size_t len;
+} MwlExAnimation;
+
+typedef struct {
+  // Raw ExGFX/bypass section payload. (MWL doc: 16x u16 slot values, plus optional extra flags depending on LM.)
+  int present;
+  uint8_t *bytes;
+  size_t len;
+} MwlExGfxBypass;
+
+typedef struct {
   MwlFileInfo file;
   MwlLevelInfo level;
   MwlLayer1 layer1;
   MwlLayer2 layer2;
+  MwlPalette palette;
+  MwlSecondaryEntrances sec_entrances;
+  MwlExAnimation exanim;
+  MwlExGfxBypass exgfx;
   MwlSprites sprites;
 } MwlParsed;
 

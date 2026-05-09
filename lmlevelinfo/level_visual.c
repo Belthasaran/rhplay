@@ -156,36 +156,13 @@ static int render_layer1_ppm_from_rom(const char *rom_path, uint16_t level_id,
     }
   }
 
-  // Determine canvas extents from decoded direct-map16 objects (MVP coverage).
-  uint32_t max_tx = 16, max_ty = 16;
-  for (size_t i = 0; i < info.objects_count; i++) {
-    const LevelObject *o = &info.objects[i];
-    if (!o->decoded.present) continue;
-    uint32_t absx = (uint32_t)o->x_position + (uint32_t)o->screen_number * 16u;
-    uint32_t y = (uint32_t)o->y_position;
-    uint32_t wtiles = 0, htiles = 0;
-    if (o->decoded.kind == OBJ_DEC_LM_22_MAP16_PAGE0 || o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) {
-      wtiles = o->decoded.u.lm22_23.width_4b ? o->decoded.u.lm22_23.width_4b : 1;
-      htiles = o->decoded.u.lm22_23.height_4b ? o->decoded.u.lm22_23.height_4b : 1;
-    } else if (o->decoded.kind == OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F || o->decoded.kind == OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F) {
-      wtiles = (uint32_t)o->decoded.u.lm27_29.width;
-      htiles = (uint32_t)o->decoded.u.lm27_29.height;
-      if (!wtiles) wtiles = 1;
-      if (!htiles) htiles = 1;
-    } else {
-      continue;
-    }
-    uint32_t ex = absx + wtiles;
-    uint32_t ey = y + htiles;
-    if (ex > max_tx) max_tx = ex;
-    if (ey > max_ty) max_ty = ey;
-  }
-  // Add a small border.
-  max_tx += 2;
-  max_ty += 2;
-
-  uint32_t W = max_tx * 16u;
-  uint32_t H = max_ty * 16u;
+  // Canvas size: show the whole level width (by screens), with a stable default height.
+  uint32_t screens = 1;
+  if (info.primary.length_in_screens == -1) screens = 32;
+  else if (info.primary.length_in_screens > 0) screens = (uint32_t)info.primary.length_in_screens;
+  uint32_t tiles_h = 27; // common LM horizontal level height
+  uint32_t W = screens * 16u * 16u; // screens * 256px
+  uint32_t H = tiles_h * 16u;
   uint8_t *rgb = (uint8_t *)malloc((size_t)W * (size_t)H * 3u);
   if (!rgb) {
     fprintf(stderr, "Out of memory allocating canvas\n");
@@ -201,26 +178,30 @@ static int render_layer1_ppm_from_rom(const char *rom_path, uint16_t level_id,
     rgb[p * 3 + 2] = back_b;
   }
 
-  // Render decoded Map16 objects (MVP).
+  // Render objects:
+  // - LM direct-map16 objects (decoded) use real Map16 + (baseline) graphics.
+  // - everything else is at least marked with a missing-visual box at its placement.
   for (size_t i = 0; i < info.objects_count; i++) {
     const LevelObject *o = &info.objects[i];
-    if (!o->decoded.present) continue;
     uint32_t absx = (uint32_t)o->x_position + (uint32_t)o->screen_number * 16u;
     uint32_t y = (uint32_t)o->y_position;
     uint16_t base_tile = 0;
     uint32_t wtiles = 0, htiles = 0;
-    if (o->decoded.kind == OBJ_DEC_LM_22_MAP16_PAGE0 || o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) {
+    if (o->decoded.present &&
+        (o->decoded.kind == OBJ_DEC_LM_22_MAP16_PAGE0 || o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1)) {
       base_tile = o->decoded.u.lm22_23.map16_tile_9b;
       if (o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) base_tile = (uint16_t)(base_tile + 0x200u);
       wtiles = o->decoded.u.lm22_23.width_4b ? o->decoded.u.lm22_23.width_4b : 1;
       htiles = o->decoded.u.lm22_23.height_4b ? o->decoded.u.lm22_23.height_4b : 1;
-    } else if (o->decoded.kind == OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F || o->decoded.kind == OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F) {
+    } else if (o->decoded.present &&
+               (o->decoded.kind == OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F || o->decoded.kind == OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F)) {
       base_tile = o->decoded.u.lm27_29.base_map16;
       wtiles = (uint32_t)o->decoded.u.lm27_29.width;
       htiles = (uint32_t)o->decoded.u.lm27_29.height;
       if (!wtiles) wtiles = 1;
       if (!htiles) htiles = 1;
     } else {
+      draw_missing_tile(rgb, W, H, absx * 16u, y * 16u, 16u, 0, 0, 0);
       continue;
     }
 

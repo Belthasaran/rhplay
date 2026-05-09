@@ -1660,6 +1660,7 @@ int main(void) {
   int okS = run_layer2_midway_sanity();
   int okLm = run_lm_object_decode_sanity();
   int okEg = test_exgfx_export_hashes();
+  // level_visual smoke test is intentionally not asserted yet (renderer is still evolving).
   int ok2 = run_quickieworld_suite();
   int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
   int ok4 = run_suite_dir("acidtapes", "test/acidtapes/acidtapes.sfc", "test/acidtapes", "acidtapes ");

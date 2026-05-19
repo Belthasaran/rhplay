@@ -10,11 +10,31 @@
 #include "romutil.h"
 #include "lm_tables.h"
 #include "level_parse.h"
+#include "obj_to_map16.h"
 #include "mwl_reader.h"
 #include "mwl_writer.h"
 #include "lc_lz2.h"
 
 static int failures = 0;
+
+typedef struct {
+  size_t count;
+  EmittedMap16 first;
+  EmittedMap16 last;
+  int have_first;
+} EmitAcc;
+
+static int emit_acc_fn(const EmittedMap16 *t, void *ctx) {
+  EmitAcc *a = (EmitAcc *)ctx;
+  if (!a || !t) return 0;
+  if (!a->have_first) {
+    a->first = *t;
+    a->have_first = 1;
+  }
+  a->last = *t;
+  a->count++;
+  return 1;
+}
 
 typedef struct {
   char **items;
@@ -1085,6 +1105,157 @@ static int run_generated_exanim_case(const char *rom_path, const char *label_pre
   return ok;
 }
 
+static int build_suite_rom(const char *suite, char *out_rom_path, size_t outcap, char *err, size_t errcap);
+
+static int run_generated_layer2_objects_case(void) {
+  char err[512];
+  char built_rom[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+
+  Rom rom;
+  if (!rom_load(&rom, built_rom, err, sizeof(err))) {
+    failf("[layer2obj-gen] ROM load failed: %s", err);
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    failf("[layer2obj-gen] ROM table resolve failed: %s", err);
+    rom_free(&rom);
+    return 0;
+  }
+
+  int found = 0;
+  uint16_t found_level = 0;
+  LevelInfo found_info;
+  memset(&found_info, 0, sizeof(found_info));
+
+  for (uint16_t level_id = 0; level_id <= 0x1FF; level_id++) {
+    LevelInfo info;
+    memset(&info, 0, sizeof(info));
+    if (!parse_level_info(&rom, &tables, level_id, &info, err, sizeof(err))) {
+      levelinfo_free(&info);
+      continue;
+    }
+    if (info.layer2_data_ptr_snes && !info.layer2_is_bg_tilemap && info.layer2_blob.len >= 6u) {
+      found = 1;
+      found_level = level_id;
+      found_info = info;
+      break;
+    }
+    levelinfo_free(&info);
+  }
+
+  if (!found) {
+    rom_free(&rom);
+    return 1;
+  }
+
+  char mwl_path[256];
+  snprintf(mwl_path, sizeof(mwl_path), "test/_generated_layer2obj_akogare_%03X.mwl", (unsigned)found_level);
+  FILE *fp = fopen(mwl_path, "wb");
+  if (!fp) {
+    failf("[layer2obj-gen] could not open %s", mwl_path);
+    levelinfo_free(&found_info);
+    rom_free(&rom);
+    return 0;
+  }
+  if (!mwl_write_minimal(fp, &found_info, &tables, &rom)) {
+    fclose(fp);
+    failf("[layer2obj-gen] mwl_write_minimal failed");
+    levelinfo_free(&found_info);
+    rom_free(&rom);
+    return 0;
+  }
+  fclose(fp);
+
+  MwlParsed mwl;
+  memset(&mwl, 0, sizeof(mwl));
+  if (!mwl_parse_file(mwl_path, &mwl, err, sizeof(err))) {
+    failf("[layer2obj-gen] MWL parse failed: %s", err);
+    levelinfo_free(&found_info);
+    rom_free(&rom);
+    (void)remove(mwl_path);
+    return 0;
+  }
+
+  int ok = 1;
+  if (!mwl.layer2.present || !mwl.layer2.bytes || mwl.layer2.len == 0) {
+    failf("[layer2obj-gen] generated MWL missing layer2 section");
+    ok = 0;
+  } else if (mwl.layer2.len != found_info.layer2_blob.len) {
+    failf("[layer2obj-gen] layer2 len mismatch: mwl=%zu rom=%zu", mwl.layer2.len, found_info.layer2_blob.len);
+    ok = 0;
+  } else if (found_info.layer2_blob.pc_offset + found_info.layer2_blob.len > rom.size) {
+    failf("[layer2obj-gen] layer2 blob out of range");
+    ok = 0;
+  } else if (memcmp(mwl.layer2.bytes, rom.data + found_info.layer2_blob.pc_offset, mwl.layer2.len) != 0) {
+    failf("[layer2obj-gen] layer2 payload mismatch vs ROM");
+    ok = 0;
+  }
+
+  mwl_parsed_free(&mwl);
+  levelinfo_free(&found_info);
+  rom_free(&rom);
+  (void)remove(mwl_path);
+
+  if (ok) printf("PASS: generated layer2 object stream (akogare 0x%03X)\n", (unsigned)found_level);
+  return ok;
+}
+
+static int run_level_visual_smoke(void) {
+  char err[512];
+  char built_rom[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+  struct stat st;
+  if (stat("test/akogare/AllMap16.map16", &st) != 0) {
+    return 1;
+  }
+
+  (void)mkdir_p("test/_work/akogare");
+  char outppm[512];
+  snprintf(outppm, sizeof(outppm), "test/_work/akogare/level_visual_smoke.ppm");
+
+  char cmd[4096];
+  snprintf(cmd, sizeof(cmd),
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all",
+           built_rom, outppm);
+  int rc = system(cmd);
+  if (rc != 0) {
+    failf("[level_visual smoke] level_visual exited rc=%d", rc);
+    return 0;
+  }
+
+  FILE *pf = fopen(outppm, "rb");
+  if (!pf) {
+    failf("[level_visual smoke] could not open output ppm");
+    return 0;
+  }
+  char magic[8];
+  if (!fgets(magic, sizeof(magic), pf) || strncmp(magic, "P6", 2) != 0) {
+    fclose(pf);
+    failf("[level_visual smoke] expected P6 header");
+    return 0;
+  }
+  unsigned pw = 0, ph = 0;
+  if (fscanf(pf, "%u%u", &pw, &ph) != 2) {
+    fclose(pf);
+    failf("[level_visual smoke] could not parse dimensions");
+    return 0;
+  }
+  fclose(pf);
+  if (pw == 0 || ph == 0) {
+    failf("[level_visual smoke] bad dimensions %u x %u", pw, ph);
+    return 0;
+  }
+  (void)remove(outppm);
+  printf("PASS: level_visual smoke (%u x %u)\n", pw, ph);
+  return 1;
+}
+
 static int build_suite_rom(const char *suite, char *out_rom_path, size_t outcap, char *err, size_t errcap) {
   if (!suite || !out_rom_path || outcap == 0) return 0;
   const char *base = getenv("PATH_BASE_ROM");
@@ -1385,6 +1556,23 @@ static int run_lm_object_decode_sanity(void) {
                  o->decoded.u.lm22_23.height_4b != 3 || o->decoded.u.lm22_23.width_4b != 5) {
         failf("[sanity] obj22: map16/H/W mismatch");
         ok = 0;
+      } else {
+        EmitAcc acc;
+        memset(&acc, 0, sizeof(acc));
+        ObjMapResult r = object_emit_map16_tiles(o, emit_acc_fn, &acc);
+        if (r != OBJMAP_HANDLED || acc.count != (size_t)(3u * 5u)) {
+          failf("[sanity] obj22: emit tiles count mismatch (got %zu)", acc.count);
+          ok = 0;
+        } else if (!acc.have_first || acc.first.map16_tile != o->decoded.u.lm22_23.map16_tile_9b ||
+                   acc.first.x_tile != (uint16_t)(o->x_position + o->screen_number * 16u) ||
+                   acc.first.y_tile != (uint16_t)o->y_position) {
+          failf("[sanity] obj22: first emitted tile mismatch");
+          ok = 0;
+        } else if (acc.last.x_tile != (uint16_t)(acc.first.x_tile + 4u) ||
+                   acc.last.y_tile != (uint16_t)(acc.first.y_tile + 2u)) {
+          failf("[sanity] obj22: last emitted tile coord mismatch");
+          ok = 0;
+        }
       }
     }
     levelinfo_free(&out);
@@ -1660,7 +1848,8 @@ int main(void) {
   int okS = run_layer2_midway_sanity();
   int okLm = run_lm_object_decode_sanity();
   int okEg = test_exgfx_export_hashes();
-  // level_visual smoke test is intentionally not asserted yet (renderer is still evolving).
+  int okLv = run_level_visual_smoke();
+  int okL2g = run_generated_layer2_objects_case();
   int ok2 = run_quickieworld_suite();
   int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
   int ok4 = run_suite_dir("acidtapes", "test/acidtapes/acidtapes.sfc", "test/acidtapes", "acidtapes ");
@@ -1670,7 +1859,7 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && okLm && okEg && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
+  if (failures == 0 && ok1 && ok1b && okS && okLm && okEg && okLv && okL2g && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");
     return 0;
   }

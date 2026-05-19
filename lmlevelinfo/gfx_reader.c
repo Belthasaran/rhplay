@@ -108,3 +108,97 @@ int snes4bpp_decode_tile(const uint8_t *gfx, size_t gfx_len, uint16_t tile_index
   return 1;
 }
 
+void gfxcache_free(GfxCache *c) {
+  if (!c) return;
+  if (c->entries) {
+    for (size_t i = 0; i < c->entries_cap; i++) {
+      if (c->entries[i].valid) gfxblob_free(&c->entries[i].blob);
+    }
+    free(c->entries);
+  }
+  c->entries = NULL;
+  c->entries_cap = 0;
+  c->use_counter = 0;
+}
+
+int gfxcache_init(GfxCache *c, size_t cap, char *err, size_t errcap) {
+  if (!c || cap == 0) {
+    seterr(err, errcap, "gfxcache_init: invalid args");
+    return 0;
+  }
+  memset(c, 0, sizeof(*c));
+  c->entries = (GfxCacheEntry *)calloc(cap, sizeof(GfxCacheEntry));
+  if (!c->entries) {
+    seterr(err, errcap, "Out of memory creating gfx cache");
+    return 0;
+  }
+  c->entries_cap = cap;
+  c->use_counter = 1;
+  return 1;
+}
+
+static GfxCacheEntry *gfxcache_find(GfxCache *c, uint8_t file_id) {
+  if (!c || !c->entries) return NULL;
+  for (size_t i = 0; i < c->entries_cap; i++) {
+    if (c->entries[i].valid && c->entries[i].file_id == file_id) return &c->entries[i];
+  }
+  return NULL;
+}
+
+static GfxCacheEntry *gfxcache_choose_victim(GfxCache *c) {
+  if (!c || !c->entries) return NULL;
+  // Prefer empty slots.
+  for (size_t i = 0; i < c->entries_cap; i++) {
+    if (!c->entries[i].valid) return &c->entries[i];
+  }
+  // Else LRU.
+  size_t best = 0;
+  uint32_t best_use = c->entries[0].last_use;
+  for (size_t i = 1; i < c->entries_cap; i++) {
+    if (c->entries[i].last_use < best_use) {
+      best_use = c->entries[i].last_use;
+      best = i;
+    }
+  }
+  return &c->entries[best];
+}
+
+int gfxcache_get(const Rom *rom, GfxCache *c, uint8_t file_id, const GfxBlob **out, char *err, size_t errcap) {
+  if (!rom || !c || !out) {
+    seterr(err, errcap, "gfxcache_get: invalid args");
+    return 0;
+  }
+  *out = NULL;
+
+  GfxCacheEntry *e = gfxcache_find(c, file_id);
+  if (e) {
+    e->last_use = c->use_counter++;
+    *out = &e->blob;
+    return 1;
+  }
+
+  e = gfxcache_choose_victim(c);
+  if (!e) {
+    seterr(err, errcap, "gfxcache_get: internal error");
+    return 0;
+  }
+  if (e->valid) {
+    gfxblob_free(&e->blob);
+    e->valid = 0;
+  }
+
+  GfxBlob b;
+  memset(&b, 0, sizeof(b));
+  if (!gfx_load_from_rom(rom, file_id, &b, err, errcap)) {
+    // propagate err from gfx_load_from_rom
+    return 0;
+  }
+
+  e->file_id = file_id;
+  e->blob = b;
+  e->valid = 1;
+  e->last_use = c->use_counter++;
+  *out = &e->blob;
+  return 1;
+}
+

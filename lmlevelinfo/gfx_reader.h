@@ -24,3 +24,23 @@ int gfx_load_from_rom(const Rom *rom, uint8_t file_id, GfxBlob *out, char *err, 
 // Returns 1 on success, 0 if out-of-range.
 int snes4bpp_decode_tile(const uint8_t *gfx, size_t gfx_len, uint16_t tile_index, uint8_t out_px64[64]);
 
+typedef struct {
+  uint8_t file_id;
+  uint32_t last_use;
+  int valid;
+  GfxBlob blob;
+} GfxCacheEntry;
+
+typedef struct {
+  GfxCacheEntry *entries;
+  size_t entries_cap;
+  uint32_t use_counter;
+} GfxCache;
+
+void gfxcache_free(GfxCache *c);
+int gfxcache_init(GfxCache *c, size_t cap, char *err, size_t errcap);
+
+// Get a decompressed blob for file_id, using a simple LRU cache.
+// On success, returns 1 and *out points to owned cached storage (valid until gfxcache_free()).
+int gfxcache_get(const Rom *rom, GfxCache *c, uint8_t file_id, const GfxBlob **out, char *err, size_t errcap);
+

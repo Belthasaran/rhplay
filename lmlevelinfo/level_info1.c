@@ -9,6 +9,8 @@
 #include "jsonutil.h"
 #include "mwl_writer.h"
 #include "lc_lz2.h"
+#include "obj_to_map16.h"
+#include "emit_stats.h"
 
 #include <sys/stat.h>
 #include <errno.h>
@@ -36,7 +38,8 @@ static void usage(FILE *fp) {
           "\n"
           "Exports:\n"
           "  --export-exgfx=<DIR>   Export used ExGFX .bin (decompressed LC_LZ2, SNES 4bpp)\n"
-          "  --export-gfx=<DIR>     Export all GFX + ExGFX from ROM (decompressed LC_LZ2, SNES 4bpp)\n");
+          "  --export-gfx=<DIR>     Export all GFX + ExGFX from ROM (decompressed LC_LZ2, SNES 4bpp)\n"
+          "  --emit-stats           Print object->Map16 emit coverage (LV_STATS line on stderr)\n");
 }
 
 static int parse_level_id(const char *s, uint16_t *out) {
@@ -773,6 +776,7 @@ int main(int argc, char **argv) {
   const char *out_path = NULL;
   const char *export_exgfx_dir = NULL;
   const char *export_gfx_dir = NULL;
+  int want_emit_stats = 0;
 
   const char *rom_path = NULL;
   const char *level_s = NULL;
@@ -790,6 +794,8 @@ int main(int argc, char **argv) {
       export_exgfx_dir = a + 15;
     } else if (!strncmp(a, "--export-gfx=", 13)) {
       export_gfx_dir = a + 13;
+    } else if (!strcmp(a, "--emit-stats")) {
+      want_emit_stats = 1;
     } else if (!strncmp(a, "--data=", 7)) {
       const char *v = a + 7;
       if (!strcmp(v, "none")) {
@@ -878,6 +884,25 @@ int main(int argc, char **argv) {
   if (export_gfx_dir) {
     (void)export_all_gfx_bins(&rom, export_gfx_dir);
     (void)write_level_used_gfx_manifest(&info, export_gfx_dir);
+  }
+
+  if (want_emit_stats) {
+    ObjEmitContext ectx;
+    memset(&ectx, 0, sizeof(ectx));
+    ectx.level_tileset = (uint8_t)(info.primary.fgbg_gfx_setting & 0x0F);
+    ectx.vertical_scroll = info.primary.vertical_scroll_set;
+    if (info.primary.length_in_screens == -1) ectx.screens_in_level = 32;
+    else if (info.primary.length_in_screens > 0) ectx.screens_in_level = (uint16_t)info.primary.length_in_screens;
+    else ectx.screens_in_level = 1;
+    ObjectEmitStats est;
+    object_emit_count_stats(info.objects, info.objects_count, &ectx, &est);
+    emit_stats_print_line(&est);
+    if (info.layer2_objects && info.layer2_objects_count) {
+      ObjectEmitStats l2;
+      object_emit_count_stats(info.layer2_objects, info.layer2_objects_count, &ectx, &l2);
+      fprintf(stderr, "LV_STATS layer2 handled=%zu unknown=%zu total=%zu\n", l2.handled, l2.unknown,
+              l2.total_objects);
+    }
   }
 
   if (want_mwl) {

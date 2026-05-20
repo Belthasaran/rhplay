@@ -1204,6 +1204,25 @@ static int run_generated_layer2_objects_case(void) {
   return ok;
 }
 
+static int parse_lv_stats_file(const char *path, size_t *handled, size_t *unknown, size_t *total) {
+  FILE *fp = fopen(path, "r");
+  if (!fp) return 0;
+  char line[256];
+  int found = 0;
+  while (fgets(line, sizeof(line), fp)) {
+    size_t h = 0, u = 0, t = 0;
+    if (sscanf(line, "LV_STATS handled=%zu unknown=%zu total=%zu", &h, &u, &t) == 3) {
+      if (handled) *handled = h;
+      if (unknown) *unknown = u;
+      if (total) *total = t;
+      found = 1;
+      break;
+    }
+  }
+  fclose(fp);
+  return found;
+}
+
 static int run_level_visual_smoke(void) {
   char err[512];
   char built_rom[512];
@@ -1217,15 +1236,31 @@ static int run_level_visual_smoke(void) {
 
   (void)mkdir_p("test/_work/akogare");
   char outppm[512];
+  char stats_path[512];
   snprintf(outppm, sizeof(outppm), "test/_work/akogare/level_visual_smoke.ppm");
+  snprintf(stats_path, sizeof(stats_path), "test/_work/akogare/level_visual_smoke.stats");
 
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
-           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all",
-           built_rom, outppm);
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all --stats 2>\"%s\"",
+           built_rom, outppm, stats_path);
   int rc = system(cmd);
   if (rc != 0) {
     failf("[level_visual smoke] level_visual exited rc=%d", rc);
+    return 0;
+  }
+
+  size_t handled = 0, unknown = 0, total = 0;
+  if (!parse_lv_stats_file(stats_path, &handled, &unknown, &total)) {
+    failf("[level_visual smoke] missing LV_STATS in stderr capture");
+    return 0;
+  }
+  if (handled < 1) {
+    failf("[level_visual smoke] expected handled>=1, got %zu", handled);
+    return 0;
+  }
+  if (total >= 10 && handled * 2 < total) {
+    failf("[level_visual smoke] coverage below 50%%: handled=%zu total=%zu", handled, total);
     return 0;
   }
 
@@ -1247,12 +1282,37 @@ static int run_level_visual_smoke(void) {
     return 0;
   }
   fclose(pf);
-  if (pw == 0 || ph == 0) {
-    failf("[level_visual smoke] bad dimensions %u x %u", pw, ph);
-    return 0;
+
+  const char *golden_env = getenv("LEVEL_VISUAL_GOLDEN");
+  if (golden_env && golden_env[0] == '1') {
+    const char *golden_path = "test/akogare/golden/level109.ppm.sha256";
+    char hash_cmd[1024];
+    snprintf(hash_cmd, sizeof(hash_cmd), "sha256sum \"%s\" | awk '{print $1}' > test/_work/akogare/level_visual_smoke.sha256", outppm);
+    if (system(hash_cmd) != 0) {
+      failf("[level_visual smoke] sha256sum failed");
+      return 0;
+    }
+    FILE *gf = fopen(golden_path, "r");
+    FILE *cf = fopen("test/_work/akogare/level_visual_smoke.sha256", "r");
+    char gline[128] = {0};
+    char cline[128] = {0};
+    if (!gf || !cf || !fgets(gline, sizeof(gline), gf) || !fgets(cline, sizeof(cline), cf)) {
+      if (gf) fclose(gf);
+      if (cf) fclose(cf);
+      failf("[level_visual smoke] golden hash compare setup failed (missing %s?)", golden_path);
+      return 0;
+    }
+    fclose(gf);
+    fclose(cf);
+    if (strncmp(gline, cline, 64) != 0) {
+      failf("[level_visual smoke] PPM sha256 mismatch vs golden");
+      return 0;
+    }
   }
+
   (void)remove(outppm);
-  printf("PASS: level_visual smoke (%u x %u)\n", pw, ph);
+  (void)remove(stats_path);
+  printf("PASS: level_visual smoke (%u x %u, handled=%zu/%zu)\n", pw, ph, handled, total);
   return 1;
 }
 
@@ -1559,7 +1619,7 @@ static int run_lm_object_decode_sanity(void) {
       } else {
         EmitAcc acc;
         memset(&acc, 0, sizeof(acc));
-        ObjMapResult r = object_emit_map16_tiles(o, emit_acc_fn, &acc);
+        ObjMapResult r = object_emit_map16_tiles(o, NULL, emit_acc_fn, &acc);
         if (r != OBJMAP_HANDLED || acc.count != (size_t)(3u * 5u)) {
           failf("[sanity] obj22: emit tiles count mismatch (got %zu)", acc.count);
           ok = 0;
@@ -1595,6 +1655,40 @@ static int run_lm_object_decode_sanity(void) {
       if (!o->decoded.present || o->decoded.kind != OBJ_DEC_LM_23_MAP16_PAGE1) {
         failf("[sanity] obj23: expected decoded");
         ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x0D cement blocks (generic fill): H=2 W=3 at screen0 (4,5)
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x05,       // y=5, bb=0, N=0
+      0xD4,       // x=4, bbbb=0xD
+      0x23,       // settings H=2 W=3
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj0D");
+    LM_SANITY_EXPECT_COUNT(1, "obj0D");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (o->object_number != 0x0D) {
+        failf("[sanity] obj0D: wrong object id");
+        ok = 0;
+      } else {
+        EmitAcc acc;
+        memset(&acc, 0, sizeof(acc));
+        ObjMapResult r = object_emit_map16_tiles(o, NULL, emit_acc_fn, &acc);
+        if (r != OBJMAP_HANDLED || acc.count != 6u) {
+          failf("[sanity] obj0D: expected 6 tiles, got %zu", acc.count);
+          ok = 0;
+        } else if (!acc.have_first || acc.first.map16_tile != 0x130u || acc.first.x_tile != 4u ||
+                   acc.first.y_tile != 5u) {
+          failf("[sanity] obj0D: first tile id/coord mismatch (id=0x%04X x=%u y=%u)", acc.first.map16_tile,
+                (unsigned)acc.first.x_tile, (unsigned)acc.first.y_tile);
+          ok = 0;
+        }
       }
     }
     levelinfo_free(&out);

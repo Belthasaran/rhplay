@@ -11,6 +11,7 @@
 #include "lc_lz2.h"
 #include "obj_to_map16.h"
 #include "emit_stats.h"
+#include "palette_rom.h"
 
 #include <sys/stat.h>
 #include <errno.h>
@@ -39,7 +40,9 @@ static void usage(FILE *fp) {
           "Exports:\n"
           "  --export-exgfx=<DIR>   Export used ExGFX .bin (decompressed LC_LZ2, SNES 4bpp)\n"
           "  --export-gfx=<DIR>     Export all GFX + ExGFX from ROM (decompressed LC_LZ2, SNES 4bpp)\n"
-          "  --emit-stats           Print object->Map16 emit coverage (LV_STATS line on stderr)\n");
+          "  --emit-stats           Print object->Map16 emit coverage (LV_STATS line on stderr)\n"
+          "  --emit-histogram       Print top unknown object ids (stderr)\n"
+          "  --dump-palette         Print palette source (custom/rom/fallback) on stderr\n");
 }
 
 static int parse_level_id(const char *s, uint16_t *out) {
@@ -777,6 +780,8 @@ int main(int argc, char **argv) {
   const char *export_exgfx_dir = NULL;
   const char *export_gfx_dir = NULL;
   int want_emit_stats = 0;
+  int want_emit_histogram = 0;
+  int want_dump_palette = 0;
 
   const char *rom_path = NULL;
   const char *level_s = NULL;
@@ -796,6 +801,10 @@ int main(int argc, char **argv) {
       export_gfx_dir = a + 13;
     } else if (!strcmp(a, "--emit-stats")) {
       want_emit_stats = 1;
+    } else if (!strcmp(a, "--emit-histogram")) {
+      want_emit_histogram = 1;
+    } else if (!strcmp(a, "--dump-palette")) {
+      want_dump_palette = 1;
     } else if (!strncmp(a, "--data=", 7)) {
       const char *v = a + 7;
       if (!strcmp(v, "none")) {
@@ -886,7 +895,15 @@ int main(int argc, char **argv) {
     (void)write_level_used_gfx_manifest(&info, export_gfx_dir);
   }
 
-  if (want_emit_stats) {
+  if (want_dump_palette) {
+    uint8_t pal256[256][3];
+    uint8_t br = 0, bg = 0, bb = 0;
+    PaletteSource ps = palette_build_for_level(&rom, &info, pal256, &br, &bg, &bb);
+    fprintf(stderr, "palette_source=%s custom_present=%d exgfx_present=%d\n", palette_source_name(ps),
+            info.palette_present, info.exgfx_present);
+  }
+
+  if (want_emit_stats || want_emit_histogram) {
     ObjEmitContext ectx;
     memset(&ectx, 0, sizeof(ectx));
     ectx.level_tileset = (uint8_t)(info.primary.fgbg_gfx_setting & 0x0F);
@@ -894,14 +911,20 @@ int main(int argc, char **argv) {
     if (info.primary.length_in_screens == -1) ectx.screens_in_level = 32;
     else if (info.primary.length_in_screens > 0) ectx.screens_in_level = (uint16_t)info.primary.length_in_screens;
     else ectx.screens_in_level = 1;
-    ObjectEmitStats est;
-    object_emit_count_stats(info.objects, info.objects_count, &ectx, &est);
-    emit_stats_print_line(&est);
-    if (info.layer2_objects && info.layer2_objects_count) {
-      ObjectEmitStats l2;
-      object_emit_count_stats(info.layer2_objects, info.layer2_objects_count, &ectx, &l2);
-      fprintf(stderr, "LV_STATS layer2 handled=%zu unknown=%zu total=%zu\n", l2.handled, l2.unknown,
-              l2.total_objects);
+    if (want_emit_histogram) {
+      object_emit_print_histogram(info.objects, info.objects_count, &ectx, stderr, 25);
+    }
+    if (want_emit_stats) {
+      ObjectEmitStats est;
+      object_emit_count_stats(info.objects, info.objects_count, &ectx, &est);
+      emit_stats_print_line(&est);
+      if (info.layer2_objects && info.layer2_objects_count) {
+        ObjectEmitStats l2;
+        object_emit_count_stats(info.layer2_objects, info.layer2_objects_count, &ectx, &l2);
+        fprintf(stderr,
+                "LV_STATS layer2 handled=%zu unknown=%zu total=%zu skipped_nonvisual=%zu\n", l2.handled,
+                l2.unknown, l2.total_objects, l2.skipped_nonvisual);
+      }
     }
   }
 

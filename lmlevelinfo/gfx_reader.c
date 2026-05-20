@@ -202,3 +202,14 @@ int gfxcache_get(const Rom *rom, GfxCache *c, uint8_t file_id, const GfxBlob **o
   return 1;
 }
 
+void gfxcache_preload_ids(const Rom *rom, GfxCache *c, const uint8_t *file_ids, size_t count,
+                          char *err, size_t errcap) {
+  if (!rom || !c || !file_ids) return;
+  char local_err[256];
+  for (size_t i = 0; i < count; i++) {
+    const GfxBlob *blob = NULL;
+    (void)gfxcache_get(rom, c, file_ids[i], &blob, err ? err : local_err,
+                       err ? errcap : sizeof(local_err));
+  }
+}
+

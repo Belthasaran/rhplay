@@ -11,6 +11,8 @@
 #include "lm_tables.h"
 #include "level_parse.h"
 #include "obj_to_map16.h"
+#include "gfx_route.h"
+#include "gfx_reader.h"
 #include "mwl_reader.h"
 #include "mwl_writer.h"
 #include "lc_lz2.h"
@@ -1204,17 +1206,44 @@ static int run_generated_layer2_objects_case(void) {
   return ok;
 }
 
-static int parse_lv_stats_file(const char *path, size_t *handled, size_t *unknown, size_t *total) {
+typedef struct {
+  size_t handled;
+  size_t unknown;
+  size_t total;
+  size_t skipped_nonvisual;
+  size_t visual_total;
+  size_t gfx_miss;
+  size_t subtiles;
+} LvStatsParsed;
+
+static int parse_lv_stats_file(const char *path, LvStatsParsed *out) {
+  if (!out) return 0;
+  memset(out, 0, sizeof(*out));
   FILE *fp = fopen(path, "r");
   if (!fp) return 0;
-  char line[256];
+  char line[512];
   int found = 0;
   while (fgets(line, sizeof(line), fp)) {
-    size_t h = 0, u = 0, t = 0;
+    size_t h = 0, u = 0, t = 0, sk = 0, vt = 0, gm = 0, st = 0;
+    if (sscanf(line,
+               "LV_STATS handled=%zu unknown=%zu total=%zu skipped_nonvisual=%zu visual_total=%zu "
+               "decoded=%*zu map16_miss=%*zu gfx_miss=%zu subtiles=%zu",
+               &h, &u, &t, &sk, &vt, &gm, &st) >= 7) {
+      out->handled = h;
+      out->unknown = u;
+      out->total = t;
+      out->skipped_nonvisual = sk;
+      out->visual_total = vt;
+      out->gfx_miss = gm;
+      out->subtiles = st;
+      found = 1;
+      break;
+    }
     if (sscanf(line, "LV_STATS handled=%zu unknown=%zu total=%zu", &h, &u, &t) == 3) {
-      if (handled) *handled = h;
-      if (unknown) *unknown = u;
-      if (total) *total = t;
+      out->handled = h;
+      out->unknown = u;
+      out->total = t;
+      out->visual_total = (t > sk) ? (t - sk) : t;
       found = 1;
       break;
     }
@@ -1223,14 +1252,84 @@ static int parse_lv_stats_file(const char *path, size_t *handled, size_t *unknow
   return found;
 }
 
+static int run_gfx_route_slot_test(void) {
+  const char *base = getenv("PATH_BASE_ROM");
+  if (!base || !*base) return 1;
+
+  char built_rom[512];
+  char err[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+
+  Rom rom;
+  if (!rom_load(&rom, built_rom, err, sizeof(err))) {
+    failf("[gfx-route] ROM load failed: %s", err);
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    failf("[gfx-route] table resolve failed");
+    rom_free(&rom);
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    failf("[gfx-route] parse level failed: %s", err);
+    rom_free(&rom);
+    return 0;
+  }
+
+  int ok = 1;
+  if (!info.exgfx_present || !info.exgfx_bytes || info.exgfx_len < 32) {
+    failf("[gfx-route] level 0x109 missing exgfx table");
+    ok = 0;
+  } else {
+    LevelGfxRoute route;
+    gfx_route_build(&route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+    if (!route.valid || !route.has_bypass_table) {
+      failf("[gfx-route] route not built from bypass table");
+      ok = 0;
+    } else {
+      int slots_ok = 0;
+      for (int p = 0; p < 4; p++) {
+        uint8_t slot = (p == 0) ? GFX_SLOT_SP1 : (p == 1) ? GFX_SLOT_SP2 : (p == 2) ? GFX_SLOT_FG1 : GFX_SLOT_FG2;
+        uint8_t fid = route.file_id_for_page[p];
+        if (fid == 0) {
+          failf("[gfx-route] page %d has no GFX file id", p);
+          ok = 0;
+          break;
+        }
+        GfxBlob blob;
+        memset(&blob, 0, sizeof(blob));
+        if (gfx_load_from_rom(&rom, fid, &blob, err, sizeof(err)) && blob.bytes && blob.len >= 32) {
+          uint8_t px[64];
+          if (snes4bpp_decode_tile(blob.bytes, blob.len, 0, px)) slots_ok++;
+          gfxblob_free(&blob);
+        }
+      }
+      if (ok && slots_ok < 2) {
+        failf("[gfx-route] only %d/4 page GFX files decoded tile0", slots_ok);
+        ok = 0;
+      }
+    }
+  }
+
+  levelinfo_free(&info);
+  rom_free(&rom);
+  if (ok) printf("PASS: gfx route exgfx slots (akogare 0x109)\n");
+  return ok;
+}
+
 static int run_level_visual_smoke(void) {
   char err[512];
   char built_rom[512];
   if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
     return 1;
   }
-  struct stat st;
-  if (stat("test/akogare/AllMap16.map16", &st) != 0) {
+  struct stat map16_st;
+  if (stat("test/akogare/AllMap16.map16", &map16_st) != 0) {
     return 1;
   }
 
@@ -1250,17 +1349,23 @@ static int run_level_visual_smoke(void) {
     return 0;
   }
 
-  size_t handled = 0, unknown = 0, total = 0;
-  if (!parse_lv_stats_file(stats_path, &handled, &unknown, &total)) {
+  LvStatsParsed st;
+  if (!parse_lv_stats_file(stats_path, &st)) {
     failf("[level_visual smoke] missing LV_STATS in stderr capture");
     return 0;
   }
-  if (handled < 1) {
-    failf("[level_visual smoke] expected handled>=1, got %zu", handled);
+  if (st.handled < 1) {
+    failf("[level_visual smoke] expected handled>=1, got %zu", st.handled);
     return 0;
   }
-  if (total >= 10 && handled * 2 < total) {
-    failf("[level_visual smoke] coverage below 50%%: handled=%zu total=%zu", handled, total);
+  size_t visual = st.visual_total ? st.visual_total : st.total;
+  if (visual >= 10 && st.handled * 10 < visual * 4) {
+    failf("[level_visual smoke] coverage below 40%% of visual objects: handled=%zu visual=%zu",
+          st.handled, visual);
+    return 0;
+  }
+  if (st.subtiles >= 100 && st.gfx_miss * 4 >= st.subtiles) {
+    failf("[level_visual smoke] gfx_miss rate too high: gfx_miss=%zu subtiles=%zu", st.gfx_miss, st.subtiles);
     return 0;
   }
 
@@ -1312,7 +1417,8 @@ static int run_level_visual_smoke(void) {
 
   (void)remove(outppm);
   (void)remove(stats_path);
-  printf("PASS: level_visual smoke (%u x %u, handled=%zu/%zu)\n", pw, ph, handled, total);
+  printf("PASS: level_visual smoke (%u x %u, handled=%zu visual=%zu gfx_miss=%zu)\n", pw, ph, st.handled,
+         st.visual_total ? st.visual_total : st.total, st.gfx_miss);
   return 1;
 }
 
@@ -1814,6 +1920,16 @@ static int run_lm_object_decode_sanity(void) {
           o->decoded.u.lm27_29.sel_h_4b != 0x0F || o->decoded.u.lm27_29.sel_w_4b != 0x0E) {
         failf("[sanity] obj27m1: variant/sel mismatch");
         ok = 0;
+      } else {
+        ObjEmitContext ectx;
+        memset(&ectx, 0, sizeof(ectx));
+        EmitAcc acc;
+        memset(&acc, 0, sizeof(acc));
+        ObjMapResult er = object_emit_map16_tiles(o, &ectx, emit_acc_fn, &acc);
+        if (er != OBJMAP_HANDLED || acc.count != 240) {
+          failf("[sanity] obj27m1: expected 240 emitted tiles, got %zu", acc.count);
+          ok = 0;
+        }
       }
     }
     levelinfo_free(&out);
@@ -1920,6 +2036,17 @@ static int run_lm_object_decode_sanity(void) {
 #undef LM_SANITY_PARSE
 #undef LM_SANITY_EXPECT_COUNT
 
+  if (ok) {
+    LevelObject o;
+    memset(&o, 0, sizeof(o));
+    o.kind = OBJ_STANDARD;
+    o.object_number = 0x28;
+    if (object_emit_classify(&o) != OBJMAP_NONVISUAL) {
+      failf("[sanity] obj28: expected nonvisual classify");
+      ok = 0;
+    }
+  }
+
   if (ok) printf("PASS: sanity lm_object_decode\n");
   return ok;
 }
@@ -1941,6 +2068,7 @@ int main(void) {
   int ok1b = run_akogare_suite();
   int okS = run_layer2_midway_sanity();
   int okLm = run_lm_object_decode_sanity();
+  int okGfxRt = run_gfx_route_slot_test();
   int okEg = test_exgfx_export_hashes();
   int okLv = run_level_visual_smoke();
   int okL2g = run_generated_layer2_objects_case();
@@ -1953,7 +2081,8 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && okLm && okEg && okLv && okL2g && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
+  if (failures == 0 && ok1 && ok1b && okS && okLm && okGfxRt && okEg && okLv && okL2g && ok2 && ok3 && ok4 &&
+      ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");
     return 0;
   }

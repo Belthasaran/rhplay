@@ -2,9 +2,18 @@
 
 #include <string.h>
 
-// snesrev smw_0d.c kStdObjXX_Generic1RepeatedTileObject_Tiles
+// snesrev smw_0d.c kStdObjXX_Generic1RepeatedTileObject_Tiles (grassland/castle/underground share StdObj05).
 static const uint8_t kGenericRepeatedTiles[15] = {
     0x02, 0x21, 0x23, 0x2a, 0x2b, 0x3f, 0x03, 0x13, 0x1e, 0x24, 0x2e, 0x2f, 0x30, 0x32, 0x65,
+};
+
+// Tileset-specific 0x2E-0x3F fallback low bytes (page 0 unless noted).
+static const uint8_t kTilesetSpecLow[18] = {
+    0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f,
+    0x1e, 0x1e, 0x1e, 0x1e, 0x1e, 0x1e,
+};
+static const uint8_t kTilesetSpecPage[18] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
 };
 
 static const uint8_t kVertPipeTopL[5] = { 0x33, 0x37, 0x39, 0x00, 0x00 };
@@ -14,6 +23,33 @@ static const uint8_t kVertPipeBotR[5] = { 0x00, 0x00, 0x3a, 0x34, 0x38 };
 
 static const uint8_t kHorizPipeEnd[8] = { 0x3b, 0x3c, 0x3b, 0x3f, 0x3b, 0x3c, 0x3b, 0x3f };
 static const uint8_t kHorizPipeShaft[8] = { 0x3d, 0x3e, 0x3d, 0x3e, 0x3d, 0x3e, 0x3d, 0x3e };
+
+typedef struct {
+  uint32_t key;
+  size_t unknown_count;
+  size_t handled_count;
+} HistEntry;
+
+static uint32_t hist_key(const LevelObject *o) {
+  if (!o) return 0;
+  return ((uint32_t)o->kind << 16) | (uint32_t)o->object_number;
+}
+
+ObjMapResult object_emit_classify(const LevelObject *o) {
+  if (!o) return OBJMAP_UNKNOWN;
+  if (o->kind == OBJ_SCREEN_EXIT) return OBJMAP_NONVISUAL;
+  if (o->kind == OBJ_EXTENDED) {
+    if (o->object_number == 0x01 || o->object_number == 0x02 || o->object_number == 0x03) return OBJMAP_NONVISUAL;
+    return OBJMAP_UNKNOWN;
+  }
+  if (o->kind == OBJ_STANDARD) {
+    if (o->object_number == 0x24 || o->object_number == 0x25 || o->object_number == 0x26 ||
+        o->object_number == 0x28 || o->object_number == 0x2D) {
+      return OBJMAP_NONVISUAL;
+    }
+  }
+  return OBJMAP_UNKNOWN;
+}
 
 static int emit_one(emit_map16_fn emit, void *user_ctx, uint16_t map16_id, uint16_t x, uint16_t y) {
   if (!emit) return 1;
@@ -39,16 +75,80 @@ static int emit_rect_fill(emit_map16_fn emit, void *user_ctx, uint16_t base_x, u
   return 1;
 }
 
+static int uses_generic_fill_table(uint16_t id) {
+  if (id >= 0x01 && id <= 0x04) return 1;
+  if (id == 0x05) return 0;
+  if (id >= 0x06 && id <= 0x0E) return 1;
+  if (id == 0x16) return 1;
+  return 0;
+}
+
 static int emit_generic_fill(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
   if (o->kind != OBJ_STANDARD) return 0;
   uint16_t id = o->object_number;
-  if (id < 0x01 || id > 0x0E) return 0;
+  if (!uses_generic_fill_table(id)) return 0;
   int k = (int)id - 1;
-  if (k == 4) return 0; // coins use item memory in-game; skip for static preview
   if (k < 0 || k >= 15) return 0;
 
   uint8_t low = kGenericRepeatedTiles[k];
   uint8_t page = (k >= 7) ? 1u : 0u;
+  uint8_t settings = o->settings;
+  uint16_t w = (uint16_t)((settings & 0x0F) ? (settings & 0x0F) : 1);
+  uint16_t h = (uint16_t)((settings >> 4) ? (settings >> 4) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  return emit_rect_fill(emit, user_ctx, bx, by, w, h, page, low);
+}
+
+static int emit_ground_ledge(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD || o->object_number != 0x14) return 0;
+  uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
+  uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  (void)h;
+  for (uint16_t xx = 0; xx < w; xx++) {
+    if (!emit_one(emit, user_ctx, map16_from_page_low(1, 0x79), (uint16_t)(bx + xx), by)) return 0;
+  }
+  return 1;
+}
+
+static int emit_ground_edges(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD || o->object_number != 0x13) return 0;
+  uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  for (uint16_t row = 0; row < h; row++) {
+    if (!emit_one(emit, user_ctx, map16_from_page_low(1, 0x75), bx, (uint16_t)(by + row))) return 0;
+  }
+  return 1;
+}
+
+static int emit_wide_ledge(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD || o->object_number != 0x21) return 0;
+  uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  for (uint16_t xx = 0; xx < w; xx++) {
+    if (!emit_one(emit, user_ctx, map16_from_page_low(1, 0x7A), (uint16_t)(bx + xx), by)) return 0;
+  }
+  return 1;
+}
+
+static int emit_midway_point(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD || o->object_number != 0x15) return 0;
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  return emit_one(emit, user_ctx, map16_from_page_low(1, 0x71), bx, by);
+}
+
+static int emit_tileset_specific(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD) return 0;
+  uint16_t id = o->object_number;
+  if (id < 0x2E || id > 0x3F) return 0;
+  int idx = (int)id - 0x2E;
+  uint8_t low = kTilesetSpecLow[idx];
+  uint8_t page = kTilesetSpecPage[idx];
   uint8_t settings = o->settings;
   uint16_t w = (uint16_t)((settings & 0x0F) ? (settings & 0x0F) : 1);
   uint16_t h = (uint16_t)((settings >> 4) ? (settings >> 4) : 1);
@@ -101,8 +201,6 @@ static int emit_horizontal_pipe(const LevelObject *o, emit_map16_fn emit, void *
 
 static int emit_slope_left(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
   if (o->kind != OBJ_STANDARD || o->object_number != 0x12) return 0;
-  uint8_t slope_type = (uint8_t)(o->settings & 0x0F);
-  if (slope_type > 9) slope_type = 0;
   uint16_t height = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
   uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
   uint16_t by = (uint16_t)o->y_position;
@@ -117,7 +215,6 @@ static int emit_slope_left(const LevelObject *o, emit_map16_fn emit, void *user_
         return 0;
     }
   }
-  (void)slope_type;
   return 1;
 }
 
@@ -135,36 +232,68 @@ static int emit_bullet_shooter(const LevelObject *o, emit_map16_fn emit, void *u
   return 1;
 }
 
+static int emit_lm_direct_rect(emit_map16_fn emit, void *user_ctx, uint16_t base_tile, uint16_t w, uint16_t h,
+                               uint16_t base_x, uint16_t base_y, int tile_stride_row_major) {
+  if (w == 0) w = 1;
+  if (h == 0) h = 1;
+  for (uint16_t yy = 0; yy < h; yy++) {
+    for (uint16_t xx = 0; xx < w; xx++) {
+      uint16_t tid;
+      if (tile_stride_row_major) {
+        tid = (uint16_t)(base_tile + xx + (uint16_t)(yy * w));
+      } else {
+        uint16_t row_base = base_tile;
+        tid = (uint16_t)((row_base & 0xFF00u) | (((row_base & 0xFFu) + xx) & 0xFFu));
+      }
+      if (!emit_one(emit, user_ctx, tid, (uint16_t)(base_x + xx), (uint16_t)(base_y + yy))) return 0;
+    }
+  }
+  return 1;
+}
+
 static int emit_lm_direct(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
   if (!o->decoded.present) return 0;
-
-  uint16_t base_tile = 0;
-  uint16_t w = 0, h = 0;
-  if (o->decoded.kind == OBJ_DEC_LM_22_MAP16_PAGE0 || o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) {
-    base_tile = o->decoded.u.lm22_23.map16_tile_9b;
-    if (o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) base_tile = (uint16_t)(base_tile + 0x200u);
-    w = (uint16_t)(o->decoded.u.lm22_23.width_4b ? o->decoded.u.lm22_23.width_4b : 1);
-    h = (uint16_t)(o->decoded.u.lm22_23.height_4b ? o->decoded.u.lm22_23.height_4b : 1);
-  } else if (o->decoded.kind == OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F ||
-             o->decoded.kind == OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F) {
-    base_tile = o->decoded.u.lm27_29.base_map16;
-    w = (uint16_t)(o->decoded.u.lm27_29.width ? o->decoded.u.lm27_29.width : 1);
-    h = (uint16_t)(o->decoded.u.lm27_29.height ? o->decoded.u.lm27_29.height : 1);
-  } else {
-    return 0;
-  }
 
   uint16_t base_x = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
   uint16_t base_y = (uint16_t)o->y_position;
 
-  for (uint16_t yy = 0; yy < h; yy++) {
-    for (uint16_t xx = 0; xx < w; xx++) {
-      if (!emit_one(emit, user_ctx, (uint16_t)(base_tile + xx + (uint16_t)(yy * w)), (uint16_t)(base_x + xx),
-                    (uint16_t)(base_y + yy)))
-        return 0;
-    }
+  if (o->decoded.kind == OBJ_DEC_LM_22_MAP16_PAGE0 || o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) {
+    uint16_t base_tile = o->decoded.u.lm22_23.map16_tile_9b;
+    if (o->decoded.kind == OBJ_DEC_LM_23_MAP16_PAGE1) base_tile = (uint16_t)(base_tile + 0x200u);
+    uint16_t w = (uint16_t)(o->decoded.u.lm22_23.width_4b ? o->decoded.u.lm22_23.width_4b : 1);
+    uint16_t h = (uint16_t)(o->decoded.u.lm22_23.height_4b ? o->decoded.u.lm22_23.height_4b : 1);
+    return emit_lm_direct_rect(emit, user_ctx, base_tile, w, h, base_x, base_y, 1);
   }
-  return 1;
+
+  if (o->decoded.kind != OBJ_DEC_LM_27_DIRECT_MAP16_P00_3F && o->decoded.kind != OBJ_DEC_LM_29_DIRECT_MAP16_P40_7F) {
+    return 0;
+  }
+
+  const LevelObjectDecoded *d = &o->decoded;
+  uint16_t base_tile = d->u.lm27_29.base_map16;
+
+  switch (d->u.lm27_29.variant) {
+    case 0:
+      return emit_lm_direct_rect(emit, user_ctx, base_tile,
+                                 (uint16_t)(d->u.lm27_29.width ? d->u.lm27_29.width : 1),
+                                 (uint16_t)(d->u.lm27_29.height ? d->u.lm27_29.height : 1), base_x, base_y, 1);
+    case 1: {
+      uint16_t w = (uint16_t)(d->u.lm27_29.sel_w_4b + 1u);
+      uint16_t h = (uint16_t)(d->u.lm27_29.sel_h_4b + 1u);
+      return emit_lm_direct_rect(emit, user_ctx, base_tile, w, h, base_x, base_y, 0);
+    }
+    case 2:
+      return emit_lm_direct_rect(emit, user_ctx, base_tile,
+                                 (uint16_t)(d->u.lm27_29.width ? d->u.lm27_29.width : 1),
+                                 (uint16_t)(d->u.lm27_29.height ? d->u.lm27_29.height : 1), base_x, base_y, 1);
+    case 3:
+    case 4:
+      return emit_lm_direct_rect(emit, user_ctx, base_tile,
+                                 (uint16_t)(d->u.lm27_29.width ? d->u.lm27_29.width : 1),
+                                 (uint16_t)(d->u.lm27_29.height ? d->u.lm27_29.height : 1), base_x, base_y, 1);
+    default:
+      return 0;
+  }
 }
 
 ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext *ctx,
@@ -172,8 +301,15 @@ ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext 
   (void)ctx;
   if (!o) return OBJMAP_UNKNOWN;
 
+  if (object_emit_classify(o) == OBJMAP_NONVISUAL) return OBJMAP_NONVISUAL;
+
   if (emit_lm_direct(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_generic_fill(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_ground_edges(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_ground_ledge(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_wide_ledge(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_midway_point(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_tileset_specific(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_vertical_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_horizontal_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_slope_left(o, emit, user_ctx)) return OBJMAP_HANDLED;
@@ -191,7 +327,51 @@ void object_emit_count_stats(const LevelObject *objects, size_t count, const Obj
     stats->total_objects++;
     if (objects[i].decoded.present) stats->decoded_present++;
     ObjMapResult r = object_emit_map16_tiles(&objects[i], ctx, NULL, NULL);
-    if (r == OBJMAP_HANDLED) stats->handled++;
+    if (r == OBJMAP_NONVISUAL) stats->skipped_nonvisual++;
+    else if (r == OBJMAP_HANDLED) stats->handled++;
     else stats->unknown++;
+  }
+}
+
+void object_emit_print_histogram(const LevelObject *objects, size_t count, const ObjEmitContext *ctx,
+                                 FILE *fp, int top_n) {
+  if (!fp || !objects || top_n <= 0) return;
+  HistEntry entries[256];
+  size_t nentries = 0;
+  memset(entries, 0, sizeof(entries));
+
+  for (size_t i = 0; i < count; i++) {
+    ObjMapResult cls = object_emit_classify(&objects[i]);
+    if (cls == OBJMAP_NONVISUAL) continue;
+    ObjMapResult r = object_emit_map16_tiles(&objects[i], ctx, NULL, NULL);
+    uint32_t key = hist_key(&objects[i]);
+    size_t j;
+    for (j = 0; j < nentries; j++) {
+      if (entries[j].key == key) break;
+    }
+    if (j == nentries && nentries < 256) {
+      entries[j].key = key;
+      nentries++;
+    }
+    if (j < nentries) {
+      if (r == OBJMAP_HANDLED) entries[j].handled_count++;
+      else entries[j].unknown_count++;
+    }
+  }
+
+  for (int out = 0; out < top_n; out++) {
+    size_t best = 0;
+    size_t best_unknown = 0;
+    for (size_t j = 0; j < nentries; j++) {
+      if (entries[j].unknown_count > best_unknown) {
+        best_unknown = entries[j].unknown_count;
+        best = j;
+      }
+    }
+    if (best_unknown == 0) break;
+    uint32_t key = entries[best].key;
+    fprintf(fp, "unknown kind=%u id=0x%03X count=%zu\n", (unsigned)((key >> 16) & 0xFF),
+            (unsigned)(key & 0xFFFF), entries[best].unknown_count);
+    entries[best].unknown_count = 0;
   }
 }

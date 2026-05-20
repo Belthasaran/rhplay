@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #include "level_parse.h"
 #include "emit_stats.h"
@@ -17,18 +18,23 @@ typedef int (*emit_map16_fn)(const EmittedMap16 *t, void *ctx);
 typedef enum {
   OBJMAP_UNKNOWN = 0,
   OBJMAP_HANDLED = 1,
+  OBJMAP_NONVISUAL = 2,
 } ObjMapResult;
 
 typedef struct {
-  uint8_t level_tileset;      // primary byte4 low nibble (vanilla tileset / LM GFX set)
-  uint8_t vertical_scroll;    // primary vertical_scroll_set
-  uint16_t screens_in_level;  // 1..32
+  uint8_t level_tileset;
+  uint8_t vertical_scroll;
+  uint16_t screens_in_level;
 } ObjEmitContext;
 
-// Emit Map16 tiles for an object (LM direct Map16, generic fills, pipes, slopes, etc.).
+ObjMapResult object_emit_classify(const LevelObject *o);
+
 ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext *ctx,
                                      emit_map16_fn emit, void *user_ctx);
 
-// Count handled vs unknown without drawing (emit may be NULL to only classify).
 void object_emit_count_stats(const LevelObject *objects, size_t count, const ObjEmitContext *ctx,
                              ObjectEmitStats *stats);
+
+// Print top unknown object ids (kind<<8 | id) to fp.
+void object_emit_print_histogram(const LevelObject *objects, size_t count, const ObjEmitContext *ctx,
+                                 FILE *fp, int top_n);

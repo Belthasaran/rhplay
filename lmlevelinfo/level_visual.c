@@ -22,7 +22,8 @@ static void usage(const char *argv0) {
           "\n"
           "notes:\n"
           "  - PNG/APNG/WebP/GIF output is not implemented yet. Use --export-ppm.\n"
-          "  - --stats prints LV_STATS line to stderr (handled/unknown object counts).\n",
+          "  - --stats prints LV_STATS line to stderr (handled/unknown/gfx_miss).\n"
+          "  - --emit-histogram prints top unknown object ids before rendering.\n",
           argv0 ? argv0 : "level_visual",
           argv0 ? argv0 : "level_visual");
 }
@@ -166,8 +167,12 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     }
     uint32_t px = x_tile * 16u + (uint32_t)(si == 1 || si == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(si >= 2 ? 8 : 0);
+    if (rc->stats) rc->stats->subtiles_drawn++;
     if (!okpx) {
-      if (rc->stats) rc->stats->gfx_miss++;
+      if (rc->stats) {
+        rc->stats->gfx_miss++;
+        rc->stats->gfx_miss_by_file[file_id]++;
+      }
       draw_missing_tile(rc->rgb, rc->W, rc->H, px, py, 8u, palrgb[1][0], palrgb[1][1], palrgb[1][2]);
       continue;
     }
@@ -187,6 +192,27 @@ enum {
   LV_LAYERS_LAYER2 = 2,
 };
 
+static void process_object_emit(const LevelObject *o, const ObjEmitContext *emit_ctx, RenderCtx *rc,
+                                ObjectEmitStats *stats, int layer2_marker) {
+  if (!o || !stats) return;
+  stats->total_objects++;
+  if (o->decoded.present) stats->decoded_present++;
+  ObjMapResult r = object_emit_map16_tiles(o, emit_ctx, emit_draw_fn, rc);
+  if (r == OBJMAP_NONVISUAL) {
+    stats->skipped_nonvisual++;
+    return;
+  }
+  if (r == OBJMAP_HANDLED) {
+    stats->handled++;
+    return;
+  }
+  stats->unknown++;
+  uint32_t absx = (uint32_t)o->x_position + (uint32_t)o->screen_number * 16u;
+  uint32_t y = (uint32_t)o->y_position;
+  if (layer2_marker) draw_missing_tile(rc->rgb, rc->W, rc->H, absx * 16u, y * 16u, 16u, 0, 0, 255);
+  else draw_missing_tile(rc->rgb, rc->W, rc->H, absx * 16u, y * 16u, 16u, 0, 0, 0);
+}
+
 static ObjEmitContext make_emit_ctx(const LevelInfo *info) {
   ObjEmitContext ctx;
   memset(&ctx, 0, sizeof(ctx));
@@ -200,7 +226,7 @@ static ObjEmitContext make_emit_ctx(const LevelInfo *info) {
 }
 
 static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_path, const char *out_ppm,
-                            int layers_mask, int print_stats) {
+                            int layers_mask, int print_stats, int print_histogram) {
   char err[512];
   if (!info || !map16_path || !*map16_path || !out_ppm) return 0;
 
@@ -213,7 +239,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 
   GfxCache gfxc;
   memset(&gfxc, 0, sizeof(gfxc));
-  if (!gfxcache_init(&gfxc, 16, err, sizeof(err))) {
+  if (!gfxcache_init(&gfxc, 64, err, sizeof(err))) {
     fprintf(stderr, "GFX cache init failed: %s\n", err);
     map16_free(&map16);
     return 0;
@@ -222,20 +248,23 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   LevelGfxRoute gfx_route;
   gfx_route_build(&gfx_route, &info->primary, info->exgfx_bytes, info->exgfx_len);
 
+  if (rom) {
+    uint8_t preload_ids[32];
+    size_t npreload = gfx_route_collect_file_ids(&gfx_route, preload_ids, sizeof(preload_ids));
+    gfxcache_preload_ids(rom, &gfxc, preload_ids, npreload, err, sizeof(err));
+  }
+
   uint8_t pal256[256][3];
   uint8_t back_r = 0, back_g = 0, back_b = 0;
-  if (info->palette_present && info->palette_bytes && info->palette_len >= 514) {
-    uint16_t back = (uint16_t)(info->palette_bytes[0] | ((uint16_t)info->palette_bytes[1] << 8));
-    snes15_to_rgb(back, &back_r, &back_g, &back_b);
-    for (int i = 0; i < 256; i++) {
-      size_t off = (size_t)(1 + i) * 2u;
-      uint16_t c = (uint16_t)(info->palette_bytes[off] | ((uint16_t)info->palette_bytes[off + 1] << 8));
-      snes15_to_rgb(c, &pal256[i][0], &pal256[i][1], &pal256[i][2]);
+  (void)palette_build_for_level(rom, info, pal256, &back_r, &back_g, &back_b);
+
+  ObjEmitContext emit_ctx = make_emit_ctx(info);
+  if (print_histogram) {
+    object_emit_print_histogram(info->objects, info->objects_count, &emit_ctx, stderr, 20);
+    if (info->layer2_objects && info->layer2_objects_count) {
+      fprintf(stderr, "LV_HIST layer2:\n");
+      object_emit_print_histogram(info->layer2_objects, info->layer2_objects_count, &emit_ctx, stderr, 10);
     }
-  } else if (rom && palette_build_from_rom(rom, &info->primary, pal256, &back_r, &back_g, &back_b)) {
-    /* ROM palette loaded */
-  } else {
-    build_fallback_palette(pal256, info->primary.fg_palette, info->primary.bg_palette, info->primary.sprite_palette);
   }
 
   uint32_t screens = 1;
@@ -275,8 +304,6 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   rc.err = err;
   rc.errcap = sizeof(err);
 
-  ObjEmitContext emit_ctx = make_emit_ctx(info);
-
   if ((layers_mask & LV_LAYERS_LAYER2) && info->layer2_data_ptr_snes) {
     if (info->layer2_is_bg_tilemap && info->layer2_bg_tiles && info->layer2_bg_width && info->layer2_bg_height) {
       uint8_t w2 = info->layer2_bg_width;
@@ -290,38 +317,21 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
       }
     } else if (info->layer2_objects && info->layer2_objects_count) {
       for (size_t i = 0; i < info->layer2_objects_count; i++) {
-        const LevelObject *o = &info->layer2_objects[i];
-        stats.total_objects++;
-        if (o->decoded.present) stats.decoded_present++;
-        if (object_emit_map16_tiles(o, &emit_ctx, emit_draw_fn, &rc) != OBJMAP_HANDLED) {
-          stats.unknown++;
-          uint32_t absx = (uint32_t)o->x_position + (uint32_t)o->screen_number * 16u;
-          uint32_t y = (uint32_t)o->y_position;
-          draw_missing_tile(rgb, W, H, absx * 16u, y * 16u, 16u, 0, 0, 255);
-        } else {
-          stats.handled++;
-        }
+        process_object_emit(&info->layer2_objects[i], &emit_ctx, &rc, &stats, 1);
       }
     }
   }
 
   if (layers_mask & LV_LAYERS_LAYER1) {
     for (size_t i = 0; i < info->objects_count; i++) {
-      const LevelObject *o = &info->objects[i];
-      stats.total_objects++;
-      if (o->decoded.present) stats.decoded_present++;
-      if (object_emit_map16_tiles(o, &emit_ctx, emit_draw_fn, &rc) != OBJMAP_HANDLED) {
-        stats.unknown++;
-        uint32_t absx = (uint32_t)o->x_position + (uint32_t)o->screen_number * 16u;
-        uint32_t y = (uint32_t)o->y_position;
-        draw_missing_tile(rgb, W, H, absx * 16u, y * 16u, 16u, 0, 0, 0);
-      } else {
-        stats.handled++;
-      }
+      process_object_emit(&info->objects[i], &emit_ctx, &rc, &stats, 0);
     }
   }
 
-  if (print_stats) emit_stats_print_line(&stats);
+  if (print_stats) {
+    emit_stats_print_line(&stats);
+    emit_stats_print_top_gfx_miss(&stats, 5);
+  }
 
   int ok = write_ppm(out_ppm, rgb, W, H);
   if (!ok) fprintf(stderr, "Failed writing %s\n", out_ppm);
@@ -333,7 +343,8 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 }
 
 static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
-                                     const char *out_ppm, int layers_mask, int print_stats) {
+                                     const char *out_ppm, int layers_mask, int print_stats,
+                                     int print_histogram) {
   char err[512];
   Rom rom;
   if (!rom_load(&rom, rom_path, err, sizeof(err))) {
@@ -353,14 +364,14 @@ static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, co
     rom_free(&rom);
     return 0;
   }
-  int ok = render_level_ppm(&info, &rom, map16_path, out_ppm, layers_mask, print_stats);
+  int ok = render_level_ppm(&info, &rom, map16_path, out_ppm, layers_mask, print_stats, print_histogram);
   levelinfo_free(&info);
   rom_free(&rom);
   return ok;
 }
 
 static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_path, const char *out_ppm,
-                                     int layers_mask, int print_stats) {
+                                     int layers_mask, int print_stats, int print_histogram) {
   char err[512];
   MwlParsed mwl;
   memset(&mwl, 0, sizeof(mwl));
@@ -438,7 +449,7 @@ static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_pat
     }
   }
 
-  int ok = render_level_ppm(&info, NULL, map16_path, out_ppm, layers_mask, print_stats);
+  int ok = render_level_ppm(&info, NULL, map16_path, out_ppm, layers_mask, print_stats, print_histogram);
   levelinfo_free(&info);
   mwl_parsed_free(&mwl);
   return ok;
@@ -457,6 +468,7 @@ int main(int argc, char **argv) {
   const char *map16_path = NULL;
   const char *suite = NULL;
   int print_stats = 0;
+  int print_histogram = 0;
 
   uint16_t level_id = 0;
   int have_level_id = 0;
@@ -495,6 +507,7 @@ int main(int argc, char **argv) {
     else if (strncmp(a, "--map16=", 8) == 0) map16_path = a + 8;
     else if (strncmp(a, "--suite=", 8) == 0) suite = a + 8;
     else if (strcmp(a, "--stats") == 0) print_stats = 1;
+    else if (strcmp(a, "--emit-histogram") == 0) print_histogram = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
       usage(argv[0]);
       return 0;
@@ -525,7 +538,8 @@ int main(int argc, char **argv) {
   }
 
   if (mwl_path) {
-    if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats)) return 1;
+    if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram))
+      return 1;
     return 0;
   }
 
@@ -533,6 +547,8 @@ int main(int argc, char **argv) {
     usage(argv[0]);
     return 2;
   }
-  if (!render_level_ppm_from_rom(rom_path, level_id, map16_path, export_ppm, layers_mask, print_stats)) return 1;
+  if (!render_level_ppm_from_rom(rom_path, level_id, map16_path, export_ppm, layers_mask, print_stats,
+                                print_histogram))
+    return 1;
   return 0;
 }

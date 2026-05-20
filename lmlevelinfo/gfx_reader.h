@@ -44,3 +44,7 @@ int gfxcache_init(GfxCache *c, size_t cap, char *err, size_t errcap);
 // On success, returns 1 and *out points to owned cached storage (valid until gfxcache_free()).
 int gfxcache_get(const Rom *rom, GfxCache *c, uint8_t file_id, const GfxBlob **out, char *err, size_t errcap);
 
+// Preload a list of file ids into the cache (best-effort; ignores failures).
+void gfxcache_preload_ids(const Rom *rom, GfxCache *c, const uint8_t *file_ids, size_t count,
+                          char *err, size_t errcap);
+

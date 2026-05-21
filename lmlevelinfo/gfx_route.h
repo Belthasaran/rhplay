@@ -47,8 +47,13 @@ void gfx_route_build(LevelGfxRoute *out, const PrimaryLevelHeader *primary,
 
 uint8_t gfx_route_file_for_tile(const LevelGfxRoute *route, uint16_t tile8);
 
+// Vanilla FG/BG list entry for Map16 page (ignores bypass overrides).
+uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page);
+
+// Collect distinct GFX file ids for preload: pages, slots, and vanilla fallbacks per page.
+size_t gfx_route_collect_preload_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out);
+
 // Collect distinct GFX file ids needed for this route (pages + any non-zero slots).
-// Writes up to max_out ids; returns count.
 size_t gfx_route_collect_file_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out);
 
 // Slot name for logging/tests.

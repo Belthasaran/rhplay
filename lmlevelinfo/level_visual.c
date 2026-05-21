@@ -23,7 +23,8 @@ static void usage(const char *argv0) {
           "notes:\n"
           "  - PNG/APNG/WebP/GIF output is not implemented yet. Use --export-ppm.\n"
           "  - --stats prints LV_STATS line to stderr (handled/unknown/gfx_miss).\n"
-          "  - --emit-histogram prints top unknown object ids before rendering.\n",
+          "  - --emit-histogram prints top unknown object ids before rendering.\n"
+          "  - --gfx-debug prints per-page GFX routing and miss breakdown after render.\n",
           argv0 ? argv0 : "level_visual",
           argv0 ? argv0 : "level_visual");
 }
@@ -134,6 +135,19 @@ typedef struct {
   size_t errcap;
 } RenderCtx;
 
+// 0 = ok, -1 = load fail, -2 = tile index out of range
+static int decode_gfx_tile(Rom *rom, GfxCache *gfxc, uint8_t file_id, uint16_t local_tile, uint8_t out_px64[64],
+                           char *err, size_t errcap) {
+  const GfxBlob *gfx = NULL;
+  if (!gfxcache_get(rom, gfxc, file_id, &gfx, err, errcap) || !gfx || !gfx->bytes || !gfx->len) {
+    return -1;
+  }
+  if (!snes4bpp_decode_tile(gfx->bytes, gfx->len, local_tile, out_px64)) {
+    return -2;
+  }
+  return 0;
+}
+
 static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uint32_t y_tile) {
   if (!rc || !rc->rgb || !rc->map16 || !rc->pal256 || !rc->rom || !rc->gfxc) return;
 
@@ -159,19 +173,43 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
 
     uint8_t px64[64];
     int okpx = 0;
-    const GfxBlob *gfx = NULL;
-    uint8_t file_id = rc->gfx_route ? gfx_route_file_for_tile(rc->gfx_route, tile8) : (uint8_t)(((tile8 >> 8) & 3) + 0);
-    uint16_t local_tile = (uint16_t)(tile8 & 0x00FFu);
-    if (gfxcache_get(rc->rom, rc->gfxc, file_id, &gfx, rc->err, rc->errcap) && gfx && gfx->bytes && gfx->len) {
-      okpx = snes4bpp_decode_tile(gfx->bytes, gfx->len, local_tile, px64);
+    uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
+    uint8_t file_id = rc->gfx_route ? gfx_route_file_for_tile(rc->gfx_route, tile8) : page;
+    // SNES FG uses 128 tiles per GFX file; index is 7 bits within the page (bits 8-9 select page).
+    uint16_t local_tile = (uint16_t)(tile8 & 0x7Fu);
+    if (rc->stats) {
+      rc->stats->subtiles_drawn++;
+      rc->stats->gfx_page_subtiles[page]++;
+      if (local_tile > rc->stats->gfx_page_max_local[page]) {
+        rc->stats->gfx_page_max_local[page] = local_tile;
+      }
     }
+
+    int dr = decode_gfx_tile(rc->rom, rc->gfxc, file_id, local_tile, px64, rc->err, rc->errcap);
+    int fail_reason = dr;
+    if (dr == 0) {
+      okpx = 1;
+    } else if (rc->gfx_route) {
+      uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
+      if (van != 0 && van != file_id) {
+        int dr2 = decode_gfx_tile(rc->rom, rc->gfxc, van, local_tile, px64, rc->err, rc->errcap);
+        if (dr2 == 0) {
+          okpx = 1;
+          if (rc->stats) rc->stats->gfx_fallback_ok++;
+        } else {
+          fail_reason = dr2;
+        }
+      }
+    }
+
     uint32_t px = x_tile * 16u + (uint32_t)(si == 1 || si == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(si >= 2 ? 8 : 0);
-    if (rc->stats) rc->stats->subtiles_drawn++;
     if (!okpx) {
       if (rc->stats) {
         rc->stats->gfx_miss++;
         rc->stats->gfx_miss_by_file[file_id]++;
+        if (fail_reason == -1) rc->stats->gfx_load_fail++;
+        else if (fail_reason == -2) rc->stats->gfx_tile_oob++;
       }
       draw_missing_tile(rc->rgb, rc->W, rc->H, px, py, 8u, palrgb[1][0], palrgb[1][1], palrgb[1][2]);
       continue;
@@ -226,7 +264,7 @@ static ObjEmitContext make_emit_ctx(const LevelInfo *info) {
 }
 
 static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_path, const char *out_ppm,
-                            int layers_mask, int print_stats, int print_histogram) {
+                            int layers_mask, int print_stats, int print_histogram, int gfx_debug) {
   char err[512];
   if (!info || !map16_path || !*map16_path || !out_ppm) return 0;
 
@@ -239,7 +277,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 
   GfxCache gfxc;
   memset(&gfxc, 0, sizeof(gfxc));
-  if (!gfxcache_init(&gfxc, 64, err, sizeof(err))) {
+  if (!gfxcache_init(&gfxc, 96, err, sizeof(err))) {
     fprintf(stderr, "GFX cache init failed: %s\n", err);
     map16_free(&map16);
     return 0;
@@ -249,8 +287,8 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   gfx_route_build(&gfx_route, &info->primary, info->exgfx_bytes, info->exgfx_len);
 
   if (rom) {
-    uint8_t preload_ids[32];
-    size_t npreload = gfx_route_collect_file_ids(&gfx_route, preload_ids, sizeof(preload_ids));
+    uint8_t preload_ids[64];
+    size_t npreload = gfx_route_collect_preload_ids(&gfx_route, preload_ids, sizeof(preload_ids));
     gfxcache_preload_ids(rom, &gfxc, preload_ids, npreload, err, sizeof(err));
   }
 
@@ -330,7 +368,11 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 
   if (print_stats) {
     emit_stats_print_line(&stats);
+    emit_stats_print_gfx_miss_reasons(&stats);
     emit_stats_print_top_gfx_miss(&stats, 5);
+  }
+  if (gfx_debug) {
+    emit_stats_print_gfx_page_debug(&stats, &gfx_route);
   }
 
   int ok = write_ppm(out_ppm, rgb, W, H);
@@ -344,7 +386,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 
 static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
                                      const char *out_ppm, int layers_mask, int print_stats,
-                                     int print_histogram) {
+                                     int print_histogram, int gfx_debug) {
   char err[512];
   Rom rom;
   if (!rom_load(&rom, rom_path, err, sizeof(err))) {
@@ -364,14 +406,14 @@ static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, co
     rom_free(&rom);
     return 0;
   }
-  int ok = render_level_ppm(&info, &rom, map16_path, out_ppm, layers_mask, print_stats, print_histogram);
+  int ok = render_level_ppm(&info, &rom, map16_path, out_ppm, layers_mask, print_stats, print_histogram, gfx_debug);
   levelinfo_free(&info);
   rom_free(&rom);
   return ok;
 }
 
 static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_path, const char *out_ppm,
-                                     int layers_mask, int print_stats, int print_histogram) {
+                                     int layers_mask, int print_stats, int print_histogram, int gfx_debug) {
   char err[512];
   MwlParsed mwl;
   memset(&mwl, 0, sizeof(mwl));
@@ -449,7 +491,7 @@ static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_pat
     }
   }
 
-  int ok = render_level_ppm(&info, NULL, map16_path, out_ppm, layers_mask, print_stats, print_histogram);
+  int ok = render_level_ppm(&info, NULL, map16_path, out_ppm, layers_mask, print_stats, print_histogram, gfx_debug);
   levelinfo_free(&info);
   mwl_parsed_free(&mwl);
   return ok;
@@ -469,6 +511,7 @@ int main(int argc, char **argv) {
   const char *suite = NULL;
   int print_stats = 0;
   int print_histogram = 0;
+  int gfx_debug = 0;
 
   uint16_t level_id = 0;
   int have_level_id = 0;
@@ -508,6 +551,7 @@ int main(int argc, char **argv) {
     else if (strncmp(a, "--suite=", 8) == 0) suite = a + 8;
     else if (strcmp(a, "--stats") == 0) print_stats = 1;
     else if (strcmp(a, "--emit-histogram") == 0) print_histogram = 1;
+    else if (strcmp(a, "--gfx-debug") == 0) gfx_debug = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
       usage(argv[0]);
       return 0;
@@ -538,7 +582,8 @@ int main(int argc, char **argv) {
   }
 
   if (mwl_path) {
-    if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram))
+    if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram,
+                                   gfx_debug))
       return 1;
     return 0;
   }
@@ -548,7 +593,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (!render_level_ppm_from_rom(rom_path, level_id, map16_path, export_ppm, layers_mask, print_stats,
-                                print_histogram))
+                                print_histogram, gfx_debug))
     return 1;
   return 0;
 }

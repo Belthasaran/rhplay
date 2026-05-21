@@ -39,7 +39,8 @@ static uint8_t vanilla_file_for_page(uint8_t tileset, int page) {
 
 static uint8_t file_id_from_slot_u16(uint16_t raw) {
   uint8_t fid = (uint8_t)(raw & 0xFFu);
-  if (fid == 0) return 0;
+  // 0 = unused; 0x7F is a common LM placeholder for "default/unset" in AN2/LT3/BG slots.
+  if (fid == 0 || fid == 0x7F) return 0;
   return fid;
 }
 
@@ -78,28 +79,35 @@ uint8_t gfx_route_file_for_tile(const LevelGfxRoute *route, uint16_t tile8) {
   return route->file_id_for_page[page];
 }
 
-size_t gfx_route_collect_file_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out) {
+uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page) {
+  if (!route || page < 0 || page > 3) return 0;
+  return vanilla_file_for_page(route->tileset, page);
+}
+
+static size_t append_unique_id(uint8_t *out_ids, size_t n, size_t max_out, uint8_t fid) {
+  if (fid == 0 || !out_ids || n >= max_out) return n;
+  for (size_t j = 0; j < n; j++) {
+    if (out_ids[j] == fid) return n;
+  }
+  out_ids[n++] = fid;
+  return n;
+}
+
+size_t gfx_route_collect_preload_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out) {
   if (!route || !out_ids || max_out == 0) return 0;
   size_t n = 0;
   for (int p = 0; p < 4; p++) {
-    uint8_t fid = route->file_id_for_page[p];
-    if (fid == 0) continue;
-    size_t j;
-    for (j = 0; j < n; j++) {
-      if (out_ids[j] == fid) break;
-    }
-    if (j == n && n < max_out) out_ids[n++] = fid;
+    n = append_unique_id(out_ids, n, max_out, route->file_id_for_page[p]);
+    n = append_unique_id(out_ids, n, max_out, gfx_route_vanilla_file_for_page(route, p));
   }
   if (route->has_bypass_table) {
     for (int s = 0; s < GFX_SLOT_COUNT; s++) {
-      uint8_t fid = route->slot_file_id[s];
-      if (fid == 0) continue;
-      size_t j;
-      for (j = 0; j < n; j++) {
-        if (out_ids[j] == fid) break;
-      }
-      if (j == n && n < max_out) out_ids[n++] = fid;
+      n = append_unique_id(out_ids, n, max_out, route->slot_file_id[s]);
     }
   }
   return n;
+}
+
+size_t gfx_route_collect_file_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out) {
+  return gfx_route_collect_preload_ids(route, out_ids, max_out);
 }

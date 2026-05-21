@@ -15,6 +15,7 @@ SRCS := \
   gfx_reader.c \
   obj_to_map16.c \
   emit_stats.c \
+  gfx_route.c \
   palette_rom.c \
   mwl_writer.c \
   mwl_reader.c

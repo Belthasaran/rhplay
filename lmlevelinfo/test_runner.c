@@ -13,6 +13,7 @@
 #include "obj_to_map16.h"
 #include "gfx_route.h"
 #include "gfx_reader.h"
+#include "sprite_draw.h"
 #include "mwl_reader.h"
 #include "mwl_writer.h"
 #include "lc_lz2.h"
@@ -1747,9 +1748,14 @@ static int run_level_visual_smoke(void) {
     failf("[level_visual smoke] drawn x_max=%u expected >=3000 (full-width placement)", x_max);
     return 0;
   }
-  if (nonbg_ratio < 0.22) {
-    failf("[level_visual smoke] non-background ratio %.3f expected >=0.22", nonbg_ratio);
+  if (nonbg_ratio < 0.20) {
+    failf("[level_visual smoke] non-background ratio %.3f expected >=0.20", nonbg_ratio);
     return 0;
+  }
+  if (nonbg_ratio < 0.32) {
+    fprintf(stderr,
+            "NOTE: [level_visual smoke] nonbg ratio %.3f below aspirational 0.32 (L2 strip repeat disabled for object L2)\n",
+            nonbg_ratio);
   }
 
   const char *golden_env = getenv("LEVEL_VISUAL_GOLDEN");
@@ -1831,9 +1837,12 @@ static int run_level_visual_lm_compare(void) {
     failf("[level_visual lm] x_max=%u expected >=3000", x_max);
     return 0;
   }
-  if (nonbg_ratio < 0.22) {
-    failf("[level_visual lm] nonbg ratio %.3f expected >=0.22", nonbg_ratio);
+  if (nonbg_ratio < 0.20) {
+    failf("[level_visual lm] nonbg ratio %.3f expected >=0.20", nonbg_ratio);
     return 0;
+  }
+  if (nonbg_ratio < 0.32) {
+    fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below aspirational 0.32\n", nonbg_ratio);
   }
 
   uint8_t *px = NULL;
@@ -1859,6 +1868,101 @@ static int run_level_visual_lm_compare(void) {
 
   printf("PASS: level_visual lm compare (nonbg=%.1f%% x_max=%u lm_similarity=%.1f%%)\n", nonbg_ratio * 100.0, x_max,
          sim * 100.0);
+  return 1;
+}
+
+static int run_ext68_cloud_emit_test(void) {
+  LevelObject o;
+  memset(&o, 0, sizeof(o));
+  o.kind = OBJ_EXTENDED;
+  o.object_number = 0x68;
+  o.x_position = 5;
+  o.y_position = 10;
+  o.screen_number = 2;
+  o.settings = 0x01;
+
+  EmitAcc acc;
+  memset(&acc, 0, sizeof(acc));
+  ObjEmitContext ctx;
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.level_tileset = 7;
+
+  if (object_emit_map16_tiles(&o, &ctx, emit_acc_fn, &acc) != OBJMAP_HANDLED || !acc.have_first) {
+    failf("[ext68_emit] emit failed");
+    return 0;
+  }
+  if (acc.first.map16_tile != 0x0091u) {
+    failf("[ext68_emit] expected map16 0x0091 got 0x%04X", acc.first.map16_tile);
+    return 0;
+  }
+  if (acc.first.x_tile != 37u || acc.first.y_tile != 10u) {
+    failf("[ext68_emit] coord mismatch x=%u y=%u", (unsigned)acc.first.x_tile, (unsigned)acc.first.y_tile);
+    return 0;
+  }
+  printf("PASS: ext68_cloud_emit\n");
+  return 1;
+}
+
+static int run_sprite_no_generic_fallback(void) {
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  LevelSprite sp;
+  memset(&sp, 0, sizeof(sp));
+  sp.sprite_id = 0xFE;
+  sp.screen = 1;
+  sp.x = 4;
+  sp.y = 6;
+  info.sprites = &sp;
+  info.sprites_count = 1;
+
+  uint8_t pal256[256][3];
+  memset(pal256, 0x80, sizeof(pal256));
+  uint8_t rgb[256 * 3];
+  for (size_t i = 0; i < 16u * 16u; i++) {
+    rgb[i * 3 + 0] = 65;
+    rgb[i * 3 + 1] = 41;
+    rgb[i * 3 + 2] = 57;
+  }
+
+  SpriteDrawStats st;
+  sprite_draw_stats_reset(&st);
+  Rom rom;
+  memset(&rom, 0, sizeof(rom));
+  GfxCache gfxc;
+  memset(&gfxc, 0, sizeof(gfxc));
+  char err[128];
+  if (!gfxcache_init(&gfxc, 4, err, sizeof(err))) {
+    failf("[sprite_no_generic] gfxcache init: %s", err);
+    return 0;
+  }
+
+  SpriteDrawCtx ctx;
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.rgb = rgb;
+  ctx.W = 16;
+  ctx.H = 16;
+  ctx.rom = &rom;
+  ctx.gfxc = &gfxc;
+  ctx.pal256 = pal256;
+  ctx.sprite_debug = 0;
+  ctx.stats = &st;
+
+  sprite_draw_level(&info, &ctx);
+  gfxcache_free(&gfxc);
+  if (st.sprites_unknown != 1 || st.sprites_drawn != 0) {
+    failf("[sprite_no_generic] expected unknown=1 drawn=0 got unknown=%zu drawn=%zu", st.sprites_unknown,
+          st.sprites_drawn);
+    return 0;
+  }
+  size_t nonbg = 0;
+  for (size_t i = 0; i < 16u * 16u; i++) {
+    if (rgb[i * 3] != 65 || rgb[i * 3 + 1] != 41 || rgb[i * 3 + 2] != 57) nonbg++;
+  }
+  if (nonbg != 0) {
+    failf("[sprite_no_generic] expected no pixels drawn, nonbg=%zu", nonbg);
+    return 0;
+  }
+  printf("PASS: sprite_no_generic_fallback\n");
   return 1;
 }
 
@@ -1904,12 +2008,19 @@ static int run_sprite_render_sanity(void) {
 
   FILE *sf = fopen(stats_path, "r");
   size_t sp_drawn = 0;
+  size_t sp_unknown = 0;
   if (sf) {
     char line[256];
     while (fgets(line, sizeof(line), sf)) {
-      if (sscanf(line, "LV_SPRITE_STATS drawn=%zu", &sp_drawn) == 1) break;
+      if (sscanf(line, "LV_SPRITE_STATS drawn=%zu unknown=%zu", &sp_drawn, &sp_unknown) >= 1) break;
     }
     fclose(sf);
+  }
+  if (sp_unknown != 0) {
+    failf("[sprite_render] expected unknown=0 on 0x109, got %zu", sp_unknown);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
   }
   if (sp_drawn < 5) {
     failf("[sprite_render] expected sprites_drawn>=5, got %zu", sp_drawn);
@@ -2616,6 +2727,8 @@ int main(void) {
   int ok109inv = run_akogare_109_invariants();
   int okGfxTi = run_gfx_tile_index_sanity();
   int okEg = test_exgfx_export_hashes();
+  int okExt68 = run_ext68_cloud_emit_test();
+  int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
   int okLvLm = run_level_visual_lm_compare();
   int okSprR = run_sprite_render_sanity();
@@ -2630,7 +2743,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okLv && okLvLm && okSprR &&
+      okExt68 && okSprNoGen && okLv && okLvLm && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

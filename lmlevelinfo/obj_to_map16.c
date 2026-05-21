@@ -251,10 +251,12 @@ static int emit_extended_generic(const LevelObject *o, const ObjEmitContext *ctx
   uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
   uint16_t by = (uint16_t)o->y_position;
   uint8_t page;
-  if (id >= 0x51 && id <= 0x6B) {
+  if (id >= 0x51 && id <= 0x6A) {
     page = 0u;
+  } else if (id >= 0x13 && id < 0x51) {
+    page = 1u;
   } else {
-    page = (id >= 0x40) ? 1u : 0u;
+    page = 0u;
   }
   return emit_rect_fill(emit, user_ctx, bx, by, w, h, page, low);
 }

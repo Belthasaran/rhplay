@@ -83,6 +83,23 @@ static int write_ppm(const char *path, const uint8_t *rgb, uint32_t w, uint32_t 
   return ok;
 }
 
+// SMW/LM Layer2 is 32 tiles (512px) wide; tile horizontally across the level canvas.
+static void repeat_layer2_strip_horiz(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t strip_px) {
+  if (!rgb || strip_px == 0 || strip_px >= w) return;
+  for (uint32_t y = 0; y < h; y++) {
+    const uint8_t *row = rgb + (size_t)y * (size_t)w * 3u;
+    uint8_t *out_row = rgb + (size_t)y * (size_t)w * 3u;
+    for (uint32_t x = strip_px; x < w; x++) {
+      uint32_t src_x = x % strip_px;
+      size_t di = (size_t)x * 3u;
+      size_t si = (size_t)src_x * 3u;
+      out_row[di + 0] = row[si + 0];
+      out_row[di + 1] = row[si + 1];
+      out_row[di + 2] = row[si + 2];
+    }
+  }
+}
+
 static void draw_missing_tile(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t x0, uint32_t y0, uint32_t s,
                               uint8_t r, uint8_t g, uint8_t b) {
   for (uint32_t yy = 0; yy < s; yy++) {
@@ -394,6 +411,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
         process_object_emit(&info->layer2_objects[i], &emit_ctx, &rc, &stats, 1);
       }
     }
+    repeat_layer2_strip_horiz(rgb, W, H, 32u * 16u);
   }
 
   if (layers_mask & LV_LAYERS_LAYER1) {

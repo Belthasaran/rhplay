@@ -319,3 +319,6 @@ int parse_level_sprites_from_bytes(const uint8_t *bytes, size_t len,
                                    LevelSprite **out_sprites, size_t *out_count,
                                    char *err, size_t errcap);
 
+// Assign cumulative horizontal screen index (0..31) from LM new_screen and ext 0x01/0x03 jumps.
+void level_assign_object_screens(LevelObject *objects, size_t count);
+

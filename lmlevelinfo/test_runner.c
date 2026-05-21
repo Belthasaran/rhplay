@@ -1496,6 +1496,98 @@ static int run_gfx_tile_index_sanity(void) {
   return ok;
 }
 
+static int is_ppm_bg_pixel(uint8_t r, uint8_t g, uint8_t b) {
+  return abs((int)r - 65) <= 3 && abs((int)g - 41) <= 3 && abs((int)b - 57) <= 3;
+}
+
+static int ppm_analyze_nonbg(const char *path, unsigned *out_w, unsigned *out_h, size_t *nonbg_count,
+                             unsigned *x_max_drawn) {
+  if (!path || !out_w || !out_h || !nonbg_count || !x_max_drawn) return 0;
+  *out_w = 0;
+  *out_h = 0;
+  *nonbg_count = 0;
+  *x_max_drawn = 0;
+
+  FILE *pf = fopen(path, "rb");
+  if (!pf) return 0;
+  char magic[8];
+  if (!fgets(magic, sizeof(magic), pf) || strncmp(magic, "P6", 2) != 0) {
+    fclose(pf);
+    return 0;
+  }
+  unsigned pw = 0, ph = 0;
+  if (fscanf(pf, "%u%u", &pw, &ph) != 2) {
+    fclose(pf);
+    return 0;
+  }
+  int c = fgetc(pf);
+  while (c != EOF && c <= ' ') c = fgetc(pf);
+  if (c != EOF) ungetc(c, pf);
+
+  size_t npix = (size_t)pw * (size_t)ph;
+  uint8_t *px = (uint8_t *)malloc(npix * 3u);
+  if (!px || fread(px, 1, npix * 3u, pf) != npix * 3u) {
+    free(px);
+    fclose(pf);
+    return 0;
+  }
+  fclose(pf);
+
+  *out_w = pw;
+  *out_h = ph;
+  for (unsigned y = 0; y < ph; y++) {
+    for (unsigned x = 0; x < pw; x++) {
+      size_t i = ((size_t)y * (size_t)pw + (size_t)x) * 3u;
+      uint8_t r = px[i], g = px[i + 1], b = px[i + 2];
+      if (!is_ppm_bg_pixel(r, g, b)) {
+        (*nonbg_count)++;
+        if (x > *x_max_drawn) *x_max_drawn = x;
+      }
+    }
+  }
+  free(px);
+  return 1;
+}
+
+static int run_screen_assign_sanity(void) {
+  uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x04, 0xD4, 0x01, // screen 0: y=4 x=4 std 0x0D
+      0x85, 0xD5, 0x01, // new_screen: screen 1 y=5 x=5 std 0x0D
+      0xFF};
+  LevelInfo out;
+  memset(&out, 0, sizeof(out));
+  char err[256] = {0};
+  int ok = parse_level_info_from_layer1_bytes(buf, sizeof(buf), 0x000, &out, err, sizeof(err));
+  if (!ok) {
+    failf("[screen_assign] parse failed: %s", err[0] ? err : "(no err)");
+    levelinfo_free(&out);
+    return 0;
+  }
+  if (out.objects_count != 2) {
+    failf("[screen_assign] expected 2 objects, got %zu", out.objects_count);
+    ok = 0;
+  } else if (out.objects[0].screen_number != 0 || out.objects[1].screen_number != 1) {
+    failf("[screen_assign] screen_number want 0,1 got %u,%u", out.objects[0].screen_number,
+          out.objects[1].screen_number);
+    ok = 0;
+  } else {
+    EmitAcc acc;
+    memset(&acc, 0, sizeof(acc));
+    ObjMapResult r = object_emit_map16_tiles(&out.objects[1], NULL, emit_acc_fn, &acc);
+    if (r != OBJMAP_HANDLED || !acc.have_first) {
+      failf("[screen_assign] emit failed");
+      ok = 0;
+    } else if (acc.first.x_tile != 21u) {
+      failf("[screen_assign] expected x_tile=21 (screen1*16+5), got %u", acc.first.x_tile);
+      ok = 0;
+    }
+  }
+  levelinfo_free(&out);
+  if (ok) printf("PASS: screen_assign_object_screens\n");
+  return ok;
+}
+
 static int run_level_visual_smoke(void) {
   char err[512];
   char built_rom[512];
@@ -1566,6 +1658,23 @@ static int run_level_visual_smoke(void) {
     return 0;
   }
 
+  unsigned ph_u = 0, x_max = 0;
+  size_t nonbg = 0;
+  if (!ppm_analyze_nonbg(outppm, &pw, &ph_u, &nonbg, &x_max)) {
+    failf("[level_visual smoke] ppm analyze failed");
+    return 0;
+  }
+  size_t total_px = (size_t)pw * (size_t)ph_u;
+  double nonbg_ratio = total_px ? (double)nonbg / (double)total_px : 0.0;
+  if (x_max < 3000u) {
+    failf("[level_visual smoke] drawn x_max=%u expected >=3000 (full-width placement)", x_max);
+    return 0;
+  }
+  if (nonbg_ratio < 0.35) {
+    failf("[level_visual smoke] non-background ratio %.3f expected >=0.35", nonbg_ratio);
+    return 0;
+  }
+
   const char *golden_env = getenv("LEVEL_VISUAL_GOLDEN");
   if (golden_env && golden_env[0] == '1') {
     const char *golden_path = "test/akogare/golden/level109.ppm.sha256";
@@ -1595,8 +1704,8 @@ static int run_level_visual_smoke(void) {
 
   (void)remove(outppm);
   (void)remove(stats_path);
-  printf("PASS: level_visual smoke (%u x %u, handled=%zu visual=%zu gfx_miss=%zu)\n", pw, ph, st.handled,
-         st.visual_total ? st.visual_total : st.total, st.gfx_miss);
+  printf("PASS: level_visual smoke (%u x %u, handled=%zu visual=%zu gfx_miss=%zu nonbg=%.1f%% x_max=%u)\n",
+         pw, ph, st.handled, st.visual_total ? st.visual_total : st.total, st.gfx_miss, nonbg_ratio * 100.0, x_max);
   return 1;
 }
 
@@ -2266,6 +2375,7 @@ int main(void) {
   int ok1b = run_akogare_suite();
   int okS = run_layer2_midway_sanity();
   int okLm = run_lm_object_decode_sanity();
+  int okScr = run_screen_assign_sanity();
   int okGfxRt = run_gfx_route_slot_test();
   int okGfxSmall = run_gfx_route_page_small_slot();
   int ok109inv = run_akogare_109_invariants();
@@ -2282,7 +2392,8 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && okLm && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg && okLv &&
+  if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
+      okLv &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

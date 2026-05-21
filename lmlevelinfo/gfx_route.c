@@ -91,6 +91,13 @@ uint8_t gfx_route_file_for_tile(const LevelGfxRoute *route, uint16_t tile8) {
   return route->file_id_for_page[page];
 }
 
+uint8_t gfx_route_file_for_sprite_slot(const LevelGfxRoute *route, int slot_index) {
+  if (!route || !route->valid || slot_index < 0 || slot_index >= GFX_SLOT_COUNT) {
+    return 0;
+  }
+  return route->slot_file_id[slot_index];
+}
+
 uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page) {
   if (!route || page < 0 || page > 3) return 0;
   return vanilla_file_for_page(route->tileset, page);

@@ -13,6 +13,7 @@
 #include "gfx_route.h"
 #include "palette_rom.h"
 #include "emit_stats.h"
+#include "sprite_draw.h"
 
 static void usage(const char *argv0) {
   fprintf(stderr,
@@ -25,7 +26,9 @@ static void usage(const char *argv0) {
           "  - --stats prints LV_STATS line to stderr (handled/unknown/gfx_miss).\n"
           "  - --emit-histogram prints top unknown object ids before rendering.\n"
           "  - --gfx-debug prints per-page GFX routing and miss breakdown after render.\n"
-          "  - --report prints palette/layer2/canvas/GFX manifest before render (stderr).\n",
+          "  - --report prints palette/layer2/canvas/GFX manifest before render (stderr).\n"
+          "  - --layers=all|layer1|layer2|sprites (sprites included in all).\n"
+          "  - --sprite-debug draws green markers for unknown sprite ids.\n",
           argv0 ? argv0 : "level_visual",
           argv0 ? argv0 : "level_visual");
 }
@@ -83,8 +86,13 @@ static int write_ppm(const char *path, const uint8_t *rgb, uint32_t w, uint32_t 
   return ok;
 }
 
-// SMW/LM Layer2 is 32 tiles (512px) wide; tile horizontally across the level canvas.
-static void repeat_layer2_strip_horiz(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t strip_px) {
+static int rgb_is_bg(uint8_t r, uint8_t g, uint8_t b, uint8_t br, uint8_t bg, uint8_t bb, int tol) {
+  return abs((int)r - (int)br) <= tol && abs((int)g - (int)bg) <= tol && abs((int)b - (int)bb) <= tol;
+}
+
+// SMW/LM Layer2 is 32 tiles (512px) wide; tile horizontally across the level canvas (non-bg pixels only).
+static void repeat_layer2_strip_horiz(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t strip_px, uint8_t br, uint8_t bg,
+                                      uint8_t bb) {
   if (!rgb || strip_px == 0 || strip_px >= w) return;
   for (uint32_t y = 0; y < h; y++) {
     const uint8_t *row = rgb + (size_t)y * (size_t)w * 3u;
@@ -93,6 +101,7 @@ static void repeat_layer2_strip_horiz(uint8_t *rgb, uint32_t w, uint32_t h, uint
       uint32_t src_x = x % strip_px;
       size_t di = (size_t)x * 3u;
       size_t si = (size_t)src_x * 3u;
+      if (rgb_is_bg(row[si + 0], row[si + 1], row[si + 2], br, bg, bb, 3)) continue;
       out_row[di + 0] = row[si + 0];
       out_row[di + 1] = row[si + 1];
       out_row[di + 2] = row[si + 2];
@@ -246,6 +255,7 @@ static int emit_draw_fn(const EmittedMap16 *t, void *ctx) {
 enum {
   LV_LAYERS_LAYER1 = 1,
   LV_LAYERS_LAYER2 = 2,
+  LV_LAYERS_SPRITES = 4,
 };
 
 static void process_object_emit(const LevelObject *o, const ObjEmitContext *emit_ctx, RenderCtx *rc,
@@ -315,7 +325,8 @@ static void print_level_report(const LevelInfo *info, Rom *rom, uint32_t W, uint
 }
 
 static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_path, const char *out_ppm,
-                            int layers_mask, int print_stats, int print_histogram, int gfx_debug, int print_report) {
+                            int layers_mask, int print_stats, int print_histogram, int gfx_debug, int print_report,
+                            int sprite_debug) {
   char err[512];
   if (!info || !map16_path || !*map16_path || !out_ppm) return 0;
 
@@ -411,7 +422,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
         process_object_emit(&info->layer2_objects[i], &emit_ctx, &rc, &stats, 1);
       }
     }
-    repeat_layer2_strip_horiz(rgb, W, H, 32u * 16u);
+    repeat_layer2_strip_horiz(rgb, W, H, 32u * 16u, back_r, back_g, back_b);
   }
 
   if (layers_mask & LV_LAYERS_LAYER1) {
@@ -420,8 +431,32 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     }
   }
 
+  SpriteDrawStats sp_stats;
+  sprite_draw_stats_reset(&sp_stats);
+  if ((layers_mask & LV_LAYERS_SPRITES) && info->sprites && info->sprites_count && rom) {
+    SpriteDrawCtx spctx;
+    memset(&spctx, 0, sizeof(spctx));
+    spctx.rgb = rgb;
+    spctx.W = W;
+    spctx.H = H;
+    spctx.rom = rom;
+    spctx.gfxc = &gfxc;
+    spctx.gfx_route = &gfx_route;
+    spctx.pal256 = pal256;
+    spctx.sprite_pal_base = (uint8_t)(info->primary.sprite_palette & 3u);
+    spctx.back_r = back_r;
+    spctx.back_g = back_g;
+    spctx.back_b = back_b;
+    spctx.sprite_debug = sprite_debug;
+    spctx.stats = &sp_stats;
+    spctx.err = err;
+    spctx.errcap = sizeof(err);
+    sprite_draw_level(info, &spctx);
+  }
+
   if (print_stats) {
     emit_stats_print_line(&stats);
+    if (sp_stats.sprites_total) sprite_draw_stats_print_line(&sp_stats);
     emit_stats_print_gfx_miss_reasons(&stats);
     emit_stats_print_top_gfx_miss(&stats, 5);
   }
@@ -440,7 +475,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 
 static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
                                      const char *out_ppm, int layers_mask, int print_stats,
-                                     int print_histogram, int gfx_debug, int print_report) {
+                                     int print_histogram, int gfx_debug, int print_report, int sprite_debug) {
   char err[512];
   Rom rom;
   if (!rom_load(&rom, rom_path, err, sizeof(err))) {
@@ -461,7 +496,7 @@ static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, co
     return 0;
   }
   int ok = render_level_ppm(&info, &rom, map16_path, out_ppm, layers_mask, print_stats, print_histogram, gfx_debug,
-                            print_report);
+                            print_report, sprite_debug);
   levelinfo_free(&info);
   rom_free(&rom);
   return ok;
@@ -469,7 +504,7 @@ static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, co
 
 static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_path, const char *out_ppm,
                                      int layers_mask, int print_stats, int print_histogram, int gfx_debug,
-                                     int print_report) {
+                                     int print_report, int sprite_debug) {
   char err[512];
   MwlParsed mwl;
   memset(&mwl, 0, sizeof(mwl));
@@ -548,7 +583,7 @@ static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_pat
   }
 
   int ok = render_level_ppm(&info, NULL, map16_path, out_ppm, layers_mask, print_stats, print_histogram, gfx_debug,
-                            print_report);
+                            print_report, sprite_debug);
   levelinfo_free(&info);
   mwl_parsed_free(&mwl);
   return ok;
@@ -570,6 +605,7 @@ int main(int argc, char **argv) {
   int print_histogram = 0;
   int gfx_debug = 0;
   int print_report = 0;
+  int sprite_debug = 0;
 
   uint16_t level_id = 0;
   int have_level_id = 0;
@@ -611,6 +647,7 @@ int main(int argc, char **argv) {
     else if (strcmp(a, "--emit-histogram") == 0) print_histogram = 1;
     else if (strcmp(a, "--gfx-debug") == 0) gfx_debug = 1;
     else if (strcmp(a, "--report") == 0) print_report = 1;
+    else if (strcmp(a, "--sprite-debug") == 0) sprite_debug = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
       usage(argv[0]);
       return 0;
@@ -625,12 +662,17 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  int layers_mask = LV_LAYERS_LAYER1 | LV_LAYERS_LAYER2;
-  if (strcmp(layers, "all") == 0) layers_mask = LV_LAYERS_LAYER1 | LV_LAYERS_LAYER2;
-  else if (strcmp(layers, "layer1") == 0) layers_mask = LV_LAYERS_LAYER1;
-  else if (strcmp(layers, "layer2") == 0) layers_mask = LV_LAYERS_LAYER2;
-  else {
-    fprintf(stderr, "Invalid --layers=%s (expected all|layer1|layer2)\n", layers);
+  int layers_mask = LV_LAYERS_LAYER1 | LV_LAYERS_LAYER2 | LV_LAYERS_SPRITES;
+  if (strcmp(layers, "all") == 0) {
+    layers_mask = LV_LAYERS_LAYER1 | LV_LAYERS_LAYER2 | LV_LAYERS_SPRITES;
+  } else if (strcmp(layers, "layer1") == 0) {
+    layers_mask = LV_LAYERS_LAYER1;
+  } else if (strcmp(layers, "layer2") == 0) {
+    layers_mask = LV_LAYERS_LAYER2;
+  } else if (strcmp(layers, "sprites") == 0) {
+    layers_mask = LV_LAYERS_SPRITES;
+  } else {
+    fprintf(stderr, "Invalid --layers=%s (expected all|layer1|layer2|sprites)\n", layers);
     return 2;
   }
 
@@ -642,7 +684,7 @@ int main(int argc, char **argv) {
 
   if (mwl_path) {
     if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram,
-                                   gfx_debug, print_report))
+                                   gfx_debug, print_report, sprite_debug))
       return 1;
     return 0;
   }
@@ -652,7 +694,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (!render_level_ppm_from_rom(rom_path, level_id, map16_path, export_ppm, layers_mask, print_stats,
-                                print_histogram, gfx_debug, print_report))
+                                print_histogram, gfx_debug, print_report, sprite_debug))
     return 1;
   return 0;
 }

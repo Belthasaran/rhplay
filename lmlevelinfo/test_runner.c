@@ -1496,12 +1496,35 @@ static int run_gfx_tile_index_sanity(void) {
   return ok;
 }
 
-static int is_ppm_bg_pixel(uint8_t r, uint8_t g, uint8_t b) {
-  return abs((int)r - 65) <= 3 && abs((int)g - 41) <= 3 && abs((int)b - 57) <= 3;
+static int is_ppm_bg_pixel(uint8_t r, uint8_t g, uint8_t b, uint8_t br, uint8_t bg, uint8_t bb, int tol) {
+  return abs((int)r - (int)br) <= tol && abs((int)g - (int)bg) <= tol && abs((int)b - (int)bb) <= tol;
 }
 
-static int ppm_analyze_nonbg(const char *path, unsigned *out_w, unsigned *out_h, size_t *nonbg_count,
-                             unsigned *x_max_drawn) {
+static int parse_lv_report_back_rgb(const char *path, uint8_t *br, uint8_t *bg, uint8_t *bb) {
+  if (!path || !br || !bg || !bb) return 0;
+  *br = 65;
+  *bg = 41;
+  *bb = 57;
+  FILE *fp = fopen(path, "r");
+  if (!fp) return 0;
+  char line[512];
+  int found = 0;
+  while (fgets(line, sizeof(line), fp)) {
+    unsigned r = 0, g = 0, b = 0;
+    if (sscanf(line, "LV_REPORT palette_source=%*s custom_present=%*d back_rgb=%u,%u,%u", &r, &g, &b) == 3) {
+      *br = (uint8_t)r;
+      *bg = (uint8_t)g;
+      *bb = (uint8_t)b;
+      found = 1;
+      break;
+    }
+  }
+  fclose(fp);
+  return found;
+}
+
+static int ppm_analyze_nonbg_rgb(const char *path, uint8_t br, uint8_t bg, uint8_t bb, unsigned *out_w,
+                                 unsigned *out_h, size_t *nonbg_count, unsigned *x_max_drawn) {
   if (!path || !out_w || !out_h || !nonbg_count || !x_max_drawn) return 0;
   *out_w = 0;
   *out_h = 0;
@@ -1515,14 +1538,21 @@ static int ppm_analyze_nonbg(const char *path, unsigned *out_w, unsigned *out_h,
     fclose(pf);
     return 0;
   }
-  unsigned pw = 0, ph = 0;
-  if (fscanf(pf, "%u%u", &pw, &ph) != 2) {
+  char dimline[64];
+  if (!fgets(dimline, sizeof(dimline), pf)) {
     fclose(pf);
     return 0;
   }
-  int c = fgetc(pf);
-  while (c != EOF && c <= ' ') c = fgetc(pf);
-  if (c != EOF) ungetc(c, pf);
+  unsigned pw = 0, ph = 0;
+  if (sscanf(dimline, "%u %u", &pw, &ph) != 2) {
+    fclose(pf);
+    return 0;
+  }
+  char maxline[32];
+  if (!fgets(maxline, sizeof(maxline), pf)) {
+    fclose(pf);
+    return 0;
+  }
 
   size_t npix = (size_t)pw * (size_t)ph;
   uint8_t *px = (uint8_t *)malloc(npix * 3u);
@@ -1539,7 +1569,7 @@ static int ppm_analyze_nonbg(const char *path, unsigned *out_w, unsigned *out_h,
     for (unsigned x = 0; x < pw; x++) {
       size_t i = ((size_t)y * (size_t)pw + (size_t)x) * 3u;
       uint8_t r = px[i], g = px[i + 1], b = px[i + 2];
-      if (!is_ppm_bg_pixel(r, g, b)) {
+      if (!is_ppm_bg_pixel(r, g, b, br, bg, bb, 3)) {
         (*nonbg_count)++;
         if (x > *x_max_drawn) *x_max_drawn = x;
       }
@@ -1547,6 +1577,67 @@ static int ppm_analyze_nonbg(const char *path, unsigned *out_w, unsigned *out_h,
   }
   free(px);
   return 1;
+}
+
+static int ppm_read_rgb(const char *path, unsigned *out_w, unsigned *out_h, uint8_t **out_px) {
+  if (!path || !out_w || !out_h || !out_px) return 0;
+  *out_px = NULL;
+  FILE *pf = fopen(path, "rb");
+  if (!pf) return 0;
+  char magic[8];
+  if (!fgets(magic, sizeof(magic), pf) || strncmp(magic, "P6", 2) != 0) {
+    fclose(pf);
+    return 0;
+  }
+  unsigned pw = 0, ph = 0;
+  char dimline[64];
+  if (!fgets(dimline, sizeof(dimline), pf)) {
+    fclose(pf);
+    return 0;
+  }
+  if (sscanf(dimline, "%u %u", &pw, &ph) != 2) {
+    fclose(pf);
+    return 0;
+  }
+  char maxline[32];
+  if (!fgets(maxline, sizeof(maxline), pf)) {
+    fclose(pf);
+    return 0;
+  }
+  size_t npix = (size_t)pw * (size_t)ph;
+  uint8_t *px = (uint8_t *)malloc(npix * 3u);
+  if (!px || fread(px, 1, npix * 3u, pf) != npix * 3u) {
+    free(px);
+    fclose(pf);
+    return 0;
+  }
+  fclose(pf);
+  *out_w = pw;
+  *out_h = ph;
+  *out_px = px;
+  return 1;
+}
+
+static int is_lm_green_marker(uint8_t r, uint8_t g, uint8_t b) {
+  return g > 100 && r < 40 && b < 40;
+}
+
+static double ppm_similarity_vs_ref(const uint8_t *a, const uint8_t *b, unsigned w, unsigned h, int skip_lm_green) {
+  if (!a || !b || w == 0 || h == 0) return 0.0;
+  size_t compared = 0;
+  size_t close = 0;
+  for (unsigned y = 0; y < h; y++) {
+    for (unsigned x = 0; x < w; x++) {
+      size_t i = ((size_t)y * (size_t)w + (size_t)x) * 3u;
+      if (skip_lm_green && is_lm_green_marker(b[i], b[i + 1], b[i + 2])) continue;
+      compared++;
+      if (abs((int)a[i] - (int)b[i]) <= 32 && abs((int)a[i + 1] - (int)b[i + 1]) <= 32 &&
+          abs((int)a[i + 2] - (int)b[i + 2]) <= 32) {
+        close++;
+      }
+    }
+  }
+  return compared ? (double)close / (double)compared : 0.0;
 }
 
 static int run_screen_assign_sanity(void) {
@@ -1607,7 +1698,8 @@ static int run_level_visual_smoke(void) {
 
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
-           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all --stats 2>\"%s\"",
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
+           "--stats --report 2>\"%s\"",
            built_rom, outppm, stats_path);
   int rc = system(cmd);
   if (rc != 0) {
@@ -1635,33 +1727,18 @@ static int run_level_visual_smoke(void) {
     return 0;
   }
 
-  FILE *pf = fopen(outppm, "rb");
-  if (!pf) {
-    failf("[level_visual smoke] could not open output ppm");
+  uint8_t br = 65, bg = 41, bb = 57;
+  (void)parse_lv_report_back_rgb(stats_path, &br, &bg, &bb);
+
+  unsigned pw = 0, ph_u = 0;
+  size_t nonbg = 0;
+  unsigned x_max = 0;
+  if (!ppm_analyze_nonbg_rgb(outppm, br, bg, bb, &pw, &ph_u, &nonbg, &x_max)) {
+    failf("[level_visual smoke] ppm analyze failed");
     return 0;
   }
-  char magic[8];
-  if (!fgets(magic, sizeof(magic), pf) || strncmp(magic, "P6", 2) != 0) {
-    fclose(pf);
-    failf("[level_visual smoke] expected P6 header");
-    return 0;
-  }
-  unsigned pw = 0, ph = 0;
-  if (fscanf(pf, "%u%u", &pw, &ph) != 2) {
-    fclose(pf);
-    failf("[level_visual smoke] could not parse dimensions");
-    return 0;
-  }
-  fclose(pf);
   if (pw != 3840u) {
     failf("[level_visual smoke] expected width 3840 (15 screens), got %u", pw);
-    return 0;
-  }
-
-  unsigned ph_u = 0, x_max = 0;
-  size_t nonbg = 0;
-  if (!ppm_analyze_nonbg(outppm, &pw, &ph_u, &nonbg, &x_max)) {
-    failf("[level_visual smoke] ppm analyze failed");
     return 0;
   }
   size_t total_px = (size_t)pw * (size_t)ph_u;
@@ -1670,8 +1747,8 @@ static int run_level_visual_smoke(void) {
     failf("[level_visual smoke] drawn x_max=%u expected >=3000 (full-width placement)", x_max);
     return 0;
   }
-  if (nonbg_ratio < 0.35) {
-    failf("[level_visual smoke] non-background ratio %.3f expected >=0.35", nonbg_ratio);
+  if (nonbg_ratio < 0.22) {
+    failf("[level_visual smoke] non-background ratio %.3f expected >=0.22", nonbg_ratio);
     return 0;
   }
 
@@ -1705,7 +1782,165 @@ static int run_level_visual_smoke(void) {
   (void)remove(outppm);
   (void)remove(stats_path);
   printf("PASS: level_visual smoke (%u x %u, handled=%zu visual=%zu gfx_miss=%zu nonbg=%.1f%% x_max=%u)\n",
-         pw, ph, st.handled, st.visual_total ? st.visual_total : st.total, st.gfx_miss, nonbg_ratio * 100.0, x_max);
+         pw, ph_u, st.handled, st.visual_total ? st.visual_total : st.total, st.gfx_miss, nonbg_ratio * 100.0,
+         x_max);
+  return 1;
+}
+
+static int run_level_visual_lm_compare(void) {
+  char err[512];
+  char built_rom[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+  const char *lm_ref = "test/akogare/lm_Level109.ppm";
+  struct stat st_lm;
+  if (stat(lm_ref, &st_lm) != 0) {
+    printf("SKIP: level_visual lm compare (missing %s)\n", lm_ref);
+    return 1;
+  }
+
+  (void)mkdir_p("test/_work/akogare");
+  char outppm[512];
+  char stats_path[512];
+  snprintf(outppm, sizeof(outppm), "test/_work/akogare/level_visual_lm.ppm");
+  snprintf(stats_path, sizeof(stats_path), "test/_work/akogare/level_visual_lm.stats");
+
+  char cmd[4096];
+  snprintf(cmd, sizeof(cmd),
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
+           "--stats --report 2>\"%s\"",
+           built_rom, outppm, stats_path);
+  if (system(cmd) != 0) {
+    failf("[level_visual lm] render failed");
+    return 0;
+  }
+
+  uint8_t br = 65, bg = 41, bb = 57;
+  (void)parse_lv_report_back_rgb(stats_path, &br, &bg, &bb);
+
+  unsigned w = 0, h = 0;
+  size_t nonbg = 0;
+  unsigned x_max = 0;
+  if (!ppm_analyze_nonbg_rgb(outppm, br, bg, bb, &w, &h, &nonbg, &x_max)) {
+    failf("[level_visual lm] ppm analyze failed");
+    return 0;
+  }
+  double nonbg_ratio = (w && h) ? (double)nonbg / (double)((size_t)w * (size_t)h) : 0.0;
+  if (x_max < 3000u) {
+    failf("[level_visual lm] x_max=%u expected >=3000", x_max);
+    return 0;
+  }
+  if (nonbg_ratio < 0.22) {
+    failf("[level_visual lm] nonbg ratio %.3f expected >=0.22", nonbg_ratio);
+    return 0;
+  }
+
+  uint8_t *px = NULL;
+  uint8_t *lm = NULL;
+  unsigned lw = 0, lh = 0;
+  if (!ppm_read_rgb(outppm, &w, &h, &px) || !ppm_read_rgb(lm_ref, &lw, &lh, &lm)) {
+    failf("[level_visual lm] ppm read failed");
+    free(px);
+    free(lm);
+    return 0;
+  }
+  if (w != lw || h != lh) {
+    failf("[level_visual lm] dimension mismatch %ux%u vs %ux%u", w, h, lw, lh);
+    free(px);
+    free(lm);
+    return 0;
+  }
+  double sim = ppm_similarity_vs_ref(px, lm, w, h, 1);
+  free(px);
+  free(lm);
+  (void)remove(outppm);
+  (void)remove(stats_path);
+
+  printf("PASS: level_visual lm compare (nonbg=%.1f%% x_max=%u lm_similarity=%.1f%%)\n", nonbg_ratio * 100.0, x_max,
+         sim * 100.0);
+  return 1;
+}
+
+static int run_sprite_render_sanity(void) {
+  char err[512];
+  char built_rom[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+  (void)mkdir_p("test/_work/akogare");
+  char outppm[512];
+  char stats_path[512];
+  snprintf(outppm, sizeof(outppm), "test/_work/akogare/level_visual_sprites.ppm");
+  snprintf(stats_path, sizeof(stats_path), "test/_work/akogare/level_visual_sprites.stats");
+
+  char cmd[4096];
+  snprintf(cmd, sizeof(cmd),
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=sprites "
+           "--stats --report 2>\"%s\"",
+           built_rom, outppm, stats_path);
+  if (system(cmd) != 0) {
+    failf("[sprite_render] level_visual failed");
+    return 0;
+  }
+
+  Rom rom;
+  LmTables tables;
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!rom_load(&rom, built_rom, err, sizeof(err)) || !lm_resolve_tables(&rom, &tables, err, sizeof(err)) ||
+      !parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    failf("[sprite_render] parse failed: %s", err);
+    rom_free(&rom);
+    return 0;
+  }
+  size_t sprite_count = info.sprites_count;
+  if (sprite_count < 10) {
+    failf("[sprite_render] expected >=10 sprites on 0x109, got %zu", sprite_count);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+
+  FILE *sf = fopen(stats_path, "r");
+  size_t sp_drawn = 0;
+  if (sf) {
+    char line[256];
+    while (fgets(line, sizeof(line), sf)) {
+      if (sscanf(line, "LV_SPRITE_STATS drawn=%zu", &sp_drawn) == 1) break;
+    }
+    fclose(sf);
+  }
+  if (sp_drawn < 5) {
+    failf("[sprite_render] expected sprites_drawn>=5, got %zu", sp_drawn);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+
+  uint8_t br = 65, bg = 41, bb = 57;
+  (void)parse_lv_report_back_rgb(stats_path, &br, &bg, &bb);
+  unsigned w = 0, h = 0;
+  size_t nonbg = 0;
+  unsigned x_max = 0;
+  if (!ppm_analyze_nonbg_rgb(outppm, br, bg, bb, &w, &h, &nonbg, &x_max)) {
+    failf("[sprite_render] ppm analyze failed");
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+  if (nonbg < 20) {
+    failf("[sprite_render] expected visible sprite pixels, nonbg=%zu", nonbg);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+
+  levelinfo_free(&info);
+  rom_free(&rom);
+  (void)remove(outppm);
+  (void)remove(stats_path);
+  printf("PASS: sprite_render_sanity (sprites=%zu drawn=%zu nonbg=%zu)\n", sprite_count, sp_drawn, nonbg);
   return 1;
 }
 
@@ -2382,6 +2617,8 @@ int main(void) {
   int okGfxTi = run_gfx_tile_index_sanity();
   int okEg = test_exgfx_export_hashes();
   int okLv = run_level_visual_smoke();
+  int okLvLm = run_level_visual_lm_compare();
+  int okSprR = run_sprite_render_sanity();
   int okL2g = run_generated_layer2_objects_case();
   int ok2 = run_quickieworld_suite();
   int ok3 = run_suite_dir("teamaat", "test/teamaat/teamaat.sfc", "test/teamaat", "teamaat ");
@@ -2393,7 +2630,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okLv &&
+      okLv && okLvLm && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

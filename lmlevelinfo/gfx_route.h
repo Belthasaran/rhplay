@@ -34,6 +34,12 @@ enum {
   GFX_MAP16_PAGE_FG2 = 3,
 };
 
+enum {
+  GFX_ROUTE_MODE_BYPASS = 0,
+  GFX_ROUTE_MODE_VANILLA = 1,
+  GFX_ROUTE_MODE_TRY_BOTH = 2,
+};
+
 typedef struct {
   uint8_t file_id_for_page[4];
   uint8_t slot_file_id[GFX_SLOT_COUNT]; // 0 = unused
@@ -47,6 +53,9 @@ void gfx_route_build(LevelGfxRoute *out, const PrimaryLevelHeader *primary,
                      const uint8_t *exgfx_bytes, size_t exgfx_len);
 
 uint8_t gfx_route_file_for_tile(const LevelGfxRoute *route, uint16_t tile8);
+
+// Resolve GFX file for a subtile word (page from tile8 bits 8-9).
+uint8_t gfx_route_file_for_tile_mode(const LevelGfxRoute *route, uint16_t tile8, int route_mode);
 
 // LM bypass slot index (GFX_SLOT_SP1..GFX_SLOT_SP4) -> GFX file id.
 uint8_t gfx_route_file_for_sprite_slot(const LevelGfxRoute *route, int slot_index);

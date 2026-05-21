@@ -222,11 +222,29 @@ static int emit_grass_cloud_std(const LevelObject *o, const ObjEmitContext *ctx,
   return 0;
 }
 
-static int emit_extended_generic(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+static int emit_ext_generic_tileset7_special(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (!o || o->kind != OBJ_EXTENDED) return 0;
+  uint16_t id = o->object_number;
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  uint8_t sub = (uint8_t)(o->settings & 0x0F);
+
+  if (id == 0x27 && (sub == 1 || sub == 4 || sub == 7 || sub == 10 || sub == 13)) {
+    return emit_one(emit, user_ctx, map16_from_page_low(1, 0x32), bx, by);
+  }
+  if (id == 0x07) {
+    return emit_one(emit, user_ctx, map16_from_page_low(1, 0x32), bx, by);
+  }
+  return 0;
+}
+
+static int emit_extended_generic(const LevelObject *o, const ObjEmitContext *ctx, emit_map16_fn emit,
+                                void *user_ctx) {
   if (o->kind != OBJ_EXTENDED) return 0;
   uint16_t id = o->object_number;
   if (id == 0x41 || id == 0x46) return 0;
   if (id == 0x68 || id == 0x6B) return 0;
+  if (ctx && ctx->level_tileset == 7 && emit_ext_generic_tileset7_special(o, emit, user_ctx)) return 1;
   uint8_t low = ext_generic_low_byte(id);
   uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
   uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
@@ -467,7 +485,7 @@ ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext 
   if (emit_yoshi_coin(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_midway_bar_ext(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_ext_cloud_fringe(o, emit, user_ctx)) return OBJMAP_HANDLED;
-  if (emit_extended_generic(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_extended_generic(o, ctx, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_water_surface(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_generic_fill(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_ground_edges(o, emit, user_ctx)) return OBJMAP_HANDLED;
@@ -539,5 +557,44 @@ void object_emit_print_histogram(const LevelObject *objects, size_t count, const
     fprintf(fp, "unknown kind=%u id=0x%03X count=%zu\n", (unsigned)((key >> 16) & 0xFF),
             (unsigned)(key & 0xFFFF), entries[best].unknown_count);
     entries[best].unknown_count = 0;
+  }
+}
+
+void object_emit_print_obj_histogram(const LevelObject *objects, size_t count, FILE *fp, int top_n) {
+  if (!fp || !objects || top_n <= 0) return;
+  HistEntry entries[256];
+  size_t nentries = 0;
+  memset(entries, 0, sizeof(entries));
+
+  for (size_t i = 0; i < count; i++) {
+    if (object_emit_classify(&objects[i]) == OBJMAP_NONVISUAL) continue;
+    uint32_t key = hist_key(&objects[i]);
+    size_t j;
+    for (j = 0; j < nentries; j++) {
+      if (entries[j].key == key) break;
+    }
+    if (j == nentries && nentries < 256) {
+      entries[j].key = key;
+      entries[j].handled_count = 0;
+      entries[j].unknown_count = 0;
+      nentries++;
+    }
+    if (j < nentries) entries[j].handled_count++;
+  }
+
+  for (int out = 0; out < top_n; out++) {
+    size_t best = 0;
+    size_t best_count = 0;
+    for (size_t j = 0; j < nentries; j++) {
+      if (entries[j].handled_count > best_count) {
+        best_count = entries[j].handled_count;
+        best = j;
+      }
+    }
+    if (best_count == 0) break;
+    uint32_t key = entries[best].key;
+    fprintf(fp, "LV_HIST_OBJ kind=%u id=0x%03X count=%zu\n", (unsigned)((key >> 16) & 0xFF),
+            (unsigned)(key & 0xFFFF), best_count);
+    entries[best].handled_count = 0;
   }
 }

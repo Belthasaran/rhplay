@@ -38,3 +38,6 @@ void object_emit_count_stats(const LevelObject *objects, size_t count, const Obj
 // Print top unknown object ids (kind<<8 | id) to fp.
 void object_emit_print_histogram(const LevelObject *objects, size_t count, const ObjEmitContext *ctx,
                                  FILE *fp, int top_n);
+
+// Print top object ids by occurrence (LV_HIST_OBJ), all visual objects.
+void object_emit_print_obj_histogram(const LevelObject *objects, size_t count, FILE *fp, int top_n);

@@ -1060,7 +1060,35 @@ static int parse_objects_from_buf(const uint8_t *p, size_t max, int is_vertical,
   // For MWL, layer1_blob is not used.
   out->layer1_blob.pc_offset = 0;
   out->layer1_blob.len = i;
+
+  level_assign_object_screens(out->objects, out->objects_count);
   return 1;
+}
+
+void level_assign_object_screens(LevelObject *objects, size_t count) {
+  if (!objects) return;
+  uint16_t screen = 0;
+  for (size_t i = 0; i < count; i++) {
+    LevelObject *o = &objects[i];
+
+    if (o->kind == OBJ_EXTENDED && o->object_number == 0x01 && o->raw_len >= 3) {
+      screen = (uint16_t)(o->raw[0] & 0x1F);
+      continue;
+    }
+    if (o->kind == OBJ_EXTENDED && o->object_number == 0x03 && o->raw_len >= 3) {
+      screen = (uint16_t)(o->raw[0] & 0x1F);
+      continue;
+    }
+    if (o->kind == OBJ_SCREEN_EXIT) {
+      continue;
+    }
+
+    if (o->new_screen) {
+      screen++;
+      if (screen > 31) screen = 31;
+    }
+    o->screen_number = (uint8_t)(screen & 0x1F);
+  }
 }
 
 static int parse_layer2_objects_from_rom(const Rom *rom, uint32_t layer2_ptr_snes, LevelInfo *out,

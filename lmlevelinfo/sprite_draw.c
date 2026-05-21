@@ -22,24 +22,42 @@ typedef struct {
   SpriteTilePart parts[16];
 } SpriteGfxDef;
 
-// snesrev smw_03.c Spr0BA_TimedPlatform, Spr0AB_Rex, smw_02.c Spr035_Yoshi, Spr09F_BanzaiBill
+// snesrev draw tables; OAM palette in low bits of Prop -> pal_sub (row offset within 8-11).
 static const SpriteGfxDef kSpriteGfxTable[] = {
     {0xBA, GFX_SLOT_SP2, 3,
      {{0, 0, 0xB4, 0, 0, 0}, {0x10, 0, 0xB5, 0, 0, 0}, {0xC, 0x4, 0xC4, 0, 0, 0}}},
     {0xAB, GFX_SLOT_SP2, 4,
-     {{0xFC, 0xF1, 0x8A, 0, 0, 0},
-      {0, 0, 0xAA, 0, 0, 0},
-      {0, 0, 0x8C, 0, 0, 0},
+     {{0xFC, 0xF1, 0x8A, 3, 0, 0},
+      {0, 0, 0xAA, 1, 0, 0},
+      {0, 0, 0x8C, 1, 0, 0},
       {0, 0, 0xA8, 0, 0, 0}}},
     {0x35, GFX_SLOT_SP2, 2,
-     {{0, 0, 0x5D, 0, 0, 0}, {0, 0, 0xC6, 0, 0, 0}}},
+     {{0, 0, 0x5D, 2, 0, 0}, {0, 0, 0xC6, 2, 0, 0}}},
     {0x9F, GFX_SLOT_SP2, 4,
-     {{0, 0, 0x80, 0, 0, 0},
-      {0x10, 0, 0x82, 0, 0, 0},
-      {0, 0x10, 0xA0, 0, 0, 0},
-      {0x10, 0x10, 0x88, 0, 0, 0}}},
+     {{0, 0, 0x80, 3, 0, 0},
+      {0x10, 0, 0x82, 3, 0, 0},
+      {0, 0x10, 0xA0, 3, 0, 0},
+      {0x10, 0x10, 0x88, 3, 0, 0}}},
     {0x4F, GFX_SLOT_SP2, 2,
      {{0, 0, 0xA6, 0, 0, 0}, {0, 0, 0xA8, 0, 0, 0}}},
+    {0xC4, GFX_SLOT_SP2, 4,
+     {{0, 0, 0x60, 0, 0, 0},
+      {0x10, 0, 0x61, 0, 0, 0},
+      {0x20, 0, 0x61, 0, 0, 0},
+      {0x30, 0, 0x62, 0, 0, 0}}},
+    {0x7B, GFX_SLOT_SP2, 1, {{0, 0, 0x24, 0, 0, 0}}},
+    {0x7C, GFX_SLOT_SP2, 1, {{0, 0, 0x24, 0, 0, 0}}},
+    {0xC5, GFX_SLOT_SP2, 1, {{0, 0, 0x60, 0, 0, 0}}},
+    {0xC6, GFX_SLOT_SP2, 1, {{0, 0, 0x62, 0, 0, 0}}},
+    {0xC7, GFX_SLOT_SP2, 1, {{0, 0, 0x64, 0, 0, 0}}},
+    {0xD8, GFX_SLOT_SP2, 1, {{0, 0, 0x00, 0, 0, 0}}},
+    {0xE0, GFX_SLOT_SP2, 2, {{0, 0, 0x88, 0, 0, 0}, {0, 0, 0x8A, 0, 0, 0}}},
+    {0xE6, GFX_SLOT_SP2, 1, {{0, 0, 0x3C, 0, 0, 0}}},
+    {0xE7, GFX_SLOT_SP2, 1, {{0, 0, 0x3E, 0, 0, 0}}},
+    {0xDB, GFX_SLOT_SP2, 1, {{0, 0, 0xA0, 0, 0, 0}}},
+    {0xDC, GFX_SLOT_SP2, 1, {{0, 0, 0xA2, 0, 0, 0}}},
+    {0xDD, GFX_SLOT_SP2, 1, {{0, 0, 0xA4, 0, 0, 0}}},
+    {0xDF, GFX_SLOT_SP2, 1, {{0, 0, 0xA6, 0, 0, 0}}},
 };
 
 static void blit_tile8(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t x0, uint32_t y0, const uint8_t px64[64],
@@ -121,7 +139,7 @@ static void draw_sprite_parts(SpriteDrawCtx *ctx, const SpriteGfxDef *def, const
   for (uint8_t ti = 0; ti < def->n; ti++) {
     const SpriteTilePart *p = &def->parts[ti];
     uint8_t palrgb[16][3];
-    uint8_t sub = (uint8_t)((pal_line + p->pal_sub) & 0x0F);
+    uint8_t sub = (uint8_t)((pal_line + (p->pal_sub & 3u)) & 0x0F);
     for (int c = 0; c < 16; c++) {
       int idx = (int)sub * 16 + c;
       palrgb[c][0] = ctx->pal256[idx & 0xFF][0];
@@ -144,19 +162,6 @@ static void draw_sprite_parts(SpriteDrawCtx *ctx, const SpriteGfxDef *def, const
   if (any && ctx->stats) ctx->stats->sprites_drawn++;
 }
 
-static void draw_sprite_generic(SpriteDrawCtx *ctx, const LevelSprite *sp) {
-  SpriteGfxDef tmp;
-  memset(&tmp, 0, sizeof(tmp));
-  tmp.sprite_id = sp->sprite_id;
-  tmp.sp_slot = GFX_SLOT_SP2;
-  tmp.n = 2;
-  uint8_t t0 = (uint8_t)((sp->sprite_id * 3u) & 0x7Fu);
-  tmp.parts[0].tile = t0;
-  tmp.parts[1].tile = (uint8_t)(t0 + 1u);
-  tmp.parts[1].x = 8;
-  draw_sprite_parts(ctx, &tmp, sp);
-}
-
 void sprite_draw_level(const LevelInfo *info, SpriteDrawCtx *ctx) {
   if (!info || !ctx || !ctx->rgb || !ctx->rom || !ctx->gfxc) return;
   if (!info->sprites || info->sprites_count == 0) return;
@@ -177,8 +182,17 @@ void sprite_draw_level(const LevelInfo *info, SpriteDrawCtx *ctx) {
         ctx->stats->sprites_drawn++;
       }
     } else {
-      draw_sprite_generic(ctx, sp);
       if (ctx->stats) ctx->stats->sprites_unknown++;
+    }
+  }
+}
+
+void sprite_draw_log_unknown_ids(const LevelInfo *info, FILE *fp) {
+  if (!info || !fp || !info->sprites) return;
+  for (size_t i = 0; i < info->sprites_count; i++) {
+    uint8_t id = info->sprites[i].sprite_id;
+    if (!lookup_sprite_def(id)) {
+      fprintf(fp, "LV_REPORT_SPRITE_UNKNOWN id=0x%02X\n", (unsigned)id);
     }
   }
 }

@@ -38,3 +38,6 @@ void sprite_draw_stats_print_line(const SpriteDrawStats *s);
 
 // Draw all level sprites on top of the canvas (call after Layer1).
 void sprite_draw_level(const LevelInfo *info, SpriteDrawCtx *ctx);
+
+// Log LV_REPORT_SPRITE_UNKNOWN lines for ids without GFX tables.
+void sprite_draw_log_unknown_ids(const LevelInfo *info, FILE *fp);

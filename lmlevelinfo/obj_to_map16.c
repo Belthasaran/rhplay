@@ -35,6 +35,18 @@ static const uint8_t kExtGenericTiles[51] = {
 static const uint8_t kWaterTopTiles[4] = { 0x00, 0x01, 0x04, 0x08 };
 static const uint8_t kWaterBottomTiles[4] = { 0x02, 0x03, 0x05, 0x0b };
 
+// snesrev smw_0d.c cloud fringe / grass tileset objects (page 0).
+static const uint8_t kExtObj68CloudFringeTiles[8] = { 0x91, 0x92, 0x96, 0x97, 0x9a, 0x9b, 0x9f, 0xa0 };
+static const uint8_t kGrassObj3DTopCloudTiles[2] = { 0x93, 0x9c };
+static const uint8_t kGrassObj3ESideCloudTop[8] = { 0x94, 0x8f, 0x9d, 0x98, 0x95, 0x90, 0x9e, 0x99 };
+static const uint8_t kGrassObj3ESideCloudBot[8] = { 0x8f, 0x8f, 0x98, 0x98, 0x90, 0x90, 0x99, 0x99 };
+
+// Extended ids 0x51-0x6A: extra low bytes (snesrev); id>=0x6B uses dedicated handlers.
+static const uint8_t kExtGenericTilesHigh[26] = {
+    0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0,
+    0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa,
+};
+
 typedef struct {
   uint32_t key;
   size_t unknown_count;
@@ -149,21 +161,83 @@ static int emit_wide_ledge(const LevelObject *o, emit_map16_fn emit, void *user_
   return 1;
 }
 
+static uint8_t ext_generic_low_byte(uint16_t id) {
+  if (id < 51) return kExtGenericTiles[id];
+  if (id >= 0x51 && id <= 0x6A) return kExtGenericTilesHigh[id - 0x51];
+  return 0x3f;
+}
+
+static int emit_ext_cloud_fringe(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_EXTENDED) return 0;
+  uint16_t id = o->object_number;
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+
+  if (id == 0x6B) {
+    uint8_t idx = (uint8_t)(o->settings & 7u);
+    if (idx > 7) idx = 7;
+    return emit_one(emit, user_ctx, map16_from_page_low(0, kExtObj68CloudFringeTiles[idx]), bx, by);
+  }
+
+  if (id == 0x68) {
+    uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
+    uint8_t variant = (uint8_t)((o->settings >> 4) & 7u);
+    for (uint16_t xx = 0; xx < w; xx++) {
+      uint8_t low = kExtObj68CloudFringeTiles[(variant + xx) & 7u];
+      if (!emit_one(emit, user_ctx, map16_from_page_low(0, low), (uint16_t)(bx + xx), by)) return 0;
+    }
+    return 1;
+  }
+  return 0;
+}
+
+static int emit_grass_cloud_std(const LevelObject *o, const ObjEmitContext *ctx, emit_map16_fn emit,
+                                void *user_ctx) {
+  if (!ctx || o->kind != OBJ_STANDARD) return 0;
+  if (ctx->level_tileset != 7) return 0;
+  uint16_t id = o->object_number;
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+
+  if (id == 0x3D) {
+    uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
+    uint8_t variant = (uint8_t)((o->settings >> 4) & 1u);
+    for (uint16_t xx = 0; xx < w; xx++) {
+      uint8_t low = kGrassObj3DTopCloudTiles[variant];
+      if (!emit_one(emit, user_ctx, map16_from_page_low(0, low), (uint16_t)(bx + xx), by)) return 0;
+    }
+    return 1;
+  }
+
+  if (id == 0x3E) {
+    uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
+    uint8_t variant = (uint8_t)(o->settings & 7u);
+    if (variant > 7) variant = 7;
+    for (uint16_t yy = 0; yy < h; yy++) {
+      uint8_t low = (yy == 0) ? kGrassObj3ESideCloudTop[variant] : kGrassObj3ESideCloudBot[variant];
+      if (!emit_one(emit, user_ctx, map16_from_page_low(0, low), bx, (uint16_t)(by + yy))) return 0;
+    }
+    return 1;
+  }
+  return 0;
+}
+
 static int emit_extended_generic(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
   if (o->kind != OBJ_EXTENDED) return 0;
   uint16_t id = o->object_number;
   if (id == 0x41 || id == 0x46) return 0;
-  uint8_t low;
-  if (id < 51) {
-    low = kExtGenericTiles[id];
-  } else {
-    low = 0x3f;
-  }
+  if (id == 0x68 || id == 0x6B) return 0;
+  uint8_t low = ext_generic_low_byte(id);
   uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
   uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
   uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
   uint16_t by = (uint16_t)o->y_position;
-  uint8_t page = (id >= 0x40) ? 1u : 0u;
+  uint8_t page;
+  if (id >= 0x51 && id <= 0x6B) {
+    page = 0u;
+  } else {
+    page = (id >= 0x40) ? 1u : 0u;
+  }
   return emit_rect_fill(emit, user_ctx, bx, by, w, h, page, low);
 }
 
@@ -211,9 +285,11 @@ static int emit_midway_point(const LevelObject *o, emit_map16_fn emit, void *use
   return emit_one(emit, user_ctx, map16_from_page_low(1, 0x71), bx, by);
 }
 
-static int emit_tileset_specific(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+static int emit_tileset_specific(const LevelObject *o, const ObjEmitContext *ctx, emit_map16_fn emit,
+                                void *user_ctx) {
   if (o->kind != OBJ_STANDARD) return 0;
   uint16_t id = o->object_number;
+  if (emit_grass_cloud_std(o, ctx, emit, user_ctx)) return 1;
   if (id < 0x2E || id > 0x3F) return 0;
   int idx = (int)id - 0x2E;
   uint8_t low = kTilesetSpecLow[idx];
@@ -383,7 +459,6 @@ static int emit_lm_direct(const LevelObject *o, emit_map16_fn emit, void *user_c
 
 ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext *ctx,
                                      emit_map16_fn emit, void *user_ctx) {
-  (void)ctx;
   if (!o) return OBJMAP_UNKNOWN;
 
   if (object_emit_classify(o) == OBJMAP_NONVISUAL) return OBJMAP_NONVISUAL;
@@ -391,6 +466,7 @@ ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext 
   if (emit_lm_direct(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_yoshi_coin(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_midway_bar_ext(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_ext_cloud_fringe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_extended_generic(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_water_surface(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_generic_fill(o, emit, user_ctx)) return OBJMAP_HANDLED;
@@ -398,7 +474,7 @@ ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext 
   if (emit_ground_ledge(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_wide_ledge(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_midway_point(o, emit, user_ctx)) return OBJMAP_HANDLED;
-  if (emit_tileset_specific(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_tileset_specific(o, ctx, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_vertical_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_skinny_vertical_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_horizontal_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;

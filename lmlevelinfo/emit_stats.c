@@ -1,4 +1,5 @@
 #include "emit_stats.h"
+#include "gfx_route.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -12,8 +13,15 @@ void emit_stats_reset(ObjectEmitStats *s) {
   s->decoded_present = 0;
   s->map16_miss = 0;
   s->gfx_miss = 0;
+  s->gfx_load_fail = 0;
+  s->gfx_tile_oob = 0;
+  s->gfx_fallback_ok = 0;
   s->subtiles_drawn = 0;
   for (int i = 0; i < 256; i++) s->gfx_miss_by_file[i] = 0;
+  for (int p = 0; p < 4; p++) {
+    s->gfx_page_max_local[p] = 0;
+    s->gfx_page_subtiles[p] = 0;
+  }
 }
 
 void emit_stats_print_human(const ObjectEmitStats *s, const char *label) {
@@ -53,5 +61,22 @@ void emit_stats_print_top_gfx_miss(const ObjectEmitStats *s, int top_n) {
     if (best_id < 0 || best == 0) break;
     fprintf(stderr, "LV_GFX_MISS_TOP file=0x%02X count=%u\n", (unsigned)best_id, best);
     used[best_id] = 1;
+  }
+}
+
+void emit_stats_print_gfx_miss_reasons(const ObjectEmitStats *s) {
+  if (!s) return;
+  fprintf(stderr,
+          "LV_GFX_MISS_REASON load_fail=%zu tile_oob=%zu fallback_ok=%zu final_miss=%zu\n", s->gfx_load_fail,
+          s->gfx_tile_oob, s->gfx_fallback_ok, s->gfx_miss);
+}
+
+void emit_stats_print_gfx_page_debug(const ObjectEmitStats *s, const LevelGfxRoute *route) {
+  if (!s || !route) return;
+  for (int p = 0; p < 4; p++) {
+    uint8_t fid = route->file_id_for_page[p];
+    uint8_t van = gfx_route_vanilla_file_for_page(route, p);
+    fprintf(stderr, "LV_GFX_PAGE page=%d file=0x%02X vanilla=0x%02X subtiles=%zu max_local=%u\n", p,
+            (unsigned)fid, (unsigned)van, s->gfx_page_subtiles[p], (unsigned)s->gfx_page_max_local[p]);
   }
 }

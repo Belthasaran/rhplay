@@ -1252,6 +1252,20 @@ static int parse_lv_stats_file(const char *path, LvStatsParsed *out) {
   return found;
 }
 
+static void print_gfx_manifest_109(const LevelInfo *info) {
+  if (!info->exgfx_present || !info->exgfx_bytes || info->exgfx_len < 32) return;
+  static const char *slot_names[16] = {
+      "AN2", "LT3", "BG3", "BG2", "FG3", "BG1", "FG2", "FG1",
+      "SP4", "SP3", "SP2", "SP1", "LG4", "LG3", "LG2", "LG1",
+  };
+  for (int slot = 0; slot < 16; slot++) {
+    uint16_t raw = (uint16_t)(info->exgfx_bytes[slot * 2] | ((uint16_t)info->exgfx_bytes[slot * 2 + 1] << 8));
+    uint8_t fid = (uint8_t)(raw & 0xFF);
+    printf("[gfx-route] slot=%02d name=%s file=0x%02X raw=0x%04X\n", slot, slot_names[slot], (unsigned)fid,
+           (unsigned)raw);
+  }
+}
+
 static int run_gfx_route_slot_test(void) {
   const char *base = getenv("PATH_BASE_ROM");
   if (!base || !*base) return 1;
@@ -1292,9 +1306,20 @@ static int run_gfx_route_slot_test(void) {
       failf("[gfx-route] route not built from bypass table");
       ok = 0;
     } else {
+      print_gfx_manifest_109(&info);
       int slots_ok = 0;
+      for (int s = 0; s < GFX_SLOT_COUNT; s++) {
+        uint8_t fid = route.slot_file_id[s];
+        if (fid == 0) continue;
+        GfxBlob blob;
+        memset(&blob, 0, sizeof(blob));
+        if (!gfx_load_from_rom(&rom, fid, &blob, err, sizeof(err)) || !blob.bytes) {
+          fprintf(stderr, "[gfx-route] note: slot %d file 0x%02X not loadable (skipped)\n", s, fid);
+        } else {
+          gfxblob_free(&blob);
+        }
+      }
       for (int p = 0; p < 4; p++) {
-        uint8_t slot = (p == 0) ? GFX_SLOT_SP1 : (p == 1) ? GFX_SLOT_SP2 : (p == 2) ? GFX_SLOT_FG1 : GFX_SLOT_FG2;
         uint8_t fid = route.file_id_for_page[p];
         if (fid == 0) {
           failf("[gfx-route] page %d has no GFX file id", p);
@@ -1319,6 +1344,76 @@ static int run_gfx_route_slot_test(void) {
   levelinfo_free(&info);
   rom_free(&rom);
   if (ok) printf("PASS: gfx route exgfx slots (akogare 0x109)\n");
+  return ok;
+}
+
+static int run_gfx_tile_index_sanity(void) {
+  const char *base = getenv("PATH_BASE_ROM");
+  if (!base || !*base) return 1;
+
+  char built_rom[512];
+  char err[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+
+  Rom rom;
+  if (!rom_load(&rom, built_rom, err, sizeof(err))) {
+    failf("[gfx-tile] ROM load failed");
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    rom_free(&rom);
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    failf("[gfx-tile] parse failed");
+    rom_free(&rom);
+    return 0;
+  }
+
+  LevelGfxRoute route;
+  gfx_route_build(&route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+
+  int ok = 1;
+  for (int p = 0; p < 4; p++) {
+    uint8_t fid = route.file_id_for_page[p];
+    uint8_t van = gfx_route_vanilla_file_for_page(&route, p);
+    GfxBlob blob;
+    memset(&blob, 0, sizeof(blob));
+    if (!gfx_load_from_rom(&rom, fid, &blob, err, sizeof(err)) || !blob.bytes) {
+      failf("[gfx-tile] page %d primary file 0x%02X load failed", p, fid);
+      ok = 0;
+      continue;
+    }
+    size_t ntiles = blob.len / 32u;
+    uint8_t px[64];
+    if (ntiles > 0 && !snes4bpp_decode_tile(blob.bytes, blob.len, 0, px)) {
+      failf("[gfx-tile] page %d file 0x%02X tile0 decode failed", p, fid);
+      ok = 0;
+    }
+    if (ntiles > 0 && ntiles < 200 && !snes4bpp_decode_tile(blob.bytes, blob.len, (uint16_t)(ntiles - 1), px)) {
+      failf("[gfx-tile] page %d file 0x%02X last tile decode failed", p, fid);
+      ok = 0;
+    }
+    gfxblob_free(&blob);
+    if (van != fid) {
+      memset(&blob, 0, sizeof(blob));
+      if (!gfx_load_from_rom(&rom, van, &blob, err, sizeof(err)) || !blob.bytes) {
+        failf("[gfx-tile] page %d vanilla file 0x%02X load failed", p, van);
+        ok = 0;
+      } else {
+        gfxblob_free(&blob);
+      }
+    }
+  }
+
+  levelinfo_free(&info);
+  rom_free(&rom);
+  if (ok) printf("PASS: gfx tile index sanity (akogare 0x109)\n");
   return ok;
 }
 
@@ -2069,6 +2164,7 @@ int main(void) {
   int okS = run_layer2_midway_sanity();
   int okLm = run_lm_object_decode_sanity();
   int okGfxRt = run_gfx_route_slot_test();
+  int okGfxTi = run_gfx_tile_index_sanity();
   int okEg = test_exgfx_export_hashes();
   int okLv = run_level_visual_smoke();
   int okL2g = run_generated_layer2_objects_case();
@@ -2081,7 +2177,7 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && okLm && okGfxRt && okEg && okLv && okL2g && ok2 && ok3 && ok4 &&
+  if (failures == 0 && ok1 && ok1b && okS && okLm && okGfxRt && okGfxTi && okEg && okLv && okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");
     return 0;

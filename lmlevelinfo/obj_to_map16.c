@@ -24,6 +24,17 @@ static const uint8_t kVertPipeBotR[5] = { 0x00, 0x00, 0x3a, 0x34, 0x38 };
 static const uint8_t kHorizPipeEnd[8] = { 0x3b, 0x3c, 0x3b, 0x3f, 0x3b, 0x3c, 0x3b, 0x3f };
 static const uint8_t kHorizPipeShaft[8] = { 0x3d, 0x3e, 0x3d, 0x3e, 0x3d, 0x3e, 0x3d, 0x3e };
 
+// snesrev smw_0d.c kExtObjXX_Generic1TileObject_Tiles
+static const uint8_t kExtGenericTiles[51] = {
+    0x1f, 0x22, 0x24, 0x42, 0x43, 0x27, 0x29, 0x25, 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x45, 0x46,
+    0x47, 0x48, 0x36, 0x37, 0x11, 0x12, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c,
+    0x29, 0x1d, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x25, 0x26, 0x27, 0x28, 0x2a, 0xde, 0xe0, 0xe2, 0xe4,
+    0xec, 0xed, 0x2c, 0x25, 0x2d,
+};
+
+static const uint8_t kWaterTopTiles[4] = { 0x00, 0x01, 0x04, 0x08 };
+static const uint8_t kWaterBottomTiles[4] = { 0x02, 0x03, 0x05, 0x0b };
+
 typedef struct {
   uint32_t key;
   size_t unknown_count;
@@ -40,6 +51,8 @@ ObjMapResult object_emit_classify(const LevelObject *o) {
   if (o->kind == OBJ_SCREEN_EXIT) return OBJMAP_NONVISUAL;
   if (o->kind == OBJ_EXTENDED) {
     if (o->object_number == 0x01 || o->object_number == 0x02 || o->object_number == 0x03) return OBJMAP_NONVISUAL;
+    if (o->object_number >= 0x55 && o->object_number <= 0x5A) return OBJMAP_NONVISUAL;
+    if (o->object_number == 0x84 || o->object_number == 0x8B) return OBJMAP_NONVISUAL;
     return OBJMAP_UNKNOWN;
   }
   if (o->kind == OBJ_STANDARD) {
@@ -79,7 +92,8 @@ static int uses_generic_fill_table(uint16_t id) {
   if (id >= 0x01 && id <= 0x04) return 1;
   if (id == 0x05) return 0;
   if (id >= 0x06 && id <= 0x0E) return 1;
-  if (id == 0x16) return 1;
+  if (id == 0x10 || id == 0x12) return 1;
+  if (id >= 0x16 && id <= 0x1B) return 1;
   return 0;
 }
 
@@ -131,6 +145,61 @@ static int emit_wide_ledge(const LevelObject *o, emit_map16_fn emit, void *user_
   uint16_t by = (uint16_t)o->y_position;
   for (uint16_t xx = 0; xx < w; xx++) {
     if (!emit_one(emit, user_ctx, map16_from_page_low(1, 0x7A), (uint16_t)(bx + xx), by)) return 0;
+  }
+  return 1;
+}
+
+static int emit_extended_generic(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_EXTENDED) return 0;
+  uint16_t id = o->object_number;
+  if (id == 0x41 || id == 0x46) return 0;
+  uint8_t low;
+  if (id < 51) {
+    low = kExtGenericTiles[id];
+  } else {
+    low = 0x3f;
+  }
+  uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
+  uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  uint8_t page = (id >= 0x40) ? 1u : 0u;
+  return emit_rect_fill(emit, user_ctx, bx, by, w, h, page, low);
+}
+
+static int emit_yoshi_coin(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_EXTENDED || o->object_number != 0x41) return 0;
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  if (!emit_one(emit, user_ctx, map16_from_page_low(0, 0x2D), bx, by)) return 0;
+  return emit_one(emit, user_ctx, map16_from_page_low(0, 0x2E), bx, (uint16_t)(by + 1));
+}
+
+static int emit_midway_bar_ext(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_EXTENDED || o->object_number != 0x46) return 0;
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  return emit_one(emit, user_ctx, map16_from_page_low(0, 0x38), bx, by);
+}
+
+static int emit_water_surface(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD || o->object_number != 0x18) return 0;
+  uint8_t variant = (uint8_t)(o->settings & 0x03);
+  if (variant > 3) variant = 0;
+  uint16_t w = (uint16_t)((o->settings & 0x0F) ? (o->settings & 0x0F) : 1);
+  uint16_t h = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  uint8_t top = kWaterTopTiles[variant];
+  uint8_t bot = kWaterBottomTiles[variant];
+  for (uint16_t xx = 0; xx < w; xx++) {
+    if (!emit_one(emit, user_ctx, map16_from_page_low(0, top), (uint16_t)(bx + xx), by)) return 0;
+  }
+  for (uint16_t yy = 1; yy < h; yy++) {
+    for (uint16_t xx = 0; xx < w; xx++) {
+      if (!emit_one(emit, user_ctx, map16_from_page_low(0, bot), (uint16_t)(bx + xx), (uint16_t)(by + yy)))
+        return 0;
+    }
   }
   return 1;
 }
@@ -304,6 +373,10 @@ ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext 
   if (object_emit_classify(o) == OBJMAP_NONVISUAL) return OBJMAP_NONVISUAL;
 
   if (emit_lm_direct(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_yoshi_coin(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_midway_bar_ext(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_extended_generic(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_water_surface(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_generic_fill(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_ground_edges(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_ground_ledge(o, emit, user_ctx)) return OBJMAP_HANDLED;

@@ -1,5 +1,6 @@
 #include "gfx_route.h"
 
+#include <stdio.h>
 #include <string.h>
 
 // snesrev smw_00.c kUploadGraphicsFiles_FGAndBGGFXList
@@ -37,9 +38,15 @@ static uint8_t vanilla_file_for_page(uint8_t tileset, int page) {
   return kFGAndBGGFXList[idx < 104 ? idx : 0];
 }
 
-static uint8_t file_id_from_slot_u16(uint16_t raw) {
+// LM Super GFX bypass u16: low 12 bits are GFX file or "use vanilla" (0 / 0x7F).
+// Values 1..0x0F in SP/FG slots are often 1-based indices into the tileset FG/BG list, not literal file 0x01.
+static uint8_t file_id_from_slot_u16(uint16_t raw, uint8_t tileset, int map16_page) {
+  uint16_t low12 = (uint16_t)(raw & 0x0FFFu);
+  if (low12 == 0 || low12 == 0x7F) return 0;
+  if (low12 < 0x10 && map16_page >= 0 && map16_page < 4) {
+    return vanilla_file_for_page(tileset, map16_page);
+  }
   uint8_t fid = (uint8_t)(raw & 0xFFu);
-  // 0 = unused; 0x7F is a common LM placeholder for "default/unset" in AN2/LT3/BG slots.
   if (fid == 0 || fid == 0x7F) return 0;
   return fid;
 }
@@ -58,7 +65,12 @@ void gfx_route_build(LevelGfxRoute *out, const PrimaryLevelHeader *primary,
     out->has_bypass_table = 1;
     for (int s = 0; s < GFX_SLOT_COUNT; s++) {
       uint16_t raw = (uint16_t)(exgfx_bytes[s * 2] | ((uint16_t)exgfx_bytes[s * 2 + 1] << 8));
-      out->slot_file_id[s] = file_id_from_slot_u16(raw);
+      int page = -1;
+      for (int p = 0; p < 4; p++) {
+        if (kMap16PageToSlot[p] == s) page = p;
+      }
+      out->slot_file_id[s] = file_id_from_slot_u16(raw, out->tileset, page);
+      out->slot_raw_u16[s] = raw;
     }
     for (int p = 0; p < 4; p++) {
       uint8_t slot = kMap16PageToSlot[p];
@@ -110,4 +122,21 @@ size_t gfx_route_collect_preload_ids(const LevelGfxRoute *route, uint8_t *out_id
 
 size_t gfx_route_collect_file_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out) {
   return gfx_route_collect_preload_ids(route, out_ids, max_out);
+}
+
+void gfx_route_print_manifest(const LevelGfxRoute *route, const uint8_t *exgfx_bytes, size_t exgfx_len) {
+  if (!route) return;
+  fprintf(stderr, "LV_REPORT_GFX tileset=%u\n", (unsigned)route->tileset);
+  for (int p = 0; p < 4; p++) {
+    fprintf(stderr, "LV_REPORT_GFX page=%d file=0x%02X vanilla=0x%02X slot=%s\n", p,
+            (unsigned)route->file_id_for_page[p], (unsigned)gfx_route_vanilla_file_for_page(route, p),
+            gfx_route_slot_name(kMap16PageToSlot[p]));
+  }
+  if (exgfx_bytes && exgfx_len >= 32) {
+    for (int s = 0; s < GFX_SLOT_COUNT; s++) {
+      uint16_t raw = (uint16_t)(exgfx_bytes[s * 2] | ((uint16_t)exgfx_bytes[s * 2 + 1] << 8));
+      fprintf(stderr, "LV_REPORT_GFX slot=%02d name=%s file=0x%02X raw=0x%04X\n", s, gfx_route_slot_name(s),
+              (unsigned)route->slot_file_id[s], (unsigned)raw);
+    }
+  }
 }

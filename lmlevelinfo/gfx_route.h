@@ -37,6 +37,7 @@ enum {
 typedef struct {
   uint8_t file_id_for_page[4];
   uint8_t slot_file_id[GFX_SLOT_COUNT]; // 0 = unused
+  uint16_t slot_raw_u16[GFX_SLOT_COUNT];
   uint8_t tileset;
   int has_bypass_table;
   int valid;
@@ -58,3 +59,6 @@ size_t gfx_route_collect_file_ids(const LevelGfxRoute *route, uint8_t *out_ids, 
 
 // Slot name for logging/tests.
 const char *gfx_route_slot_name(int slot_index);
+
+// Human-readable manifest on stderr (LV_REPORT_GFX).
+void gfx_route_print_manifest(const LevelGfxRoute *route, const uint8_t *exgfx_bytes, size_t exgfx_len);

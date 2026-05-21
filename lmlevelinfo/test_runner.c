@@ -1347,6 +1347,85 @@ static int run_gfx_route_slot_test(void) {
   return ok;
 }
 
+static int run_gfx_route_page_small_slot(void) {
+  PrimaryLevelHeader ph;
+  memset(&ph, 0, sizeof(ph));
+  ph.fgbg_gfx_setting = 7;
+  uint8_t ex[32];
+  memset(ex, 0, sizeof(ex));
+  ex[GFX_SLOT_SP2 * 2] = 0x01;
+  ex[GFX_SLOT_SP2 * 2 + 1] = 0x00;
+  LevelGfxRoute route;
+  gfx_route_build(&route, &ph, ex, sizeof(ex));
+  if (!route.valid) {
+    failf("[gfx-route-small] route invalid");
+    return 0;
+  }
+  if (route.file_id_for_page[1] != 0x17) {
+    failf("[gfx-route-small] page1 expected 0x17 (vanilla), got 0x%02X", route.file_id_for_page[1]);
+    return 0;
+  }
+  ex[GFX_SLOT_FG1 * 2] = 0x15;
+  ex[GFX_SLOT_FG1 * 2 + 1] = 0x00;
+  gfx_route_build(&route, &ph, ex, sizeof(ex));
+  if (route.file_id_for_page[2] != 0x15) {
+    failf("[gfx-route-small] page2 expected literal 0x15, got 0x%02X", route.file_id_for_page[2]);
+    return 0;
+  }
+  printf("PASS: gfx route small slot index maps to vanilla\n");
+  return 1;
+}
+
+static int run_akogare_109_invariants(void) {
+  const char *rom_path = "test/akogare/orig_Ako.sfc";
+  char err[512];
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, sizeof(err))) {
+    failf("[akogare109] ROM load failed");
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    rom_free(&rom);
+    failf("[akogare109] tables failed");
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    rom_free(&rom);
+    failf("[akogare109] parse failed: %s", err);
+    return 0;
+  }
+  int ok = 1;
+  if (!info.palette_present) {
+    failf("[akogare109] expected custom palette");
+    ok = 0;
+  }
+  if (!info.layer2_data_ptr_snes || !info.layer2_objects_count) {
+    failf("[akogare109] expected layer2 objects");
+    ok = 0;
+  }
+  if (info.layer2_is_bg_tilemap) {
+    failf("[akogare109] expected layer2 objects not tilemap for 0x109");
+    ok = 0;
+  }
+  if (!info.secondary_decoded.shc_c) {
+    failf("[akogare109] expected lmexp horizontal flag for +1 screen");
+    ok = 0;
+  }
+  LevelGfxRoute route;
+  gfx_route_build(&route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+  if (route.file_id_for_page[1] != 0x17) {
+    failf("[akogare109] page1 GFX expected 0x17 got 0x%02X", route.file_id_for_page[1]);
+    ok = 0;
+  }
+  levelinfo_free(&info);
+  rom_free(&rom);
+  if (ok) printf("PASS: akogare 0x109 invariants\n");
+  return ok;
+}
+
 static int run_gfx_tile_index_sanity(void) {
   const char *base = getenv("PATH_BASE_ROM");
   if (!base || !*base) return 1;
@@ -1482,6 +1561,10 @@ static int run_level_visual_smoke(void) {
     return 0;
   }
   fclose(pf);
+  if (pw != 3840u) {
+    failf("[level_visual smoke] expected width 3840 (15 screens), got %u", pw);
+    return 0;
+  }
 
   const char *golden_env = getenv("LEVEL_VISUAL_GOLDEN");
   if (golden_env && golden_env[0] == '1') {
@@ -1895,6 +1978,26 @@ static int run_lm_object_decode_sanity(void) {
     levelinfo_free(&out);
   }
 
+  // Standard 0x1F skinny vertical pipe emit
+  {
+    uint8_t buf[] = {0, 0, 0, 0, 0, 0x20, 0xF4, 0x30, 0xFF};
+    LM_SANITY_PARSE(buf, "obj1F");
+    LM_SANITY_EXPECT_COUNT(1, "obj1F");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      EmitAcc acc;
+      memset(&acc, 0, sizeof(acc));
+      if (object_emit_map16_tiles(o, NULL, emit_acc_fn, &acc) != OBJMAP_HANDLED || acc.count < 2u) {
+        failf("[sanity] obj1F: expected >=2 tiles, got %zu", acc.count);
+        ok = 0;
+      } else if (!acc.have_first || acc.first.map16_tile != 0x153u) {
+        failf("[sanity] obj1F: expected first map16 0x153 got 0x%04X", acc.have_first ? acc.first.map16_tile : 0);
+        ok = 0;
+      }
+    }
+    levelinfo_free(&out);
+  }
+
   // Object 0x24 old FG/BG/SP bypass (deprecated), 3 bytes
   {
     uint8_t buf[] = {
@@ -2164,6 +2267,8 @@ int main(void) {
   int okS = run_layer2_midway_sanity();
   int okLm = run_lm_object_decode_sanity();
   int okGfxRt = run_gfx_route_slot_test();
+  int okGfxSmall = run_gfx_route_page_small_slot();
+  int ok109inv = run_akogare_109_invariants();
   int okGfxTi = run_gfx_tile_index_sanity();
   int okEg = test_exgfx_export_hashes();
   int okLv = run_level_visual_smoke();
@@ -2177,7 +2282,8 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && okLm && okGfxRt && okGfxTi && okEg && okLv && okL2g && ok2 && ok3 && ok4 &&
+  if (failures == 0 && ok1 && ok1b && okS && okLm && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg && okLv &&
+      okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");
     return 0;

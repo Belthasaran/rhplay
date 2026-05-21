@@ -12,6 +12,7 @@
 #include "obj_to_map16.h"
 #include "emit_stats.h"
 #include "palette_rom.h"
+#include "gfx_route.h"
 
 #include <sys/stat.h>
 #include <errno.h>
@@ -42,7 +43,8 @@ static void usage(FILE *fp) {
           "  --export-gfx=<DIR>     Export all GFX + ExGFX from ROM (decompressed LC_LZ2, SNES 4bpp)\n"
           "  --emit-stats           Print object->Map16 emit coverage (LV_STATS line on stderr)\n"
           "  --emit-histogram       Print top unknown object ids (stderr)\n"
-          "  --dump-palette         Print palette source (custom/rom/fallback) on stderr\n");
+          "  --dump-palette         Print palette source (custom/rom/fallback) on stderr\n"
+          "  --report               Print level diagnostic report (palette, layer2, gfx route) on stderr\n");
 }
 
 static int parse_level_id(const char *s, uint16_t *out) {
@@ -532,11 +534,27 @@ static void json_emit_level(JsonW *w, const LevelInfo *info, const LmTables *tab
     jsonw_key(w, "is_bg_tilemap"); jsonw_bool(w, info->layer2_is_bg_tilemap);
     jsonw_key(w, "bg_flags_0ef310"); jsonw_uint(w, info->layer2_bg_flags_0ef310);
     if (info->layer2_is_bg_tilemap) {
+      jsonw_key(w, "kind"); jsonw_str(w, "bg_tilemap");
       jsonw_key(w, "width"); jsonw_uint(w, info->layer2_bg_width);
       jsonw_key(w, "height"); jsonw_uint(w, info->layer2_bg_height);
     } else {
+      jsonw_key(w, "kind"); jsonw_str(w, "objects");
       jsonw_key(w, "objects_count"); jsonw_uint(w, info->layer2_objects_count);
     }
+  }
+  jsonw_obj_end(w);
+
+  jsonw_key(w, "gfx_route");
+  jsonw_obj_begin(w);
+  {
+    LevelGfxRoute route;
+    gfx_route_build(&route, &info->primary, info->exgfx_bytes, info->exgfx_len);
+    jsonw_key(w, "tileset"); jsonw_uint(w, route.tileset);
+    jsonw_key(w, "has_bypass"); jsonw_bool(w, route.has_bypass_table);
+    jsonw_key(w, "page_files");
+    jsonw_arr_begin(w);
+    for (int p = 0; p < 4; p++) jsonw_uint(w, route.file_id_for_page[p]);
+    jsonw_arr_end(w);
   }
   jsonw_obj_end(w);
 
@@ -782,6 +800,7 @@ int main(int argc, char **argv) {
   int want_emit_stats = 0;
   int want_emit_histogram = 0;
   int want_dump_palette = 0;
+  int want_report = 0;
 
   const char *rom_path = NULL;
   const char *level_s = NULL;
@@ -805,6 +824,8 @@ int main(int argc, char **argv) {
       want_emit_histogram = 1;
     } else if (!strcmp(a, "--dump-palette")) {
       want_dump_palette = 1;
+    } else if (!strcmp(a, "--report")) {
+      want_report = 1;
     } else if (!strncmp(a, "--data=", 7)) {
       const char *v = a + 7;
       if (!strcmp(v, "none")) {
@@ -895,12 +916,26 @@ int main(int argc, char **argv) {
     (void)write_level_used_gfx_manifest(&info, export_gfx_dir);
   }
 
-  if (want_dump_palette) {
+  if (want_dump_palette || want_report) {
     uint8_t pal256[256][3];
     uint8_t br = 0, bg = 0, bb = 0;
     PaletteSource ps = palette_build_for_level(&rom, &info, pal256, &br, &bg, &bb);
     fprintf(stderr, "palette_source=%s custom_present=%d exgfx_present=%d\n", palette_source_name(ps),
             info.palette_present, info.exgfx_present);
+    if (want_report) {
+      LevelGfxRoute route;
+      gfx_route_build(&route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+      uint32_t screens = (uint32_t)(info.primary.length_in_screens > 0 ? info.primary.length_in_screens : 1);
+      if (info.secondary_decoded.present && info.secondary_decoded.shc_c && screens < 32) screens++;
+      fprintf(stderr, "LV_REPORT length_in_screens=%d canvas_screens=%u lmexp_horizontal=%u\n",
+              info.primary.length_in_screens, screens, info.secondary_decoded.shc_c);
+      if (info.layer2_is_bg_tilemap) {
+        fprintf(stderr, "LV_REPORT layer2=bg_tilemap %ux%u\n", info.layer2_bg_width, info.layer2_bg_height);
+      } else if (info.layer2_data_ptr_snes) {
+        fprintf(stderr, "LV_REPORT layer2=objects count=%zu\n", info.layer2_objects_count);
+      }
+      gfx_route_print_manifest(&route, info.exgfx_bytes, info.exgfx_len);
+    }
   }
 
   if (want_emit_stats || want_emit_histogram) {

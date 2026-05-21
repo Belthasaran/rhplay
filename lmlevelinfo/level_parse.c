@@ -325,12 +325,10 @@ static int read_layer2_flags_0ef310(const Rom *rom, uint16_t level_id, uint8_t *
 }
 
 static int layer2_is_bg_tilemap_from_flags(uint8_t flags) {
-  // Format: bbBBVFCT (wiki). If V or C set, Layer2 uses a BG tilemap.
-  // In practice (LM 3.6x exports), the low bit T also indicates tilemap usage.
+  // Format: bbBBVFCT (wiki). V or T indicate a BG tilemap; C is "compressed" (objects can be compressed too).
   uint8_t v = (flags >> 3) & 0x1;
-  uint8_t c = (flags >> 1) & 0x1;
   uint8_t t = (flags >> 0) & 0x1;
-  return (v || c || t) ? 1 : 0;
+  return (v || t) ? 1 : 0;
 }
 
 static int read_sprite_ptr(const Rom *rom, const LmTables *tables, uint16_t level_id, uint32_t *out_ptr_snes) {
@@ -1226,6 +1224,10 @@ static int parse_layer2_bg_tilemap_from_rom(const Rom *rom, uint32_t layer2_ptr_
   uint8_t *low = NULL;
   size_t low_len = 0, c1 = 0;
   if (!lc_rle1_decompress(rom->data + pc, srclen, &low, &low_len, &c1, err, errcap)) return 0;
+  if (low_len == 0) {
+    free(low);
+    return 0;
+  }
   if (!(low_len == 864 || low_len == 1024)) {
     free(low);
     seterr(err, errcap, "Layer2 BG tilemap unexpected low-byte size");
@@ -1262,7 +1264,7 @@ static int parse_layer2_bg_tilemap_from_rom(const Rom *rom, uint32_t layer2_ptr_
 
   // LM stores as left half then right half.
   size_t half = (size_t)16 * (size_t)h;
-  uint8_t const_high = (uint8_t)(out->layer2_bg_flags_0ef310 >> 4);
+  uint8_t const_high = (uint8_t)((out->layer2_bg_flags_0ef310 >> 4) & 0xF);
   uint8_t f = (uint8_t)((out->layer2_bg_flags_0ef310 >> 2) & 0x1);
 
   for (uint8_t yy = 0; yy < h; yy++) {
@@ -1270,9 +1272,11 @@ static int parse_layer2_bg_tilemap_from_rom(const Rom *rom, uint32_t layer2_ptr_
       size_t src_i = (xx < 16) ? ((size_t)yy * 16u + (size_t)xx) : (half + (size_t)yy * 16u + (size_t)(xx - 16));
       uint8_t lo = low[src_i];
       uint8_t hi = 0;
-      if (high) hi = high[src_i];
-      else if (!f) hi = const_high; // only the simple documented case
-      // else: legacy/high-byte rules not fully implemented yet
+      if (high) {
+        hi = high[src_i];
+      } else if (!f) {
+        hi = const_high;
+      }
 
       out->layer2_bg_tiles[(size_t)yy * w + xx] = (uint16_t)lo | ((uint16_t)hi << 8);
     }
@@ -1502,24 +1506,25 @@ int parse_level_info(const Rom *rom, const LmTables *tables, uint16_t level_id, 
     }
   }
 
-  // Layer2 object parsing (only when not a BG tilemap)
+  // Layer2: BG tilemap or object stream
   if (out->layer2_data_ptr_snes) {
-    // Auto-detect: some hacks don’t have readable $0EF310 flags (or move the table), and bank heuristics
-    // aren’t sufficient. Try BG-tilemap parsing first; if it succeeds, treat as tilemap, otherwise fall back
-    // to object parsing.
-    int bg_ok = parse_layer2_bg_tilemap_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
-    if (bg_ok && out->layer2_bg_tiles && out->layer2_bg_width && out->layer2_bg_height) {
-      out->layer2_is_bg_tilemap = 1;
+    uint8_t bank = (uint8_t)((out->layer2_data_ptr_snes >> 16) & 0xFF);
+    int try_bg = out->layer2_is_bg_tilemap || (bank == 0xFF);
+    if (try_bg) {
+      int bg_ok = parse_layer2_bg_tilemap_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
+      if (bg_ok && out->layer2_bg_tiles && out->layer2_bg_width && out->layer2_bg_height) {
+        out->layer2_is_bg_tilemap = 1;
+      } else {
+        free(out->layer2_bg_tiles);
+        out->layer2_bg_tiles = NULL;
+        out->layer2_bg_width = 0;
+        out->layer2_bg_height = 0;
+        out->layer2_is_bg_tilemap = 0;
+        (void)parse_layer2_objects_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
+      }
     } else {
-      // Clear any partial BG tilemap artifacts to avoid confusing downstream checks.
-      free(out->layer2_bg_tiles);
-      out->layer2_bg_tiles = NULL;
-      out->layer2_bg_width = 0;
-      out->layer2_bg_height = 0;
-      out->layer2_is_bg_tilemap = 0;
       (void)parse_layer2_objects_from_rom(rom, out->layer2_data_ptr_snes, out, err, errcap);
     }
-    // Best-effort: do not fail the whole parse if layer2 can't be parsed.
   }
 
   return 1;

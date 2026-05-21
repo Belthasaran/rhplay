@@ -84,9 +84,17 @@ void gfx_route_build(LevelGfxRoute *out, const PrimaryLevelHeader *primary,
 }
 
 uint8_t gfx_route_file_for_tile(const LevelGfxRoute *route, uint16_t tile8) {
+  return gfx_route_file_for_tile_mode(route, tile8, GFX_ROUTE_MODE_BYPASS);
+}
+
+uint8_t gfx_route_file_for_tile_mode(const LevelGfxRoute *route, uint16_t tile8, int route_mode) {
   uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
   if (!route || !route->valid) {
     return (uint8_t)(0x00 + page);
+  }
+  if (route_mode == GFX_ROUTE_MODE_VANILLA) {
+    uint8_t van = vanilla_file_for_page(route->tileset, page);
+    return van ? van : route->file_id_for_page[page];
   }
   return route->file_id_for_page[page];
 }

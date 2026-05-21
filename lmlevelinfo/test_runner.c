@@ -1752,10 +1752,31 @@ static int run_level_visual_smoke(void) {
     failf("[level_visual smoke] non-background ratio %.3f expected >=0.20", nonbg_ratio);
     return 0;
   }
+  if (nonbg_ratio < 0.25) {
+    fprintf(stderr, "NOTE: [level_visual smoke] nonbg ratio %.3f below inc7 target 0.25\n", nonbg_ratio);
+  }
   if (nonbg_ratio < 0.32) {
-    fprintf(stderr,
-            "NOTE: [level_visual smoke] nonbg ratio %.3f below aspirational 0.32 (L2 strip repeat disabled for object L2)\n",
-            nonbg_ratio);
+    fprintf(stderr, "NOTE: [level_visual smoke] nonbg ratio %.3f below aspirational 0.32\n", nonbg_ratio);
+  }
+
+  int has_block_audit = 0;
+  FILE *sf = fopen(stats_path, "r");
+  if (sf) {
+    char line[512];
+    while (fgets(line, sizeof(line), sf)) {
+      if (strstr(line, "LV_REPORT_MAP16_BLOCK") && strstr(line, "id=0x0021")) {
+        has_block_audit = 1;
+        break;
+      }
+      if (strstr(line, "LV_REPORT_GFX_FILE")) {
+        has_block_audit = 1;
+      }
+    }
+    fclose(sf);
+  }
+  if (!has_block_audit) {
+    failf("[level_visual smoke] expected LV_REPORT_MAP16_BLOCK or LV_REPORT_GFX_FILE in --report output");
+    return 0;
   }
 
   const char *golden_env = getenv("LEVEL_VISUAL_GOLDEN");
@@ -1841,6 +1862,9 @@ static int run_level_visual_lm_compare(void) {
     failf("[level_visual lm] nonbg ratio %.3f expected >=0.20", nonbg_ratio);
     return 0;
   }
+  if (nonbg_ratio < 0.25) {
+    fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below inc7 target 0.25\n", nonbg_ratio);
+  }
   if (nonbg_ratio < 0.32) {
     fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below aspirational 0.32\n", nonbg_ratio);
   }
@@ -1866,8 +1890,60 @@ static int run_level_visual_lm_compare(void) {
   (void)remove(outppm);
   (void)remove(stats_path);
 
+  if (sim < 0.50) {
+    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below aspirational 0.55\n", sim);
+  }
+
   printf("PASS: level_visual lm compare (nonbg=%.1f%% x_max=%u lm_similarity=%.1f%%)\n", nonbg_ratio * 100.0, x_max,
          sim * 100.0);
+  return 1;
+}
+
+static int run_level_visual_diff_stats(void) {
+  char err[512];
+  char built_rom[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+  const char *lm_ref = "test/akogare/lm_Level109.ppm";
+  struct stat st_lm;
+  if (stat(lm_ref, &st_lm) != 0) {
+    printf("SKIP: level_visual diff_stats (missing %s)\n", lm_ref);
+    return 1;
+  }
+  (void)mkdir_p("test/_work/akogare");
+  char outppm[512];
+  char stats_path[512];
+  snprintf(outppm, sizeof(outppm), "test/_work/akogare/level_visual_diff.ppm");
+  snprintf(stats_path, sizeof(stats_path), "test/_work/akogare/level_visual_diff.stats");
+  char cmd[4096];
+  snprintf(cmd, sizeof(cmd),
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
+           "--export-diff-stats --lm-ref=\"%s\" 2>\"%s\"",
+           built_rom, outppm, lm_ref, stats_path);
+  if (system(cmd) != 0) {
+    failf("[diff_stats] level_visual failed");
+    return 0;
+  }
+  FILE *sf = fopen(stats_path, "r");
+  int ok = 0;
+  if (sf) {
+    char line[256];
+    while (fgets(line, sizeof(line), sf)) {
+      if (strncmp(line, "LV_DIFF_STATS compared=", 23) == 0) {
+        ok = 1;
+        break;
+      }
+    }
+    fclose(sf);
+  }
+  if (!ok) {
+    failf("[diff_stats] missing LV_DIFF_STATS line");
+    return 0;
+  }
+  (void)remove(outppm);
+  (void)remove(stats_path);
+  printf("PASS: level_visual_diff_stats\n");
   return 1;
 }
 
@@ -2731,6 +2807,7 @@ int main(void) {
   int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
   int okLvLm = run_level_visual_lm_compare();
+  int okDiff = run_level_visual_diff_stats();
   int okSprR = run_sprite_render_sanity();
   int okL2g = run_generated_layer2_objects_case();
   int ok2 = run_quickieworld_suite();
@@ -2743,7 +2820,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okSprNoGen && okLv && okLvLm && okSprR &&
+      okExt68 && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

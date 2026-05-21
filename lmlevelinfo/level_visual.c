@@ -26,8 +26,11 @@ static void usage(const char *argv0) {
           "  - --stats prints LV_STATS line to stderr (handled/unknown/gfx_miss).\n"
           "  - --emit-histogram prints top unknown object ids before rendering.\n"
           "  - --gfx-debug prints per-page GFX routing and miss breakdown after render.\n"
-          "  - --report prints palette/layer2/canvas/GFX manifest and top Map16 ids (stderr).\n"
-          "  - --palette-debug dumps palette rows 0-15 as LV_PALETTE_DEBUG lines.\n"
+          "  - --report prints palette/layer2/canvas/GFX manifest, top Map16 ids, block audit (stderr).\n"
+          "  - --map16-audit with --report dumps subtile/GFX details for top Map16 blocks.\n"
+          "  - --palette-debug dumps palette rows 0-15; --palette-debug-ppm=<FILE> exports strip.\n"
+          "  - --gfx-route-mode=bypass|vanilla|try-both (default bypass).\n"
+          "  - --export-diff-stats compares OUT.ppm to --lm-ref=<FILE> on stderr.\n"
           "  - --layers=all|layer1|layer2|sprites (sprites included in all).\n"
           "  - --sprite-debug draws green markers for unknown sprite ids (no generic GFX blit).\n",
           argv0 ? argv0 : "level_visual",
@@ -156,6 +159,9 @@ typedef struct {
 } Map16HistEntry;
 
 typedef struct {
+  int gfx_route_mode;
+  int map16_audit;
+  const char *audit_layer;
   uint8_t *rgb;
   uint32_t W, H;
   const Map16Data *map16;
@@ -166,9 +172,35 @@ typedef struct {
   ObjectEmitStats *stats;
   Map16HistEntry map16_hist[256];
   size_t map16_hist_n;
+  size_t gfx_file_subtiles[256];
+  size_t pal_row_subtiles[8];
+  size_t pal_row_oob_count;
   char *err;
   size_t errcap;
 } RenderCtx;
+
+typedef struct {
+  int gfx_route_mode;
+  int map16_audit;
+  int export_diff_stats;
+  const char *palette_debug_ppm;
+  const char *lm_ref_ppm;
+} LvRenderOpts;
+
+static int parse_gfx_route_mode(const char *s) {
+  if (!s || !*s) return GFX_ROUTE_MODE_BYPASS;
+  if (strcmp(s, "bypass") == 0) return GFX_ROUTE_MODE_BYPASS;
+  if (strcmp(s, "vanilla") == 0) return GFX_ROUTE_MODE_VANILLA;
+  if (strcmp(s, "try-both") == 0 || strcmp(s, "try_both") == 0) return GFX_ROUTE_MODE_TRY_BOTH;
+  return -1;
+}
+
+static int tile_px64_has_opaque(const uint8_t px64[64]) {
+  for (int i = 0; i < 64; i++) {
+    if ((px64[i] & 0x0F) != 0) return 1;
+  }
+  return 0;
+}
 
 static void map16_hist_bump(RenderCtx *rc, uint16_t map16_id) {
   if (!rc) return;
@@ -185,6 +217,29 @@ static void map16_hist_bump(RenderCtx *rc, uint16_t map16_id) {
   }
 }
 
+static void map16_audit_print_block(const Map16Data *map16, const LevelGfxRoute *route, int gfx_route_mode,
+                                    const char *layer_label, uint16_t map16_id) {
+  if (!map16 || !layer_label) return;
+  Map16Tile t;
+  if (!map16_get(map16, map16_id, &t)) {
+    fprintf(stderr, "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X missing\n", layer_label, (unsigned)map16_id);
+    return;
+  }
+  for (int si = 0; si < 4; si++) {
+    uint16_t w0 = t.w[si];
+    uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
+    uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
+    uint8_t pal = (uint8_t)((w0 >> 13) & 0x7);
+    uint8_t file_id = route ? gfx_route_file_for_tile_mode(route, tile8, gfx_route_mode) : page;
+    uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
+    fprintf(stderr,
+            "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d tile8=0x%03X page=%u pal=%u h=%d v=%d file=0x%02X "
+            "vanilla=0x%02X local=0x%02X\n",
+            layer_label, (unsigned)map16_id, si, (unsigned)tile8, (unsigned)page, (unsigned)pal, (w0 >> 10) & 1,
+            (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu));
+  }
+}
+
 static void map16_hist_print_top(RenderCtx *rc, const char *layer_label, int top_n) {
   if (!rc || !layer_label || top_n <= 0) return;
   for (int out = 0; out < top_n; out++) {
@@ -197,9 +252,44 @@ static void map16_hist_print_top(RenderCtx *rc, const char *layer_label, int top
       }
     }
     if (best_count == 0) break;
+    uint16_t mid = (uint16_t)rc->map16_hist[best].map16_id;
     fprintf(stderr, "LV_REPORT_MAP16_TOP layer=%s rank=%d id=0x%04X count=%zu\n", layer_label, out + 1,
-            (unsigned)rc->map16_hist[best].map16_id, best_count);
+            (unsigned)mid, best_count);
+    if (rc->map16_audit && out < 3) {
+      map16_audit_print_block(rc->map16, rc->gfx_route, rc->gfx_route_mode, layer_label, mid);
+    }
     rc->map16_hist[best].count = 0;
+  }
+}
+
+static void gfx_file_hist_print(RenderCtx *rc, const char *layer_label) {
+  if (!rc || !layer_label) return;
+  for (int out = 0; out < 8; out++) {
+    size_t best_f = 0;
+    size_t best_n = 0;
+    for (size_t f = 0; f < 256; f++) {
+      if (rc->gfx_file_subtiles[f] > best_n) {
+        best_n = rc->gfx_file_subtiles[f];
+        best_f = f;
+      }
+    }
+    if (best_n == 0) break;
+    fprintf(stderr, "LV_REPORT_GFX_FILE layer=%s rank=%d file=0x%02X subtiles=%zu\n", layer_label, out + 1,
+            (unsigned)best_f, best_n);
+    rc->gfx_file_subtiles[best_f] = 0;
+  }
+}
+
+static void pal_row_hist_print(const RenderCtx *rc, const char *layer_label) {
+  if (!rc || !layer_label) return;
+  for (int row = 0; row < 8; row++) {
+    if (rc->pal_row_subtiles[row]) {
+      fprintf(stderr, "LV_REPORT_PAL_ROW layer=%s row=%d subtiles=%zu\n", layer_label, row,
+              rc->pal_row_subtiles[row]);
+    }
+  }
+  if (rc->pal_row_oob_count) {
+    fprintf(stderr, "LV_REPORT_PAL_ROW layer=%s sprite_row_refs=%zu\n", layer_label, rc->pal_row_oob_count);
   }
 }
 
@@ -230,7 +320,10 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
     int hflip = (w0 >> 10) & 1;
     int vflip = (w0 >> 11) & 1;
-    uint8_t pal = (uint8_t)((w0 >> 13) & 0x7);
+    uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
+    uint8_t pal = (uint8_t)(pal_raw & 7u);
+    if (pal_raw != pal) rc->pal_row_oob_count++;
+    if (pal < 8) rc->pal_row_subtiles[pal]++;
     uint8_t palrgb[16][3];
     for (int c = 0; c < 16; c++) {
       int idx = (int)pal * 16 + c;
@@ -242,9 +335,10 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint8_t px64[64];
     int okpx = 0;
     uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
-    uint8_t file_id = rc->gfx_route ? gfx_route_file_for_tile(rc->gfx_route, tile8) : page;
-    // SNES FG uses 128 tiles per GFX file; index is 7 bits within the page (bits 8-9 select page).
     uint16_t local_tile = (uint16_t)(tile8 & 0x7Fu);
+    uint8_t file_id = rc->gfx_route ? gfx_route_file_for_tile_mode(rc->gfx_route, tile8, rc->gfx_route_mode) : page;
+    uint8_t used_file = file_id;
+
     if (rc->stats) {
       rc->stats->subtiles_drawn++;
       rc->stats->gfx_page_subtiles[page]++;
@@ -256,6 +350,18 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     int dr = decode_gfx_tile(rc->rom, rc->gfxc, file_id, local_tile, px64, rc->err, rc->errcap);
     int fail_reason = dr;
     if (dr == 0) {
+      if (rc->gfx_route_mode == GFX_ROUTE_MODE_TRY_BOTH && !tile_px64_has_opaque(px64) && rc->gfx_route) {
+        uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
+        if (van != 0 && van != file_id) {
+          uint8_t px_van[64];
+          if (decode_gfx_tile(rc->rom, rc->gfxc, van, local_tile, px_van, rc->err, rc->errcap) == 0 &&
+              tile_px64_has_opaque(px_van)) {
+            memcpy(px64, px_van, sizeof(px64));
+            used_file = van;
+            if (rc->stats) rc->stats->gfx_fallback_ok++;
+          }
+        }
+      }
       okpx = 1;
     } else if (rc->gfx_route) {
       uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
@@ -263,12 +369,15 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
         int dr2 = decode_gfx_tile(rc->rom, rc->gfxc, van, local_tile, px64, rc->err, rc->errcap);
         if (dr2 == 0) {
           okpx = 1;
+          used_file = van;
           if (rc->stats) rc->stats->gfx_fallback_ok++;
         } else {
           fail_reason = dr2;
         }
       }
     }
+
+    if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
     uint32_t px = x_tile * 16u + (uint32_t)(si == 1 || si == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(si >= 2 ? 8 : 0);
@@ -304,6 +413,125 @@ static void palette_debug_print(const uint8_t pal256[256][3]) {
     }
     fputc('\n', stderr);
   }
+}
+
+static int palette_debug_write_ppm(const char *path, const uint8_t pal256[256][3]) {
+  if (!path || !pal256) return 0;
+  uint8_t *rgb = (uint8_t *)malloc(256u * 16u * 3u);
+  if (!rgb) return 0;
+  for (int row = 0; row < 16; row++) {
+    for (int c = 0; c < 16; c++) {
+      int idx = row * 16 + c;
+      size_t di = ((size_t)row * 16u + (size_t)c) * 3u;
+      rgb[di + 0] = pal256[idx][0];
+      rgb[di + 1] = pal256[idx][1];
+      rgb[di + 2] = pal256[idx][2];
+    }
+  }
+  int ok = write_ppm(path, rgb, 256u, 16u);
+  free(rgb);
+  return ok;
+}
+
+static int ppm_read_rgb_simple(const char *path, unsigned *out_w, unsigned *out_h, uint8_t **out_px) {
+  if (!path || !out_w || !out_h || !out_px) return 0;
+  *out_px = NULL;
+  FILE *pf = fopen(path, "rb");
+  if (!pf) return 0;
+  char magic[8];
+  if (!fgets(magic, sizeof(magic), pf) || strncmp(magic, "P6", 2) != 0) {
+    fclose(pf);
+    return 0;
+  }
+  char dimline[64];
+  if (!fgets(dimline, sizeof(dimline), pf)) {
+    fclose(pf);
+    return 0;
+  }
+  unsigned pw = 0, ph = 0;
+  if (sscanf(dimline, "%u %u", &pw, &ph) != 2) {
+    fclose(pf);
+    return 0;
+  }
+  char maxline[32];
+  if (!fgets(maxline, sizeof(maxline), pf)) {
+    fclose(pf);
+    return 0;
+  }
+  size_t npix = (size_t)pw * (size_t)ph;
+  uint8_t *px = (uint8_t *)malloc(npix * 3u);
+  if (!px || fread(px, 1, npix * 3u, pf) != npix * 3u) {
+    free(px);
+    fclose(pf);
+    return 0;
+  }
+  fclose(pf);
+  *out_w = pw;
+  *out_h = ph;
+  *out_px = px;
+  return 1;
+}
+
+static int is_lm_green(uint8_t r, uint8_t g, uint8_t b) {
+  return g > 100 && r < 40 && b < 40;
+}
+
+static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t br, uint8_t bg, uint8_t bb) {
+  if (!out_ppm || !lm_ref) return;
+  unsigned w = 0, h = 0, lw = 0, lh = 0;
+  uint8_t *px = NULL;
+  uint8_t *lm = NULL;
+  if (!ppm_read_rgb_simple(out_ppm, &w, &h, &px) || !ppm_read_rgb_simple(lm_ref, &lw, &lh, &lm)) {
+    fprintf(stderr, "LV_DIFF_STATS error=ppm_read_failed\n");
+    free(px);
+    free(lm);
+    return;
+  }
+  if (w != lw || h != lh) {
+    fprintf(stderr, "LV_DIFF_STATS error=dimension_mismatch %ux%u vs %ux%u\n", w, h, lw, lh);
+    free(px);
+    free(lm);
+    return;
+  }
+  size_t total = (size_t)w * (size_t)h;
+  size_t compared = 0;
+  size_t close = 0;
+  long long dr_sum = 0, dg_sum = 0, db_sum = 0;
+  size_t bucket_count[5];
+  memset(bucket_count, 0, sizeof(bucket_count));
+
+  for (size_t i = 0; i < total; i++) {
+    size_t oi = i * 3u;
+    if (is_lm_green(lm[oi], lm[oi + 1], lm[oi + 2])) continue;
+    compared++;
+    int dr = abs((int)px[oi] - (int)lm[oi]);
+    int dg = abs((int)px[oi + 1] - (int)lm[oi + 1]);
+    int db = abs((int)px[oi + 2] - (int)lm[oi + 2]);
+    dr_sum += dr;
+    dg_sum += dg;
+    db_sum += db;
+    int mx = dr > dg ? dr : dg;
+    if (db > mx) mx = db;
+    if (mx <= 32) close++;
+    int bi = mx <= 64 ? (mx <= 32 ? (mx <= 16 ? 0 : 1) : 2) : (mx <= 128 ? 3 : 4);
+    bucket_count[bi]++;
+    (void)br;
+    (void)bg;
+    (void)bb;
+  }
+
+  double sim = compared ? (double)close / (double)compared : 0.0;
+  double mean_dr = compared ? (double)dr_sum / (double)compared : 0.0;
+  double mean_dg = compared ? (double)dg_sum / (double)compared : 0.0;
+  double mean_db = compared ? (double)db_sum / (double)compared : 0.0;
+  fprintf(stderr, "LV_DIFF_STATS compared=%zu similarity_32=%.3f mean_drgb=%.1f,%.1f,%.1f\n", compared, sim, mean_dr,
+          mean_dg, mean_db);
+  fprintf(stderr,
+          "LV_DIFF_STATS buckets_le16=%zu le32=%zu le64=%zu le128=%zu gt128=%zu\n", bucket_count[0], bucket_count[1],
+          bucket_count[2], bucket_count[3], bucket_count[4]);
+
+  free(px);
+  free(lm);
 }
 
 enum {
@@ -380,7 +608,7 @@ static void print_level_report(const LevelInfo *info, Rom *rom, uint32_t W, uint
 
 static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_path, const char *out_ppm,
                             int layers_mask, int print_stats, int print_histogram, int gfx_debug, int print_report,
-                            int palette_debug, int sprite_debug) {
+                            int palette_debug, int sprite_debug, const LvRenderOpts *opts) {
   char err[512];
   if (!info || !map16_path || !*map16_path || !out_ppm) return 0;
 
@@ -414,9 +642,12 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   ObjEmitContext emit_ctx = make_emit_ctx(info);
   if (print_histogram) {
     object_emit_print_histogram(info->objects, info->objects_count, &emit_ctx, stderr, 20);
+    object_emit_print_obj_histogram(info->objects, info->objects_count, stderr, 15);
     if (info->layer2_objects && info->layer2_objects_count) {
-      fprintf(stderr, "LV_HIST layer2:\n");
+      fprintf(stderr, "LV_HIST layer2 unknown:\n");
       object_emit_print_histogram(info->layer2_objects, info->layer2_objects_count, &emit_ctx, stderr, 10);
+      fprintf(stderr, "LV_HIST layer2 objects:\n");
+      object_emit_print_obj_histogram(info->layer2_objects, info->layer2_objects_count, stderr, 15);
     }
   }
 
@@ -431,6 +662,11 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   }
   if (palette_debug) {
     palette_debug_print(pal256);
+  }
+  if (opts && opts->palette_debug_ppm && opts->palette_debug_ppm[0]) {
+    if (!palette_debug_write_ppm(opts->palette_debug_ppm, pal256)) {
+      fprintf(stderr, "Failed writing palette debug %s\n", opts->palette_debug_ppm);
+    }
   }
 
   uint8_t *rgb = (uint8_t *)malloc((size_t)W * (size_t)H * 3u);
@@ -462,8 +698,15 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   rc.stats = &stats;
   rc.err = err;
   rc.errcap = sizeof(err);
+  if (opts) {
+    rc.gfx_route_mode = opts->gfx_route_mode;
+    rc.map16_audit = opts->map16_audit;
+  }
 
   if ((layers_mask & LV_LAYERS_LAYER2) && info->layer2_data_ptr_snes) {
+    memset(rc.gfx_file_subtiles, 0, sizeof(rc.gfx_file_subtiles));
+    memset(rc.pal_row_subtiles, 0, sizeof(rc.pal_row_subtiles));
+    rc.pal_row_oob_count = 0;
     rc.map16_hist_n = 0;
     if (info->layer2_is_bg_tilemap && info->layer2_bg_tiles && info->layer2_bg_width && info->layer2_bg_height) {
       uint8_t w2 = info->layer2_bg_width;
@@ -486,16 +729,23 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     }
     if (print_report) {
       map16_hist_print_top(&rc, "layer2", 10);
+      gfx_file_hist_print(&rc, "layer2");
+      pal_row_hist_print(&rc, "layer2");
     }
   }
 
   if (layers_mask & LV_LAYERS_LAYER1) {
+    memset(rc.gfx_file_subtiles, 0, sizeof(rc.gfx_file_subtiles));
+    memset(rc.pal_row_subtiles, 0, sizeof(rc.pal_row_subtiles));
+    rc.pal_row_oob_count = 0;
     rc.map16_hist_n = 0;
     for (size_t i = 0; i < info->objects_count; i++) {
       process_object_emit(&info->objects[i], &emit_ctx, &rc, &stats, 0);
     }
     if (print_report) {
       map16_hist_print_top(&rc, "layer1", 10);
+      gfx_file_hist_print(&rc, "layer1");
+      pal_row_hist_print(&rc, "layer1");
     }
   }
 
@@ -538,6 +788,10 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   int ok = write_ppm(out_ppm, rgb, W, H);
   if (!ok) fprintf(stderr, "Failed writing %s\n", out_ppm);
 
+  if (opts && opts->export_diff_stats && opts->lm_ref_ppm && opts->lm_ref_ppm[0]) {
+    export_diff_stats(out_ppm, opts->lm_ref_ppm, back_r, back_g, back_b);
+  }
+
   free(rgb);
   gfxcache_free(&gfxc);
   map16_free(&map16);
@@ -547,7 +801,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
                                      const char *out_ppm, int layers_mask, int print_stats,
                                      int print_histogram, int gfx_debug, int print_report, int palette_debug,
-                                     int sprite_debug) {
+                                     int sprite_debug, const LvRenderOpts *opts) {
   char err[512];
   Rom rom;
   if (!rom_load(&rom, rom_path, err, sizeof(err))) {
@@ -568,7 +822,7 @@ static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, co
     return 0;
   }
   int ok = render_level_ppm(&info, &rom, map16_path, out_ppm, layers_mask, print_stats, print_histogram, gfx_debug,
-                            print_report, palette_debug, sprite_debug);
+                            print_report, palette_debug, sprite_debug, opts);
   levelinfo_free(&info);
   rom_free(&rom);
   return ok;
@@ -576,7 +830,8 @@ static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, co
 
 static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_path, const char *out_ppm,
                                      int layers_mask, int print_stats, int print_histogram, int gfx_debug,
-                                     int print_report, int palette_debug, int sprite_debug) {
+                                     int print_report, int palette_debug, int sprite_debug,
+                                     const LvRenderOpts *opts) {
   char err[512];
   MwlParsed mwl;
   memset(&mwl, 0, sizeof(mwl));
@@ -655,7 +910,7 @@ static int render_level_ppm_from_mwl(const char *mwl_path, const char *map16_pat
   }
 
   int ok = render_level_ppm(&info, NULL, map16_path, out_ppm, layers_mask, print_stats, print_histogram, gfx_debug,
-                            print_report, palette_debug, sprite_debug);
+                            print_report, palette_debug, sprite_debug, opts);
   levelinfo_free(&info);
   mwl_parsed_free(&mwl);
   return ok;
@@ -679,6 +934,11 @@ int main(int argc, char **argv) {
   int print_report = 0;
   int palette_debug = 0;
   int sprite_debug = 0;
+  int map16_audit = 0;
+  int export_diff_stats = 0;
+  int gfx_route_mode = GFX_ROUTE_MODE_BYPASS;
+  const char *palette_debug_ppm = NULL;
+  const char *lm_ref_ppm = NULL;
 
   uint16_t level_id = 0;
   int have_level_id = 0;
@@ -721,6 +981,17 @@ int main(int argc, char **argv) {
     else if (strcmp(a, "--gfx-debug") == 0) gfx_debug = 1;
     else if (strcmp(a, "--report") == 0) print_report = 1;
     else if (strcmp(a, "--palette-debug") == 0) palette_debug = 1;
+    else if (strncmp(a, "--palette-debug-ppm=", 20) == 0) palette_debug_ppm = a + 20;
+    else if (strcmp(a, "--map16-audit") == 0) map16_audit = 1;
+    else if (strcmp(a, "--export-diff-stats") == 0) export_diff_stats = 1;
+    else if (strncmp(a, "--gfx-route-mode=", 17) == 0) {
+      int m = parse_gfx_route_mode(a + 17);
+      if (m < 0) {
+        fprintf(stderr, "Invalid --gfx-route-mode (use bypass|vanilla|try-both)\n");
+        return 2;
+      }
+      gfx_route_mode = m;
+    } else if (strncmp(a, "--lm-ref=", 9) == 0) lm_ref_ppm = a + 9;
     else if (strcmp(a, "--sprite-debug") == 0) sprite_debug = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
       usage(argv[0]);
@@ -756,9 +1027,23 @@ int main(int argc, char **argv) {
     map16_path = suite_map16;
   }
 
+  const char *gfx_env = getenv("LEVEL_VISUAL_GFX_MODE");
+  if (gfx_env && gfx_env[0]) {
+    int m = parse_gfx_route_mode(gfx_env);
+    if (m >= 0) gfx_route_mode = m;
+  }
+
+  LvRenderOpts ropts;
+  memset(&ropts, 0, sizeof(ropts));
+  ropts.gfx_route_mode = gfx_route_mode;
+  ropts.map16_audit = map16_audit || print_report;
+  ropts.export_diff_stats = export_diff_stats;
+  ropts.palette_debug_ppm = palette_debug_ppm;
+  ropts.lm_ref_ppm = lm_ref_ppm;
+
   if (mwl_path) {
     if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram,
-                                   gfx_debug, print_report, palette_debug, sprite_debug))
+                                   gfx_debug, print_report, palette_debug, sprite_debug, &ropts))
       return 1;
     return 0;
   }
@@ -768,7 +1053,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (!render_level_ppm_from_rom(rom_path, level_id, map16_path, export_ppm, layers_mask, print_stats,
-                                print_histogram, gfx_debug, print_report, palette_debug, sprite_debug))
+                                print_histogram, gfx_debug, print_report, palette_debug, sprite_debug, &ropts))
     return 1;
   return 0;
 }

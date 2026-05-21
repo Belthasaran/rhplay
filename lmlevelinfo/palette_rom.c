@@ -66,6 +66,16 @@ static PaletteSource palette_from_custom(const LevelInfo *info, uint8_t pal256[2
     uint16_t c = (uint16_t)(info->palette_bytes[off] | ((uint16_t)info->palette_bytes[off + 1] << 8));
     snes15_to_rgb(c, &pal256[i][0], &pal256[i][1], &pal256[i][2]);
   }
+  // Map16 may reference palette rows 8-15; mirror rows 0-7 like ROM table path.
+  for (int pal_line = 8; pal_line < 16; pal_line++) {
+    for (int c = 0; c < 16; c++) {
+      int src = (pal_line & 7) * 16 + c;
+      int dst = pal_line * 16 + c;
+      pal256[dst][0] = pal256[src][0];
+      pal256[dst][1] = pal256[src][1];
+      pal256[dst][2] = pal256[src][2];
+    }
+  }
   return PAL_SOURCE_CUSTOM;
 }
 

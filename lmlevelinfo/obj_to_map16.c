@@ -226,6 +226,22 @@ static int emit_tileset_specific(const LevelObject *o, emit_map16_fn emit, void 
   return emit_rect_fill(emit, user_ctx, bx, by, w, h, page, low);
 }
 
+static int emit_skinny_vertical_pipe(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
+  if (o->kind != OBJ_STANDARD || o->object_number != 0x1F) return 0;
+  uint16_t height = (uint16_t)((o->settings >> 4) ? (o->settings >> 4) : 1);
+  uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+  uint16_t by = (uint16_t)o->y_position;
+  const uint8_t page = 1;
+  if (!emit_one(emit, user_ctx, map16_from_page_low(page, 0x53), bx, by)) return 0;
+  for (uint16_t row = 1; row + 1 < height; row++) {
+    if (!emit_one(emit, user_ctx, map16_from_page_low(page, 0x54), bx, (uint16_t)(by + row))) return 0;
+  }
+  if (height > 1) {
+    if (!emit_one(emit, user_ctx, map16_from_page_low(page, 0x55), bx, (uint16_t)(by + height - 1))) return 0;
+  }
+  return 1;
+}
+
 static int emit_vertical_pipe(const LevelObject *o, emit_map16_fn emit, void *user_ctx) {
   if (o->kind != OBJ_STANDARD || o->object_number != 0x0F) return 0;
   uint8_t pipe_type = (uint8_t)(o->settings & 0x0F);
@@ -384,6 +400,7 @@ ObjMapResult object_emit_map16_tiles(const LevelObject *o, const ObjEmitContext 
   if (emit_midway_point(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_tileset_specific(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_vertical_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
+  if (emit_skinny_vertical_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_horizontal_pipe(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_slope_left(o, emit, user_ctx)) return OBJMAP_HANDLED;
   if (emit_bullet_shooter(o, emit, user_ctx)) return OBJMAP_HANDLED;

@@ -3,34 +3,46 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "romutil.h"
+
 typedef struct {
-  // raw words for a Map16 tile (4 subtiles). Word bit layout is LM/SMW-defined.
-  // We keep raw so higher layers can interpret palette/flip/priority bits.
-  uint16_t w[4]; // TL, TR, BL, BR (conventional order)
+  uint16_t w[4];
 } Map16Tile;
+
+#define MAP16_SRC_FILE 0
+#define MAP16_SRC_ALIAS 1
+#define MAP16_SRC_ROM 2
+#define MAP16_SRC_SYNTH 3
 
 typedef struct {
   Map16Tile *tiles;
-  size_t tiles_count; // number of tiles present in file
-  int is_lm16;       // file began with LM16 magic
-  int synth_vanilla; // synthesize empty export slots from tile_id page/low (default on load)
+  size_t tiles_count;
+  int is_lm16;
+  int synth_vanilla;
   size_t synth_count;
+  size_t alias_hit_count;
+  size_t rom_hit_count;
+  size_t alias_table_count;
+  uint16_t *alias_index; /* tiles_count entries: alias for flat tile_id, 0xFFFF=none */
+  Rom *rom;
 } Map16Data;
 
 void map16_free(Map16Data *m);
 
-// Load Lunar Magic binary AllMap16.map16 (LM16 container or raw 8-byte tiles).
-// Flat tile_id indexing: tiles[tile_id] (matches LM export for custom ids e.g. 0x07EC).
-// Returns 1 on success, 0 on failure (err filled).
 int map16_load_file(const char *path, Map16Data *out, char *err, size_t errcap);
 
 void map16_set_synth_vanilla(Map16Data *m, int enable);
 
-// Return 1 if tile_id is present and *out is filled (applies vanilla synth when enabled).
+void map16_attach_rom(Map16Data *m, Rom *rom);
+
 int map16_get(Map16Data *m, uint16_t tile_id, Map16Tile *out);
 
-// Lookup without synthesizing empty blocks.
+int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out);
+
 int map16_get_raw(const Map16Data *m, uint16_t tile_id, Map16Tile *out);
 
-// 1 if export slot exists but all subtile words are zero.
 int map16_tile_is_empty(const Map16Tile *t);
+
+int map16_tile_needs_resolve(const Map16Tile *t);
+
+void map16_print_alias_debug(const Map16Data *m, int top_n);

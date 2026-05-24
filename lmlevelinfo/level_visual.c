@@ -34,7 +34,8 @@ static void usage(const char *argv0) {
           "  - --layers=all|layer1|layer2|sprites (sprites included in all).\n"
           "  - --sprite-debug draws green markers for unknown sprite ids (no generic GFX blit).\n"
           "  - --map16-synth-vanilla fills empty AllMap16 export slots from tile id (default on).\n"
-          "  - --no-map16-synth-vanilla disables empty-slot synthesis.\n",
+          "  - --no-map16-synth-vanilla disables empty-slot synthesis.\n"
+          "  - --map16-alias-debug logs top alias (tile_id -> file index) mappings to stderr.\n",
           argv0 ? argv0 : "level_visual",
           argv0 ? argv0 : "level_visual");
 }
@@ -185,6 +186,7 @@ typedef struct {
   int gfx_route_mode;
   int map16_audit;
   int map16_synth_vanilla;
+  int map16_alias_debug;
   int export_diff_stats;
   const char *palette_debug_ppm;
   const char *lm_ref_ppm;
@@ -229,8 +231,11 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     fprintf(stderr, "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X missing\n", layer_label, (unsigned)map16_id);
     return;
   }
-  if (!map16_get(map16, map16_id, &t)) return;
-  int synth = map16_tile_is_empty(&raw) && !map16_tile_is_empty(&t);
+  int src = MAP16_SRC_FILE;
+  if (!map16_get_with_src(map16, map16_id, &t, &src)) return;
+  int synth = (src == MAP16_SRC_SYNTH);
+  int alias = (src == MAP16_SRC_ALIAS);
+  int rom_fb = (src == MAP16_SRC_ROM);
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
@@ -240,9 +245,9 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
     fprintf(stderr,
             "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d tile8=0x%03X page=%u pal=%u h=%d v=%d file=0x%02X "
-            "vanilla=0x%02X local=0x%02X synth=%d\n",
+            "vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d\n",
             layer_label, (unsigned)map16_id, si, (unsigned)tile8, (unsigned)page, (unsigned)pal, (w0 >> 10) & 1,
-            (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth);
+            (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb);
   }
 }
 
@@ -624,6 +629,8 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     fprintf(stderr, "Map16 load failed: %s\n", err);
     return 0;
   }
+  if (rom) map16_attach_rom(&map16, rom);
+  if (opts && opts->map16_alias_debug) map16_print_alias_debug(&map16, 10);
 
   GfxCache gfxc;
   memset(&gfxc, 0, sizeof(gfxc));
@@ -783,7 +790,11 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   }
 
   if (print_report) {
-    fprintf(stderr, "LV_REPORT map16_synth_fallback=%zu lm16=%d\n", map16.synth_count, map16.is_lm16);
+    fprintf(stderr,
+            "LV_REPORT map16_alias_hits=%zu map16_rom_hits=%zu map16_alias_table=%zu map16_synth_fallback=%zu "
+            "lm16=%d\n",
+            map16.alias_hit_count, map16.rom_hit_count, map16.alias_table_count, map16.synth_count,
+            map16.is_lm16);
   }
 
   if (print_stats) {
@@ -947,6 +958,7 @@ int main(int argc, char **argv) {
   int sprite_debug = 0;
   int map16_audit = 0;
   int map16_synth_vanilla = 1;
+  int map16_alias_debug = 0;
   int export_diff_stats = 0;
   int gfx_route_mode = GFX_ROUTE_MODE_BYPASS;
   const char *palette_debug_ppm = NULL;
@@ -997,6 +1009,7 @@ int main(int argc, char **argv) {
     else if (strcmp(a, "--map16-audit") == 0) map16_audit = 1;
     else if (strcmp(a, "--map16-synth-vanilla") == 0) map16_synth_vanilla = 1;
     else if (strcmp(a, "--no-map16-synth-vanilla") == 0) map16_synth_vanilla = 0;
+    else if (strcmp(a, "--map16-alias-debug") == 0) map16_alias_debug = 1;
     else if (strcmp(a, "--export-diff-stats") == 0) export_diff_stats = 1;
     else if (strncmp(a, "--gfx-route-mode=", 17) == 0) {
       int m = parse_gfx_route_mode(a + 17);
@@ -1052,6 +1065,7 @@ int main(int argc, char **argv) {
   ropts.gfx_route_mode = gfx_route_mode;
   ropts.map16_audit = map16_audit || print_report;
   ropts.map16_synth_vanilla = map16_synth_vanilla;
+  ropts.map16_alias_debug = map16_alias_debug;
   ropts.export_diff_stats = export_diff_stats;
   ropts.palette_debug_ppm = palette_debug_ppm;
   ropts.lm_ref_ppm = lm_ref_ppm;

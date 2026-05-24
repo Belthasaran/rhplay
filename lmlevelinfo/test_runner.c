@@ -1681,59 +1681,99 @@ static int run_screen_assign_sanity(void) {
   return ok;
 }
 
-static int run_map16_synth_tests(void) {
+static int map16_tile_matches_hill_21(const Map16Tile *t) {
+  if (!t) return 0;
+  return t->w[0] == 0x20u && t->w[1] == 0x20u && t->w[2] == 0x21u && t->w[3] == 0x21u;
+}
+
+static int run_map16_alias_tests(void) {
   Map16Data m;
   char err[256];
   memset(&m, 0, sizeof(m));
   if (!map16_load_file("test/akogare/AllMap16.map16", &m, err, sizeof(err))) {
-    failf("[map16_synth] load failed: %s", err);
+    failf("[map16_alias] load failed: %s", err);
     return 0;
   }
   if (!m.is_lm16) {
-    failf("[map16_synth] expected LM16 magic in akogare AllMap16");
+    failf("[map16_alias] expected LM16 magic in akogare AllMap16");
+    map16_free(&m);
+    return 0;
+  }
+  if (!m.alias_index || m.alias_table_count < 100) {
+    failf("[map16_alias] expected alias table entries, got %zu", m.alias_table_count);
     map16_free(&m);
     return 0;
   }
 
-  Map16Tile raw, got;
-  if (!map16_get_raw(&m, 0x0021, &raw) || !map16_tile_is_empty(&raw)) {
-    failf("[map16_synth] expected empty raw block 0x0021");
+  Map16Tile raw, got, ref;
+  if (!map16_get_raw(&m, 0x0021, &raw) || !map16_tile_needs_resolve(&raw)) {
+    failf("[map16_alias] expected empty/placeholder raw block 0x0021");
     map16_free(&m);
     return 0;
   }
-  if (!map16_get(&m, 0x0021, &got)) {
-    failf("[map16_synth] map16_get 0x0021 failed");
+  if (m.alias_index[0x0021] != 0x0502u) {
+    failf("[map16_alias] expected alias_index[0x21]=0x502 got 0x%04X", m.alias_index[0x0021]);
     map16_free(&m);
     return 0;
   }
-  if (map16_tile_is_empty(&got) || (got.w[0] & 0x03FFu) != 0x21u) {
-    failf("[map16_synth] 0x0021 synth w[0]=0x%04X expected tile8 0x021", got.w[0]);
+  if (!map16_get_raw(&m, 0x0502, &ref) || !map16_tile_matches_hill_21(&ref)) {
+    failf("[map16_alias] block 0x502 not hill pattern");
+    map16_free(&m);
+    return 0;
+  }
+
+  size_t synth_before = m.synth_count;
+  size_t alias_before = m.alias_hit_count;
+  int src = -1;
+  if (!map16_get_with_src(&m, 0x0021, &got, &src)) {
+    failf("[map16_alias] map16_get 0x0021 failed");
+    map16_free(&m);
+    return 0;
+  }
+  if (src != MAP16_SRC_ALIAS) {
+    failf("[map16_alias] 0x0021 src=%d expected MAP16_SRC_ALIAS", src);
+    map16_free(&m);
+    return 0;
+  }
+  if (!map16_tile_matches_hill_21(&got)) {
+    failf("[map16_alias] 0x0021 w=%04X,%04X,%04X,%04X expected hill 0x20/0x21",
+          got.w[0], got.w[1], got.w[2], got.w[3]);
+    map16_free(&m);
+    return 0;
+  }
+  if (m.synth_count != synth_before) {
+    failf("[map16_alias] synth_count changed on alias hit");
+    map16_free(&m);
+    return 0;
+  }
+  if (m.alias_hit_count != alias_before + 1) {
+    failf("[map16_alias] alias_hit_count expected %zu got %zu", alias_before + 1, m.alias_hit_count);
     map16_free(&m);
     return 0;
   }
 
   map16_set_synth_vanilla(&m, 0);
-  if (!map16_get(&m, 0x0021, &got) || !map16_tile_is_empty(&got)) {
-    failf("[map16_synth] disabled synth should leave 0x0021 empty");
+  alias_before = m.alias_hit_count;
+  if (!map16_get_with_src(&m, 0x0021, &got, &src) || src != MAP16_SRC_ALIAS || !map16_tile_matches_hill_21(&got)) {
+    failf("[map16_alias] alias must work with synth disabled");
+    map16_free(&m);
+    return 0;
+  }
+  if (m.alias_hit_count != alias_before + 1) {
+    failf("[map16_alias] alias hit count with synth off");
     map16_free(&m);
     return 0;
   }
 
   map16_set_synth_vanilla(&m, 1);
-  if (!map16_get(&m, 0x0091, &got) || map16_tile_is_empty(&got) || (got.w[0] & 0x03FFu) != 0x91u) {
-    failf("[map16_synth] 0x0091 synth w[0]=0x%04X expected tile8 0x091", got.w[0]);
-    map16_free(&m);
-    return 0;
-  }
-
-  if (!map16_get(&m, 0x0121, &got) || map16_tile_is_empty(&got) || (got.w[0] & 0x03FFu) != 0x21u) {
-    failf("[map16_synth] 0x0121 synth w[0]=0x%04X expected page-0 tile8 0x021", got.w[0]);
+  if (!map16_get(&m, 0x0091, &got) || map16_tile_is_empty(&got)) {
+    failf("[map16_alias] 0x0091 resolve failed");
     map16_free(&m);
     return 0;
   }
 
   map16_free(&m);
-  printf("PASS: map16_synth_empty_block\n");
+  printf("PASS: map16_alias_hill_21\n");
   return 1;
 }
 
@@ -1757,7 +1797,7 @@ static int run_level_visual_smoke(void) {
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
-           "--stats --report 2>\"%s\"",
+           "--gfx-route-mode=vanilla --stats --report 2>\"%s\"",
            built_rom, outppm, stats_path);
   int rc = system(cmd);
   if (rc != 0) {
@@ -1809,11 +1849,11 @@ static int run_level_visual_smoke(void) {
     failf("[level_visual smoke] non-background ratio %.3f expected >=0.19", nonbg_ratio);
     return 0;
   }
-  if (nonbg_ratio < 0.25) {
-    fprintf(stderr, "NOTE: [level_visual smoke] nonbg ratio %.3f below inc8 target 0.25\n", nonbg_ratio);
+  if (nonbg_ratio < 0.30) {
+    fprintf(stderr, "NOTE: [level_visual smoke] nonbg ratio %.3f below inc9 target 0.30\n", nonbg_ratio);
   }
-  if (nonbg_ratio < 0.32) {
-    fprintf(stderr, "NOTE: [level_visual smoke] nonbg ratio %.3f below aspirational 0.32\n", nonbg_ratio);
+  if (nonbg_ratio < 0.35) {
+    fprintf(stderr, "NOTE: [level_visual smoke] nonbg ratio %.3f below inc9 stretch 0.35\n", nonbg_ratio);
   }
 
   int has_block_audit = 0;
@@ -1894,7 +1934,7 @@ static int run_level_visual_lm_compare(void) {
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
-           "--stats --report 2>\"%s\"",
+           "--gfx-route-mode=vanilla --stats --report 2>\"%s\"",
            built_rom, outppm, stats_path);
   if (system(cmd) != 0) {
     failf("[level_visual lm] render failed");
@@ -1920,11 +1960,11 @@ static int run_level_visual_lm_compare(void) {
     failf("[level_visual lm] nonbg ratio %.3f expected >=0.19", nonbg_ratio);
     return 0;
   }
-  if (nonbg_ratio < 0.25) {
-    fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below inc8 target 0.25\n", nonbg_ratio);
+  if (nonbg_ratio < 0.30) {
+    fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below inc9 target 0.30\n", nonbg_ratio);
   }
-  if (nonbg_ratio < 0.32) {
-    fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below aspirational 0.32\n", nonbg_ratio);
+  if (nonbg_ratio < 0.35) {
+    fprintf(stderr, "NOTE: [level_visual lm] nonbg ratio %.3f below inc9 stretch 0.35\n", nonbg_ratio);
   }
 
   uint8_t *px = NULL;
@@ -1948,8 +1988,11 @@ static int run_level_visual_lm_compare(void) {
   (void)remove(outppm);
   (void)remove(stats_path);
 
+  if (sim < 0.52) {
+    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below inc9 target 0.52\n", sim);
+  }
   if (sim < 0.55) {
-    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below aspirational 0.55\n", sim);
+    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below stretch 0.55\n", sim);
   }
 
   printf("PASS: level_visual lm compare (nonbg=%.1f%% x_max=%u lm_similarity=%.1f%%)\n", nonbg_ratio * 100.0, x_max,
@@ -2862,7 +2905,7 @@ int main(void) {
   int okGfxTi = run_gfx_tile_index_sanity();
   int okEg = test_exgfx_export_hashes();
   int okExt68 = run_ext68_cloud_emit_test();
-  int okMap16Synth = run_map16_synth_tests();
+  int okMap16Alias = run_map16_alias_tests();
   int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
   int okLvLm = run_level_visual_lm_compare();
@@ -2879,7 +2922,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okMap16Synth && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
+      okExt68 && okMap16Alias && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

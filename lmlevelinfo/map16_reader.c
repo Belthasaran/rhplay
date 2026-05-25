@@ -26,8 +26,17 @@ int map16_tile_is_empty(const Map16Tile *t) {
   return t->w[0] == 0 && t->w[1] == 0 && t->w[2] == 0 && t->w[3] == 0;
 }
 
+static int map16_tile_zero_sub_count(const Map16Tile *t) {
+  int z = 0;
+  for (int i = 0; i < 4; i++) {
+    if (((uint16_t)(t->w[i] & 0x03FFu)) == 0) z++;
+  }
+  return z;
+}
+
 int map16_tile_needs_resolve(const Map16Tile *t) {
   if (!t || map16_tile_is_empty(t)) return 1;
+  if (map16_tile_zero_sub_count(t) >= 2) return 1;
   if (t->w[0] != t->w[1] || t->w[0] != t->w[2] || t->w[0] != t->w[3]) return 0;
   uint16_t tile8 = (uint16_t)(t->w[0] & 0x03FFu);
   if (tile8 == 0) return 1;
@@ -37,10 +46,12 @@ int map16_tile_needs_resolve(const Map16Tile *t) {
 
 static void map16_synthesize_from_tile_id(uint16_t tile_id, Map16Tile *out) {
   if (!out) return;
+  uint8_t page = (uint8_t)((tile_id >> 8) & 0x01);
   uint8_t low = (uint8_t)(tile_id & 0xFF);
   memset(out, 0, sizeof(*out));
   if (low == 0) return;
   uint16_t w = (uint16_t)low;
+  if (page) w = (uint16_t)(w | 0x0080u);
   out->w[0] = w;
   out->w[1] = w;
   out->w[2] = w;
@@ -55,6 +66,21 @@ static int subtile_matches_page_low(uint16_t w, uint8_t page, uint8_t low) {
     return wlow == low;
   }
   return wpage == (page & 1u) && wlow == low;
+}
+
+static int block_alias_exact_hits(const Map16Tile *t, uint8_t page, uint8_t low) {
+  if (!t || low == 0) return 0;
+  int exact = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    uint8_t wlow = (uint8_t)(tile8 & 0x7Fu);
+    if (page == 0) {
+      if (wlow == low) exact++;
+    } else if (subtile_matches_page_low(t->w[i], page, low)) {
+      exact++;
+    }
+  }
+  return exact;
 }
 
 static int block_alias_score(const Map16Tile *t, uint8_t page, uint8_t low, uint16_t *out_max_w) {
@@ -98,9 +124,9 @@ static int map16_build_alias_table(Map16Data *m) {
   if (!m || !m->tiles || m->tiles_count == 0) return 0;
 
   size_t n = m->tiles_count;
-  m->alias_index = (uint16_t *)malloc(n * sizeof(uint16_t));
+  m->alias_index = (size_t *)malloc(n * sizeof(size_t));
   if (!m->alias_index) return 0;
-  for (size_t i = 0; i < n; i++) m->alias_index[i] = 0xFFFFu;
+  for (size_t i = 0; i < n; i++) m->alias_index[i] = SIZE_MAX;
 
   size_t filled = 0;
   for (size_t tid = 0; tid < n; tid++) {
@@ -122,7 +148,12 @@ static int map16_build_alias_table(Map16Data *m) {
       if (map16_tile_needs_resolve(cand)) continue;
       uint16_t max_w = 0;
       int score = block_alias_score(cand, page, low, &max_w);
-      if (score < 6) continue;
+      if (score < 4) continue;
+      /* Page-0 exact-low match avoids false positives (e.g. 0x0002 -> filler 0x1004).
+       * Empty/degenerate/page>=1 slots may alias via near-match scoring only (e.g. 0x013D checker). */
+      if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 &&
+          block_alias_exact_hits(cand, page, low) < 1)
+        continue;
       if (!have_best || block_alias_better(score, max_w, j, best_score, best_max_w, best_idx)) {
         best_score = score;
         best_max_w = max_w;
@@ -131,8 +162,8 @@ static int map16_build_alias_table(Map16Data *m) {
       }
     }
 
-    if (have_best && best_score >= 2) {
-      m->alias_index[tid] = (uint16_t)best_idx;
+    if (have_best && best_score >= 4 && !map16_tile_needs_resolve(&m->tiles[best_idx])) {
+      m->alias_index[tid] = best_idx;
       filled++;
     }
   }
@@ -153,6 +184,7 @@ void map16_free(Map16Data *m) {
   m->synth_count = 0;
   m->alias_hit_count = 0;
   m->rom_hit_count = 0;
+  m->rom_vanilla_hit_count = 0;
   m->alias_table_count = 0;
   m->rom = NULL;
 }
@@ -204,13 +236,27 @@ int map16_load_file(const char *path, Map16Data *out, char *err, size_t errcap) 
     seterr(err, errcap, "Empty map16 file");
     return 0;
   }
-  if ((sz % 8u) != 0) {
+
+  size_t data_off = out->is_lm16 ? 8u : 0u;
+  if (sz <= data_off) {
+    fclose(fp);
+    seterr(err, errcap, "Empty map16 file");
+    return 0;
+  }
+  size_t data_sz = sz - data_off;
+  if ((data_sz % 8u) != 0) {
     fclose(fp);
     seterr(err, errcap, "AllMap16.map16 size not multiple of 8");
     return 0;
   }
 
-  size_t tilesN = sz / 8u;
+  if (data_off != 0 && fseek(fp, (long)data_off, SEEK_SET) != 0) {
+    fclose(fp);
+    seterr(err, errcap, "Could not seek map16 file");
+    return 0;
+  }
+
+  size_t tilesN = data_sz / 8u;
   Map16Tile *tiles = (Map16Tile *)calloc(tilesN ? tilesN : 1, sizeof(Map16Tile));
   if (!tiles) {
     fclose(fp);
@@ -262,8 +308,8 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   }
 
   if (m->alias_index && (size_t)tile_id < m->tiles_count) {
-    uint16_t alias_idx = m->alias_index[tile_id];
-    if (alias_idx != 0xFFFFu && (size_t)alias_idx < m->tiles_count) {
+    size_t alias_idx = m->alias_index[tile_id];
+    if (alias_idx != SIZE_MAX && alias_idx < m->tiles_count) {
       const Map16Tile *at = &m->tiles[alias_idx];
       if (!map16_tile_needs_resolve(at)) {
         *out = *at;
@@ -276,6 +322,13 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
 
   if (m->rom) {
     Map16Tile rom_tile;
+    uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
+    if (page <= 1 && map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) {
+      *out = rom_tile;
+      m->rom_vanilla_hit_count++;
+      if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
+      return 1;
+    }
     if (map16_rom_get_tile(m->rom, tile_id, &rom_tile)) {
       *out = rom_tile;
       m->rom_hit_count++;
@@ -309,9 +362,9 @@ void map16_print_alias_debug(const Map16Data *m, int top_n) {
   fprintf(stderr, "map16 alias table: %zu entries\n", m->alias_table_count);
   int printed = 0;
   for (size_t tid = 0; tid < m->tiles_count && printed < top_n; tid++) {
-    uint16_t alias_idx = m->alias_index[tid];
-    if (alias_idx == 0xFFFFu) continue;
-    fprintf(stderr, "  tile_id=0x%04X -> alias_index=0x%04X\n", (unsigned)tid, (unsigned)alias_idx);
+    size_t alias_idx = m->alias_index[tid];
+    if (alias_idx == SIZE_MAX) continue;
+    fprintf(stderr, "  tile_id=0x%04X -> alias_index=0x%zX\n", (unsigned)tid, alias_idx);
     printed++;
   }
 }

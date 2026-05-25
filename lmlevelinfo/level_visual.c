@@ -229,6 +229,23 @@ static void map16_hist_bump(RenderCtx *rc, uint16_t map16_id) {
   }
 }
 
+static const char *map16_src_label(int src) {
+  switch (src) {
+    case MAP16_SRC_FILE:
+      return "file";
+    case MAP16_SRC_ALIAS:
+      return "alias";
+    case MAP16_SRC_ROM:
+      return "rom";
+    case MAP16_SRC_SYNTH:
+      return "synth";
+    case MAP16_SRC_ROM_VANILLA:
+      return "rom_van";
+    default:
+      return "?";
+  }
+}
+
 static uint8_t map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t bg_palette_row) {
   uint8_t pal = (uint8_t)(pal_raw & 7u);
   if (is_layer2 && pal <= 3u) {
@@ -265,11 +282,11 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t file_id = route ? gfx_route_file_for_tile_mode(route, tile8, gfx_route_mode) : page;
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
     fprintf(stderr,
-            "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
+            "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
             "file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
-            layer_label, (unsigned)map16_id, si, (unsigned)tile8, (unsigned)page, (unsigned)pal_raw,
-            (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van,
-            (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+            layer_label, (unsigned)map16_id, si, map16_src_label(src), (unsigned)tile8, (unsigned)page,
+            (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
+            (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
   }
 }
 

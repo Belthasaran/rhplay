@@ -120,6 +120,48 @@ static int block_alias_better(int score, uint16_t max_w, size_t idx, int best_sc
   return idx < best_idx;
 }
 
+static int map16_tile_uniform_tile8(const Map16Tile *t, uint16_t *out_tile8) {
+  if (!t) return 0;
+  uint16_t t0 = (uint16_t)(t->w[0] & 0x03FFu);
+  for (int i = 1; i < 4; i++) {
+    if ((uint16_t)(t->w[i] & 0x03FFu) != t0) return 0;
+  }
+  if (out_tile8) *out_tile8 = t0;
+  return 1;
+}
+
+static int map16_distinct_tile8_count(const Map16Tile *t) {
+  if (!t) return 0;
+  uint16_t vals[4];
+  int n = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t v = (uint16_t)(t->w[i] & 0x03FFu);
+    if (v == 0) continue;
+    int found = 0;
+    for (int j = 0; j < n; j++) {
+      if (vals[j] == v) {
+        found = 1;
+        break;
+      }
+    }
+    if (!found) vals[n++] = v;
+  }
+  return n;
+}
+
+static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand) {
+  if (!slot || !cand) return 0;
+  uint16_t slot_uni = 0, cand_uni = 0;
+  int slot_uniform = map16_tile_uniform_tile8(slot, &slot_uni);
+  int cand_uniform = map16_tile_uniform_tile8(cand, &cand_uni);
+  if (cand_uniform && !slot_uniform) return 0;
+  if (cand_uniform && slot_uniform && cand_uni != slot_uni) return 0;
+  int raw_distinct = map16_distinct_tile8_count(slot);
+  int cand_distinct = map16_distinct_tile8_count(cand);
+  if (raw_distinct >= 2 && cand_distinct < 2) return 0;
+  return 1;
+}
+
 static int map16_build_alias_table(Map16Data *m) {
   if (!m || !m->tiles || m->tiles_count == 0) return 0;
 
@@ -154,6 +196,7 @@ static int map16_build_alias_table(Map16Data *m) {
       if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 &&
           block_alias_exact_hits(cand, page, low) < 1)
         continue;
+      if (!map16_alias_cand_ok(slot, cand)) continue;
       if (!have_best || block_alias_better(score, max_w, j, best_score, best_max_w, best_idx)) {
         best_score = score;
         best_max_w = max_w;
@@ -307,6 +350,20 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
     return 1;
   }
 
+  if (m->rom && have_raw && !map16_tile_is_empty(&raw)) {
+    Map16Tile rom_tile;
+    uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
+    /* Partial/degenerate export slots (e.g. 0x0002): prefer ROM vanilla shape.
+     * Fully empty slots (e.g. 0x0021) keep alias — hack ROM pointer tables often differ from AllMap16. */
+    if (page <= 1 && map16_tile_needs_resolve(&raw) &&
+        map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) {
+      *out = rom_tile;
+      m->rom_vanilla_hit_count++;
+      if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
+      return 1;
+    }
+  }
+
   if (m->alias_index && (size_t)tile_id < m->tiles_count) {
     size_t alias_idx = m->alias_index[tile_id];
     if (alias_idx != SIZE_MAX && alias_idx < m->tiles_count) {
@@ -322,13 +379,6 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
 
   if (m->rom) {
     Map16Tile rom_tile;
-    uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
-    if (page <= 1 && map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) {
-      *out = rom_tile;
-      m->rom_vanilla_hit_count++;
-      if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
-      return 1;
-    }
     if (map16_rom_get_tile(m->rom, tile_id, &rom_tile)) {
       *out = rom_tile;
       m->rom_hit_count++;

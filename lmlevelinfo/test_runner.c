@@ -1711,6 +1711,33 @@ static int map16_tile_matches_hill_21(const Map16Tile *t) {
          map16_tile8(t, 3) == 0x21u;
 }
 
+static int map16_distinct_tile8_count(const Map16Tile *t) {
+  if (!t) return 0;
+  uint16_t vals[4];
+  int n = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t v = map16_tile8(t, i);
+    if (v == 0) continue;
+    int found = 0;
+    for (int j = 0; j < n; j++) {
+      if (vals[j] == v) {
+        found = 1;
+        break;
+      }
+    }
+    if (!found) vals[n++] = v;
+  }
+  return n;
+}
+
+static int map16_tile_all_subs_tile8(const Map16Tile *t, uint16_t tile8) {
+  if (!t) return 0;
+  for (int i = 0; i < 4; i++) {
+    if (map16_tile8(t, i) != tile8) return 0;
+  }
+  return 1;
+}
+
 static int run_map16_alias_tests(void) {
   Map16Data m;
   char err[256];
@@ -1728,6 +1755,12 @@ static int run_map16_alias_tests(void) {
     failf("[map16_alias] expected alias table entries, got %zu", m.alias_table_count);
     map16_free(&m);
     return 0;
+  }
+
+  Rom rom;
+  memset(&rom, 0, sizeof(rom));
+  if (rom_load(&rom, "test/akogare/orig_Ako.sfc", err, sizeof(err))) {
+    map16_attach_rom(&m, &rom);
   }
 
   Map16Tile raw, got, ref;
@@ -1773,7 +1806,7 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
-  if (m.alias_hit_count != alias_before + 1) {
+  if (src == MAP16_SRC_ALIAS && m.alias_hit_count != alias_before + 1) {
     failf("[map16_alias] alias_hit_count expected %zu got %zu", alias_before + 1, m.alias_hit_count);
     map16_free(&m);
     return 0;
@@ -1782,11 +1815,11 @@ static int run_map16_alias_tests(void) {
   map16_set_synth_vanilla(&m, 0);
   alias_before = m.alias_hit_count;
   if (!map16_get_with_src(&m, 0x0021, &got, &src) || src != MAP16_SRC_ALIAS || !map16_tile_matches_hill_21(&got)) {
-    failf("[map16_alias] alias must work with synth disabled");
+    failf("[map16_alias] 0x0021 must resolve via alias with synth disabled");
     map16_free(&m);
     return 0;
   }
-  if (m.alias_hit_count != alias_before + 1) {
+  if (src == MAP16_SRC_ALIAS && m.alias_hit_count != alias_before + 1) {
     failf("[map16_alias] alias hit count with synth off");
     map16_free(&m);
     return 0;
@@ -1818,6 +1851,21 @@ static int run_map16_alias_tests(void) {
   if (src == MAP16_SRC_ROM_VANILLA) {
     printf("NOTE: [map16_alias] 0x0002 resolved via ROM vanilla\n");
   }
+  if (map16_distinct_tile8_count(&got) < 2) {
+    failf("[map16_alias] 0x0002 expected >=2 distinct tile8, got %d", map16_distinct_tile8_count(&got));
+    map16_free(&m);
+    return 0;
+  }
+  if (map16_tile_all_subs_tile8(&got, 0x082u)) {
+    failf("[map16_alias] 0x0002 must not be four identical 0x082 subs");
+    map16_free(&m);
+    return 0;
+  }
+  if (got.w[0] == got.w[1] && got.w[0] == got.w[2] && got.w[0] == got.w[3]) {
+    failf("[map16_alias] 0x0002 must not be four identical sub words");
+    map16_free(&m);
+    return 0;
+  }
   for (int si = 0; si < 4; si++) {
     if ((got.w[si] & 0x03FFu) == 0) {
       failf("[map16_alias] 0x0002 resolved sub %d still tile8=0", si);
@@ -1838,12 +1886,7 @@ static int run_map16_alias_tests(void) {
     return 0;
   }
 
-  char rom_path[512];
-  snprintf(rom_path, sizeof(rom_path), "test/akogare/orig_Ako.sfc");
-  Rom rom;
-  memset(&rom, 0, sizeof(rom));
-  if (rom_load(&rom, rom_path, err, sizeof(err))) {
-    map16_attach_rom(&m, &rom);
+  if (rom.data) {
     Map16Tile rom_tile;
     if (!map16_rom_get_vanilla_tile(&rom, 0x0021, &rom_tile)) {
       failf("[map16_alias] map16_rom_get_vanilla_tile 0x0021 failed");
@@ -1859,9 +1902,13 @@ static int run_map16_alias_tests(void) {
       }
     }
     if (!rom_match) {
-      fprintf(stderr, "NOTE: [map16_alias] ROM vanilla 0x0021 differs from AllMap16 alias (hack ROM)\n");
+      fprintf(stderr, "NOTE: [map16_alias] ROM vanilla 0x0021 differs from resolved hill (hack ROM)\n");
     }
     rom_free(&rom);
+  } else {
+    map16_free(&m);
+    failf("[map16_alias] could not load test/akogare/orig_Ako.sfc for ROM resolve");
+    return 0;
   }
 
   map16_free(&m);
@@ -1889,7 +1936,7 @@ static int run_level_visual_smoke(void) {
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
-           "--gfx-route-mode=vanilla --stats --report 2>\"%s\"",
+           "--gfx-route-mode=bypass --stats --report 2>\"%s\"",
            built_rom, outppm, stats_path);
   int rc = system(cmd);
   if (rc != 0) {
@@ -2047,7 +2094,7 @@ static int run_level_visual_lm_compare(void) {
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=all "
-           "--gfx-route-mode=vanilla --stats --report 2>\"%s\"",
+           "--gfx-route-mode=bypass --stats --report 2>\"%s\"",
            built_rom, outppm, stats_path);
   if (system(cmd) != 0) {
     failf("[level_visual lm] render failed");
@@ -2087,12 +2134,12 @@ static int run_level_visual_lm_compare(void) {
   char l2cmd[4096];
   snprintf(l2cmd, sizeof(l2cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=layer2 "
-           "--gfx-route-mode=vanilla 2>/dev/null",
+           "--gfx-route-mode=bypass 2>/dev/null",
            built_rom, l2ppm);
   char l1cmd[4096];
   snprintf(l1cmd, sizeof(l1cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" --layers=layer1 "
-           "--gfx-route-mode=vanilla 2>/dev/null",
+           "--gfx-route-mode=bypass 2>/dev/null",
            built_rom, l1ppm);
   if (system(l2cmd) == 0) {
     size_t l2nb = 0;

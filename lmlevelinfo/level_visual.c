@@ -30,9 +30,9 @@ static void usage(const char *argv0) {
           "  - --map16-audit with --report dumps subtile/GFX details for top Map16 blocks.\n"
           "  - --palette-debug dumps palette rows 0-15; --palette-debug-ppm=<FILE> exports strip.\n"
           "  - --gfx-route-mode=bypass|vanilla|try-both (default bypass).\n"
-          "  - --export-diff-stats compares OUT.ppm to --lm-ref=<FILE> on stderr.\n"
+          "  - --export-diff-stats compares OUT.ppm to --lm-ref=<FILE> (full pixels; LM is in-game ground truth).\n"
           "  - --layers=all|layer1|layer2|sprites (sprites included in all).\n"
-          "  - --sprite-debug draws green markers for unknown sprite ids (no generic GFX blit).\n"
+          "  - --sprite-debug draws green markers for unknown sprite ids only in our output (not in LM ref).\n"
           "  - --map16-synth-vanilla fills empty AllMap16 export slots from tile id (default on).\n"
           "  - --no-map16-synth-vanilla disables empty-slot synthesis.\n"
           "  - --map16-alias-debug logs top alias (tile_id -> file index) mappings to stderr.\n"
@@ -229,8 +229,20 @@ static void map16_hist_bump(RenderCtx *rc, uint16_t map16_id) {
   }
 }
 
+static uint8_t map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t bg_palette_row) {
+  uint8_t pal = (uint8_t)(pal_raw & 7u);
+  if (is_layer2 && pal <= 3u) {
+    return (uint8_t)(bg_palette_row & 7u);
+  }
+  if (!is_layer2 && pal <= 3u) {
+    return (uint8_t)(4u + (pal & 3u));
+  }
+  return pal;
+}
+
 static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route, int gfx_route_mode,
-                                    const char *layer_label, uint16_t map16_id) {
+                                    const char *layer_label, uint16_t map16_id, int is_layer2,
+                                    uint8_t bg_palette_row) {
   if (!map16 || !layer_label) return;
   Map16Tile raw;
   Map16Tile t;
@@ -248,15 +260,16 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
     uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
-    uint8_t pal = (uint8_t)((w0 >> 13) & 0x7);
+    uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
+    uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, bg_palette_row);
     uint8_t file_id = route ? gfx_route_file_for_tile_mode(route, tile8, gfx_route_mode) : page;
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
     fprintf(stderr,
-            "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d tile8=0x%03X page=%u pal=%u h=%d v=%d file=0x%02X "
-            "vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
-            layer_label, (unsigned)map16_id, si, (unsigned)tile8, (unsigned)page, (unsigned)pal, (w0 >> 10) & 1,
-            (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb,
-            rom_van);
+            "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
+            "file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
+            layer_label, (unsigned)map16_id, si, (unsigned)tile8, (unsigned)page, (unsigned)pal_raw,
+            (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van,
+            (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
   }
 }
 
@@ -276,7 +289,8 @@ static void map16_hist_print_top(RenderCtx *rc, const char *layer_label, int top
     fprintf(stderr, "LV_REPORT_MAP16_TOP layer=%s rank=%d id=0x%04X count=%zu\n", layer_label, out + 1,
             (unsigned)mid, best_count);
     if (rc->map16_audit && out < 3) {
-      map16_audit_print_block(rc->map16, rc->gfx_route, rc->gfx_route_mode, layer_label, mid);
+      map16_audit_print_block(rc->map16, rc->gfx_route, rc->gfx_route_mode, layer_label, mid, rc->is_layer2,
+                              rc->bg_palette_row);
     }
     rc->map16_hist[best].count = 0;
   }
@@ -379,9 +393,8 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     int hflip = (w0 >> 10) & 1;
     int vflip = (w0 >> 11) & 1;
     uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
-    uint8_t pal = (uint8_t)(pal_raw & 7u);
-    if (rc->is_layer2 && pal <= 3u) pal = (uint8_t)(rc->bg_palette_row & 7u);
-    if (pal_raw != pal && !rc->is_layer2) rc->pal_row_oob_count++;
+    uint8_t pal = map16_effective_palette(pal_raw, rc->is_layer2, rc->bg_palette_row);
+    if (pal >= 8) rc->pal_row_oob_count++;
     if (pal < 8) rc->pal_row_subtiles[pal]++;
     uint8_t palrgb[16][3];
     for (int c = 0; c < 16; c++) {
@@ -531,10 +544,6 @@ static int ppm_read_rgb_simple(const char *path, unsigned *out_w, unsigned *out_
   return 1;
 }
 
-static int is_lm_green(uint8_t r, uint8_t g, uint8_t b) {
-  return g > 100 && r < 40 && b < 40;
-}
-
 static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t br, uint8_t bg, uint8_t bb) {
   if (!out_ppm || !lm_ref) return;
   unsigned w = 0, h = 0, lw = 0, lh = 0;
@@ -563,7 +572,6 @@ static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t b
 
   for (size_t i = 0; i < total; i++) {
     size_t oi = i * 3u;
-    if (is_lm_green(lm[oi], lm[oi + 1], lm[oi + 2])) continue;
     compared++;
     int lm_tan = (abs((int)lm[oi] - 214) <= 12 && abs((int)lm[oi + 1] - 181) <= 12 && abs((int)lm[oi + 2] - 140) <= 12);
     if (lm_tan) {
@@ -838,7 +846,10 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     spctx.gfxc = &gfxc;
     spctx.gfx_route = &gfx_route;
     spctx.pal256 = pal256;
-    spctx.sprite_pal_base = (uint8_t)(info->primary.sprite_palette & 3u);
+    spctx.sprite_pal_base = (uint8_t)(info->primary.sprite_palette & 7u);
+    spctx.sprite_gfx = (uint8_t)(info->primary.sprite_gfx & 0xFu);
+    spctx.gfx_route_mode = rc.gfx_route_mode;
+    spctx.print_report = print_report;
     spctx.back_r = back_r;
     spctx.back_g = back_g;
     spctx.back_b = back_b;
@@ -849,6 +860,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     sprite_draw_level(info, &spctx);
     if (print_report) {
       sprite_draw_log_unknown_ids(info, stderr);
+      sprite_draw_pal_row_hist_print(&spctx, stderr);
     }
   }
 

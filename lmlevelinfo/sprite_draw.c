@@ -123,23 +123,69 @@ void sprite_draw_stats_print_line(const SpriteDrawStats *s) {
           s->sprites_unknown, s->sprites_gfx_miss, s->sprites_total);
 }
 
-static void draw_sprite_parts(SpriteDrawCtx *ctx, const SpriteGfxDef *def, const LevelSprite *sp) {
-  if (!ctx || !def || !sp) return;
-  uint8_t file_id = gfx_route_file_for_sprite_slot(ctx->gfx_route, def->sp_slot);
+void sprite_draw_pal_row_hist_print(const SpriteDrawCtx *ctx, FILE *fp) {
+  if (!ctx || !fp) return;
+  for (int row = 0; row < 16; row++) {
+    if (ctx->pal_row_subtiles[row]) {
+      fprintf(fp, "LV_REPORT_PAL_ROW layer=sprites row=%d subtiles=%zu\n", row, ctx->pal_row_subtiles[row]);
+    }
+  }
+}
+
+static int sprite_px64_has_opaque(const uint8_t px64[64]) {
+  for (int i = 0; i < 64; i++) {
+    if ((px64[i] & 0x0F) != 0) return 1;
+  }
+  return 0;
+}
+
+static int sprite_slot_map16_page(int slot_index) {
+  if (slot_index == GFX_SLOT_SP1) return GFX_MAP16_PAGE_SP1;
+  if (slot_index == GFX_SLOT_SP2) return GFX_MAP16_PAGE_SP2;
+  if (slot_index == GFX_SLOT_FG1) return GFX_MAP16_PAGE_FG1;
+  if (slot_index == GFX_SLOT_FG2) return GFX_MAP16_PAGE_FG2;
+  return -1;
+}
+
+static uint8_t sprite_resolve_file_id(SpriteDrawCtx *ctx, const SpriteGfxDef *def) {
+  uint8_t file_id =
+      gfx_route_file_for_sprite_slot_mode(ctx->gfx_route, def->sp_slot, ctx->gfx_route_mode);
   if (file_id == 0 && ctx->gfx_route) {
-    file_id = ctx->gfx_route->file_id_for_page[GFX_MAP16_PAGE_SP2];
+    int page = sprite_slot_map16_page(def->sp_slot);
+    if (page >= 0) {
+      file_id = gfx_route_file_for_tile_mode(ctx->gfx_route, (uint16_t)((unsigned)page << 8),
+                                             ctx->gfx_route_mode);
+    }
+    if (file_id == 0) {
+      file_id = ctx->gfx_route->file_id_for_page[GFX_MAP16_PAGE_SP2];
+    }
   }
   if (file_id == 0) file_id = 0x17;
+  return file_id;
+}
+
+static void draw_sprite_parts(SpriteDrawCtx *ctx, const SpriteGfxDef *def, const LevelSprite *sp) {
+  if (!ctx || !def || !sp) return;
+  uint8_t file_id = sprite_resolve_file_id(ctx, def);
+  int map_page = sprite_slot_map16_page(def->sp_slot);
 
   uint32_t base_x = (uint32_t)sp->screen * 256u + (uint32_t)sp->x * 16u;
   uint32_t base_y = (uint32_t)sp->y * 16u;
-  uint8_t pal_line = (uint8_t)(8u + ((ctx->sprite_pal_base + (sp->extra_bits & 3u)) & 3u));
+  uint8_t pal_line = (uint8_t)(8u + ((ctx->sprite_pal_base + (sp->extra_bits & 3u)) & 7u));
+
+  if (ctx->print_report) {
+    fprintf(stderr,
+            "LV_REPORT_SPRITE id=0x%02X slot=%s file=0x%02X pal_line=%u sprite_gfx=%u sprite_pal=%u\n",
+            (unsigned)sp->sprite_id, gfx_route_slot_name(def->sp_slot), (unsigned)file_id,
+            (unsigned)pal_line, (unsigned)ctx->sprite_gfx, (unsigned)ctx->sprite_pal_base);
+  }
 
   int any = 0;
   for (uint8_t ti = 0; ti < def->n; ti++) {
     const SpriteTilePart *p = &def->parts[ti];
     uint8_t palrgb[16][3];
     uint8_t sub = (uint8_t)((pal_line + (p->pal_sub & 3u)) & 0x0F);
+    if (sub < 16) ctx->pal_row_subtiles[sub]++;
     for (int c = 0; c < 16; c++) {
       int idx = (int)sub * 16 + c;
       palrgb[c][0] = ctx->pal256[idx & 0xFF][0];
@@ -149,13 +195,28 @@ static void draw_sprite_parts(SpriteDrawCtx *ctx, const SpriteGfxDef *def, const
 
     uint8_t px64[64];
     uint16_t local = (uint16_t)(p->tile & 0x7Fu);
-    if (decode_sprite_tile(ctx->rom, ctx->gfxc, file_id, local, px64, ctx->err, ctx->errcap) != 0) {
+    uint8_t used_file = file_id;
+    int ok = decode_sprite_tile(ctx->rom, ctx->gfxc, file_id, local, px64, ctx->err, ctx->errcap) == 0;
+    if (ok && ctx->gfx_route_mode == GFX_ROUTE_MODE_TRY_BOTH && ctx->gfx_route && !sprite_px64_has_opaque(px64) &&
+        map_page >= 0) {
+      uint8_t van = gfx_route_vanilla_file_for_page(ctx->gfx_route, map_page);
+      if (van != 0 && van != file_id) {
+        uint8_t px_van[64];
+        if (decode_sprite_tile(ctx->rom, ctx->gfxc, van, local, px_van, ctx->err, ctx->errcap) == 0 &&
+            sprite_px64_has_opaque(px_van)) {
+          memcpy(px64, px_van, sizeof(px64));
+          used_file = van;
+        }
+      }
+    }
+    if (!ok) {
       if (ctx->stats) ctx->stats->sprites_gfx_miss++;
       continue;
     }
     int x0 = (int)base_x + (int)p->x;
     int y0 = (int)base_y + (int)p->y;
     if (x0 < 0 || y0 < 0) continue;
+    (void)used_file;
     blit_tile8(ctx->rgb, ctx->W, ctx->H, (uint32_t)x0, (uint32_t)y0, px64, palrgb, p->hflip, p->vflip);
     any = 1;
   }

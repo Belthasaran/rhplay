@@ -100,10 +100,31 @@ uint8_t gfx_route_file_for_tile_mode(const LevelGfxRoute *route, uint16_t tile8,
 }
 
 uint8_t gfx_route_file_for_sprite_slot(const LevelGfxRoute *route, int slot_index) {
+  return gfx_route_file_for_sprite_slot_mode(route, slot_index, GFX_ROUTE_MODE_BYPASS);
+}
+
+uint8_t gfx_route_file_for_sprite_slot_mode(const LevelGfxRoute *route, int slot_index, int route_mode) {
   if (!route || !route->valid || slot_index < 0 || slot_index >= GFX_SLOT_COUNT) {
     return 0;
   }
-  return route->slot_file_id[slot_index];
+  if (route_mode == GFX_ROUTE_MODE_VANILLA) {
+    for (int p = 0; p < 4; p++) {
+      if (kMap16PageToSlot[p] == (uint8_t)slot_index) {
+        uint8_t van = vanilla_file_for_page(route->tileset, p);
+        if (van) return van;
+        break;
+      }
+    }
+  }
+  if (route->slot_file_id[slot_index] != 0) {
+    return route->slot_file_id[slot_index];
+  }
+  for (int p = 0; p < 4; p++) {
+    if (kMap16PageToSlot[p] == (uint8_t)slot_index) {
+      return route->file_id_for_page[p];
+    }
+  }
+  return 0;
 }
 
 uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page) {

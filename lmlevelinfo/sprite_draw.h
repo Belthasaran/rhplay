@@ -23,7 +23,11 @@ typedef struct {
   GfxCache *gfxc;
   const LevelGfxRoute *gfx_route;
   const uint8_t (*pal256)[3];
-  uint8_t sprite_pal_base; // palette row 8-11 base from header
+  uint8_t sprite_pal_base; // palette row 8-11 base from header (3 bits)
+  uint8_t sprite_gfx;      // primary header SSSS nibble
+  int gfx_route_mode;
+  int print_report;
+  size_t pal_row_subtiles[16];
   uint8_t back_r;
   uint8_t back_g;
   uint8_t back_b;
@@ -41,3 +45,5 @@ void sprite_draw_level(const LevelInfo *info, SpriteDrawCtx *ctx);
 
 // Log LV_REPORT_SPRITE_UNKNOWN lines for ids without GFX tables.
 void sprite_draw_log_unknown_ids(const LevelInfo *info, FILE *fp);
+
+void sprite_draw_pal_row_hist_print(const SpriteDrawCtx *ctx, FILE *fp);

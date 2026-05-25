@@ -34,9 +34,20 @@ static int map16_tile_zero_sub_count(const Map16Tile *t) {
   return z;
 }
 
+static int map16_tile_is_uniform_filler(const Map16Tile *t) {
+  if (!t) return 0;
+  if (t->w[0] != t->w[1] || t->w[0] != t->w[2] || t->w[0] != t->w[3]) return 0;
+  uint16_t tile8 = (uint16_t)(t->w[0] & 0x03FFu);
+  if (tile8 == 0 || tile8 == 0x1004u) return 1;
+  /* LM export placeholders: four identical 0x0F8 (or pal-variant) filler subs. */
+  if (tile8 == 0x0F8u) return 1;
+  return 0;
+}
+
 int map16_tile_needs_resolve(const Map16Tile *t) {
   if (!t || map16_tile_is_empty(t)) return 1;
   if (map16_tile_zero_sub_count(t) >= 2) return 1;
+  if (map16_tile_is_uniform_filler(t)) return 1;
   if (t->w[0] != t->w[1] || t->w[0] != t->w[2] || t->w[0] != t->w[3]) return 0;
   uint16_t tile8 = (uint16_t)(t->w[0] & 0x03FFu);
   if (tile8 == 0) return 1;
@@ -77,10 +88,45 @@ static int block_alias_exact_hits(const Map16Tile *t, uint8_t page, uint8_t low)
   return exact;
 }
 
+static int map16_sub_local_is_muncher_chr(uint8_t local) {
+  if (local == 0) return 0;
+  if (local >= 0x5Cu && local <= 0x5Fu) return 1;
+  if (local >= 0x4Cu && local <= 0x4Fu) return 1;
+  if (local == 0x78u || local == 0x7Cu) return 1;
+  return 0;
+}
+
+static int map16_distinct_tile8_count(const Map16Tile *t);
+
+static int map16_shape_ok_hack_muncher_block(const Map16Tile *t) {
+  if (!t) return 0;
+  if (map16_distinct_tile8_count(t) < 3) return 0;
+  int munch = 0;
+  int any = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 == 0) continue;
+    any = 1;
+    if (map16_sub_local_is_muncher_chr((uint8_t)(tile8 & 0x7Fu))) munch++;
+  }
+  return any && munch >= 3;
+}
+
 static int block_alias_score(const Map16Tile *t, uint8_t page, uint8_t low, uint16_t *out_max_w) {
   if (!t || low == 0) {
     if (out_max_w) *out_max_w = 0;
     return 0;
+  }
+
+  if (page >= 2u && (low == 0xBDu || low == 0xBEu) && map16_shape_ok_hack_muncher_block(t)) {
+    if (out_max_w) {
+      uint16_t max_w = 0;
+      for (int i = 0; i < 4; i++) {
+        if (t->w[i] > max_w) max_w = t->w[i];
+      }
+      *out_max_w = max_w;
+    }
+    return 8;
   }
 
   int score = 0;
@@ -206,6 +252,7 @@ static int map16_shape_ok_pipe_block(const Map16Tile *t) {
 
 static int map16_shape_ok_muncher_block(const Map16Tile *t) {
   if (!t || !map16_block_gfx_pages_match_id(t, 0)) return 0;
+  if (map16_shape_ok_hack_muncher_block(t)) return 1;
   return map16_distinct_tile8_count(t) >= 3;
 }
 
@@ -216,15 +263,34 @@ static int map16_shape_ok_generic02_block(const Map16Tile *t) {
 }
 
 static int map16_shape_ok_for_id(uint8_t id_page, uint8_t id_low, const Map16Tile *cand) {
-  if (!cand || !map16_block_gfx_pages_match_id(cand, id_page)) return 0;
+  if (!cand) return 0;
+  if (id_low == 0xBDu || id_low == 0xBEu) {
+    if (map16_shape_ok_hack_muncher_block(cand)) return 1;
+  }
+  if (!map16_block_gfx_pages_match_id(cand, id_page)) return 0;
   if (id_page == 1 && id_low >= 0x33u && id_low <= 0x5Fu) return map16_shape_ok_pipe_block(cand);
   if (id_page == 0 && id_low == 0x6Fu) return map16_shape_ok_muncher_block(cand);
   if (id_page == 0 && id_low == 0x02u) return map16_shape_ok_generic02_block(cand);
   return map16_distinct_tile8_count(cand) >= 2;
 }
 
+static int map16_tile_all_subs_local(const Map16Tile *t, uint8_t local) {
+  if (!t) return 0;
+  int any = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 == 0) return 0;
+    any = 1;
+    if ((uint8_t)(tile8 & 0x7Fu) != local) return 0;
+  }
+  return any;
+}
+
 static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uint8_t id_page, uint8_t id_low) {
   if (!slot || !cand) return 0;
+  for (int i = 0; i < 4; i++) {
+    if (((uint16_t)(cand->w[i] & 0x03FFu)) == 0) return 0;
+  }
   uint16_t slot_uni = 0, cand_uni = 0;
   int slot_uniform = map16_tile_uniform_tile8(slot, &slot_uni);
   int cand_uniform = map16_tile_uniform_tile8(cand, &cand_uni);
@@ -234,7 +300,10 @@ static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uin
   int cand_distinct = map16_distinct_tile8_count(cand);
   if (raw_distinct >= 2 && cand_distinct < 2) return 0;
   if (!map16_block_gfx_pages_match_id(cand, id_page)) return 0;
-  if (id_page == 0 && id_low == 0x02 && map16_count_subs_local_low(cand, 0x02) >= 3) return 0;
+  if (id_page == 0 && id_low == 0x02) {
+    if (map16_count_subs_local_low(cand, 0x02) >= 3) return 0;
+    if (map16_tile_all_subs_local(cand, 0x82u)) return 0;
+  }
   if (!map16_shape_ok_for_id(id_page, id_low, cand)) return 0;
   return 1;
 }
@@ -246,15 +315,38 @@ static int map16_try_canonical_index(const Map16Data *m, size_t idx, uint8_t pag
   return map16_shape_ok_for_id(page, low, cand);
 }
 
+static int map16_try_canonical_muncher_index(const Map16Data *m, size_t idx) {
+  if (!m || !m->tiles || idx >= m->tiles_count) return 0;
+  const Map16Tile *cand = &m->tiles[idx];
+  if (map16_tile_needs_resolve(cand)) return 0;
+  return map16_shape_ok_hack_muncher_block(cand);
+}
+
+static int map16_tile_words_equal(const Map16Tile *a, const Map16Tile *b) {
+  if (!a || !b) return 0;
+  return a->w[0] == b->w[0] && a->w[1] == b->w[1] && a->w[2] == b->w[2] && a->w[3] == b->w[3];
+}
+
 static int map16_pick_canonical_for_tid(Map16Data *m, size_t tid, uint8_t page, uint8_t low) {
   if (!m || !m->tiles || low == 0) return 0;
 
-  uint16_t candidates[12];
+  uint16_t candidates[16];
   int nc = 0;
   candidates[nc++] = (uint16_t)tid;
   if (page == 0) {
     if (low == 0x21u) candidates[nc++] = 0x0501u;
+    if (low == 0x6Fu) candidates[nc++] = 0x002Bu;
     candidates[nc++] = (uint16_t)(0x0500u | (uint16_t)low);
+  } else if (page == 1 && low == 0x2Fu) {
+    candidates[nc++] = 0x04BDu;
+    candidates[nc++] = 0x04BEu;
+  } else if (page == 4 && low == 0xBDu) {
+    candidates[nc++] = 0x04BDu;
+    candidates[nc++] = 0x012Fu;
+  } else if (page == 4 && low == 0xBEu) {
+    candidates[nc++] = 0x04BEu;
+    candidates[nc++] = 0x012Fu;
+    candidates[nc++] = 0x04BDu;
   } else {
     candidates[nc++] = (uint16_t)(0x0500u | ((uint16_t)page << 8) | (uint16_t)low);
     candidates[nc++] = (uint16_t)(0x0500u | (uint16_t)low);
@@ -264,7 +356,27 @@ static int map16_pick_canonical_for_tid(Map16Data *m, size_t tid, uint8_t page, 
     uint16_t cid = candidates[ci];
     if ((size_t)cid >= m->tiles_count) continue;
     if (cid == tid) continue;
-    if (map16_try_canonical_index(m, cid, page, low)) return (int)cid;
+    if (low == 0xBDu || low == 0xBEu || (page == 1 && low == 0x2Fu)) {
+      if (map16_try_canonical_muncher_index(m, (size_t)cid)) return (int)cid;
+    }
+    if (map16_try_canonical_index(m, (size_t)cid, page, low)) return (int)cid;
+  }
+
+  /* Content alias: find a filled slot with matching block words or hack muncher geometry. */
+  if (tid < m->tiles_count && map16_tile_needs_resolve(&m->tiles[tid])) {
+    const Map16Tile *slot = &m->tiles[tid];
+    int slot_has_words = !map16_tile_is_empty(slot) && !map16_tile_is_uniform_filler(slot);
+    for (size_t j = 0; j < m->tiles_count; j++) {
+      if (j == tid) continue;
+      if (map16_tile_needs_resolve(&m->tiles[j])) continue;
+      if (slot_has_words && map16_tile_words_equal(slot, &m->tiles[j])) return (int)j;
+    }
+    if (low == 0xBDu || low == 0xBEu || (page == 1 && low == 0x2Fu)) {
+      for (size_t j = 0; j < m->tiles_count; j++) {
+        if (j == tid) continue;
+        if (map16_try_canonical_muncher_index(m, j)) return (int)j;
+      }
+    }
   }
 
   int best_score = 0;
@@ -344,9 +456,14 @@ static int map16_build_alias_table(Map16Data *m) {
       int exact = block_alias_exact_hits(cand, page, low);
       /* Page-0 exact-low match avoids false positives (e.g. 0x0002 -> filler 0x1004).
        * Empty/degenerate/page>=1 slots may alias via near-match scoring only (e.g. 0x013D checker). */
-      if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 && exact < 1)
+      if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 && exact < 1 &&
+          score < 8)
         continue;
-      if (!map16_alias_cand_ok(slot, cand, page, low)) continue;
+      if (page >= 2u && (low == 0xBDu || low == 0xBEu) && score >= 8) {
+        if (!map16_shape_ok_hack_muncher_block(cand)) continue;
+      } else if (!map16_alias_cand_ok(slot, cand, page, low)) {
+        continue;
+      }
       if (!have_best || block_alias_better(score, exact, max_w, j, best_score, best_exact, best_max_w, best_idx)) {
         best_score = score;
         best_exact = exact;
@@ -516,6 +633,57 @@ int map16_get_canonical_index(const Map16Data *m, uint16_t tile_id, size_t *out_
   return 1;
 }
 
+static int map16_try_canonical_resolve(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
+  if (!m->canonical_index || (size_t)tile_id >= m->tiles_count) return 0;
+  size_t can_idx = m->canonical_index[tile_id];
+  if (can_idx == SIZE_MAX || can_idx >= m->tiles_count) return 0;
+  const Map16Tile *at = &m->tiles[can_idx];
+  if (map16_tile_needs_resolve(at)) return 0;
+  *out = *at;
+  if (src_out) *src_out = MAP16_SRC_CANONICAL;
+  return 1;
+}
+
+static int map16_try_alias_resolve(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
+  if (!m->alias_index || (size_t)tile_id >= m->tiles_count) return 0;
+  size_t alias_idx = m->alias_index[tile_id];
+  if (alias_idx == SIZE_MAX || alias_idx >= m->tiles_count) return 0;
+  const Map16Tile *at = &m->tiles[alias_idx];
+  if (map16_tile_needs_resolve(at)) return 0;
+  *out = *at;
+  m->alias_hit_count++;
+  if (src_out) *src_out = MAP16_SRC_ALIAS;
+  return 1;
+}
+
+static int map16_try_rom_custom_resolve(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
+  if (!m->rom) return 0;
+  Map16Tile rom_tile;
+  if (!map16_rom_get_tile(m->rom, tile_id, &rom_tile)) return 0;
+  *out = rom_tile;
+  m->rom_hit_count++;
+  if (src_out) *src_out = MAP16_SRC_ROM;
+  return 1;
+}
+
+static int map16_try_rom_vanilla_resolve(Map16Data *m, uint16_t tile_id, uint8_t page, uint8_t low,
+                                         Map16Tile *out, int *src_out) {
+  if (!m->rom || page == 0u || page > 1u) return 0;
+  Map16Tile rom_tile;
+  if (!map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) return 0;
+  int rom_shape_ok = 0;
+  if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
+    rom_shape_ok = map16_shape_ok_pipe_block_loose(&rom_tile);
+  } else {
+    rom_shape_ok = map16_block_gfx_pages_match_id(&rom_tile, page) && map16_shape_ok_for_id(page, low, &rom_tile);
+  }
+  if (!rom_shape_ok) return 0;
+  *out = rom_tile;
+  m->rom_vanilla_hit_count++;
+  if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
+  return 1;
+}
+
 int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
@@ -530,59 +698,24 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
   uint8_t low = (uint8_t)(tile_id & 0xFF);
 
-  if (m->rom) {
-    Map16Tile rom_tile;
-    int rom_shape_ok = 0;
-    if (page <= 1u && map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) {
-      if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
-        rom_shape_ok = map16_shape_ok_pipe_block_loose(&rom_tile);
-      } else {
-        rom_shape_ok =
-            map16_block_gfx_pages_match_id(&rom_tile, page) && map16_shape_ok_for_id(page, low, &rom_tile);
-      }
-    }
-    if (rom_shape_ok) {
-      *out = rom_tile;
-      m->rom_vanilla_hit_count++;
-      if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
+  if (page >= 2u) {
+    /* LM export pages 2+: ROM LM custom pages, then canonical/alias; never synth 4x low|(page&3). */
+    if (map16_try_rom_custom_resolve(m, tile_id, out, src_out)) return 1;
+    if (map16_try_canonical_resolve(m, tile_id, out, src_out)) return 1;
+    if (map16_try_alias_resolve(m, tile_id, out, src_out)) return 1;
+    if (have_raw && !map16_tile_is_empty(&raw)) {
+      *out = raw;
+      if (src_out) *src_out = MAP16_SRC_FILE;
       return 1;
     }
+    return 0;
   }
 
-  if (m->canonical_index && (size_t)tile_id < m->tiles_count) {
-    size_t can_idx = m->canonical_index[tile_id];
-    if (can_idx != SIZE_MAX && can_idx < m->tiles_count) {
-      const Map16Tile *at = &m->tiles[can_idx];
-      if (!map16_tile_needs_resolve(at)) {
-        *out = *at;
-        if (src_out) *src_out = MAP16_SRC_CANONICAL;
-        return 1;
-      }
-    }
-  }
-
-  if (m->alias_index && (size_t)tile_id < m->tiles_count) {
-    size_t alias_idx = m->alias_index[tile_id];
-    if (alias_idx != SIZE_MAX && alias_idx < m->tiles_count) {
-      const Map16Tile *at = &m->tiles[alias_idx];
-      if (!map16_tile_needs_resolve(at)) {
-        *out = *at;
-        m->alias_hit_count++;
-        if (src_out) *src_out = MAP16_SRC_ALIAS;
-        return 1;
-      }
-    }
-  }
-
-  if (m->rom) {
-    Map16Tile rom_tile;
-    if (map16_rom_get_tile(m->rom, tile_id, &rom_tile)) {
-      *out = rom_tile;
-      m->rom_hit_count++;
-      if (src_out) *src_out = MAP16_SRC_ROM;
-      return 1;
-    }
-  }
+  /* Pages 0-1: alias before ROM vanilla (inc13 page-0); pipes may use ROM vanilla on page 1. */
+  if (map16_try_alias_resolve(m, tile_id, out, src_out)) return 1;
+  if (map16_try_rom_custom_resolve(m, tile_id, out, src_out)) return 1;
+  if (map16_try_rom_vanilla_resolve(m, tile_id, page, low, out, src_out)) return 1;
+  if (map16_try_canonical_resolve(m, tile_id, out, src_out)) return 1;
 
   if (!m->synth_vanilla) {
     if (have_raw) {

@@ -1797,6 +1797,30 @@ static int map16_count_subs_local_low(const Map16Tile *t, uint8_t local) {
   return n;
 }
 
+static int map16_local_is_muncher_chr(uint8_t local) {
+  if (local == 0) return 0;
+  if (local >= 0x5Cu && local <= 0x5Fu) return 1;
+  if (local >= 0x4Cu && local <= 0x4Fu) return 1;
+  if (local == 0x78u || local == 0x7Cu) return 1;
+  return 0;
+}
+
+static int map16_count_hack_muncher_locals(const Map16Tile *t) {
+  if (!t) return 0;
+  int n = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = map16_tile8(t, i);
+    if (tile8 == 0) continue;
+    if (map16_local_is_muncher_chr((uint8_t)(tile8 & 0x7Fu))) n++;
+  }
+  return n;
+}
+
+static int map16_tile_is_uniform_bd_synth(const Map16Tile *t) {
+  if (!t) return 0;
+  return map16_tile_all_subs_tile8(t, 0x0BDu);
+}
+
 static int run_map16_synth_gfx_page_test(void) {
   Map16Tile t;
   memset(&t, 0, sizeof(t));
@@ -1997,6 +2021,52 @@ static int run_map16_alias_tests(void) {
   }
   if (map16_distinct_tile8_count(&got) < 3) {
     failf("[map16_alias] 0x006F expected >=3 distinct tile8, got %d", map16_distinct_tile8_count(&got));
+    map16_free(&m);
+    return 0;
+  }
+
+  for (uint16_t munch_id = 0x04BDu; munch_id <= 0x04BEu; munch_id++) {
+    if (!map16_get_with_src(&m, munch_id, &got, &src) || map16_tile_is_empty(&got)) {
+      failf("[map16_alias] map16_get 0x%04X failed", (unsigned)munch_id);
+      map16_free(&m);
+      return 0;
+    }
+    if (src == MAP16_SRC_SYNTH) {
+      failf("[map16_alias] 0x%04X must not use synth", (unsigned)munch_id);
+      map16_free(&m);
+      return 0;
+    }
+    if (map16_tile_is_uniform_bd_synth(&got)) {
+      failf("[map16_alias] 0x%04X must not be four identical 0x0BD synth subs", (unsigned)munch_id);
+      map16_free(&m);
+      return 0;
+    }
+    if (map16_distinct_tile8_count(&got) < 3) {
+      failf("[map16_alias] 0x%04X expected >=3 distinct tile8, got %d", (unsigned)munch_id,
+             map16_distinct_tile8_count(&got));
+      map16_free(&m);
+      return 0;
+    }
+    if (map16_count_hack_muncher_locals(&got) < 3) {
+      failf("[map16_alias] 0x%04X expected >=3 muncher CHR locals, got %d", (unsigned)munch_id,
+             map16_count_hack_muncher_locals(&got));
+      map16_free(&m);
+      return 0;
+    }
+  }
+
+  if (!map16_get_with_src(&m, 0x012F, &got, &src) || map16_tile_is_empty(&got)) {
+    failf("[map16_alias] map16_get 0x012F failed");
+    map16_free(&m);
+    return 0;
+  }
+  if (src == MAP16_SRC_SYNTH) {
+    failf("[map16_alias] 0x012F should not use synth");
+    map16_free(&m);
+    return 0;
+  }
+  if (map16_count_hack_muncher_locals(&got) < 3) {
+    failf("[map16_alias] 0x012F expected muncher geometry from canonical/alias");
     map16_free(&m);
     return 0;
   }

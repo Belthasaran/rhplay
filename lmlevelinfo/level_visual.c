@@ -274,6 +274,8 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
   int alias = (src == MAP16_SRC_ALIAS);
   int rom_fb = (src == MAP16_SRC_ROM || src == MAP16_SRC_ROM_VANILLA);
   int rom_van = (src == MAP16_SRC_ROM_VANILLA);
+  size_t alias_idx = SIZE_MAX;
+  int have_alias_idx = alias && map16_get_alias_index(map16, map16_id, &alias_idx);
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
@@ -282,12 +284,21 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, bg_palette_row);
     uint8_t file_id = route ? gfx_route_file_for_tile_mode(route, tile8, gfx_route_mode) : page;
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
-    fprintf(stderr,
-            "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
-            "file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
-            layer_label, (unsigned)map16_id, si, map16_src_label(src), (unsigned)tile8, (unsigned)page,
-            (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
-            (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+    if (have_alias_idx) {
+      fprintf(stderr,
+              "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s alias_idx=0x%04zX tile8=0x%03X page=%u pal=%u "
+              "eff_pal=%u h=%d v=%d file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
+              layer_label, (unsigned)map16_id, si, map16_src_label(src), alias_idx, (unsigned)tile8, (unsigned)page,
+              (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
+              (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+    } else {
+      fprintf(stderr,
+              "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
+              "file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
+              layer_label, (unsigned)map16_id, si, map16_src_label(src), (unsigned)tile8, (unsigned)page,
+              (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
+              (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+    }
   }
 }
 

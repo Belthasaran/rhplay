@@ -1759,6 +1759,17 @@ static int map16_tile_has_gfx_page(const Map16Tile *t, uint8_t page) {
   return 0;
 }
 
+static int map16_count_subs_local_low(const Map16Tile *t, uint8_t local) {
+  if (!t) return 0;
+  int n = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = map16_tile8(t, i);
+    if (tile8 == 0) continue;
+    if ((uint8_t)(tile8 & 0x7Fu) == local) n++;
+  }
+  return n;
+}
+
 static int run_map16_alias_tests(void) {
   Map16Data m;
   char err[256];
@@ -1901,6 +1912,32 @@ static int run_map16_alias_tests(void) {
       return 0;
     }
   }
+  if (map16_count_subs_local_low(&got, 0x02) > 2) {
+    failf("[map16_alias] 0x0002 must not have >=3 subs with local tile 0x02");
+    map16_free(&m);
+    return 0;
+  }
+
+  if (!map16_get_with_src(&m, 0x006F, &got, &src) || map16_tile_is_empty(&got)) {
+    failf("[map16_alias] map16_get 0x006F failed");
+    map16_free(&m);
+    return 0;
+  }
+  if (src == MAP16_SRC_SYNTH) {
+    failf("[map16_alias] 0x006F should not use synth");
+    map16_free(&m);
+    return 0;
+  }
+  if (!map16_tile_gfx_pages_match(&got, 0)) {
+    failf("[map16_alias] 0x006F subs must all use Map16 GFX page 0");
+    map16_free(&m);
+    return 0;
+  }
+  if (map16_distinct_tile8_count(&got) < 2) {
+    failf("[map16_alias] 0x006F expected >=2 distinct tile8, got %d", map16_distinct_tile8_count(&got));
+    map16_free(&m);
+    return 0;
+  }
 
   if (!map16_get_raw(&m, 0x013D, &raw) || !map16_tile_needs_resolve(&raw)) {
     failf("[map16_alias] expected empty/placeholder raw 0x013D");
@@ -1924,8 +1961,8 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
-  if (!map16_tile_has_gfx_page(&got, 1)) {
-    failf("[map16_alias] 0x0133 expected at least one sub on Map16 GFX page 1");
+  if (!map16_tile_gfx_pages_match(&got, 1)) {
+    failf("[map16_alias] 0x0133 subs must all use Map16 GFX page 1");
     map16_free(&m);
     return 0;
   }
@@ -1933,6 +1970,26 @@ static int run_map16_alias_tests(void) {
     failf("[map16_alias] 0x0133 expected >=2 distinct tile8 for pipe block");
     map16_free(&m);
     return 0;
+  }
+
+  static const uint16_t kPipeGfxPageIds[] = {0x0134, 0x0135, 0x0136, 0x0153, 0x0154, 0x0155};
+  for (size_t pi = 0; pi < sizeof(kPipeGfxPageIds) / sizeof(kPipeGfxPageIds[0]); pi++) {
+    uint16_t pid = kPipeGfxPageIds[pi];
+    if (!map16_get_with_src(&m, pid, &got, &src) || map16_tile_is_empty(&got)) {
+      failf("[map16_alias] map16_get 0x%04X (pipe) failed", (unsigned)pid);
+      map16_free(&m);
+      return 0;
+    }
+    if (src == MAP16_SRC_SYNTH) {
+      failf("[map16_alias] 0x%04X should not use synth", (unsigned)pid);
+      map16_free(&m);
+      return 0;
+    }
+    if (!map16_tile_gfx_pages_match(&got, 1)) {
+      failf("[map16_alias] 0x%04X subs must all use Map16 GFX page 1", (unsigned)pid);
+      map16_free(&m);
+      return 0;
+    }
   }
 
   if (rom.data) {

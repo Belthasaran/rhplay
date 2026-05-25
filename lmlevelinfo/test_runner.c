@@ -1711,6 +1711,14 @@ static int map16_tile_matches_hill_21(const Map16Tile *t) {
          map16_tile8(t, 3) == 0x21u;
 }
 
+static int map16_tile_matches_block(const Map16Tile *a, const Map16Tile *b) {
+  if (!a || !b) return 0;
+  for (int i = 0; i < 4; i++) {
+    if (map16_tile8(a, i) != map16_tile8(b, i)) return 0;
+  }
+  return 1;
+}
+
 static int map16_distinct_tile8_count(const Map16Tile *t) {
   if (!t) return 0;
   uint16_t vals[4];
@@ -1728,6 +1736,25 @@ static int map16_distinct_tile8_count(const Map16Tile *t) {
     if (!found) vals[n++] = v;
   }
   return n;
+}
+
+static int map16_tile_pipe_two_checker(const Map16Tile *t) {
+  if (!t) return 0;
+  if (map16_distinct_tile8_count(t) != 2) return 0;
+  return map16_tile8(t, 0) == map16_tile8(t, 2) && map16_tile8(t, 1) == map16_tile8(t, 3);
+}
+
+static int map16_tile_pipe_loose_ok(const Map16Tile *t) {
+  if (!t) return 0;
+  int on_p1 = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = map16_tile8(t, i);
+    if (tile8 && ((tile8 >> 8) & 3u) == 1u) on_p1++;
+  }
+  if (on_p1 < 3) return 0;
+  if (map16_distinct_tile8_count(t) < 3) return 0;
+  if (map16_tile_pipe_two_checker(t)) return 0;
+  return 1;
 }
 
 static int map16_tile_all_subs_tile8(const Map16Tile *t, uint16_t tile8) {
@@ -1768,6 +1795,27 @@ static int map16_count_subs_local_low(const Map16Tile *t, uint8_t local) {
     if ((uint8_t)(tile8 & 0x7Fu) == local) n++;
   }
   return n;
+}
+
+static int run_map16_synth_gfx_page_test(void) {
+  Map16Tile t;
+  memset(&t, 0, sizeof(t));
+  map16_debug_synthesize(0x0133, &t);
+  for (int i = 0; i < 4; i++) {
+    if (((t.w[i] >> 8) & 3u) != 1u) {
+      failf("[map16_synth] 0x0133 synth sub %d gfx page %u expected 1", i, (unsigned)((t.w[i] >> 8) & 3u));
+      return 0;
+    }
+  }
+  map16_debug_synthesize(0x0002, &t);
+  for (int i = 0; i < 4; i++) {
+    if (((t.w[i] >> 8) & 3u) != 0u) {
+      failf("[map16_synth] 0x0002 synth sub %d gfx page %u expected 0", i, (unsigned)((t.w[i] >> 8) & 3u));
+      return 0;
+    }
+  }
+  printf("PASS: map16_synth_gfx_page\n");
+  return 1;
 }
 
 static int run_map16_alias_tests(void) {
@@ -1821,8 +1869,8 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
-  if (src != MAP16_SRC_ALIAS) {
-    failf("[map16_alias] 0x0021 src=%d expected MAP16_SRC_ALIAS", src);
+  if (src != MAP16_SRC_ALIAS && src != MAP16_SRC_CANONICAL) {
+    failf("[map16_alias] 0x0021 src=%d expected alias or canonical", src);
     map16_free(&m);
     return 0;
   }
@@ -1831,6 +1879,14 @@ static int run_map16_alias_tests(void) {
           got.w[0], got.w[1], got.w[2], got.w[3]);
     map16_free(&m);
     return 0;
+  }
+  if (src == MAP16_SRC_CANONICAL) {
+    size_t cidx = 0;
+    if (!map16_get_canonical_index(&m, 0x0021, &cidx) || cidx != 0x0501u) {
+      failf("[map16_alias] 0x0021 canonical_index expected 0x501 got 0x%zX", cidx);
+      map16_free(&m);
+      return 0;
+    }
   }
   hill_ref = got;
   if (m.synth_count != synth_before) {
@@ -1846,8 +1902,13 @@ static int run_map16_alias_tests(void) {
 
   map16_set_synth_vanilla(&m, 0);
   alias_before = m.alias_hit_count;
-  if (!map16_get_with_src(&m, 0x0021, &got, &src) || src != MAP16_SRC_ALIAS || !map16_tile_matches_hill_21(&got)) {
-    failf("[map16_alias] 0x0021 must resolve via alias with synth disabled");
+  if (!map16_get_with_src(&m, 0x0021, &got, &src) || !map16_tile_matches_hill_21(&got)) {
+    failf("[map16_alias] 0x0021 must resolve to hill pattern with synth disabled");
+    map16_free(&m);
+    return 0;
+  }
+  if (src == MAP16_SRC_SYNTH) {
+    failf("[map16_alias] 0x0021 must not use synth when disabled");
     map16_free(&m);
     return 0;
   }
@@ -1856,6 +1917,7 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
+  (void)alias_before;
 
   map16_set_synth_vanilla(&m, 1);
   if (!map16_get(&m, 0x0091, &got) || map16_tile_is_empty(&got)) {
@@ -1933,8 +1995,8 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
-  if (map16_distinct_tile8_count(&got) < 2) {
-    failf("[map16_alias] 0x006F expected >=2 distinct tile8, got %d", map16_distinct_tile8_count(&got));
+  if (map16_distinct_tile8_count(&got) < 3) {
+    failf("[map16_alias] 0x006F expected >=3 distinct tile8, got %d", map16_distinct_tile8_count(&got));
     map16_free(&m);
     return 0;
   }
@@ -1945,8 +2007,9 @@ static int run_map16_alias_tests(void) {
     return 0;
   }
   if (!map16_get_with_src(&m, 0x013D, &got, &src) ||
-      (src != MAP16_SRC_ALIAS && src != MAP16_SRC_ROM_VANILLA && src != MAP16_SRC_ROM)) {
-    failf("[map16_alias] 0x013D src=%d expected alias or ROM resolve", src);
+      (src != MAP16_SRC_ALIAS && src != MAP16_SRC_ROM_VANILLA && src != MAP16_SRC_ROM &&
+       src != MAP16_SRC_CANONICAL)) {
+    failf("[map16_alias] 0x013D src=%d expected alias/canonical/ROM resolve", src);
     map16_free(&m);
     return 0;
   }
@@ -1961,15 +2024,37 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
-  if (!map16_tile_gfx_pages_match(&got, 1)) {
+  if (src == MAP16_SRC_ROM_VANILLA) {
+    if (!map16_tile_pipe_loose_ok(&got)) {
+      failf("[map16_alias] 0x0133 ROM vanilla pipe block failed loose shape check");
+      map16_free(&m);
+      return 0;
+    }
+  } else if (!map16_tile_gfx_pages_match(&got, 1)) {
     failf("[map16_alias] 0x0133 subs must all use Map16 GFX page 1");
     map16_free(&m);
     return 0;
   }
-  if (map16_distinct_tile8_count(&got) < 2) {
-    failf("[map16_alias] 0x0133 expected >=2 distinct tile8 for pipe block");
+  if (map16_distinct_tile8_count(&got) < 3) {
+    failf("[map16_alias] 0x0133 expected >=3 distinct tile8 for pipe block, got %d", map16_distinct_tile8_count(&got));
     map16_free(&m);
     return 0;
+  }
+  if (map16_tile_pipe_two_checker(&got)) {
+    failf("[map16_alias] 0x0133 must not be two-tile checker repeat block");
+    map16_free(&m);
+    return 0;
+  }
+  if (src == MAP16_SRC_ALIAS) {
+    size_t aidx = 0;
+    if (map16_get_alias_index(&m, 0x0133, &aidx) && aidx == 0x10118u) {
+      failf("[map16_alias] 0x0133 must not alias to 0x10118 (wrong pipe geometry)");
+      map16_free(&m);
+      return 0;
+    }
+  }
+  if (src != MAP16_SRC_ROM_VANILLA && src != MAP16_SRC_CANONICAL && src != MAP16_SRC_FILE) {
+    fprintf(stderr, "NOTE: [map16_alias] 0x0133 resolved via src=%d\n", src);
   }
 
   static const uint16_t kPipeGfxPageIds[] = {0x0134, 0x0135, 0x0136, 0x0153, 0x0154, 0x0155};
@@ -1985,7 +2070,13 @@ static int run_map16_alias_tests(void) {
       map16_free(&m);
       return 0;
     }
-    if (!map16_tile_gfx_pages_match(&got, 1)) {
+    if (src == MAP16_SRC_ROM_VANILLA) {
+      if (!map16_tile_pipe_loose_ok(&got)) {
+        failf("[map16_alias] 0x%04X ROM vanilla pipe failed loose shape", (unsigned)pid);
+        map16_free(&m);
+        return 0;
+      }
+    } else if (!map16_tile_gfx_pages_match(&got, 1)) {
       failf("[map16_alias] 0x%04X subs must all use Map16 GFX page 1", (unsigned)pid);
       map16_free(&m);
       return 0;
@@ -1994,21 +2085,26 @@ static int run_map16_alias_tests(void) {
 
   if (rom.data) {
     Map16Tile rom_tile;
+    Map16Tile rom_pipe;
     if (!map16_rom_get_vanilla_tile(&rom, 0x0021, &rom_tile)) {
       failf("[map16_alias] map16_rom_get_vanilla_tile 0x0021 failed");
       rom_free(&rom);
       map16_free(&m);
       return 0;
     }
-    int rom_match = 1;
-    for (int si = 0; si < 4; si++) {
-      if (map16_tile8(&rom_tile, si) != map16_tile8(&hill_ref, si)) {
-        rom_match = 0;
-        break;
-      }
+    if (!map16_tile_matches_block(&rom_tile, &hill_ref)) {
+      fprintf(stderr, "NOTE: [map16_alias] ROM vanilla 0x0021 differs from file hill 0x501\n");
     }
-    if (!rom_match) {
-      fprintf(stderr, "NOTE: [map16_alias] ROM vanilla 0x0021 differs from resolved hill (hack ROM)\n");
+    if (map16_rom_get_vanilla_tile(&rom, 0x0133, &rom_pipe)) {
+      Map16Tile pipe_got;
+      int pipe_src = -1;
+      if (map16_get_with_src(&m, 0x0133, &pipe_got, &pipe_src) && !map16_tile_matches_block(&pipe_got, &rom_pipe) &&
+          pipe_src == MAP16_SRC_ALIAS) {
+        failf("[map16_alias] 0x0133 alias block does not match ROM vanilla pipe");
+        rom_free(&rom);
+        map16_free(&m);
+        return 0;
+      }
     }
     rom_free(&rom);
   } else {
@@ -3206,6 +3302,7 @@ int main(void) {
   int okGfxTi = run_gfx_tile_index_sanity();
   int okEg = test_exgfx_export_hashes();
   int okExt68 = run_ext68_cloud_emit_test();
+  int okMap16Synth = run_map16_synth_gfx_page_test();
   int okMap16Alias = run_map16_alias_tests();
   int okL1Pal = run_l1_palette_remap_sanity();
   int okSprNoGen = run_sprite_no_generic_fallback();
@@ -3224,7 +3321,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okMap16Alias && okL1Pal && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
+      okExt68 && okMap16Synth && okMap16Alias && okL1Pal && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

@@ -8,6 +8,7 @@
 #include "level_parse.h"
 #include "mwl_reader.h"
 #include "map16_reader.h"
+#include "map16_rom.h"
 #include "gfx_reader.h"
 #include "obj_to_map16.h"
 #include "gfx_route.h"
@@ -36,6 +37,7 @@ static void usage(const char *argv0) {
           "  - --map16-synth-vanilla fills empty AllMap16 export slots from tile id (default on).\n"
           "  - --no-map16-synth-vanilla disables empty-slot synthesis.\n"
           "  - --map16-alias-debug logs top alias (tile_id -> file index) mappings to stderr.\n"
+          "  - --map16-probe-id=0xNNNN dumps resolve path and optional 16x16 --map16-probe-ppm=probe.ppm\n"
           "  - --map16-synth-debug logs top Map16 ids resolved via synthesis fallback.\n",
           argv0 ? argv0 : "level_visual",
           argv0 ? argv0 : "level_visual");
@@ -241,6 +243,8 @@ static const char *map16_src_label(int src) {
       return "synth";
     case MAP16_SRC_ROM_VANILLA:
       return "rom_van";
+    case MAP16_SRC_CANONICAL:
+      return "canonical";
     default:
       return "?";
   }
@@ -275,7 +279,9 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
   int rom_fb = (src == MAP16_SRC_ROM || src == MAP16_SRC_ROM_VANILLA);
   int rom_van = (src == MAP16_SRC_ROM_VANILLA);
   size_t alias_idx = SIZE_MAX;
+  size_t can_idx = SIZE_MAX;
   int have_alias_idx = alias && map16_get_alias_index(map16, map16_id, &alias_idx);
+  int have_can_idx = (src == MAP16_SRC_CANONICAL) && map16_get_canonical_index(map16, map16_id, &can_idx);
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
@@ -284,13 +290,14 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, bg_palette_row);
     uint8_t file_id = route ? gfx_route_file_for_tile_mode(route, tile8, gfx_route_mode) : page;
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
-    if (have_alias_idx) {
+    if (have_alias_idx || have_can_idx) {
       fprintf(stderr,
-              "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s alias_idx=0x%04zX tile8=0x%03X page=%u pal=%u "
-              "eff_pal=%u h=%d v=%d file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
-              layer_label, (unsigned)map16_id, si, map16_src_label(src), alias_idx, (unsigned)tile8, (unsigned)page,
-              (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
-              (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+              "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s alias_idx=0x%04zX can_idx=0x%04zX tile8=0x%03X page=%u "
+              "pal=%u eff_pal=%u h=%d v=%d file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
+              layer_label, (unsigned)map16_id, si, map16_src_label(src),
+              have_alias_idx ? alias_idx : (size_t)SIZE_MAX, have_can_idx ? can_idx : (size_t)SIZE_MAX,
+              (unsigned)tile8, (unsigned)page, (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1,
+              (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
     } else {
       fprintf(stderr,
               "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
@@ -963,6 +970,121 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   return ok;
 }
 
+static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
+                                    uint16_t probe_id, const char *probe_ppm, int gfx_route_mode) {
+  char err[512];
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, sizeof(err))) {
+    fprintf(stderr, "map16_probe: ROM load failed: %s\n", err);
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    fprintf(stderr, "map16_probe: tables failed: %s\n", err);
+    rom_free(&rom);
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, level_id, &info, err, sizeof(err))) {
+    fprintf(stderr, "map16_probe: level parse failed: %s\n", err);
+    rom_free(&rom);
+    return 0;
+  }
+
+  Map16Data map16;
+  memset(&map16, 0, sizeof(map16));
+  if (!map16_load_file(map16_path, &map16, err, sizeof(err))) {
+    fprintf(stderr, "map16_probe: map16 load failed: %s\n", err);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+  map16_attach_rom(&map16, &rom);
+
+  Map16Tile raw;
+  if (map16_get_raw(&map16, probe_id, &raw)) {
+    fprintf(stderr, "LV_PROBE id=0x%04X raw sub=(0x%03X,0x%03X,0x%03X,0x%03X) needs_resolve=%d\n", (unsigned)probe_id,
+            (unsigned)(raw.w[0] & 0x03FFu), (unsigned)(raw.w[1] & 0x03FFu), (unsigned)(raw.w[2] & 0x03FFu),
+            (unsigned)(raw.w[3] & 0x03FFu), map16_tile_needs_resolve(&raw));
+  }
+
+  size_t can_idx = SIZE_MAX, alias_idx = SIZE_MAX;
+  if (map16_get_canonical_index(&map16, probe_id, &can_idx)) {
+    fprintf(stderr, "LV_PROBE id=0x%04X canonical_index=0x%04zX\n", (unsigned)probe_id, can_idx);
+  }
+  if (map16_get_alias_index(&map16, probe_id, &alias_idx)) {
+    fprintf(stderr, "LV_PROBE id=0x%04X alias_index=0x%04zX\n", (unsigned)probe_id, alias_idx);
+  }
+
+  Map16Tile rom_van;
+  if (map16_rom_get_vanilla_tile(&rom, probe_id, &rom_van)) {
+    fprintf(stderr, "LV_PROBE id=0x%04X rom_vanilla sub=(0x%03X,0x%03X,0x%03X,0x%03X)\n", (unsigned)probe_id,
+            (unsigned)(rom_van.w[0] & 0x03FFu), (unsigned)(rom_van.w[1] & 0x03FFu), (unsigned)(rom_van.w[2] & 0x03FFu),
+            (unsigned)(rom_van.w[3] & 0x03FFu));
+  }
+
+  Map16Tile got;
+  int src = -1;
+  if (map16_get_with_src(&map16, probe_id, &got, &src)) {
+    fprintf(stderr, "LV_PROBE id=0x%04X resolved src=%s sub=(0x%03X,0x%03X,0x%03X,0x%03X)\n", (unsigned)probe_id,
+            map16_src_label(src), (unsigned)(got.w[0] & 0x03FFu), (unsigned)(got.w[1] & 0x03FFu),
+            (unsigned)(got.w[2] & 0x03FFu), (unsigned)(got.w[3] & 0x03FFu));
+  } else {
+    fprintf(stderr, "LV_PROBE id=0x%04X resolved=FAIL\n", (unsigned)probe_id);
+  }
+
+  if (probe_ppm && probe_ppm[0]) {
+    GfxCache gfxc;
+    memset(&gfxc, 0, sizeof(gfxc));
+    if (gfxcache_init(&gfxc, 32, err, sizeof(err))) {
+      LevelGfxRoute gfx_route;
+      gfx_route_build(&gfx_route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+      uint8_t preload_ids[64];
+      size_t npreload = gfx_route_collect_preload_ids(&gfx_route, preload_ids, sizeof(preload_ids));
+      gfxcache_preload_ids(&rom, &gfxc, preload_ids, npreload, err, sizeof(err));
+
+      uint8_t pal256[256][3];
+      uint8_t br = 0, bg = 0, bb = 0;
+      palette_build_for_level(&rom, &info, pal256, &br, &bg, &bb);
+
+      uint32_t W = 16u, H = 16u;
+      uint8_t *rgb = (uint8_t *)calloc((size_t)W * (size_t)H * 3u, 1);
+      if (rgb) {
+        for (size_t i = 0; i < (size_t)W * (size_t)H * 3u; i += 3) {
+          rgb[i] = br;
+          rgb[i + 1] = bg;
+          rgb[i + 2] = bb;
+        }
+        RenderCtx rc;
+        memset(&rc, 0, sizeof(rc));
+        rc.rgb = rgb;
+        rc.W = W;
+        rc.H = H;
+        rc.rom = &rom;
+        rc.gfxc = &gfxc;
+        rc.map16 = &map16;
+        rc.pal256 = pal256;
+        rc.gfx_route = &gfx_route;
+        rc.gfx_route_mode = gfx_route_mode;
+        rc.is_layer2 = 0;
+        rc.bg_palette_row = info.primary.bg_palette;
+        draw_map16_at(&rc, probe_id, 0, 0);
+        if (write_ppm(probe_ppm, rgb, W, H)) {
+          fprintf(stderr, "LV_PROBE wrote %s (16x16)\n", probe_ppm);
+        }
+        free(rgb);
+      }
+      gfxcache_free(&gfxc);
+    }
+  }
+
+  map16_free(&map16);
+  levelinfo_free(&info);
+  rom_free(&rom);
+  return 1;
+}
+
 static int render_level_ppm_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
                                      const char *out_ppm, int layers_mask, int print_stats,
                                      int print_histogram, int gfx_debug, int print_report, int palette_debug,
@@ -1107,6 +1229,9 @@ int main(int argc, char **argv) {
   int gfx_route_mode = GFX_ROUTE_MODE_BYPASS;
   const char *palette_debug_ppm = NULL;
   const char *lm_ref_ppm = NULL;
+  const char *map16_probe_ppm = "probe.ppm";
+  uint16_t map16_probe_id = 0;
+  int have_map16_probe = 0;
 
   uint16_t level_id = 0;
   int have_level_id = 0;
@@ -1164,6 +1289,13 @@ int main(int argc, char **argv) {
       }
       gfx_route_mode = m;
     } else if (strncmp(a, "--lm-ref=", 9) == 0) lm_ref_ppm = a + 9;
+    else if (strncmp(a, "--map16-probe-id=", 17) == 0) {
+      if (!parse_level_id(a + 17, &map16_probe_id)) {
+        fprintf(stderr, "Invalid --map16-probe-id\n");
+        return 2;
+      }
+      have_map16_probe = 1;
+    } else if (strncmp(a, "--map16-probe-ppm=", 18) == 0) map16_probe_ppm = a + 18;
     else if (strcmp(a, "--sprite-debug") == 0) sprite_debug = 1;
     else if (strcmp(a, "--help") == 0 || strcmp(a, "-h") == 0) {
       usage(argv[0]);
@@ -1174,7 +1306,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (!export_ppm || !*export_ppm) {
+  if ((!export_ppm || !*export_ppm) && !have_map16_probe) {
     fprintf(stderr, "Missing required --export-ppm=<OUT.ppm>\n");
     return 2;
   }
@@ -1226,6 +1358,15 @@ int main(int argc, char **argv) {
   if (!rom_path || !have_level_id) {
     usage(argv[0]);
     return 2;
+  }
+  if (have_map16_probe) {
+    if (!map16_path || !*map16_path) {
+      fprintf(stderr, "map16_probe requires --map16=\n");
+      return 2;
+    }
+    if (!run_map16_probe_from_rom(rom_path, level_id, map16_path, map16_probe_id, map16_probe_ppm, gfx_route_mode))
+      return 1;
+    if (!export_ppm || !*export_ppm) return 0;
   }
   if (!render_level_ppm_from_rom(rom_path, level_id, map16_path, export_ppm, layers_mask, print_stats,
                                 print_histogram, gfx_debug, print_report, palette_debug, sprite_debug, &ropts))

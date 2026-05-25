@@ -1738,6 +1738,27 @@ static int map16_tile_all_subs_tile8(const Map16Tile *t, uint16_t tile8) {
   return 1;
 }
 
+static int map16_tile_gfx_pages_match(const Map16Tile *t, uint8_t id_page) {
+  if (!t) return 0;
+  int any = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = map16_tile8(t, i);
+    if (tile8 == 0) continue;
+    any = 1;
+    if (((tile8 >> 8) & 3u) != (id_page & 3u)) return 0;
+  }
+  return any;
+}
+
+static int map16_tile_has_gfx_page(const Map16Tile *t, uint8_t page) {
+  if (!t) return 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = map16_tile8(t, i);
+    if (tile8 && ((tile8 >> 8) & 3u) == (page & 3u)) return 1;
+  }
+  return 0;
+}
+
 static int run_map16_alias_tests(void) {
   Map16Data m;
   char err[256];
@@ -1849,7 +1870,14 @@ static int run_map16_alias_tests(void) {
     return 0;
   }
   if (src == MAP16_SRC_ROM_VANILLA) {
-    printf("NOTE: [map16_alias] 0x0002 resolved via ROM vanilla\n");
+    failf("[map16_alias] 0x0002 must not use ROM vanilla (page-0 generic fill)");
+    map16_free(&m);
+    return 0;
+  }
+  if (!map16_tile_gfx_pages_match(&got, 0)) {
+    failf("[map16_alias] 0x0002 subs must use Map16 GFX page 0");
+    map16_free(&m);
+    return 0;
   }
   if (map16_distinct_tile8_count(&got) < 2) {
     failf("[map16_alias] 0x0002 expected >=2 distinct tile8, got %d", map16_distinct_tile8_count(&got));
@@ -1882,6 +1910,27 @@ static int run_map16_alias_tests(void) {
   if (!map16_get_with_src(&m, 0x013D, &got, &src) ||
       (src != MAP16_SRC_ALIAS && src != MAP16_SRC_ROM_VANILLA && src != MAP16_SRC_ROM)) {
     failf("[map16_alias] 0x013D src=%d expected alias or ROM resolve", src);
+    map16_free(&m);
+    return 0;
+  }
+
+  if (!map16_get_with_src(&m, 0x0133, &got, &src) || map16_tile_is_empty(&got)) {
+    failf("[map16_alias] map16_get 0x0133 (pipe top-L) failed");
+    map16_free(&m);
+    return 0;
+  }
+  if (src == MAP16_SRC_SYNTH) {
+    failf("[map16_alias] 0x0133 should not use synth");
+    map16_free(&m);
+    return 0;
+  }
+  if (!map16_tile_has_gfx_page(&got, 1)) {
+    failf("[map16_alias] 0x0133 expected at least one sub on Map16 GFX page 1");
+    map16_free(&m);
+    return 0;
+  }
+  if (map16_distinct_tile8_count(&got) < 2) {
+    failf("[map16_alias] 0x0133 expected >=2 distinct tile8 for pipe block");
     map16_free(&m);
     return 0;
   }

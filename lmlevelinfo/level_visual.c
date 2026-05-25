@@ -248,10 +248,11 @@ static const char *map16_src_label(int src) {
 
 static uint8_t map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t bg_palette_row) {
   uint8_t pal = (uint8_t)(pal_raw & 7u);
-  if (is_layer2 && pal <= 3u) {
+  if (is_layer2) {
+    pal = (uint8_t)(pal & 3u);
     return (uint8_t)(bg_palette_row & 7u);
   }
-  if (!is_layer2 && pal <= 3u) {
+  if (pal <= 3u) {
     return (uint8_t)(4u + (pal & 3u));
   }
   return pal;
@@ -287,6 +288,38 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
             layer_label, (unsigned)map16_id, si, map16_src_label(src), (unsigned)tile8, (unsigned)page,
             (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
             (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+  }
+}
+
+static const uint16_t kPipeMap16AuditIds[] = {
+    0x0133, 0x0134, 0x0135, 0x0136, 0x0137, 0x0138, 0x0139, 0x013A, 0x013B, 0x013C, 0x013D, 0x013E, 0x013F,
+    0x0153, 0x0154, 0x0155,
+};
+
+static void map16_audit_pipe_blocks(RenderCtx *rc) {
+  if (!rc || !rc->map16_audit || !rc->map16) return;
+  const char *layer = rc->audit_layer ? rc->audit_layer : "layer1";
+  for (size_t i = 0; i < sizeof(kPipeMap16AuditIds) / sizeof(kPipeMap16AuditIds[0]); i++) {
+    uint16_t pid = kPipeMap16AuditIds[i];
+    Map16Tile t;
+    if (!map16_get(rc->map16, pid, &t) || map16_tile_is_empty(&t)) continue;
+    map16_audit_print_block(rc->map16, rc->gfx_route, rc->gfx_route_mode, layer, pid, rc->is_layer2,
+                            rc->bg_palette_row);
+  }
+}
+
+static void emit_report_pipe_objects(const LevelObject *objects, size_t count) {
+  if (!objects) return;
+  size_t n0f = 0, n10 = 0, n1f = 0;
+  for (size_t i = 0; i < count; i++) {
+    if (objects[i].kind != OBJ_STANDARD) continue;
+    if (objects[i].object_number == 0x0F) n0f++;
+    else if (objects[i].object_number == 0x10) n10++;
+    else if (objects[i].object_number == 0x1F) n1f++;
+  }
+  if (n0f || n10 || n1f) {
+    fprintf(stderr, "LV_REPORT_EMIT_OBJ pipe_std id=0x0F count=%zu id=0x10 count=%zu id=0x1F count=%zu\n", n0f,
+            n10, n1f);
   }
 }
 
@@ -828,6 +861,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
       repeat_layer2_strip_horiz(rgb, W, H, 32u * 16u, back_r, back_g, back_b);
     }
     if (print_report) {
+      rc.audit_layer = "layer2";
       map16_hist_print_top(&rc, "layer2", 10);
       gfx_file_hist_print(&rc, "layer2");
       pal_row_hist_print(&rc, "layer2");
@@ -841,13 +875,18 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     rc.map16_hist_n = 0;
     rc.map16_synth_hist_n = 0;
     rc.is_layer2 = 0;
+    if (print_report) {
+      emit_report_pipe_objects(info->objects, info->objects_count);
+    }
     for (size_t i = 0; i < info->objects_count; i++) {
       process_object_emit(&info->objects[i], &emit_ctx, &rc, &stats, 0);
     }
     if (print_report) {
+      rc.audit_layer = "layer1";
       map16_hist_print_top(&rc, "layer1", 10);
       gfx_file_hist_print(&rc, "layer1");
       pal_row_hist_print(&rc, "layer1");
+      if (rc.map16_audit) map16_audit_pipe_blocks(&rc);
     }
   }
 

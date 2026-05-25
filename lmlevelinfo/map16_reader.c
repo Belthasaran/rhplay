@@ -46,16 +46,15 @@ int map16_tile_needs_resolve(const Map16Tile *t) {
 
 static void map16_synthesize_from_tile_id(uint16_t tile_id, Map16Tile *out) {
   if (!out) return;
-  uint8_t page = (uint8_t)((tile_id >> 8) & 0x01);
+  uint8_t page = (uint8_t)((tile_id >> 8) & 3u);
   uint8_t low = (uint8_t)(tile_id & 0xFF);
   memset(out, 0, sizeof(*out));
   if (low == 0) return;
-  uint16_t w = (uint16_t)low;
-  if (page) w = (uint16_t)(w | 0x0080u);
-  out->w[0] = w;
-  out->w[1] = w;
-  out->w[2] = w;
-  out->w[3] = w;
+  uint16_t tile8 = (uint16_t)(low | ((uint16_t)(page & 3u) << 8));
+  out->w[0] = tile8;
+  out->w[1] = tile8;
+  out->w[2] = tile8;
+  out->w[3] = tile8;
 }
 
 static uint8_t map16_sub_gfx_page(uint16_t w) {
@@ -169,6 +168,61 @@ static int map16_block_gfx_pages_match_id(const Map16Tile *t, uint8_t id_page) {
   return any;
 }
 
+static int map16_tile_two_checker_repeat(const Map16Tile *t) {
+  if (!t) return 0;
+  int distinct = map16_distinct_tile8_count(t);
+  if (distinct != 2) return 0;
+  uint16_t t0 = (uint16_t)(t->w[0] & 0x03FFu);
+  uint16_t t1 = (uint16_t)(t->w[1] & 0x03FFu);
+  uint16_t t2 = (uint16_t)(t->w[2] & 0x03FFu);
+  uint16_t t3 = (uint16_t)(t->w[3] & 0x03FFu);
+  return t0 == t2 && t1 == t3;
+}
+
+static int map16_shape_ok_pipe_block_loose(const Map16Tile *t) {
+  if (!t) return 0;
+  int on_p1 = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 && map16_sub_gfx_page(t->w[i]) == 1u) on_p1++;
+  }
+  if (on_p1 < 3) return 0;
+  if (map16_distinct_tile8_count(t) < 3) return 0;
+  if (map16_tile_two_checker_repeat(t)) return 0;
+  return 1;
+}
+
+static int map16_shape_ok_pipe_block(const Map16Tile *t) {
+  if (!map16_shape_ok_pipe_block_loose(t)) return 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 == 0) continue;
+    if (map16_sub_gfx_page(t->w[i]) != 1u) continue;
+    uint8_t local = (uint8_t)(tile8 & 0x7Fu);
+    if (local < 0x33u || local > 0x5Fu) return 0;
+  }
+  return 1;
+}
+
+static int map16_shape_ok_muncher_block(const Map16Tile *t) {
+  if (!t || !map16_block_gfx_pages_match_id(t, 0)) return 0;
+  return map16_distinct_tile8_count(t) >= 3;
+}
+
+static int map16_shape_ok_generic02_block(const Map16Tile *t) {
+  if (!t || !map16_block_gfx_pages_match_id(t, 0)) return 0;
+  if (map16_count_subs_local_low(t, 0x02) >= 3) return 0;
+  return map16_distinct_tile8_count(t) >= 3;
+}
+
+static int map16_shape_ok_for_id(uint8_t id_page, uint8_t id_low, const Map16Tile *cand) {
+  if (!cand || !map16_block_gfx_pages_match_id(cand, id_page)) return 0;
+  if (id_page == 1 && id_low >= 0x33u && id_low <= 0x5Fu) return map16_shape_ok_pipe_block(cand);
+  if (id_page == 0 && id_low == 0x6Fu) return map16_shape_ok_muncher_block(cand);
+  if (id_page == 0 && id_low == 0x02u) return map16_shape_ok_generic02_block(cand);
+  return map16_distinct_tile8_count(cand) >= 2;
+}
+
 static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uint8_t id_page, uint8_t id_low) {
   if (!slot || !cand) return 0;
   uint16_t slot_uni = 0, cand_uni = 0;
@@ -181,6 +235,79 @@ static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uin
   if (raw_distinct >= 2 && cand_distinct < 2) return 0;
   if (!map16_block_gfx_pages_match_id(cand, id_page)) return 0;
   if (id_page == 0 && id_low == 0x02 && map16_count_subs_local_low(cand, 0x02) >= 3) return 0;
+  if (!map16_shape_ok_for_id(id_page, id_low, cand)) return 0;
+  return 1;
+}
+
+static int map16_try_canonical_index(const Map16Data *m, size_t idx, uint8_t page, uint8_t low) {
+  if (!m || !m->tiles || idx >= m->tiles_count) return 0;
+  const Map16Tile *cand = &m->tiles[idx];
+  if (map16_tile_needs_resolve(cand)) return 0;
+  return map16_shape_ok_for_id(page, low, cand);
+}
+
+static int map16_pick_canonical_for_tid(Map16Data *m, size_t tid, uint8_t page, uint8_t low) {
+  if (!m || !m->tiles || low == 0) return 0;
+
+  uint16_t candidates[12];
+  int nc = 0;
+  candidates[nc++] = (uint16_t)tid;
+  if (page == 0) {
+    if (low == 0x21u) candidates[nc++] = 0x0501u;
+    candidates[nc++] = (uint16_t)(0x0500u | (uint16_t)low);
+  } else {
+    candidates[nc++] = (uint16_t)(0x0500u | ((uint16_t)page << 8) | (uint16_t)low);
+    candidates[nc++] = (uint16_t)(0x0500u | (uint16_t)low);
+  }
+
+  for (int ci = 0; ci < nc; ci++) {
+    uint16_t cid = candidates[ci];
+    if ((size_t)cid >= m->tiles_count) continue;
+    if (cid == tid) continue;
+    if (map16_try_canonical_index(m, cid, page, low)) return (int)cid;
+  }
+
+  int best_score = 0;
+  int best_exact = 0;
+  size_t best_idx = SIZE_MAX;
+  for (size_t j = 0; j < m->tiles_count; j++) {
+    if (j == tid) continue;
+    if (!map16_try_canonical_index(m, j, page, low)) continue;
+    uint16_t max_w = 0;
+    int score = block_alias_score(&m->tiles[j], page, low, &max_w);
+    int exact = block_alias_exact_hits(&m->tiles[j], page, low);
+    if (score < 4) continue;
+    if (best_idx == SIZE_MAX || block_alias_better(score, exact, max_w, j, best_score, best_exact, 0xFFFFu, best_idx)) {
+      best_score = score;
+      best_exact = exact;
+      best_idx = j;
+    }
+  }
+  if (best_idx != SIZE_MAX) return (int)best_idx;
+  return 0;
+}
+
+static int map16_build_canonical_table(Map16Data *m) {
+  if (!m || !m->tiles || m->tiles_count == 0) return 0;
+
+  size_t n = m->tiles_count;
+  m->canonical_index = (size_t *)malloc(n * sizeof(size_t));
+  if (!m->canonical_index) return 0;
+  for (size_t i = 0; i < n; i++) m->canonical_index[i] = SIZE_MAX;
+
+  size_t filled = 0;
+  for (size_t tid = 0; tid < n; tid++) {
+    if (!map16_tile_needs_resolve(&m->tiles[tid])) continue;
+    uint8_t page = (uint8_t)((tid >> 8) & 0xFF);
+    uint8_t low = (uint8_t)(tid & 0xFF);
+    if (low == 0) continue;
+    int picked = map16_pick_canonical_for_tid(m, tid, page, low);
+    if (picked >= 0 && (size_t)picked < n) {
+      m->canonical_index[tid] = (size_t)picked;
+      filled++;
+    }
+  }
+  m->canonical_table_count = filled;
   return 1;
 }
 
@@ -243,8 +370,10 @@ void map16_free(Map16Data *m) {
   if (!m) return;
   free(m->tiles);
   free(m->alias_index);
+  free(m->canonical_index);
   m->tiles = NULL;
   m->alias_index = NULL;
+  m->canonical_index = NULL;
   m->tiles_count = 0;
   m->is_lm16 = 0;
   m->synth_vanilla = 0;
@@ -253,6 +382,7 @@ void map16_free(Map16Data *m) {
   m->rom_hit_count = 0;
   m->rom_vanilla_hit_count = 0;
   m->alias_table_count = 0;
+  m->canonical_table_count = 0;
   m->rom = NULL;
 }
 
@@ -348,6 +478,11 @@ int map16_load_file(const char *path, Map16Data *out, char *err, size_t errcap) 
   fclose(fp);
   out->tiles = tiles;
   out->tiles_count = tilesN;
+  if (!map16_build_canonical_table(out)) {
+    map16_free(out);
+    seterr(err, errcap, "Out of memory building map16 canonical table");
+    return 0;
+  }
   if (!map16_build_alias_table(out)) {
     map16_free(out);
     seterr(err, errcap, "Out of memory building map16 alias table");
@@ -372,6 +507,15 @@ int map16_get_alias_index(const Map16Data *m, uint16_t tile_id, size_t *out_idx)
   return 1;
 }
 
+int map16_get_canonical_index(const Map16Data *m, uint16_t tile_id, size_t *out_idx) {
+  if (!m || !out_idx || !m->canonical_index) return 0;
+  if ((size_t)tile_id >= m->tiles_count) return 0;
+  size_t idx = m->canonical_index[tile_id];
+  if (idx == SIZE_MAX) return 0;
+  *out_idx = idx;
+  return 1;
+}
+
 int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
@@ -381,6 +525,40 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   if (have_raw && !map16_tile_needs_resolve(&raw)) {
     *out = raw;
     return 1;
+  }
+
+  uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
+  uint8_t low = (uint8_t)(tile_id & 0xFF);
+
+  if (m->rom) {
+    Map16Tile rom_tile;
+    int rom_shape_ok = 0;
+    if (page <= 1u && map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) {
+      if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
+        rom_shape_ok = map16_shape_ok_pipe_block_loose(&rom_tile);
+      } else {
+        rom_shape_ok =
+            map16_block_gfx_pages_match_id(&rom_tile, page) && map16_shape_ok_for_id(page, low, &rom_tile);
+      }
+    }
+    if (rom_shape_ok) {
+      *out = rom_tile;
+      m->rom_vanilla_hit_count++;
+      if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
+      return 1;
+    }
+  }
+
+  if (m->canonical_index && (size_t)tile_id < m->tiles_count) {
+    size_t can_idx = m->canonical_index[tile_id];
+    if (can_idx != SIZE_MAX && can_idx < m->tiles_count) {
+      const Map16Tile *at = &m->tiles[can_idx];
+      if (!map16_tile_needs_resolve(at)) {
+        *out = *at;
+        if (src_out) *src_out = MAP16_SRC_CANONICAL;
+        return 1;
+      }
+    }
   }
 
   if (m->alias_index && (size_t)tile_id < m->tiles_count) {
@@ -398,21 +576,10 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
 
   if (m->rom) {
     Map16Tile rom_tile;
-    uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
     if (map16_rom_get_tile(m->rom, tile_id, &rom_tile)) {
       *out = rom_tile;
       m->rom_hit_count++;
       if (src_out) *src_out = MAP16_SRC_ROM;
-      return 1;
-    }
-    /* Page-0 ids (generic fill) must use AllMap16 alias, not vanilla SMW pointer table.
-     * Page-1 partial slots may use ROM vanilla when GFX pages in the block match. */
-    if (page == 1 && have_raw && !map16_tile_is_empty(&raw) && map16_tile_needs_resolve(&raw) &&
-        map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile) &&
-        map16_block_gfx_pages_match_id(&rom_tile, page)) {
-      *out = rom_tile;
-      m->rom_vanilla_hit_count++;
-      if (src_out) *src_out = MAP16_SRC_ROM_VANILLA;
       return 1;
     }
   }
@@ -435,6 +602,10 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
 
 int map16_get(Map16Data *m, uint16_t tile_id, Map16Tile *out) {
   return map16_get_with_src(m, tile_id, out, NULL);
+}
+
+void map16_debug_synthesize(uint16_t tile_id, Map16Tile *out) {
+  map16_synthesize_from_tile_id(tile_id, out);
 }
 
 void map16_print_alias_debug(const Map16Data *m, int top_n) {

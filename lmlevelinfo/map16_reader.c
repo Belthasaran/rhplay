@@ -58,27 +58,22 @@ static void map16_synthesize_from_tile_id(uint16_t tile_id, Map16Tile *out) {
   out->w[3] = w;
 }
 
+static uint8_t map16_sub_gfx_page(uint16_t w) {
+  return (uint8_t)(((uint16_t)(w & 0x03FFu)) >> 8) & 0x03u;
+}
+
 static int subtile_matches_page_low(uint16_t w, uint8_t page, uint8_t low) {
   uint16_t tile8 = (uint16_t)(w & 0x03FFu);
-  uint8_t wpage = (uint8_t)((tile8 >> 7) & 1u);
-  uint8_t wlow = (uint8_t)(tile8 & 0x7Fu);
-  if (page == 0) {
-    return wlow == low;
-  }
-  return wpage == (page & 1u) && wlow == low;
+  if (tile8 == 0) return 0;
+  if (map16_sub_gfx_page(w) != (page & 3u)) return 0;
+  return (uint8_t)(tile8 & 0x7Fu) == low;
 }
 
 static int block_alias_exact_hits(const Map16Tile *t, uint8_t page, uint8_t low) {
   if (!t || low == 0) return 0;
   int exact = 0;
   for (int i = 0; i < 4; i++) {
-    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
-    uint8_t wlow = (uint8_t)(tile8 & 0x7Fu);
-    if (page == 0) {
-      if (wlow == low) exact++;
-    } else if (subtile_matches_page_low(t->w[i], page, low)) {
-      exact++;
-    }
+    if (subtile_matches_page_low(t->w[i], page, low)) exact++;
   }
   return exact;
 }
@@ -95,29 +90,42 @@ static int block_alias_score(const Map16Tile *t, uint8_t page, uint8_t low, uint
     uint16_t w = t->w[i];
     if (w > max_w) max_w = w;
     uint16_t tile8 = (uint16_t)(w & 0x03FFu);
+    if (tile8 == 0) continue;
+    if (map16_sub_gfx_page(w) != (page & 3u)) continue;
     uint8_t wlow = (uint8_t)(tile8 & 0x7Fu);
-    if (page == 0) {
-      if (wlow == low)
-        score += 4;
-      else if (wlow + 1u == low)
+    if (subtile_matches_page_low(w, page, low)) {
+      score += 4;
+    } else if (page == 0) {
+      if (wlow + 1u == low)
         score += 2;
       else if (wlow == low + 1u)
         score += 1;
-    } else if (subtile_matches_page_low(w, page, low)) {
-      score += 4;
     }
   }
   if (out_max_w) *out_max_w = max_w;
   return score;
 }
 
-static int block_alias_better(int score, uint16_t max_w, size_t idx, int best_score, uint16_t best_max_w,
-                              size_t best_idx) {
+static int block_alias_better(int score, int exact_hits, uint16_t max_w, size_t idx, int best_score,
+                              int best_exact, uint16_t best_max_w, size_t best_idx) {
   if (score > best_score) return 1;
   if (score < best_score) return 0;
+  if (exact_hits > best_exact) return 1;
+  if (exact_hits < best_exact) return 0;
   if (max_w < best_max_w) return 1;
   if (max_w > best_max_w) return 0;
   return idx < best_idx;
+}
+
+static int map16_count_subs_local_low(const Map16Tile *t, uint8_t local) {
+  if (!t) return 0;
+  int n = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 == 0) continue;
+    if ((uint8_t)(tile8 & 0x7Fu) == local) n++;
+  }
+  return n;
 }
 
 static int map16_tile_uniform_tile8(const Map16Tile *t, uint16_t *out_tile8) {
@@ -149,10 +157,6 @@ static int map16_distinct_tile8_count(const Map16Tile *t) {
   return n;
 }
 
-static uint8_t map16_sub_gfx_page(uint16_t w) {
-  return (uint8_t)(((uint16_t)(w & 0x03FFu)) >> 8) & 0x03u;
-}
-
 static int map16_block_gfx_pages_match_id(const Map16Tile *t, uint8_t id_page) {
   if (!t) return 0;
   int any = 0;
@@ -165,7 +169,7 @@ static int map16_block_gfx_pages_match_id(const Map16Tile *t, uint8_t id_page) {
   return any;
 }
 
-static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uint8_t id_page) {
+static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uint8_t id_page, uint8_t id_low) {
   if (!slot || !cand) return 0;
   uint16_t slot_uni = 0, cand_uni = 0;
   int slot_uniform = map16_tile_uniform_tile8(slot, &slot_uni);
@@ -175,7 +179,8 @@ static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uin
   int raw_distinct = map16_distinct_tile8_count(slot);
   int cand_distinct = map16_distinct_tile8_count(cand);
   if (raw_distinct >= 2 && cand_distinct < 2) return 0;
-  if (id_page == 0 && !map16_block_gfx_pages_match_id(cand, 0)) return 0;
+  if (!map16_block_gfx_pages_match_id(cand, id_page)) return 0;
+  if (id_page == 0 && id_low == 0x02 && map16_count_subs_local_low(cand, 0x02) >= 3) return 0;
   return 1;
 }
 
@@ -197,6 +202,7 @@ static int map16_build_alias_table(Map16Data *m) {
     if (low == 0) continue;
 
     int best_score = 0;
+    int best_exact = 0;
     uint16_t best_max_w = 0xFFFFu;
     size_t best_idx = 0;
     int have_best = 0;
@@ -208,14 +214,15 @@ static int map16_build_alias_table(Map16Data *m) {
       uint16_t max_w = 0;
       int score = block_alias_score(cand, page, low, &max_w);
       if (score < 4) continue;
+      int exact = block_alias_exact_hits(cand, page, low);
       /* Page-0 exact-low match avoids false positives (e.g. 0x0002 -> filler 0x1004).
        * Empty/degenerate/page>=1 slots may alias via near-match scoring only (e.g. 0x013D checker). */
-      if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 &&
-          block_alias_exact_hits(cand, page, low) < 1)
+      if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 && exact < 1)
         continue;
-      if (!map16_alias_cand_ok(slot, cand, page)) continue;
-      if (!have_best || block_alias_better(score, max_w, j, best_score, best_max_w, best_idx)) {
+      if (!map16_alias_cand_ok(slot, cand, page, low)) continue;
+      if (!have_best || block_alias_better(score, exact, max_w, j, best_score, best_exact, best_max_w, best_idx)) {
         best_score = score;
+        best_exact = exact;
         best_max_w = max_w;
         best_idx = j;
         have_best = 1;
@@ -353,6 +360,15 @@ int map16_get_raw(const Map16Data *m, uint16_t tile_id, Map16Tile *out) {
   if (!m || !out || !m->tiles) return 0;
   if ((size_t)tile_id >= m->tiles_count) return 0;
   *out = m->tiles[tile_id];
+  return 1;
+}
+
+int map16_get_alias_index(const Map16Data *m, uint16_t tile_id, size_t *out_idx) {
+  if (!m || !out_idx || !m->alias_index) return 0;
+  if ((size_t)tile_id >= m->tiles_count) return 0;
+  size_t idx = m->alias_index[tile_id];
+  if (idx == SIZE_MAX) return 0;
+  *out_idx = idx;
   return 1;
 }
 

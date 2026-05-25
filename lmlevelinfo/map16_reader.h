@@ -43,6 +43,8 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
 
 int map16_get_raw(const Map16Data *m, uint16_t tile_id, Map16Tile *out);
 
+int map16_get_alias_index(const Map16Data *m, uint16_t tile_id, size_t *out_idx);
+
 int map16_tile_is_empty(const Map16Tile *t);
 
 int map16_tile_needs_resolve(const Map16Tile *t);

@@ -60,6 +60,8 @@ uint8_t gfx_route_file_for_tile_mode(const LevelGfxRoute *route, uint16_t tile8,
 // LM bypass slot index (GFX_SLOT_SP1..GFX_SLOT_SP4) -> GFX file id.
 uint8_t gfx_route_file_for_sprite_slot(const LevelGfxRoute *route, int slot_index);
 
+uint8_t gfx_route_file_for_sprite_slot_mode(const LevelGfxRoute *route, int slot_index, int route_mode);
+
 // Vanilla FG/BG list entry for Map16 page (ignores bypass overrides).
 uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page);
 

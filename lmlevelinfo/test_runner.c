@@ -1621,18 +1621,37 @@ static int ppm_read_rgb(const char *path, unsigned *out_w, unsigned *out_h, uint
   return 1;
 }
 
-static int is_lm_green_marker(uint8_t r, uint8_t g, uint8_t b) {
-  return g > 100 && r < 40 && b < 40;
+static uint8_t test_map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t bg_palette_row) {
+  uint8_t pal = (uint8_t)(pal_raw & 7u);
+  if (is_layer2 && pal <= 3u) return (uint8_t)(bg_palette_row & 7u);
+  if (!is_layer2 && pal <= 3u) return (uint8_t)(4u + (pal & 3u));
+  return pal;
 }
 
-static double ppm_similarity_vs_ref(const uint8_t *a, const uint8_t *b, unsigned w, unsigned h, int skip_lm_green) {
+static int run_l1_palette_remap_sanity(void) {
+  if (test_map16_effective_palette(0, 0, 1) != 4) {
+    failf("[l1_palette] FG pal 0 expected eff 4");
+    return 0;
+  }
+  if (test_map16_effective_palette(2, 0, 1) != 6) {
+    failf("[l1_palette] FG pal 2 expected eff 6");
+    return 0;
+  }
+  if (test_map16_effective_palette(0, 1, 3) != 3) {
+    failf("[l1_palette] L2 pal 0 bg_row 3 expected eff 3");
+    return 0;
+  }
+  printf("PASS: l1_palette_remap_sanity\n");
+  return 1;
+}
+
+static double ppm_similarity_vs_ref(const uint8_t *a, const uint8_t *b, unsigned w, unsigned h) {
   if (!a || !b || w == 0 || h == 0) return 0.0;
   size_t compared = 0;
   size_t close = 0;
   for (unsigned y = 0; y < h; y++) {
     for (unsigned x = 0; x < w; x++) {
       size_t i = ((size_t)y * (size_t)w + (size_t)x) * 3u;
-      if (skip_lm_green && is_lm_green_marker(b[i], b[i + 1], b[i + 2])) continue;
       compared++;
       if (abs((int)a[i] - (int)b[i]) <= 32 && abs((int)a[i + 1] - (int)b[i + 1]) <= 32 &&
           abs((int)a[i + 2] - (int)b[i + 2]) <= 32) {
@@ -1930,19 +1949,41 @@ static int run_level_visual_smoke(void) {
   }
 
   int has_block_audit = 0;
+  size_t l1_pal_row0 = 0;
+  size_t l1_pal_row_fg = 0;
   FILE *sf = fopen(stats_path, "r");
   if (sf) {
     char line[512];
     while (fgets(line, sizeof(line), sf)) {
       if (strstr(line, "LV_REPORT_MAP16_BLOCK") && strstr(line, "id=0x0021") && strstr(line, "alias=1")) {
         has_block_audit = 1;
-        break;
       }
       if (strstr(line, "LV_REPORT_GFX_FILE")) {
         has_block_audit = 1;
       }
+      if (strstr(line, "LV_REPORT_PAL_ROW layer=layer1 row=0 ")) {
+        size_t n = 0;
+        if (sscanf(line, "LV_REPORT_PAL_ROW layer=layer1 row=0 subtiles=%zu", &n) == 1) {
+          l1_pal_row0 = n;
+        }
+      }
+      if (strstr(line, "LV_REPORT_PAL_ROW layer=layer1 row=4 ") ||
+          strstr(line, "LV_REPORT_PAL_ROW layer=layer1 row=5 ") ||
+          strstr(line, "LV_REPORT_PAL_ROW layer=layer1 row=6 ") ||
+          strstr(line, "LV_REPORT_PAL_ROW layer=layer1 row=7 ")) {
+        size_t n = 0;
+        int row = 0;
+        if (sscanf(line, "LV_REPORT_PAL_ROW layer=layer1 row=%d subtiles=%zu", &row, &n) == 2) {
+          l1_pal_row_fg += n;
+        }
+      }
     }
     fclose(sf);
+  }
+  if (l1_pal_row_fg > 0 && l1_pal_row0 * 2 > l1_pal_row_fg) {
+    fprintf(stderr,
+            "NOTE: [level_visual smoke] layer1 pal_row0=%zu > half of FG rows 4-7=%zu (check L1 palette remap)\n",
+            l1_pal_row0, l1_pal_row_fg);
   }
   if (!has_block_audit) {
     failf("[level_visual smoke] expected LV_REPORT_MAP16_BLOCK or LV_REPORT_GFX_FILE in --report output");
@@ -2089,17 +2130,17 @@ static int run_level_visual_lm_compare(void) {
     free(lm);
     return 0;
   }
-  double sim = ppm_similarity_vs_ref(px, lm, w, h, 1);
+  double sim = ppm_similarity_vs_ref(px, lm, w, h);
   free(px);
   free(lm);
   (void)remove(outppm);
   (void)remove(stats_path);
 
-  if (sim < 0.52) {
-    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below inc10 target 0.52\n", sim);
+  if (sim < 0.45) {
+    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below inc11 baseline 0.45 (full-pixel compare)\n", sim);
   }
   if (sim < 0.55) {
-    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below inc10 stretch 0.55\n", sim);
+    fprintf(stderr, "NOTE: [level_visual lm] lm_similarity %.3f below inc11 stretch 0.55\n", sim);
   }
 
   printf("PASS: level_visual lm compare (nonbg=%.1f%% x_max=%u lm_similarity=%.1f%%)\n", nonbg_ratio * 100.0, x_max,
@@ -3013,6 +3054,7 @@ int main(void) {
   int okEg = test_exgfx_export_hashes();
   int okExt68 = run_ext68_cloud_emit_test();
   int okMap16Alias = run_map16_alias_tests();
+  int okL1Pal = run_l1_palette_remap_sanity();
   int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
   int okLvLm = run_level_visual_lm_compare();
@@ -3029,7 +3071,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okMap16Alias && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
+      okExt68 && okMap16Alias && okL1Pal && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

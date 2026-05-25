@@ -35,7 +35,8 @@ static void usage(const char *argv0) {
           "  - --sprite-debug draws green markers for unknown sprite ids (no generic GFX blit).\n"
           "  - --map16-synth-vanilla fills empty AllMap16 export slots from tile id (default on).\n"
           "  - --no-map16-synth-vanilla disables empty-slot synthesis.\n"
-          "  - --map16-alias-debug logs top alias (tile_id -> file index) mappings to stderr.\n",
+          "  - --map16-alias-debug logs top alias (tile_id -> file index) mappings to stderr.\n"
+          "  - --map16-synth-debug logs top Map16 ids resolved via synthesis fallback.\n",
           argv0 ? argv0 : "level_visual",
           argv0 ? argv0 : "level_visual");
 }
@@ -164,6 +165,9 @@ typedef struct {
 typedef struct {
   int gfx_route_mode;
   int map16_audit;
+  int map16_synth_debug;
+  int is_layer2;
+  uint8_t bg_palette_row;
   const char *audit_layer;
   uint8_t *rgb;
   uint32_t W, H;
@@ -175,6 +179,8 @@ typedef struct {
   ObjectEmitStats *stats;
   Map16HistEntry map16_hist[256];
   size_t map16_hist_n;
+  Map16HistEntry map16_synth_hist[256];
+  size_t map16_synth_hist_n;
   size_t gfx_file_subtiles[256];
   size_t pal_row_subtiles[8];
   size_t pal_row_oob_count;
@@ -187,6 +193,7 @@ typedef struct {
   int map16_audit;
   int map16_synth_vanilla;
   int map16_alias_debug;
+  int map16_synth_debug;
   int export_diff_stats;
   const char *palette_debug_ppm;
   const char *lm_ref_ppm;
@@ -235,7 +242,8 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
   if (!map16_get_with_src(map16, map16_id, &t, &src)) return;
   int synth = (src == MAP16_SRC_SYNTH);
   int alias = (src == MAP16_SRC_ALIAS);
-  int rom_fb = (src == MAP16_SRC_ROM);
+  int rom_fb = (src == MAP16_SRC_ROM || src == MAP16_SRC_ROM_VANILLA);
+  int rom_van = (src == MAP16_SRC_ROM_VANILLA);
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
@@ -245,9 +253,10 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
     fprintf(stderr,
             "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d tile8=0x%03X page=%u pal=%u h=%d v=%d file=0x%02X "
-            "vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d\n",
+            "vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
             layer_label, (unsigned)map16_id, si, (unsigned)tile8, (unsigned)page, (unsigned)pal, (w0 >> 10) & 1,
-            (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb);
+            (w0 >> 11) & 1, (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb,
+            rom_van);
   }
 }
 
@@ -317,23 +326,62 @@ static int decode_gfx_tile(Rom *rom, GfxCache *gfxc, uint8_t file_id, uint16_t l
   return 0;
 }
 
+static void map16_synth_hist_bump(RenderCtx *rc, uint16_t map16_id) {
+  if (!rc) return;
+  for (size_t i = 0; i < rc->map16_synth_hist_n; i++) {
+    if (rc->map16_synth_hist[i].map16_id == (uint32_t)map16_id) {
+      rc->map16_synth_hist[i].count++;
+      return;
+    }
+  }
+  if (rc->map16_synth_hist_n < 256) {
+    rc->map16_synth_hist[rc->map16_synth_hist_n].map16_id = map16_id;
+    rc->map16_synth_hist[rc->map16_synth_hist_n].count = 1;
+    rc->map16_synth_hist_n++;
+  }
+}
+
+static void map16_synth_hist_print_top(RenderCtx *rc, int top_n) {
+  if (!rc || top_n <= 0) return;
+  fprintf(stderr, "LV_REPORT_MAP16_SYNTH_TOP count=%zu\n", rc->map16->synth_count);
+  for (int out = 0; out < top_n; out++) {
+    size_t best = 0;
+    size_t best_count = 0;
+    for (size_t i = 0; i < rc->map16_synth_hist_n; i++) {
+      if (rc->map16_synth_hist[i].count > best_count) {
+        best_count = rc->map16_synth_hist[i].count;
+        best = i;
+      }
+    }
+    if (best_count == 0) break;
+    fprintf(stderr, "LV_REPORT_MAP16_SYNTH_TOP rank=%d id=0x%04X count=%zu\n", out + 1,
+            (unsigned)rc->map16_synth_hist[best].map16_id, best_count);
+    rc->map16_synth_hist[best].count = 0;
+  }
+}
+
 static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uint32_t y_tile) {
   if (!rc || !rc->rgb || !rc->map16 || !rc->pal256 || !rc->rom || !rc->gfxc) return;
 
   Map16Tile t;
-  if (!map16_get(rc->map16, map16_id, &t)) {
+  int src = MAP16_SRC_FILE;
+  if (!map16_get_with_src(rc->map16, map16_id, &t, &src)) {
     if (rc->stats) rc->stats->map16_miss++;
     draw_missing_tile(rc->rgb, rc->W, rc->H, x_tile * 16u, y_tile * 16u, 16u, 0, 0, 0);
     return;
   }
+  if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
+
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
+    if ((tile8 & 0x03FFu) == 0) continue;
     int hflip = (w0 >> 10) & 1;
     int vflip = (w0 >> 11) & 1;
     uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
     uint8_t pal = (uint8_t)(pal_raw & 7u);
-    if (pal_raw != pal) rc->pal_row_oob_count++;
+    if (rc->is_layer2 && pal <= 3u) pal = (uint8_t)(rc->bg_palette_row & 7u);
+    if (pal_raw != pal && !rc->is_layer2) rc->pal_row_oob_count++;
     if (pal < 8) rc->pal_row_subtiles[pal]++;
     uint8_t palrgb[16][3];
     for (int c = 0; c < 16; c++) {
@@ -507,6 +555,8 @@ static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t b
   size_t total = (size_t)w * (size_t)h;
   size_t compared = 0;
   size_t close = 0;
+  size_t tan_lm = 0;
+  size_t tan_miss = 0;
   long long dr_sum = 0, dg_sum = 0, db_sum = 0;
   size_t bucket_count[5];
   memset(bucket_count, 0, sizeof(bucket_count));
@@ -515,6 +565,13 @@ static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t b
     size_t oi = i * 3u;
     if (is_lm_green(lm[oi], lm[oi + 1], lm[oi + 2])) continue;
     compared++;
+    int lm_tan = (abs((int)lm[oi] - 214) <= 12 && abs((int)lm[oi + 1] - 181) <= 12 && abs((int)lm[oi + 2] - 140) <= 12);
+    if (lm_tan) {
+      tan_lm++;
+      if (abs((int)px[oi] - (int)br) <= 3 && abs((int)px[oi + 1] - (int)bg) <= 3 && abs((int)px[oi + 2] - (int)bb) <= 3) {
+        tan_miss++;
+      }
+    }
     int dr = abs((int)px[oi] - (int)lm[oi]);
     int dg = abs((int)px[oi + 1] - (int)lm[oi + 1]);
     int db = abs((int)px[oi + 2] - (int)lm[oi + 2]);
@@ -526,12 +583,10 @@ static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t b
     if (mx <= 32) close++;
     int bi = mx <= 64 ? (mx <= 32 ? (mx <= 16 ? 0 : 1) : 2) : (mx <= 128 ? 3 : 4);
     bucket_count[bi]++;
-    (void)br;
-    (void)bg;
-    (void)bb;
   }
 
   double sim = compared ? (double)close / (double)compared : 0.0;
+  double tan_miss_pct = tan_lm ? (double)tan_miss / (double)tan_lm : 0.0;
   double mean_dr = compared ? (double)dr_sum / (double)compared : 0.0;
   double mean_dg = compared ? (double)dg_sum / (double)compared : 0.0;
   double mean_db = compared ? (double)db_sum / (double)compared : 0.0;
@@ -540,6 +595,7 @@ static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t b
   fprintf(stderr,
           "LV_DIFF_STATS buckets_le16=%zu le32=%zu le64=%zu le128=%zu gt128=%zu\n", bucket_count[0], bucket_count[1],
           bucket_count[2], bucket_count[3], bucket_count[4]);
+  fprintf(stderr, "LV_DIFF_STATS tan_lm=%zu tan_miss=%zu tan_miss_pct=%.3f\n", tan_lm, tan_miss, tan_miss_pct);
 
   free(px);
   free(lm);
@@ -712,9 +768,11 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   rc.stats = &stats;
   rc.err = err;
   rc.errcap = sizeof(err);
+  rc.bg_palette_row = info->primary.bg_palette & 7u;
   if (opts) {
     rc.gfx_route_mode = opts->gfx_route_mode;
     rc.map16_audit = opts->map16_audit;
+    rc.map16_synth_debug = opts->map16_synth_debug;
   }
 
   if ((layers_mask & LV_LAYERS_LAYER2) && info->layer2_data_ptr_snes) {
@@ -722,6 +780,9 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     memset(rc.pal_row_subtiles, 0, sizeof(rc.pal_row_subtiles));
     rc.pal_row_oob_count = 0;
     rc.map16_hist_n = 0;
+    rc.map16_synth_hist_n = 0;
+    rc.is_layer2 = 1;
+    rc.bg_palette_row = info->primary.bg_palette & 7u;
     if (info->layer2_is_bg_tilemap && info->layer2_bg_tiles && info->layer2_bg_width && info->layer2_bg_height) {
       uint8_t w2 = info->layer2_bg_width;
       uint8_t h2 = info->layer2_bg_height;
@@ -753,6 +814,8 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     memset(rc.pal_row_subtiles, 0, sizeof(rc.pal_row_subtiles));
     rc.pal_row_oob_count = 0;
     rc.map16_hist_n = 0;
+    rc.map16_synth_hist_n = 0;
+    rc.is_layer2 = 0;
     for (size_t i = 0; i < info->objects_count; i++) {
       process_object_emit(&info->objects[i], &emit_ctx, &rc, &stats, 0);
     }
@@ -791,10 +854,11 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 
   if (print_report) {
     fprintf(stderr,
-            "LV_REPORT map16_alias_hits=%zu map16_rom_hits=%zu map16_alias_table=%zu map16_synth_fallback=%zu "
-            "lm16=%d\n",
-            map16.alias_hit_count, map16.rom_hit_count, map16.alias_table_count, map16.synth_count,
-            map16.is_lm16);
+            "LV_REPORT map16_alias_hits=%zu map16_rom_hits=%zu map16_rom_vanilla_hits=%zu map16_alias_table=%zu "
+            "map16_synth_fallback=%zu lm16=%d\n",
+            map16.alias_hit_count, map16.rom_hit_count, map16.rom_vanilla_hit_count, map16.alias_table_count,
+            map16.synth_count, map16.is_lm16);
+    if (opts && opts->map16_synth_debug) map16_synth_hist_print_top(&rc, 10);
   }
 
   if (print_stats) {
@@ -959,6 +1023,7 @@ int main(int argc, char **argv) {
   int map16_audit = 0;
   int map16_synth_vanilla = 1;
   int map16_alias_debug = 0;
+  int map16_synth_debug = 0;
   int export_diff_stats = 0;
   int gfx_route_mode = GFX_ROUTE_MODE_BYPASS;
   const char *palette_debug_ppm = NULL;
@@ -1010,6 +1075,7 @@ int main(int argc, char **argv) {
     else if (strcmp(a, "--map16-synth-vanilla") == 0) map16_synth_vanilla = 1;
     else if (strcmp(a, "--no-map16-synth-vanilla") == 0) map16_synth_vanilla = 0;
     else if (strcmp(a, "--map16-alias-debug") == 0) map16_alias_debug = 1;
+    else if (strcmp(a, "--map16-synth-debug") == 0) map16_synth_debug = 1;
     else if (strcmp(a, "--export-diff-stats") == 0) export_diff_stats = 1;
     else if (strncmp(a, "--gfx-route-mode=", 17) == 0) {
       int m = parse_gfx_route_mode(a + 17);
@@ -1066,6 +1132,7 @@ int main(int argc, char **argv) {
   ropts.map16_audit = map16_audit || print_report;
   ropts.map16_synth_vanilla = map16_synth_vanilla;
   ropts.map16_alias_debug = map16_alias_debug;
+  ropts.map16_synth_debug = map16_synth_debug;
   ropts.export_diff_stats = export_diff_stats;
   ropts.palette_debug_ppm = palette_debug_ppm;
   ropts.lm_ref_ppm = lm_ref_ppm;

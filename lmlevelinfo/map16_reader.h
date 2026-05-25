@@ -13,6 +13,7 @@ typedef struct {
 #define MAP16_SRC_ALIAS 1
 #define MAP16_SRC_ROM 2
 #define MAP16_SRC_SYNTH 3
+#define MAP16_SRC_ROM_VANILLA 4
 
 typedef struct {
   Map16Tile *tiles;
@@ -22,8 +23,9 @@ typedef struct {
   size_t synth_count;
   size_t alias_hit_count;
   size_t rom_hit_count;
+  size_t rom_vanilla_hit_count;
   size_t alias_table_count;
-  uint16_t *alias_index; /* tiles_count entries: alias for flat tile_id, 0xFFFF=none */
+  size_t *alias_index; /* tiles_count entries: alias target index, SIZE_MAX=none */
   Rom *rom;
 } Map16Data;
 

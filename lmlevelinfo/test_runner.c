@@ -1816,6 +1816,22 @@ static int map16_count_hack_muncher_locals(const Map16Tile *t) {
   return n;
 }
 
+static int map16_tile_has_full_muncher_quad_locals(const Map16Tile *t) {
+  if (!t) return 0;
+  uint8_t mask = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = map16_tile8(t, i);
+    if (tile8 == 0) return 0;
+    if (((tile8 >> 8) & 3u) != 0u) return 0;
+    uint8_t local = (uint8_t)(tile8 & 0x7Fu);
+    if (local == 0x5Cu) mask |= 1u;
+    else if (local == 0x5Du) mask |= 2u;
+    else if (local == 0x5Eu) mask |= 4u;
+    else if (local == 0x5Fu) mask |= 8u;
+  }
+  return mask == 0x0Fu;
+}
+
 static int map16_tile_is_uniform_bd_synth(const Map16Tile *t) {
   if (!t) return 0;
   return map16_tile_all_subs_tile8(t, 0x0BDu);
@@ -2047,9 +2063,8 @@ static int run_map16_alias_tests(void) {
       map16_free(&m);
       return 0;
     }
-    if (map16_count_hack_muncher_locals(&got) < 3) {
-      failf("[map16_alias] 0x%04X expected >=3 muncher CHR locals, got %d", (unsigned)munch_id,
-             map16_count_hack_muncher_locals(&got));
+    if (!map16_tile_has_full_muncher_quad_locals(&got)) {
+      failf("[map16_alias] 0x%04X expected full muncher quad locals 0x5C-0x5F (page 0)", (unsigned)munch_id);
       map16_free(&m);
       return 0;
     }
@@ -2065,8 +2080,8 @@ static int run_map16_alias_tests(void) {
     map16_free(&m);
     return 0;
   }
-  if (map16_count_hack_muncher_locals(&got) < 3) {
-    failf("[map16_alias] 0x012F expected muncher geometry from canonical/alias");
+  if (!map16_tile_has_full_muncher_quad_locals(&got)) {
+    failf("[map16_alias] 0x012F expected full muncher quad locals 0x5C-0x5F (page 0)");
     map16_free(&m);
     return 0;
   }

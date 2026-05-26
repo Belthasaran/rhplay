@@ -98,6 +98,21 @@ static int map16_sub_local_is_muncher_chr(uint8_t local) {
 
 static int map16_distinct_tile8_count(const Map16Tile *t);
 
+static int map16_tile_is_partial_hack_muncher_stub(const Map16Tile *t) {
+  if (!t) return 0;
+  int stub = 0;
+  int stripe = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 == 0) continue;
+    if (map16_sub_gfx_page(t->w[i]) != 0u) continue;
+    uint8_t local = (uint8_t)(tile8 & 0x7Fu);
+    if (local == 0x78u || local == 0x7Cu) stub++;
+    if (local >= 0x4Cu && local <= 0x4Fu) stripe++;
+  }
+  return stub >= 2 && stripe >= 2;
+}
+
 static int map16_shape_ok_hack_muncher_block(const Map16Tile *t) {
   if (!t) return 0;
   if (map16_distinct_tile8_count(t) < 3) return 0;
@@ -110,6 +125,22 @@ static int map16_shape_ok_hack_muncher_block(const Map16Tile *t) {
     if (map16_sub_local_is_muncher_chr((uint8_t)(tile8 & 0x7Fu))) munch++;
   }
   return any && munch >= 3;
+}
+
+static int map16_tile_has_full_muncher_locals_page0(const Map16Tile *t) {
+  if (!t) return 0;
+  uint8_t want_mask = 0;
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (tile8 == 0) return 0;
+    if (map16_sub_gfx_page(t->w[i]) != 0u) return 0;
+    uint8_t local = (uint8_t)(tile8 & 0x7Fu);
+    if (local == 0x5Cu) want_mask |= 1u;
+    else if (local == 0x5Du) want_mask |= 2u;
+    else if (local == 0x5Eu) want_mask |= 4u;
+    else if (local == 0x5Fu) want_mask |= 8u;
+  }
+  return want_mask == 0x0Fu;
 }
 
 static int block_alias_score(const Map16Tile *t, uint8_t page, uint8_t low, uint16_t *out_max_w) {
@@ -483,6 +514,39 @@ static int map16_build_alias_table(Map16Data *m) {
   return 1;
 }
 
+static size_t map16_find_muncher_full_quad_index(const Map16Data *m) {
+  if (!m || !m->tiles || m->tiles_count == 0) return SIZE_MAX;
+  size_t best = SIZE_MAX;
+  int best_has_pal6 = 0;
+  for (size_t i = 0; i < m->tiles_count; i++) {
+    const Map16Tile *t = &m->tiles[i];
+    if (map16_tile_needs_resolve(t)) continue;
+    if (!map16_tile_has_full_muncher_locals_page0(t)) continue;
+    int pal6 = 1;
+    for (int si = 0; si < 4; si++) {
+      uint8_t pal_raw = (uint8_t)((t->w[si] >> 13) & 0x7u);
+      if (pal_raw != 6u) {
+        pal6 = 0;
+        break;
+      }
+    }
+    if (best == SIZE_MAX) {
+      best = i;
+      best_has_pal6 = pal6;
+      continue;
+    }
+    if (pal6 && !best_has_pal6) {
+      best = i;
+      best_has_pal6 = 1;
+      continue;
+    }
+    if (pal6 == best_has_pal6 && i < best) {
+      best = i;
+    }
+  }
+  return best;
+}
+
 void map16_free(Map16Data *m) {
   if (!m) return;
   free(m->tiles);
@@ -494,6 +558,7 @@ void map16_free(Map16Data *m) {
   m->tiles_count = 0;
   m->is_lm16 = 0;
   m->synth_vanilla = 0;
+  m->muncher_full_quad_index = SIZE_MAX;
   m->synth_count = 0;
   m->alias_hit_count = 0;
   m->rom_hit_count = 0;
@@ -519,6 +584,7 @@ int map16_load_file(const char *path, Map16Data *out, char *err, size_t errcap) 
     return 0;
   }
   memset(out, 0, sizeof(*out));
+  out->muncher_full_quad_index = SIZE_MAX;
 
   FILE *fp = fopen(path, "rb");
   if (!fp) {
@@ -605,6 +671,7 @@ int map16_load_file(const char *path, Map16Data *out, char *err, size_t errcap) 
     seterr(err, errcap, "Out of memory building map16 alias table");
     return 0;
   }
+  out->muncher_full_quad_index = map16_find_muncher_full_quad_index(out);
   return 1;
 }
 
@@ -639,6 +706,7 @@ static int map16_try_canonical_resolve(Map16Data *m, uint16_t tile_id, Map16Tile
   if (can_idx == SIZE_MAX || can_idx >= m->tiles_count) return 0;
   const Map16Tile *at = &m->tiles[can_idx];
   if (map16_tile_needs_resolve(at)) return 0;
+  if (tile_id == 0x012Fu && !map16_shape_ok_hack_muncher_block(at)) return 0;
   *out = *at;
   if (src_out) *src_out = MAP16_SRC_CANONICAL;
   return 1;
@@ -650,6 +718,7 @@ static int map16_try_alias_resolve(Map16Data *m, uint16_t tile_id, Map16Tile *ou
   if (alias_idx == SIZE_MAX || alias_idx >= m->tiles_count) return 0;
   const Map16Tile *at = &m->tiles[alias_idx];
   if (map16_tile_needs_resolve(at)) return 0;
+  if (tile_id == 0x012Fu && !map16_shape_ok_hack_muncher_block(at)) return 0;
   *out = *at;
   m->alias_hit_count++;
   if (src_out) *src_out = MAP16_SRC_ALIAS;
@@ -688,15 +757,38 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
 
+  uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
+  uint8_t low = (uint8_t)(tile_id & 0xFF);
+
   Map16Tile raw;
   int have_raw = map16_get_raw(m, tile_id, &raw);
+
+  if (have_raw && m->muncher_full_quad_index != SIZE_MAX && m->muncher_full_quad_index < m->tiles_count) {
+    int want_muncher = 0;
+    if (tile_id == 0x04BDu || tile_id == 0x04BEu) {
+      want_muncher = 1;
+    } else if (tile_id == 0x012Fu && map16_tile_is_empty(&raw)) {
+      want_muncher = 1;
+    } else if (page >= 2u && (low == 0xBDu || low == 0xBEu) && map16_tile_is_partial_hack_muncher_stub(&raw)) {
+      want_muncher = 1;
+    }
+    if (want_muncher) {
+      Map16Tile full = m->tiles[m->muncher_full_quad_index];
+      if (tile_id == 0x04BEu) {
+        for (int si = 0; si < 4; si++) {
+          full.w[si] = (uint16_t)((full.w[si] & (uint16_t)~0x0C00u) | (raw.w[si] & 0x0C00u));
+        }
+      }
+      *out = full;
+      if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
+      return 1;
+    }
+  }
+
   if (have_raw && !map16_tile_needs_resolve(&raw)) {
     *out = raw;
     return 1;
   }
-
-  uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
-  uint8_t low = (uint8_t)(tile_id & 0xFF);
 
   if (page >= 2u) {
     /* LM export pages 2+: ROM LM custom pages, then canonical/alias; never synth 4x low|(page&3). */
@@ -711,10 +803,15 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
     return 0;
   }
 
-  /* Pages 0-1: alias before ROM vanilla (inc13 page-0); pipes may use ROM vanilla on page 1. */
+  /* Pages 0-1: avoid page-0 ROM vanilla; pipes may use ROM vanilla on page 1. */
+  if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
+    if (map16_try_rom_vanilla_resolve(m, tile_id, page, low, out, src_out)) return 1;
+  }
   if (map16_try_alias_resolve(m, tile_id, out, src_out)) return 1;
   if (map16_try_rom_custom_resolve(m, tile_id, out, src_out)) return 1;
-  if (map16_try_rom_vanilla_resolve(m, tile_id, page, low, out, src_out)) return 1;
+  if (page != 1u || low < 0x33u || low > 0x5Fu) {
+    if (map16_try_rom_vanilla_resolve(m, tile_id, page, low, out, src_out)) return 1;
+  }
   if (map16_try_canonical_resolve(m, tile_id, out, src_out)) return 1;
 
   if (!m->synth_vanilla) {

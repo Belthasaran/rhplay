@@ -2284,6 +2284,41 @@ static int run_map16_rom_def_redirect_tests(void) {
     return 0;
   }
 
+  if (!map16_get_with_src(&m, 0x07EC, &got, &src)) {
+    failf("[map16_rom] map16_get 0x07EC failed");
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (src != MAP16_SRC_DEF_REDIRECT) {
+    failf("[map16_rom] 0x07EC src=%d expected def_redirect", src);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (map16_sub_local(&got, 0) != 0x76 || map16_sub_local(&got, 1) != 0x74 || map16_sub_local(&got, 2) != 0x77 ||
+      map16_sub_local(&got, 3) != 0x75) {
+    failf("[map16_rom] 0x07EC locals expected 76/74/77/75");
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  {
+    Map16Tile place;
+    if (!map16_get_raw(&m, 0x07EC, &place)) {
+      failf("[map16_rom] 0x07EC raw missing");
+      map16_free(&m);
+      rom_free(&rom);
+      return 0;
+    }
+    if (((place.w[0] >> 11) & 1u) == 1u && ((got.w[0] >> 11) & 1u) != 1u) {
+      failf("[map16_rom] 0x07EC expected Y-flip from placement on sub0 w=%04X", got.w[0]);
+      map16_free(&m);
+      rom_free(&rom);
+      return 0;
+    }
+  }
+
   map16_free(&m);
   rom_free(&rom);
   printf("PASS: map16_rom_def_redirect\n");

@@ -101,6 +101,29 @@ static void map16_merge_flip_from_placement(const Map16Tile *placement, const Ma
   }
 }
 
+/* LM16 definition pool at placement+21 carries authoritative CHR/pal; merge flips from placement stub. */
+static void map16_copy_def_pool_visual(const Map16Tile *placement, const Map16Tile *visual, Map16Tile *out,
+                                       int from_lm_pool_offset) {
+  if (!out || !visual) return;
+  if (!placement) {
+    *out = *visual;
+    return;
+  }
+  if (from_lm_pool_offset && !map16_tile_is_partial_hack_muncher_stub(placement) &&
+      !map16_tile_is_uniform_filler(placement)) {
+    *out = *visual;
+    for (int si = 0; si < 4; si++) {
+      uint16_t pt = (uint16_t)(placement->w[si] & 0x03FFu);
+      uint16_t vt = (uint16_t)(visual->w[si] & 0x03FFu);
+      if (pt != vt && pt != 0u && pt != 0x1004u) {
+        out->w[si] = (uint16_t)((visual->w[si] & (uint16_t)~0x0C00u) | (placement->w[si] & 0x0C00u));
+      }
+    }
+    return;
+  }
+  map16_merge_flip_from_placement(placement, visual, out);
+}
+
 static int map16_grow(Map16Data *m, size_t new_count) {
   if (!m || new_count <= m->tiles_count) return 1;
   Map16Tile *nt = (Map16Tile *)realloc(m->tiles, new_count * sizeof(Map16Tile));
@@ -594,19 +617,15 @@ static int map16_try_visual_pool_lookup(Map16Data *m, uint16_t tile_id, const Ma
                                         Map16Tile *out, int *src_out) {
   if (!m || !out) return 0;
 
-  static const int k_pool_offsets[] = {21, 0, -21, 42, -42};
+  static const int k_pool_offsets[] = {21, -21, 42, -42};
   for (size_t oi = 0; oi < sizeof(k_pool_offsets) / sizeof(k_pool_offsets[0]); oi++) {
     int off = k_pool_offsets[oi];
     int64_t idx = (int64_t)tile_id + (int64_t)off;
     if (idx < 0 || (size_t)idx >= m->tiles_count) continue;
     const Map16Tile *cand = &m->tiles[(size_t)idx];
     if (!map16_tile_is_drawable(cand)) continue;
-    if (map16_tile8s_equal(placement, cand)) continue;
-    if (placement) {
-      map16_merge_flip_from_placement(placement, cand, out);
-    } else {
-      *out = *cand;
-    }
+    if (placement && map16_tile8s_equal(placement, cand)) continue;
+    map16_copy_def_pool_visual(placement, cand, out, off == 21 || off == -21);
     if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
     m->def_redirect_count++;
     return 1;
@@ -618,11 +637,7 @@ static int map16_try_visual_pool_lookup(Map16Data *m, uint16_t tile_id, const Ma
     if (acts != tile_id && (size_t)acts < m->tiles_count) {
       const Map16Tile *cand = &m->tiles[acts];
       if (map16_tile_is_drawable(cand) && (!placement || !map16_tile8s_equal(placement, cand))) {
-        if (placement) {
-          map16_merge_flip_from_placement(placement, cand, out);
-        } else {
-          *out = *cand;
-        }
+        map16_copy_def_pool_visual(placement, cand, out, 0);
         if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
         m->def_redirect_count++;
         return 1;
@@ -631,11 +646,7 @@ static int map16_try_visual_pool_lookup(Map16Data *m, uint16_t tile_id, const Ma
     if ((size_t)acts + 21u < m->tiles_count) {
       const Map16Tile *cand = &m->tiles[acts + 21u];
       if (map16_tile_is_drawable(cand) && (!placement || !map16_tile8s_equal(placement, cand))) {
-        if (placement) {
-          map16_merge_flip_from_placement(placement, cand, out);
-        } else {
-          *out = *cand;
-        }
+        map16_copy_def_pool_visual(placement, cand, out, 1);
         if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
         m->def_redirect_count++;
         return 1;
@@ -662,44 +673,13 @@ static int map16_try_visual_pool_lookup(Map16Data *m, uint16_t tile_id, const Ma
       }
     }
     if (best_m != SIZE_MAX) {
-      if (placement) {
-        map16_merge_flip_from_placement(placement, &m->tiles[best_m], out);
-      } else {
-        *out = m->tiles[best_m];
-      }
+      map16_copy_def_pool_visual(placement, &m->tiles[best_m], out, 0);
       if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
       m->def_redirect_count++;
       return 1;
     }
   }
 
-  size_t best_idx = SIZE_MAX;
-  int best_dist = 0x7FFFFFFF;
-  int best_distinct = 0;
-  for (size_t j = 0; j < m->tiles_count; j++) {
-    if (j == (size_t)tile_id) continue;
-    const Map16Tile *cand = &m->tiles[j];
-    if (!map16_tile_is_drawable(cand)) continue;
-    if (placement && map16_tile8s_equal(placement, cand)) continue;
-    int distinct = map16_distinct_tile8_count(cand);
-    int dist = (j > (size_t)tile_id) ? (int)(j - (size_t)tile_id) : (int)((size_t)tile_id - j);
-    if (best_idx == SIZE_MAX || distinct > best_distinct ||
-        (distinct == best_distinct && dist < best_dist)) {
-      best_idx = j;
-      best_dist = dist;
-      best_distinct = distinct;
-    }
-  }
-  if (best_idx != SIZE_MAX && best_distinct >= 3) {
-    if (placement) {
-      map16_merge_flip_from_placement(placement, &m->tiles[best_idx], out);
-    } else {
-      *out = m->tiles[best_idx];
-    }
-    if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
-    m->def_redirect_count++;
-    return 1;
-  }
   return 0;
 }
 
@@ -913,8 +893,29 @@ int map16_merge_file(const char *path, Map16Data *m, char *err, size_t errcap) {
     const Map16Tile *fs = &file.tiles[i];
     if (!map16_tile_is_drawable(fs)) continue;
     Map16Tile *dst = &m->tiles[i];
-    if (!map16_tile_is_drawable(dst) || map16_tile_is_placement_stub(m, (uint16_t)i, dst)) {
+    int force_pool = 0;
+    if (i >= 21u) {
+      const Map16Tile *place = &m->tiles[i - 21u];
+      if (map16_tile_is_placement_stub(m, (uint16_t)(i - 21u), place)) force_pool = 1;
+    }
+    if (!map16_tile_is_drawable(dst) || map16_tile_is_placement_stub(m, (uint16_t)i, dst) || force_pool) {
       *dst = *fs;
+    }
+  }
+
+  /* Keep LM16 placement rows (stub words + flip hints); ROM rows are often wrong CHR. */
+  for (size_t i = 0; i < file.tiles_count; i++) {
+    const Map16Tile *fs = &file.tiles[i];
+    if (map16_tile_is_empty(fs)) continue;
+    Map16Tile tmp;
+    memset(&tmp, 0, sizeof(tmp));
+    Map16Data stub_probe;
+    memset(&stub_probe, 0, sizeof(stub_probe));
+    stub_probe.tiles = (Map16Tile *)fs;
+    stub_probe.tiles_count = file.tiles_count;
+    if (map16_tile_is_placement_stub(&stub_probe, (uint16_t)i, fs) ||
+        map16_tile_is_uniform_filler(fs) || map16_tile_is_partial_hack_muncher_stub(fs)) {
+      m->tiles[i] = *fs;
     }
   }
 

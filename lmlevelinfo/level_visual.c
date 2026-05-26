@@ -257,6 +257,8 @@ static const char *map16_src_label(int src) {
       return "rom_van";
     case MAP16_SRC_CANONICAL:
       return "canonical";
+    case MAP16_SRC_DEF_REDIRECT:
+      return "def_redirect";
     default:
       return "?";
   }

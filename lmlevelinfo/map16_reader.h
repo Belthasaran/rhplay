@@ -15,12 +15,14 @@ typedef struct {
 #define MAP16_SRC_SYNTH 3
 #define MAP16_SRC_ROM_VANILLA 4
 #define MAP16_SRC_CANONICAL 5
+#define MAP16_SRC_DEF_REDIRECT 6
 
 typedef struct {
   Map16Tile *tiles;
   size_t tiles_count;
   int is_lm16;
   int synth_vanilla;
+  size_t muncher_full_quad_index; /* SIZE_MAX if unknown/unavailable */
   size_t synth_count;
   size_t alias_hit_count;
   size_t rom_hit_count;

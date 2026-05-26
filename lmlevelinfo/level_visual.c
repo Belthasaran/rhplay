@@ -786,15 +786,33 @@ static void print_level_report(const LevelInfo *info, Rom *rom, uint32_t W, uint
   (void)rom;
 }
 
+static int map16_load_for_render(Rom *rom, const char *map16_path, Map16Data *map16, char *err, size_t errcap) {
+  memset(map16, 0, sizeof(*map16));
+  if (rom) {
+    if (!map16_load_from_rom(rom, map16, err, errcap)) return 0;
+    map16_attach_rom(map16, rom);
+    if (map16_path && map16_path[0]) {
+      if (!map16_merge_file(map16_path, map16, err, errcap)) return 0;
+    }
+    return 1;
+  }
+  if (!map16_path || !map16_path[0]) {
+    snprintf(err, errcap, "Map16: need ROM or --map16=file");
+    return 0;
+  }
+  if (!map16_load_file(map16_path, map16, err, errcap)) return 0;
+  return 1;
+}
+
 static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_path, const char *out_ppm,
                             int layers_mask, int print_stats, int print_histogram, int gfx_debug, int print_report,
                             int palette_debug, int sprite_debug, const LvRenderOpts *opts) {
   char err[512];
-  if (!info || !map16_path || !*map16_path || !out_ppm) return 0;
+  if (!info || !out_ppm) return 0;
+  if (!rom && (!map16_path || !*map16_path)) return 0;
 
   Map16Data map16;
-  memset(&map16, 0, sizeof(map16));
-  if (!map16_load_file(map16_path, &map16, err, sizeof(err))) {
+  if (!map16_load_for_render(rom, map16_path, &map16, err, sizeof(err))) {
     fprintf(stderr, "Map16 load failed: %s\n", err);
     return 0;
   }
@@ -982,9 +1000,9 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   if (print_report) {
     fprintf(stderr,
             "LV_REPORT map16_alias_hits=%zu map16_rom_hits=%zu map16_rom_vanilla_hits=%zu map16_alias_table=%zu "
-            "map16_synth_fallback=%zu lm16=%d\n",
+            "map16_synth_fallback=%zu map16_def_redirect=%zu lm16=%d loaded_from_rom=%d\n",
             map16.alias_hit_count, map16.rom_hit_count, map16.rom_vanilla_hit_count, map16.alias_table_count,
-            map16.synth_count, map16.is_lm16);
+            map16.synth_count, map16.def_redirect_count, map16.is_lm16, map16.loaded_from_rom);
     if (opts && opts->map16_synth_debug) map16_synth_hist_print_top(&rc, 10);
   }
 
@@ -1034,8 +1052,7 @@ static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, con
   }
 
   Map16Data map16;
-  memset(&map16, 0, sizeof(map16));
-  if (!map16_load_file(map16_path, &map16, err, sizeof(err))) {
+  if (!map16_load_for_render(&rom, map16_path, &map16, err, sizeof(err))) {
     fprintf(stderr, "map16_probe: map16 load failed: %s\n", err);
     levelinfo_free(&info);
     rom_free(&rom);
@@ -1067,6 +1084,11 @@ static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, con
 
   Map16Tile got;
   int src = -1;
+  uint16_t acts_like = 0;
+  if (map16_get_acts_like(&map16, probe_id, &acts_like)) {
+    fprintf(stderr, "LV_PROBE id=0x%04X acts_like=0x%04X (behavior only)\n", (unsigned)probe_id, (unsigned)acts_like);
+  }
+
   if (map16_get_with_src(&map16, probe_id, &got, &src)) {
     fprintf(stderr, "LV_PROBE id=0x%04X resolved src=%s sub=(0x%03X,0x%03X,0x%03X,0x%03X)\n", (unsigned)probe_id,
             map16_src_label(src), (unsigned)(got.w[0] & 0x03FFu), (unsigned)(got.w[1] & 0x03FFu),
@@ -1401,10 +1423,6 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (have_map16_probe) {
-    if (!map16_path || !*map16_path) {
-      fprintf(stderr, "map16_probe requires --map16=\n");
-      return 2;
-    }
     if (!run_map16_probe_from_rom(rom_path, level_id, map16_path, map16_probe_id, map16_probe_ppm, gfx_route_mode))
       return 1;
     if (!export_ppm || !*export_ppm) return 0;

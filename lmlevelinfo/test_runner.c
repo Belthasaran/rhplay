@@ -2203,6 +2203,93 @@ static int run_map16_alias_tests(void) {
   return 1;
 }
 
+static int map16_sub_local(const Map16Tile *t, int sub) {
+  return (int)((uint8_t)(map16_tile8(t, sub) & 0x7Fu));
+}
+
+static int map16_tile_matches_pipe_cap(const Map16Tile *t) {
+  if (!t) return 0;
+  return map16_sub_local(t, 0) == 0x10 && map16_sub_local(t, 1) == 0x00 && map16_sub_local(t, 2) == 0x11 &&
+         map16_sub_local(t, 3) == 0x01;
+}
+
+static int run_map16_rom_def_redirect_tests(void) {
+  Rom rom;
+  char err[256];
+  memset(&rom, 0, sizeof(rom));
+  if (!rom_load(&rom, "test/akogare/orig_Ako.sfc", err, sizeof(err))) {
+    failf("[map16_rom] could not load orig_Ako.sfc: %s", err);
+    return 0;
+  }
+
+  uint16_t acts = 0;
+  if (!map16_rom_read_acts_like(&rom, 0x04BD, &acts) || acts != 0x012Fu) {
+    failf("[map16_rom] 0x04BD acts_like expected 0x012F got 0x%04X", (unsigned)acts);
+    rom_free(&rom);
+    return 0;
+  }
+
+  Map16Data m;
+  memset(&m, 0, sizeof(m));
+  if (!map16_load_from_rom(&rom, &m, err, sizeof(err))) {
+    failf("[map16_rom] map16_load_from_rom failed: %s", err);
+    rom_free(&rom);
+    return 0;
+  }
+  if (!map16_merge_file("test/akogare/AllMap16.map16", &m, err, sizeof(err))) {
+    failf("[map16_rom] map16_merge_file failed: %s", err);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+
+  Map16Tile got;
+  int src = -1;
+  if (!map16_get_with_src(&m, 0x04BD, &got, &src)) {
+    failf("[map16_rom] map16_get 0x04BD failed");
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (src != MAP16_SRC_DEF_REDIRECT) {
+    failf("[map16_rom] 0x04BD src=%d expected def_redirect", src);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (!map16_tile_has_full_muncher_quad_locals(&got)) {
+    failf("[map16_rom] 0x04BD expected full muncher quad 0x5C-0x5F");
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+
+  if (!map16_get_with_src(&m, 0x03BE, &got, &src)) {
+    failf("[map16_rom] map16_get 0x03BE failed");
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (src != MAP16_SRC_DEF_REDIRECT) {
+    failf("[map16_rom] 0x03BE src=%d expected def_redirect", src);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (!map16_tile_matches_pipe_cap(&got)) {
+    failf("[map16_rom] 0x03BE subs=%04X,%04X,%04X,%04X expected pipe cap 0x10/0/0x11/0x01",
+          got.w[0], got.w[1], got.w[2], got.w[3]);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+
+  map16_free(&m);
+  rom_free(&rom);
+  printf("PASS: map16_rom_def_redirect\n");
+  return 1;
+}
+
 static int run_level_visual_smoke(void) {
   char err[512];
   char built_rom[512];
@@ -3389,6 +3476,7 @@ int main(void) {
   int okExt68 = run_ext68_cloud_emit_test();
   int okMap16Synth = run_map16_synth_gfx_page_test();
   int okMap16Alias = run_map16_alias_tests();
+  int okMap16Rom = run_map16_rom_def_redirect_tests();
   int okL1Pal = run_l1_palette_remap_sanity();
   int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
@@ -3406,7 +3494,8 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okMap16Synth && okMap16Alias && okL1Pal && okSprNoGen && okLv && okLvLm && okDiff && okSprR &&
+      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okL1Pal && okSprNoGen && okLv && okLvLm &&
+      okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {
     printf("ALL PASS\n");

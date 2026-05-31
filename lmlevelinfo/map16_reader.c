@@ -390,11 +390,16 @@ static int map16_shape_ok_generic02_block(const Map16Tile *t) {
   return map16_distinct_tile8_count(t) >= 3;
 }
 
+static int map16_id_is_pipe_low(uint8_t id_page, uint8_t id_low) {
+  return (id_page == 0u || id_page == 1u) && id_low >= 0x33u && id_low <= 0x5Fu;
+}
+
 static int map16_shape_ok_for_id(uint8_t id_page, uint8_t id_low, const Map16Tile *cand) {
   if (!cand) return 0;
   if (id_low == 0xBDu || id_low == 0xBEu) {
     if (map16_shape_ok_hack_muncher_block(cand)) return 1;
   }
+  if (map16_id_is_pipe_low(id_page, id_low)) return map16_shape_ok_pipe_block_loose(cand);
   if (!map16_block_gfx_pages_match_id(cand, id_page)) return 0;
   if (id_page == 1 && id_low >= 0x33u && id_low <= 0x5Fu) return map16_shape_ok_pipe_block(cand);
   if (id_page == 0 && id_low == 0x6Fu) return map16_shape_ok_muncher_block(cand);
@@ -427,7 +432,11 @@ static int map16_alias_cand_ok(const Map16Tile *slot, const Map16Tile *cand, uin
   int raw_distinct = map16_distinct_tile8_count(slot);
   int cand_distinct = map16_distinct_tile8_count(cand);
   if (raw_distinct >= 2 && cand_distinct < 2) return 0;
-  if (!map16_block_gfx_pages_match_id(cand, id_page)) return 0;
+  if (map16_id_is_pipe_low(id_page, id_low)) {
+    if (!map16_shape_ok_pipe_block_loose(cand)) return 0;
+  } else if (!map16_block_gfx_pages_match_id(cand, id_page)) {
+    return 0;
+  }
   if (id_page == 0 && id_low == 0x02) {
     if (map16_count_subs_local_low(cand, 0x02) >= 3) return 0;
     if (map16_tile_all_subs_local(cand, 0x82u)) return 0;
@@ -586,9 +595,14 @@ static int map16_build_alias_table(Map16Data *m) {
       int exact = block_alias_exact_hits(cand, page, low);
       /* Page-0 exact-low match avoids false positives (e.g. 0x0002 -> filler 0x1004).
        * Empty/degenerate/page>=1 slots may alias via near-match scoring only (e.g. 0x013D checker). */
-      if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 && exact < 1 &&
-          score < 8)
+      if (map16_id_is_pipe_low(page, low)) {
+        if (!map16_shape_ok_pipe_block_loose(cand)) continue;
+        if (exact < 1 && score < 8) continue;
+        if ((j >> 8) != (tid >> 8) && exact < 2) continue;
+      } else if (page == 0 && !map16_tile_is_empty(slot) && map16_tile_zero_sub_count(slot) < 2 &&
+                 exact < 1 && score < 8) {
         continue;
+      }
       if (page >= 2u && (low == 0xBDu || low == 0xBEu) && score >= 8) {
         if (!map16_shape_ok_hack_muncher_block(cand)) continue;
       } else if (!map16_alias_cand_ok(slot, cand, page, low)) {
@@ -1012,11 +1026,13 @@ static int map16_try_rom_custom_resolve(Map16Data *m, uint16_t tile_id, Map16Til
 
 static int map16_try_rom_vanilla_resolve(Map16Data *m, uint16_t tile_id, uint8_t page, uint8_t low,
                                          Map16Tile *out, int *src_out) {
-  if (!m->rom || page == 0u || page > 1u) return 0;
+  if (!m->rom) return 0;
+  int is_pipe = map16_id_is_pipe_low(page, low);
+  if (page > 1u || (page == 0u && !is_pipe)) return 0;
   Map16Tile rom_tile;
   if (!map16_rom_get_vanilla_tile(m->rom, tile_id, &rom_tile)) return 0;
   int rom_shape_ok = 0;
-  if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
+  if (is_pipe) {
     rom_shape_ok = map16_shape_ok_pipe_block_loose(&rom_tile);
   } else {
     rom_shape_ok = map16_block_gfx_pages_match_id(&rom_tile, page) && map16_shape_ok_for_id(page, low, &rom_tile);
@@ -1069,14 +1085,14 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
     return 0;
   }
 
-  /* Pages 0-1: avoid page-0 ROM vanilla; pipes may use ROM vanilla on page 1. */
-  if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
+  /* Pages 0-1: pipe blocks (GFX page 1 subs) may use ROM vanilla before alias guessing. */
+  if (map16_id_is_pipe_low(page, low)) {
     if (map16_try_rom_vanilla_resolve(m, tile_id, page, low, out, src_out)) return 1;
   }
   if (have_raw && map16_try_visual_def_redirect(m, tile_id, &raw, out, src_out)) return 1;
   if (map16_try_alias_resolve(m, tile_id, out, src_out)) return 1;
   if (map16_try_rom_custom_resolve(m, tile_id, out, src_out)) return 1;
-  if (page == 1u && low >= 0x33u && low <= 0x5Fu) {
+  if (map16_id_is_pipe_low(page, low)) {
     /* pipe ROM vanilla already tried above */
   } else if (page == 1u) {
     if (map16_try_rom_vanilla_resolve(m, tile_id, page, low, out, src_out)) return 1;

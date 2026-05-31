@@ -11,11 +11,13 @@
 #include "lm_tables.h"
 #include "level_parse.h"
 #include "obj_to_map16.h"
+#include "emit_stats.h"
 #include "gfx_route.h"
 #include "gfx_reader.h"
 #include "sprite_draw.h"
 #include "map16_reader.h"
 #include "map16_rom.h"
+#include "palette_rom.h"
 #include "lv_ppm_compare.h"
 #include "mwl_reader.h"
 #include "mwl_writer.h"
@@ -1625,17 +1627,17 @@ static int ppm_read_rgb(const char *path, unsigned *out_w, unsigned *out_h, uint
 static uint8_t test_map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t bg_palette_row) {
   uint8_t pal = (uint8_t)(pal_raw & 7u);
   if (is_layer2 && pal <= 3u) return (uint8_t)(bg_palette_row & 7u);
-  if (!is_layer2 && pal <= 3u) return (uint8_t)(4u + (pal & 3u));
+  (void)bg_palette_row;
   return pal;
 }
 
 static int run_l1_palette_remap_sanity(void) {
-  if (test_map16_effective_palette(0, 0, 1) != 4) {
-    failf("[l1_palette] FG pal 0 expected eff 4");
+  if (test_map16_effective_palette(0, 0, 1) != 0) {
+    failf("[l1_palette] L1 pal 0 expected raw row 0 (LM export)");
     return 0;
   }
-  if (test_map16_effective_palette(2, 0, 1) != 6) {
-    failf("[l1_palette] FG pal 2 expected eff 6");
+  if (test_map16_effective_palette(2, 0, 1) != 2) {
+    failf("[l1_palette] L1 pal 2 expected raw row 2");
     return 0;
   }
   if (test_map16_effective_palette(0, 1, 3) != 3) {
@@ -1643,6 +1645,104 @@ static int run_l1_palette_remap_sanity(void) {
     return 0;
   }
   printf("PASS: l1_palette_remap_sanity\n");
+  return 1;
+}
+
+static int run_snes15_back_color_109(void) {
+  const char *rom_path = "test/akogare/orig_Ako.sfc";
+  char err[512];
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, sizeof(err))) {
+    printf("SKIP: snes15_back_color_109 (ROM)\n");
+    return 1;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    rom_free(&rom);
+    printf("SKIP: snes15_back_color_109 (tables)\n");
+    return 1;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    rom_free(&rom);
+    failf("[snes15] parse 0x109 failed: %s", err);
+    return 0;
+  }
+  if (!info.palette_present || info.palette_len < 2) {
+    levelinfo_free(&info);
+    rom_free(&rom);
+    failf("[snes15] level 0x109 missing custom palette");
+    return 0;
+  }
+  uint16_t back_w = (uint16_t)(info.palette_bytes[0] | ((uint16_t)info.palette_bytes[1] << 8));
+  uint8_t r = 0, g = 0, b = 0;
+  palette_snes15_to_rgb(back_w, &r, &g, &b);
+  uint8_t pal256[256][3];
+  uint8_t br = 0, bg = 0, bb = 0;
+  palette_build_for_level(&rom, &info, pal256, &br, &bg, &bb);
+  levelinfo_free(&info);
+  rom_free(&rom);
+  if (r != 66u || g != 41u || b != 57u) {
+    failf("[snes15] back word 0x%04X -> %u,%u,%u expected 66,41,57", (unsigned)back_w, r, g, b);
+    return 0;
+  }
+  if (br != 66u || bg != 41u || bb != 57u) {
+    failf("[snes15] palette_build back %u,%u,%u expected 66,41,57", br, bg, bb);
+    return 0;
+  }
+  printf("PASS: snes15_back_color_109\n");
+  return 1;
+}
+
+static int run_akogare_109_emit_coverage(void) {
+  const char *rom_path = "test/akogare/orig_Ako.sfc";
+  char err[512];
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, sizeof(err))) {
+    printf("SKIP: akogare_109_emit_coverage (ROM)\n");
+    return 1;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    rom_free(&rom);
+    return 1;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    rom_free(&rom);
+    failf("[emit109] parse failed");
+    return 0;
+  }
+  ObjEmitContext ectx;
+  memset(&ectx, 0, sizeof(ectx));
+  ectx.level_tileset = (uint8_t)(info.primary.fgbg_gfx_setting & 0x0Fu);
+  ectx.vertical_scroll = info.primary.vertical_scroll_set;
+  if (info.primary.length_in_screens == -1) {
+    ectx.screens_in_level = 32;
+  } else if (info.primary.length_in_screens > 0) {
+    ectx.screens_in_level = (uint16_t)info.primary.length_in_screens;
+  } else {
+    ectx.screens_in_level = 1;
+  }
+  ObjectEmitStats stats;
+  memset(&stats, 0, sizeof(stats));
+  object_emit_count_stats(info.objects, info.objects_count, &ectx, &stats);
+  levelinfo_free(&info);
+  rom_free(&rom);
+  size_t visual = stats.total_objects > stats.skipped_nonvisual
+                      ? stats.total_objects - stats.skipped_nonvisual
+                      : stats.total_objects;
+  if (stats.unknown != 0) {
+    failf("[emit109] unknown=%zu visual=%zu (require 0)", stats.unknown, visual);
+    return 0;
+  }
+  if (visual < 400 || stats.handled < visual) {
+    failf("[emit109] handled=%zu visual=%zu suspiciously low", stats.handled, visual);
+    return 0;
+  }
+  printf("PASS: akogare_109_emit_coverage (handled=%zu visual=%zu)\n", stats.handled, visual);
   return 1;
 }
 
@@ -2329,7 +2429,7 @@ static int run_map16_rom_def_redirect_tests(void) {
 static int run_lv_ppm_gridlines_unit(void) {
   uint8_t rgb[16u * 16u * 3u];
   for (size_t i = 0; i < sizeof(rgb); i += 3u) {
-    rgb[i + 0] = 65;
+    rgb[i + 0] = 66;
     rgb[i + 1] = 41;
     rgb[i + 2] = 57;
   }
@@ -2346,7 +2446,7 @@ static int run_lv_ppm_gridlines_unit(void) {
     return 0;
   }
   o = (8u * 16u + 8u) * 3u;
-  if (rgb[o + 0] != 65) {
+  if (rgb[o + 0] != 66) {
     failf("[lv_ppm] interior pixel overwritten at (8,8)");
     return 0;
   }
@@ -2391,7 +2491,7 @@ static int run_level_visual_tile_compare_l1(void) {
   char cmd[4096];
   snprintf(cmd, sizeof(cmd),
            "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" "
-           "--layers=layer1 --gfx-route-mode=bypass --export-gridlines "
+           "--layers=layer1 --gfx-route-mode=bypass --no-map16-synth-vanilla --export-gridlines "
            "--lm-tile-ref=\"%s\" 2>\"%s\"",
            rom_path, outppm, lm_ref, stats_path);
 
@@ -3626,6 +3726,8 @@ int main(void) {
   int okMap16Rom = run_map16_rom_def_redirect_tests();
   int okLvPpmGrid = run_lv_ppm_gridlines_unit();
   int okLvTileL1 = run_level_visual_tile_compare_l1();
+  int okSnes15 = run_snes15_back_color_109();
+  int okEmit109 = run_akogare_109_emit_coverage();
   int okL1Pal = run_l1_palette_remap_sanity();
   int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
@@ -3643,7 +3745,8 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okLvPpmGrid && okLvTileL1 && okL1Pal &&
+      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okLvPpmGrid && okLvTileL1 && okSnes15 &&
+      okEmit109 && okL1Pal &&
       okSprNoGen && okLv && okLvLm &&
       okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&

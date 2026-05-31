@@ -65,10 +65,13 @@ uint8_t gfx_route_file_for_sprite_slot_mode(const LevelGfxRoute *route, int slot
 // Vanilla FG/BG list entry for Map16 page (ignores bypass overrides).
 uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page);
 
-// Resolve ExGFX file + local 8x8 tile index for a Map16 subtile CHR (10-bit tile8).
-// LM extended CHR (bits 7+8 set, 0x180-0x1FF) uses SP3 slot with local remap (>=0x54 -> -0x54).
+// Resolve ExGFX file + local 8x8 for a Map16 subtile CHR word (SMW 10-bit tile8).
 void gfx_route_resolve_subtile(const LevelGfxRoute *route, uint16_t tile8, int route_mode,
                                uint8_t *out_file_id, uint16_t *out_local);
+
+// FG_pages oracle CHR (3-digit LM hex, e.g. 0x1FA): bypass slot (hi digit + BG2) + local (low>=0x80 -> -0x80).
+void gfx_route_resolve_lm_oracle_chr(const LevelGfxRoute *route, uint16_t chr, int route_mode,
+                                   uint8_t *out_file_id, uint16_t *out_local);
 
 // Collect distinct GFX file ids for preload: pages, slots, and vanilla fallbacks per page.
 size_t gfx_route_collect_preload_ids(const LevelGfxRoute *route, uint8_t *out_ids, size_t max_out);

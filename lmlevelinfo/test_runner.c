@@ -1503,6 +1503,61 @@ static int run_gfx_tile_index_sanity(void) {
   return ok;
 }
 
+static int run_gfx_extended_chr_resolve(void) {
+  const char *base = getenv("PATH_BASE_ROM");
+  if (!base || !*base) return 1;
+
+  char built_rom[512];
+  char err[512];
+  if (!build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    return 1;
+  }
+
+  Rom rom;
+  if (!rom_load(&rom, built_rom, err, sizeof(err))) {
+    failf("[gfx-ext] ROM load failed");
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    rom_free(&rom);
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    failf("[gfx-ext] parse failed");
+    rom_free(&rom);
+    return 0;
+  }
+
+  LevelGfxRoute route;
+  gfx_route_build(&route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+
+  uint8_t fid = 0;
+  uint16_t local = 0;
+  gfx_route_resolve_subtile(&route, 0x1FCu, GFX_ROUTE_MODE_BYPASS, &fid, &local);
+  if (fid != 0x13u || local != 0x28u) {
+    failf("[gfx-ext] 0x1FC expected file 0x13 local 0x28 got 0x%02X 0x%02X", fid, local);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+
+  gfx_route_resolve_subtile(&route, 0x010u, GFX_ROUTE_MODE_BYPASS, &fid, &local);
+  if (local != 0x10u) {
+    failf("[gfx-ext] 0x010 expected local 0x10 got 0x%02X", local);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+
+  levelinfo_free(&info);
+  rom_free(&rom);
+  printf("PASS: gfx extended chr resolve\n");
+  return 1;
+}
+
 static int is_ppm_bg_pixel(uint8_t r, uint8_t g, uint8_t b, uint8_t br, uint8_t bg, uint8_t bb, int tol) {
   return abs((int)r - (int)br) <= tol && abs((int)g - (int)bg) <= tol && abs((int)b - (int)bb) <= tol;
 }
@@ -3757,6 +3812,7 @@ int main(void) {
   int okGfxSmall = run_gfx_route_page_small_slot();
   int ok109inv = run_akogare_109_invariants();
   int okGfxTi = run_gfx_tile_index_sanity();
+  int okGfxExt = run_gfx_extended_chr_resolve();
   int okEg = test_exgfx_export_hashes();
   int okExt68 = run_ext68_cloud_emit_test();
   int okMap16Synth = run_map16_synth_gfx_page_test();
@@ -3782,7 +3838,7 @@ int main(void) {
   int ok8 = run_suite_dir("myth", "test/myth/myth.sfc", "test/myth", "myth ");
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
-  if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
+  if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okGfxExt && okEg &&
       okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okLvPpmGrid && okLvTileL1 && okSnes15 &&
       okEmit109 && okL1Pal &&
       okSprNoGen && okLv && okLvLm &&

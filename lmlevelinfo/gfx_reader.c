@@ -108,6 +108,15 @@ int snes4bpp_decode_tile(const uint8_t *gfx, size_t gfx_len, uint16_t tile_index
   return 1;
 }
 
+uint16_t gfx_local_tile_index(size_t gfx_len, uint16_t tile8) {
+  size_t ntiles = gfx_len / 32u;
+  uint16_t low7 = (uint16_t)(tile8 & 0x7Fu);
+  uint16_t low8 = (uint16_t)(tile8 & 0xFFu);
+  if (ntiles == 0) return low7;
+  if (ntiles > 128u && low8 < ntiles) return low8;
+  return low7;
+}
+
 void gfxcache_free(GfxCache *c) {
   if (!c) return;
   if (c->entries) {

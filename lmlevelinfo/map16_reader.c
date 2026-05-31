@@ -271,6 +271,15 @@ static int map16_tile_is_hack_paired_repeat(const Map16Tile *t) {
   return map16_distinct_tile8_count(t) == 2;
 }
 
+static int map16_tile_all_subs_tile8_ge(const Map16Tile *t, uint16_t min_tile8) {
+  if (!t) return 0;
+  for (int si = 0; si < 4; si++) {
+    uint16_t tile8 = (uint16_t)(t->w[si] & 0x03FFu);
+    if (tile8 == 0 || tile8 < min_tile8) return 0;
+  }
+  return 1;
+}
+
 static int map16_sub_max_local_chr(const Map16Tile *t) {
   int mx = 0;
   if (!t) return 0;
@@ -1137,6 +1146,22 @@ static int map16_try_rom_vanilla_resolve(Map16Data *m, uint16_t tile_id, uint8_t
 int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
+
+  Map16Tile raw_peek;
+  int have_peek = map16_get_raw(m, tile_id, &raw_peek);
+  uint8_t page_peek = (uint8_t)((tile_id >> 8) & 0xFF);
+  if (have_peek && page_peek >= 2u && map16_tile_is_drawable(&raw_peek) &&
+      !map16_tile_is_placement_stub(m, tile_id, &raw_peek) && !map16_tile_is_hack_paired_repeat(&raw_peek) &&
+      map16_distinct_tile8_count(&raw_peek) >= 4 && map16_tile_all_subs_tile8_ge(&raw_peek, 0x180u)) {
+    Map16Tile oracle_peek;
+    int defer_for_oracle = map16_get_fg_oracle(m, tile_id, &oracle_peek) &&
+                           !map16_tile_all_subs_tile8_ge(&oracle_peek, 0x180u);
+    if (!defer_for_oracle) {
+      *out = raw_peek;
+      if (src_out) *src_out = MAP16_SRC_FILE;
+      return 1;
+    }
+  }
 
   if (map16_get_fg_oracle(m, tile_id, out)) {
     if (src_out) *src_out = MAP16_SRC_FG_ORACLE;

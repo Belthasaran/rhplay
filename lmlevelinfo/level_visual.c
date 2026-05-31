@@ -15,6 +15,7 @@
 #include "palette_rom.h"
 #include "emit_stats.h"
 #include "sprite_draw.h"
+#include "lv_ppm_compare.h"
 
 static void usage(const char *argv0) {
   fprintf(stderr,
@@ -32,6 +33,9 @@ static void usage(const char *argv0) {
           "  - --palette-debug dumps palette rows 0-15; --palette-debug-ppm=<FILE> exports strip.\n"
           "  - --gfx-route-mode=bypass|vanilla|try-both (default bypass).\n"
           "  - --export-diff-stats compares OUT.ppm to --lm-ref=<FILE> (full pixels; LM is in-game ground truth).\n"
+          "  - --export-gridlines draws LM-style white gridlines (RGB 206,200,204 at x%%16==15, y%%16==15).\n"
+          "  - --lm-tile-ref=<FILE> strict 16x16 tile compare vs ref; exit 1 on size mismatch or any tile diff.\n"
+          "  - --lm-tile-mismatch-ppm=<FILE> optional diff heatmap when --lm-tile-ref fails.\n"
           "  - --layers=all|layer1|layer2|sprites (sprites included in all).\n"
           "  - --sprite-debug draws green markers for unknown sprite ids only in our output (not in LM ref).\n"
           "  - --map16-synth-vanilla fills empty AllMap16 export slots from tile id (default on).\n"
@@ -209,8 +213,11 @@ typedef struct {
   int map16_alias_debug;
   int map16_synth_debug;
   int export_diff_stats;
+  int export_gridlines;
   const char *palette_debug_ppm;
   const char *lm_ref_ppm;
+  const char *lm_tile_ref_ppm;
+  const char *lm_tile_mismatch_ppm;
 } LvRenderOpts;
 
 static int parse_gfx_route_mode(const char *s) {
@@ -610,51 +617,12 @@ static int palette_debug_write_ppm(const char *path, const uint8_t pal256[256][3
   return ok;
 }
 
-static int ppm_read_rgb_simple(const char *path, unsigned *out_w, unsigned *out_h, uint8_t **out_px) {
-  if (!path || !out_w || !out_h || !out_px) return 0;
-  *out_px = NULL;
-  FILE *pf = fopen(path, "rb");
-  if (!pf) return 0;
-  char magic[8];
-  if (!fgets(magic, sizeof(magic), pf) || strncmp(magic, "P6", 2) != 0) {
-    fclose(pf);
-    return 0;
-  }
-  char dimline[64];
-  if (!fgets(dimline, sizeof(dimline), pf)) {
-    fclose(pf);
-    return 0;
-  }
-  unsigned pw = 0, ph = 0;
-  if (sscanf(dimline, "%u %u", &pw, &ph) != 2) {
-    fclose(pf);
-    return 0;
-  }
-  char maxline[32];
-  if (!fgets(maxline, sizeof(maxline), pf)) {
-    fclose(pf);
-    return 0;
-  }
-  size_t npix = (size_t)pw * (size_t)ph;
-  uint8_t *px = (uint8_t *)malloc(npix * 3u);
-  if (!px || fread(px, 1, npix * 3u, pf) != npix * 3u) {
-    free(px);
-    fclose(pf);
-    return 0;
-  }
-  fclose(pf);
-  *out_w = pw;
-  *out_h = ph;
-  *out_px = px;
-  return 1;
-}
-
 static void export_diff_stats(const char *out_ppm, const char *lm_ref, uint8_t br, uint8_t bg, uint8_t bb) {
   if (!out_ppm || !lm_ref) return;
   unsigned w = 0, h = 0, lw = 0, lh = 0;
   uint8_t *px = NULL;
   uint8_t *lm = NULL;
-  if (!ppm_read_rgb_simple(out_ppm, &w, &h, &px) || !ppm_read_rgb_simple(lm_ref, &lw, &lh, &lm)) {
+  if (!lv_ppm_read_rgb(out_ppm, &w, &h, &px) || !lv_ppm_read_rgb(lm_ref, &lw, &lh, &lm)) {
     fprintf(stderr, "LV_DIFF_STATS error=ppm_read_failed\n");
     free(px);
     free(lm);
@@ -1016,17 +984,34 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     emit_stats_print_gfx_page_debug(&stats, &gfx_route);
   }
 
+  if (opts && opts->export_gridlines) {
+    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H);
+  }
+
   int ok = write_ppm(out_ppm, rgb, W, H);
   if (!ok) fprintf(stderr, "Failed writing %s\n", out_ppm);
 
-  if (opts && opts->export_diff_stats && opts->lm_ref_ppm && opts->lm_ref_ppm[0]) {
+  if (ok && opts && opts->export_diff_stats && opts->lm_ref_ppm && opts->lm_ref_ppm[0]) {
     export_diff_stats(out_ppm, opts->lm_ref_ppm, back_r, back_g, back_b);
+  }
+
+  int tile_ok = 1;
+  if (ok && opts && opts->lm_tile_ref_ppm && opts->lm_tile_ref_ppm[0]) {
+    LvTileCmpOpts tcmp;
+    LvTileCmpReport trep;
+    memset(&tcmp, 0, sizeof(tcmp));
+    memset(&trep, 0, sizeof(trep));
+    tcmp.max_mismatch_log = LV_TILE_CMP_MAX_MISMATCH_LOG;
+    tcmp.mismatch_ppm_path = opts->lm_tile_mismatch_ppm;
+    if (!lv_ppm_tile_compare_files(out_ppm, opts->lm_tile_ref_ppm, &tcmp, &trep)) {
+      tile_ok = 0;
+    }
   }
 
   free(rgb);
   gfxcache_free(&gfxc);
   map16_free(&map16);
-  return ok;
+  return ok && tile_ok;
 }
 
 static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
@@ -1289,9 +1274,12 @@ int main(int argc, char **argv) {
   int map16_alias_debug = 0;
   int map16_synth_debug = 0;
   int export_diff_stats = 0;
+  int export_gridlines = 0;
   int gfx_route_mode = GFX_ROUTE_MODE_BYPASS;
   const char *palette_debug_ppm = NULL;
   const char *lm_ref_ppm = NULL;
+  const char *lm_tile_ref_ppm = NULL;
+  const char *lm_tile_mismatch_ppm = NULL;
   const char *map16_probe_ppm = "probe.ppm";
   uint16_t map16_probe_id = 0;
   int have_map16_probe = 0;
@@ -1344,6 +1332,7 @@ int main(int argc, char **argv) {
     else if (strcmp(a, "--map16-alias-debug") == 0) map16_alias_debug = 1;
     else if (strcmp(a, "--map16-synth-debug") == 0) map16_synth_debug = 1;
     else if (strcmp(a, "--export-diff-stats") == 0) export_diff_stats = 1;
+    else if (strcmp(a, "--export-gridlines") == 0) export_gridlines = 1;
     else if (strncmp(a, "--gfx-route-mode=", 17) == 0) {
       int m = parse_gfx_route_mode(a + 17);
       if (m < 0) {
@@ -1352,6 +1341,8 @@ int main(int argc, char **argv) {
       }
       gfx_route_mode = m;
     } else if (strncmp(a, "--lm-ref=", 9) == 0) lm_ref_ppm = a + 9;
+    else if (strncmp(a, "--lm-tile-ref=", 14) == 0) lm_tile_ref_ppm = a + 14;
+    else if (strncmp(a, "--lm-tile-mismatch-ppm=", 23) == 0) lm_tile_mismatch_ppm = a + 23;
     else if (strncmp(a, "--map16-probe-id=", 17) == 0) {
       if (!parse_map16_id(a + 17, &map16_probe_id)) {
         fprintf(stderr, "Invalid --map16-probe-id\n");
@@ -1408,8 +1399,11 @@ int main(int argc, char **argv) {
   ropts.map16_alias_debug = map16_alias_debug;
   ropts.map16_synth_debug = map16_synth_debug;
   ropts.export_diff_stats = export_diff_stats;
+  ropts.export_gridlines = export_gridlines;
   ropts.palette_debug_ppm = palette_debug_ppm;
   ropts.lm_ref_ppm = lm_ref_ppm;
+  ropts.lm_tile_ref_ppm = lm_tile_ref_ppm;
+  ropts.lm_tile_mismatch_ppm = lm_tile_mismatch_ppm;
 
   if (mwl_path) {
     if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram,

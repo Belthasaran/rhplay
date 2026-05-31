@@ -16,6 +16,7 @@
 #include "sprite_draw.h"
 #include "map16_reader.h"
 #include "map16_rom.h"
+#include "lv_ppm_compare.h"
 #include "mwl_reader.h"
 #include "mwl_writer.h"
 #include "lc_lz2.h"
@@ -2325,6 +2326,117 @@ static int run_map16_rom_def_redirect_tests(void) {
   return 1;
 }
 
+static int run_lv_ppm_gridlines_unit(void) {
+  uint8_t rgb[16u * 16u * 3u];
+  for (size_t i = 0; i < sizeof(rgb); i += 3u) {
+    rgb[i + 0] = 65;
+    rgb[i + 1] = 41;
+    rgb[i + 2] = 57;
+  }
+  lv_ppm_draw_gridlines(rgb, 16u, 16u);
+  size_t o = (0u * 16u + 15u) * 3u;
+  if (rgb[o + 0] != LV_PPM_GRID_R || rgb[o + 1] != LV_PPM_GRID_G || rgb[o + 2] != LV_PPM_GRID_B) {
+    failf("[lv_ppm] gridline color at (15,0) expected %u,%u,%u got %u,%u,%u", LV_PPM_GRID_R, LV_PPM_GRID_G,
+          LV_PPM_GRID_B, rgb[o + 0], rgb[o + 1], rgb[o + 2]);
+    return 0;
+  }
+  o = (15u * 16u + 8u) * 3u;
+  if (rgb[o + 0] != LV_PPM_GRID_R) {
+    failf("[lv_ppm] gridline missing at (8,15)");
+    return 0;
+  }
+  o = (8u * 16u + 8u) * 3u;
+  if (rgb[o + 0] != 65) {
+    failf("[lv_ppm] interior pixel overwritten at (8,8)");
+    return 0;
+  }
+  printf("PASS: lv_ppm_gridlines_unit\n");
+  return 1;
+}
+
+static int run_level_visual_tile_compare_l1(void) {
+  const char *lm_ref = "test/akogare/Level109_l1only_gridlines.ppm";
+  struct stat st_ref;
+  if (stat(lm_ref, &st_ref) != 0) {
+    printf("SKIP: level_visual_tile_compare_l1 (missing %s)\n", lm_ref);
+    return 1;
+  }
+  struct stat st_map16;
+  if (stat("test/akogare/AllMap16.map16", &st_map16) != 0) {
+    printf("SKIP: level_visual_tile_compare_l1 (missing AllMap16.map16)\n");
+    return 1;
+  }
+
+  char err[512];
+  char built_rom[512];
+  const char *rom_path = NULL;
+  if (build_suite_rom("akogare", built_rom, sizeof(built_rom), err, sizeof(err))) {
+    rom_path = built_rom;
+  } else {
+    struct stat st_rom;
+    if (stat("test/akogare/orig_Ako.sfc", &st_rom) == 0) {
+      rom_path = "test/akogare/orig_Ako.sfc";
+    } else {
+      printf("SKIP: level_visual_tile_compare_l1 (ROM build failed: %s)\n", err);
+      return 1;
+    }
+  }
+
+  (void)mkdir_p("test/_work/akogare");
+  char outppm[512];
+  char stats_path[512];
+  snprintf(outppm, sizeof(outppm), "test/_work/akogare/tilecmp_l1.ppm");
+  snprintf(stats_path, sizeof(stats_path), "test/_work/akogare/tilecmp_l1.stats");
+
+  char cmd[4096];
+  snprintf(cmd, sizeof(cmd),
+           "./level_visual \"%s\" 0x109 --map16=test/akogare/AllMap16.map16 --export-ppm=\"%s\" "
+           "--layers=layer1 --gfx-route-mode=bypass --export-gridlines "
+           "--lm-tile-ref=\"%s\" 2>\"%s\"",
+           rom_path, outppm, lm_ref, stats_path);
+
+  int rc = system(cmd);
+  if (rc != 0) {
+    FILE *sf = fopen(stats_path, "r");
+    if (sf) {
+      char line[256];
+      while (fgets(line, sizeof(line), sf)) {
+        if (strncmp(line, "LV_TILE_CMP", 11) == 0) fputs(line, stderr);
+        if (strncmp(line, "LV_TILE_MISMATCH", 16) == 0) fputs(line, stderr);
+      }
+      fclose(sf);
+    }
+    failf("[tile_cmp_l1] level_visual failed (exit %d); require 100%% tile match vs %s", rc, lm_ref);
+    return 0;
+  }
+
+  FILE *sf = fopen(stats_path, "r");
+  int found = 0;
+  size_t mismatched = 1;
+  if (sf) {
+    char line[256];
+    while (fgets(line, sizeof(line), sf)) {
+      size_t mm = 0;
+      if (sscanf(line, "LV_TILE_CMP size=%*ux%*u tiles=%*zu matched=%*zu mismatched=%zu", &mm) == 1) {
+        found = 1;
+        mismatched = mm;
+      }
+    }
+    fclose(sf);
+  }
+  if (!found) {
+    failf("[tile_cmp_l1] missing LV_TILE_CMP line in %s", stats_path);
+    return 0;
+  }
+  if (mismatched != 0) {
+    failf("[tile_cmp_l1] mismatched=%zu (expected 0 for 100%% L1 tile match)", mismatched);
+    return 0;
+  }
+
+  printf("PASS: level_visual_tile_compare_l1\n");
+  return 1;
+}
+
 static int run_level_visual_smoke(void) {
   char err[512];
   char built_rom[512];
@@ -3512,6 +3624,8 @@ int main(void) {
   int okMap16Synth = run_map16_synth_gfx_page_test();
   int okMap16Alias = run_map16_alias_tests();
   int okMap16Rom = run_map16_rom_def_redirect_tests();
+  int okLvPpmGrid = run_lv_ppm_gridlines_unit();
+  int okLvTileL1 = run_level_visual_tile_compare_l1();
   int okL1Pal = run_l1_palette_remap_sanity();
   int okSprNoGen = run_sprite_no_generic_fallback();
   int okLv = run_level_visual_smoke();
@@ -3529,7 +3643,8 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okEg &&
-      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okL1Pal && okSprNoGen && okLv && okLvLm &&
+      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okLvPpmGrid && okLvTileL1 && okL1Pal &&
+      okSprNoGen && okLv && okLvLm &&
       okDiff && okSprR &&
       okL2g && ok2 && ok3 && ok4 &&
       ok5 && ok6 && ok7 && ok8 && ok9 && ok10) {

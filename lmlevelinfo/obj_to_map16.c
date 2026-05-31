@@ -413,6 +413,29 @@ static int emit_bullet_shooter(const LevelObject *o, emit_map16_fn emit, void *u
   return 1;
 }
 
+/* LM std 0x27/0x29 variant 0: H=0 or W=0 means repeat one Map16 tile along that axis (not +1 per cell). */
+static int emit_lm_direct_repeat_axis(emit_map16_fn emit, void *user_ctx, uint16_t base_tile, uint16_t w,
+                                      uint16_t h, uint16_t base_x, uint16_t base_y) {
+  if (w == 0 && h == 0) {
+    return emit_one(emit, user_ctx, base_tile, base_x, base_y);
+  }
+  if (h == 0) {
+    uint16_t count = w ? w : 1;
+    for (uint16_t xx = 0; xx < count; xx++) {
+      if (!emit_one(emit, user_ctx, base_tile, (uint16_t)(base_x + xx), base_y)) return 0;
+    }
+    return 1;
+  }
+  if (w == 0) {
+    uint16_t count = h ? h : 1;
+    for (uint16_t yy = 0; yy < count; yy++) {
+      if (!emit_one(emit, user_ctx, base_tile, base_x, (uint16_t)(base_y + yy))) return 0;
+    }
+    return 1;
+  }
+  return 0;
+}
+
 static int emit_lm_direct_rect(emit_map16_fn emit, void *user_ctx, uint16_t base_tile, uint16_t w, uint16_t h,
                                uint16_t base_x, uint16_t base_y, int tile_stride_row_major) {
   if (w == 0) w = 1;
@@ -454,19 +477,27 @@ static int emit_lm_direct(const LevelObject *o, emit_map16_fn emit, void *user_c
   uint16_t base_tile = d->u.lm27_29.base_map16;
 
   switch (d->u.lm27_29.variant) {
-    case 0:
-      return emit_lm_direct_rect(emit, user_ctx, base_tile,
-                                 (uint16_t)(d->u.lm27_29.width ? d->u.lm27_29.width : 1),
-                                 (uint16_t)(d->u.lm27_29.height ? d->u.lm27_29.height : 1), base_x, base_y, 1);
+    case 0: {
+      uint16_t w = d->u.lm27_29.width;
+      uint16_t h = d->u.lm27_29.height;
+      if (h == 0 || w == 0) {
+        return emit_lm_direct_repeat_axis(emit, user_ctx, base_tile, w, h, base_x, base_y);
+      }
+      return emit_lm_direct_rect(emit, user_ctx, base_tile, w, h, base_x, base_y, 1);
+    }
     case 1: {
       uint16_t w = (uint16_t)(d->u.lm27_29.sel_w_4b + 1u);
       uint16_t h = (uint16_t)(d->u.lm27_29.sel_h_4b + 1u);
       return emit_lm_direct_rect(emit, user_ctx, base_tile, w, h, base_x, base_y, 0);
     }
-    case 2:
-      return emit_lm_direct_rect(emit, user_ctx, base_tile,
-                                 (uint16_t)(d->u.lm27_29.width ? d->u.lm27_29.width : 1),
-                                 (uint16_t)(d->u.lm27_29.height ? d->u.lm27_29.height : 1), base_x, base_y, 1);
+    case 2: {
+      uint16_t w = d->u.lm27_29.width;
+      uint16_t h = d->u.lm27_29.height;
+      if (h == 0 || w == 0) {
+        return emit_lm_direct_repeat_axis(emit, user_ctx, base_tile, w, h, base_x, base_y);
+      }
+      return emit_lm_direct_rect(emit, user_ctx, base_tile, w, h, base_x, base_y, 1);
+    }
     case 3:
     case 4:
       return emit_lm_direct_rect(emit, user_ctx, base_tile,

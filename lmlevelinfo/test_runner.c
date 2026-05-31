@@ -3640,6 +3640,41 @@ static int run_lm_object_decode_sanity(void) {
     levelinfo_free(&out);
   }
 
+  // Object 0x27 mode 0: H=0 W=4 repeats the same Map16 tile (akogare cloud shaft 0x07CE)
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x01,
+      0x70 | 0x03,
+      0x04,  // H=0 W=4
+      0x07,  // mode 0, base high 0x07
+      0xCE,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj27h0");
+    LM_SANITY_EXPECT_COUNT(1, "obj27h0");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.u.lm27_29.variant != 0 || o->decoded.u.lm27_29.height != 0 ||
+          o->decoded.u.lm27_29.width != 4 || o->decoded.u.lm27_29.base_map16 != 0x07CEu) {
+        failf("[sanity] obj27h0: decode mismatch");
+        ok = 0;
+      } else {
+        static int obj27h0_bad;
+        obj27h0_bad = 0;
+        EmitAcc chk = {0};
+        if (object_emit_map16_tiles(o, NULL, emit_acc_fn, &chk) != OBJMAP_HANDLED || chk.count != 4u ||
+            chk.last.map16_tile != 0x07CEu || chk.first.map16_tile != 0x07CEu) {
+          failf("[sanity] obj27h0: expected 4x 0x07CE got count=%zu first=0x%04X last=0x%04X", chk.count,
+                  chk.have_first ? (unsigned)chk.first.map16_tile : 0u,
+                  (unsigned)chk.last.map16_tile);
+          ok = 0;
+        }
+      }
+    }
+    levelinfo_free(&out);
+  }
+
   // Object 0x27 mode 1 (multiple tiles unstretched), 5 bytes
   {
     uint8_t buf[] = {

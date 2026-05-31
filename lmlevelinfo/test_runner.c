@@ -2448,7 +2448,7 @@ static int run_lv_ppm_gridlines_unit(void) {
   }
   lv_ppm_draw_gridlines(rgb, 16u, 16u);
   lv_ppm_draw_grid_corners(rgb, 16u, 16u, 66, 41, 57);
-  size_t o = (0u * 16u + 15u) * 3u;
+  size_t o = (15u * 16u + 15u) * 3u;
   if (rgb[o + 0] != LV_PPM_GRID_CORNER_R || rgb[o + 1] != LV_PPM_GRID_CORNER_G || rgb[o + 2] != LV_PPM_GRID_CORNER_B) {
     failf("[lv_ppm] tile corner at (15,15) expected %u,%u,%u got %u,%u,%u", LV_PPM_GRID_CORNER_R,
           LV_PPM_GRID_CORNER_G, LV_PPM_GRID_CORNER_B, rgb[o + 0], rgb[o + 1], rgb[o + 2]);

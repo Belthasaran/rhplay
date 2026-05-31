@@ -119,8 +119,11 @@ static void map16_copy_def_pool_visual(const Map16Tile *placement, const Map16Ti
     for (int si = 0; si < 4; si++) {
       uint16_t pt = (uint16_t)(placement->w[si] & 0x03FFu);
       uint16_t vt = (uint16_t)(visual->w[si] & 0x03FFu);
+      uint16_t merged = (uint16_t)((visual->w[si] & (uint16_t)~0xFC00u) | (placement->w[si] & 0xFC00u));
       if (pt != vt && pt != 0u && pt != 0x1004u) {
-        out->w[si] = (uint16_t)((visual->w[si] & (uint16_t)~0x0C00u) | (placement->w[si] & 0x0C00u));
+        out->w[si] = (uint16_t)((merged & (uint16_t)~0x0C00u) | (placement->w[si] & 0x0C00u));
+      } else {
+        out->w[si] = merged;
       }
     }
     return;
@@ -265,6 +268,32 @@ static int map16_tile_is_hack_paired_repeat(const Map16Tile *t) {
   if (((uint16_t)(t->w[0] & 0x03FFu)) != (uint16_t)(t->w[2] & 0x03FFu)) return 0;
   if (((uint16_t)(t->w[1] & 0x03FFu)) != (uint16_t)(t->w[3] & 0x03FFu)) return 0;
   return map16_distinct_tile8_count(t) == 2;
+}
+
+static int map16_sub_max_local_chr(const Map16Tile *t) {
+  int mx = 0;
+  if (!t) return 0;
+  for (int i = 0; i < 4; i++) {
+    int v = map16_sub_local_chr(t, i);
+    if (v > mx) mx = v;
+  }
+  return mx;
+}
+
+/* LM hack-page placement rows point at drawable definition pool (+21). */
+static int map16_hack_page_prefers_lm_pool(const Map16Tile *place, const Map16Tile *pool) {
+  if (!place || !pool || map16_tile_is_empty(pool) || !map16_tile_is_drawable(pool)) return 0;
+  if (map16_tile8s_equal(place, pool)) return 0;
+  if (map16_tile_is_hack_paired_repeat(place)) return 1;
+  if (map16_tile_matches_pipe_cap(pool) && !map16_tile_matches_pipe_cap(place)) return 1;
+  if (map16_tile_matches_slope_quad_locals(pool) && !map16_tile_matches_slope_quad_locals(place)) return 1;
+  /* Keep authoritative file blocks (e.g. 0x03BA hill); skip low-local pipe-cap templates at +21. */
+  if (map16_tile_matches_pipe_cap(pool) || map16_tile_is_uniform_filler(pool)) return 0;
+  if (map16_tile_has_full_muncher_quad_locals(place) && !map16_tile_has_full_muncher_quad_locals(pool)) return 0;
+  int place_mx = map16_sub_max_local_chr(place);
+  int pool_mx = map16_sub_max_local_chr(pool);
+  if (pool_mx >= 0x78 && pool_mx > place_mx + 8) return 1;
+  return 0;
 }
 
 static int block_alias_score(const Map16Tile *t, uint8_t page, uint8_t low, uint16_t *out_max_w) {
@@ -956,6 +985,11 @@ int map16_merge_file(const char *path, Map16Data *m, char *err, size_t errcap) {
     const Map16Tile *fs = &file.tiles[i];
     if (!map16_tile_is_drawable(fs)) continue;
     Map16Tile *dst = &m->tiles[i];
+    /* LM16 hack pages (>=2): file placement/visual rows override ROM CHR guesses. */
+    if ((i >> 8) >= 2 && !map16_tile_is_empty(fs)) {
+      *dst = *fs;
+      continue;
+    }
     int force_pool = 0;
     if (i >= 21u) {
       const Map16Tile *place = &m->tiles[i - 21u];
@@ -1132,7 +1166,18 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
     }
   }
 
-  if (have_raw && map16_tile_is_drawable(&raw) && !map16_tile_is_placement_stub(m, tile_id, &raw)) {
+  if (have_raw && page >= 2u && (size_t)tile_id + 21u < m->tiles_count) {
+    const Map16Tile *pool = &m->tiles[tile_id + 21u];
+    if (map16_hack_page_prefers_lm_pool(&raw, pool)) {
+      map16_copy_def_pool_visual(&raw, pool, out, 1);
+      if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
+      m->def_redirect_count++;
+      return 1;
+    }
+  }
+
+  if (have_raw && map16_tile_is_drawable(&raw) && !map16_tile_is_placement_stub(m, tile_id, &raw) &&
+      !map16_tile_is_hack_paired_repeat(&raw)) {
     *out = raw;
     if (src_out) *src_out = MAP16_SRC_FILE;
     return 1;

@@ -132,6 +132,25 @@ uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page) {
   return vanilla_file_for_page(route->tileset, page);
 }
 
+void gfx_route_resolve_subtile(const LevelGfxRoute *route, uint16_t tile8, int route_mode,
+                               uint8_t *out_file_id, uint16_t *out_local) {
+  uint8_t page = (uint8_t)((tile8 >> 8) & 0x03u);
+  uint8_t fid = page;
+  if (route && route->valid) {
+    fid = gfx_route_file_for_tile_mode(route, tile8, route_mode);
+  }
+
+  uint16_t local = (uint16_t)(tile8 & 0x7Fu);
+  if (route && route->valid && (tile8 & 0x180u) == 0x180u) {
+    uint8_t sp3 = gfx_route_file_for_sprite_slot_mode(route, GFX_SLOT_SP3, route_mode);
+    if (sp3 != 0) fid = sp3;
+    if (local >= 0x54u) local = (uint16_t)(local - 0x54u);
+  }
+
+  if (out_file_id) *out_file_id = fid;
+  if (out_local) *out_local = local;
+}
+
 static size_t append_unique_id(uint8_t *out_ids, size_t n, size_t max_out, uint8_t fid) {
   if (fid == 0 || !out_ids || n >= max_out) return n;
   for (size_t j = 0; j < n; j++) {

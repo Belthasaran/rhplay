@@ -100,12 +100,13 @@ static const SpriteGfxDef *lookup_sprite_def(uint8_t sprite_id) {
   return NULL;
 }
 
-static int decode_sprite_tile(Rom *rom, GfxCache *gfxc, uint8_t file_id, uint16_t local_tile, uint8_t out_px64[64],
+static int decode_sprite_tile(Rom *rom, GfxCache *gfxc, uint8_t file_id, uint16_t tile8, uint8_t out_px64[64],
                               char *err, size_t errcap) {
   const GfxBlob *gfx = NULL;
   if (!gfxcache_get(rom, gfxc, file_id, &gfx, err, errcap) || !gfx || !gfx->bytes || !gfx->len) {
     return -1;
   }
+  uint16_t local_tile = gfx_local_tile_index(gfx->len, tile8);
   if (!snes4bpp_decode_tile(gfx->bytes, gfx->len, local_tile, out_px64)) {
     return -2;
   }
@@ -194,15 +195,15 @@ static void draw_sprite_parts(SpriteDrawCtx *ctx, const SpriteGfxDef *def, const
     }
 
     uint8_t px64[64];
-    uint16_t local = (uint16_t)(p->tile & 0x7Fu);
+    uint16_t tile8 = (uint16_t)p->tile;
     uint8_t used_file = file_id;
-    int ok = decode_sprite_tile(ctx->rom, ctx->gfxc, file_id, local, px64, ctx->err, ctx->errcap) == 0;
+    int ok = decode_sprite_tile(ctx->rom, ctx->gfxc, file_id, tile8, px64, ctx->err, ctx->errcap) == 0;
     if (ok && ctx->gfx_route_mode == GFX_ROUTE_MODE_TRY_BOTH && ctx->gfx_route && !sprite_px64_has_opaque(px64) &&
         map_page >= 0) {
       uint8_t van = gfx_route_vanilla_file_for_page(ctx->gfx_route, map_page);
       if (van != 0 && van != file_id) {
         uint8_t px_van[64];
-        if (decode_sprite_tile(ctx->rom, ctx->gfxc, van, local, px_van, ctx->err, ctx->errcap) == 0 &&
+        if (decode_sprite_tile(ctx->rom, ctx->gfxc, van, tile8, px_van, ctx->err, ctx->errcap) == 0 &&
             sprite_px64_has_opaque(px_van)) {
           memcpy(px64, px_van, sizeof(px64));
           used_file = van;

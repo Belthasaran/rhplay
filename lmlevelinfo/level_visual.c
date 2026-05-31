@@ -316,7 +316,9 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
     uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
     uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, custom_palette, bg_palette_row, fg_palette_row);
-    uint8_t file_id = route ? gfx_route_file_for_tile_mode(route, tile8, gfx_route_mode) : page;
+    uint8_t file_id = 0;
+    uint16_t local_tile = 0;
+    gfx_route_resolve_subtile(route, tile8, gfx_route_mode, &file_id, &local_tile);
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
     if (have_alias_idx || have_can_idx) {
       fprintf(stderr,
@@ -325,14 +327,14 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
               layer_label, (unsigned)map16_id, si, map16_src_label(src),
               have_alias_idx ? alias_idx : (size_t)SIZE_MAX, have_can_idx ? can_idx : (size_t)SIZE_MAX,
               (unsigned)tile8, (unsigned)page, (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1,
-              (unsigned)file_id, (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+              (unsigned)file_id, (unsigned)van, (unsigned)local_tile, synth, alias, rom_fb, rom_van);
     } else {
       fprintf(stderr,
               "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
               "file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
               layer_label, (unsigned)map16_id, si, map16_src_label(src), (unsigned)tile8, (unsigned)page,
               (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
-              (unsigned)van, (unsigned)(tile8 & 0x7Fu), synth, alias, rom_fb, rom_van);
+              (unsigned)van, (unsigned)local_tile, synth, alias, rom_fb, rom_van);
     }
   }
 }
@@ -447,9 +449,13 @@ static void pal_row_hist_print(const RenderCtx *rc, const char *layer_label) {
 }
 
 // 0 = ok, -1 = load fail, -2 = tile index out of range
-static int decode_gfx_tile(Rom *rom, GfxCache *gfxc, uint8_t file_id, uint16_t local_tile, uint8_t out_px64[64],
-                           char *err, size_t errcap) {
+static int decode_gfx_subtile(Rom *rom, GfxCache *gfxc, const LevelGfxRoute *route, int route_mode, uint16_t tile8,
+                              uint8_t file_override, uint8_t out_px64[64], char *err, size_t errcap) {
   const GfxBlob *gfx = NULL;
+  uint8_t file_id = 0;
+  uint16_t local_tile = 0;
+  gfx_route_resolve_subtile(route, tile8, route_mode, &file_id, &local_tile);
+  if (file_override != 0) file_id = file_override;
   if (!gfxcache_get(rom, gfxc, file_id, &gfx, err, errcap) || !gfx || !gfx->bytes || !gfx->len) {
     return -1;
   }
@@ -527,9 +533,11 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint8_t px64[64];
     int okpx = 0;
     uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
-    uint16_t local_tile = (uint16_t)(tile8 & 0x7Fu);
-    uint8_t file_id = rc->gfx_route ? gfx_route_file_for_tile_mode(rc->gfx_route, tile8, rc->gfx_route_mode) : page;
+    uint16_t local_tile = 0;
+    uint8_t file_id = page;
     uint8_t used_file = file_id;
+    gfx_route_resolve_subtile(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
+    used_file = file_id;
 
     if (rc->stats) {
       rc->stats->subtiles_drawn++;
@@ -539,14 +547,16 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       }
     }
 
-    int dr = decode_gfx_tile(rc->rom, rc->gfxc, file_id, local_tile, px64, rc->err, rc->errcap);
+    int dr = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, tile8, 0, px64, rc->err,
+                                rc->errcap);
     int fail_reason = dr;
     if (dr == 0) {
       if (rc->gfx_route_mode == GFX_ROUTE_MODE_TRY_BOTH && !tile_px64_has_opaque(px64) && rc->gfx_route) {
         uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
         if (van != 0 && van != file_id) {
           uint8_t px_van[64];
-          if (decode_gfx_tile(rc->rom, rc->gfxc, van, local_tile, px_van, rc->err, rc->errcap) == 0 &&
+          if (decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, tile8, van, px_van, rc->err,
+                                 rc->errcap) == 0 &&
               tile_px64_has_opaque(px_van)) {
             memcpy(px64, px_van, sizeof(px64));
             used_file = van;
@@ -558,7 +568,8 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     } else if (rc->gfx_route) {
       uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
       if (van != 0 && van != file_id) {
-        int dr2 = decode_gfx_tile(rc->rom, rc->gfxc, van, local_tile, px64, rc->err, rc->errcap);
+        int dr2 = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, tile8, van, px64, rc->err,
+                                     rc->errcap);
         if (dr2 == 0) {
           okpx = 1;
           used_file = van;

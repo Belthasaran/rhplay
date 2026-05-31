@@ -24,6 +24,10 @@ int gfx_load_from_rom(const Rom *rom, uint8_t file_id, GfxBlob *out, char *err, 
 // Returns 1 on success, 0 if out-of-range.
 int snes4bpp_decode_tile(const uint8_t *gfx, size_t gfx_len, uint16_t tile_index, uint8_t out_px64[64]);
 
+// Map16 tile8 (10-bit CHR + page bits 8-9) to local 8x8 index within a GFX file.
+// Vanilla slots use 128 tiles (low 7 bits); ExGFX often has 256 (low 8 bits when bit 7 set).
+uint16_t gfx_local_tile_index(size_t gfx_len, uint16_t tile8);
+
 typedef struct {
   uint8_t file_id;
   uint32_t last_use;

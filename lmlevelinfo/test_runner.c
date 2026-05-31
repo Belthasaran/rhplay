@@ -3663,11 +3663,12 @@ static int run_lm_object_decode_sanity(void) {
         static int obj27h0_bad;
         obj27h0_bad = 0;
         EmitAcc chk = {0};
-        if (object_emit_map16_tiles(o, NULL, emit_acc_fn, &chk) != OBJMAP_HANDLED || chk.count != 4u ||
-            chk.last.map16_tile != 0x07CEu || chk.first.map16_tile != 0x07CEu) {
-          failf("[sanity] obj27h0: expected 4x 0x07CE got count=%zu first=0x%04X last=0x%04X", chk.count,
-                  chk.have_first ? (unsigned)chk.first.map16_tile : 0u,
-                  (unsigned)chk.last.map16_tile);
+        if (object_emit_map16_tiles(o, NULL, emit_acc_fn, &chk) != OBJMAP_HANDLED || chk.count != 5u ||
+            chk.last.map16_tile != 0x07CEu || chk.first.map16_tile != 0x07CEu ||
+            chk.first.x_tile != 1u || chk.last.x_tile != 5u) {
+          failf("[sanity] obj27h0: expected 5x 0x07CE at x=1..5 got count=%zu first=0x%04X@x=%u last=0x%04X@x=%u",
+                  chk.count, (unsigned)chk.first.map16_tile, (unsigned)chk.first.x_tile,
+                  (unsigned)chk.last.map16_tile, (unsigned)chk.last.x_tile);
           ok = 0;
         }
       }

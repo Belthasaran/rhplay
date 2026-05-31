@@ -413,21 +413,22 @@ static int emit_bullet_shooter(const LevelObject *o, emit_map16_fn emit, void *u
   return 1;
 }
 
-/* LM std 0x27/0x29 variant 0: H=0 or W=0 means repeat one Map16 tile along that axis (not +1 per cell). */
+/* LM std 0x27/0x29 variant 0: H=0 or W=0 repeats one Map16 tile along that axis.
+ * The W/H nibble is LM "length minus one" (e.g. W=13 places 14 tiles, through column E when base is 1). */
 static int emit_lm_direct_repeat_axis(emit_map16_fn emit, void *user_ctx, uint16_t base_tile, uint16_t w,
                                       uint16_t h, uint16_t base_x, uint16_t base_y) {
   if (w == 0 && h == 0) {
     return emit_one(emit, user_ctx, base_tile, base_x, base_y);
   }
   if (h == 0) {
-    uint16_t count = w ? w : 1;
+    uint16_t count = (uint16_t)(w + 1u);
     for (uint16_t xx = 0; xx < count; xx++) {
       if (!emit_one(emit, user_ctx, base_tile, (uint16_t)(base_x + xx), base_y)) return 0;
     }
     return 1;
   }
   if (w == 0) {
-    uint16_t count = h ? h : 1;
+    uint16_t count = (uint16_t)(h + 1u);
     for (uint16_t yy = 0; yy < count; yy++) {
       if (!emit_one(emit, user_ctx, base_tile, base_x, (uint16_t)(base_y + yy))) return 0;
     }

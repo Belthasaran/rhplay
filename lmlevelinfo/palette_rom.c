@@ -11,13 +11,22 @@ static const uint16_t kGlobalPalettes_Sky[8] = {
     0x7FFF, 0x7AB4, 0x6B94, 0x5A71, 0x494E, 0x382B, 0x2708, 0x15E5,
 };
 
-static void snes15_to_rgb(uint16_t c, uint8_t *r, uint8_t *g, uint8_t *b) {
+static uint8_t snes15_component_to_8(uint8_t c5) {
+  /* Standard SNES 5-bit to 8-bit expansion (matches LM export / snesrev). */
+  return (uint8_t)((c5 << 3) | (c5 >> 2));
+}
+
+void palette_snes15_to_rgb(uint16_t c, uint8_t *r, uint8_t *g, uint8_t *b) {
   uint8_t rr = (uint8_t)(c & 0x1F);
   uint8_t gg = (uint8_t)((c >> 5) & 0x1F);
   uint8_t bb = (uint8_t)((c >> 10) & 0x1F);
-  *r = (uint8_t)((rr * 255u) / 31u);
-  *g = (uint8_t)((gg * 255u) / 31u);
-  *b = (uint8_t)((bb * 255u) / 31u);
+  *r = snes15_component_to_8(rr);
+  *g = snes15_component_to_8(gg);
+  *b = snes15_component_to_8(bb);
+}
+
+static void snes15_to_rgb(uint16_t c, uint8_t *r, uint8_t *g, uint8_t *b) {
+  palette_snes15_to_rgb(c, r, g, b);
 }
 
 static int read_rom_u16_le(const Rom *rom, uint32_t snes_addr, uint16_t *out) {

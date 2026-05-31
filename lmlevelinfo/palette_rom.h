@@ -17,3 +17,6 @@ PaletteSource palette_build_for_level(const Rom *rom, const LevelInfo *info, uin
                                       uint8_t *out_back_r, uint8_t *out_back_g, uint8_t *out_back_b);
 
 const char *palette_source_name(PaletteSource src);
+
+/* SNES 15-bit BGR (BBBBBGGGGGRRRRR) to 8-bit RGB via (c<<3)|(c>>2) expansion. */
+void palette_snes15_to_rgb(uint16_t c, uint8_t *r, uint8_t *g, uint8_t *b);

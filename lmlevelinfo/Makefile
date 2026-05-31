@@ -29,8 +29,8 @@ $(BIN): $(SRCS)
 $(VISBIN): level_visual.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c map16_reader.c map16_rom.c gfx_reader.c obj_to_map16.c gfx_route.c palette_rom.c emit_stats.c sprite_draw.c lc_lz2.c
 	$(CC) $(CFLAGS) -o $@ level_visual.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c map16_reader.c map16_rom.c gfx_reader.c obj_to_map16.c gfx_route.c palette_rom.c emit_stats.c sprite_draw.c lc_lz2.c
 
-$(TESTBIN): test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c map16_rom.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c sprite_draw.c
-	$(CC) $(CFLAGS) -o $@ test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c map16_rom.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c sprite_draw.c
+$(TESTBIN): test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c map16_rom.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c palette_rom.c sprite_draw.c
+	$(CC) $(CFLAGS) -o $@ test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c map16_rom.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c palette_rom.c sprite_draw.c
 
 clean:
 	rm -f $(BIN) $(VISBIN) $(TESTBIN)

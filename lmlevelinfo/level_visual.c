@@ -71,15 +71,6 @@ static int parse_map16_id(const char *s, uint16_t *out) {
   return 1;
 }
 
-static void snes15_to_rgb(uint16_t c, uint8_t *r, uint8_t *g, uint8_t *b) {
-  uint8_t rr = (uint8_t)(c & 0x1F);
-  uint8_t gg = (uint8_t)((c >> 5) & 0x1F);
-  uint8_t bb = (uint8_t)((c >> 10) & 0x1F);
-  *r = (uint8_t)((rr * 255u) / 31u);
-  *g = (uint8_t)((gg * 255u) / 31u);
-  *b = (uint8_t)((bb * 255u) / 31u);
-}
-
 static void build_fallback_palette(uint8_t pal256[256][3], uint8_t fg_pal, uint8_t bg_pal, uint8_t sprite_pal) {
   static const uint8_t base8[8][3] = {
       { 200, 200, 200 }, { 220, 120, 120 }, { 120, 220, 120 }, { 120, 160, 240 },
@@ -277,9 +268,7 @@ static uint8_t map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t b
     pal = (uint8_t)(pal & 3u);
     return (uint8_t)(bg_palette_row & 7u);
   }
-  if (pal <= 3u) {
-    return (uint8_t)(4u + (pal & 3u));
-  }
+  /* Layer1: LM L1-only export uses Map16 palette bits directly (rows 0-7). */
   return pal;
 }
 
@@ -849,6 +838,10 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     rgb[p * 3 + 1] = back_g;
     rgb[p * 3 + 2] = back_b;
   }
+  /* Grid under Map16 art so tile corners with content match LM export. */
+  if (opts && opts->export_gridlines) {
+    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H);
+  }
 
   ObjectEmitStats stats;
   emit_stats_reset(&stats);
@@ -982,10 +975,6 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   }
   if (gfx_debug) {
     emit_stats_print_gfx_page_debug(&stats, &gfx_route);
-  }
-
-  if (opts && opts->export_gridlines) {
-    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H);
   }
 
   int ok = write_ppm(out_ppm, rgb, W, H);

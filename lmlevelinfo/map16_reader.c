@@ -1,4 +1,5 @@
 #include "map16_reader.h"
+#include "map16_fg_oracle.h"
 #include "map16_rom.h"
 
 #include <stdio.h>
@@ -794,10 +795,16 @@ void map16_free(Map16Data *m) {
   free(m->acts_like);
   free(m->alias_index);
   free(m->canonical_index);
+  free(m->fg_oracle_tiles);
+  free(m->fg_oracle_valid);
   m->tiles = NULL;
   m->acts_like = NULL;
   m->alias_index = NULL;
   m->canonical_index = NULL;
+  m->fg_oracle_tiles = NULL;
+  m->fg_oracle_valid = NULL;
+  m->fg_oracle_count = 0;
+  m->fg_oracle_loaded_total = 0;
   m->tiles_count = 0;
   m->acts_like_count = 0;
   m->is_lm16 = 0;
@@ -1130,6 +1137,11 @@ static int map16_try_rom_vanilla_resolve(Map16Data *m, uint16_t tile_id, uint8_t
 int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_out) {
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
+
+  if (map16_get_fg_oracle(m, tile_id, out)) {
+    if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
+    return 1;
+  }
 
   uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
   uint8_t low = (uint8_t)(tile_id & 0xFF);

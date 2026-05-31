@@ -8,6 +8,7 @@
 #include "level_parse.h"
 #include "mwl_reader.h"
 #include "map16_reader.h"
+#include "map16_fg_oracle.h"
 #include "map16_rom.h"
 #include "gfx_reader.h"
 #include "obj_to_map16.h"
@@ -211,6 +212,7 @@ typedef struct {
   const char *lm_ref_ppm;
   const char *lm_tile_ref_ppm;
   const char *lm_tile_mismatch_ppm;
+  const char *map16_fg_oracle_dir;
 } LvRenderOpts;
 
 static int parse_gfx_route_mode(const char *s) {
@@ -259,6 +261,8 @@ static const char *map16_src_label(int src) {
       return "canonical";
     case MAP16_SRC_DEF_REDIRECT:
       return "def_redirect";
+    case MAP16_SRC_FG_ORACLE:
+      return "fg_oracle";
     default:
       return "?";
   }
@@ -758,13 +762,33 @@ static void print_level_report(const LevelInfo *info, Rom *rom, uint32_t W, uint
   (void)rom;
 }
 
-static int map16_load_for_render(Rom *rom, const char *map16_path, Map16Data *map16, char *err, size_t errcap) {
+static int map16_load_fg_oracles_for_render(const char *map16_path, const char *fg_oracle_dir, Map16Data *map16,
+                                            char *err, size_t errcap) {
+  const char *dir = fg_oracle_dir;
+  char auto_dir[512];
+  int explicit = (dir && dir[0]);
+  if (!explicit && map16_path && map16_try_auto_fg_oracle_dir(map16_path, auto_dir, sizeof(auto_dir))) {
+    dir = auto_dir;
+  }
+  if (!dir || !dir[0]) return 1;
+  if (!map16_load_fg_oracles(dir, map16, err, errcap)) {
+    if (explicit) return 0;
+    err[0] = '\0';
+    return 1;
+  }
+  fprintf(stderr, "LV_MAP16 fg_oracle dir=%s entries=%zu\n", dir, map16->fg_oracle_loaded_total);
+  return 1;
+}
+
+static int map16_load_for_render(Rom *rom, const char *map16_path, const char *fg_oracle_dir, Map16Data *map16,
+                                 char *err, size_t errcap) {
   memset(map16, 0, sizeof(*map16));
   if (rom) {
     if (!map16_load_from_rom(rom, map16, err, errcap)) return 0;
     map16_attach_rom(map16, rom);
     if (map16_path && map16_path[0]) {
       if (!map16_merge_file(map16_path, map16, err, errcap)) return 0;
+      if (!map16_load_fg_oracles_for_render(map16_path, fg_oracle_dir, map16, err, errcap)) return 0;
     }
     return 1;
   }
@@ -773,6 +797,7 @@ static int map16_load_for_render(Rom *rom, const char *map16_path, Map16Data *ma
     return 0;
   }
   if (!map16_load_file(map16_path, map16, err, errcap)) return 0;
+  if (!map16_load_fg_oracles_for_render(map16_path, fg_oracle_dir, map16, err, errcap)) return 0;
   return 1;
 }
 
@@ -784,7 +809,8 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   if (!rom && (!map16_path || !*map16_path)) return 0;
 
   Map16Data map16;
-  if (!map16_load_for_render(rom, map16_path, &map16, err, sizeof(err))) {
+  const char *fg_oracle_dir = (opts && opts->map16_fg_oracle_dir) ? opts->map16_fg_oracle_dir : NULL;
+  if (!map16_load_for_render(rom, map16_path, fg_oracle_dir, &map16, err, sizeof(err))) {
     fprintf(stderr, "Map16 load failed: %s\n", err);
     return 0;
   }
@@ -1025,7 +1051,8 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
 }
 
 static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, const char *map16_path,
-                                    uint16_t probe_id, const char *probe_ppm, int gfx_route_mode) {
+                                    uint16_t probe_id, const char *probe_ppm, int gfx_route_mode,
+                                    const char *fg_oracle_dir) {
   char err[512];
   Rom rom;
   if (!rom_load(&rom, rom_path, err, sizeof(err))) {
@@ -1047,7 +1074,7 @@ static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, con
   }
 
   Map16Data map16;
-  if (!map16_load_for_render(&rom, map16_path, &map16, err, sizeof(err))) {
+  if (!map16_load_for_render(&rom, map16_path, fg_oracle_dir, &map16, err, sizeof(err))) {
     fprintf(stderr, "map16_probe: map16 load failed: %s\n", err);
     levelinfo_free(&info);
     rom_free(&rom);
@@ -1126,7 +1153,9 @@ static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, con
         rc.gfx_route = &gfx_route;
         rc.gfx_route_mode = gfx_route_mode;
         rc.is_layer2 = 0;
-        rc.bg_palette_row = info.primary.bg_palette;
+        rc.bg_palette_row = info.primary.bg_palette & 7u;
+        rc.fg_palette_row = info.primary.fg_palette & 7u;
+        rc.custom_palette = info.palette_present ? 1 : 0;
         draw_map16_at(&rc, probe_id, 0, 0);
         if (write_ppm(probe_ppm, rgb, W, H)) {
           fprintf(stderr, "LV_PROBE wrote %s (16x16)\n", probe_ppm);
@@ -1291,6 +1320,7 @@ int main(int argc, char **argv) {
   const char *lm_tile_ref_ppm = NULL;
   const char *lm_tile_mismatch_ppm = NULL;
   const char *map16_probe_ppm = "probe.ppm";
+  const char *map16_fg_oracle_dir = NULL;
   uint16_t map16_probe_id = 0;
   int have_map16_probe = 0;
 
@@ -1329,6 +1359,7 @@ int main(int argc, char **argv) {
     if (strncmp(a, "--layers=", 9) == 0) layers = a + 9;
     else if (strncmp(a, "--export-ppm=", 13) == 0) export_ppm = a + 13;
     else if (strncmp(a, "--map16=", 8) == 0) map16_path = a + 8;
+    else if (strncmp(a, "--map16-fg-oracles=", 19) == 0) map16_fg_oracle_dir = a + 19;
     else if (strncmp(a, "--suite=", 8) == 0) suite = a + 8;
     else if (strcmp(a, "--stats") == 0) print_stats = 1;
     else if (strcmp(a, "--emit-histogram") == 0) print_histogram = 1;
@@ -1400,6 +1431,10 @@ int main(int argc, char **argv) {
     int m = parse_gfx_route_mode(gfx_env);
     if (m >= 0) gfx_route_mode = m;
   }
+  if (!map16_fg_oracle_dir) {
+    const char *oracle_env = getenv("MAP16_FG_ORACLE_DIR");
+    if (oracle_env && oracle_env[0]) map16_fg_oracle_dir = oracle_env;
+  }
 
   LvRenderOpts ropts;
   memset(&ropts, 0, sizeof(ropts));
@@ -1414,6 +1449,7 @@ int main(int argc, char **argv) {
   ropts.lm_ref_ppm = lm_ref_ppm;
   ropts.lm_tile_ref_ppm = lm_tile_ref_ppm;
   ropts.lm_tile_mismatch_ppm = lm_tile_mismatch_ppm;
+  ropts.map16_fg_oracle_dir = map16_fg_oracle_dir;
 
   if (mwl_path) {
     if (!render_level_ppm_from_mwl(mwl_path, map16_path, export_ppm, layers_mask, print_stats, print_histogram,
@@ -1427,7 +1463,8 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (have_map16_probe) {
-    if (!run_map16_probe_from_rom(rom_path, level_id, map16_path, map16_probe_id, map16_probe_ppm, gfx_route_mode))
+    if (!run_map16_probe_from_rom(rom_path, level_id, map16_path, map16_probe_id, map16_probe_ppm, gfx_route_mode,
+                                  map16_fg_oracle_dir))
       return 1;
     if (!export_ppm || !*export_ppm) return 0;
   }

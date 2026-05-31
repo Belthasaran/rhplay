@@ -1627,17 +1627,17 @@ static int ppm_read_rgb(const char *path, unsigned *out_w, unsigned *out_h, uint
 static uint8_t test_map16_effective_palette(uint8_t pal_raw, int is_layer2, uint8_t bg_palette_row) {
   uint8_t pal = (uint8_t)(pal_raw & 7u);
   if (is_layer2 && pal <= 3u) return (uint8_t)(bg_palette_row & 7u);
-  (void)bg_palette_row;
+  if (!is_layer2 && pal <= 3u) return (uint8_t)(4u + (pal & 3u));
   return pal;
 }
 
 static int run_l1_palette_remap_sanity(void) {
-  if (test_map16_effective_palette(0, 0, 1) != 0) {
-    failf("[l1_palette] L1 pal 0 expected raw row 0 (LM export)");
+  if (test_map16_effective_palette(0, 0, 1) != 4) {
+    failf("[l1_palette] FG pal 0 expected eff 4");
     return 0;
   }
-  if (test_map16_effective_palette(2, 0, 1) != 2) {
-    failf("[l1_palette] L1 pal 2 expected raw row 2");
+  if (test_map16_effective_palette(2, 0, 1) != 6) {
+    failf("[l1_palette] FG pal 2 expected eff 6");
     return 0;
   }
   if (test_map16_effective_palette(0, 1, 3) != 3) {
@@ -2346,6 +2346,19 @@ static int run_map16_rom_def_redirect_tests(void) {
 
   Map16Tile got;
   int src = -1;
+  if (!map16_get_with_src(&m, 0x03BA, &got, &src) || src == MAP16_SRC_DEF_REDIRECT) {
+    failf("[map16_rom] 0x03BA expected file/alias resolve, got src=%d", src);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (got.w[0] != 0x0D80u) {
+    failf("[map16_rom] 0x03BA sub0 w=%04X expected 0x0D80 from AllMap16", got.w[0]);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+
   if (!map16_get_with_src(&m, 0x04BD, &got, &src)) {
     failf("[map16_rom] map16_get 0x04BD failed");
     map16_free(&m);
@@ -2434,7 +2447,14 @@ static int run_lv_ppm_gridlines_unit(void) {
     rgb[i + 2] = 57;
   }
   lv_ppm_draw_gridlines(rgb, 16u, 16u);
+  lv_ppm_draw_grid_corners(rgb, 16u, 16u, 66, 41, 57);
   size_t o = (0u * 16u + 15u) * 3u;
+  if (rgb[o + 0] != LV_PPM_GRID_CORNER_R || rgb[o + 1] != LV_PPM_GRID_CORNER_G || rgb[o + 2] != LV_PPM_GRID_CORNER_B) {
+    failf("[lv_ppm] tile corner at (15,15) expected %u,%u,%u got %u,%u,%u", LV_PPM_GRID_CORNER_R,
+          LV_PPM_GRID_CORNER_G, LV_PPM_GRID_CORNER_B, rgb[o + 0], rgb[o + 1], rgb[o + 2]);
+    return 0;
+  }
+  o = (0u * 16u + 14u) * 3u;
   if (rgb[o + 0] != LV_PPM_GRID_R || rgb[o + 1] != LV_PPM_GRID_G || rgb[o + 2] != LV_PPM_GRID_B) {
     failf("[lv_ppm] gridline color at (15,0) expected %u,%u,%u got %u,%u,%u", LV_PPM_GRID_R, LV_PPM_GRID_G,
           LV_PPM_GRID_B, rgb[o + 0], rgb[o + 1], rgb[o + 2]);

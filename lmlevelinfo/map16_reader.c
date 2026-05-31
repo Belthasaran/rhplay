@@ -85,9 +85,13 @@ static int map16_tile_is_placement_stub(const Map16Data *m, uint16_t tile_id, co
   if (map16_tile_is_uniform_filler(placement)) return 1;
   if (map16_tile_is_partial_hack_muncher_stub(placement)) return 1;
   if (map16_tile_needs_resolve(placement)) return 1;
+  /* +21 pool differs only when placement is already degenerate (LM pointer row). */
   if (m && m->tiles && (size_t)tile_id + 21u < m->tiles_count) {
     const Map16Tile *pool = &m->tiles[tile_id + 21u];
-    if (map16_tile_is_drawable(pool) && !map16_tile8s_equal(placement, pool)) return 1;
+    if (map16_tile_is_drawable(pool) && !map16_tile8s_equal(placement, pool)) {
+      if (map16_distinct_tile8_count(placement) < 2) return 1;
+      if (map16_tile_is_uniform_filler(placement)) return 1;
+    }
   }
   return 0;
 }
@@ -238,6 +242,29 @@ static int map16_tile_has_full_muncher_quad_locals(const Map16Tile *t) {
     else if (local == 0x5Fu) want_mask |= 8u;
   }
   return want_mask == 0x0Fu;
+}
+
+static int map16_sub_local_chr(const Map16Tile *t, int sub) {
+  return (int)((uint8_t)((uint16_t)(t->w[sub] & 0x03FFu) & 0x7Fu));
+}
+
+static int map16_tile_matches_pipe_cap(const Map16Tile *t) {
+  if (!t) return 0;
+  return map16_sub_local_chr(t, 0) == 0x10 && map16_sub_local_chr(t, 1) == 0x00 && map16_sub_local_chr(t, 2) == 0x11 &&
+         map16_sub_local_chr(t, 3) == 0x01;
+}
+
+static int map16_tile_matches_slope_quad_locals(const Map16Tile *t) {
+  if (!t) return 0;
+  return map16_sub_local_chr(t, 0) == 0x76 && map16_sub_local_chr(t, 1) == 0x74 && map16_sub_local_chr(t, 2) == 0x77 &&
+         map16_sub_local_chr(t, 3) == 0x75;
+}
+
+static int map16_tile_is_hack_paired_repeat(const Map16Tile *t) {
+  if (!t || map16_tile_is_uniform_filler(t)) return 0;
+  if (((uint16_t)(t->w[0] & 0x03FFu)) != (uint16_t)(t->w[2] & 0x03FFu)) return 0;
+  if (((uint16_t)(t->w[1] & 0x03FFu)) != (uint16_t)(t->w[3] & 0x03FFu)) return 0;
+  return map16_distinct_tile8_count(t) == 2;
 }
 
 static int block_alias_score(const Map16Tile *t, uint8_t page, uint8_t low, uint16_t *out_max_w) {
@@ -630,6 +657,28 @@ static int map16_build_alias_table(Map16Data *m) {
 static int map16_try_visual_pool_lookup(Map16Data *m, uint16_t tile_id, const Map16Tile *placement,
                                         Map16Tile *out, int *src_out) {
   if (!m || !out) return 0;
+
+  if (placement && map16_tile_is_hack_paired_repeat(placement)) {
+    size_t best_s = SIZE_MAX;
+    int best_s_dist = 0x7FFFFFFF;
+    for (size_t j = 0; j < m->tiles_count; j++) {
+      if (j == (size_t)tile_id) continue;
+      const Map16Tile *cand = &m->tiles[j];
+      if (!map16_tile_is_drawable(cand) || !map16_tile_matches_slope_quad_locals(cand)) continue;
+      if (map16_tile8s_equal(placement, cand)) continue;
+      int dist = (j > (size_t)tile_id) ? (int)(j - (size_t)tile_id) : (int)((size_t)tile_id - j);
+      if (best_s == SIZE_MAX || dist < best_s_dist) {
+        best_s = j;
+        best_s_dist = dist;
+      }
+    }
+    if (best_s != SIZE_MAX) {
+      map16_copy_def_pool_visual(placement, &m->tiles[best_s], out, 0);
+      if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
+      m->def_redirect_count++;
+      return 1;
+    }
+  }
 
   static const int k_pool_offsets[] = {21, -21, 42, -42};
   for (size_t oi = 0; oi < sizeof(k_pool_offsets) / sizeof(k_pool_offsets[0]); oi++) {
@@ -1063,13 +1112,33 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
     }
   }
 
-  if (have_raw && map16_try_visual_def_redirect(m, tile_id, &raw, out, src_out)) return 1;
+  /* Hack-page placement rows may be drawable but wrong; LM pool (+21) carries authoritative CHR. */
+  if (have_raw && page >= 2u) {
+    Map16Tile pool_vis;
+    int pool_src = 0;
+    if (map16_try_visual_pool_lookup(m, tile_id, &raw, &pool_vis, &pool_src)) {
+      int use_pool = map16_tile_is_placement_stub(m, tile_id, &raw);
+      if (!use_pool && map16_tile_matches_pipe_cap(&pool_vis) && !map16_tile_matches_pipe_cap(&raw)) use_pool = 1;
+      if (!use_pool && map16_tile_has_full_muncher_quad_locals(&pool_vis) && !map16_tile_has_full_muncher_quad_locals(&raw))
+        use_pool = 1;
+      if (!use_pool && map16_tile_matches_slope_quad_locals(&pool_vis) && !map16_tile_matches_slope_quad_locals(&raw))
+        use_pool = 1;
+      if (!use_pool && map16_tile_is_hack_paired_repeat(&raw)) use_pool = 1;
+      if (use_pool) {
+        *out = pool_vis;
+        if (src_out) *src_out = pool_src;
+        return 1;
+      }
+    }
+  }
 
   if (have_raw && map16_tile_is_drawable(&raw) && !map16_tile_is_placement_stub(m, tile_id, &raw)) {
     *out = raw;
     if (src_out) *src_out = MAP16_SRC_FILE;
     return 1;
   }
+
+  if (have_raw && map16_try_visual_def_redirect(m, tile_id, &raw, out, src_out)) return 1;
 
   if (page >= 2u) {
     /* Hack pages: prefer visual def pool over alias guessing. */

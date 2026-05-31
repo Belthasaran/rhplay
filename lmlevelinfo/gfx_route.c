@@ -132,6 +132,30 @@ uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page) {
   return vanilla_file_for_page(route->tileset, page);
 }
 
+void gfx_route_resolve_lm_oracle_chr(const LevelGfxRoute *route, uint16_t chr, int route_mode,
+                                     uint8_t *out_file_id, uint16_t *out_local) {
+  uint8_t fid = 0;
+  if (route && route->valid) {
+    /* FG_pages 3-digit CHR: high digit selects LM bypass slot from BG2 (3) upward
+     * (e.g. 0x1FA -> slot FG3/file 0x15, not SP3). */
+    if (chr >= 0x100u) {
+      unsigned hi = (unsigned)((chr >> 8) & 0x0Fu);
+      int slot = (int)hi + (int)GFX_SLOT_BG2;
+      if (slot >= 0 && slot < GFX_SLOT_COUNT) {
+        fid = gfx_route_file_for_sprite_slot_mode(route, slot, route_mode);
+      }
+    }
+    if (fid == 0) {
+      uint8_t page = (uint8_t)((chr >> 8) & 0x03u);
+      fid = gfx_route_file_for_tile_mode(route, (uint16_t)((unsigned)page << 8), route_mode);
+    }
+  }
+  uint16_t low = (uint16_t)(chr & 0xFFu);
+  uint16_t local = (low >= 0x80u) ? (uint16_t)(low - 0x80u) : (uint16_t)(low & 0x7Fu);
+  if (out_file_id) *out_file_id = fid;
+  if (out_local) *out_local = local;
+}
+
 void gfx_route_resolve_subtile(const LevelGfxRoute *route, uint16_t tile8, int route_mode,
                                uint8_t *out_file_id, uint16_t *out_local) {
   uint8_t page = (uint8_t)((tile8 >> 8) & 0x03u);
@@ -139,14 +163,7 @@ void gfx_route_resolve_subtile(const LevelGfxRoute *route, uint16_t tile8, int r
   if (route && route->valid) {
     fid = gfx_route_file_for_tile_mode(route, tile8, route_mode);
   }
-
   uint16_t local = (uint16_t)(tile8 & 0x7Fu);
-  if (route && route->valid && (tile8 & 0x180u) == 0x180u) {
-    uint8_t sp3 = gfx_route_file_for_sprite_slot_mode(route, GFX_SLOT_SP3, route_mode);
-    if (sp3 != 0) fid = sp3;
-    if (local >= 0x54u) local = (uint16_t)(local - 0x54u);
-  }
-
   if (out_file_id) *out_file_id = fid;
   if (out_local) *out_local = local;
 }

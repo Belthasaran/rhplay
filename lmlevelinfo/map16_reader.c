@@ -1147,22 +1147,6 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
 
-  Map16Tile raw_peek;
-  int have_peek = map16_get_raw(m, tile_id, &raw_peek);
-  uint8_t page_peek = (uint8_t)((tile_id >> 8) & 0xFF);
-  if (have_peek && page_peek >= 2u && map16_tile_is_drawable(&raw_peek) &&
-      !map16_tile_is_placement_stub(m, tile_id, &raw_peek) && !map16_tile_is_hack_paired_repeat(&raw_peek) &&
-      map16_distinct_tile8_count(&raw_peek) >= 4 && map16_tile_all_subs_tile8_ge(&raw_peek, 0x180u)) {
-    Map16Tile oracle_peek;
-    int defer_for_oracle = map16_get_fg_oracle(m, tile_id, &oracle_peek) &&
-                           !map16_tile_all_subs_tile8_ge(&oracle_peek, 0x180u);
-    if (!defer_for_oracle) {
-      *out = raw_peek;
-      if (src_out) *src_out = MAP16_SRC_FILE;
-      return 1;
-    }
-  }
-
   if (map16_get_fg_oracle(m, tile_id, out)) {
     if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
     return 1;

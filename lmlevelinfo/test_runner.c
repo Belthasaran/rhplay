@@ -1536,9 +1536,9 @@ static int run_gfx_extended_chr_resolve(void) {
 
   uint8_t fid = 0;
   uint16_t local = 0;
-  gfx_route_resolve_subtile(&route, 0x1FCu, GFX_ROUTE_MODE_BYPASS, &fid, &local);
-  if (fid != 0x13u || local != 0x28u) {
-    failf("[gfx-ext] 0x1FC expected file 0x13 local 0x28 got 0x%02X 0x%02X", fid, local);
+  gfx_route_resolve_lm_oracle_chr(&route, 0x1FAu, GFX_ROUTE_MODE_BYPASS, &fid, &local);
+  if (fid != 0x15u || local != 0x7Au) {
+    failf("[gfx-ext] 0x1FA expected file 0x15 local 0x7A got 0x%02X 0x%02X", fid, local);
     levelinfo_free(&info);
     rom_free(&rom);
     return 0;

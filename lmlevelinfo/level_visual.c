@@ -318,7 +318,11 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, custom_palette, bg_palette_row, fg_palette_row);
     uint8_t file_id = 0;
     uint16_t local_tile = 0;
-    gfx_route_resolve_subtile(route, tile8, gfx_route_mode, &file_id, &local_tile);
+    if (src == MAP16_SRC_FG_ORACLE) {
+      gfx_route_resolve_lm_oracle_chr(route, tile8, gfx_route_mode, &file_id, &local_tile);
+    } else {
+      gfx_route_resolve_subtile(route, tile8, gfx_route_mode, &file_id, &local_tile);
+    }
     uint8_t van = route ? gfx_route_vanilla_file_for_page(route, page) : 0;
     if (have_alias_idx || have_can_idx) {
       fprintf(stderr,
@@ -449,12 +453,16 @@ static void pal_row_hist_print(const RenderCtx *rc, const char *layer_label) {
 }
 
 // 0 = ok, -1 = load fail, -2 = tile index out of range
-static int decode_gfx_subtile(Rom *rom, GfxCache *gfxc, const LevelGfxRoute *route, int route_mode, uint16_t tile8,
-                              uint8_t file_override, uint8_t out_px64[64], char *err, size_t errcap) {
+static int decode_gfx_subtile(Rom *rom, GfxCache *gfxc, const LevelGfxRoute *route, int route_mode, int map16_src,
+                              uint16_t tile8, uint8_t file_override, uint8_t out_px64[64], char *err, size_t errcap) {
   const GfxBlob *gfx = NULL;
   uint8_t file_id = 0;
   uint16_t local_tile = 0;
-  gfx_route_resolve_subtile(route, tile8, route_mode, &file_id, &local_tile);
+  if (map16_src == MAP16_SRC_FG_ORACLE) {
+    gfx_route_resolve_lm_oracle_chr(route, tile8, route_mode, &file_id, &local_tile);
+  } else {
+    gfx_route_resolve_subtile(route, tile8, route_mode, &file_id, &local_tile);
+  }
   if (file_override != 0) file_id = file_override;
   if (!gfxcache_get(rom, gfxc, file_id, &gfx, err, errcap) || !gfx || !gfx->bytes || !gfx->len) {
     return -1;
@@ -536,7 +544,11 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint16_t local_tile = 0;
     uint8_t file_id = page;
     uint8_t used_file = file_id;
-    gfx_route_resolve_subtile(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
+    if (src == MAP16_SRC_FG_ORACLE) {
+      gfx_route_resolve_lm_oracle_chr(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
+    } else {
+      gfx_route_resolve_subtile(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
+    }
     used_file = file_id;
 
     if (rc->stats) {
@@ -547,7 +559,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       }
     }
 
-    int dr = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, tile8, 0, px64, rc->err,
+    int dr = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, src, tile8, 0, px64, rc->err,
                                 rc->errcap);
     int fail_reason = dr;
     if (dr == 0) {
@@ -555,7 +567,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
         uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
         if (van != 0 && van != file_id) {
           uint8_t px_van[64];
-          if (decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, tile8, van, px_van, rc->err,
+          if (decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, src, tile8, van, px_van, rc->err,
                                  rc->errcap) == 0 &&
               tile_px64_has_opaque(px_van)) {
             memcpy(px64, px_van, sizeof(px64));
@@ -568,7 +580,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     } else if (rc->gfx_route) {
       uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
       if (van != 0 && van != file_id) {
-        int dr2 = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, tile8, van, px64, rc->err,
+        int dr2 = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, src, tile8, van, px64, rc->err,
                                      rc->errcap);
         if (dr2 == 0) {
           okpx = 1;
@@ -582,8 +594,14 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
 
     if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
-    uint32_t px = x_tile * 16u + (uint32_t)(si == 1 || si == 3 ? 8 : 0);
-    uint32_t py = y_tile * 16u + (uint32_t)(si >= 2 ? 8 : 0);
+    /* FG_pages oracle lists subs TL, BL, TR, BR; SMW draw order is TL, TR, BL, BR. */
+    int corner = si;
+    if (src == MAP16_SRC_FG_ORACLE) {
+      if (corner == 1) corner = 2;
+      else if (corner == 2) corner = 1;
+    }
+    uint32_t px = x_tile * 16u + (uint32_t)(corner == 1 || corner == 3 ? 8 : 0);
+    uint32_t py = y_tile * 16u + (uint32_t)(corner >= 2 ? 8 : 0);
     if (!okpx) {
       if (rc->stats) {
         rc->stats->gfx_miss++;
@@ -890,11 +908,6 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
     rgb[p * 3 + 1] = back_g;
     rgb[p * 3 + 2] = back_b;
   }
-  /* Grid under Map16 art; empty tile corners use LM corner dot (not grid line color). */
-  if (opts && opts->export_gridlines) {
-    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H);
-  }
-
   ObjectEmitStats stats;
   emit_stats_reset(&stats);
 
@@ -1032,6 +1045,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   }
 
   if (opts && opts->export_gridlines) {
+    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H);
     lv_ppm_draw_grid_corners(rgb, (unsigned)W, (unsigned)H, back_r, back_g, back_b);
   }
 

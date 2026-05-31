@@ -16,6 +16,7 @@
 #include "gfx_reader.h"
 #include "sprite_draw.h"
 #include "map16_reader.h"
+#include "map16_fg_oracle.h"
 #include "map16_rom.h"
 #include "palette_rom.h"
 #include "lv_ppm_compare.h"
@@ -2344,16 +2345,33 @@ static int run_map16_rom_def_redirect_tests(void) {
     return 0;
   }
 
-  Map16Tile got;
+  Map16Tile got, raw;
   int src = -1;
-  if (!map16_get_with_src(&m, 0x03BA, &got, &src) || src == MAP16_SRC_DEF_REDIRECT) {
-    failf("[map16_rom] 0x03BA expected file/alias resolve, got src=%d", src);
+  if (!map16_get_raw(&m, 0x03BA, &raw) || raw.w[0] != 0x0D80u) {
+    failf("[map16_rom] 0x03BA raw sub0 w=%04X expected 0x0D80 from AllMap16 file", raw.w[0]);
     map16_free(&m);
     rom_free(&rom);
     return 0;
   }
-  if (got.w[0] != 0x0D80u) {
-    failf("[map16_rom] 0x03BA sub0 w=%04X expected 0x0D80 from AllMap16", got.w[0]);
+
+  char oracle_dir[512];
+  if (!map16_try_auto_fg_oracle_dir("test/akogare/AllMap16.map16", oracle_dir, sizeof(oracle_dir)) ||
+      !map16_load_fg_oracles(oracle_dir, &m, err, sizeof(err))) {
+    failf("[map16_rom] could not load FG oracles for 0x03BA visual test");
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+
+  if (!map16_get_with_src(&m, 0x03BA, &got, &src) || src != MAP16_SRC_FG_ORACLE) {
+    failf("[map16_rom] 0x03BA expected fg_oracle resolve, got src=%d", src);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  if (got.w[0] != 0xA000u || got.w[1] != 0xA010u || got.w[2] != 0xA001u || got.w[3] != 0xA011u) {
+    failf("[map16_rom] 0x03BA oracle subs=%04X,%04X,%04X,%04X expected A000,A010,A001,A011",
+          got.w[0], got.w[1], got.w[2], got.w[3]);
     map16_free(&m);
     rom_free(&rom);
     return 0;
@@ -2365,8 +2383,8 @@ static int run_map16_rom_def_redirect_tests(void) {
     rom_free(&rom);
     return 0;
   }
-  if (src != MAP16_SRC_DEF_REDIRECT) {
-    failf("[map16_rom] 0x04BD src=%d expected def_redirect", src);
+  if (src != MAP16_SRC_DEF_REDIRECT && src != MAP16_SRC_FG_ORACLE) {
+    failf("[map16_rom] 0x04BD src=%d expected def_redirect or fg_oracle", src);
     map16_free(&m);
     rom_free(&rom);
     return 0;
@@ -2384,8 +2402,8 @@ static int run_map16_rom_def_redirect_tests(void) {
     rom_free(&rom);
     return 0;
   }
-  if (src != MAP16_SRC_DEF_REDIRECT) {
-    failf("[map16_rom] 0x03BE src=%d expected def_redirect", src);
+  if (src != MAP16_SRC_DEF_REDIRECT && src != MAP16_SRC_FG_ORACLE) {
+    failf("[map16_rom] 0x03BE src=%d expected def_redirect or fg_oracle", src);
     map16_free(&m);
     rom_free(&rom);
     return 0;
@@ -2404,8 +2422,8 @@ static int run_map16_rom_def_redirect_tests(void) {
     rom_free(&rom);
     return 0;
   }
-  if (src != MAP16_SRC_DEF_REDIRECT) {
-    failf("[map16_rom] 0x07EC src=%d expected def_redirect", src);
+  if (src != MAP16_SRC_DEF_REDIRECT && src != MAP16_SRC_FG_ORACLE) {
+    failf("[map16_rom] 0x07EC src=%d expected def_redirect or fg_oracle", src);
     map16_free(&m);
     rom_free(&rom);
     return 0;
@@ -2454,7 +2472,7 @@ static int run_lv_ppm_gridlines_unit(void) {
           LV_PPM_GRID_CORNER_G, LV_PPM_GRID_CORNER_B, rgb[o + 0], rgb[o + 1], rgb[o + 2]);
     return 0;
   }
-  o = (0u * 16u + 14u) * 3u;
+  o = (0u * 16u + 15u) * 3u;
   if (rgb[o + 0] != LV_PPM_GRID_R || rgb[o + 1] != LV_PPM_GRID_G || rgb[o + 2] != LV_PPM_GRID_B) {
     failf("[lv_ppm] gridline color at (15,0) expected %u,%u,%u got %u,%u,%u", LV_PPM_GRID_R, LV_PPM_GRID_G,
           LV_PPM_GRID_B, rgb[o + 0], rgb[o + 1], rgb[o + 2]);

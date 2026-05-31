@@ -16,6 +16,7 @@ typedef struct {
 #define MAP16_SRC_ROM_VANILLA 4
 #define MAP16_SRC_CANONICAL 5
 #define MAP16_SRC_DEF_REDIRECT 6
+#define MAP16_SRC_FG_ORACLE 7
 
 /* Standard LM hack Map16 index space (pages 00-7F x 256). */
 #define MAP16_TILE_CAPACITY 0x8000u
@@ -38,6 +39,10 @@ typedef struct {
   size_t canonical_table_count;
   size_t *canonical_index;
   Rom *rom;
+  Map16Tile *fg_oracle_tiles;
+  uint8_t *fg_oracle_valid;
+  size_t fg_oracle_count;
+  size_t fg_oracle_loaded_total;
 } Map16Data;
 
 void map16_free(Map16Data *m);

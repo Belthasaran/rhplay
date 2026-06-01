@@ -594,11 +594,19 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
 
     if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
-    /* FG_pages oracle lists subs TL, BL, TR, BR; SMW draw order is TL, TR, BL, BR. */
+    /* FG_pages oracle: TL, BL, TR, BR; screen corners are TL, TR, BL, BR.
+     * -y- on all subs mirrors top/bottom halves (swap TL↔BL, TR↔BR); CHR is already upright. */
     int corner = si;
+    int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
-      if (corner == 1) corner = 2;
-      else if (corner == 2) corner = 1;
+      if (vflip && !hflip) {
+        static const int k_oracle_vflip_corner[4] = {2, 0, 3, 1};
+        corner = k_oracle_vflip_corner[si];
+        blit_vflip = 0;
+      } else {
+        if (corner == 1) corner = 2;
+        else if (corner == 2) corner = 1;
+      }
     }
     uint32_t px = x_tile * 16u + (uint32_t)(corner == 1 || corner == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(corner >= 2 ? 8 : 0);
@@ -612,7 +620,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       draw_missing_tile(rc->rgb, rc->W, rc->H, px, py, 8u, palrgb[1][0], palrgb[1][1], palrgb[1][2]);
       continue;
     }
-    blit_tile8(rc->rgb, rc->W, rc->H, px, py, px64, palrgb, hflip, vflip);
+    blit_tile8(rc->rgb, rc->W, rc->H, px, py, px64, palrgb, hflip, blit_vflip);
   }
 }
 

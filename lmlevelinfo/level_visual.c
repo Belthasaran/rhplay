@@ -517,25 +517,6 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     draw_missing_tile(rc->rgb, rc->W, rc->H, x_tile * 16u, y_tile * 16u, 16u, 0, 0, 0);
     return;
   }
-  /* Hack-page pipe slots (-y- oracle) draw like their acts_like FG definition (unflipped). */
-  if (src == MAP16_SRC_FG_ORACLE) {
-    uint16_t acts = 0;
-    uint8_t pg = (uint8_t)((map16_id >> 8) & 0xFF);
-    if (pg >= 2u && map16_get_acts_like(rc->map16, map16_id, &acts)) {
-      uint8_t ap = (uint8_t)((acts >> 8) & 0xFF);
-      uint8_t al = (uint8_t)(acts & 0xFF);
-      if (ap <= 1u && al >= 0x33u && al <= 0x5Fu) {
-        Map16Tile pipe_def;
-        if (map16_get_fg_oracle(rc->map16, acts, &pipe_def)) {
-          for (int si = 0; si < 4; si++) {
-            uint8_t pal_raw = (uint8_t)((t.w[si] >> 13) & 0x7);
-            pipe_def.w[si] = (uint16_t)((pipe_def.w[si] & (uint16_t)~0xE000u) | ((uint16_t)pal_raw << 13));
-          }
-          t = pipe_def;
-        }
-      }
-    }
-  }
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
   for (int si = 0; si < 4; si++) {
@@ -613,11 +594,19 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
 
     if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
-    /* FG_pages oracle: TL, BL, TR, BR; screen corners are TL, TR, BL, BR. */
+    /* FG_pages oracle: TL, BL, TR, BR; screen corners are TL, TR, BL, BR.
+     * -y- (no hflip): mirror which 8x8 sits in each half; do not vflip blit pixels. */
     int corner = si;
+    int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
-      if (corner == 1) corner = 2;
-      else if (corner == 2) corner = 1;
+      if (vflip && !hflip) {
+        static const int k_oracle_y_corner[4] = {2, 0, 3, 1};
+        corner = k_oracle_y_corner[si];
+        blit_vflip = 0;
+      } else {
+        if (corner == 1) corner = 2;
+        else if (corner == 2) corner = 1;
+      }
     }
     uint32_t px = x_tile * 16u + (uint32_t)(corner == 1 || corner == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(corner >= 2 ? 8 : 0);
@@ -631,7 +620,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       draw_missing_tile(rc->rgb, rc->W, rc->H, px, py, 8u, palrgb[1][0], palrgb[1][1], palrgb[1][2]);
       continue;
     }
-    blit_tile8(rc->rgb, rc->W, rc->H, px, py, px64, palrgb, hflip, vflip);
+    blit_tile8(rc->rgb, rc->W, rc->H, px, py, px64, palrgb, hflip, blit_vflip);
   }
 }
 

@@ -437,6 +437,22 @@ static int emit_lm_direct_repeat_axis(emit_map16_fn emit, void *user_ctx, uint16
   return 0;
 }
 
+/* LM std 0x27/0x29 variant 2 (stretched): W/H nibbles are length minus one.
+ * Anchor (X,Y) is top-left of a (W+1)×(H+1) Map16 block grid; ids advance in row-major order
+ * (e.g. 03BC|03BD on row 0, 03BE|03BF on row 1 — the paired tiles for a 2-wide strip). */
+static int emit_lm_direct_stretched_rect(emit_map16_fn emit, void *user_ctx, uint16_t base_tile, uint16_t w,
+                                         uint16_t h, uint16_t base_x, uint16_t base_y) {
+  uint16_t cols = (uint16_t)(w + 1u);
+  uint16_t rows = (uint16_t)(h + 1u);
+  for (uint16_t yy = 0; yy < rows; yy++) {
+    for (uint16_t xx = 0; xx < cols; xx++) {
+      uint16_t tid = (uint16_t)(base_tile + xx + (uint16_t)(yy * cols));
+      if (!emit_one(emit, user_ctx, tid, (uint16_t)(base_x + xx), (uint16_t)(base_y + yy))) return 0;
+    }
+  }
+  return 1;
+}
+
 static int emit_lm_direct_rect(emit_map16_fn emit, void *user_ctx, uint16_t base_tile, uint16_t w, uint16_t h,
                                uint16_t base_x, uint16_t base_y, int tile_stride_row_major) {
   if (w == 0) w = 1;
@@ -497,7 +513,7 @@ static int emit_lm_direct(const LevelObject *o, emit_map16_fn emit, void *user_c
       if (h == 0 || w == 0) {
         return emit_lm_direct_repeat_axis(emit, user_ctx, base_tile, w, h, base_x, base_y);
       }
-      return emit_lm_direct_rect(emit, user_ctx, base_tile, w, h, base_x, base_y, 1);
+      return emit_lm_direct_stretched_rect(emit, user_ctx, base_tile, w, h, base_x, base_y);
     }
     case 3:
     case 4:

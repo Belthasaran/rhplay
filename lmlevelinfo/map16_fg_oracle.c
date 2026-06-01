@@ -25,8 +25,12 @@ static void parse_flips(const char *s, int *hflip, int *vflip) {
   if (hflip) *hflip = 0;
   if (vflip) *vflip = 0;
   if (!s) return;
-  if (s[0] == 'x' && hflip) *hflip = 1;
-  if (s[1] == 'y' && vflip) *vflip = 1;
+  if (strchr(s, 'x')) {
+    if (hflip) *hflip = 1;
+  }
+  if (strchr(s, 'y')) {
+    if (vflip) *vflip = 1;
+  }
 }
 
 static uint16_t oracle_sub_word(uint16_t chr, uint8_t pal, int hflip, int vflip) {

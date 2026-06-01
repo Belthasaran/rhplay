@@ -3665,10 +3665,50 @@ static int run_lm_object_decode_sanity(void) {
         EmitAcc chk = {0};
         if (object_emit_map16_tiles(o, NULL, emit_acc_fn, &chk) != OBJMAP_HANDLED || chk.count != 5u ||
             chk.last.map16_tile != 0x07CEu || chk.first.map16_tile != 0x07CEu ||
-            chk.first.x_tile != 1u || chk.last.x_tile != 5u) {
-          failf("[sanity] obj27h0: expected 5x 0x07CE at x=1..5 got count=%zu first=0x%04X@x=%u last=0x%04X@x=%u",
+            chk.first.x_tile != 3u || chk.last.x_tile != 7u) {
+          failf("[sanity] obj27h0: expected 5x 0x07CE at x=3..7 got count=%zu first=0x%04X@x=%u last=0x%04X@x=%u",
                   chk.count, (unsigned)chk.first.map16_tile, (unsigned)chk.first.x_tile,
                   (unsigned)chk.last.map16_tile, (unsigned)chk.last.x_tile);
+          ok = 0;
+        }
+      }
+    }
+    levelinfo_free(&out);
+  }
+
+  // Object 0x27 mode 2 (stretched): W=1 H=6 places 2x7 cells of the same Map16 (akogare 0x03BC)
+  {
+    uint8_t buf[] = {
+      0, 0, 0, 0, 0,
+      0x40 | 0x07,
+      0x70 | 0x03,
+      0x61,  // H=6 W=1
+      0x83,  // mode 2, base page 0x03
+      0xBC,
+      0x01,
+      0xFF
+    };
+    LM_SANITY_PARSE(buf, "obj27m2");
+    LM_SANITY_EXPECT_COUNT(1, "obj27m2");
+    if (ok) {
+      const LevelObject *o = &out.objects[0];
+      if (!o->decoded.present || o->decoded.u.lm27_29.variant != 2 || o->decoded.u.lm27_29.height != 6 ||
+          o->decoded.u.lm27_29.width != 1 || o->decoded.u.lm27_29.base_map16 != 0x03BCu) {
+        failf("[sanity] obj27m2: decode mismatch");
+        ok = 0;
+      } else {
+        EmitAcc chk = {0};
+        uint16_t bx = (uint16_t)(o->x_position + (uint16_t)o->screen_number * 16u);
+        uint16_t by = (uint16_t)o->y_position;
+        if (object_emit_map16_tiles(o, NULL, emit_acc_fn, &chk) != OBJMAP_HANDLED || chk.count != 14u ||
+            chk.first.map16_tile != 0x03BCu || chk.last.map16_tile != 0x03C9u ||
+            chk.first.x_tile != bx || chk.first.y_tile != by ||
+            chk.last.x_tile != (uint16_t)(bx + 1u) || chk.last.y_tile != (uint16_t)(by + 6u)) {
+          failf("[sanity] obj27m2: expected 14x 0x03BC..0x03C7 at (%u,%u)..(%u,%u) got count=%zu "
+                "first=0x%04X@(x=%u,y=%u) last=0x%04X@(x=%u,y=%u)",
+                (unsigned)bx, (unsigned)by, (unsigned)(bx + 1u), (unsigned)(by + 6u), chk.count,
+                (unsigned)chk.first.map16_tile, (unsigned)chk.first.x_tile, (unsigned)chk.first.y_tile,
+                (unsigned)chk.last.map16_tile, (unsigned)chk.last.x_tile, (unsigned)chk.last.y_tile);
           ok = 0;
         }
       }

@@ -595,14 +595,20 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
     /* FG_pages oracle: TL, BL, TR, BR; screen corners are TL, TR, BL, BR.
-     * -y- (no hflip): mirror which 8x8 sits in each half; do not vflip blit pixels. */
+     * All -y- pipe pairs (e.g. 03BE/03BF): even id remaps subs 0/1, odd id remaps subs 2/3. */
     int corner = si;
-    int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
       if (vflip && !hflip) {
-        static const int k_oracle_y_corner[4] = {2, 0, 3, 1};
-        corner = k_oracle_y_corner[si];
-        blit_vflip = 0;
+        int even_id = ((map16_id & 1u) == 0u);
+        if ((even_id && si <= 1) || (!even_id && si >= 2)) {
+          if (si == 0) corner = 2;
+          else if (si == 1) corner = 0;
+          else if (si == 2) corner = 3;
+          else corner = 1;
+        } else {
+          if (corner == 1) corner = 2;
+          else if (corner == 2) corner = 1;
+        }
       } else {
         if (corner == 1) corner = 2;
         else if (corner == 2) corner = 1;
@@ -620,7 +626,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       draw_missing_tile(rc->rgb, rc->W, rc->H, px, py, 8u, palrgb[1][0], palrgb[1][1], palrgb[1][2]);
       continue;
     }
-    blit_tile8(rc->rgb, rc->W, rc->H, px, py, px64, palrgb, hflip, blit_vflip);
+    blit_tile8(rc->rgb, rc->W, rc->H, px, py, px64, palrgb, hflip, vflip);
   }
 }
 

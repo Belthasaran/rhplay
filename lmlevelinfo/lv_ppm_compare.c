@@ -189,6 +189,67 @@ LvTileCmpStatus lv_ppm_tile_compare_bufs(const uint8_t *got, const uint8_t *ref,
   return report->status;
 }
 
+void lv_ppm_report_pipe_stack_tiles(const char *got_path, const char *ref_path) {
+  if (!got_path || !ref_path || !got_path[0] || !ref_path[0]) return;
+
+  unsigned gw = 0, gh = 0, rw = 0, rh = 0;
+  uint8_t *got = NULL;
+  uint8_t *ref = NULL;
+  if (!lv_ppm_read_rgb(got_path, &gw, &gh, &got) || !lv_ppm_read_rgb(ref_path, &rw, &rh, &ref)) {
+    fprintf(stderr, "LV_PIPE_STACK error=ppm_read_failed\n");
+    free(got);
+    free(ref);
+    return;
+  }
+  if (gw != rw || gh != rh) {
+    fprintf(stderr, "LV_PIPE_STACK error=dimension_mismatch got=%ux%u ref=%ux%u\n", gw, gh, rw, rh);
+    free(got);
+    free(ref);
+    return;
+  }
+
+  static const struct {
+    unsigned tx;
+    unsigned ty;
+    char col;
+    char row;
+  } k_pipe_tiles[] = {
+      {71, 10, '4', 'A'}, {72, 10, '5', 'A'}, {71, 11, '4', 'B'}, {72, 11, '5', 'B'},
+      {71, 12, '4', 'C'}, {72, 12, '5', 'C'}, {71, 13, '4', 'D'}, {72, 13, '5', 'D'},
+      {71, 14, '4', 'E'}, {72, 14, '5', 'E'}, {71, 15, '4', 'F'}, {72, 15, '5', 'F'},
+      {71, 16, '4', 'G'}, {72, 16, '5', 'G'},
+  };
+
+  size_t ok_n = 0;
+  for (size_t i = 0; i < sizeof(k_pipe_tiles) / sizeof(k_pipe_tiles[0]); i++) {
+    unsigned tx = k_pipe_tiles[i].tx;
+    unsigned ty = k_pipe_tiles[i].ty;
+    int tile_ok = 1;
+    for (unsigned py = 0; py < 16u && tile_ok; py++) {
+      for (unsigned px = 0; px < 16u; px++) {
+        unsigned x = tx * 16u + px;
+        unsigned y = ty * 16u + py;
+        size_t o = ((size_t)y * (size_t)gw + (size_t)x) * 3u;
+        if (got[o + 0] != ref[o + 0] || got[o + 1] != ref[o + 1] || got[o + 2] != ref[o + 2]) {
+          tile_ok = 0;
+          fprintf(stderr, "LV_PIPE_STACK mismatch col=%c row=%c tx=%u ty=%u px=%u py=%u\n",
+                  k_pipe_tiles[i].col, k_pipe_tiles[i].row, tx, ty, px, py);
+          break;
+        }
+      }
+    }
+    if (tile_ok) {
+      ok_n++;
+      fprintf(stderr, "LV_PIPE_STACK ok col=%c row=%c tx=%u ty=%u\n", k_pipe_tiles[i].col,
+              k_pipe_tiles[i].row, tx, ty);
+    }
+  }
+  fprintf(stderr, "LV_PIPE_STACK summary matched=%zu total=%zu\n", ok_n,
+          sizeof(k_pipe_tiles) / sizeof(k_pipe_tiles[0]));
+  free(got);
+  free(ref);
+}
+
 int lv_ppm_tile_compare_files(const char *got_path, const char *ref_path, const LvTileCmpOpts *opts,
                               LvTileCmpReport *report) {
   if (!got_path || !ref_path || !report) return 0;

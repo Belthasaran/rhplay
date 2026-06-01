@@ -51,3 +51,6 @@ int lv_ppm_tile_compare_files(const char *got_path, const char *ref_path, const 
                               LvTileCmpReport *report);
 
 void lv_ppm_tile_compare_print_report(const LvTileCmpReport *report, unsigned ref_w, unsigned ref_h);
+
+/* Log per-tile OK/mismatch for akogare 0x109 std 0x27 pipe stack (screen 4 cols 7-8, rows A-G). */
+void lv_ppm_report_pipe_stack_tiles(const char *got_path, const char *ref_path);

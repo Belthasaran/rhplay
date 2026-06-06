@@ -134,10 +134,15 @@ uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page) {
 
 void gfx_route_resolve_lm_oracle_chr(const LevelGfxRoute *route, uint16_t chr, int route_mode,
                                      uint8_t *out_file_id, uint16_t *out_local) {
+  /* FG_pages 3-digit CHR: values 0x1F0+ use LM bypass slot (hi digit + BG2), e.g. 0x1FA -> FG3.
+   * Values 0x100-0x1EF use SMW tile8 page bits (same as AllMap16 pool words), e.g. 0x190 -> page 1. */
+  if (chr >= 0x100u && (chr & 0xFFu) < 0xF0u) {
+    gfx_route_resolve_subtile(route, chr, route_mode, out_file_id, out_local);
+    return;
+  }
+
   uint8_t fid = 0;
   if (route && route->valid) {
-    /* FG_pages 3-digit CHR: high digit selects LM bypass slot from BG2 (3) upward
-     * (e.g. 0x1FA -> slot FG3/file 0x15, not SP3). */
     if (chr >= 0x100u) {
       unsigned hi = (unsigned)((chr >> 8) & 0x0Fu);
       int slot = (int)hi + (int)GFX_SLOT_BG2;

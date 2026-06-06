@@ -232,7 +232,7 @@ static int map16_shape_ok_hack_muncher_block(const Map16Tile *t) {
   return any && munch >= 3;
 }
 
-static int map16_tile_has_full_muncher_quad_locals(const Map16Tile *t) {
+int map16_tile_is_full_muncher_quad(const Map16Tile *t) {
   if (!t) return 0;
   uint8_t want_mask = 0;
   for (int i = 0; i < 4; i++) {
@@ -246,6 +246,10 @@ static int map16_tile_has_full_muncher_quad_locals(const Map16Tile *t) {
     else if (local == 0x5Fu) want_mask |= 8u;
   }
   return want_mask == 0x0Fu;
+}
+
+static int map16_tile_has_full_muncher_quad_locals(const Map16Tile *t) {
+  return map16_tile_is_full_muncher_quad(t);
 }
 
 static int map16_sub_local_chr(const Map16Tile *t, int sub) {

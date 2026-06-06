@@ -196,6 +196,9 @@ typedef struct {
   size_t gfx_file_subtiles[256];
   size_t pal_row_subtiles[8];
   size_t pal_row_oob_count;
+  uint8_t back_r;
+  uint8_t back_g;
+  uint8_t back_b;
   char *err;
   size_t errcap;
 } RenderCtx;
@@ -546,6 +549,13 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       palrgb[c][0] = rc->pal256[idx & 0xFF][0];
       palrgb[c][1] = rc->pal256[idx & 0xFF][1];
       palrgb[c][2] = rc->pal256[idx & 0xFF][2];
+    }
+    /* LM L1 export: muncher CHR is mostly pal index 1; row-6 color 1 is a highlight slot but
+     * static renders use the level back-area color for the muncher body (akogare 0x109). */
+    if (pal == 6u && map16_tile_is_full_muncher_quad(&t)) {
+      palrgb[1][0] = rc->back_r;
+      palrgb[1][1] = rc->back_g;
+      palrgb[1][2] = rc->back_b;
     }
 
     uint8_t px64[64];
@@ -939,6 +949,9 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   rc.bg_palette_row = info->primary.bg_palette & 7u;
   rc.fg_palette_row = info->primary.fg_palette & 7u;
   rc.custom_palette = info->palette_present ? 1 : 0;
+  rc.back_r = back_r;
+  rc.back_g = back_g;
+  rc.back_b = back_b;
   if (opts) {
     rc.gfx_route_mode = opts->gfx_route_mode;
     rc.map16_audit = opts->map16_audit;
@@ -1193,6 +1206,9 @@ static int run_map16_probe_from_rom(const char *rom_path, uint16_t level_id, con
         rc.bg_palette_row = info.primary.bg_palette & 7u;
         rc.fg_palette_row = info.primary.fg_palette & 7u;
         rc.custom_palette = info.palette_present ? 1 : 0;
+        rc.back_r = br;
+        rc.back_g = bg;
+        rc.back_b = bb;
         draw_map16_at(&rc, probe_id, 0, 0);
         if (write_ppm(probe_ppm, rgb, W, H)) {
           fprintf(stderr, "LV_PROBE wrote %s (16x16)\n", probe_ppm);

@@ -127,6 +127,22 @@ static void repeat_layer2_strip_horiz(uint8_t *rgb, uint32_t w, uint32_t h, uint
   }
 }
 
+static void fill_tile_rect(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t x0, uint32_t y0, uint32_t tw, uint32_t th,
+                           uint8_t r, uint8_t g, uint8_t b) {
+  for (uint32_t yy = 0; yy < th; yy++) {
+    uint32_t y = y0 + yy;
+    if (y >= h) continue;
+    for (uint32_t xx = 0; xx < tw; xx++) {
+      uint32_t x = x0 + xx;
+      if (x >= w) continue;
+      uint32_t idx = (y * w + x) * 3u;
+      rgb[idx + 0] = r;
+      rgb[idx + 1] = g;
+      rgb[idx + 2] = b;
+    }
+  }
+}
+
 static void draw_missing_tile(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t x0, uint32_t y0, uint32_t s,
                               uint8_t r, uint8_t g, uint8_t b) {
   for (uint32_t yy = 0; yy < s; yy++) {
@@ -532,6 +548,14 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   }
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
+  uint8_t munch_page = (uint8_t)((map16_id >> 8) & 0xFF);
+  uint8_t munch_low = (uint8_t)(map16_id & 0xFF);
+  int muncher_hack = munch_page >= 2u && (munch_low == 0xBDu || munch_low == 0xBEu);
+  int muncher_full = map16_tile_is_full_muncher_quad(&t);
+  if (muncher_hack) {
+    fill_tile_rect(rc->rgb, rc->W, rc->H, x_tile * 16u, y_tile * 16u, 16u, 16u, 0, 0, 0);
+  }
+
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
@@ -552,10 +576,13 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     }
     /* LM L1 export: muncher CHR is mostly pal index 1; row-6 color 1 is a highlight slot but
      * static renders use the level back-area color for the muncher body (akogare 0x109). */
-    if (pal == 6u && map16_tile_is_full_muncher_quad(&t)) {
-      palrgb[1][0] = rc->back_r;
-      palrgb[1][1] = rc->back_g;
-      palrgb[1][2] = rc->back_b;
+    if (muncher_full && pal == 6u) {
+      palrgb[1][0] = 0;
+      palrgb[1][1] = 0;
+      palrgb[1][2] = 0;
+      palrgb[2][0] = rc->back_r;
+      palrgb[2][1] = rc->back_g;
+      palrgb[2][2] = rc->back_b;
     }
 
     uint8_t px64[64];

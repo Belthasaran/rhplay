@@ -232,6 +232,10 @@ static int map16_shape_ok_hack_muncher_block(const Map16Tile *t) {
   return any && munch >= 3;
 }
 
+int map16_tile_is_hack_muncher_placement_stub(const Map16Tile *t) {
+  return map16_tile_is_partial_hack_muncher_stub(t);
+}
+
 int map16_tile_is_full_muncher_quad(const Map16Tile *t) {
   if (!t) return 0;
   uint8_t want_mask = 0;

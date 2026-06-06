@@ -79,6 +79,9 @@ int map16_tile_is_empty(const Map16Tile *t);
 
 int map16_tile_needs_resolve(const Map16Tile *t);
 
+/* Full muncher quad: page-0 locals 0x5C-0x5F (one per corner). */
+int map16_tile_is_full_muncher_quad(const Map16Tile *t);
+
 void map16_print_alias_debug(const Map16Data *m, int top_n);
 
 void map16_debug_synthesize(uint16_t tile_id, Map16Tile *out);

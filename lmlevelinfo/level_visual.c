@@ -507,12 +507,22 @@ static void map16_synth_hist_print_top(RenderCtx *rc, int top_n) {
   }
 }
 
+static uint16_t map16_pipe_body_visual_id(uint16_t map16_id) {
+  /* LM static export: stretched pipe shaft rows (03BE..03C9) render the same art as the
+   * first body pair 03BC/03BD; -y- / mixed-flip oracle entries encode in-game behavior only. */
+  if (map16_id >= 0x03BEu && map16_id <= 0x03C9u) {
+    return (uint16_t)(0x03BCu + (map16_id & 1u));
+  }
+  return map16_id;
+}
+
 static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uint32_t y_tile) {
   if (!rc || !rc->rgb || !rc->map16 || !rc->pal256 || !rc->rom || !rc->gfxc) return;
 
+  uint16_t draw_id = map16_pipe_body_visual_id(map16_id);
   Map16Tile t;
   int src = MAP16_SRC_FILE;
-  if (!map16_get_with_src(rc->map16, map16_id, &t, &src)) {
+  if (!map16_get_with_src(rc->map16, draw_id, &t, &src)) {
     if (rc->stats) rc->stats->map16_miss++;
     draw_missing_tile(rc->rgb, rc->W, rc->H, x_tile * 16u, y_tile * 16u, 16u, 0, 0, 0);
     return;
@@ -520,20 +530,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
   for (int si = 0; si < 4; si++) {
-    int oi = si;
-    if (src == MAP16_SRC_FG_ORACLE) {
-      uint16_t wv = t.w[si];
-      if (((wv >> 11) & 1) != 0) {
-        if ((map16_id & 1u) == 0u) {
-          if (si == 0) oi = 1;
-          else if (si == 1) oi = 0;
-        } else {
-          if (si == 2) oi = 3;
-          else if (si == 3) oi = 2;
-        }
-      }
-    }
-    uint16_t w0 = t.w[oi];
+    uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
     if ((tile8 & 0x03FFu) == 0) continue;
     int hflip = (w0 >> 10) & 1;
@@ -607,7 +604,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
 
     if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
-    int corner = oi;
+    int corner = si;
     int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
       /* FG_pages TL,BL,TR,BR -> screen TL,TR,BL,BR */

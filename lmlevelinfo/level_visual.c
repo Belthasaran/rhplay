@@ -519,19 +519,21 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   }
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
-  int fg_oracle_all_vflip = 0;
-  if (src == MAP16_SRC_FG_ORACLE) {
-    fg_oracle_all_vflip = 1;
-    for (int k = 0; k < 4; k++) {
-      if (((t.w[k] >> 11) & 1) == 0) {
-        fg_oracle_all_vflip = 0;
-        break;
+  for (int si = 0; si < 4; si++) {
+    int oi = si;
+    if (src == MAP16_SRC_FG_ORACLE) {
+      uint16_t wv = t.w[si];
+      if (((wv >> 11) & 1) != 0) {
+        if ((map16_id & 1u) == 0u) {
+          if (si == 0) oi = 1;
+          else if (si == 1) oi = 0;
+        } else {
+          if (si == 2) oi = 3;
+          else if (si == 3) oi = 2;
+        }
       }
     }
-  }
-
-  for (int si = 0; si < 4; si++) {
-    uint16_t w0 = t.w[si];
+    uint16_t w0 = t.w[oi];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
     if ((tile8 & 0x03FFu) == 0) continue;
     int hflip = (w0 >> 10) & 1;
@@ -605,13 +607,12 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
 
     if (used_file < 256) rc->gfx_file_subtiles[used_file]++;
 
-    int corner = si;
+    int corner = oi;
     int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
+      /* FG_pages TL,BL,TR,BR -> screen TL,TR,BL,BR */
       if (corner == 1) corner = 2;
       else if (corner == 2) corner = 1;
-      /* LM -y- on all four subs: corner layout matches unflipped tile; do not SNES-vflip blit. */
-      if (fg_oracle_all_vflip) blit_vflip = 0;
     }
     uint32_t px = x_tile * 16u + (uint32_t)(corner == 1 || corner == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(corner >= 2 ? 8 : 0);

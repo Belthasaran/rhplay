@@ -1155,16 +1155,26 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   if (!m || !out) return 0;
   if (src_out) *src_out = MAP16_SRC_FILE;
 
-  if (map16_get_fg_oracle(m, tile_id, out)) {
-    if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
-    return 1;
-  }
-
   uint8_t page = (uint8_t)((tile_id >> 8) & 0xFF);
   uint8_t low = (uint8_t)(tile_id & 0xFF);
 
   Map16Tile raw;
   int have_raw = map16_get_raw(m, tile_id, &raw);
+
+  /* Hack-page muncher stubs: L1 export uses FG oracle on definition pool (+21), not placement row or 0x5C file pool. */
+  if (have_raw && page >= 2u && map16_tile_is_partial_hack_muncher_stub(&raw) &&
+      (size_t)tile_id + 21u < m->tiles_count) {
+    uint16_t pool_id = (uint16_t)(tile_id + 21u);
+    if (map16_get_fg_oracle(m, pool_id, out)) {
+      if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
+      return 1;
+    }
+  }
+
+  if (map16_get_fg_oracle(m, tile_id, out)) {
+    if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
+    return 1;
+  }
 
   if (have_raw && map16_tile_is_empty(&raw)) {
     uint16_t acts = 0;

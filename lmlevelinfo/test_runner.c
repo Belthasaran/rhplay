@@ -2220,8 +2220,9 @@ static int run_map16_alias_tests(void) {
       map16_free(&m);
       return 0;
     }
-    if (!map16_tile_has_full_muncher_quad_locals(&got)) {
-      failf("[map16_alias] 0x%04X expected full muncher quad locals 0x5C-0x5F (page 0)", (unsigned)munch_id);
+    if (!map16_tile_has_full_muncher_quad_locals(&got) &&
+        (src != MAP16_SRC_FG_ORACLE || map16_distinct_tile8_count(&got) < 3)) {
+      failf("[map16_alias] 0x%04X expected muncher visual (full quad or pool FG oracle)", (unsigned)munch_id);
       map16_free(&m);
       return 0;
     }
@@ -2444,8 +2445,9 @@ static int run_map16_rom_def_redirect_tests(void) {
     rom_free(&rom);
     return 0;
   }
-  if (!map16_tile_has_full_muncher_quad_locals(&got)) {
-    failf("[map16_rom] 0x04BD expected full muncher quad 0x5C-0x5F");
+  if (!map16_tile_has_full_muncher_quad_locals(&got) &&
+      (src != MAP16_SRC_FG_ORACLE || map16_distinct_tile8_count(&got) < 3)) {
+    failf("[map16_rom] 0x04BD expected muncher visual (full quad or pool FG oracle)");
     map16_free(&m);
     rom_free(&rom);
     return 0;

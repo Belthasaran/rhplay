@@ -563,11 +563,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     int hflip = sub.hflip;
     int vflip = sub.vflip;
     if (use_012f_munch) {
-      if (src == MAP16_SRC_FG_ORACLE) {
-        gfx_route_012f_muncher_blit_flips_oracle(si, &hflip, &vflip);
-      } else {
-        gfx_route_012f_muncher_blit_flips(si, &hflip, &vflip);
-      }
+      gfx_route_012f_muncher_blit_flips(si, &hflip, &vflip);
       hflip ^= sub.hflip;
       vflip ^= sub.vflip;
     } else if (use_002b_coin) {
@@ -672,8 +668,9 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       /* FG_pages column order TL,BL,TR,BR -> screen TL,TR,BL,BR */
       if (corner == 1) corner = 2;
       else if (corner == 2) corner = 1;
-      /* Extended CHR (0x100+): FG_pages -y- is priority, not static vflip for L1 export. */
-      if (ext_oracle) blit_vflip = 0;
+      /* Extended CHR (0x100+): FG_pages -y- is priority, not static vflip for L1 export.
+       * Acts-like 0x012F muncher template keeps computed vflip (teeth orientation). */
+      if (ext_oracle && !use_012f_munch) blit_vflip = 0;
     }
     uint32_t px = x_tile * 16u + (uint32_t)(corner == 1 || corner == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(corner >= 2 ? 8 : 0);

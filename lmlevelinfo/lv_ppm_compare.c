@@ -282,6 +282,74 @@ int lv_ppm_spot_tile_match(const char *got_path, const char *ref_path, unsigned 
   return diff <= max_diff_pixels;
 }
 
+int lv_ppm_spot_sub8_match(const char *got_path, const char *ref_path, unsigned tx, unsigned ty, int corner,
+                           unsigned max_diff_pixels) {
+  if (!got_path || !ref_path || corner < 0 || corner > 3) return 0;
+  unsigned gw = 0, gh = 0, rw = 0, rh = 0;
+  uint8_t *got = NULL;
+  uint8_t *ref = NULL;
+  if (!lv_ppm_read_rgb(got_path, &gw, &gh, &got) || !lv_ppm_read_rgb(ref_path, &rw, &rh, &ref)) {
+    free(got);
+    free(ref);
+    return 0;
+  }
+  if (gw != rw || gh != rh) {
+    free(got);
+    free(ref);
+    return 0;
+  }
+  unsigned cx = tx * 16u + (unsigned)((corner == 1 || corner == 3) ? 8u : 0u);
+  unsigned cy = ty * 16u + (unsigned)(corner >= 2 ? 8u : 0u);
+  unsigned diff = 0;
+  for (unsigned py = 0; py < 8u; py++) {
+    for (unsigned px = 0; px < 8u; px++) {
+      size_t o = ((size_t)(cy + py) * (size_t)gw + (size_t)(cx + px)) * 3u;
+      if (got[o + 0] != ref[o + 0] || got[o + 1] != ref[o + 1] || got[o + 2] != ref[o + 2]) {
+        diff++;
+      }
+    }
+  }
+  free(got);
+  free(ref);
+  fprintf(stderr, "LV_SPOT_SUB8 tx=%u ty=%u corner=%d diff=%u max=%u\n", tx, ty, corner, diff, max_diff_pixels);
+  return diff <= max_diff_pixels;
+}
+
+void lv_ppm_report_spot_sub8_tiles(const char *got_path, const char *ref_path, unsigned tx, unsigned ty) {
+  static const char *k_corner_names[4] = {"TL", "TR", "BL", "BR"};
+  unsigned gw = 0, gh = 0, rw = 0, rh = 0;
+  uint8_t *got = NULL;
+  uint8_t *ref = NULL;
+  if (!lv_ppm_read_rgb(got_path, &gw, &gh, &got) || !lv_ppm_read_rgb(ref_path, &rw, &rh, &ref)) {
+    fprintf(stderr, "LV_SPOT_SUB8_REPORT error=read_failed tx=%u ty=%u\n", tx, ty);
+    free(got);
+    free(ref);
+    return;
+  }
+  if (gw != rw || gh != rh) {
+    fprintf(stderr, "LV_SPOT_SUB8_REPORT error=dimension_mismatch tx=%u ty=%u\n", tx, ty);
+    free(got);
+    free(ref);
+    return;
+  }
+  for (int corner = 0; corner < 4; corner++) {
+    unsigned cx = tx * 16u + (unsigned)((corner == 1 || corner == 3) ? 8u : 0u);
+    unsigned cy = ty * 16u + (unsigned)(corner >= 2 ? 8u : 0u);
+    unsigned diff = 0;
+    for (unsigned py = 0; py < 8u; py++) {
+      for (unsigned px = 0; px < 8u; px++) {
+        size_t o = ((size_t)(cy + py) * (size_t)gw + (size_t)(cx + px)) * 3u;
+        if (got[o + 0] != ref[o + 0] || got[o + 1] != ref[o + 1] || got[o + 2] != ref[o + 2]) {
+          diff++;
+        }
+      }
+    }
+    fprintf(stderr, "LV_SPOT_SUB8_REPORT tx=%u ty=%u corner=%s diff=%u/64\n", tx, ty, k_corner_names[corner], diff);
+  }
+  free(got);
+  free(ref);
+}
+
 int lv_ppm_tile_compare_files(const char *got_path, const char *ref_path, const LvTileCmpOpts *opts,
                               LvTileCmpReport *report) {
   if (!got_path || !ref_path || !report) return 0;

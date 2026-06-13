@@ -56,5 +56,12 @@ void lv_ppm_tile_compare_print_report(const LvTileCmpReport *report, unsigned re
 int lv_ppm_spot_tile_match(const char *got_path, const char *ref_path, unsigned tx, unsigned ty,
                            unsigned max_diff_pixels);
 
+/* Compare one 8x8 sub-corner within a 16x16 tile (corner 0=TL,1=TR,2=BL,3=BR). */
+int lv_ppm_spot_sub8_match(const char *got_path, const char *ref_path, unsigned tx, unsigned ty, int corner,
+                           unsigned max_diff_pixels);
+
+/* Log all four 8x8 corners for a Map16 tile (LV_SPOT_SUB8). */
+void lv_ppm_report_spot_sub8_tiles(const char *got_path, const char *ref_path, unsigned tx, unsigned ty);
+
 /* Log per-tile OK/mismatch for akogare 0x109 std 0x27 pipe stack (screen 4 cols 7-8, rows A-G). */
 void lv_ppm_report_pipe_stack_tiles(const char *got_path, const char *ref_path);

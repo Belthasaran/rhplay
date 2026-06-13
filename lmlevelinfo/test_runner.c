@@ -18,6 +18,7 @@
 #include "map16_reader.h"
 #include "map16_fg_oracle.h"
 #include "map16_rom.h"
+#include "map16_parity.h"
 #include "palette_rom.h"
 #include "lv_ppm_compare.h"
 #include "mwl_reader.h"
@@ -3896,6 +3897,14 @@ int main(void) {
   int okMap16Synth = run_map16_synth_gfx_page_test();
   int okMap16Alias = run_map16_alias_tests();
   int okMap16Rom = run_map16_rom_def_redirect_tests();
+  int okMap16ParityA = map16_parity_run_tier_a();
+  if (!okMap16ParityA) failures++;
+  int okMap16ParityB = map16_parity_run_tier_b_thorough();
+  if (!okMap16ParityB) failures++;
+  int okMap16ParityC = map16_parity_run_tier_c_resolve();
+  if (!okMap16ParityC) failures++;
+  int okMap16GfxMunch = map16_parity_run_gfx_muncher_regression();
+  if (!okMap16GfxMunch) failures++;
   int okLvPpmGrid = run_lv_ppm_gridlines_unit();
   int okLvTileL1 = run_level_visual_tile_compare_l1();
   int okSnes15 = run_snes15_back_color_109();
@@ -3917,7 +3926,8 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okGfxExt && okEg &&
-      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okLvPpmGrid && okLvTileL1 && okSnes15 &&
+      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okMap16ParityA && okMap16ParityB && okMap16ParityC &&
+      okMap16GfxMunch && okLvPpmGrid && okLvTileL1 && okSnes15 &&
       okEmit109 && okL1Pal &&
       okSprNoGen && okLv && okLvLm &&
       okDiff && okSprR &&

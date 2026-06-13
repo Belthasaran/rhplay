@@ -1,6 +1,6 @@
 #include "map16_fg_oracle.h"
+#include "map16_text.h"
 
-#include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,112 +12,11 @@ static void seterr(char *err, size_t errcap, const char *msg) {
   snprintf(err, errcap, "%s", msg ? msg : "error");
 }
 
-static int parse_hex_u16(const char *s, uint16_t *out) {
-  if (!s || !*s || !out) return 0;
-  char *end = NULL;
-  unsigned long v = strtoul(s, &end, 16);
-  if (end == s || v > 0xFFFFu) return 0;
-  *out = (uint16_t)v;
-  return 1;
-}
-
-static void parse_flips(const char *s, int *hflip, int *vflip) {
-  if (hflip) *hflip = 0;
-  if (vflip) *vflip = 0;
-  if (!s) return;
-  if (strchr(s, 'x')) {
-    if (hflip) *hflip = 1;
-  }
-  if (strchr(s, 'y')) {
-    if (vflip) *vflip = 1;
-  }
-}
-
-static uint16_t oracle_sub_word(uint16_t chr, uint8_t pal, int hflip, int vflip) {
-  uint16_t w = (uint16_t)(chr & 0x03FFu);
-  if (hflip) w |= (uint16_t)(1u << 10);
-  if (vflip) w |= (uint16_t)(1u << 11);
-  w |= (uint16_t)((uint16_t)(pal & 7u) << 13);
-  return w;
-}
-
 static int path_is_dir(const char *path) {
   struct stat st;
   if (!path || !path[0]) return 0;
   if (stat(path, &st) != 0) return 0;
   return S_ISDIR(st.st_mode);
-}
-
-static int parse_oracle_line(const char *line, uint16_t *out_id, Map16Tile *out_tile) {
-  if (!line || !out_id || !out_tile) return 0;
-  while (*line && isspace((unsigned char)*line)) line++;
-  if (!line[0]) return 0;
-
-  const char *colon = strchr(line, ':');
-  if (!colon) return 0;
-  char idbuf[8];
-  size_t idlen = (size_t)(colon - line);
-  if (idlen == 0 || idlen >= sizeof(idbuf)) return 0;
-  memcpy(idbuf, line, idlen);
-  idbuf[idlen] = '\0';
-  uint16_t tid = 0;
-  if (!parse_hex_u16(idbuf, &tid)) return 0;
-
-  const char *body = colon + 1;
-  while (*body && isspace((unsigned char)*body)) body++;
-  if (*body == '~') return 0;
-
-  const char *brace = strchr(body, '{');
-  if (!brace) return 0;
-  const char *end = strchr(brace, '}');
-  if (!end) return 0;
-
-  Map16Tile t;
-  memset(&t, 0, sizeof(t));
-  const char *p = brace + 1;
-  for (int si = 0; si < 4; si++) {
-    while (p < end && isspace((unsigned char)*p)) p++;
-    if (p >= end) return 0;
-
-    char chrbuf[8];
-    int ci = 0;
-    while (p < end && !isspace((unsigned char)*p) && ci + 1 < (int)sizeof(chrbuf)) {
-      chrbuf[ci++] = *p++;
-    }
-    chrbuf[ci] = '\0';
-    if (ci == 0) return 0;
-    while (p < end && isspace((unsigned char)*p)) p++;
-
-    char palbuf[8];
-    ci = 0;
-    while (p < end && !isspace((unsigned char)*p) && ci + 1 < (int)sizeof(palbuf)) {
-      palbuf[ci++] = *p++;
-    }
-    palbuf[ci] = '\0';
-    if (ci == 0) return 0;
-    while (p < end && isspace((unsigned char)*p)) p++;
-
-    char flipbuf[8];
-    ci = 0;
-    while (p < end && !isspace((unsigned char)*p) && ci + 1 < (int)sizeof(flipbuf)) {
-      flipbuf[ci++] = *p++;
-    }
-    flipbuf[ci] = '\0';
-    if (ci == 0) return 0;
-
-    uint16_t chr = 0;
-    if (!parse_hex_u16(chrbuf, &chr)) return 0;
-    char *pal_end = NULL;
-    unsigned long palv = strtoul(palbuf, &pal_end, 10);
-    if (pal_end == palbuf || palv > 7u) return 0;
-    int hflip = 0, vflip = 0;
-    parse_flips(flipbuf, &hflip, &vflip);
-    t.w[si] = oracle_sub_word(chr, (uint8_t)palv, hflip, vflip);
-  }
-
-  *out_id = tid;
-  *out_tile = t;
-  return 1;
 }
 
 static int parse_oracle_file(const char *path, Map16Data *m, size_t *loaded_out, char *err, size_t errcap) {
@@ -130,12 +29,13 @@ static int parse_oracle_file(const char *path, Map16Data *m, size_t *loaded_out,
   char line[512];
   size_t loaded = 0;
   while (fgets(line, sizeof(line), fp)) {
-    uint16_t tid = 0;
-    Map16Tile t;
-    if (!parse_oracle_line(line, &tid, &t)) continue;
-    if ((size_t)tid >= m->fg_oracle_count) continue;
-    m->fg_oracle_tiles[tid] = t;
-    m->fg_oracle_valid[tid] = 1;
+    Map16TextTile parsed;
+    char perr[128];
+    int fmt = map16_text_parse_line(line, 0xFFFFu, &parsed, perr, sizeof(perr));
+    if (fmt != MAP16_TEXT_FMT_FG_FULL) continue;
+    if ((size_t)parsed.tile_id >= m->fg_oracle_count) continue;
+    m->fg_oracle_tiles[parsed.tile_id] = parsed.words;
+    m->fg_oracle_valid[parsed.tile_id] = 1;
     loaded++;
   }
   fclose(fp);

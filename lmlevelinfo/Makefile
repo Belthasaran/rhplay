@@ -4,6 +4,11 @@ CFLAGS ?= -O2 -Wall -Wextra -std=c99
 BIN := level_info1
 VISBIN := level_visual
 TESTBIN := levelinfo_tests
+PARITYBIN := map16-parity
+GFXPROBE := gfx_chr_probe
+
+MAP16_COMMON := map16_text.c map16_lm16.c map16_fg_oracle.c
+
 SRCS := \
   level_info1.c \
   romutil.c \
@@ -12,7 +17,7 @@ SRCS := \
   lc_lz2.c \
   jsonutil.c \
   map16_reader.c \
-  map16_fg_oracle.c \
+  $(MAP16_COMMON) \
   map16_rom.c \
   gfx_reader.c \
   obj_to_map16.c \
@@ -22,26 +27,27 @@ SRCS := \
   mwl_writer.c \
   mwl_reader.c
 
-all: $(BIN) $(VISBIN) $(TESTBIN)
+all: $(BIN) $(VISBIN) $(TESTBIN) $(PARITYBIN)
 
 $(BIN): $(SRCS)
 	$(CC) $(CFLAGS) -o $@ $(SRCS)
 
-$(VISBIN): level_visual.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c map16_reader.c map16_fg_oracle.c map16_rom.c gfx_reader.c obj_to_map16.c gfx_route.c palette_rom.c emit_stats.c sprite_draw.c lc_lz2.c
-	$(CC) $(CFLAGS) -o $@ level_visual.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c map16_reader.c map16_fg_oracle.c map16_rom.c gfx_reader.c obj_to_map16.c gfx_route.c palette_rom.c emit_stats.c sprite_draw.c lc_lz2.c
+$(VISBIN): level_visual.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c map16_reader.c $(MAP16_COMMON) map16_rom.c gfx_reader.c obj_to_map16.c gfx_route.c palette_rom.c emit_stats.c sprite_draw.c lc_lz2.c
+	$(CC) $(CFLAGS) -o $@ level_visual.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c map16_reader.c $(MAP16_COMMON) map16_rom.c gfx_reader.c obj_to_map16.c gfx_route.c palette_rom.c emit_stats.c sprite_draw.c lc_lz2.c
 
-$(TESTBIN): test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c map16_fg_oracle.c map16_rom.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c palette_rom.c sprite_draw.c
-	$(CC) $(CFLAGS) -o $@ test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c map16_fg_oracle.c map16_rom.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c palette_rom.c sprite_draw.c
+$(TESTBIN): test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c $(MAP16_COMMON) map16_rom.c map16_parity.c gfx_muncher_regression.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c palette_rom.c sprite_draw.c
+	$(CC) $(CFLAGS) -o $@ test_runner.c lv_ppm_compare.c romutil.c lm_tables.c level_parse.c mwl_reader.c mwl_writer.c lc_lz2.c map16_reader.c $(MAP16_COMMON) map16_rom.c map16_parity.c gfx_muncher_regression.c obj_to_map16.c emit_stats.c gfx_route.c gfx_reader.c palette_rom.c sprite_draw.c
 
-GFXPROBE := gfx_chr_probe
-$(GFXPROBE): gfx_chr_probe.c romutil.c lm_tables.c level_parse.c lc_lz2.c gfx_reader.c gfx_route.c palette_rom.c lv_ppm_compare.c
-	$(CC) $(CFLAGS) -o $@ gfx_chr_probe.c romutil.c lm_tables.c level_parse.c lc_lz2.c gfx_reader.c gfx_route.c palette_rom.c lv_ppm_compare.c
+$(PARITYBIN): map16_parity_main.c map16_parity.c $(MAP16_COMMON) gfx_muncher_regression.c romutil.c lm_tables.c level_parse.c lc_lz2.c map16_reader.c map16_rom.c gfx_route.c gfx_reader.c palette_rom.c
+	$(CC) $(CFLAGS) -o $@ map16_parity_main.c map16_parity.c map16_text.c map16_lm16.c map16_fg_oracle.c gfx_muncher_regression.c romutil.c lm_tables.c level_parse.c lc_lz2.c map16_reader.c map16_rom.c gfx_route.c gfx_reader.c palette_rom.c
+
+$(GFXPROBE): gfx_chr_probe.c gfx_muncher_regression.c romutil.c lm_tables.c level_parse.c lc_lz2.c gfx_reader.c gfx_route.c palette_rom.c lv_ppm_compare.c map16_text.c
+	$(CC) $(CFLAGS) -o $@ gfx_chr_probe.c gfx_muncher_regression.c romutil.c lm_tables.c level_parse.c lc_lz2.c gfx_reader.c gfx_route.c palette_rom.c lv_ppm_compare.c map16_text.c
 
 .PHONY: all clean gfx-probe
 gfx-probe: $(GFXPROBE)
 
 clean:
-	rm -f $(BIN) $(VISBIN) $(TESTBIN) $(GFXPROBE)
+	rm -f $(BIN) $(VISBIN) $(TESTBIN) $(PARITYBIN) $(GFXPROBE)
 
 .PHONY: all clean
-

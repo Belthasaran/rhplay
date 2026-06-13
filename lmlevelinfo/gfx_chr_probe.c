@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "gfx_chr_probe.h"
 #include "gfx_reader.h"
 #include "gfx_route.h"
 #include "level_parse.h"

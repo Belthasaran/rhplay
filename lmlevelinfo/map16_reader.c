@@ -103,7 +103,7 @@ static void map16_merge_flip_from_placement(const Map16Tile *placement, const Ma
   *out = *visual;
   if (!placement) return;
   for (int si = 0; si < 4; si++) {
-    out->w[si] = (uint16_t)((visual->w[si] & (uint16_t)~0x0C00u) | (placement->w[si] & 0x0C00u));
+    out->w[si] = (uint16_t)((visual->w[si] & (uint16_t)~0xC000u) | (placement->w[si] & 0xC000u));
   }
 }
 
@@ -123,7 +123,7 @@ static void map16_copy_def_pool_visual(const Map16Tile *placement, const Map16Ti
       uint16_t vt = (uint16_t)(visual->w[si] & 0x03FFu);
       uint16_t merged = (uint16_t)((visual->w[si] & (uint16_t)~0xFC00u) | (placement->w[si] & 0xFC00u));
       if (pt != vt && pt != 0u && pt != 0x1004u) {
-        out->w[si] = (uint16_t)((merged & (uint16_t)~0x0C00u) | (placement->w[si] & 0x0C00u));
+        out->w[si] = (uint16_t)((merged & (uint16_t)~0xC000u) | (placement->w[si] & 0xC000u));
       } else {
         out->w[si] = merged;
       }
@@ -267,6 +267,26 @@ int map16_tile_uses_012f_muncher_gfx(const Map16Data *m, uint16_t tile_id, const
   uint16_t acts = 0;
   if (m && map16_get_acts_like(m, tile_id, &acts) && acts == 0x012Fu) return 1;
   if (m && m->rom && map16_rom_read_acts_like(m->rom, tile_id, &acts) && acts == 0x012Fu) return 1;
+  return 0;
+}
+
+static int map16_tile_is_coin_quad(const Map16Tile *t) {
+  if (!t) return 0;
+  static const uint8_t kLocals[4] = {0x6Cu, 0x6Eu, 0x6Du, 0x6Fu};
+  for (int i = 0; i < 4; i++) {
+    uint16_t tile8 = (uint16_t)(t->w[i] & 0x03FFu);
+    if (((tile8 >> 8) & 0x03u) != 0u) return 0;
+    if ((uint8_t)(tile8 & 0x7Fu) != kLocals[i]) return 0;
+  }
+  return 1;
+}
+
+int map16_tile_uses_002b_coin_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved) {
+  if (!resolved || !map16_tile_is_coin_quad(resolved)) return 0;
+  if (tile_id == 0x002Bu) return 1;
+  uint16_t acts = 0;
+  if (m && map16_get_acts_like(m, tile_id, &acts) && acts == 0x002Bu) return 1;
+  if (m && m->rom && map16_rom_read_acts_like(m->rom, tile_id, &acts) && acts == 0x002Bu) return 1;
   return 0;
 }
 

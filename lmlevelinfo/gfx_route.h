@@ -74,6 +74,14 @@ int gfx_route_tile8_is_vanilla_muncher_local(uint16_t tile8);
 int gfx_route_resolve_012f_muncher(const LevelGfxRoute *route, int corner_si, int route_mode,
                                    uint8_t *out_file_id, uint16_t *out_local);
 void gfx_route_012f_muncher_blit_flips(int corner_si, int *hflip, int *vflip);
+/* FG_pages oracle column order (TL,BL,TR,BR) -> screen corner (TL,TR,BL,BR) for 012F blit flips. */
+void gfx_route_012f_muncher_blit_flips_oracle(int oracle_si, int *hflip, int *vflip);
+
+/* Acts-like 0x002B coin quad (oracle CHR 0x06C-0x06F): SP1/SP4/LG3/LG1 slot GFX (akogare scan-best). */
+int gfx_route_resolve_002b_coin(const LevelGfxRoute *route, int oracle_si, int route_mode,
+                                uint8_t *out_file_id, uint16_t *out_local);
+void gfx_route_002b_coin_blit_flips(int corner_si, int *hflip, int *vflip);
+void gfx_route_002b_coin_blit_flips_oracle(int oracle_si, int *hflip, int *vflip);
 
 // FG_pages oracle CHR (3-digit LM hex, e.g. 0x1FA): bypass slot (hi digit + BG2) + local (low>=0x80 -> -0x80).
 void gfx_route_resolve_lm_oracle_chr(const LevelGfxRoute *route, uint16_t chr, int route_mode,

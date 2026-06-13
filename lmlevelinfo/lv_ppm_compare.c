@@ -249,6 +249,39 @@ void lv_ppm_report_pipe_stack_tiles(const char *got_path, const char *ref_path) 
   free(ref);
 }
 
+int lv_ppm_spot_tile_match(const char *got_path, const char *ref_path, unsigned tx, unsigned ty,
+                           unsigned max_diff_pixels) {
+  if (!got_path || !ref_path) return 0;
+  unsigned gw = 0, gh = 0, rw = 0, rh = 0;
+  uint8_t *got = NULL;
+  uint8_t *ref = NULL;
+  if (!lv_ppm_read_rgb(got_path, &gw, &gh, &got) || !lv_ppm_read_rgb(ref_path, &rw, &rh, &ref)) {
+    free(got);
+    free(ref);
+    return 0;
+  }
+  if (gw != rw || gh != rh) {
+    free(got);
+    free(ref);
+    return 0;
+  }
+  unsigned diff = 0;
+  for (unsigned py = 0; py < 16u; py++) {
+    for (unsigned px = 0; px < 16u; px++) {
+      unsigned x = tx * 16u + px;
+      unsigned y = ty * 16u + py;
+      size_t o = ((size_t)y * (size_t)gw + (size_t)x) * 3u;
+      if (got[o + 0] != ref[o + 0] || got[o + 1] != ref[o + 1] || got[o + 2] != ref[o + 2]) {
+        diff++;
+      }
+    }
+  }
+  free(got);
+  free(ref);
+  fprintf(stderr, "LV_SPOT_TILE tx=%u ty=%u diff=%u max=%u\n", tx, ty, diff, max_diff_pixels);
+  return diff <= max_diff_pixels;
+}
+
 int lv_ppm_tile_compare_files(const char *got_path, const char *ref_path, const LvTileCmpOpts *opts,
                               LvTileCmpReport *report) {
   if (!got_path || !ref_path || !report) return 0;

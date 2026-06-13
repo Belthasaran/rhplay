@@ -576,6 +576,18 @@ int map16_parity_run_gfx_muncher_regression(void) {
   return g_failures == 0;
 }
 
+int map16_parity_run_gfx_coin_regression(void) {
+  char err[512];
+  g_failures = 0;
+  if (!gfx_chr_probe_coin_regression("test/akogare/orig_Ako.sfc", "test/akogare/Level109_l1only_gridlines.ppm", err,
+                                     sizeof(err))) {
+    failf("[map16_gfx_coin_regression] %s", err);
+  } else {
+    printf("PASS: map16_gfx_coin_regression\n");
+  }
+  return g_failures == 0;
+}
+
 int map16_parity_cli(int argc, char **argv) {
   int thorough = 0;
   const char *res = NULL;

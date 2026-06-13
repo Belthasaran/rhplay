@@ -325,8 +325,11 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t file_id = 0;
     uint16_t local_tile = 0;
     int use_012f_munch = map16_tile_uses_012f_muncher_gfx(map16, map16_id, &t);
+    int use_002b_coin = !use_012f_munch && map16_tile_uses_002b_coin_gfx(map16, map16_id, &t);
     if (use_012f_munch) {
       gfx_route_resolve_012f_muncher(route, si, gfx_route_mode, &file_id, &local_tile);
+    } else if (use_002b_coin) {
+      gfx_route_resolve_002b_coin(route, si, gfx_route_mode, &file_id, &local_tile);
     } else if (src == MAP16_SRC_FG_ORACLE) {
       gfx_route_resolve_lm_oracle_chr(route, tile8, gfx_route_mode, &file_id, &local_tile);
     } else {
@@ -549,6 +552,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
   int use_012f_munch = map16_tile_uses_012f_muncher_gfx(rc->map16, draw_id, &t);
+  int use_002b_coin = !use_012f_munch && map16_tile_uses_002b_coin_gfx(rc->map16, draw_id, &t);
 
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
@@ -559,7 +563,21 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     int hflip = sub.hflip;
     int vflip = sub.vflip;
     if (use_012f_munch) {
-      gfx_route_012f_muncher_blit_flips(si, &hflip, &vflip);
+      if (src == MAP16_SRC_FG_ORACLE) {
+        gfx_route_012f_muncher_blit_flips_oracle(si, &hflip, &vflip);
+      } else {
+        gfx_route_012f_muncher_blit_flips(si, &hflip, &vflip);
+      }
+      hflip ^= sub.hflip;
+      vflip ^= sub.vflip;
+    } else if (use_002b_coin) {
+      if (src == MAP16_SRC_FG_ORACLE) {
+        gfx_route_002b_coin_blit_flips_oracle(si, &hflip, &vflip);
+      } else {
+        gfx_route_002b_coin_blit_flips(si, &hflip, &vflip);
+      }
+      hflip ^= sub.hflip;
+      vflip ^= sub.vflip;
     }
     uint8_t pal = map16_effective_palette(sub.pal, rc->is_layer2, rc->custom_palette, rc->bg_palette_row,
                                           rc->fg_palette_row);
@@ -580,6 +598,8 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint8_t used_file = file_id;
     if (use_012f_munch) {
       gfx_route_resolve_012f_muncher(rc->gfx_route, si, rc->gfx_route_mode, &file_id, &local_tile);
+    } else if (use_002b_coin) {
+      gfx_route_resolve_002b_coin(rc->gfx_route, si, rc->gfx_route_mode, &file_id, &local_tile);
     } else if (src == MAP16_SRC_FG_ORACLE) {
       gfx_route_resolve_lm_oracle_chr(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
     } else {
@@ -597,7 +617,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     }
 
     uint16_t decode_local = local_tile;
-    if (!use_012f_munch) {
+    if (!use_012f_munch && !use_002b_coin) {
       const GfxBlob *gfx_hint = NULL;
       if (gfxcache_get(rc->rom, rc->gfxc, file_id, &gfx_hint, rc->err, rc->errcap) && gfx_hint) {
         decode_local = gfx_local_tile_index(gfx_hint->len, tile8);

@@ -17,6 +17,7 @@ static uint16_t read_u16le(const uint8_t *p) {
 
 static int map16_distinct_tile8_count(const Map16Tile *t);
 static int map16_tile_is_partial_hack_muncher_stub(const Map16Tile *t);
+static int map16_tile_uses_extended_oracle_chr(const Map16Tile *t);
 static int map16_build_canonical_table(Map16Data *m);
 static int map16_build_alias_table(Map16Data *m);
 int map16_get_acts_like(const Map16Data *m, uint16_t tile_id, uint16_t *out_acts_like);
@@ -216,6 +217,14 @@ static int map16_tile_is_partial_hack_muncher_stub(const Map16Tile *t) {
     if (local >= 0x4Cu && local <= 0x4Fu) stripe++;
   }
   return stub >= 2 && stripe >= 2;
+}
+
+static int map16_tile_uses_extended_oracle_chr(const Map16Tile *t) {
+  if (!t) return 0;
+  for (int i = 0; i < 4; i++) {
+    if ((t->w[i] & 0x03FFu) >= 0x100u) return 1;
+  }
+  return 0;
 }
 
 static int map16_shape_ok_hack_muncher_block(const Map16Tile *t) {
@@ -1161,11 +1170,17 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   Map16Tile raw;
   int have_raw = map16_get_raw(m, tile_id, &raw);
 
-  /* Hack-page muncher stubs: L1 export uses FG oracle on definition pool (+21), not placement row or 0x5C file pool. */
-  if (have_raw && page >= 2u && map16_tile_is_partial_hack_muncher_stub(&raw) &&
+  /* Hack-page placement stubs: prefer FG oracle on definition pool (+21) when customized CHR exists. */
+  if (have_raw && page >= 2u && map16_tile_is_placement_stub(m, tile_id, &raw) &&
       (size_t)tile_id + 21u < m->tiles_count) {
     uint16_t pool_id = (uint16_t)(tile_id + 21u);
-    if (map16_get_fg_oracle(m, pool_id, out)) {
+    Map16Tile pool_oracle;
+    if (map16_get_fg_oracle(m, pool_id, &pool_oracle) && map16_tile_uses_extended_oracle_chr(&pool_oracle)) {
+      *out = pool_oracle;
+      Map16Tile place_oracle;
+      if (map16_get_fg_oracle(m, tile_id, &place_oracle)) {
+        map16_merge_flip_from_placement(&place_oracle, out, out);
+      }
       if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
       return 1;
     }

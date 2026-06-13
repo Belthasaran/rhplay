@@ -37,7 +37,7 @@ typedef struct {
 
 int lv_ppm_read_rgb(const char *path, unsigned *out_w, unsigned *out_h, uint8_t **out_px);
 
-void lv_ppm_draw_gridlines(uint8_t *rgb, unsigned w, unsigned h);
+void lv_ppm_draw_gridlines(uint8_t *rgb, unsigned w, unsigned h, uint8_t back_r, uint8_t back_g, uint8_t back_b);
 
 void lv_ppm_draw_grid_corners(uint8_t *rgb, unsigned w, unsigned h, uint8_t back_r, uint8_t back_g,
                               uint8_t back_b);

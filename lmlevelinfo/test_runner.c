@@ -2564,6 +2564,190 @@ static int run_map16_rom_def_redirect_tests(void) {
   return 1;
 }
 
+static int muncher_oracle_effective_vflip(const Map16Tile *t, int oracle_si) {
+  if (!t || oracle_si < 0 || oracle_si > 3) return -1;
+  Map16TextSub sub;
+  map16_text_decode_sub_word(t->w[oracle_si], &sub);
+  int hf = 0, vf = 0;
+  gfx_route_012f_muncher_blit_flips_oracle(oracle_si, &hf, &vf);
+  hf ^= sub.hflip;
+  vf ^= sub.vflip;
+  (void)hf;
+  return vf;
+}
+
+static int run_muncher_oracle_flip_unit(void) {
+  struct stat st;
+  if (stat("test/akogare/AllMap16.map16", &st) != 0) {
+    printf("SKIP: muncher_oracle_flip_unit (missing AllMap16.map16)\n");
+    return 1;
+  }
+  Map16Data m;
+  char err[256];
+  memset(&m, 0, sizeof(m));
+  if (!map16_load_file("test/akogare/AllMap16.map16", &m, err, sizeof(err))) {
+    failf("[muncher_flip] map16 load failed: %s", err);
+    return 0;
+  }
+  Rom rom;
+  memset(&rom, 0, sizeof(rom));
+  if (rom_load(&rom, "test/akogare/orig_Ako.sfc", err, sizeof(err))) {
+    map16_attach_rom(&m, &rom);
+  }
+  char oracle_dir[512];
+  if (!map16_try_auto_fg_oracle_dir("test/akogare/AllMap16.map16", oracle_dir, sizeof(oracle_dir)) ||
+      !map16_load_fg_oracles(oracle_dir, &m, err, sizeof(err))) {
+    failf("[muncher_flip] FG oracle load failed: %s", err);
+    map16_free(&m);
+    rom_free(&rom);
+    return 0;
+  }
+  Map16Tile bd, be;
+  int src = 0;
+  if (!map16_get_with_src(&m, 0x04BDu, &bd, &src) || !map16_get_with_src(&m, 0x04BEu, &be, &src)) {
+    failf("[muncher_flip] map16_get 0x04BD/0x04BE failed");
+    map16_free(&m);
+    return 0;
+  }
+  for (int si = 0; si < 4; si++) {
+    int vf_bd = muncher_oracle_effective_vflip(&bd, si);
+    int vf_be = muncher_oracle_effective_vflip(&be, si);
+    if (vf_bd < 0 || vf_be < 0) {
+      failf("[muncher_flip] sub=%d effective vflip failed", si);
+      map16_free(&m);
+      return 0;
+    }
+    if (vf_bd == vf_be) {
+      failf("[muncher_flip] sub=%d 0x04BD vf=%d equals 0x04BE vf=%d (expect XOR from -y-)", si, vf_bd, vf_be);
+      map16_free(&m);
+      return 0;
+    }
+  }
+  map16_free(&m);
+  rom_free(&rom);
+  printf("PASS: muncher_oracle_flip_unit\n");
+  return 1;
+}
+
+typedef struct {
+  uint16_t id[32][256];
+  int have[32][256];
+  size_t cur_obj;
+} EmitGrid;
+
+static int emit_grid_fn(const EmittedMap16 *t, void *ctx) {
+  EmitGrid *g = (EmitGrid *)ctx;
+  if (!g || !t) return 0;
+  if (t->y_tile < 32u && t->x_tile < 256u) {
+    g->id[t->y_tile][t->x_tile] = t->map16_tile;
+    g->have[t->y_tile][t->x_tile] = 1;
+  }
+  return 1;
+}
+
+static int run_akogare_bush_coin_emit_trace(void) {
+  struct stat st;
+  if (stat("test/akogare/orig_Ako.sfc", &st) != 0) {
+    printf("SKIP: akogare_bush_coin_emit_trace (ROM)\n");
+    return 1;
+  }
+  Rom rom;
+  char err[256];
+  if (!rom_load(&rom, "test/akogare/orig_Ako.sfc", err, sizeof(err))) {
+    failf("[emit_trace] rom_load: %s", err);
+    return 0;
+  }
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, sizeof(err))) {
+    rom_free(&rom);
+    failf("[emit_trace] tables: %s", err);
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, sizeof(err))) {
+    rom_free(&rom);
+    failf("[emit_trace] parse: %s", err);
+    return 0;
+  }
+  ObjEmitContext ectx;
+  memset(&ectx, 0, sizeof(ectx));
+  ectx.level_tileset = (uint8_t)(info.primary.fgbg_gfx_setting & 0x0F);
+  EmitGrid grid;
+  memset(&grid, 0, sizeof(grid));
+  for (size_t i = 0; i < info.objects_count; i++) {
+    grid.cur_obj = i;
+    object_emit_map16_tiles(&info.objects[i], &ectx, emit_grid_fn, &grid);
+  }
+  if (!grid.have[15][27] || grid.id[15][27] != 0x03ABu) {
+    failf("[emit_trace] coin (27,15) expected 0x03AB got %s", grid.have[15][27] ? "other" : "empty");
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+  if (!grid.have[16][27] || grid.id[16][27] != 0x03ABu) {
+    failf("[emit_trace] coin (27,16) expected 0x03AB");
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+  if (grid.have[15][1] || grid.have[15][2]) {
+    failf("[emit_trace] bush row (1,15)/(2,15) unexpected emit 0x%04X/0x%04X (obj67 is screen2 x=1)",
+          grid.have[15][1] ? grid.id[15][1] : 0u, grid.have[15][2] ? grid.id[15][2] : 0u);
+    levelinfo_free(&info);
+    rom_free(&rom);
+    return 0;
+  }
+  printf("PASS: akogare_bush_coin_emit_trace coin=(27,15..16)=0x03AB bush_row12=empty (3,15)=0x%04X\n",
+         grid.have[15][3] ? grid.id[15][3] : 0u);
+  levelinfo_free(&info);
+  rom_free(&rom);
+  return 1;
+}
+
+static int run_akogare_spot_tile_gates(void) {
+  const char *lm_ref = "test/akogare/Level109_l1only_gridlines.ppm";
+  struct stat st_ref, st_map16;
+  if (stat(lm_ref, &st_ref) != 0 || stat("test/akogare/AllMap16.map16", &st_map16) != 0) {
+    printf("SKIP: akogare_spot_tile_gates (fixtures)\n");
+    return 1;
+  }
+  (void)mkdir_p("test/_work/akogare");
+  const char *outppm = "test/_work/akogare/spot_gates.ppm";
+  char cmd[4096];
+  snprintf(cmd, sizeof(cmd),
+           "./level_visual \"test/akogare/orig_Ako.sfc\" 0x109 --map16=test/akogare/AllMap16.map16 "
+           "--export-ppm=\"%s\" --layers=layer1 --gfx-route-mode=bypass --no-map16-synth-vanilla "
+           "--export-gridlines 2>/dev/null",
+           outppm);
+  if (system(cmd) != 0) {
+    failf("[spot_tile] level_visual export failed");
+    return 0;
+  }
+  static const struct {
+    unsigned tx;
+    unsigned ty;
+    unsigned max_diff;
+    const char *label;
+  } spots[] = {
+      {27, 15, 200u, "coin_27_15"},
+      {27, 16, 200u, "coin_27_16"},
+      {1, 15, 0u, "bush_1_15"},
+      {2, 15, 0u, "bush_2_15"},
+      {3, 15, 20u, "bush_3_15"},
+  };
+  int ok = 1;
+  for (size_t i = 0; i < sizeof(spots) / sizeof(spots[0]); i++) {
+    if (!lv_ppm_spot_tile_match(outppm, lm_ref, spots[i].tx, spots[i].ty, spots[i].max_diff)) {
+      failf("[spot_tile] %s (%u,%u) exceeded max_diff=%u", spots[i].label, spots[i].tx, spots[i].ty,
+            spots[i].max_diff);
+      ok = 0;
+    }
+  }
+  if (ok) printf("PASS: akogare_spot_tile_gates\n");
+  return ok;
+}
+
 static int run_lv_ppm_gridlines_unit(void) {
   uint8_t rgb[16u * 16u * 3u];
   for (size_t i = 0; i < sizeof(rgb); i += 3u) {
@@ -3957,6 +4141,14 @@ int main(void) {
   if (!okMap16ParityC) failures++;
   int okMap16GfxMunch = map16_parity_run_gfx_muncher_regression();
   if (!okMap16GfxMunch) failures++;
+  int okMap16GfxCoin = map16_parity_run_gfx_coin_regression();
+  if (!okMap16GfxCoin) failures++;
+  int okMunchFlip = run_muncher_oracle_flip_unit();
+  if (!okMunchFlip) failures++;
+  int okEmitTrace = run_akogare_bush_coin_emit_trace();
+  if (!okEmitTrace) failures++;
+  int okSpotTiles = run_akogare_spot_tile_gates();
+  if (!okSpotTiles) failures++;
   int okLvPpmGrid = run_lv_ppm_gridlines_unit();
   int okLvTileL1 = run_level_visual_tile_compare_l1();
   int okSnes15 = run_snes15_back_color_109();
@@ -3979,7 +4171,7 @@ int main(void) {
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okGfxExt && okEg &&
       okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okMap16SubPipe && okMap16ParityA && okMap16ParityB && okMap16ParityC &&
-      okMap16GfxMunch && okLvPpmGrid && okLvTileL1 && okSnes15 &&
+      okMap16GfxMunch && okMap16GfxCoin && okMunchFlip && okEmitTrace && okSpotTiles && okLvPpmGrid && okLvTileL1 && okSnes15 &&
       okEmit109 && okL1Pal &&
       okSprNoGen && okLv && okLvLm &&
       okDiff && okSprR &&

@@ -85,6 +85,9 @@ int map16_tile_is_full_muncher_quad(const Map16Tile *t);
 /* Acts-like 0x012F + full muncher quad locals → BG1/LG3 GFX template in level_visual. */
 int map16_tile_uses_012f_muncher_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved);
 
+/* Acts-like 0x002B + coin quad locals 0x6C-0x6F → SP1/SP4/LG3/LG1 GFX template in level_visual. */
+int map16_tile_uses_002b_coin_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved);
+
 /* Hack-page placement row: 0x78 corners + 0x4C-0x4F stripe locals (LM L1 static draw). */
 int map16_tile_is_hack_muncher_placement_stub(const Map16Tile *t);
 

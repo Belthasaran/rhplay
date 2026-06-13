@@ -52,5 +52,9 @@ int lv_ppm_tile_compare_files(const char *got_path, const char *ref_path, const 
 
 void lv_ppm_tile_compare_print_report(const LvTileCmpReport *report, unsigned ref_w, unsigned ref_h);
 
+/* Compare one 16x16 tile; return 1 if mismatch pixel count <= max_diff_pixels. */
+int lv_ppm_spot_tile_match(const char *got_path, const char *ref_path, unsigned tx, unsigned ty,
+                           unsigned max_diff_pixels);
+
 /* Log per-tile OK/mismatch for akogare 0x109 std 0x27 pipe stack (screen 4 cols 7-8, rows A-G). */
 void lv_ppm_report_pipe_stack_tiles(const char *got_path, const char *ref_path);

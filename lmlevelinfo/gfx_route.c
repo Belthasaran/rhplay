@@ -215,6 +215,55 @@ void gfx_route_012f_muncher_blit_flips(int corner_si, int *hflip, int *vflip) {
   if (vflip) *vflip = kFlips[corner_si].vflip;
 }
 
+void gfx_route_012f_muncher_blit_flips_oracle(int oracle_si, int *hflip, int *vflip) {
+  static const int oracle_to_screen[4] = {0, 2, 1, 3};
+  if (oracle_si < 0 || oracle_si > 3) return;
+  gfx_route_012f_muncher_blit_flips(oracle_to_screen[oracle_si], hflip, vflip);
+}
+
+int gfx_route_resolve_002b_coin(const LevelGfxRoute *route, int oracle_si, int route_mode,
+                                uint8_t *out_file_id, uint16_t *out_local) {
+  static const struct {
+    int slot;
+    uint16_t local;
+  } kRoute[4] = {
+      {GFX_SLOT_SP1, 0x058},
+      {GFX_SLOT_SP4, 0x012},
+      {GFX_SLOT_LG3, 0x01A},
+      {GFX_SLOT_LG1, 0x019},
+  };
+  if (oracle_si < 0 || oracle_si > 3) return 0;
+  uint8_t fid = 0;
+  if (route && route->valid) {
+    fid = gfx_route_file_for_sprite_slot_mode(route, kRoute[oracle_si].slot, route_mode);
+  }
+  if (fid == 0) return 0;
+  if (out_file_id) *out_file_id = fid;
+  if (out_local) *out_local = kRoute[oracle_si].local;
+  return 1;
+}
+
+void gfx_route_002b_coin_blit_flips(int corner_si, int *hflip, int *vflip) {
+  static const int screen_to_oracle[4] = {0, 2, 1, 3};
+  if (corner_si < 0 || corner_si > 3) return;
+  gfx_route_002b_coin_blit_flips_oracle(screen_to_oracle[corner_si], hflip, vflip);
+}
+
+void gfx_route_002b_coin_blit_flips_oracle(int oracle_si, int *hflip, int *vflip) {
+  static const struct {
+    int hflip;
+    int vflip;
+  } kFlips[4] = {
+      {0, 0},
+      {1, 1},
+      {1, 1},
+      {0, 1},
+  };
+  if (oracle_si < 0 || oracle_si > 3) return;
+  if (hflip) *hflip = kFlips[oracle_si].hflip;
+  if (vflip) *vflip = kFlips[oracle_si].vflip;
+}
+
 static size_t append_unique_id(uint8_t *out_ids, size_t n, size_t max_out, uint8_t fid) {
   if (fid == 0 || !out_ids || n >= max_out) return n;
   for (size_t j = 0; j < n; j++) {

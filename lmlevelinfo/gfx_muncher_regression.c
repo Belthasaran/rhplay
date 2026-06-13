@@ -72,3 +72,64 @@ int gfx_chr_probe_muncher_regression(const char *rom_path, const char *ref_ppm, 
   rom_free(&rom);
   return ok;
 }
+
+int gfx_chr_probe_coin_regression(const char *rom_path, const char *ref_ppm, char *err, size_t errcap) {
+  (void)ref_ppm;
+  if (!rom_path) {
+    if (err && errcap) snprintf(err, errcap, "invalid args");
+    return 0;
+  }
+  static const struct {
+    uint8_t file_id;
+    uint16_t local;
+    int hflip;
+    int vflip;
+  } expect[4] = {
+      {0x14, 0x058, 0, 0},
+      {0x20, 0x012, 1, 1},
+      {0x2A, 0x01A, 1, 1},
+      {0x28, 0x019, 0, 1},
+  };
+
+  Rom rom;
+  if (!rom_load(&rom, rom_path, err, errcap)) return 0;
+  LmTables tables;
+  if (!lm_resolve_tables(&rom, &tables, err, errcap)) {
+    rom_free(&rom);
+    return 0;
+  }
+  LevelInfo info;
+  memset(&info, 0, sizeof(info));
+  if (!parse_level_info(&rom, &tables, 0x109, &info, err, errcap)) {
+    rom_free(&rom);
+    return 0;
+  }
+  LevelGfxRoute route;
+  gfx_route_build(&route, &info.primary, info.exgfx_bytes, info.exgfx_len);
+
+  int ok = 1;
+  for (int si = 0; si < 4; si++) {
+    uint8_t fid = 0;
+    uint16_t local = 0;
+    if (!gfx_route_resolve_002b_coin(&route, si, GFX_ROUTE_MODE_BYPASS, &fid, &local)) {
+      if (err && errcap) snprintf(err, errcap, "sub=%d resolve_002b_coin failed", si);
+      ok = 0;
+      break;
+    }
+    int hf = 0, vf = 0;
+    gfx_route_002b_coin_blit_flips_oracle(si, &hf, &vf);
+    if (fid != expect[si].file_id || local != expect[si].local || hf != expect[si].hflip || vf != expect[si].vflip) {
+      if (err && errcap) {
+        snprintf(err, errcap, "sub=%d route file=0x%02X local=0x%03X hf=%d vf=%d expect file=0x%02X local=0x%03X hf=%d vf=%d", si,
+                 (unsigned)fid, (unsigned)local, hf, vf, (unsigned)expect[si].file_id, (unsigned)expect[si].local,
+                 expect[si].hflip, expect[si].vflip);
+      }
+      ok = 0;
+      break;
+    }
+  }
+
+  levelinfo_free(&info);
+  rom_free(&rom);
+  return ok;
+}

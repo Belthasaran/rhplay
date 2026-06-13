@@ -85,9 +85,6 @@ int map16_tile_is_full_muncher_quad(const Map16Tile *t);
 /* Acts-like 0x012F + full muncher quad locals → BG1/LG3 GFX template in level_visual. */
 int map16_tile_uses_012f_muncher_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved);
 
-/* FG_pages 0x04BE-style muncher: all four subs carry -y- (down-facing vs 0x04BD). */
-int map16_tile_is_down_facing_muncher_quad(const Map16Tile *t);
-
 /* Acts-like 0x002B + coin quad locals 0x6C-0x6F → SP1/SP4/LG3/LG1 GFX template in level_visual. */
 int map16_tile_uses_002b_coin_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved);
 

@@ -1170,23 +1170,30 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   Map16Tile raw;
   int have_raw = map16_get_raw(m, tile_id, &raw);
 
-  /* Hack-page placement stubs: pool FG oracle (extended CHR) or pool file + placement oracle pal. */
+  /* Hack-page placement stubs: prefer placement FG oracle for L1 visual (CHR/pal/flips).
+   * Pool +21 may carry 0130 extended CHR (e.g. 0x186) for LM editor; placement keeps 012F
+   * vanilla CHR (e.g. 0x05C) which matches LM static export. Pool file words still used
+   * when placement oracle is absent. */
   if (have_raw && page >= 2u && map16_tile_is_placement_stub(m, tile_id, &raw) &&
       (size_t)tile_id + 21u < m->tiles_count) {
+    Map16Tile place_oracle;
+    int have_place_oracle = map16_get_fg_oracle(m, tile_id, &place_oracle);
+    if (have_place_oracle) {
+      *out = place_oracle;
+      if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
+      return 1;
+    }
     uint16_t pool_id = (uint16_t)(tile_id + 21u);
     Map16Tile pool_oracle;
     if (map16_get_fg_oracle(m, pool_id, &pool_oracle) && map16_tile_uses_extended_oracle_chr(&pool_oracle)) {
       *out = pool_oracle;
-      Map16Tile place_oracle;
-      if (map16_get_fg_oracle(m, tile_id, &place_oracle)) {
+      if (have_place_oracle) {
         map16_merge_flip_from_placement(&place_oracle, out, out);
       }
       if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
       return 1;
     }
     const Map16Tile *pool = &m->tiles[pool_id];
-    Map16Tile place_oracle;
-    int have_place_oracle = map16_get_fg_oracle(m, tile_id, &place_oracle);
     if (map16_tile_is_drawable(pool) && !map16_tile8s_equal(&raw, pool)) {
       if (have_place_oracle && !map16_tile_uses_extended_oracle_chr(&place_oracle)) {
         for (int si = 0; si < 4; si++) {

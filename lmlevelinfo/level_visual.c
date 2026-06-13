@@ -470,6 +470,7 @@ static int decode_gfx_subtile(Rom *rom, GfxCache *gfxc, const LevelGfxRoute *rou
   if (!gfxcache_get(rom, gfxc, file_id, &gfx, err, errcap) || !gfx || !gfx->bytes || !gfx->len) {
     return -1;
   }
+  local_tile = gfx_local_tile_index(gfx->len, tile8);
   if (!snes4bpp_decode_tile(gfx->bytes, gfx->len, local_tile, out_px64)) {
     return -2;
   }

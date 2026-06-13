@@ -69,6 +69,12 @@ uint8_t gfx_route_vanilla_file_for_page(const LevelGfxRoute *route, int page);
 void gfx_route_resolve_subtile(const LevelGfxRoute *route, uint16_t tile8, int route_mode,
                                uint8_t *out_file_id, uint16_t *out_local);
 
+/* Acts-like 0x012F vanilla muncher quad (page-0 locals 0x5C-0x5F): BG1/LG3 slot GFX. */
+int gfx_route_tile8_is_vanilla_muncher_local(uint16_t tile8);
+int gfx_route_resolve_012f_muncher(const LevelGfxRoute *route, int corner_si, int route_mode,
+                                   uint8_t *out_file_id, uint16_t *out_local);
+void gfx_route_012f_muncher_blit_flips(int corner_si, int *hflip, int *vflip);
+
 // FG_pages oracle CHR (3-digit LM hex, e.g. 0x1FA): bypass slot (hi digit + BG2) + local (low>=0x80 -> -0x80).
 void gfx_route_resolve_lm_oracle_chr(const LevelGfxRoute *route, uint16_t chr, int route_mode,
                                    uint8_t *out_file_id, uint16_t *out_local);

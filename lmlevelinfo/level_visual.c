@@ -10,6 +10,7 @@
 #include "map16_reader.h"
 #include "map16_fg_oracle.h"
 #include "map16_rom.h"
+#include "map16_text.h"
 #include "gfx_reader.h"
 #include "obj_to_map16.h"
 #include "gfx_route.h"
@@ -317,7 +318,9 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
     uint8_t page = (uint8_t)((tile8 >> 8) & 0x03);
-    uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
+    Map16TextSub sub;
+    map16_text_decode_sub_word(w0, &sub);
+    uint8_t pal_raw = sub.pal;
     uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, custom_palette, bg_palette_row, fg_palette_row);
     uint8_t file_id = 0;
     uint16_t local_tile = 0;
@@ -333,14 +336,14 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
               "pal=%u eff_pal=%u h=%d v=%d file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
               layer_label, (unsigned)map16_id, si, map16_src_label(src),
               have_alias_idx ? alias_idx : (size_t)SIZE_MAX, have_can_idx ? can_idx : (size_t)SIZE_MAX,
-              (unsigned)tile8, (unsigned)page, (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1,
+              (unsigned)tile8, (unsigned)page, (unsigned)pal_raw, (unsigned)eff_pal, sub.hflip, sub.vflip,
               (unsigned)file_id, (unsigned)van, (unsigned)local_tile, synth, alias, rom_fb, rom_van);
     } else {
       fprintf(stderr,
               "LV_REPORT_MAP16_BLOCK layer=%s id=0x%04X sub=%d src=%s tile8=0x%03X page=%u pal=%u eff_pal=%u h=%d v=%d "
               "file=0x%02X vanilla=0x%02X local=0x%02X synth=%d alias=%d rom=%d rom_van=%d\n",
               layer_label, (unsigned)map16_id, si, map16_src_label(src), (unsigned)tile8, (unsigned)page,
-              (unsigned)pal_raw, (unsigned)eff_pal, (w0 >> 10) & 1, (w0 >> 11) & 1, (unsigned)file_id,
+              (unsigned)pal_raw, (unsigned)eff_pal, sub.hflip, sub.vflip, (unsigned)file_id,
               (unsigned)van, (unsigned)local_tile, synth, alias, rom_fb, rom_van);
     }
   }
@@ -456,21 +459,12 @@ static void pal_row_hist_print(const RenderCtx *rc, const char *layer_label) {
 }
 
 // 0 = ok, -1 = load fail, -2 = tile index out of range
-static int decode_gfx_subtile(Rom *rom, GfxCache *gfxc, const LevelGfxRoute *route, int route_mode, int map16_src,
-                              uint16_t tile8, uint8_t file_override, uint8_t out_px64[64], char *err, size_t errcap) {
+static int decode_gfx_subtile(Rom *rom, GfxCache *gfxc, uint8_t file_id, uint16_t local_tile,
+                              uint8_t out_px64[64], char *err, size_t errcap) {
   const GfxBlob *gfx = NULL;
-  uint8_t file_id = 0;
-  uint16_t local_tile = 0;
-  if (map16_src == MAP16_SRC_FG_ORACLE) {
-    gfx_route_resolve_lm_oracle_chr(route, tile8, route_mode, &file_id, &local_tile);
-  } else {
-    gfx_route_resolve_subtile(route, tile8, route_mode, &file_id, &local_tile);
-  }
-  if (file_override != 0) file_id = file_override;
   if (!gfxcache_get(rom, gfxc, file_id, &gfx, err, errcap) || !gfx || !gfx->bytes || !gfx->len) {
     return -1;
   }
-  local_tile = gfx_local_tile_index(gfx->len, tile8);
   if (!snes4bpp_decode_tile(gfx->bytes, gfx->len, local_tile, out_px64)) {
     return -2;
   }
@@ -551,14 +545,25 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   int ext_oracle = (src == MAP16_SRC_FG_ORACLE) && tile_uses_extended_oracle_chr(&t);
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
+  uint16_t acts_like = 0;
+  int use_012f_munch = 0;
+  if (map16_get_acts_like(rc->map16, draw_id, &acts_like) && acts_like == 0x012Fu &&
+      map16_tile_is_full_muncher_quad(&t)) {
+    use_012f_munch = 1;
+  }
+
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
     if ((tile8 & 0x03FFu) == 0) continue;
-    int hflip = (w0 >> 10) & 1;
-    int vflip = (w0 >> 11) & 1;
-    uint8_t pal_raw = (uint8_t)((w0 >> 13) & 0x7);
-    uint8_t pal = map16_effective_palette(pal_raw, rc->is_layer2, rc->custom_palette, rc->bg_palette_row,
+    Map16TextSub sub;
+    map16_text_decode_sub_word(w0, &sub);
+    int hflip = sub.hflip;
+    int vflip = sub.vflip;
+    if (use_012f_munch) {
+      gfx_route_012f_muncher_blit_flips(si, &hflip, &vflip);
+    }
+    uint8_t pal = map16_effective_palette(sub.pal, rc->is_layer2, rc->custom_palette, rc->bg_palette_row,
                                           rc->fg_palette_row);
     if (pal >= 8) rc->pal_row_oob_count++;
     if (pal < 8) rc->pal_row_subtiles[pal]++;
@@ -575,7 +580,9 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint16_t local_tile = 0;
     uint8_t file_id = page;
     uint8_t used_file = file_id;
-    if (src == MAP16_SRC_FG_ORACLE) {
+    if (use_012f_munch) {
+      gfx_route_resolve_012f_muncher(rc->gfx_route, si, rc->gfx_route_mode, &file_id, &local_tile);
+    } else if (src == MAP16_SRC_FG_ORACLE) {
       gfx_route_resolve_lm_oracle_chr(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
     } else {
       gfx_route_resolve_subtile(rc->gfx_route, map16_gfx_route_tile8(tile8), rc->gfx_route_mode, &file_id,
@@ -591,18 +598,29 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
       }
     }
 
-    int dr = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, src, tile8, 0, px64, rc->err,
-                                rc->errcap);
+    uint16_t decode_local = local_tile;
+    if (!use_012f_munch) {
+      const GfxBlob *gfx_hint = NULL;
+      if (gfxcache_get(rc->rom, rc->gfxc, file_id, &gfx_hint, rc->err, rc->errcap) && gfx_hint) {
+        decode_local = gfx_local_tile_index(gfx_hint->len, tile8);
+      }
+    }
+
+    int dr = decode_gfx_subtile(rc->rom, rc->gfxc, file_id, decode_local, px64, rc->err, rc->errcap);
     int fail_reason = dr;
     if (dr == 0) {
       if (rc->gfx_route_mode == GFX_ROUTE_MODE_TRY_BOTH && !tile_px64_has_opaque(px64) && rc->gfx_route) {
         uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
         if (van != 0 && van != file_id) {
           uint8_t px_van[64];
-          if (decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, src, tile8, van, px_van, rc->err,
-                                 rc->errcap) == 0 &&
+          uint16_t van_local = decode_local;
+          const GfxBlob *vgfx = NULL;
+          if (gfxcache_get(rc->rom, rc->gfxc, van, &vgfx, rc->err, rc->errcap) && vgfx) {
+            van_local = gfx_local_tile_index(vgfx->len, tile8);
+          }
+          if (decode_gfx_subtile(rc->rom, rc->gfxc, van, van_local, px_van, rc->err, rc->errcap) == 0 &&
               tile_px64_has_opaque(px_van)) {
-            memcpy(px64, px_van, sizeof(px64));
+            memcpy(px64, px_van, sizeof(px_van));
             used_file = van;
             if (rc->stats) rc->stats->gfx_fallback_ok++;
           }
@@ -612,8 +630,12 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     } else if (rc->gfx_route) {
       uint8_t van = gfx_route_vanilla_file_for_page(rc->gfx_route, page);
       if (van != 0 && van != file_id) {
-        int dr2 = decode_gfx_subtile(rc->rom, rc->gfxc, rc->gfx_route, rc->gfx_route_mode, src, tile8, van, px64, rc->err,
-                                     rc->errcap);
+        uint16_t van_local = decode_local;
+        const GfxBlob *vgfx = NULL;
+        if (gfxcache_get(rc->rom, rc->gfxc, van, &vgfx, rc->err, rc->errcap) && vgfx) {
+          van_local = gfx_local_tile_index(vgfx->len, tile8);
+        }
+        int dr2 = decode_gfx_subtile(rc->rom, rc->gfxc, van, van_local, px64, rc->err, rc->errcap);
         if (dr2 == 0) {
           okpx = 1;
           used_file = van;

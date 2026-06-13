@@ -527,6 +527,15 @@ static int tile_uses_extended_oracle_chr(const Map16Tile *t) {
   return 0;
 }
 
+/* Muncher locals 0x5C-0x5F are authored on SP2 in many hacks while Map16 words keep page 0. */
+static uint16_t map16_gfx_route_tile8(uint16_t tile8) {
+  uint16_t local = (uint16_t)(tile8 & 0x7Fu);
+  if (((tile8 >> 8) & 0x03u) == 0u && local >= 0x5Cu && local <= 0x5Fu) {
+    return (uint16_t)(0x0100u | local);
+  }
+  return tile8;
+}
+
 static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uint32_t y_tile) {
   if (!rc || !rc->rgb || !rc->map16 || !rc->pal256 || !rc->rom || !rc->gfxc) return;
 
@@ -568,7 +577,8 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     if (src == MAP16_SRC_FG_ORACLE) {
       gfx_route_resolve_lm_oracle_chr(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
     } else {
-      gfx_route_resolve_subtile(rc->gfx_route, tile8, rc->gfx_route_mode, &file_id, &local_tile);
+      gfx_route_resolve_subtile(rc->gfx_route, map16_gfx_route_tile8(tile8), rc->gfx_route_mode, &file_id,
+                                &local_tile);
     }
     used_file = file_id;
 

@@ -1170,7 +1170,7 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   Map16Tile raw;
   int have_raw = map16_get_raw(m, tile_id, &raw);
 
-  /* Hack-page placement stubs: prefer FG oracle on definition pool (+21) when customized CHR exists. */
+  /* Hack-page placement stubs: pool FG oracle (extended CHR) or pool file + placement oracle pal. */
   if (have_raw && page >= 2u && map16_tile_is_placement_stub(m, tile_id, &raw) &&
       (size_t)tile_id + 21u < m->tiles_count) {
     uint16_t pool_id = (uint16_t)(tile_id + 21u);
@@ -1182,6 +1182,23 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
         map16_merge_flip_from_placement(&place_oracle, out, out);
       }
       if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
+      return 1;
+    }
+    const Map16Tile *pool = &m->tiles[pool_id];
+    Map16Tile place_oracle;
+    int have_place_oracle = map16_get_fg_oracle(m, tile_id, &place_oracle);
+    if (map16_tile_is_drawable(pool) && !map16_tile8s_equal(&raw, pool)) {
+      if (have_place_oracle && !map16_tile_uses_extended_oracle_chr(&place_oracle)) {
+        for (int si = 0; si < 4; si++) {
+          out->w[si] = (uint16_t)((pool->w[si] & 0x03FFu) | (place_oracle.w[si] & 0xE000u));
+        }
+        if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
+        m->def_redirect_count++;
+        return 1;
+      }
+      map16_copy_def_pool_visual(&raw, pool, out, 1);
+      if (src_out) *src_out = MAP16_SRC_DEF_REDIRECT;
+      m->def_redirect_count++;
       return 1;
     }
   }

@@ -261,6 +261,15 @@ int map16_tile_is_full_muncher_quad(const Map16Tile *t) {
   return want_mask == 0x0Fu;
 }
 
+int map16_tile_uses_012f_muncher_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved) {
+  if (!resolved || !map16_tile_is_full_muncher_quad(resolved)) return 0;
+  if (tile_id == 0x012Fu) return 1;
+  uint16_t acts = 0;
+  if (m && map16_get_acts_like(m, tile_id, &acts) && acts == 0x012Fu) return 1;
+  if (m && m->rom && map16_rom_read_acts_like(m->rom, tile_id, &acts) && acts == 0x012Fu) return 1;
+  return 0;
+}
+
 static int map16_tile_has_full_muncher_quad_locals(const Map16Tile *t) {
   return map16_tile_is_full_muncher_quad(t);
 }

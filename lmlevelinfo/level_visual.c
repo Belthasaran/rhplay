@@ -324,7 +324,10 @@ static void map16_audit_print_block(Map16Data *map16, const LevelGfxRoute *route
     uint8_t eff_pal = map16_effective_palette(pal_raw, is_layer2, custom_palette, bg_palette_row, fg_palette_row);
     uint8_t file_id = 0;
     uint16_t local_tile = 0;
-    if (src == MAP16_SRC_FG_ORACLE) {
+    int use_012f_munch = map16_tile_uses_012f_muncher_gfx(map16, map16_id, &t);
+    if (use_012f_munch) {
+      gfx_route_resolve_012f_muncher(route, si, gfx_route_mode, &file_id, &local_tile);
+    } else if (src == MAP16_SRC_FG_ORACLE) {
       gfx_route_resolve_lm_oracle_chr(route, tile8, gfx_route_mode, &file_id, &local_tile);
     } else {
       gfx_route_resolve_subtile(route, tile8, gfx_route_mode, &file_id, &local_tile);
@@ -545,12 +548,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   int ext_oracle = (src == MAP16_SRC_FG_ORACLE) && tile_uses_extended_oracle_chr(&t);
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
-  uint16_t acts_like = 0;
-  int use_012f_munch = 0;
-  if (map16_get_acts_like(rc->map16, draw_id, &acts_like) && acts_like == 0x012Fu &&
-      map16_tile_is_full_muncher_quad(&t)) {
-    use_012f_munch = 1;
-  }
+  int use_012f_munch = map16_tile_uses_012f_muncher_gfx(rc->map16, draw_id, &t);
 
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];

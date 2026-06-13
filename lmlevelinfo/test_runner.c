@@ -2521,7 +2521,7 @@ static int run_lv_ppm_gridlines_unit(void) {
     rgb[i + 1] = 41;
     rgb[i + 2] = 57;
   }
-  lv_ppm_draw_gridlines(rgb, 16u, 16u);
+  lv_ppm_draw_gridlines(rgb, 16u, 16u, 66, 41, 57);
   lv_ppm_draw_grid_corners(rgb, 16u, 16u, 66, 41, 57);
   size_t o = (15u * 16u + 15u) * 3u;
   if (rgb[o + 0] != LV_PPM_GRID_CORNER_R || rgb[o + 1] != LV_PPM_GRID_CORNER_G || rgb[o + 2] != LV_PPM_GRID_CORNER_B) {

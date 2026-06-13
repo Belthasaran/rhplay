@@ -43,7 +43,7 @@ int lv_ppm_read_rgb(const char *path, unsigned *out_w, unsigned *out_h, uint8_t 
   return 1;
 }
 
-void lv_ppm_draw_gridlines(uint8_t *rgb, unsigned w, unsigned h) {
+void lv_ppm_draw_gridlines(uint8_t *rgb, unsigned w, unsigned h, uint8_t back_r, uint8_t back_g, uint8_t back_b) {
   if (!rgb || w == 0 || h == 0) return;
   for (unsigned y = 0; y < h; y++) {
     for (unsigned x = 0; x < w; x++) {
@@ -51,6 +51,7 @@ void lv_ppm_draw_gridlines(uint8_t *rgb, unsigned w, unsigned h) {
       /* Corner (15,15) per tile is finished in lv_ppm_draw_grid_corners. */
       if ((x & 15u) == 15u && (y & 15u) == 15u) continue;
       size_t o = ((size_t)y * (size_t)w + (size_t)x) * 3u;
+      if (rgb[o + 0] != back_r || rgb[o + 1] != back_g || rgb[o + 2] != back_b) continue;
       rgb[o + 0] = LV_PPM_GRID_R;
       rgb[o + 1] = LV_PPM_GRID_G;
       rgb[o + 2] = LV_PPM_GRID_B;
@@ -61,9 +62,6 @@ void lv_ppm_draw_gridlines(uint8_t *rgb, unsigned w, unsigned h) {
 void lv_ppm_draw_grid_corners(uint8_t *rgb, unsigned w, unsigned h, uint8_t back_r, uint8_t back_g,
                               uint8_t back_b) {
   if (!rgb || w < 16u || h < 16u) return;
-  (void)back_r;
-  (void)back_g;
-  (void)back_b;
   unsigned tiles_x = w / 16u;
   unsigned tiles_y = h / 16u;
   for (unsigned ty = 0; ty < tiles_y; ty++) {
@@ -71,6 +69,7 @@ void lv_ppm_draw_grid_corners(uint8_t *rgb, unsigned w, unsigned h, uint8_t back
       unsigned x = tx * 16u + 15u;
       unsigned y = ty * 16u + 15u;
       size_t o = ((size_t)y * (size_t)w + (size_t)x) * 3u;
+      if (rgb[o + 0] != back_r || rgb[o + 1] != back_g || rgb[o + 2] != back_b) continue;
       rgb[o + 0] = LV_PPM_GRID_CORNER_R;
       rgb[o + 1] = LV_PPM_GRID_CORNER_G;
       rgb[o + 2] = LV_PPM_GRID_CORNER_B;

@@ -519,6 +519,14 @@ static uint16_t map16_pipe_body_visual_id(uint16_t map16_id) {
   return map16_id;
 }
 
+static int tile_uses_extended_oracle_chr(const Map16Tile *t) {
+  if (!t) return 0;
+  for (int si = 0; si < 4; si++) {
+    if ((t->w[si] & 0x03FFu) >= 0x100u) return 1;
+  }
+  return 0;
+}
+
 static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uint32_t y_tile) {
   if (!rc || !rc->rgb || !rc->map16 || !rc->pal256 || !rc->rom || !rc->gfxc) return;
 
@@ -530,6 +538,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     draw_missing_tile(rc->rgb, rc->W, rc->H, x_tile * 16u, y_tile * 16u, 16u, 0, 0, 0);
     return;
   }
+  int ext_oracle = (src == MAP16_SRC_FG_ORACLE) && tile_uses_extended_oracle_chr(&t);
   if (src == MAP16_SRC_SYNTH && rc->map16_synth_debug) map16_synth_hist_bump(rc, map16_id);
 
   for (int si = 0; si < 4; si++) {
@@ -609,9 +618,11 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     int corner = si;
     int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
-      /* FG_pages TL,BL,TR,BR -> screen TL,TR,BL,BR */
+      /* FG_pages column order TL,BL,TR,BR -> screen TL,TR,BL,BR */
       if (corner == 1) corner = 2;
       else if (corner == 2) corner = 1;
+      /* Extended CHR (0x100+): FG_pages -y- is priority, not static vflip for L1 export. */
+      if (ext_oracle) blit_vflip = 0;
     }
     uint32_t px = x_tile * 16u + (uint32_t)(corner == 1 || corner == 3 ? 8 : 0);
     uint32_t py = y_tile * 16u + (uint32_t)(corner >= 2 ? 8 : 0);
@@ -1061,7 +1072,7 @@ static int render_level_ppm(const LevelInfo *info, Rom *rom, const char *map16_p
   }
 
   if (opts && opts->export_gridlines) {
-    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H);
+    lv_ppm_draw_gridlines(rgb, (unsigned)W, (unsigned)H, back_r, back_g, back_b);
     lv_ppm_draw_grid_corners(rgb, (unsigned)W, (unsigned)H, back_r, back_g, back_b);
   }
 

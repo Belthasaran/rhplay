@@ -1,7 +1,6 @@
 #include "map16_reader.h"
 #include "map16_fg_oracle.h"
 #include "map16_rom.h"
-#include "map16_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -269,16 +268,6 @@ int map16_tile_uses_012f_muncher_gfx(const Map16Data *m, uint16_t tile_id, const
   if (m && map16_get_acts_like(m, tile_id, &acts) && acts == 0x012Fu) return 1;
   if (m && m->rom && map16_rom_read_acts_like(m->rom, tile_id, &acts) && acts == 0x012Fu) return 1;
   return 0;
-}
-
-int map16_tile_is_down_facing_muncher_quad(const Map16Tile *t) {
-  if (!t || !map16_tile_is_full_muncher_quad(t)) return 0;
-  for (int si = 0; si < 4; si++) {
-    Map16TextSub sub;
-    map16_text_decode_sub_word(t->w[si], &sub);
-    if (!sub.vflip) return 0;
-  }
-  return 1;
 }
 
 static int map16_tile_is_coin_quad(const Map16Tile *t) {

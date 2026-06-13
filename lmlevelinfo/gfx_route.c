@@ -221,12 +221,6 @@ void gfx_route_012f_muncher_blit_flips_oracle(int oracle_si, int *hflip, int *vf
   gfx_route_012f_muncher_blit_flips(oracle_to_screen[oracle_si], hflip, vflip);
 }
 
-int gfx_route_012f_muncher_template_si(int oracle_si, int down_facing) {
-  static const int kDownFacing[4] = {1, 0, 3, 2};
-  if (oracle_si < 0 || oracle_si > 3) return oracle_si;
-  return down_facing ? kDownFacing[oracle_si] : oracle_si;
-}
-
 int gfx_route_resolve_002b_coin(const LevelGfxRoute *route, int oracle_si, int route_mode,
                                 uint8_t *out_file_id, uint16_t *out_local) {
   static const struct {

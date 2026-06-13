@@ -173,6 +173,48 @@ void gfx_route_resolve_subtile(const LevelGfxRoute *route, uint16_t tile8, int r
   if (out_local) *out_local = local;
 }
 
+int gfx_route_tile8_is_vanilla_muncher_local(uint16_t tile8) {
+  uint16_t local = (uint16_t)(tile8 & 0x7Fu);
+  return ((tile8 >> 8) & 0x03u) == 0u && local >= 0x5Cu && local <= 0x5Fu;
+}
+
+int gfx_route_resolve_012f_muncher(const LevelGfxRoute *route, int corner_si, int route_mode,
+                                   uint8_t *out_file_id, uint16_t *out_local) {
+  static const struct {
+    int slot;
+    uint16_t local;
+  } kRoute[4] = {
+      {GFX_SLOT_BG1, 0x000},
+      {GFX_SLOT_BG1, 0x004},
+      {GFX_SLOT_LG3, 0x017},
+      {GFX_SLOT_BG1, 0x004},
+  };
+  if (corner_si < 0 || corner_si > 3) return 0;
+  uint8_t fid = 0;
+  if (route && route->valid) {
+    fid = gfx_route_file_for_sprite_slot_mode(route, kRoute[corner_si].slot, route_mode);
+  }
+  if (fid == 0) return 0;
+  if (out_file_id) *out_file_id = fid;
+  if (out_local) *out_local = kRoute[corner_si].local;
+  return 1;
+}
+
+void gfx_route_012f_muncher_blit_flips(int corner_si, int *hflip, int *vflip) {
+  static const struct {
+    int hflip;
+    int vflip;
+  } kFlips[4] = {
+      {0, 1},
+      {0, 0},
+      {0, 1},
+      {1, 0},
+  };
+  if (corner_si < 0 || corner_si > 3) return;
+  if (hflip) *hflip = kFlips[corner_si].hflip;
+  if (vflip) *vflip = kFlips[corner_si].vflip;
+}
+
 static size_t append_unique_id(uint8_t *out_ids, size_t n, size_t max_out, uint8_t fid) {
   if (fid == 0 || !out_ids || n >= max_out) return n;
   for (size_t j = 0; j < n; j++) {

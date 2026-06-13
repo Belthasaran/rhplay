@@ -18,7 +18,6 @@ int gfx_chr_probe_muncher_regression(const char *rom_path, const char *ref_ppm, 
     if (err && errcap) snprintf(err, errcap, "invalid args");
     return 0;
   }
-  static const uint16_t vanilla_chr[4] = {0x05C, 0x05E, 0x05D, 0x05F};
   static const struct {
     uint8_t file_id;
     uint16_t local;
@@ -49,12 +48,15 @@ int gfx_chr_probe_muncher_regression(const char *rom_path, const char *ref_ppm, 
 
   int ok = 1;
   for (int si = 0; si < 4; si++) {
-    uint16_t word = map16_text_encode_sub_word(vanilla_chr[si], 6, expect[si].hflip, expect[si].vflip, 0);
     uint8_t fid = 0;
     uint16_t local = 0;
-    gfx_route_resolve_subtile(&route, word, GFX_ROUTE_MODE_BYPASS, &fid, &local);
-    int hf = (int)((word >> 14) & 1u);
-    int vf = (int)((word >> 15) & 1u);
+    if (!gfx_route_resolve_012f_muncher(&route, si, GFX_ROUTE_MODE_BYPASS, &fid, &local)) {
+      if (err && errcap) snprintf(err, errcap, "sub=%d resolve_012f_muncher failed", si);
+      ok = 0;
+      break;
+    }
+    int hf = 0, vf = 0;
+    gfx_route_012f_muncher_blit_flips(si, &hf, &vf);
     if (fid != expect[si].file_id || local != expect[si].local || hf != expect[si].hflip || vf != expect[si].vflip) {
       if (err && errcap) {
         snprintf(err, errcap, "sub=%d route file=0x%02X local=0x%03X hf=%d vf=%d expect file=0x%02X local=0x%03X hf=%d vf=%d", si,

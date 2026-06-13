@@ -18,6 +18,7 @@
 #include "map16_reader.h"
 #include "map16_fg_oracle.h"
 #include "map16_rom.h"
+#include "map16_text.h"
 #include "map16_parity.h"
 #include "palette_rom.h"
 #include "lv_ppm_compare.h"
@@ -1705,6 +1706,54 @@ static int run_l1_palette_remap_sanity(void) {
   return 1;
 }
 
+static int run_map16_subword_decode_pipe(void) {
+  Map16TextTile parsed;
+  char err[128];
+
+  const char *cap_line = "03BA: 0133 { 000 5 ---  010 5 ---  001 5 ---  011 5 --- }";
+  if (map16_text_parse_line(cap_line, 0x03BA, &parsed, err, sizeof(err)) != MAP16_TEXT_FMT_FG_FULL) {
+    failf("[map16_subword_pipe] parse 03BA failed: %s", err);
+    return 0;
+  }
+  for (int si = 0; si < 4; si++) {
+    Map16TextSub dec;
+    map16_text_decode_sub_word(parsed.words.w[si], &dec);
+    if (dec.pal != 5u || dec.hflip || dec.vflip) {
+      failf("[map16_subword_pipe] 03BA sub=%d pal=%u hf=%d vf=%d", si, (unsigned)dec.pal, dec.hflip, dec.vflip);
+      return 0;
+    }
+    if (test_map16_effective_palette(dec.pal, 0, 0) != 5u) {
+      failf("[map16_subword_pipe] 03BA sub=%d eff_pal expected 5", si);
+      return 0;
+    }
+  }
+
+  const char *shaft_line = "03BE: 0133 { 010 5 -y-  000 5 -y-  011 5 -y-  001 5 -y- }";
+  if (map16_text_parse_line(shaft_line, 0x03BE, &parsed, err, sizeof(err)) != MAP16_TEXT_FMT_FG_FULL) {
+    failf("[map16_subword_pipe] parse 03BE failed: %s", err);
+    return 0;
+  }
+  for (int si = 0; si < 4; si++) {
+    Map16TextSub dec;
+    map16_text_decode_sub_word(parsed.words.w[si], &dec);
+    if (dec.pal != 5u || dec.hflip || !dec.vflip) {
+      failf("[map16_subword_pipe] 03BE sub=%d pal=%u hf=%d vf=%d", si, (unsigned)dec.pal, dec.hflip, dec.vflip);
+      return 0;
+    }
+  }
+
+  uint16_t green_word = map16_text_encode_sub_word(0x000, 3, 0, 0, 0);
+  Map16TextSub green;
+  map16_text_decode_sub_word(green_word, &green);
+  if (green.pal != 3u || test_map16_effective_palette(green.pal, 0, 0) != 7u) {
+    failf("[map16_subword_pipe] green pipe pal 3 eff expected 7");
+    return 0;
+  }
+
+  printf("PASS: map16_subword_decode_pipe\n");
+  return 1;
+}
+
 static int run_snes15_back_color_109(void) {
   const char *rom_path = "test/akogare/orig_Ako.sfc";
   char err[512];
@@ -2501,7 +2550,7 @@ static int run_map16_rom_def_redirect_tests(void) {
       rom_free(&rom);
       return 0;
     }
-    if (((place.w[0] >> 11) & 1u) == 1u && ((got.w[0] >> 11) & 1u) != 1u) {
+    if (((place.w[0] >> 15) & 1u) == 1u && ((got.w[0] >> 15) & 1u) != 1u) {
       failf("[map16_rom] 0x07EC expected Y-flip from placement on sub0 w=%04X", got.w[0]);
       map16_free(&m);
       rom_free(&rom);
@@ -3897,7 +3946,10 @@ int main(void) {
   int okMap16Synth = run_map16_synth_gfx_page_test();
   int okMap16Alias = run_map16_alias_tests();
   int okMap16Rom = run_map16_rom_def_redirect_tests();
+  int okMap16SubPipe = run_map16_subword_decode_pipe();
   int okMap16ParityA = map16_parity_run_tier_a();
+  if (!okMap16Rom) failures++;
+  if (!okMap16SubPipe) failures++;
   if (!okMap16ParityA) failures++;
   int okMap16ParityB = map16_parity_run_tier_b_thorough();
   if (!okMap16ParityB) failures++;
@@ -3926,7 +3978,7 @@ int main(void) {
   int ok9 = run_suite_dir("sakaya", "test/sakaya/sakaya.sfc", "test/sakaya", "sakaya ");
   int ok10 = run_suite_dir("pineapple", "test/pineapple/pineapple.sfc", "test/pineapple", "pineapple ");
   if (failures == 0 && ok1 && ok1b && okS && okLm && okScr && okGfxRt && okGfxSmall && ok109inv && okGfxTi && okGfxExt && okEg &&
-      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okMap16ParityA && okMap16ParityB && okMap16ParityC &&
+      okExt68 && okMap16Synth && okMap16Alias && okMap16Rom && okMap16SubPipe && okMap16ParityA && okMap16ParityB && okMap16ParityC &&
       okMap16GfxMunch && okLvPpmGrid && okLvTileL1 && okSnes15 &&
       okEmit109 && okL1Pal &&
       okSprNoGen && okLv && okLvLm &&

@@ -128,6 +128,22 @@ static void repeat_layer2_strip_horiz(uint8_t *rgb, uint32_t w, uint32_t h, uint
   }
 }
 
+static void fill_rect_rgb(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t x0, uint32_t y0, uint32_t sw, uint32_t sh,
+                          uint8_t r, uint8_t g, uint8_t b) {
+  for (uint32_t yy = 0; yy < sh; yy++) {
+    uint32_t y = y0 + yy;
+    if (y >= h) continue;
+    for (uint32_t xx = 0; xx < sw; xx++) {
+      uint32_t x = x0 + xx;
+      if (x >= w) continue;
+      uint32_t idx = (y * w + x) * 3u;
+      rgb[idx + 0] = r;
+      rgb[idx + 1] = g;
+      rgb[idx + 2] = b;
+    }
+  }
+}
+
 static void draw_missing_tile(uint8_t *rgb, uint32_t w, uint32_t h, uint32_t x0, uint32_t y0, uint32_t s,
                               uint8_t r, uint8_t g, uint8_t b) {
   for (uint32_t yy = 0; yy < s; yy++) {
@@ -554,6 +570,10 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
   int use_012f_munch = map16_tile_uses_012f_muncher_gfx(rc->map16, draw_id, &t);
   int use_002b_coin = !use_012f_munch && map16_tile_uses_002b_coin_gfx(rc->map16, draw_id, &t);
 
+  if (use_012f_munch) {
+    fill_rect_rgb(rc->rgb, rc->W, rc->H, x_tile * 16u, y_tile * 16u, 16u, 16u, rc->back_r, rc->back_g, rc->back_b);
+  }
+
   for (int si = 0; si < 4; si++) {
     uint16_t w0 = t.w[si];
     uint16_t tile8 = (uint16_t)(w0 & 0x03FFu);
@@ -562,8 +582,9 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     map16_text_decode_sub_word(w0, &sub);
     int hflip = sub.hflip;
     int vflip = sub.vflip;
+    int munch_route_si = si;
     if (use_012f_munch) {
-      gfx_route_012f_muncher_blit_flips(si, &hflip, &vflip);
+      gfx_route_012f_muncher_blit_flips(munch_route_si, &hflip, &vflip);
       hflip ^= sub.hflip;
       vflip ^= sub.vflip;
     } else if (use_002b_coin) {
@@ -593,7 +614,7 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     uint8_t file_id = page;
     uint8_t used_file = file_id;
     if (use_012f_munch) {
-      gfx_route_resolve_012f_muncher(rc->gfx_route, si, rc->gfx_route_mode, &file_id, &local_tile);
+      gfx_route_resolve_012f_muncher(rc->gfx_route, munch_route_si, rc->gfx_route_mode, &file_id, &local_tile);
     } else if (use_002b_coin) {
       gfx_route_resolve_002b_coin(rc->gfx_route, si, rc->gfx_route_mode, &file_id, &local_tile);
     } else if (src == MAP16_SRC_FG_ORACLE) {
@@ -665,9 +686,12 @@ static void draw_map16_at(RenderCtx *rc, uint16_t map16_id, uint32_t x_tile, uin
     int corner = si;
     int blit_vflip = vflip;
     if (src == MAP16_SRC_FG_ORACLE) {
-      /* FG_pages column order TL,BL,TR,BR -> screen TL,TR,BL,BR */
-      if (corner == 1) corner = 2;
-      else if (corner == 2) corner = 1;
+      /* FG_pages column order TL,BL,TR,BR -> screen TL,TR,BL,BR for generic tiles.
+       * Acts-like 0x012F muncher quads list subs in screen order TL,TR,BL,BR. */
+      if (!use_012f_munch) {
+        if (corner == 1) corner = 2;
+        else if (corner == 2) corner = 1;
+      }
       /* Extended CHR (0x100+): FG_pages -y- is priority, not static vflip for L1 export.
        * Acts-like 0x012F muncher template keeps computed vflip (teeth orientation). */
       if (ext_oracle && !use_012f_munch) blit_vflip = 0;

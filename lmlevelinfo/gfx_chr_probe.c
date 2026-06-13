@@ -230,8 +230,9 @@ int main(int argc, char **argv) {
   }
 
   Rgb ref_sub[4][64];
-  /* Screen corners: 0=TL, 1=TR, 2=BL, 3=BR. Oracle column order: 0=TL, 1=BL, 2=TR, 3=BR. */
-  static const int oracle_to_screen[4] = {0, 2, 1, 3};
+  /* Screen corners: 0=TL, 1=TR, 2=BL, 3=BR.
+   * Muncher FG_pages subs are listed in screen order (05C 05E 05D 05F). */
+  static const int oracle_to_screen[4] = {0, 1, 2, 3};
   for (int si = 0; si < 4; si++) {
     extract_ref_sub(ref_rgb, ref_w, munch_tx, munch_ty, oracle_to_screen[si], ref_sub[si]);
   }

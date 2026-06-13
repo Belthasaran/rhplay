@@ -185,8 +185,8 @@ int gfx_route_resolve_012f_muncher(const LevelGfxRoute *route, int corner_si, in
     uint16_t local;
   } kRoute[4] = {
       {GFX_SLOT_BG1, 0x000},
-      {GFX_SLOT_BG1, 0x004},
       {GFX_SLOT_LG3, 0x017},
+      {GFX_SLOT_BG1, 0x004},
       {GFX_SLOT_BG1, 0x004},
   };
   if (corner_si < 0 || corner_si > 3) return 0;
@@ -205,9 +205,9 @@ void gfx_route_012f_muncher_blit_flips(int corner_si, int *hflip, int *vflip) {
     int hflip;
     int vflip;
   } kFlips[4] = {
-      {0, 1},
+      {1, 1},
+      {1, 1},
       {0, 0},
-      {0, 1},
       {1, 0},
   };
   if (corner_si < 0 || corner_si > 3) return;
@@ -216,9 +216,8 @@ void gfx_route_012f_muncher_blit_flips(int corner_si, int *hflip, int *vflip) {
 }
 
 void gfx_route_012f_muncher_blit_flips_oracle(int oracle_si, int *hflip, int *vflip) {
-  static const int oracle_to_screen[4] = {0, 2, 1, 3};
   if (oracle_si < 0 || oracle_si > 3) return;
-  gfx_route_012f_muncher_blit_flips(oracle_to_screen[oracle_si], hflip, vflip);
+  gfx_route_012f_muncher_blit_flips(oracle_si, hflip, vflip);
 }
 
 int gfx_route_resolve_002b_coin(const LevelGfxRoute *route, int oracle_si, int route_mode,

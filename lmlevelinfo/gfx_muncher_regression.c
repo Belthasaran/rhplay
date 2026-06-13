@@ -24,9 +24,9 @@ int gfx_chr_probe_muncher_regression(const char *rom_path, const char *ref_ppm, 
     int hflip;
     int vflip;
   } expect[4] = {
-      {0x1B, 0x000, 0, 1},
+      {0x1B, 0x000, 1, 1},
+      {0x2A, 0x017, 1, 1},
       {0x1B, 0x004, 0, 0},
-      {0x2A, 0x017, 0, 1},
       {0x1B, 0x004, 1, 0},
   };
 

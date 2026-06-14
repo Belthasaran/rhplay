@@ -36764,6 +36764,16 @@ button:disabled {
   font-size: 16px;
 }
 
+.launch-instructions .quick-launch-toggle > span {
+  color: #374151;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.quick-launch-toggles-row h4 {
+  margin: 0;
+}
+
 .quick-actions-buttons {
   display: flex;
   flex-direction: column;
@@ -42114,6 +42124,7 @@ button.catalog-chip {
   align-items: center;
   gap: 6px;
   font-size: 13px;
+  color: #374151;
 }
 
 .quick-launch-toggle select {

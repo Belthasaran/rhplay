@@ -744,6 +744,17 @@ async function stageQuickLaunchGames(params) {
     const quickLaunchBase = getQuickLaunchBasePath(tempDirOverride);
     if (!fs.existsSync(quickLaunchBase)) {
       fs.mkdirSync(quickLaunchBase, { recursive: true });
+    } else {
+      // Remove stale ROMs/metadata from prior sessions (e.g. Build+ sm{id}_cc.sfc)
+      for (const entry of fs.readdirSync(quickLaunchBase)) {
+        if (entry.endsWith('.sfc') || (entry.endsWith('.json') && entry.startsWith('md'))) {
+          try {
+            fs.unlinkSync(path.join(quickLaunchBase, entry));
+          } catch (e) {
+            console.warn(`Failed to remove stale quick-launch file ${entry}:`, e.message);
+          }
+        }
+      }
     }
     
     console.log(`Quick launch folder: ${quickLaunchBase}`);
@@ -777,6 +788,7 @@ async function stageQuickLaunchGames(params) {
     let successCount = 0;
     const errors = [];
     const stagedFiles = []; // Track which files we actually staged
+    const stagedGames = []; // Full metadata for each staged game
     
     for (let i = 0; i < gameInfos.length; i++) {
       const gameInfo = gameInfos[i];
@@ -803,6 +815,29 @@ async function stageQuickLaunchGames(params) {
       if (patchResult.success) {
         successCount++;
         stagedFiles.push(sfcFilename); // Track successful staging
+        stagedGames.push({
+          gameid: gameInfo.gameid,
+          version: gameInfo.version,
+          name: gameInfo.name,
+          authors: gameInfo.authors,
+          author: gameInfo.author,
+          gametype: gameInfo.gametype,
+          combinedtype: gameInfo.combinedtype,
+          fields_type: gameInfo.fields_type,
+          legacy_type: gameInfo.legacy_type,
+          difficulty: gameInfo.difficulty,
+          raw_difficulty: gameInfo.raw_difficulty,
+          length: gameInfo.length,
+          demo: gameInfo.demo,
+          featured: gameInfo.featured,
+          description: gameInfo.description,
+          added: gameInfo.added,
+          moderated: gameInfo.moderated,
+          tags: gameInfo.tags,
+          publicrating: gameInfo.publicrating,
+          sfcFilename,
+          jsonFilename
+        });
         console.log(`✓ Created ${sfcFilename}: ${gameInfo.name}`);
         
         // Save game metadata as JSON
@@ -848,7 +883,8 @@ async function stageQuickLaunchGames(params) {
       success: true,
       folderPath: quickLaunchBase,
       gamesStaged: successCount,
-      stagedFiles: stagedFiles  // Return list of files we staged
+      stagedFiles: stagedFiles,
+      stagedGames: stagedGames
     };
     
   } catch (error) {

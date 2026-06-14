@@ -1768,6 +1768,21 @@ async function testLevel(stage: GameStage) {
       testProgressMessage.value = `Launching ${result.filename} with program...`;
       try {
         await api.launchProgram(launchProgram, launchArgs, result.outputPath);
+        if (api.recordCurBooted) {
+          await api.recordCurBooted({
+            launch_method: 'program',
+            launch_mode: 'stage_test',
+            gameid: props.gameId,
+            name: props.gameName,
+            sfc_basename: result.filename,
+            sfc_path: result.outputPath,
+            stage: {
+              levelnumber: stage.levelnumber,
+              levelname: stage.levelname,
+              difficulty: stage.difficulty
+            }
+          });
+        }
         testProgressMessage.value = `✓ Test complete! Level ${levelHex} - ${stage.levelname} launched in emulator`;
       } catch (launchError: any) {
         testProgressMessage.value = `Launch failed: ${launchError?.message || String(launchError)}`;
@@ -1915,6 +1930,21 @@ async function testLevel(stage: GameStage) {
         // Boot the file
         try {
           await api.usb2snesBoot(dstPath);
+          if (api.recordCurBooted) {
+            await api.recordCurBooted({
+              launch_method: 'usb2snes',
+              launch_mode: 'stage_test',
+              gameid: props.gameId,
+              name: props.gameName,
+              sfc_basename: filename,
+              sfc_path: srcPath,
+              stage: {
+                levelnumber: stage.levelnumber,
+                levelname: stage.levelname,
+                difficulty: stage.difficulty
+              }
+            });
+          }
           testProgressMessage.value = `✓ Test complete! Level ${levelHex} - ${stage.levelname} is now running on SNES`;
         } catch (bootError: any) {
           testProgressMessage.value = `Uploaded but boot failed: ${bootError?.message || String(bootError)}`;

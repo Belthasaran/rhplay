@@ -5,7 +5,31 @@
  * Provides database access, game data, user annotations, and settings
  */
 
-const { ipcMain, dialog, BrowserWindow, shell } = require('electron');
+const { writeCurBooted } = require('../lib/cur-booted-writer');
+
+/** @type {Map<string, { pid: number, program: string, filePath: string, startedAt: number }>} */
+const launchProcessSessions = new Map();
+let launchSessionCounter = 0;
+
+function broadcastLaunchProcessExited(sessionId, code, signal) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('launch:process-exited', { sessionId, code, signal });
+    }
+  }
+}
+
+function isLaunchProcessRunning(sessionId) {
+  const session = launchProcessSessions.get(sessionId);
+  if (!session) return false;
+  try {
+    process.kill(session.pid, 0);
+    return true;
+  } catch {
+    launchProcessSessions.delete(sessionId);
+    return false;
+  }
+}
 const crypto = require('crypto');
 const { app } = require('electron');
 const { ensureRhpakAssociation, removeRhpakAssociation } = require('./rhpak-association');
@@ -6807,7 +6831,6 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   ipcMain.handle('fs:launchProgram', async (event, program, args, filePath) => {
-    const { spawn } = require('child_process');
     const path = require('path');
     
     try {
@@ -6849,18 +6872,50 @@ function registerDatabaseHandlers(dbManager) {
       
       console.log('[Launch] Arg array:', argArray);
       
-      // Launch the program
       const child = spawn(program, argArray, {
         detached: true,
-        stdio: 'inherit'
+        stdio: 'ignore'
+      });
+      
+      const sessionId = `launch-${Date.now()}-${++launchSessionCounter}`;
+      const pid = child.pid;
+      launchProcessSessions.set(sessionId, {
+        pid,
+        program,
+        filePath,
+        startedAt: Date.now()
+      });
+      
+      child.on('exit', (code, signal) => {
+        launchProcessSessions.delete(sessionId);
+        broadcastLaunchProcessExited(sessionId, code, signal);
+      });
+      child.on('error', (err) => {
+        console.error('[Launch] Process error:', err);
+        launchProcessSessions.delete(sessionId);
+        broadcastLaunchProcessExited(sessionId, -1, 'error');
       });
       
       child.unref();
       
-      console.log('[Launch] Process started');
+      console.log('[Launch] Process started', { sessionId, pid });
+      return { sessionId, pid };
     } catch (error) {
       console.error('[Launch] Error:', error);
       throw error;
+    }
+  });
+
+  ipcMain.handle('launch:isRunning', async (event, sessionId) => {
+    return { running: isLaunchProcessRunning(sessionId) };
+  });
+
+  ipcMain.handle('boot:record-current', async (event, payload) => {
+    try {
+      const userDataDir = app.getPath('userData');
+      return writeCurBooted(userDataDir, payload || {});
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   });
   /**

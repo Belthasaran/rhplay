@@ -895,6 +895,7 @@ interface Props {
   showAddToRunButton?: boolean;  // Show "Add Stage to Run" button in footer
   forceAuthorMode?: boolean; // Force author/edit mode even without DEVADMIN (e.g., when editing from submission draft)
   draftStages?: GameStage[] | null; // Draft stages for submission authoring (when forceAuthorMode is true, stages come from here instead of database)
+  activeLaunchMethod?: 'manual' | 'program' | 'usb2snes';
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -904,6 +905,7 @@ const props = withDefaults(defineProps<Props>(), {
   showAddToRunButton: false,
   forceAuthorMode: false,
   draftStages: null,
+  activeLaunchMethod: 'usb2snes',
 });
 
 // Make mode reactive so we can switch it
@@ -1750,11 +1752,33 @@ async function testLevel(stage: GameStage) {
       testingLevel.value = false;
       return;
     }
-    
+
+    const launchMethod = props.activeLaunchMethod || 'usb2snes';
+
+    if (launchMethod === 'manual') {
+      testProgressMessage.value = `✓ Build complete! Level ${levelHex} - ${stage.levelname}`;
+    } else if (launchMethod === 'program') {
+      const launchProgram = currentSettings.launchProgram || '';
+      const launchArgs = currentSettings.launchProgramArgs || '%file';
+      if (!launchProgram) {
+        testProgressMessage.value = 'Error: No launch program configured in settings';
+        testingLevel.value = false;
+        return;
+      }
+      testProgressMessage.value = `Launching ${result.filename} with program...`;
+      try {
+        await api.launchProgram(launchProgram, launchArgs, result.outputPath);
+        testProgressMessage.value = `✓ Test complete! Level ${levelHex} - ${stage.levelname} launched in emulator`;
+      } catch (launchError: any) {
+        testProgressMessage.value = `Launch failed: ${launchError?.message || String(launchError)}`;
+        testingLevel.value = false;
+        return;
+      }
+    } else {
     testProgressMessage.value = 'Build complete! Connecting to USB2SNES...';
     
     // Check USB2SNES connection and upload/boot if needed
-    if (buildParams.action === 'boot' && api.usb2snesConnect && api.usb2snesUploadRom && api.usb2snesBoot) {
+    if (api.usb2snesConnect && api.usb2snesUploadRom && api.usb2snesBoot) {
       // Check if USB2SNES is configured
       if (currentSettings.usb2snesEnabled !== 'yes') {
         testProgressMessage.value = 'Error: USB2SNES is not enabled. Please enable it in Settings first.';
@@ -1904,8 +1928,8 @@ async function testLevel(stage: GameStage) {
         return;
       }
     } else {
-      // Just report build success
       testProgressMessage.value = `✓ Build complete! Level ${levelHex} - ${stage.levelname}`;
+    }
     }
     
     // Close dialog after a delay

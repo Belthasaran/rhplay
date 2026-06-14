@@ -6739,6 +6739,44 @@ function registerDatabaseHandlers(dbManager) {
    * @param {string} args - Arguments with %file placeholder
    * @param {string} filePath - File path to launch
    */
+  const emulatorPaths = require('../lib/emulator-paths');
+  const helpDocResolver = require('./utils/help-doc-resolver');
+  const helpDocWindow = require('./utils/help-doc-window');
+
+  ipcMain.handle('fs:detectEmulatorPaths', async (_event, existing = {}) => {
+    try {
+      return { success: true, ...emulatorPaths.detectEmulatorPaths(existing || {}) };
+    } catch (error) {
+      console.error('[detectEmulatorPaths] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:applyEmulatorPreset', async (_event, preset, paths = {}) => {
+    try {
+      const settings = emulatorPaths.applyPresetLaunchSettings(preset, paths || {});
+      return { success: true, settings };
+    } catch (error) {
+      console.error('[applyEmulatorPreset] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('help:open-setup-doc', async (_event, { docId } = {}) => {
+    try {
+      const resolved = helpDocResolver.resolveHelpDocPath(docId);
+      if (!resolved) {
+        return { success: false, error: `Help document not found: ${docId}` };
+      }
+      const titles = { retroarch: 'RetroArch Setup', bizhawk: 'BizHawk Setup' };
+      helpDocWindow.openHelpDocWindow(resolved, titles[docId] || 'Setup Instructions');
+      return { success: true, path: resolved };
+    } catch (error) {
+      console.error('[help:open-setup-doc] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('fs:launchProgram', async (event, program, args, filePath) => {
     const { spawn } = require('child_process');
     const path = require('path');

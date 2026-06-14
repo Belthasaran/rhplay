@@ -1,3 +1,18 @@
+- **lmlevelinfo**: Fix Map16 resolve regressions: restore placement FG oracle for pipes/coins; hills (`0x03BA`) prefer file extended CHR over turn-block template; munchers use placement `0x05C` quad + acts-like `0x012F` GFX template (not pool `+21` extended CHR).
+- **lmlevelinfo**: Fix pipe palette regression after Callisto Map16 encode: `level_visual` draw/audit use `map16_text_decode_sub_word` (pal bits 10–12); test `map16_subword_decode_pipe`. Acts-like `0x012F` muncher GFX routes to BG1 `0x1B`/LG3 `0x2A` slot locals via `gfx_route_resolve_012f_muncher`; `decode_gfx_subtile` honors routed `local_tile`; gate `map16_gfx_muncher_regression`.
+- **lmlevelinfo**: Map16 text export parity: Callisto-aligned `map16_text`/`map16_lm16` modules, tiered `levelinfo_tests` gates (parse/header/spot, optional `MAP16_PARITY_THOROUGH=1` full scan, resolve vs FG oracle, muncher GFX regression), and `map16-parity` CLI.
+- **lmlevelinfo**: GFX muncher probe (`gfx_chr_probe`): extended oracle CHR `0x186` and placement `0x05C` both match LM ref art in BG1 file `0x1B`/LG3 `0x2A`, not bypass SP2 `0x17`. Placement stub `0x04BD` now resolves placement FG oracle (`0x05C` pal 6) not pool extended (`0x186`); `decode_gfx_subtile` uses `gfx_local_tile_index`. CHR→GFX file rule for customized muncher still open.
+- **lmlevelinfo**: Pipe shaft static render: Map16 `0x03BE`–`0x03C9` draw as first body pair `0x03BC`/`0x03BD` (LM L1 export shows identical art for stretched `-y-` body rows; flips are behavior-only).
+- **lmlevelinfo**: Fix FG_pages oracle CHR routing: `0x100`–`0x1EF` use SMW tile8 page bits (`gfx_route_resolve_subtile`); `0x1F0+` still use bypass slot `hi+GFX_SLOT_BG2` (e.g. `0x1FA` → FG3/file `0x15`). Swap oracle sub corners TR/BL when drawing; gridlines after Map16 art; test `gfx extended chr resolve`.
+- **lmlevelinfo**: Fix LM std `0x27`/`0x29` variant 2 stretched: `(W+1)×(H+1)` grid with row-major Map16 ids (`base+xx+yy*(W+1)`), e.g. akogare `4:A:0x03BC` places `03BC|03BD`, `03BE|03BF`, …; test `obj27m2`. Fix FG_pages flip parse (`---` no longer sets vflip). FG oracle `-y-` pipe pairs: even Map16 id remaps oracle subs 0/1, odd id remaps subs 2/3 (TL↔BL / TR↔BR), then vflip blit — fixes L109 pipe tiles `4:B`–`5:E`.
+- **lmlevelinfo**: Fix LM std `0x27`/`0x29` variant 0 emit when H=0 or W=0: repeat the same Map16 tile; W/H nibble is length−1 (fills e.g. `1:8`…`E:8` with `0x07CE`, cap at `0:8`/`0xF:8`).
+- **lmlevelinfo**: Load LM `FG_pages/page_*.txt` visual oracles when merging `AllMap16.map16` (auto from `resources/all_map16/global_pages/FG_pages`); `map16_get` prefers oracle CHR/pal/flips over raw file words (fixes e.g. `0x03BA` hill cap); `--map16-fg-oracles=` / `MAP16_FG_ORACLE_DIR`.
+- **lmlevelinfo**: L1 render fixes — prefer drawable AllMap16 file tiles before def_redirect; tighter placement-stub detection; SNES `(c<<3)|(c>>2)` palette; LM grid corner dots at tile (15,15); custom-palette FG remap rows 4–7; tests `snes15_back_color_109`, `akogare_109_emit_coverage`, `0x03BA` file resolve (tile compare 4789/6480 on 0x109).
+- **lmlevelinfo**: Hack-page Map16 (pages ≥2): LM16 file overrides ROM on merge; +21 definition-pool redirect for placement rows (e.g. cloud strip `0x07CD`/`0x07CE`); merge placement flip/palette into pool CHR; grid corners always at tile (15,15).
+- **lmlevelinfo**: Add `--export-gridlines`, `--lm-tile-ref`, strict 16×16 tile compare (`lv_ppm_compare.c`), and `level_visual_tile_compare_l1` test vs `Level109_l1only_gridlines.ppm` (100% L1 gate).
+- **lmlevelinfo**: ROM-default Map16 for `level_visual` (`map16_load_from_rom` + optional `--map16=` merge); acts-like is behavior-only; visual def_redirect uses LM16 `+21` pool (no generic scan); merge file pool over ROM stubs; flip bits from placement stubs; tests `map16_rom_def_redirect` (+ `0x07EC`).
+- **lmlevelinfo**: Fix akogare Map16 munchers (`0x04BD`/`0x04BE`) by redirecting LM placement stubs to the full `0x5C–0x5F` quad (using `test/akogare/4bd.map16` as ground truth) and updating the `level_visual` golden hash.
+
 - **lmlevelinfo**: Expanded synthetic LM object-decode sanity tests (`0x22`–`0x2D` paths, extended `0x03`, chained objects) in `lmlevelinfo/test_runner.c`; README note updated.
 
 - **RHTools Launcher UI**: RHPlay section shows **active core manifest** `version_string` / `versionid` and **`lastupdated`** (Unix + local time) above the RHPlay manifest entry line.
@@ -1901,4 +1916,6 @@ and try to have a similar module system
 - Surface history in other inspectors: Ratings and Trust views get “View Publish History”.
 - Close prompts: optional “Don’t ask again” toggle (persist to `csettings`) for Profile and Rating Sheet dialogs.
 - UX polish: toasts/progress for batch actions; clearer empty states in PublishHistory.
+
+- **lmlevelinfo muncher**: Reverted pool+21 extended-CHR draw path (broke up-facing 04BD appearance); all munchers back on 012F template.
 

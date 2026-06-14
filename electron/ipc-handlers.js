@@ -6785,7 +6785,7 @@ function registerDatabaseHandlers(dbManager) {
       // Launch the program
       const child = spawn(program, argArray, {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'inherit'
       });
       
       child.unref();

@@ -49,15 +49,17 @@
           <div class="form-field">
             <label>RetroArch executable path</label>
             <div class="file-row">
-              <input v-model="draft.retroarch_path" type="text" class="input" />
+              <input v-model="draft.retroarch_path" type="text" class="input path-input" />
               <button type="button" class="btn-secondary" @click="browseRetroarchExe">Browse</button>
+              <button type="button" class="btn-secondary" @click="openSearch('retroarch_exe')">Search</button>
             </div>
           </div>
           <div class="form-field">
             <label>RetroArch SNES Core Path</label>
             <div class="file-row">
-              <input v-model="draft.retroarch_core_path" type="text" class="input" />
+              <input v-model="draft.retroarch_core_path" type="text" class="input path-input" />
               <button type="button" class="btn-secondary" @click="browseRetroarchCore">Browse</button>
+              <button type="button" class="btn-secondary" @click="openSearch('retroarch_core')">Search</button>
             </div>
           </div>
         </template>
@@ -71,8 +73,9 @@
           <div class="form-field">
             <label>BizHawk executable path</label>
             <div class="file-row">
-              <input v-model="draft.bizhawk_path" type="text" class="input" />
+              <input v-model="draft.bizhawk_path" type="text" class="input path-input" />
               <button type="button" class="btn-secondary" @click="browseBizhawkExe">Browse</button>
+              <button type="button" class="btn-secondary" @click="openSearch('bizhawk_exe')">Search</button>
             </div>
           </div>
         </template>
@@ -83,11 +86,20 @@
         <button type="button" class="btn-secondary" @click="cancel">Cancel</button>
       </footer>
     </div>
+
+    <EmulatorPathSearchModal
+      :is-open="searchModalOpen"
+      :kind="searchKind"
+      :retroarch_path="draft.retroarch_path"
+      @close="searchModalOpen = false"
+      @select="handleSearchSelect"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue';
+import { reactive, ref, watch } from 'vue';
+import EmulatorPathSearchModal, { type EmulatorSearchKind } from './EmulatorPathSearchModal.vue';
 
 export interface EmulatorConfigDraft {
   launchProgramPreset: 'other' | 'retroarch' | 'bizhawk';
@@ -116,6 +128,25 @@ const draft = reactive<EmulatorConfigDraft>({
   retroarch_core_path: '',
   bizhawk_path: '',
 });
+
+const searchModalOpen = ref(false);
+const searchKind = ref<EmulatorSearchKind>('retroarch_exe');
+
+function openSearch(kind: EmulatorSearchKind) {
+  searchKind.value = kind;
+  searchModalOpen.value = true;
+}
+
+function handleSearchSelect(path: string) {
+  if (searchKind.value === 'retroarch_exe') {
+    draft.retroarch_path = path;
+  } else if (searchKind.value === 'retroarch_core') {
+    draft.retroarch_core_path = path;
+  } else if (searchKind.value === 'bizhawk_exe') {
+    draft.bizhawk_path = path;
+  }
+  searchModalOpen.value = false;
+}
 
 function copyFromSettings() {
   draft.launchProgramPreset = props.settings.launchProgramPreset || 'other';
@@ -264,6 +295,12 @@ function cancel() {
   display: flex;
   gap: 8px;
   align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.path-input {
+  flex: 1;
+  min-width: 180px;
 }
 
 .drop-zone {
@@ -299,7 +336,7 @@ function cancel() {
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
-  font-size: 14px;
+  font-size: 20px;
 }
 
 .modal-footer {

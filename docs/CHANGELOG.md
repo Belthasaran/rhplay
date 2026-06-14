@@ -1,4 +1,5 @@
 - **Active Launch Method**: Session-scoped USB2SNES / Emulator / Manual switcher in the always-visible header dropdown; Default Game Launch Method in Settings; Emulator Config modal (RetroArch/Bizhawk/Other); portable help pages under `electron/help/`; Build Plus USB/Emu modes; Prepare Run Prep Status; program launch in runs and stage tests.
+- **Emulator path search**: Search modal for standard RetroArch/BizHawk install paths; Ubuntu libretro core path; APT/winget install helpers; USB dropdown label reflects active emulator preset; Connect USB / Disconnect USB labels; Reconnect/Upload disabled when USB2SNES off.
 
 - **Patch resolver packaging**: Include new `lib/patch-*.js`, `lib/catalog-patch-extract.js`, and `lib/rhpak-storage.js` in electron-builder `files` list (fixes packaged app launch error).
 

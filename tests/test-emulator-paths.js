@@ -11,6 +11,7 @@ const {
   applyPresetLaunchSettings,
   retroarchExeCandidates,
   retroarchCoreCandidates,
+  searchPaths,
 } = require('../lib/emulator-paths');
 
 let passed = 0;
@@ -63,6 +64,19 @@ assert(bizPreset.launchProgramArgs === '--open %file', 'BizHawk preset launch ar
 
 assert(Array.isArray(retroarchExeCandidates()) && retroarchExeCandidates().length > 0, 'RetroArch exe candidates non-empty');
 assert(Array.isArray(retroarchCoreCandidates('C:\\RetroArch-Win64\\retroarch.exe')), 'Core candidates from exe dir');
+
+if (process.platform === 'linux') {
+  const coreCandidates = retroarchCoreCandidates('');
+  assert(
+    coreCandidates.includes('/usr/lib/x86_64-linux-gnu/libretro/snes9x_libretro.so'),
+    'Ubuntu libretro core path in candidates'
+  );
+}
+
+const searchResult = searchPaths('retroarch_exe');
+assert(Array.isArray(searchResult.found), 'searchPaths returns found array');
+assert(Array.isArray(searchResult.candidates), 'searchPaths returns candidates array');
+assert(searchResult.candidates.length >= searchResult.found.length, 'candidates includes all found paths');
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -789,6 +789,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   launchProgram: (program, args, filePath) => ipcRenderer.invoke('fs:launchProgram', program, args, filePath),
   detectEmulatorPaths: (existing) => ipcRenderer.invoke('fs:detectEmulatorPaths', existing),
+  searchEmulatorPaths: (params) => ipcRenderer.invoke('fs:searchEmulatorPaths', params),
+  getEmulatorInstallCapabilities: () => ipcRenderer.invoke('fs:getEmulatorInstallCapabilities'),
+  installRetroarch: () => ipcRenderer.invoke('fs:installRetroarch'),
   applyEmulatorPreset: (preset, paths) => ipcRenderer.invoke('fs:applyEmulatorPreset', preset, paths),
   openSetupHelpDoc: (docId) => ipcRenderer.invoke('help:open-setup-doc', { docId }),
   

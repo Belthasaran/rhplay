@@ -788,6 +788,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<void>}
    */
   launchProgram: (program, args, filePath) => ipcRenderer.invoke('fs:launchProgram', program, args, filePath),
+  detectEmulatorPaths: (existing) => ipcRenderer.invoke('fs:detectEmulatorPaths', existing),
+  applyEmulatorPreset: (preset, paths) => ipcRenderer.invoke('fs:applyEmulatorPreset', preset, paths),
+  openSetupHelpDoc: (docId) => ipcRenderer.invoke('help:open-setup-doc', { docId }),
   
   /**
    * Upload ROM file to console

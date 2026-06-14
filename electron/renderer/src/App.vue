@@ -709,16 +709,48 @@
           </div>
         </div>
         
-        <!-- USB2SNES Dropdown Button -->
-        <div v-if="settings.usb2snesEnabled === 'yes'" class="usb2snes-dropdown-container">
+        <!-- Launch Method / USB2SNES Dropdown Button -->
+        <div class="usb2snes-dropdown-container">
           <button @click="toggleUsb2snesDropdown" class="usb2snes-dropdown-btn">
             <span class="dropdown-icon">🎮</span>
             <span>USB2SNES</span>
-            <span class="health-indicator-mini" :class="connectionHealth"></span>
+            <span v-if="settings.usb2snesEnabled === 'yes'" class="health-indicator-mini" :class="connectionHealth"></span>
             <span class="dropdown-arrow">▼</span>
           </button>
 
           <div v-if="usb2snesDropdownOpen" class="usb2snes-dropdown" @click.stop>
+            <!-- Active Launch Method Tiles -->
+            <div class="launch-method-tiles">
+              <button
+                type="button"
+                class="launch-method-tile"
+                :class="{ active: activeLaunchMethod === 'usb2snes', disabled: settings.usb2snesEnabled !== 'yes' }"
+                :disabled="settings.usb2snesEnabled !== 'yes'"
+                @click="setActiveLaunchMethod('usb2snes')"
+              >
+                USB2SNES
+              </button>
+              <div class="launch-method-tile-wrap">
+                <button
+                  type="button"
+                  class="launch-method-tile"
+                  :class="{ active: activeLaunchMethod === 'program' }"
+                  @click="setActiveLaunchMethod('program')"
+                >
+                  Emulator / Program
+                </button>
+                <button type="button" class="launch-method-edit-link" @click.stop="openEmulatorConfigModal">Edit</button>
+              </div>
+              <button
+                type="button"
+                class="launch-method-tile"
+                :class="{ active: activeLaunchMethod === 'manual' }"
+                @click="setActiveLaunchMethod('manual')"
+              >
+                Manual
+              </button>
+            </div>
+
             <!-- Status Section -->
             <div class="usb2snes-dropdown-header">
               <div class="status-indicators">
@@ -1474,7 +1506,7 @@
             <span class="run-timer">⏱ {{ formatTime(runElapsedSeconds) }}</span>
             <span class="pause-time" v-if="runPauseSeconds > 0">⏸ {{ formatTime(runPauseSeconds) }}</span>
             <span class="run-progress">Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
-            <button v-if="currentChallenge && currentChallengeSfcPath" @click="toggleUsbPolling" :class="['btn-poll-usb', { 'active': usbPollingEnabled }, usbPollingStatus ? `poll-status-${usbPollingStatus}` : '']" :title="usbPollingEnabled ? 'USB polling is active' : 'Enable USB polling for automatic challenge completion'">
+            <button v-if="currentChallenge && currentChallengeSfcPath && activeLaunchMethod !== 'program'" @click="toggleUsbPolling" :class="['btn-poll-usb', { 'active': usbPollingEnabled }, usbPollingStatus ? `poll-status-${usbPollingStatus}` : '']" :title="usbPollingEnabled ? 'USB polling is active' : 'Enable USB polling for automatic challenge completion'">
               <input type="checkbox" :checked="usbPollingEnabled" @change="toggleUsbPolling" class="poll-checkbox" />
               <span>Poll USB</span>
             </button>
@@ -1482,7 +1514,7 @@
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
             <button @click="undoChallenge" :disabled="!canUndo || isRunPaused" class="btn-back">↶ Back</button>
             <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused || isDoneButtonDisabled || isSkipDoneOnCooldown" class="btn-next">✓ Done</button>
-            <button @click="launchCurrentChallenge" v-if="currentChallenge && currentChallengeSfcPath" :disabled="isRunPaused" class="btn-launch" :title="`Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} on USB2SNES`">🚀 Launch {{ String(currentChallengeIndex + 1).padStart(2, '0') }}</button>
+            <button @click="launchCurrentChallenge" v-if="showActiveRunLaunchButton" :disabled="isRunPaused" class="btn-launch" :title="activeLaunchMethod === 'program' ? `Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} in emulator` : `Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} on USB2SNES`">🚀 Launch {{ String(currentChallengeIndex + 1).padStart(2, '0') }}</button>
             <button @click="skipChallenge" :disabled="!currentChallenge || isRunPaused || isSkipDoneOnCooldown" class="btn-skip">⏭ Skip</button>
             <button @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
           </template>
@@ -5519,10 +5551,10 @@ Do you recommend; is the game fun and worthwhile?</span></label>
 
         <div class="settings-section">
           <div class="setting-row">
-            <label class="setting-label">Game launch method</label>
+            <label class="setting-label">Default Game Launch Method</label>
             <div class="setting-control">
               <select v-model="settings.launchMethod">
-                <option value="manual">Launch Manually</option>
+                <option value="manual">Launch Manually / Ask</option>
                 <option value="program">Run Launch Program</option>
                 <option value="usb2snes">Launch from USB2Snes</option>
               </select>
@@ -6625,14 +6657,14 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             
             <div class="wizard-field" style="margin-bottom: 20px;">
               <label style="display: block; font-weight: 600; margin-bottom: 8px;">
-                Game Launch Method
+                Default Game Launch Method
               </label>
               <select 
                 v-model="settings.launchMethod"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
-                <option value="usb2snes">USB2SNES</option>
-                <option value="local">Local</option>
-                <option value="custom">Custom</option>
+                <option value="manual">Launch Manually / Ask</option>
+                <option value="program">Run Launch Program</option>
+                <option value="usb2snes">Launch from USB2Snes</option>
               </select>
               <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
                 Choose your preferred method for launching games.
@@ -8472,8 +8504,17 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   :game-name="advancedPatchGameName"
   :usb2snes-enabled="settings.usb2snesEnabled === 'yes'"
   :usb2snes-connected="usb2snesStatus.connected"
+  :active-launch-method="activeLaunchMethod"
+  :launch-program-configured="!!(settings.launchProgram && settings.launchProgram.trim())"
   @close="closeAdvancedPatchModal"
   @build="handleAdvancedPatchBuild"
+/>
+
+<EmulatorConfigModal
+  :is-open="emulatorConfigModalOpen"
+  :settings="emulatorConfigSettings"
+  @close="emulatorConfigModalOpen = false"
+  @save="handleEmulatorConfigSave"
 />
 
 <!-- Game Stages Dialog -->
@@ -8484,6 +8525,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   :game-version="selectedVersion"
   mode="select"
   :show-add-to-run-button="true"
+  :active-launch-method="activeLaunchMethod"
   @close="showGameStagesDialog = false"
   @select="handleStageSelected"
   @add-to-run="handleAddStageToRunFromDialog"
@@ -9567,6 +9609,7 @@ import ProfilePublishingDashboard from './components/publish/ProfilePublishingDa
 import RatingsPublishingDashboard from './components/publish/RatingsPublishingDashboard.vue';
 import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard.vue';
 import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
+import EmulatorConfigModal from './components/EmulatorConfigModal.vue';
 import GameDetailsInspector from './components/GameDetailsInspector.vue';
 import GameStagesDialog from './components/GameStagesDialog.vue';
 import AlertDialog from './components/AlertDialog.vue';
@@ -12068,6 +12111,118 @@ const uploadSuccess = ref(false);
 
 // USB2SNES Dropdown state
 const usb2snesDropdownOpen = ref(false);
+const activeLaunchMethod = ref<'manual' | 'program' | 'usb2snes'>('manual');
+const emulatorConfigModalOpen = ref(false);
+
+function initActiveLaunchMethod() {
+  let method = settings.launchMethod;
+  if (method === 'usb2snes' && settings.usb2snesEnabled !== 'yes') {
+    method = settings.launchProgram?.trim() ? 'program' : 'manual';
+  }
+  activeLaunchMethod.value = method;
+}
+
+function setActiveLaunchMethod(method: 'manual' | 'program' | 'usb2snes') {
+  if (method === 'usb2snes' && settings.usb2snesEnabled !== 'yes') return;
+  activeLaunchMethod.value = method;
+}
+
+function openEmulatorConfigModal() {
+  emulatorConfigModalOpen.value = true;
+}
+
+const emulatorConfigSettings = computed(() => ({
+  launchProgramPreset: (settings.launchProgramPreset || 'other') as 'other' | 'retroarch' | 'bizhawk',
+  launchProgram: settings.launchProgram,
+  launchProgramArgs: settings.launchProgramArgs,
+  retroarch_path: settings.retroarch_path,
+  retroarch_core_path: settings.retroarch_core_path,
+  bizhawk_path: settings.bizhawk_path,
+}));
+
+async function saveEmulatorSettingsPartial(partial: Record<string, string>) {
+  if (!isElectronAvailable()) return { success: false };
+  const settingsToSave: Record<string, string> = {};
+  for (const [key, value] of Object.entries(partial)) {
+    if (value !== undefined && value !== null) settingsToSave[key] = String(value);
+  }
+  return (window as any).electronAPI.saveSettings(settingsToSave);
+}
+
+async function handleEmulatorConfigSave(draft: {
+  launchProgramPreset: 'other' | 'retroarch' | 'bizhawk';
+  launchProgram: string;
+  launchProgramArgs: string;
+  retroarch_path: string;
+  retroarch_core_path: string;
+  bizhawk_path: string;
+}) {
+  settings.launchProgramPreset = draft.launchProgramPreset;
+  settings.launchProgram = draft.launchProgram || '';
+  settings.launchProgramArgs = draft.launchProgramArgs || '%file';
+  settings.retroarch_path = draft.retroarch_path || '';
+  settings.retroarch_core_path = draft.retroarch_core_path || '';
+  settings.bizhawk_path = draft.bizhawk_path || '';
+
+  if (isElectronAvailable()) {
+    const result = await saveEmulatorSettingsPartial({
+      launchProgramPreset: settings.launchProgramPreset,
+      launchProgram: settings.launchProgram,
+      launchProgramArgs: settings.launchProgramArgs,
+      retroarch_path: settings.retroarch_path,
+      retroarch_core_path: settings.retroarch_core_path,
+      bizhawk_path: settings.bizhawk_path,
+    });
+    if (!result?.success) {
+      await showAlert(`Failed to save emulator config: ${result?.error || 'Unknown error'}`, 'Save Failed');
+      return;
+    }
+  }
+  emulatorConfigModalOpen.value = false;
+}
+
+async function launchProgramFile(filePath: string) {
+  const launchProgram = settings.launchProgram || '';
+  const launchArgs = settings.launchProgramArgs || '%file';
+  if (!launchProgram) {
+    throw new Error('No launch program configured in settings');
+  }
+  await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
+}
+
+async function launchFileWithActiveMethod(filePath: string, options: { boot?: boolean; uploadDstName?: string } = {}) {
+  if (activeLaunchMethod.value === 'manual') return;
+  if (activeLaunchMethod.value === 'program') {
+    await launchProgramFile(filePath);
+    return;
+  }
+  if (settings.usb2snesEnabled !== 'yes') {
+    throw new Error('USB2SNES is not enabled in settings');
+  }
+  const filename = options.uploadDstName || filePath.split(/[/\\]/).pop() || 'game.sfc';
+  const dstPath = `/work/${filename}`;
+  await refreshUsb2snesStatus();
+  if (!usb2snesStatus.connected) {
+    const connectOptions = buildUsb2snesConnectOptions();
+    const connectResult = await (window as any).electronAPI.usb2snesConnect(connectOptions);
+    usb2snesStatus.connected = true;
+    usb2snesStatus.device = connectResult.device;
+    usb2snesStatus.firmwareVersion = connectResult.firmwareVersion || 'N/A';
+    usb2snesStatus.versionString = connectResult.versionString || 'N/A';
+    usb2snesStatus.romRunning = connectResult.romRunning || 'N/A';
+    startHealthMonitoring();
+  }
+  await (window as any).electronAPI.usb2snesUploadRom(filePath, dstPath);
+  if (options.boot !== false) {
+    await (window as any).electronAPI.usb2snesBoot(dstPath);
+  }
+}
+
+async function launchStagedFolderFile(folderPath: string, challengeIndex: number) {
+  const seq = String(challengeIndex + 1).padStart(2, '0');
+  const filePath = `${folderPath}/${seq}.sfc`;
+  await launchFileWithActiveMethod(filePath, { boot: true, uploadDstName: `${seq}.sfc` });
+}
 
 // Online/NOSTR profile state
 type KeypairType = 'Nostr' | 'ML-DSA-44' | 'ML-DSA-87' | 'ED25519' | 'RSA-2048';
@@ -21348,6 +21503,12 @@ async function startSelected() {
     quickLaunchSfcCount.value = stagingResult.gamesStaged;
     quickLaunchStagedFiles.value = stagingResult.stagedFiles || []; // Store list of staged files
     quickLaunchSuccessModalOpen.value = true;
+
+    if (activeLaunchMethod.value === 'usb2snes') {
+      await uploadStagedToSnes(true);
+    } else if (activeLaunchMethod.value === 'program') {
+      await launchWithProgram();
+    }
     
   } catch (error) {
     console.error('Error staging games for quick launch:', error);
@@ -21490,7 +21651,7 @@ async function handleAdvancedPatchBuild(options: {
   selectedPatches: string[];
   globalParams: Record<string, any>;
   localParams: Record<string, Record<string, any>>;
-  action: 'build' | 'upload' | 'boot';
+  action: 'build' | 'upload' | 'boot' | 'launch';
 }) {
   const api = (window as any)?.electronAPI;
   if (!api) {
@@ -21521,6 +21682,17 @@ async function handleAdvancedPatchBuild(options: {
     if (options.action === 'build') {
       showToastNotification(`Successfully built patched game: ${result.filename}`, 'success', 3000);
       closeAdvancedPatchModal();
+      return;
+    }
+
+    if (options.action === 'launch') {
+      try {
+        await launchProgramFile(result.outputPath);
+        showToastNotification(`Built and launched: ${result.filename}`, 'success', 3000);
+        closeAdvancedPatchModal();
+      } catch (launchError: any) {
+        await showAlert(`Built but launch failed: ${launchError.message || launchError}`, 'Launch Failed');
+      }
       return;
     }
 
@@ -21712,6 +21884,10 @@ const settings = reactive({
   launchMethod: 'manual' as 'manual' | 'program' | 'usb2snes',
   launchProgram: '',
   launchProgramArgs: '%file',
+  launchProgramPreset: 'other' as 'other' | 'retroarch' | 'bizhawk',
+  retroarch_path: '',
+  retroarch_core_path: '',
+  bizhawk_path: '',
   usb2snesHostingMethod: 'remote' as 'remote' | 'embedded' | 'embedded-divert' | 'embedded-divert-fallback',
   usb2snesAddress: 'ws://localhost:64213',
   usb2snesFxpAutoStart: 'yes' as 'yes' | 'no',
@@ -21778,6 +21954,10 @@ async function openSettings() {
       if (savedSettings.launchMethod) settings.launchMethod = savedSettings.launchMethod as typeof settings.launchMethod;
       if (savedSettings.launchProgram) settings.launchProgram = savedSettings.launchProgram;
       if (savedSettings.launchProgramArgs) settings.launchProgramArgs = savedSettings.launchProgramArgs;
+      if (savedSettings.launchProgramPreset) settings.launchProgramPreset = savedSettings.launchProgramPreset as typeof settings.launchProgramPreset;
+      if (savedSettings.retroarch_path) settings.retroarch_path = savedSettings.retroarch_path;
+      if (savedSettings.retroarch_core_path) settings.retroarch_core_path = savedSettings.retroarch_core_path;
+      if (savedSettings.bizhawk_path) settings.bizhawk_path = savedSettings.bizhawk_path;
       if (savedSettings.usb2snesHostingMethod) settings.usb2snesHostingMethod = savedSettings.usb2snesHostingMethod as typeof settings.usb2snesHostingMethod;
       if (savedSettings.usb2snesAddress) settings.usb2snesAddress = savedSettings.usb2snesAddress;
       if (savedSettings.usb2snesFxpAutoStart) settings.usb2snesFxpAutoStart = savedSettings.usb2snesFxpAutoStart as typeof settings.usb2snesFxpAutoStart;
@@ -21941,6 +22121,10 @@ async function saveSettings() {
       launchMethod: settings.launchMethod,
       launchProgram: settings.launchProgram,
       launchProgramArgs: settings.launchProgramArgs,
+      launchProgramPreset: settings.launchProgramPreset,
+      retroarch_path: settings.retroarch_path,
+      retroarch_core_path: settings.retroarch_core_path,
+      bizhawk_path: settings.bizhawk_path,
       usb2snesHostingMethod: settings.usb2snesHostingMethod,
       usb2snesAddress: settings.usb2snesAddress,
       usb2snesFxpAutoStart: settings.usb2snesFxpAutoStart,
@@ -21970,6 +22154,7 @@ async function saveSettings() {
     const result = await (window as any).electronAPI.saveSettings(settingsToSave);
     if (result.success) {
       console.log('Settings saved successfully');
+      initActiveLaunchMethod();
       
       // Handle USBFXP server lifecycle
       if (isElectronAvailable()) {
@@ -22995,18 +23180,29 @@ const allResultsHaveSfcPath = computed(() => {
   return expandedRunResults.value.every((result: any) => result.sfcpath && result.sfcpath.trim() !== '');
 });
 
-// Check if run is ready to start (has sfcPath or skip acknowledged)
+// Check if run is ready to start (has sfcPath or skip acknowledged, or program mode staged)
 const isRunReadyToStart = computed(() => {
+  if (activeLaunchMethod.value === 'program') {
+    return !!(stagingFolderPath.value && stagingSfcCount.value > 0);
+  }
   return allResultsHaveSfcPath.value || skipUploadAcknowledged.value;
 });
 
-// Run status text
+// Prep status text
 const runStatusText = computed(() => {
   if (isRunReadyToStart.value) {
-    return 'Run Status: Ready to Start';
+    return 'Prep Status: Ready to Start';
   } else {
-    return 'Run Status: Need Upload';
+    return 'Prep Status: Need Upload';
   }
+});
+
+const showActiveRunLaunchButton = computed(() => {
+  if (!currentChallenge.value) return false;
+  if (activeLaunchMethod.value === 'program') {
+    return !!(stagingFolderPath.value && runEntries.length > 0);
+  }
+  return !!currentChallengeSfcPath.value;
 });
 
 // Can start run (must be saved AND ready)
@@ -25714,9 +25910,20 @@ async function startRun() {
 }
 
 async function launchCurrentChallenge() {
-  if (!currentChallenge.value || !currentChallengeSfcPath.value) return;
+  if (!currentChallenge.value) return;
   
   try {
+    if (activeLaunchMethod.value === 'program') {
+      if (!stagingFolderPath.value) {
+        await showAlert('No staging folder available for emulator launch', 'Launch Failed');
+        return;
+      }
+      await launchStagedFolderFile(stagingFolderPath.value, currentChallengeIndex.value);
+      console.log(`✓ Launched challenge ${currentChallengeIndex.value + 1} in emulator`);
+      return;
+    }
+
+    if (!currentChallengeSfcPath.value) return;
     // Check if USB2SNES is enabled in settings and auto-connect if needed
     if (settings.usb2snesEnabled === 'yes') {
       // Refresh status first to check if already connected
@@ -30350,6 +30557,7 @@ async function loadSettings() {
     // Apply defaults even in mock mode
     applyTheme(DEFAULT_THEME);
     applyTextSize(DEFAULT_TEXT_SIZE);
+    initActiveLaunchMethod();
     return;
   }
   
@@ -30383,6 +30591,10 @@ async function loadSettings() {
     if (savedSettings.launchMethod) settings.launchMethod = savedSettings.launchMethod as any;
     if (savedSettings.launchProgram) settings.launchProgram = savedSettings.launchProgram;
     if (savedSettings.launchProgramArgs) settings.launchProgramArgs = savedSettings.launchProgramArgs;
+    if (savedSettings.launchProgramPreset) settings.launchProgramPreset = savedSettings.launchProgramPreset as any;
+    if (savedSettings.retroarch_path) settings.retroarch_path = savedSettings.retroarch_path;
+    if (savedSettings.retroarch_core_path) settings.retroarch_core_path = savedSettings.retroarch_core_path;
+    if (savedSettings.bizhawk_path) settings.bizhawk_path = savedSettings.bizhawk_path;
     if (savedSettings.usb2snesHostingMethod) settings.usb2snesHostingMethod = savedSettings.usb2snesHostingMethod as any;
     if (savedSettings.usb2snesAddress) settings.usb2snesAddress = savedSettings.usb2snesAddress;
     if (savedSettings.usb2snesFxpAutoStart) settings.usb2snesFxpAutoStart = savedSettings.usb2snesFxpAutoStart as any;
@@ -30417,6 +30629,7 @@ async function loadSettings() {
     rhpakAssociationEnabledAtLoad = settings.rhpakFileAssociationEnabled;
     
     console.log('Settings loaded from database');
+    initActiveLaunchMethod();
   } catch (error) {
     console.error('Error loading settings:', error);
   }
@@ -38616,6 +38829,57 @@ button:disabled {
   padding: 16px;
   border-bottom: 1px solid var(--border-primary);
   background-color: var(--bg-secondary);
+}
+
+.launch-method-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  background-color: var(--bg-secondary);
+}
+
+.launch-method-tile-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.launch-method-tile {
+  padding: 10px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.launch-method-tile.active {
+  border-color: #0b57d0;
+  background: rgba(11, 87, 208, 0.12);
+  box-shadow: inset 0 0 0 1px #0b57d0;
+}
+
+.launch-method-tile.disabled,
+.launch-method-tile:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.launch-method-edit-link {
+  background: none;
+  border: none;
+  color: var(--link-color, #0b57d0);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  align-self: center;
 }
 
 .action-status-display {

@@ -487,7 +487,21 @@
       </section>
 
       <footer v-if="activeTab === 'apply'" class="modal-footer">
-        <div class="modal-actions">
+        <div class="modal-actions build-plus-actions">
+          <div class="build-plus-mode-toggle">
+            <button
+              type="button"
+              class="mode-toggle-btn"
+              :class="{ active: buildPlusMode === 'usb' }"
+              @click="buildPlusMode = 'usb'"
+            >USB2SNES</button>
+            <button
+              type="button"
+              class="mode-toggle-btn"
+              :class="{ active: buildPlusMode === 'emu' }"
+              @click="buildPlusMode = 'emu'"
+            >Emu</button>
+          </div>
           <button 
             @click="resetToDefaults" 
             class="btn-secondary"
@@ -499,22 +513,33 @@
             class="btn-primary"
             :disabled="loading || selectedPatches.length === 0"
           >
-            Build Plus
+            Build
           </button>
-          <button 
-            @click="buildPlusAndUpload" 
-            class="btn-primary"
-            :disabled="loading || selectedPatches.length === 0 || !usb2snesEnabled"
-          >
-            Build Plus and Upload USB2SNES
-          </button>
-          <button 
-            @click="buildPlusAndBoot" 
-            class="btn-primary"
-            :disabled="loading || selectedPatches.length === 0 || !usb2snesEnabled"
-          >
-            Build Plus and Boot on USB2SNES
-          </button>
+          <template v-if="buildPlusMode === 'usb'">
+            <button 
+              @click="buildPlusAndUpload" 
+              class="btn-primary"
+              :disabled="loading || selectedPatches.length === 0 || !usb2snesEnabled"
+            >
+              Upload
+            </button>
+            <button 
+              @click="buildPlusAndBoot" 
+              class="btn-primary"
+              :disabled="loading || selectedPatches.length === 0 || !usb2snesEnabled"
+            >
+              Upload and Boot
+            </button>
+          </template>
+          <template v-else>
+            <button
+              @click="buildPlusAndLaunch"
+              class="btn-primary"
+              :disabled="loading || selectedPatches.length === 0 || !launchProgramConfigured"
+            >
+              Build and Launch
+            </button>
+          </template>
           <button @click="close" class="btn-secondary">Cancel</button>
         </div>
       </footer>
@@ -647,11 +672,15 @@ interface Props {
   gameName: string;
   usb2snesEnabled?: boolean;
   usb2snesConnected?: boolean;
+  activeLaunchMethod?: 'manual' | 'program' | 'usb2snes';
+  launchProgramConfigured?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   usb2snesEnabled: false,
   usb2snesConnected: false,
+  activeLaunchMethod: 'manual',
+  launchProgramConfigured: false,
 });
 
 const emit = defineEmits<{
@@ -662,9 +691,11 @@ const emit = defineEmits<{
     selectedPatches: string[];
     globalParams: Record<string, any>;
     localParams: Record<string, Record<string, any>>;
-    action: 'build' | 'upload' | 'boot';
+    action: 'build' | 'upload' | 'boot' | 'launch';
   }];
 }>();
+
+const buildPlusMode = ref<'usb' | 'emu'>('usb');
 
 const activeTab = ref<'apply' | 'edit'>('apply');
 const loading = ref(false);
@@ -806,6 +837,7 @@ onUnmounted(() => {
 // Load available patches when modal opens
 watch(() => props.isOpen, async (newVal) => {
   if (newVal) {
+    buildPlusMode.value = props.activeLaunchMethod === 'program' ? 'emu' : 'usb';
     // Check DEVADMIN status
     const api = (window as any)?.electronAPI;
     if (api?.isDevAdmin) {
@@ -1019,6 +1051,17 @@ function buildPlusAndBoot() {
     globalParams: serializeForIPC(globalParams.value),
     localParams: serializeForIPC(localParams.value),
     action: 'boot',
+  });
+}
+
+function buildPlusAndLaunch() {
+  emit('build', {
+    gameId: props.gameId,
+    gameVersion: props.gameVersion,
+    selectedPatches: serializeForIPC(selectedPatches.value),
+    globalParams: serializeForIPC(globalParams.value),
+    localParams: serializeForIPC(localParams.value),
+    action: 'launch',
   });
 }
 
@@ -1983,6 +2026,34 @@ async function deletePreset(preset: Preset) {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.build-plus-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.build-plus-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: auto;
+}
+
+.mode-toggle-btn {
+  padding: 6px 12px;
+  border: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mode-toggle-btn.active {
+  background: var(--accent-primary);
+  color: var(--button-text);
 }
 
 .btn-primary {

@@ -1,8 +1,12 @@
 #!/bin/bash
+echo ====
+echo $0 $*
+
 #~/BizHawk/EmuHawkMono.sh $*
 #~/BizHawk/EmuHawkMono.sh $(pwd)/$*
 #snes9x -conf $(pwd)/snes9xb.conf $(pwd)/$*
-snes9x -conf $(pwd)/snes9xb.conf $(pwd)/$*
+#snes9x -conf $(pwd)/snes9xb.conf $(pwd)/$*
+snes9x -conf $(pwd)/snes9xb.conf $*
 sleep 1
 
 

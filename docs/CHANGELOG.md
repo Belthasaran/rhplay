@@ -1,3 +1,5 @@
+- **Active Launch Method**: Session-scoped USB2SNES / Emulator / Manual switcher in the always-visible header dropdown; Default Game Launch Method in Settings; Emulator Config modal (RetroArch/Bizhawk/Other); portable help pages under `electron/help/`; Build Plus USB/Emu modes; Prepare Run Prep Status; program launch in runs and stage tests.
+
 - **Patch resolver packaging**: Include new `lib/patch-*.js`, `lib/catalog-patch-extract.js`, and `lib/rhpak-storage.js` in electron-builder `files` list (fixes packaged app launch error).
 
 - **Patch resolver**: Added `lib/patch-resolver.js` with multi-source patch/patchblob retrieval (DB, local files, catalog 7z, RHPAK, archives, download URL, auto-catalog). Electron staging uses resolver instead of direct `attachments.file_data` reads. See `devdocs/PATCH_RESOLVER.md`.

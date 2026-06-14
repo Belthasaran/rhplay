@@ -63,6 +63,8 @@
     "updategames:resume": "node updategames.js --resume",
     "test:blob-compat": "node tests/test_blob_compatibility.js",
     "test:patch-resolver": "node tests/test_patch_resolver.js",
+    "test:emulator-paths": "node tests/test-emulator-paths.js",
+    "test:help-doc-resolver": "node tests/test-help-doc-resolver.js",
     "test:python-compat": "node tests/test_python_script_compat.js",
     "test:updategames": "node tests/test_updategames.js",
     "test:usb2snes-list": "node tests/test_usb2snes_list.js",
@@ -171,6 +173,7 @@
       "lib/patch-resolver-hash.js",
       "lib/catalog-patch-extract.js",
       "lib/rhpak-storage.js",
+      "lib/emulator-paths.js",
       "!electron/renderer/node_modules/**/*",
       "!electron/renderer/src/**/*",
       "!electron/test_data/**/*",
@@ -255,6 +258,14 @@
       {
         "from": "electron/installer/prepare_databases.js",
         "to": "app.asar.unpacked/electron/installer/prepare_databases.js"
+      },
+      {
+        "from": "electron/help/RETROARCH_SETUP.html",
+        "to": "help/RETROARCH_SETUP.html"
+      },
+      {
+        "from": "electron/help/BIZHAWK_SETUP.html",
+        "to": "help/BIZHAWK_SETUP.html"
       }
     ],
     "asarUnpack": [

@@ -5564,6 +5564,30 @@ Do you recommend; is the game fun and worthwhile?</span></label>
 
         <div class="settings-section">
           <div class="setting-row">
+            <label class="setting-label">Launch Preference</label>
+            <div class="setting-control">
+              <select v-model="settings.launchPreference">
+                <option value="auto">Auto (launch after Start)</option>
+                <option value="manual">Manual (wait for Launch button)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="setting-row">
+            <label class="setting-label">Auto-Next (Quick Launch)</label>
+            <div class="setting-control">
+              <select v-model="settings.autoNext">
+                <option value="yes">On</option>
+                <option value="no">Off</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="setting-row">
             <label class="setting-label">Launch Program</label>
             <div class="setting-control">
               <div 
@@ -5801,19 +5825,6 @@ Do you recommend; is the game fun and worthwhile?</span></label>
               <select v-model="settings.usb2snesEnabled">
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <div class="setting-row">
-            <label class="setting-label">USB2SNES Launch Preference</label>
-            <div class="setting-control">
-              <select v-model="settings.usb2snesLaunchPref">
-                <option value="auto">Launch Automatically</option>
-                <option value="manual">Manual Launch (Do nothing)</option>
-                <option value="reset">Manual Launch (Reset console)</option>
               </select>
             </div>
           </div>
@@ -6104,7 +6115,11 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
           <div class="status-row">
             <label>Launch Preference:</label>
-            <span>{{ settings.usb2snesLaunchPref }}</span>
+            <span>{{ settings.launchPreference }}</span>
+          </div>
+          <div class="status-row">
+            <label>Auto-Next:</label>
+            <span>{{ settings.autoNext }}</span>
           </div>
         </div>
 
@@ -6673,18 +6688,14 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             
             <div class="wizard-field" style="margin-bottom: 20px;">
               <label style="display: block; font-weight: 600; margin-bottom: 8px;">
-                USB2SNES Launch Preference
+                Launch Preference
               </label>
               <select 
-                v-model="usbOptionsWizardDraftSettings.usb2snesLaunchPref"
+                v-model="usbOptionsWizardDraftSettings.launchPreference"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
-                <option value="none">None</option>
-                <option value="boot">Boot</option>
-                <option value="reset">Reset</option>
+                <option value="auto">Auto (launch after Start)</option>
+                <option value="manual">Manual (wait for Launch button)</option>
               </select>
-              <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                Note: Specific USB2SNES Launch/Upload Preference options might not always be used by the application, and some might not be implemented yet.
-              </p>
             </div>
             
             <div class="wizard-field" style="margin-bottom: 20px;">
@@ -9306,8 +9317,8 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   </div>
 
   <!-- Quick Launch Success Modal -->
-  <div v-if="quickLaunchSuccessModalOpen" class="modal-backdrop">
-    <div class="modal staging-success-modal">
+  <div v-if="quickLaunchSuccessModalOpen" class="modal-backdrop" @click.stop>
+    <div class="modal staging-success-modal" @click.stop>
       <header class="modal-header">
         <h3>✅ Games Staged Successfully!</h3>
       </header>
@@ -9324,29 +9335,69 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             </div>
           </div>
 
+          <div v-if="quickLaunchActiveGame" class="quick-launch-active-game">
+            <div class="quick-launch-game-line">
+              <span class="quick-launch-game-id">[{{ quickLaunchActiveGame.gameid }}]</span>
+              <span class="quick-launch-game-name">{{ quickLaunchActiveGame.name }}</span>
+              <span
+                v-if="quickLaunchActiveTileItem"
+                class="tile-difficulty-badge quick-launch-diff-badge"
+                :style="{ backgroundColor: getDifficultyColor(getDifficultyValue(quickLaunchActiveTileItem)) }"
+              >{{ getDifficultyValue(quickLaunchActiveTileItem) }}</span>
+              <span
+                v-if="quickLaunchActiveTileItem && getSimplifiedType(quickLaunchActiveTileItem)"
+                class="tile-type-badge quick-launch-type-badge"
+                :style="{ backgroundColor: getSimplifiedType(quickLaunchActiveTileItem)?.color }"
+              >{{ getSimplifiedType(quickLaunchActiveTileItem)?.label }}</span>
+              <span class="quick-launch-nav-icons">
+                <button type="button" class="btn-icon" title="Game info" @click="quickLaunchInfoModalOpen = true">🔍</button>
+                <button type="button" class="btn-icon" title="Previous game" :disabled="quickLaunchLaunchLocked || quickLaunchActiveIndex <= 0" @click="prevQuickLaunchGame">◀</button>
+                <button type="button" class="btn-icon" title="Next game" :disabled="quickLaunchLaunchLocked || quickLaunchActiveIndex >= quickLaunchStagedGames.length - 1" @click="nextQuickLaunchGameManual">▶</button>
+              </span>
+            </div>
+            <p v-if="quickLaunchStagedGames.length > 1" class="quick-launch-index-label">
+              Game {{ quickLaunchActiveIndex + 1 }} of {{ quickLaunchStagedGames.length }}
+            </p>
+          </div>
+
           <div class="launch-instructions">
-            <h4>🚀 Quick Actions:</h4>
+            <div class="quick-launch-toggles-row">
+              <h4>🚀 Quick Actions:</h4>
+              <div class="quick-launch-toggles">
+                <label class="quick-launch-toggle">
+                  <span>Auto-Launch</span>
+                  <select :value="settings.launchPreference" :disabled="quickLaunchLaunchLocked" @change="setQuickLaunchLaunchPreference(($event.target as HTMLSelectElement).value as 'auto' | 'manual')">
+                    <option value="auto">On</option>
+                    <option value="manual">Off</option>
+                  </select>
+                </label>
+                <label class="quick-launch-toggle">
+                  <span>Auto-Next</span>
+                  <select :value="settings.autoNext" :disabled="quickLaunchLaunchLocked" @change="setQuickLaunchAutoNext(($event.target as HTMLSelectElement).value as 'yes' | 'no')">
+                    <option value="yes">On</option>
+                    <option value="no">Off</option>
+                  </select>
+                </label>
+              </div>
+            </div>
             
             <div class="quick-actions-buttons">
-              <!-- USB2SNES Actions -->
               <div v-if="settings.usb2snesEnabled === 'yes'" class="action-group">
-                <button @click="uploadStagedToSnes(false)" class="btn-action">
+                <button @click="uploadStagedToSnes(false)" class="btn-action" :disabled="quickLaunchLaunchLocked">
                   📤 Upload to SNES
                 </button>
-                <button @click="uploadStagedToSnes(true)" class="btn-action">
+                <button @click="uploadStagedToSnes(true)" class="btn-action" :disabled="quickLaunchLaunchLocked">
                   🚀 Upload and Boot
                 </button>
               </div>
               
-              <!-- Launch Program Action -->
               <div v-if="settings.launchProgram && settings.launchProgram.trim()" class="action-group">
-                <button @click="launchWithProgram" class="btn-action">
-                  🎮 Launch with Program
+                <button @click="launchWithProgram" class="btn-action" :disabled="quickLaunchLaunchLocked">
+                  {{ quickLaunchLaunchLocked && quickLaunchEmulatorRunningLabel ? quickLaunchEmulatorRunningLabel : '🎮 Launch with Program' }}
                 </button>
               </div>
             </div>
             
-            <!-- Status Display -->
             <div v-if="quickLaunchActionStatus" class="action-status-display quick-launch-status">
               {{ quickLaunchActionStatus }}
             </div>
@@ -9360,6 +9411,40 @@ Do you recommend; is the game fun and worthwhile?</span></label>
       </footer>
     </div>
   </div>
+
+  <!-- Quick Launch game info popout -->
+  <div v-if="quickLaunchInfoModalOpen && quickLaunchActiveGame" class="modal-backdrop" @click.stop style="z-index: 21000;">
+    <div class="modal details-popout-modal" @click.stop>
+      <header class="modal-header">
+        <h3>Game Info</h3>
+      </header>
+      <section class="modal-body details-popout-body">
+        <p><strong>Game ID:</strong> {{ quickLaunchActiveGame.gameid }}</p>
+        <p><strong>Name:</strong> {{ quickLaunchActiveGame.name }}</p>
+        <p v-if="quickLaunchActiveGame.added"><strong>Date:</strong> {{ quickLaunchActiveGame.added }}</p>
+        <p v-if="quickLaunchActiveGame.authors"><strong>Authors:</strong> {{ quickLaunchActiveGame.authors }}</p>
+        <p v-if="quickLaunchActiveGame.tags"><strong>Tags:</strong> {{ quickLaunchActiveGame.tags }}</p>
+        <p v-if="quickLaunchActiveGame.combinedtype"><strong>Combined Type:</strong> {{ quickLaunchActiveGame.combinedtype }}</p>
+      </section>
+      <footer class="modal-footer">
+        <button @click="quickLaunchInfoModalOpen = false" class="btn-primary">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <RunExitDetectedModal
+    :visible="runExitDetectedModalOpen"
+    :game-id="currentChallenge?.id"
+    :game-name="currentChallenge?.name"
+    :game-difficulty="currentChallenge ? getDifficultyValue(currentChallenge) : null"
+    :game-difficulty-label="currentChallenge ? formatStageDifficulty(getDifficultyValue(currentChallenge)) : ''"
+    :stage-id="isCurrentChallengeAnyStage ? (currentChallenge?.levelnumber || currentChallenge?.exit_number) : null"
+    :stage-name="currentStageInfo.levelname || currentChallenge?.levelname || ''"
+    :stage-difficulty="isCurrentChallengeAnyStage ? currentStageDifficulty : null"
+    :stage-difficulty-label="isCurrentChallengeAnyStage && currentStageDifficulty !== null ? formatStageDifficulty(currentStageDifficulty) : ''"
+    :show-stage-feedback="isCurrentChallengeAnyStage"
+    @choice="handleRunExitDetectedChoice"
+  />
   
   <!-- Dialog Components (Alert, Confirm, Prompt, Toast) -->
   <AlertDialog
@@ -9589,6 +9674,7 @@ import {
   type ThemeName,
   type TextSize 
 } from './themeConfig';
+import { createLaunchSessionMonitor, type LaunchFinishReason } from './composables/useLaunchSessionMonitor';
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
 import { matchesPatchFilter } from './utils/patchFilter';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
@@ -9612,6 +9698,7 @@ import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
 import EmulatorConfigModal from './components/EmulatorConfigModal.vue';
 import GameDetailsInspector from './components/GameDetailsInspector.vue';
 import GameStagesDialog from './components/GameStagesDialog.vue';
+import RunExitDetectedModal from './components/RunExitDetectedModal.vue';
 import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
@@ -12195,25 +12282,50 @@ async function handleEmulatorConfigSave(draft: {
   emulatorConfigModalOpen.value = false;
 }
 
-async function launchProgramFile(filePath: string) {
+async function launchProgramFile(filePath: string): Promise<{ sessionId?: string; pid?: number }> {
   const launchProgram = settings.launchProgram || '';
   const launchArgs = settings.launchProgramArgs || '%file';
   if (!launchProgram) {
     throw new Error('No launch program configured in settings');
   }
-  await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
+  return await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
 }
 
-async function launchFileWithActiveMethod(filePath: string, options: { boot?: boolean; uploadDstName?: string } = {}) {
-  if (activeLaunchMethod.value === 'manual') return;
-  if (activeLaunchMethod.value === 'program') {
-    await launchProgramFile(filePath);
-    return;
+async function recordCurBooted(payload: Record<string, unknown>) {
+  if (!isElectronAvailable()) return;
+  try {
+    await (window as any).electronAPI.recordCurBooted(payload);
+  } catch (error) {
+    console.warn('[recordCurBooted] Failed:', error);
   }
+}
+
+async function launchFileWithActiveMethod(
+  filePath: string,
+  options: { boot?: boolean; uploadDstName?: string; launchMode?: string; bootRecord?: Record<string, unknown> } = {}
+): Promise<{ sessionId?: string }> {
+  const launchMode = options.launchMode || 'manual';
+  const bootRecord = options.bootRecord || {};
+  const sfcBasename = filePath.split(/[/\\]/).pop() || '';
+
+  if (activeLaunchMethod.value === 'manual') return {};
+
+  if (activeLaunchMethod.value === 'program') {
+    const launchResult = await launchProgramFile(filePath);
+    await recordCurBooted({
+      ...bootRecord,
+      launch_method: 'program',
+      launch_mode: launchMode,
+      sfc_basename: sfcBasename,
+      sfc_path: filePath
+    });
+    return { sessionId: launchResult?.sessionId };
+  }
+
   if (settings.usb2snesEnabled !== 'yes') {
     throw new Error('USB2SNES is not enabled in settings');
   }
-  const filename = options.uploadDstName || filePath.split(/[/\\]/).pop() || 'game.sfc';
+  const filename = options.uploadDstName || sfcBasename || 'game.sfc';
   const dstPath = `/work/${filename}`;
   await refreshUsb2snesStatus();
   if (!usb2snesStatus.connected) {
@@ -12230,12 +12342,116 @@ async function launchFileWithActiveMethod(filePath: string, options: { boot?: bo
   if (options.boot !== false) {
     await (window as any).electronAPI.usb2snesBoot(dstPath);
   }
+  await recordCurBooted({
+    ...bootRecord,
+    launch_method: 'usb2snes',
+    launch_mode: launchMode,
+    sfc_basename: filename,
+    sfc_path: filePath
+  });
+  return {};
 }
 
 async function launchStagedFolderFile(folderPath: string, challengeIndex: number) {
   const seq = String(challengeIndex + 1).padStart(2, '0');
   const filePath = `${folderPath}/${seq}.sfc`;
-  await launchFileWithActiveMethod(filePath, { boot: true, uploadDstName: `${seq}.sfc` });
+  const challenge = runEntries[challengeIndex];
+  const bootRecord: Record<string, unknown> = {
+    launch_mode: 'run',
+    gameid: challenge?.id,
+    name: challenge?.name,
+    sfc_basename: `${seq}.sfc`,
+    sfc_path: filePath
+  };
+  if (challenge && (challenge as any).levelnumber) {
+    bootRecord.stage = {
+      levelnumber: (challenge as any).levelnumber || (challenge as any).exit_number,
+      levelname: (challenge as any).levelname
+    };
+  }
+  return await launchFileWithActiveMethod(filePath, {
+    boot: true,
+    uploadDstName: `${seq}.sfc`,
+    launchMode: 'run',
+    bootRecord
+  });
+}
+
+function buildRunExpectedRomBasename(): string {
+  if (activeLaunchMethod.value === 'program' && stagingFolderPath.value) {
+    const seq = String(currentChallengeIndex.value + 1).padStart(2, '0');
+    return `${seq}.sfc`;
+  }
+  const sfcpath = currentChallengeSfcPath.value;
+  if (!sfcpath) return '';
+  return sfcpath.split(/[/\\]/).pop() || sfcpath;
+}
+
+function startRunLaunchMonitoring(expectedBasename: string, sessionId?: string | null) {
+  if (!isRunActive.value) return;
+  runLaunchMonitor.stopMonitoring();
+  runLaunchMonitorActive.value = true;
+  const mode = activeLaunchMethod.value === 'program' ? 'program' : 'usb2snes';
+  let connectOptions: Record<string, unknown> | undefined;
+  try {
+    connectOptions = mode === 'usb2snes' ? buildUsb2snesConnectOptions() : undefined;
+  } catch {
+    connectOptions = undefined;
+  }
+  runLaunchMonitor.startMonitoring({
+    mode,
+    expectedRomBasename: expectedBasename,
+    launchSessionId: sessionId || undefined,
+    pollIntervalMs: 3500,
+    usbConnectOptions: connectOptions,
+    onStarted: () => {
+      runLaunchMonitorActive.value = true;
+    },
+    onFinished: () => {
+      runLaunchSessionId.value = null;
+      runLaunchMonitorActive.value = false;
+      if (usbPollingHandlingGoalEvent.value) return;
+      runExitDetectedModalOpen.value = true;
+    }
+  });
+}
+
+async function handleRunExitDetectedChoice(payload: {
+  outcome: 'win' | 'skip';
+  difficultyFeedback: number | null;
+  comment: string;
+}) {
+  runExitDetectedModalOpen.value = false;
+
+  if (isCurrentChallengeAnyStage.value && currentChallenge.value) {
+    const challenge = currentChallenge.value as any;
+    if (payload.difficultyFeedback !== null || payload.comment) {
+      try {
+        await (window as any).electronAPI.saveStageFeedback({
+          gameid: challenge.id,
+          levelnumber: challenge.levelnumber || challenge.exit_number || challenge.stageNumber,
+          difficulty_feedback: payload.difficultyFeedback,
+          comment: payload.comment || undefined,
+          run_uuid: currentRunUuid.value,
+          global_conditions: challenge.conditions || [],
+          applied_patches: challenge.appliedPatches || [],
+          playlevel_patchcode: challenge.playlevelPatchcode || null
+        });
+      } catch (error) {
+        console.warn('[handleRunExitDetectedChoice] feedback save failed:', error);
+      }
+    }
+  }
+
+  if (payload.outcome === 'win') {
+    await nextChallenge();
+  } else {
+    await skipChallenge();
+  }
+
+  if (isRunActive.value && activeLaunchMethod.value !== 'manual') {
+    await launchCurrentChallenge();
+  }
 }
 
 // Online/NOSTR profile state
@@ -19752,7 +19968,8 @@ function openUsbOptionsWizard() {
     usb2snesFxpDiversionSocksProxyUrl: settings.usb2snesFxpDiversionSocksProxyUrl || '',
     usb2snesProxyMode: settings.usb2snesProxyMode || 'direct',
     usb2snesSocksProxyUrl: settings.usb2snesSocksProxyUrl || '',
-    usb2snesLaunchPref: settings.usb2snesLaunchPref || 'none',
+    launchPreference: settings.launchPreference || 'auto',
+    autoNext: settings.autoNext || 'yes',
     usb2snesUploadPref: settings.usb2snesUploadPref || 'none',
     usb2snesUploadDir: settings.usb2snesUploadDir || '/work'
   };
@@ -19903,7 +20120,8 @@ async function finishUsbOptionsWizard() {
   settings.usb2snesFxpDiversionSocksProxyUrl = draft.usb2snesFxpDiversionSocksProxyUrl;
   settings.usb2snesProxyMode = draft.usb2snesProxyMode;
   settings.usb2snesSocksProxyUrl = draft.usb2snesSocksProxyUrl;
-  settings.usb2snesLaunchPref = draft.usb2snesLaunchPref;
+  settings.launchPreference = draft.launchPreference || 'auto';
+  settings.autoNext = draft.autoNext || 'yes';
   settings.usb2snesUploadPref = draft.usb2snesUploadPref;
   settings.usb2snesUploadDir = draft.usb2snesUploadDir;
   
@@ -21509,13 +21727,13 @@ async function startSelected() {
     console.log('[QuickLaunch] Staged files:', stagingResult.stagedFiles);
     quickLaunchFolderPath.value = stagingResult.folderPath;
     quickLaunchSfcCount.value = stagingResult.gamesStaged;
-    quickLaunchStagedFiles.value = stagingResult.stagedFiles || []; // Store list of staged files
+    quickLaunchStagedFiles.value = stagingResult.stagedFiles || [];
+    quickLaunchStagedGames.value = stagingResult.stagedGames || [];
+    quickLaunchActiveIndex.value = 0;
     quickLaunchSuccessModalOpen.value = true;
 
-    if (activeLaunchMethod.value === 'usb2snes') {
-      await uploadStagedToSnes(true);
-    } else if (activeLaunchMethod.value === 'program') {
-      await launchWithProgram();
+    if (settings.launchPreference === 'auto' && activeLaunchMethod.value !== 'manual') {
+      await launchQuickLaunchGameAtIndex(0, { launchMode: 'auto' });
     }
     
   } catch (error) {
@@ -21696,6 +21914,20 @@ async function handleAdvancedPatchBuild(options: {
     if (options.action === 'launch') {
       try {
         await launchProgramFile(result.outputPath);
+        await recordCurBooted({
+          launch_method: 'program',
+          launch_mode: 'patch',
+          gameid: options.gameId,
+          name: advancedPatchGameName.value,
+          sfc_basename: result.filename,
+          sfc_path: result.outputPath,
+          patch: {
+            selectedPatches: options.selectedPatches,
+            globalParams: options.globalParams,
+            localParams: options.localParams,
+            stage_number: options.globalParams?.glevelnum?.trim() || null
+          }
+        });
         showToastNotification(`Built and launched: ${result.filename}`, 'success', 3000);
         closeAdvancedPatchModal();
       } catch (launchError: any) {
@@ -21837,6 +22069,21 @@ async function handleAdvancedPatchBuild(options: {
           try {
             await api.usb2snesBoot(dstPath);
             uploadProgressStatus.value = `✓ Uploaded and booted ${filename}`;
+            await recordCurBooted({
+              launch_method: 'usb2snes',
+              launch_mode: options.action,
+              gameid: options.gameId,
+              name: advancedPatchGameName.value,
+              sfc_basename: filename,
+              sfc_path: srcPath,
+              patch: {
+                selectedPatches: options.selectedPatches,
+                globalParams: options.globalParams,
+                localParams: options.localParams,
+                stage_number: levelnumber
+              },
+              stage: levelnumber ? { levelnumber, levelname, difficulty: null } : undefined
+            });
           } catch (bootError: any) {
             uploadProgressStatus.value = `✓ Uploaded ${filename}, but boot failed: ${formatErrorMessage(bootError)}`;
             uploadSuccess.value = false;
@@ -21890,6 +22137,8 @@ const settings = reactive({
   uberAsmPath: '',
   uberAsmValid: false,
   launchMethod: 'manual' as 'manual' | 'program' | 'usb2snes',
+  launchPreference: 'auto' as 'auto' | 'manual',
+  autoNext: 'yes' as 'yes' | 'no',
   launchProgram: '',
   launchProgramArgs: '%file',
   launchProgramPreset: 'other' as 'other' | 'retroarch' | 'bizhawk',
@@ -21912,7 +22161,6 @@ const settings = reactive({
   usb2snesSshIdentityFile: '',
   usb2snesEnabled: 'no' as 'yes' | 'no',
   usb2snesLibrary: 'usb2snes_a' as 'usb2snes_a' | 'usb2snes_b' | 'qusb2snes' | 'node-usb',
-  usb2snesLaunchPref: 'auto' as 'auto' | 'manual' | 'reset',
   usb2snesUploadPref: 'manual' as 'manual' | 'check' | 'always',
   usb2snesUploadDir: '/work',
   tempDirOverride: '',
@@ -21924,6 +22172,30 @@ const settings = reactive({
 });
 let rhpakAssociationEnabledAtLoad = true;
 let rhpakOsListenerCleanup: (() => void) | null = null;
+
+function applyLaunchPreferenceSettings(savedSettings: Record<string, string> = {}) {
+  if (savedSettings.launchPreference === 'auto' || savedSettings.launchPreference === 'manual') {
+    settings.launchPreference = savedSettings.launchPreference;
+  } else if (savedSettings.usb2snesLaunchPref) {
+    settings.launchPreference = savedSettings.usb2snesLaunchPref === 'manual' ? 'manual' : 'auto';
+  } else {
+    settings.launchPreference = 'auto';
+  }
+  if (savedSettings.autoNext === 'yes' || savedSettings.autoNext === 'no') {
+    settings.autoNext = savedSettings.autoNext;
+  } else {
+    settings.autoNext = 'yes';
+  }
+}
+
+async function persistLaunchPreferenceSetting(key: 'launchPreference' | 'autoNext', value: string) {
+  if (!isElectronAvailable()) return;
+  try {
+    await (window as any).electronAPI.setSetting(key, value);
+  } catch (error) {
+    console.warn(`Failed to persist ${key}:`, error);
+  }
+}
 
 function openAboutDialog() {
   showAboutDialog.value = true;
@@ -21960,6 +22232,7 @@ async function openSettings() {
       if (savedSettings.uberAsmPath) settings.uberAsmPath = savedSettings.uberAsmPath;
       if (savedSettings.uberAsmValid !== undefined) settings.uberAsmValid = savedSettings.uberAsmValid === 'true';
       if (savedSettings.launchMethod) settings.launchMethod = savedSettings.launchMethod as typeof settings.launchMethod;
+      applyLaunchPreferenceSettings(savedSettings);
       if (savedSettings.launchProgram) settings.launchProgram = savedSettings.launchProgram;
       if (savedSettings.launchProgramArgs) settings.launchProgramArgs = savedSettings.launchProgramArgs;
       if (savedSettings.launchProgramPreset) settings.launchProgramPreset = savedSettings.launchProgramPreset as typeof settings.launchProgramPreset;
@@ -21982,7 +22255,6 @@ async function openSettings() {
       if (savedSettings.usb2snesSshIdentityFile) settings.usb2snesSshIdentityFile = savedSettings.usb2snesSshIdentityFile;
       if (savedSettings.usb2snesEnabled) settings.usb2snesEnabled = savedSettings.usb2snesEnabled as typeof settings.usb2snesEnabled;
       if (savedSettings.usb2snesLibrary) settings.usb2snesLibrary = savedSettings.usb2snesLibrary as typeof settings.usb2snesLibrary;
-      if (savedSettings.usb2snesLaunchPref) settings.usb2snesLaunchPref = savedSettings.usb2snesLaunchPref as typeof settings.usb2snesLaunchPref;
       if (savedSettings.usb2snesUploadPref) settings.usb2snesUploadPref = savedSettings.usb2snesUploadPref as typeof settings.usb2snesUploadPref;
       if (savedSettings.usb2snesUploadDir) settings.usb2snesUploadDir = savedSettings.usb2snesUploadDir;
       if (savedSettings.tempDirOverride) settings.tempDirOverride = savedSettings.tempDirOverride;
@@ -22127,6 +22399,8 @@ async function saveSettings() {
       uberAsmPath: settings.uberAsmPath,
       uberAsmValid: String(settings.uberAsmValid),
       launchMethod: settings.launchMethod,
+      launchPreference: settings.launchPreference,
+      autoNext: settings.autoNext,
       launchProgram: settings.launchProgram,
       launchProgramArgs: settings.launchProgramArgs,
       launchProgramPreset: settings.launchProgramPreset,
@@ -22148,7 +22422,6 @@ async function saveSettings() {
       usb2snesSshRemotePort: String(settings.usb2snesSshRemotePort),
       usb2snesSshIdentityFile: settings.usb2snesSshIdentityFile,
       usb2snesEnabled: settings.usb2snesEnabled,
-      usb2snesLaunchPref: settings.usb2snesLaunchPref,
       usb2snesUploadPref: settings.usb2snesUploadPref,
       usb2snesUploadDir: settings.usb2snesUploadDir,
       tempDirOverride: settings.tempDirOverride,
@@ -23173,9 +23446,237 @@ const quickLaunchProgressGameName = ref('');
 const quickLaunchSuccessModalOpen = ref(false);
 const quickLaunchFolderPath = ref('');
 const quickLaunchSfcCount = ref(0);
-const quickLaunchStagedFiles = ref<string[]>([]); // List of files from most recent staging
+const quickLaunchStagedFiles = ref<string[]>([]);
+const quickLaunchStagedGames = ref<any[]>([]);
+const quickLaunchActiveIndex = ref(0);
 const quickLaunchActionStatus = ref('');
-const quickLaunchSelectedFile = ref('');
+const quickLaunchInfoModalOpen = ref(false);
+const quickLaunchLaunchSessionId = ref<string | null>(null);
+const quickLaunchMonitor = createLaunchSessionMonitor(() => (window as any).electronAPI);
+const runLaunchMonitor = createLaunchSessionMonitor(() => (window as any).electronAPI);
+const runExitDetectedModalOpen = ref(false);
+const runLaunchSessionId = ref<string | null>(null);
+const runLaunchMonitorActive = ref(false);
+
+function stagedGameToTileItem(game: any) {
+  if (!game) return null;
+  return {
+    Id: String(game.gameid),
+    RawDifficulty: game.raw_difficulty,
+    PublicDifficulty: game.difficulty,
+    LegacyType: game.legacy_type,
+    CombinedType: game.combinedtype,
+    FieldsType: game.fields_type,
+    GameType: game.gametype,
+    Type: game.combinedtype
+  };
+}
+
+const quickLaunchActiveGame = computed(() => {
+  if (quickLaunchStagedGames.value.length === 0) return null;
+  const idx = Math.min(quickLaunchActiveIndex.value, quickLaunchStagedGames.value.length - 1);
+  return quickLaunchStagedGames.value[idx] || null;
+});
+
+const quickLaunchActiveTileItem = computed(() => stagedGameToTileItem(quickLaunchActiveGame.value));
+
+const quickLaunchEmulatorRunningLabel = computed(() => {
+  if (quickLaunchMonitor.state.value !== 'running' && quickLaunchMonitor.state.value !== 'waiting_start') return '';
+  const preset = settings.launchProgramPreset;
+  if (preset === 'retroarch') return 'RetroArch Still Running';
+  if (preset === 'bizhawk') return 'BizHawk Still Running';
+  return 'Emulator Still Running';
+});
+
+const quickLaunchLaunchLocked = computed(() =>
+  quickLaunchMonitor.state.value === 'running' || quickLaunchMonitor.state.value === 'waiting_start'
+);
+
+async function setQuickLaunchLaunchPreference(value: 'auto' | 'manual') {
+  settings.launchPreference = value;
+  await persistLaunchPreferenceSetting('launchPreference', value);
+}
+
+async function setQuickLaunchAutoNext(value: 'yes' | 'no') {
+  settings.autoNext = value;
+  await persistLaunchPreferenceSetting('autoNext', value);
+}
+
+function buildQuickLaunchBootRecord(game: any, launchMode: string) {
+  if (!game) return { launch_mode: launchMode };
+  return {
+    launch_mode: launchMode,
+    gameid: game.gameid,
+    name: game.name,
+    authors: game.authors,
+    author: game.author,
+    gametype: game.gametype,
+    combinedtype: game.combinedtype,
+    fields_type: game.fields_type,
+    legacy_type: game.legacy_type,
+    difficulty: game.difficulty,
+    raw_difficulty: game.raw_difficulty,
+    version: game.version,
+    tags: game.tags,
+    sfc_basename: game.sfcFilename
+  };
+}
+
+function startQuickLaunchMonitoring(expectedBasename: string, sessionId?: string | null) {
+  quickLaunchMonitor.stopMonitoring();
+  const mode = activeLaunchMethod.value === 'program' ? 'program' : 'usb2snes';
+  let connectOptions: Record<string, unknown> | undefined;
+  try {
+    connectOptions = mode === 'usb2snes' ? buildUsb2snesConnectOptions() : undefined;
+  } catch {
+    connectOptions = undefined;
+  }
+  quickLaunchMonitor.startMonitoring({
+    mode,
+    expectedRomBasename: expectedBasename,
+    launchSessionId: sessionId || undefined,
+    pollIntervalMs: 3500,
+    usbConnectOptions: connectOptions,
+    onStarted: () => {
+      quickLaunchActionStatus.value = `▶ Playing ${expectedBasename}`;
+    },
+    onFinished: (reason: LaunchFinishReason) => {
+      quickLaunchLaunchSessionId.value = null;
+      quickLaunchActionStatus.value = `✓ Session finished (${reason})`;
+      handleQuickLaunchSessionFinished();
+    }
+  });
+}
+
+async function handleQuickLaunchSessionFinished() {
+  if (settings.autoNext !== 'yes') return;
+  if (quickLaunchActiveIndex.value >= quickLaunchStagedGames.value.length - 1) return;
+  quickLaunchActiveIndex.value += 1;
+  if (settings.launchPreference === 'auto' && activeLaunchMethod.value !== 'manual') {
+    await launchQuickLaunchGameAtIndex(quickLaunchActiveIndex.value, { launchMode: 'auto_next' });
+  }
+}
+
+async function launchQuickLaunchGameAtIndex(
+  index: number,
+  options: { launchMode?: string } = {}
+) {
+  const game = quickLaunchStagedGames.value[index];
+  if (!game || !quickLaunchFolderPath.value) {
+    quickLaunchActionStatus.value = '✗ No game at selected index';
+    return;
+  }
+  const launchMode = options.launchMode || 'manual';
+  const fileName = game.sfcFilename || quickLaunchStagedFiles.value[index];
+  if (!fileName) {
+    quickLaunchActionStatus.value = '✗ Missing staged file for game';
+    return;
+  }
+  const filePath = `${quickLaunchFolderPath.value}/${fileName}`;
+  quickLaunchActiveIndex.value = index;
+
+  try {
+    if (activeLaunchMethod.value === 'program') {
+      if (!settings.launchProgram?.trim()) {
+        quickLaunchActionStatus.value = '✗ No launch program configured in settings';
+        return;
+      }
+      quickLaunchActionStatus.value = `Launching ${fileName}...`;
+      const result = await launchFileWithActiveMethod(filePath, {
+        boot: true,
+        launchMode,
+        bootRecord: buildQuickLaunchBootRecord(game, launchMode)
+      });
+      quickLaunchLaunchSessionId.value = result.sessionId || null;
+      quickLaunchActionStatus.value = `✓ Launched ${fileName}`;
+      startQuickLaunchMonitoring(fileName, result.sessionId);
+      return;
+    }
+
+    if (activeLaunchMethod.value === 'usb2snes') {
+      await uploadQuickLaunchGameAtIndex(index, true, launchMode);
+      startQuickLaunchMonitoring(fileName);
+      return;
+    }
+
+    quickLaunchActionStatus.value = 'Manual launch mode — use Launch buttons when ready';
+  } catch (error) {
+    quickLaunchActionStatus.value = `✗ Launch error: ${error}`;
+  }
+}
+
+async function uploadQuickLaunchGameAtIndex(index: number, andBoot: boolean, launchMode = 'manual') {
+  const game = quickLaunchStagedGames.value[index];
+  const fileName = game?.sfcFilename || quickLaunchStagedFiles.value[index];
+  if (!fileName || !quickLaunchFolderPath.value) {
+    quickLaunchActionStatus.value = '✗ No games staged';
+    return;
+  }
+  const srcPath = `${quickLaunchFolderPath.value}/${fileName}`;
+  const dstPath = `/work/${fileName}`;
+
+  quickLaunchActionStatus.value = 'Checking USB2SNES connection...';
+  await refreshUsb2snesStatus();
+  if (!usb2snesStatus.connected) {
+    quickLaunchActionStatus.value = 'Connecting to USB2SNES...';
+    const connectOptions = buildUsb2snesConnectOptions();
+    const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
+    usb2snesStatus.connected = true;
+    usb2snesStatus.device = result.device;
+    usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
+    usb2snesStatus.versionString = result.versionString || 'N/A';
+    usb2snesStatus.romRunning = result.romRunning || 'N/A';
+    startHealthMonitoring();
+  }
+
+  quickLaunchActionStatus.value = `Uploading ${fileName}...`;
+  const uploadResult = await (window as any).electronAPI.usb2snesUploadRom(srcPath, dstPath);
+  if (!uploadResult?.success) {
+    quickLaunchActionStatus.value = `✗ Upload failed: ${fileName}`;
+    return;
+  }
+
+  if (andBoot) {
+    quickLaunchActionStatus.value = `Booting ${fileName}...`;
+    await (window as any).electronAPI.usb2snesBoot(dstPath);
+    await recordCurBooted({
+      ...buildQuickLaunchBootRecord(game, launchMode),
+      launch_method: 'usb2snes',
+      sfc_basename: fileName,
+      sfc_path: srcPath
+    });
+    quickLaunchActionStatus.value = `✓ Uploaded and booted ${fileName}`;
+  } else {
+    quickLaunchActionStatus.value = `✓ Uploaded ${fileName}`;
+  }
+}
+
+function prevQuickLaunchGame() {
+  if (quickLaunchLaunchLocked.value) return;
+  if (quickLaunchActiveIndex.value > 0) {
+    quickLaunchActiveIndex.value -= 1;
+  }
+}
+
+function nextQuickLaunchGameManual() {
+  if (quickLaunchLaunchLocked.value) return;
+  if (quickLaunchActiveIndex.value < quickLaunchStagedGames.value.length - 1) {
+    quickLaunchActiveIndex.value += 1;
+  }
+}
+
+async function launchWithProgram() {
+  await launchQuickLaunchGameAtIndex(quickLaunchActiveIndex.value, { launchMode: 'manual' });
+}
+
+async function uploadStagedToSnes(andBoot: boolean = false) {
+  await uploadQuickLaunchGameAtIndex(quickLaunchActiveIndex.value, andBoot, 'manual');
+  if (andBoot) {
+    const game = quickLaunchStagedGames.value[quickLaunchActiveIndex.value];
+    const fileName = game?.sfcFilename || quickLaunchStagedFiles.value[quickLaunchActiveIndex.value];
+    if (fileName) startQuickLaunchMonitoring(fileName);
+  }
+}
 
 const allRunChecked = computed(() => runEntries.length > 0 && runEntries.every((e) => checkedRun.value.has(e.key)));
 const checkedRunCount = computed(() => checkedRun.value.size);
@@ -25234,11 +25735,14 @@ function addToLog(message: string) {
 }
 
 function closeQuickLaunchSuccess() {
+  quickLaunchMonitor.stopMonitoring();
   quickLaunchSuccessModalOpen.value = false;
-  // Clear folder path and staged files list to prevent uploading stale games
-  // User must click Start again to stage different games
   quickLaunchFolderPath.value = '';
   quickLaunchStagedFiles.value = [];
+  quickLaunchStagedGames.value = [];
+  quickLaunchActiveIndex.value = 0;
+  quickLaunchLaunchSessionId.value = null;
+  quickLaunchInfoModalOpen.value = false;
   quickLaunchActionStatus.value = '';
 }
 
@@ -25249,190 +25753,6 @@ function openQuickLaunchFolder() {
     if (shell && shell.openPath) {
       shell.openPath(quickLaunchFolderPath.value);
     }
-  }
-}
-
-async function uploadStagedToSnes(andBoot: boolean = false) {
-  // Check if games are staged
-  if (!quickLaunchFolderPath.value || quickLaunchStagedFiles.value.length === 0) {
-    quickLaunchActionStatus.value = '✗ No games staged. Click Start first to stage games.';
-    return;
-  }
-  
-  // Use the list of files we actually staged (not all files in directory!)
-  const sfcFiles = quickLaunchStagedFiles.value;
-  console.log(`[Upload] Uploading ${sfcFiles.length} staged file(s):`, sfcFiles);
-  
-  if (sfcFiles.length === 0) {
-    quickLaunchActionStatus.value = '✗ No .sfc files found in staging list';
-    return;
-  }
-  
-  try {
-    // Check if USB2SNES is connected, auto-connect if not
-    quickLaunchActionStatus.value = 'Checking USB2SNES connection...';
-    await refreshUsb2snesStatus();
-    
-    if (!usb2snesStatus.connected) {
-      quickLaunchActionStatus.value = 'Connecting to USB2SNES...';
-      
-      let connectOptions;
-      try {
-        connectOptions = buildUsb2snesConnectOptions();
-      } catch (configError: any) {
-        quickLaunchActionStatus.value = `✗ ${configError.message}`;
-        return;
-      }
-
-      try {
-        const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
-        
-        usb2snesStatus.connected = true;
-        usb2snesStatus.device = result.device;
-        usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
-        usb2snesStatus.versionString = result.versionString || 'N/A';
-        usb2snesStatus.romRunning = result.romRunning || 'N/A';
-        startHealthMonitoring();
-      } catch (connectError) {
-        quickLaunchActionStatus.value = `✗ Connection failed: ${formatErrorMessage(connectError)}`;
-        return;
-      }
-    }
-    
-    // Upload ALL staged files
-    let uploadedCount = 0;
-    let lastUploadedFile = '';
-    
-    for (let i = 0; i < sfcFiles.length; i++) {
-      const fileToUpload = sfcFiles[i];
-      const srcPath = `${quickLaunchFolderPath.value}/${fileToUpload}`;
-      const dstPath = `/work/${fileToUpload}`;
-      
-      quickLaunchActionStatus.value = `Uploading ${i + 1}/${sfcFiles.length}: ${fileToUpload}...`;
-      console.log(`[Upload] Uploading file ${i + 1}/${sfcFiles.length}: ${srcPath} -> ${dstPath}`);
-      
-      // Listen for upload progress
-      let progressListenerActive = true;
-      const removeProgressListener = (window as any).electronAPI.onUploadProgress((transferred: number, total: number, percent: number) => {
-        if (progressListenerActive) {
-          quickLaunchActionStatus.value = `Uploading ${i + 1}/${sfcFiles.length}: ${fileToUpload}... ${percent}%`;
-        }
-      });
-      
-      try {
-        const result = await (window as any).electronAPI.usb2snesUploadRom(srcPath, dstPath);
-        
-        progressListenerActive = false;
-        removeProgressListener();
-        
-        if (!result.success) {
-          quickLaunchActionStatus.value = `✗ Upload ${i + 1}/${sfcFiles.length} failed: ${fileToUpload}`;
-          return;
-        }
-        
-        uploadedCount++;
-        lastUploadedFile = fileToUpload;
-        console.log(`[Upload] Successfully uploaded ${fileToUpload} (${uploadedCount}/${sfcFiles.length})`);
-        
-        // Sync SNES contents cache with uploaded file info
-        try {
-          const uploadedFileInfo = {
-            fullpath: dstPath,
-            filename: fileToUpload,
-            gameid: null,
-            version: null,
-            metadata: {},
-            part_of_a_run: false
-          };
-          
-          // Try to extract game ID and version from filename (smw12345_1.sfc)
-          const match = fileToUpload.match(/^smw(\d+)_(\d+)\.sfc$/i);
-          if (match) {
-            uploadedFileInfo.gameid = match[1];
-            uploadedFileInfo.version = parseInt(match[2]);
-            
-            // Try to get game metadata from main list
-            const gameItem = items.find(item => item.Id === match[1]);
-            if (gameItem) {
-              uploadedFileInfo.metadata = {
-                gamename: gameItem.Name,
-                gametype: gameItem.Type,
-                difficulty: gameItem.PublicDifficulty,
-                combinedtype: gameItem.Type
-              };
-            }
-          }
-          
-          await (window as any).electronAPI.snesContentsSync(uploadedFileInfo);
-          console.log(`[Upload] SNES contents cache synced for ${fileToUpload}`);
-        } catch (syncError) {
-          console.warn(`[Upload] Cache sync failed for ${fileToUpload}:`, syncError);
-        }
-        
-      } catch (uploadError) {
-        progressListenerActive = false;
-        removeProgressListener();
-        quickLaunchActionStatus.value = `✗ Upload error for ${fileToUpload}: ${uploadError}`;
-        console.error(`[Upload] Error uploading ${fileToUpload}:`, uploadError);
-        return;
-      }
-    }
-    
-    // All files uploaded successfully
-    quickLaunchActionStatus.value = `✓ Uploaded ${uploadedCount} file${uploadedCount > 1 ? 's' : ''}`;
-    
-    // Boot the last uploaded file if requested
-    if (andBoot && lastUploadedFile) {
-      const bootPath = `/work/${lastUploadedFile}`;
-      quickLaunchActionStatus.value = `Booting ${lastUploadedFile}...`;
-      try {
-        await (window as any).electronAPI.usb2snesBoot(bootPath);
-        quickLaunchActionStatus.value = `✓ Uploaded ${uploadedCount} files and booted ${lastUploadedFile}`;
-      } catch (bootError) {
-        quickLaunchActionStatus.value = `✓ Uploaded ${uploadedCount} files (Boot failed: ${bootError})`;
-      }
-    }
-    
-  } catch (error) {
-    quickLaunchActionStatus.value = `✗ Error: ${error}`;
-  }
-}
-
-async function launchWithProgram() {
-  if (!quickLaunchFolderPath.value || quickLaunchStagedFiles.value.length === 0) {
-    quickLaunchActionStatus.value = '✗ No games staged. Click Start first to stage games.';
-    return;
-  }
-
-  try {
-    // Use files from the current Start staging session (not all .sfc in the folder)
-    const sfcFiles = quickLaunchStagedFiles.value;
-    console.log(`[Launch] Launching ${sfcFiles.length} staged file(s):`, sfcFiles);
-
-    let fileToLaunch = sfcFiles[0];
-    if (quickLaunchSelectedFile.value && sfcFiles.includes(quickLaunchSelectedFile.value)) {
-      fileToLaunch = quickLaunchSelectedFile.value;
-    }
-    
-    const filePath = `${quickLaunchFolderPath.value}/${fileToLaunch}`;
-    
-    quickLaunchActionStatus.value = `Launching ${fileToLaunch} with program...`;
-    
-    // Get launch program from settings
-    const launchProgram = settings.launchProgram || '';
-    const launchArgs = settings.launchProgramArgs || '';
-    
-    if (!launchProgram) {
-      quickLaunchActionStatus.value = '✗ No launch program configured in settings';
-      return;
-    }
-    
-    // Use IPC to launch program with arguments
-    await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
-    
-    quickLaunchActionStatus.value = `✓ Launched ${fileToLaunch}`;
-  } catch (error) {
-    quickLaunchActionStatus.value = `✗ Launch error: ${error}`;
   }
 }
 
@@ -25918,13 +26238,19 @@ async function launchCurrentChallenge() {
   if (!currentChallenge.value) return;
   
   try {
+    const expectedBasename = buildRunExpectedRomBasename();
+
     if (activeLaunchMethod.value === 'program') {
       if (!stagingFolderPath.value) {
         await showAlert('No staging folder available for emulator launch', 'Launch Failed');
         return;
       }
-      await launchStagedFolderFile(stagingFolderPath.value, currentChallengeIndex.value);
+      const result = await launchStagedFolderFile(stagingFolderPath.value, currentChallengeIndex.value);
+      runLaunchSessionId.value = result.sessionId || null;
       console.log(`✓ Launched challenge ${currentChallengeIndex.value + 1} in emulator`);
+      if (expectedBasename) {
+        startRunLaunchMonitoring(expectedBasename, result.sessionId);
+      }
       return;
     }
 
@@ -25972,6 +26298,24 @@ async function launchCurrentChallenge() {
     console.log('[launchCurrentChallenge] Booting:', fullPath);
     
     await (window as any).electronAPI.usb2snesBoot(fullPath);
+
+    const challenge = currentChallenge.value as any;
+    await recordCurBooted({
+      launch_mode: 'run',
+      launch_method: 'usb2snes',
+      gameid: challenge?.id,
+      name: challenge?.name,
+      sfc_basename: sfcpath,
+      stage: isCurrentChallengeAnyStage.value ? {
+        levelnumber: challenge?.levelnumber || challenge?.exit_number,
+        levelname: currentStageInfo.value.levelname || challenge?.levelname,
+        difficulty: currentStageDifficulty.value
+      } : undefined
+    });
+    
+    if (expectedBasename) {
+      startRunLaunchMonitoring(expectedBasename);
+    }
     
     console.log(`✓ Launched challenge ${currentChallengeIndex.value + 1}`);
   } catch (error: any) {
@@ -26122,6 +26466,8 @@ async function cancelRun() {
     }
     usbPollingEnabled.value = false;
     usbPollingConditionATime.value = 0;
+    runLaunchMonitor.stopMonitoring();
+    runExitDetectedModalOpen.value = false;
     
     currentRunStatus.value = 'cancelled';
     console.log('Run cancelled');
@@ -26693,6 +27039,8 @@ async function completeRun() {
     clearInterval(runTimerInterval.value);
     runTimerInterval.value = null;
   }
+  runLaunchMonitor.stopMonitoring();
+  runExitDetectedModalOpen.value = false;
   
   try {
     // Mark run as completed in database
@@ -30594,6 +30942,7 @@ async function loadSettings() {
     if (savedSettings.uberAsmPath) settings.uberAsmPath = savedSettings.uberAsmPath;
     if (savedSettings.uberAsmValid) settings.uberAsmValid = savedSettings.uberAsmValid === 'true';
     if (savedSettings.launchMethod) settings.launchMethod = savedSettings.launchMethod as any;
+    applyLaunchPreferenceSettings(savedSettings);
     if (savedSettings.launchProgram) settings.launchProgram = savedSettings.launchProgram;
     if (savedSettings.launchProgramArgs) settings.launchProgramArgs = savedSettings.launchProgramArgs;
     if (savedSettings.launchProgramPreset) settings.launchProgramPreset = savedSettings.launchProgramPreset as any;
@@ -30621,7 +30970,6 @@ async function loadSettings() {
     }
     if (savedSettings.usb2snesSshIdentityFile) settings.usb2snesSshIdentityFile = savedSettings.usb2snesSshIdentityFile;
     if (savedSettings.usb2snesEnabled) settings.usb2snesEnabled = savedSettings.usb2snesEnabled as any;
-    if (savedSettings.usb2snesLaunchPref) settings.usb2snesLaunchPref = savedSettings.usb2snesLaunchPref as any;
     if (savedSettings.usb2snesUploadPref) settings.usb2snesUploadPref = savedSettings.usb2snesUploadPref as any;
     if (savedSettings.usb2snesUploadDir) settings.usb2snesUploadDir = savedSettings.usb2snesUploadDir;
     if (savedSettings.tempDirOverride !== undefined) settings.tempDirOverride = savedSettings.tempDirOverride;
@@ -41685,6 +42033,91 @@ button.catalog-chip {
   background: var(--bg-tertiary, #e0e0e0);
   border-color: var(--accent-primary, #2196F3);
   color: var(--accent-primary, #2196F3);
+}
+
+.quick-launch-active-game {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary, #444);
+  border-radius: 6px;
+  background: var(--bg-secondary, #2a2a2a);
+}
+
+.quick-launch-game-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-launch-game-id {
+  font-weight: 700;
+  color: var(--accent-primary, #64b5f6);
+}
+
+.quick-launch-game-name {
+  font-weight: 600;
+}
+
+.quick-launch-diff-badge,
+.quick-launch-type-badge {
+  position: static;
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quick-launch-nav-icons {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.quick-launch-nav-icons .btn-icon {
+  background: transparent;
+  border: 1px solid var(--border-primary, #555);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.quick-launch-nav-icons .btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.quick-launch-index-label {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #aaa);
+}
+
+.quick-launch-toggles-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.quick-launch-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.quick-launch-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.quick-launch-toggle select {
+  padding: 2px 6px;
 }
 </style>
 

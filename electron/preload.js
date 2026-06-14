@@ -788,6 +788,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<void>}
    */
   launchProgram: (program, args, filePath) => ipcRenderer.invoke('fs:launchProgram', program, args, filePath),
+  isLaunchProcessRunning: (sessionId) => ipcRenderer.invoke('launch:isRunning', sessionId),
+  onLaunchProcessExited: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('launch:process-exited', handler);
+    return () => ipcRenderer.removeListener('launch:process-exited', handler);
+  },
+  recordCurBooted: (payload) => ipcRenderer.invoke('boot:record-current', payload),
   detectEmulatorPaths: (existing) => ipcRenderer.invoke('fs:detectEmulatorPaths', existing),
   searchEmulatorPaths: (params) => ipcRenderer.invoke('fs:searchEmulatorPaths', params),
   getEmulatorInstallCapabilities: () => ipcRenderer.invoke('fs:getEmulatorInstallCapabilities'),

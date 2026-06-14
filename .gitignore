@@ -82,3 +82,6 @@ games3/
 backups/
 *.json.backup
 
+# lmlevelinfo built binaries (compile from source)
+lmlevelinfo/level_info1
+

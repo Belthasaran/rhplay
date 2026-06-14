@@ -23535,7 +23535,7 @@ function startQuickLaunchMonitoring(expectedBasename: string, sessionId?: string
     mode,
     expectedRomBasename: expectedBasename,
     launchSessionId: sessionId || undefined,
-    pollIntervalMs: 3500,
+    pollIntervalMs: mode === 'program' ? 1000 : 3500,
     usbConnectOptions: connectOptions,
     onStarted: () => {
       quickLaunchActionStatus.value = `▶ Playing ${expectedBasename}`;
@@ -23550,10 +23550,16 @@ function startQuickLaunchMonitoring(expectedBasename: string, sessionId?: string
 
 async function handleQuickLaunchSessionFinished() {
   if (settings.autoNext !== 'yes') return;
-  if (quickLaunchActiveIndex.value >= quickLaunchStagedGames.value.length - 1) return;
+  if (quickLaunchActiveIndex.value >= quickLaunchStagedGames.value.length - 1) {
+    quickLaunchActionStatus.value = '✓ Last staged game finished';
+    return;
+  }
   quickLaunchActiveIndex.value += 1;
+  const nextGame = quickLaunchStagedGames.value[quickLaunchActiveIndex.value];
   if (settings.launchPreference === 'auto' && activeLaunchMethod.value !== 'manual') {
     await launchQuickLaunchGameAtIndex(quickLaunchActiveIndex.value, { launchMode: 'auto_next' });
+  } else if (nextGame) {
+    quickLaunchActionStatus.value = `Advanced to ${nextGame.name || nextGame.sfcFilename}. Click Launch when ready.`;
   }
 }
 

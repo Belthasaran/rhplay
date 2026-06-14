@@ -1572,6 +1572,25 @@ enode.sh search_smwhacks.js --rhsearchdb=search.db --rhsearchzip=search.zip "sup
 
 ---
 
+## lmlevelinfo utilities
+
+### map16-parity
+**Purpose**: Debug/compare Callisto text Map16 exports under `resources/all_map16/` against an optional `AllMap16.map16` LM16 binary.
+
+**Usage** (from `lmlevelinfo/`):
+```bash
+make map16-parity
+./map16-parity test/akogare/resources/all_map16 test/akogare/AllMap16.map16
+./map16-parity --thorough test/akogare/resources/all_map16 test/akogare/AllMap16.map16
+./map16-parity --help
+```
+
+**Options**: `--thorough` enables full text-vs-binary scan (same as `MAP16_PARITY_THOROUGH=1` in `levelinfo_tests`).
+
+**Documentation**: See [`lmlevelinfo/test/README.md`](../lmlevelinfo/test/README.md) Map16 text export parity section.
+
+---
+
 *Last Updated: December 2025*  
 *Total Programs: 18+ interactive scripts*
 

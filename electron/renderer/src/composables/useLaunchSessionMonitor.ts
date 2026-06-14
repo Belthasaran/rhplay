@@ -44,6 +44,12 @@ export function createLaunchSessionMonitor(getApi: () => any) {
     activeOptions = null;
   }
 
+  function finishMonitoring(reason: LaunchFinishReason) {
+    const opts = activeOptions;
+    stopMonitoring();
+    opts?.onFinished?.(reason);
+  }
+
   async function ensureUsbConnected(connectOptions?: Record<string, unknown>) {
     const api = getApi();
     if (!api?.usb2snesStatus) return false;
@@ -89,8 +95,7 @@ export function createLaunchSessionMonitor(getApi: () => any) {
     if (currentBasename.toLowerCase() !== expected.toLowerCase()) {
       romMismatchCount += 1;
       if (romMismatchCount >= 2) {
-        stopMonitoring();
-        activeOptions.onFinished?.('rom_changed');
+        finishMonitoring('rom_changed');
       }
     } else {
       romMismatchCount = 0;
@@ -113,8 +118,7 @@ export function createLaunchSessionMonitor(getApi: () => any) {
     }
 
     if (startedNotified && !running) {
-      stopMonitoring();
-      activeOptions.onFinished?.('exit');
+      finishMonitoring('exit');
     }
   }
 
@@ -134,10 +138,10 @@ export function createLaunchSessionMonitor(getApi: () => any) {
         if (!activeOptions || data.sessionId !== activeSessionId) return;
         if (!startedNotified) {
           startedNotified = true;
+          state.value = 'running';
           activeOptions.onStarted?.();
         }
-        stopMonitoring();
-        activeOptions.onFinished?.('exit');
+        finishMonitoring('exit');
       });
       intervalId = setInterval(() => {
         pollProgramCycle().catch((err) => console.warn('[LaunchMonitor] program poll error:', err));

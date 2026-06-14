@@ -6,32 +6,7 @@
  */
 
 const { writeCurBooted } = require('../lib/cur-booted-writer');
-
-/** @type {Map<string, { pid: number, program: string, filePath: string, startedAt: number }>} */
-const launchProcessSessions = new Map();
-let launchSessionCounter = 0;
-
-function broadcastLaunchProcessExited(sessionId, code, signal) {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send('launch:process-exited', { sessionId, code, signal });
-    }
-  }
-}
-
-function isLaunchProcessRunning(sessionId) {
-  const session = launchProcessSessions.get(sessionId);
-  if (!session) return false;
-  try {
-    process.kill(session.pid, 0);
-    return true;
-  } catch {
-    launchProcessSessions.delete(sessionId);
-    return false;
-  }
-}
-const crypto = require('crypto');
-const { app } = require('electron');
+const { ipcMain, dialog, BrowserWindow, shell, app } = require('electron');
 const { ensureRhpakAssociation, removeRhpakAssociation } = require('./rhpak-association');
 const path = require('path');
 const fs = require('fs');
@@ -57,6 +32,30 @@ const { getTwitchClientId, getTwitchRedirectUri } = require('./twitch-config');
 const PermissionHelper = require('./utils/PermissionHelper');
 const ModerationManager = require('./utils/ModerationManager');
 const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
+
+/** @type {Map<string, { pid: number, program: string, filePath: string, startedAt: number }>} */
+const launchProcessSessions = new Map();
+let launchSessionCounter = 0;
+
+function broadcastLaunchProcessExited(sessionId, code, signal) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('launch:process-exited', { sessionId, code, signal });
+    }
+  }
+}
+
+function isLaunchProcessRunning(sessionId) {
+  const session = launchProcessSessions.get(sessionId);
+  if (!session) return false;
+  try {
+    process.kill(session.pid, 0);
+    return true;
+  } catch {
+    launchProcessSessions.delete(sessionId);
+    return false;
+  }
+}
 
 /**
  * Get keyguard key from session (for encryption/decryption)

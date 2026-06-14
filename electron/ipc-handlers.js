@@ -6740,8 +6740,37 @@ function registerDatabaseHandlers(dbManager) {
    * @param {string} filePath - File path to launch
    */
   const emulatorPaths = require('../lib/emulator-paths');
+  const emulatorInstall = require('../lib/emulator-install');
   const helpDocResolver = require('./utils/help-doc-resolver');
   const helpDocWindow = require('./utils/help-doc-window');
+
+  ipcMain.handle('fs:searchEmulatorPaths', async (_event, { kind, retroarch_path } = {}) => {
+    try {
+      const result = emulatorPaths.searchPaths(kind, { retroarch_path: retroarch_path || '' });
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[searchEmulatorPaths] Error:', error);
+      return { success: false, error: error.message, found: [], candidates: [] };
+    }
+  });
+
+  ipcMain.handle('fs:getEmulatorInstallCapabilities', async () => {
+    try {
+      return { success: true, ...emulatorInstall.getInstallCapabilities() };
+    } catch (error) {
+      console.error('[getEmulatorInstallCapabilities] Error:', error);
+      return { success: false, apt: false, winget: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:installRetroarch', async () => {
+    try {
+      return emulatorInstall.installRetroarch();
+    } catch (error) {
+      console.error('[installRetroarch] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
 
   ipcMain.handle('fs:detectEmulatorPaths', async (_event, existing = {}) => {
     try {

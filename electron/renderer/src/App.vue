@@ -713,7 +713,7 @@
         <div class="usb2snes-dropdown-container">
           <button @click="toggleUsb2snesDropdown" class="usb2snes-dropdown-btn">
             <span class="dropdown-icon">🎮</span>
-            <span>USB2SNES</span>
+            <span>{{ usb2snesDropdownButtonLabel }}</span>
             <span v-if="settings.usb2snesEnabled === 'yes'" class="health-indicator-mini" :class="connectionHealth"></span>
             <span class="dropdown-arrow">▼</span>
           </button>
@@ -914,13 +914,13 @@
                   v-if="!usb2snesStatus.connected" 
                   @click="connectUsb2snes" 
                   class="btn-primary-small">
-                  Connect
+                  Connect USB
                 </button>
                 <button 
                   v-if="usb2snesStatus.connected" 
                   @click="disconnectUsb2snes" 
                   class="btn-danger-small">
-                  Disconnect
+                  Disconnect USB
                 </button>
                 <button @click="openUsb2snesTools" class="btn-secondary-small">
                   USB2SNES Diagnostics
@@ -940,7 +940,7 @@
             <div class="usb2snes-dropdown-actions">
               <h4>Quick Actions</h4>
               <div class="action-grid">
-                <button @click="reconnectUsb2snes" class="action-btn">
+                <button @click="reconnectUsb2snes" :disabled="settings.usb2snesEnabled !== 'yes'" class="action-btn">
                   🔌 Reconnect
                 </button>
                 <button @click="rebootSnes" :disabled="!usb2snesStatus.connected" class="action-btn">
@@ -949,7 +949,7 @@
                 <button @click="returnToMenu" :disabled="!usb2snesStatus.connected" class="action-btn">
                   🏠 Menu
                 </button>
-                <button @click="openUploadFileModal" class="action-btn">
+                <button @click="openUploadFileModal" :disabled="settings.usb2snesEnabled !== 'yes'" class="action-btn">
                   📤 Upload
                 </button>
                 <button @click="openCheatsModal" :disabled="!usb2snesStatus.connected" class="action-btn">
@@ -11577,6 +11577,10 @@ async function disconnectUsb2snes() {
 }
 
 async function reconnectUsb2snes() {
+  if (settings.usb2snesEnabled !== 'yes') {
+    dropdownActionStatus.value = '✗ USB2SNES is disabled in settings';
+    return;
+  }
   dropdownActionStatus.value = 'Reconnecting...';
   
   try {
@@ -12139,6 +12143,16 @@ const emulatorConfigSettings = computed(() => ({
   retroarch_core_path: settings.retroarch_core_path,
   bizhawk_path: settings.bizhawk_path,
 }));
+
+const usb2snesDropdownButtonLabel = computed(() => {
+  if (!usb2snesStatus.connected && activeLaunchMethod.value === 'program') {
+    const preset = settings.launchProgramPreset || 'other';
+    if (preset === 'retroarch') return 'RetroArch';
+    if (preset === 'bizhawk') return 'Bizhawk';
+    return 'Emulator';
+  }
+  return 'USB2SNES';
+});
 
 async function saveEmulatorSettingsPartial(partial: Record<string, string>) {
   if (!isElectronAvailable()) return { success: false };
@@ -13151,12 +13165,6 @@ async function toggleUsb2snesDropdown() {
   // Refresh status when opening dropdown
   if (usb2snesDropdownOpen.value) {
     await refreshUsb2snesStatus();
-    
-    // Auto-show wizard if USB2SNES is not enabled (first time)
-    if (settings.usb2snesEnabled !== 'yes' && !usbOptionsWizardFirstTime.value) {
-      usbOptionsWizardFirstTime.value = true;
-      openUsbOptionsWizard();
-    }
   }
 }
 
@@ -38875,7 +38883,7 @@ button:disabled {
   background: none;
   border: none;
   color: var(--link-color, #0b57d0);
-  font-size: 11px;
+  font-size: 20px;
   cursor: pointer;
   text-decoration: underline;
   padding: 0;

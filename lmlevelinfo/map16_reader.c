@@ -262,12 +262,12 @@ int map16_tile_is_full_muncher_quad(const Map16Tile *t) {
 }
 
 int map16_tile_uses_012f_muncher_gfx(const Map16Data *m, uint16_t tile_id, const Map16Tile *resolved) {
-  if (!resolved || !map16_tile_is_full_muncher_quad(resolved)) return 0;
+  if (!resolved) return 0;
   if (tile_id == 0x012Fu) return 1;
   uint16_t acts = 0;
   if (m && map16_get_acts_like(m, tile_id, &acts) && acts == 0x012Fu) return 1;
   if (m && m->rom && map16_rom_read_acts_like(m->rom, tile_id, &acts) && acts == 0x012Fu) return 1;
-  return 0;
+  return map16_tile_is_full_muncher_quad(resolved);
 }
 
 static int map16_tile_is_coin_quad(const Map16Tile *t) {
@@ -302,6 +302,13 @@ static int map16_tile_matches_pipe_cap(const Map16Tile *t) {
   if (!t) return 0;
   return map16_sub_local_chr(t, 0) == 0x10 && map16_sub_local_chr(t, 1) == 0x00 && map16_sub_local_chr(t, 2) == 0x11 &&
          map16_sub_local_chr(t, 3) == 0x01;
+}
+
+/* FG_pages lists pipe-cap / turn-block template in screen order (TL,TR,BL,BR). */
+static int map16_tile_matches_turn_block_oracle_template(const Map16Tile *t) {
+  if (!t) return 0;
+  return map16_sub_local_chr(t, 0) == 0x00 && map16_sub_local_chr(t, 1) == 0x10 && map16_sub_local_chr(t, 2) == 0x01 &&
+         map16_sub_local_chr(t, 3) == 0x11;
 }
 
 static int map16_tile_matches_slope_quad_locals(const Map16Tile *t) {
@@ -1200,9 +1207,7 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   int have_raw = map16_get_raw(m, tile_id, &raw);
 
   /* Hack-page placement stubs: prefer placement FG oracle for L1 visual (CHR/pal/flips).
-   * Pool +21 may carry 0130 extended CHR (e.g. 0x186) for LM editor; placement keeps 012F
-   * vanilla CHR (e.g. 0x05C) which matches LM static export. Pool file words still used
-   * when placement oracle is absent. */
+   * Pool +21 file/oracle is used only when placement oracle is absent (def_redirect below). */
   if (have_raw && page >= 2u && map16_tile_is_placement_stub(m, tile_id, &raw) &&
       (size_t)tile_id + 21u < m->tiles_count) {
     Map16Tile place_oracle;
@@ -1213,15 +1218,6 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
       return 1;
     }
     uint16_t pool_id = (uint16_t)(tile_id + 21u);
-    Map16Tile pool_oracle;
-    if (map16_get_fg_oracle(m, pool_id, &pool_oracle) && map16_tile_uses_extended_oracle_chr(&pool_oracle)) {
-      *out = pool_oracle;
-      if (have_place_oracle) {
-        map16_merge_flip_from_placement(&place_oracle, out, out);
-      }
-      if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
-      return 1;
-    }
     const Map16Tile *pool = &m->tiles[pool_id];
     if (map16_tile_is_drawable(pool) && !map16_tile8s_equal(&raw, pool)) {
       if (have_place_oracle && !map16_tile_uses_extended_oracle_chr(&place_oracle)) {
@@ -1240,6 +1236,18 @@ int map16_get_with_src(Map16Data *m, uint16_t tile_id, Map16Tile *out, int *src_
   }
 
   if (map16_get_fg_oracle(m, tile_id, out)) {
+    int oracle_vflip = 0;
+    for (int si = 0; si < 4; si++) {
+      if ((out->w[si] >> 15) & 1u) oracle_vflip = 1;
+    }
+    /* FG oracle may carry a turn-block template (000/010/001/011) for unrelated hack tiles (e.g. hill 0x03BA). */
+    if (have_raw && page >= 2u && map16_tile_is_drawable(&raw) && map16_tile_uses_extended_oracle_chr(&raw) &&
+        map16_tile_matches_turn_block_oracle_template(out) && !map16_tile_uses_extended_oracle_chr(out) &&
+        !oracle_vflip) {
+      *out = raw;
+      if (src_out) *src_out = MAP16_SRC_FILE;
+      return 1;
+    }
     if (src_out) *src_out = MAP16_SRC_FG_ORACLE;
     return 1;
   }

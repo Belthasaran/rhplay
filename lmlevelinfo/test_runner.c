@@ -2469,14 +2469,14 @@ static int run_map16_rom_def_redirect_tests(void) {
     return 0;
   }
 
-  if (!map16_get_with_src(&m, 0x03BA, &got, &src) || src != MAP16_SRC_FG_ORACLE) {
-    failf("[map16_rom] 0x03BA expected fg_oracle resolve, got src=%d", src);
+  if (!map16_get_with_src(&m, 0x03BA, &got, &src) || src != MAP16_SRC_FILE) {
+    failf("[map16_rom] 0x03BA expected file resolve (extended CHR), got src=%d", src);
     map16_free(&m);
     rom_free(&rom);
     return 0;
   }
-  if (got.w[0] != 0xA000u || got.w[1] != 0xA010u || got.w[2] != 0xA001u || got.w[3] != 0xA011u) {
-    failf("[map16_rom] 0x03BA oracle subs=%04X,%04X,%04X,%04X expected A000,A010,A001,A011",
+  if (got.w[0] != 0x0D80u || got.w[1] != 0x0D90u || got.w[2] != 0x0D83u || got.w[3] != 0x0D93u) {
+    failf("[map16_rom] 0x03BA file subs=%04X,%04X,%04X,%04X expected 0D80,0D90,0D83,0D93",
           got.w[0], got.w[1], got.w[2], got.w[3]);
     map16_free(&m);
     rom_free(&rom);
@@ -2489,15 +2489,14 @@ static int run_map16_rom_def_redirect_tests(void) {
     rom_free(&rom);
     return 0;
   }
-  if (src != MAP16_SRC_DEF_REDIRECT && src != MAP16_SRC_FG_ORACLE) {
-    failf("[map16_rom] 0x04BD src=%d expected def_redirect or fg_oracle", src);
+  if (src != MAP16_SRC_FG_ORACLE) {
+    failf("[map16_rom] 0x04BD src=%d expected fg_oracle placement muncher quad", src);
     map16_free(&m);
     rom_free(&rom);
     return 0;
   }
-  if (!map16_tile_has_full_muncher_quad_locals(&got) &&
-      (src != MAP16_SRC_FG_ORACLE || map16_distinct_tile8_count(&got) < 3)) {
-    failf("[map16_rom] 0x04BD expected muncher visual (full quad or pool FG oracle)");
+  if (!map16_tile_has_full_muncher_quad_locals(&got)) {
+    failf("[map16_rom] 0x04BD expected placement FG oracle vanilla muncher quad 0x5C-0x5F");
     map16_free(&m);
     rom_free(&rom);
     return 0;

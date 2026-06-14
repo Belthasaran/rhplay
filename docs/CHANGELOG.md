@@ -1,3 +1,5 @@
+- **Patch resolver packaging**: Include new `lib/patch-*.js`, `lib/catalog-patch-extract.js`, and `lib/rhpak-storage.js` in electron-builder `files` list (fixes packaged app launch error).
+
 - **Patch resolver**: Added `lib/patch-resolver.js` with multi-source patch/patchblob retrieval (DB, local files, catalog 7z, RHPAK, archives, download URL, auto-catalog). Electron staging uses resolver instead of direct `attachments.file_data` reads. See `devdocs/PATCH_RESOLVER.md`.
 
 - **lmlevelinfo**: Fix Map16 resolve regressions: restore placement FG oracle for pipes/coins; hills (`0x03BA`) prefer file extended CHR over turn-block template; munchers use placement `0x05C` quad + acts-like `0x012F` GFX template (not pool `+21` extended CHR).

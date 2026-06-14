@@ -171,6 +171,7 @@ function registerDatabaseHandlers(dbManager) {
   const getScreenshotDbPath = () => getAuxDbPath('screenshot.db');
 
   function buildNewgameConfig(overrides = {}) {
+    const { app } = require('electron');
     const packageInput = overrides.packageInput ? path.resolve(overrides.packageInput) : null;
     return {
       jsonPath: overrides.jsonPath || null,
@@ -182,6 +183,7 @@ function registerDatabaseHandlers(dbManager) {
       force: !!overrides.force,
       purgeFiles: !!overrides.purgeFiles,
       uninstallUuid: overrides.uninstallUuid || null,
+      userDataPath: overrides.userDataPath || (app && app.getPath ? app.getPath('userData') : null),
       rhdataPath: overrides.rhdataPath || dbManager.paths?.rhdata,
       patchbinPath: overrides.patchbinPath || dbManager.paths?.patchbin,
       resourcePath: overrides.resourcePath || getResourceDbPath(),
@@ -4644,8 +4646,12 @@ function registerDatabaseHandlers(dbManager) {
         flipsPath,
         asarPath,
         onProgress: (current, total, gameName) => {
-          // Send progress updates to renderer
           event.sender.send('staging-progress', { current, total, gameName });
+        },
+        onPatchProgress: (payload) => {
+          if (event.sender && !event.sender.isDestroyed()) {
+            event.sender.send('patch-resolve-progress', payload);
+          }
         }
       });
       
@@ -4677,15 +4683,21 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('db:games:quick-launch-stage', async (event, { gameIds, vanillaRomPath, flipsPath, tempDirOverride }) => {
     try {
+      const userDataPath = app.getPath('userData');
       const result = await gameStager.stageQuickLaunchGames({
         dbManager,
         gameIds,
         vanillaRomPath,
         flipsPath,
         tempDirOverride,
+        userDataPath,
         onProgress: (current, total, gameName) => {
-          // Send progress updates to renderer
           event.sender.send('quick-launch-progress', { current, total, gameName });
+        },
+        onPatchProgress: (payload) => {
+          if (event.sender && !event.sender.isDestroyed()) {
+            event.sender.send('patch-resolve-progress', payload);
+          }
         }
       });
       
@@ -4702,9 +4714,11 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('db:game:get-highest-valid-version', async (_event, { gameId, verifyDecodable } = {}) => {
     try {
+      const userDataPath = app.getPath('userData');
       const result = await gameStager.getHighestValidVersion({
         dbManager,
         gameId,
+        userDataPath,
         verifyDecodable: verifyDecodable !== false,
       });
       return result;
@@ -7964,20 +7978,33 @@ function registerDatabaseHandlers(dbManager) {
                 `).all(...patchblobUuids);
                 
                 for (const attachment of attachmentRecords) {
-                  // Create attachment record without file_data
                   const attachmentRecord = { ...attachment };
                   delete attachmentRecord.file_data;
                   attachments.push(attachmentRecord);
-                  
-                  // Save file_data to separate file if it exists
-                  if (attachment.file_data) {
+
+                  let fileBuffer = attachment.file_data;
+                  if (!fileBuffer) {
+                    try {
+                      const { resolvePatchblob } = require('../lib/patch-resolver');
+                      const { buildPatchResolverContext } = require('./utils/patch-resolver-context');
+                      const resolverCtx = buildPatchResolverContext(dbManager, {
+                        userDataPath: app.getPath('userData')
+                      });
+                      const resolved = await resolvePatchblob(resolverCtx, { pbuuid: attachment.pbuuid });
+                      if (resolved.success && resolved.data) {
+                        fileBuffer = resolved.data;
+                      }
+                    } catch (resolveErr) {
+                      console.warn(`Could not resolve patchblob ${attachment.file_name}:`, resolveErr.message);
+                    }
+                  }
+
+                  if (fileBuffer) {
                     const fileName = sanitizeFileName(attachment.file_name) || attachment.auuid;
                     const filePath = path.join(exportDirectory, fileName);
-                    
-                    // Convert base64 to buffer and save
-                    const fileBuffer = Buffer.from(attachment.file_data, 'base64');
-                    await fs.writeFile(filePath, fileBuffer);
-                    
+                    const buf = Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer);
+                    await fs.writeFile(filePath, buf);
+
                     attachmentFiles.push({
                       auuid: attachment.auuid,
                       file_name: attachment.file_name,

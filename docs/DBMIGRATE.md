@@ -1,3 +1,10 @@
+- 2026-06-14 — patchblobs result_sha256 (rhdata)
+  - Purpose: Add `result_sha256` to patchblobs for catalog-based patch retrieval
+  - Command:
+    - `./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db`
+  - Applies: Migration ID `rhdata_067_patchblobs_result_sha256`
+  - Expected outcome: `patchblobs` gains nullable `result_sha256` column
+
 - 2025-01-XX — Screenshot Sequence Number (screenshot)
   - Purpose: Add sequence_no column to res_screenshots table to track screenshot ordering
   - Command:

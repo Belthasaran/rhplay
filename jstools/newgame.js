@@ -36,6 +36,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
+const { copyRhpakToInstalled, moveInstalledRhpakToRemoved } = require('../lib/rhpak-storage');
 const readline = require('readline/promises');
 const { stdin, stdout } = require('process');
 const Database = require('better-sqlite3');
@@ -3635,6 +3636,17 @@ async function handleUninstall(config, skeletonFromJson = null) {
         console.log(`  Removed resource entries: ${summary.resources}`);
         console.log(`  Removed screenshot entries: ${summary.screenshots}`);
 
+        if (config.userDataPath) {
+          try {
+            const removedPath = moveInstalledRhpakToRemoved(descriptor.rhpakuuid, config.userDataPath);
+            if (removedPath) {
+              console.log(`  RHPAK moved to: ${removedPath}`);
+            }
+          } catch (moveErr) {
+            console.warn(`  Warning: could not move RHPAK to rhpak-removed: ${moveErr.message}`);
+          }
+        }
+
         if (descriptor.skeleton && descriptor.jsonPath) {
           if (config.purgeFiles) {
             purgePreparedFilesFromSkeleton(descriptor.skeleton, descriptor.baseDir);
@@ -4195,6 +4207,17 @@ async function handleImportPackage(config) {
     console.log(`✓ Imported package ${path.basename(packageAbs)} into databases for ${gv.gameid || '(unknown gameid)'} v${gv.version || '?'}.`);
     console.log(`  Resources processed: ${resourceCount}`);
     console.log(`  Screenshots processed: ${screenshotCount}`);
+
+    if (config.userDataPath) {
+      try {
+        const installedPath = copyRhpakToInstalled(packageAbs, rhpakuuid, config.userDataPath);
+        if (installedPath) {
+          console.log(`  RHPAK archived to: ${installedPath}`);
+        }
+      } catch (copyErr) {
+        console.warn(`  Warning: could not copy RHPAK to rhpak-installed: ${copyErr.message}`);
+      }
+    }
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

@@ -7,14 +7,14 @@ const fs = require('fs');
 const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const crypto = require('crypto');
-const lzma = require('lzma-native');
-const fernet = require('fernet');
 const sevenZip = require('7zip-min');
 const { path7za } = require('7zip-bin');
 
 const SKIP_CLEANUP_FOR_NOW = 0;
 const gameGenieDecoder = require('./utils/gamegenie-decoder');
 const manifestResolver = require('./utils/manifest-resolver');
+const { resolvePatch, canResolvePatch } = require('../lib/patch-resolver');
+const { buildPatchResolverContext } = require('./utils/patch-resolver-context');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path
 // This is needed for Electron packaged apps where the binary is in app.asar.unpacked
@@ -76,97 +76,6 @@ function configure7zipPath() {
 configure7zipPath();
 
 /**
- * Decode encrypted/compressed blob data
- * @param {Buffer} encryptedData - Raw blob data
- * @param {string} keyBase64 - Base64-encoded key
- * @returns {Promise<Buffer>} Decoded patch data
- */
-async function decodeBlob(encryptedData, keyBase64) {
-  // Step 1: Decompress LZMA
-  const decompressed1 = await new Promise((resolve, reject) => {
-    lzma.decompress(encryptedData, (result, error) => {
-      if (error) reject(error);
-      else resolve(Buffer.from(result));
-    });
-  });
-  
-  // Step 2: Decrypt Fernet
-  let fernetKey;
-  try {
-    const decoded = Buffer.from(keyBase64, 'base64').toString('utf8');
-    if (/^[A-Za-z0-9+/\-_]+=*$/.test(decoded) && decoded.length >= 40) {
-      fernetKey = decoded;
-    } else {
-      fernetKey = keyBase64;
-    }
-  } catch (error) {
-    fernetKey = keyBase64;
-  }
-  
-  const frnsecret = new fernet.Secret(fernetKey);
-  let tokenStr;
-  try {
-    tokenStr = decompressed1.toString('utf8');
-  } catch (error) {
-    // Fallback to latin1 if UTF-8 fails
-    tokenStr = decompressed1.toString('latin1');
-  }
-  const token = new fernet.Token({ 
-    secret: frnsecret, 
-    ttl: 0, 
-    token: tokenStr
-  });
-  const decrypted = token.decode();
-  
-  // Step 3: Decompress again
-  // The `decrypted` string may contain:
-  // 1. Base64-encoded LZMA data (Python blobs)
-  // 2. Base64-encoded base64-encoded LZMA data (JavaScript blobs - double encoding)
-  // We need to auto-detect which format we have
-  
-  let lzmaData;
-  
-  // Detect if decrypted contains non-ASCII characters (Latin1-encoded binary)
-  const hasNonAscii = /[^\x00-\x7F]/.test(decrypted);
-  
-  if (hasNonAscii) {
-    // Decrypted is Latin1-encoded binary data (UTF-8 conversion failed in crypto-js)
-    // Convert directly from Latin1 string to Buffer
-    lzmaData = Buffer.from(decrypted, 'latin1');
-  } else {
-    // Decrypted is a base64 string (normal case)
-    lzmaData = Buffer.from(decrypted, 'base64');
-    
-    // Check if it starts with LZMA/XZ magic bytes (0xFD or 0x5D)
-    if (lzmaData[0] !== 0xfd && lzmaData[0] !== 0x5d) {
-      // Not LZMA magic - might be double-encoded base64 (JavaScript blobs)
-      // Try decoding one more layer
-      try {
-        const decoded1Str = lzmaData.toString('utf8');
-        lzmaData = Buffer.from(decoded1Str, 'base64');
-      } catch (e) {
-        // If UTF-8 fails, try latin1
-        try {
-          const decoded1Str = lzmaData.toString('latin1');
-          lzmaData = Buffer.from(decoded1Str, 'base64');
-        } catch (e2) {
-          // Keep original lzmaData
-        }
-      }
-    }
-  }
-  
-  const decompressed2 = await new Promise((resolve, reject) => {
-    lzma.decompress(lzmaData, (result, error) => {
-      if (error) reject(error);
-      else resolve(Buffer.from(result));
-    });
-  });
-  
-  return decompressed2;
-}
-
-/**
  * Get staging folder path (uses OS temp directory or override)
  * @param {string} tempDirOverride - Optional custom temp directory base path
  * @returns {string} Path to staging folder
@@ -213,107 +122,69 @@ function generateRunFolderName(date = new Date()) {
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 async function createPatchedSFC(params) {
-  const { dbManager, gameid, version, vanillaRomPath, flipsPath, outputPath } = params;
-  
+  const {
+    dbManager,
+    gameid,
+    version,
+    vanillaRomPath,
+    flipsPath,
+    outputPath,
+    userDataPath,
+    onProgress,
+    prefetchList,
+    patchResolverCtx
+  } = params;
+
   try {
-    // Get game version from rhdata.db
-    const rhdb = dbManager.getConnection('rhdata');
-    const gameVersion = rhdb.prepare(`
-      SELECT gv.*, pb.patchblob1_name, pb.patchblob1_sha224, pb.patchblob1_key
-      FROM gameversions gv
-      LEFT JOIN patchblobs pb ON gv.patchblob1_name = pb.patchblob1_name
-      WHERE gv.gameid = ? AND gv.version = ?
-    `).get(gameid, version);
-    
-    if (!gameVersion) {
-      return { success: false, error: `Game ${gameid} version ${version} not found` };
+    const ctx = patchResolverCtx || buildPatchResolverContext(dbManager, {
+      userDataPath,
+      flipsPath,
+      vanillaRomPath
+    });
+
+    const resolved = await resolvePatch(ctx, { gameid, version }, {
+      onProgress,
+      prefetchList
+    });
+
+    if (!resolved.success || !resolved.data) {
+      return { success: false, error: resolved.error || 'Failed to resolve patch data' };
     }
-    
-    if (!gameVersion.patchblob1_name) {
-      return { success: false, error: `No patch blob for ${gameid} v${version}` };
-    }
-    
-    if (!gameVersion.patchblob1_key) {
-      return { success: false, error: `No decryption key for ${gameid} v${version}` };
-    }
-    
-    // Get patch file data from patchbin.db
-    const patchbinDb = dbManager.getConnection('patchbin');
-    const attachment = patchbinDb.prepare(`
-      SELECT file_data, file_hash_sha224, decoded_hash_sha224
-      FROM attachments
-      WHERE file_name = ?
-    `).get(gameVersion.patchblob1_name);
-    
-    if (!attachment) {
-      return { success: false, error: `Patch file ${gameVersion.patchblob1_name} not found in patchbin.db` };
-    }
-    
-    if (!attachment.file_data) {
-      return { success: false, error: `Patch file ${gameVersion.patchblob1_name} has no file_data` };
-    }
-    
-    // Create temp directory for patching
+
+    const decodedData = resolved.data;
+
     const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rhtools-patch-'));
     const patchPath = path.join(tempDir, 'patch.bps');
     const tempOutputPath = path.join(tempDir, 'output.sfc');
-    
+
     try {
-      // Decode the compressed/encrypted patch data
-      let decodedData;
-      try {
-        decodedData = await decodeBlob(attachment.file_data, gameVersion.patchblob1_key);
-      } catch (decodeError) {
-        console.error('Blob decode error for game', game.gameid, ':', decodeError);
-        return { success: false, error: `Failed to decode patch: ${decodeError.message}` };
-      }
-      
-      // Verify decoded hash
-      const decodedHash = crypto.createHash('sha224').update(decodedData).digest('hex');
-      if (attachment.decoded_hash_sha224 && decodedHash !== attachment.decoded_hash_sha224) {
-        return { 
-          success: false, 
-          error: `Decoded hash mismatch for ${gameVersion.patchblob1_name}: expected ${attachment.decoded_hash_sha224}, got ${decodedHash}` 
-        };
-      }
-      
-      // Write decoded patch file
       fs.writeFileSync(patchPath, decodedData);
-      
-      // Verify vanilla ROM exists
+
       if (!fs.existsSync(vanillaRomPath)) {
         return { success: false, error: 'Vanilla ROM not found. Please configure in Settings.' };
       }
-      
-      // Verify FLIPS exists
+
       if (!fs.existsSync(flipsPath)) {
         return { success: false, error: 'FLIPS not found. Please configure in Settings.' };
       }
-      
-      // Run FLIPS to apply patch
+
       const flipsCmd = `"${flipsPath}" --apply "${patchPath}" "${vanillaRomPath}" "${tempOutputPath}"`;
-      
+
       try {
-       execSync(flipsCmd, { stdio: 'pipe' });
+        execSync(flipsCmd, { stdio: 'pipe' });
       } catch (execError) {
         return { success: false, error: `FLIPS failed: ${execError.message}` };
       }
-      
-      // Verify output was created
+
       if (!fs.existsSync(tempOutputPath)) {
         return { success: false, error: 'FLIPS did not create output file' };
       }
-      
-      // Move to final location
+
       fs.copyFileSync(tempOutputPath, outputPath);
-      
-      // Cleanup temp dir
       fs.rmSync(tempDir, { recursive: true, force: true });
-      
-      return { success: true };
-      
+
+      return { success: true, patchSource: resolved.source };
     } catch (error) {
-      // Cleanup on error
       if (fs.existsSync(tempDir)) {
         fs.rmSync(tempDir, { recursive: true, force: true });
       }
@@ -343,19 +214,16 @@ async function createPatchedSFC(params) {
  * @returns {Promise<{success: boolean, version: number|null, triedVersions: number[], error?: string}>}
  */
 async function getHighestValidVersion(params) {
-  const { dbManager, gameId, verifyDecodable = true } = params || {};
+  const { dbManager, gameId, userDataPath, verifyDecodable = true } = params || {};
   if (!dbManager) {
     return { success: false, version: null, triedVersions: [], error: 'dbManager is required' };
   }
   if (!gameId) {
     return { success: false, version: null, triedVersions: [], error: 'gameId is required' };
   }
-  
+
   try {
     const rhdb = dbManager.getConnection('rhdata');
-    const patchbinDb = dbManager.getConnection('patchbin');
-    
-    // Get candidate versions (highest first) with patchblob name + key
     const candidates = rhdb.prepare(`
       SELECT gv.version, gv.patchblob1_name, pb.patchblob1_key
       FROM gameversions gv
@@ -363,54 +231,28 @@ async function getHighestValidVersion(params) {
       WHERE gv.gameid = ?
       ORDER BY gv.version DESC
     `).all(gameId);
-    
+
     if (!candidates || candidates.length === 0) {
       return { success: true, version: null, triedVersions: [] };
     }
-    
+
+    const ctx = buildPatchResolverContext(dbManager, { userDataPath });
     const triedVersions = [];
-    
+
     for (const row of candidates) {
       const version = row?.version;
       if (typeof version !== 'number') continue;
       triedVersions.push(version);
-      
-      const patchblobName = row?.patchblob1_name;
-      const patchKey = row?.patchblob1_key;
-      
-      if (!patchblobName || !patchKey) continue;
-      
-      const attachment = patchbinDb.prepare(`
-        SELECT file_data, decoded_hash_sha224
-        FROM attachments
-        WHERE file_name = ?
-      `).get(patchblobName);
-      
-      if (!attachment || !attachment.file_data) continue;
-      
-      if (verifyDecodable) {
-        try {
-          const decodedData = await decodeBlob(attachment.file_data, patchKey);
-          if (!decodedData || !Buffer.isBuffer(decodedData) || decodedData.length === 0) {
-            continue;
-          }
-          
-          // If a decoded hash is present, enforce it
-          if (attachment.decoded_hash_sha224) {
-            const actualDecodedHash = crypto.createHash('sha224').update(decodedData).digest('hex');
-            if (actualDecodedHash !== attachment.decoded_hash_sha224) {
-              continue;
-            }
-          }
-        } catch (e) {
-          // Decode failed; try next lower version
-          continue;
-        }
+
+      if (!row?.patchblob1_name) continue;
+      if (verifyDecodable && !row?.patchblob1_key) continue;
+
+      const check = await canResolvePatch(ctx, { gameid: gameId, version });
+      if (check.resolvable) {
+        return { success: true, version, triedVersions, source: check.source };
       }
-      
-      return { success: true, version, triedVersions };
     }
-    
+
     return { success: true, version: null, triedVersions };
   } catch (error) {
     return { success: false, version: null, triedVersions: [], error: error.message };
@@ -434,8 +276,31 @@ function stripleadingzeros(strval) {
  * @returns {Promise<{success: boolean, folderPath?: string, gamesStaged?: number, error?: string}>}
  */
 async function stageRunGames(params) {
-  const { dbManager, runUuid, expandedResults, userDataPath, vanillaRomPath, flipsPath, asarPath, onProgress } = params;
+  const {
+    dbManager,
+    runUuid,
+    expandedResults,
+    userDataPath,
+    vanillaRomPath,
+    flipsPath,
+    asarPath,
+    onProgress,
+    onPatchProgress,
+    prefetchList
+  } = params;
   console.log('[stageRunGames] Received asarPath:', asarPath);
+
+  const patchResolverCtx = buildPatchResolverContext(dbManager, {
+    userDataPath,
+    flipsPath,
+    vanillaRomPath
+  });
+  const sharedPatchParams = {
+    userDataPath,
+    patchResolverCtx,
+    onProgress: onPatchProgress,
+    prefetchList
+  };
   
   try {
     // Create staging base directory if it doesn't exist
@@ -471,6 +336,11 @@ async function stageRunGames(params) {
       if (onProgress) {
         onProgress(i + 1, expandedResults.length, result.game_name);
       }
+
+      const prefetchList = expandedResults.slice(i + 1)
+        .filter((r) => r.gameid)
+        .map((r) => ({ gameid: r.gameid, version: r.version || 1 }));
+      const iterationPatchParams = { ...sharedPatchParams, prefetchList };
       
       // Skip if no gameid (shouldn't happen after reveal, but just in case)
       if (!result.gameid) {
@@ -558,10 +428,9 @@ async function stageRunGames(params) {
           flipsPath,
           asarPath: asarPath || null,  // Use provided ASAR path or let it find automatically
           outputDir: runFolder,
-          finalFilename: finalFilename  // Pass desired filename
-        });
-        
-        // Clean up any intermediate files in the output directory (unless skip cleanup)
+              finalFilename: finalFilename,  // Pass desired filename
+              ...iterationPatchParams
+            });
         const clientDb = dbManager.getConnection('clientdata');
         const skipCleanup = clientDb.prepare(`
           SELECT csetting_value FROM csettings WHERE csetting_name = 'SkipCleanup'
@@ -636,10 +505,11 @@ async function stageRunGames(params) {
               flipsPath,
               asarPath: asarPath || null,  // Use provided ASAR path or let it find automatically
               outputDir: runFolder,
-              finalFilename: finalFilename  // Pass desired filename
-            });
-            
-            // Clean up any intermediate files in the output directory (unless skip cleanup)
+          finalFilename: finalFilename,  // Pass desired filename
+          ...iterationPatchParams
+        });
+        
+        // Clean up any intermediate files in the output directory (unless skip cleanup)
             const clientDb = dbManager.getConnection('clientdata');
             const skipCleanup = clientDb.prepare(`
               SELECT csetting_value FROM csettings WHERE csetting_name = 'SkipCleanup'
@@ -686,7 +556,8 @@ async function stageRunGames(params) {
               version: result.version || 1,
               vanillaRomPath,
               flipsPath,
-              outputPath: sfcPath
+              outputPath: sfcPath,
+              ...iterationPatchParams
             });
           }
         } else {
@@ -697,7 +568,8 @@ async function stageRunGames(params) {
             version: result.version || 1,  // Use version from result or default to 1
             vanillaRomPath,
             flipsPath,
-            outputPath: sfcPath
+            outputPath: sfcPath,
+            ...iterationPatchParams
           });
         }
       }
@@ -843,7 +715,29 @@ function calculateRunElapsed(run) {
  * @returns {Promise<{success: boolean, folderPath?: string, gamesStaged?: number, error?: string}>}
  */
 async function stageQuickLaunchGames(params) {
-  const { dbManager, gameIds, vanillaRomPath, flipsPath, tempDirOverride = '', onProgress } = params;
+  const {
+    dbManager,
+    gameIds,
+    vanillaRomPath,
+    flipsPath,
+    tempDirOverride = '',
+    onProgress,
+    userDataPath,
+    onPatchProgress,
+    prefetchList
+  } = params;
+
+  const patchResolverCtx = buildPatchResolverContext(dbManager, {
+    userDataPath,
+    flipsPath,
+    vanillaRomPath
+  });
+  const sharedPatchParams = {
+    userDataPath,
+    patchResolverCtx,
+    onProgress: onPatchProgress,
+    prefetchList
+  };
   
   try {
     // Create quick launch base directory if it doesn't exist
@@ -902,7 +796,8 @@ async function stageQuickLaunchGames(params) {
         version: gameInfo.version,
         vanillaRomPath,
         flipsPath,
-        outputPath: sfcPath
+        outputPath: sfcPath,
+        ...sharedPatchParams
       });
       
       if (patchResult.success) {
@@ -1165,11 +1060,14 @@ async function buildPlusPatchedGame(params) {
     flipsPath,
     asarPath,
     outputDir,
-    finalFilename
+    finalFilename,
+    userDataPath,
+    patchResolverCtx,
+    onProgress,
+    prefetchList
   } = params;
   
   try {
-    // Step 1: Create initial patched SFC (same as Start button)
     const tempDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rhtools-pluspatch-'));
     const initialSfcPath = path.join(tempDir, 'initial.sfc');
     
@@ -1179,7 +1077,11 @@ async function buildPlusPatchedGame(params) {
       version: gameVersion,
       vanillaRomPath,
       flipsPath,
-      outputPath: initialSfcPath
+      outputPath: initialSfcPath,
+      userDataPath,
+      patchResolverCtx,
+      onProgress,
+      prefetchList
     });
     
     if (!initialResult.success) {

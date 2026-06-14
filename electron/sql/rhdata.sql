@@ -69,6 +69,7 @@ CREATE TABLE patchblobs (
    patchblob1_sha224 varchar(255),
    result_sha1 varchar(255),
    result_sha224 varchar(255),
+   result_sha256 varchar(255),
    result_shake1 varchar(255),
    pbjsondata text,
    pblobdata blob,

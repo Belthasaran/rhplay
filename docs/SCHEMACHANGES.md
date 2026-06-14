@@ -1,3 +1,9 @@
+- 2026-06-14: rhdata - patchblobs result_sha256
+  - Description: Add nullable `result_sha256` column to `patchblobs` for catalog item lookup and future patched-ROM verification.
+  - Rationale: Patch resolver Method 4 matches catalog `items.sfc_rom_sha256_hash` when populated; falls back to `result_sha1` / `sfc_rom_sha1_hash` otherwise.
+  - Tables/columns: `patchblobs.result_sha256 varchar(255)` (nullable)
+  - Migration: `rhdata_067_patchblobs_result_sha256` via `jsutils/migratedb.js`
+
 - 2026-03-28: core manifest (documentation only — no SQL migration)
   - Description: Documented optional `rhtools-launcher` app and future manifest key pattern for launcher self-updates (e.g. `beta/RHToolsLauncher/win64/portable` alongside existing `beta/RHPLAY/...`). The existing `launcher_allowlist` array of `[note, sha256]` remains the registry of allowed SHA256 hashes for past official binaries.
   - Rationale: Separates minimal launcher distribution from full RHPlay; launch gate checks manifest entry `sha256` and `launcher_allowlist`.

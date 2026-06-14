@@ -62,6 +62,7 @@
     "updategames:test": "node updategames.js --dry-run --limit=5",
     "updategames:resume": "node updategames.js --resume",
     "test:blob-compat": "node tests/test_blob_compatibility.js",
+    "test:patch-resolver": "node tests/test_patch_resolver.js",
     "test:python-compat": "node tests/test_python_script_compat.js",
     "test:updategames": "node tests/test_updategames.js",
     "test:usb2snes-list": "node tests/test_usb2snes_list.js",

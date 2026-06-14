@@ -685,6 +685,15 @@ const MIGRATIONS = {
       type: 'js',
       file: resolveRelative('electron/sql/migrations/057_rhdata_populate_fields_sa1_from_json.js'),
     },
+    {
+      id: 'rhdata_067_patchblobs_result_sha256',
+      description: 'Add result_sha256 column to patchblobs for catalog patch lookup',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/067_rhdata_patchblobs_result_sha256.sql'),
+      skipIf(db) {
+        return columnExists(db, 'patchblobs', 'result_sha256');
+      },
+    },
   ],
   clientdata: [
     {

@@ -25399,19 +25399,16 @@ async function uploadStagedToSnes(andBoot: boolean = false) {
 }
 
 async function launchWithProgram() {
-  quickLaunchActionStatus.value = 'Scanning for game files...';
-  
+  if (!quickLaunchFolderPath.value || quickLaunchStagedFiles.value.length === 0) {
+    quickLaunchActionStatus.value = '✗ No games staged. Click Start first to stage games.';
+    return;
+  }
+
   try {
-    // Get list of .sfc files in the folder
-    const folderContents = await (window as any).electronAPI.readDirectory(quickLaunchFolderPath.value);
-    const sfcFiles = folderContents.filter((f: string) => f.endsWith('.sfc'));
-    
-    if (sfcFiles.length === 0) {
-      quickLaunchActionStatus.value = '✗ No .sfc files found in folder';
-      return;
-    }
-    
-    // If multiple files, use the selected one or first one
+    // Use files from the current Start staging session (not all .sfc in the folder)
+    const sfcFiles = quickLaunchStagedFiles.value;
+    console.log(`[Launch] Launching ${sfcFiles.length} staged file(s):`, sfcFiles);
+
     let fileToLaunch = sfcFiles[0];
     if (quickLaunchSelectedFile.value && sfcFiles.includes(quickLaunchSelectedFile.value)) {
       fileToLaunch = quickLaunchSelectedFile.value;

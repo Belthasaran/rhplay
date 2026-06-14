@@ -1,3 +1,4 @@
+- **Quick launch program launch**: Fix Start + Emulator launching wrong ROM when stale `.sfc` files remain in `RHTools-QuickLaunch/`; `launchWithProgram()` now uses the current staging list (same as USB upload), and new Start clears old quick-launch ROMs/metadata.
 - **Active Launch Method**: Session-scoped USB2SNES / Emulator / Manual switcher in the always-visible header dropdown; Default Game Launch Method in Settings; Emulator Config modal (RetroArch/Bizhawk/Other); portable help pages under `electron/help/`; Build Plus USB/Emu modes; Prepare Run Prep Status; program launch in runs and stage tests.
 - **Emulator path search**: Search modal for standard RetroArch/BizHawk install paths; Ubuntu libretro core path; APT/winget install helpers; USB dropdown label reflects active emulator preset; Connect USB / Disconnect USB labels; Reconnect/Upload disabled when USB2SNES off.
 

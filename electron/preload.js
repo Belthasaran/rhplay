@@ -235,6 +235,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * Update a preparing run name and global config
    */
   updateRunPreparing: (params) => ipcRenderer.invoke('db:runs:update-preparing', params),
+  renameRun: (params) => ipcRenderer.invoke('db:runs:rename', params),
   
   /**
    * Save run plan entries

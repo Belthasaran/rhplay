@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { parseLevelInfo } = require('../lib/jit-levels/levelinfo');
+const { parseLevelInfo, mapLevelInfoToStageDefaults } = require('../lib/jit-levels/levelinfo');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -72,9 +72,22 @@ function testMapLevelInfoExports() {
   assert(typeof deriveTagsFromLevelInfo === 'function');
 }
 
+function testLevel130HexParseWater() {
+  const romPath = path.join(__dirname, '..', 'lmlevelinfo', 'test', 'akogare', 'orig_Ako.sfc');
+  if (!fs.existsSync(romPath)) {
+    console.log('Skipping level 130 hex parse test (akogare fixture missing)');
+    return;
+  }
+  const romBuffer = fs.readFileSync(romPath);
+  const defaults = mapLevelInfoToStageDefaults(parseLevelInfo(romBuffer, '130'));
+  assert(defaults.water === 1, "level '130' should parse as hex 0x130 and be a water level");
+  assert((defaults.stagetags || '').includes('water'), 'level 130 should include water tag');
+}
+
 function main() {
   testMapLevelInfoExports();
   testParseInvalidLevel();
+  testLevel130HexParseWater();
   testAkogare109Parity();
   console.log('✅ test_jit_levelinfo_parity passed');
 }

@@ -192,6 +192,7 @@ interface DetectedLevel {
   credits?: number;
   stagetags?: string;
   difficulty?: number;
+  extradescription?: string | null;
 }
 
 const loading = ref(false);

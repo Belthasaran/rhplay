@@ -11,23 +11,23 @@ const {
 
 function testStatusLabels() {
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ predictionsConfigured: false, twitchTokenValid: true, prepPredictionsMode: 'none' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationValid: false, prepPredictionsMode: 'none' }),
     '(Off)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ predictionsConfigured: true, twitchTokenValid: false, prepPredictionsMode: 'same_item' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationValid: false, prepPredictionsMode: 'same_item' }),
     '(Off)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ predictionsConfigured: true, twitchTokenValid: true, prepPredictionsMode: 'none' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationValid: true, prepPredictionsMode: 'none' }),
     '(Ready)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ predictionsConfigured: true, twitchTokenValid: true, prepPredictionsMode: 'same_item' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationValid: true, prepPredictionsMode: 'same_item' }),
     '(On, Per-Item)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ predictionsConfigured: true, twitchTokenValid: true, prepPredictionsMode: 'whole_challenge' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationValid: true, prepPredictionsMode: 'whole_challenge' }),
     '(On, Per-Run)'
   );
 }

@@ -23551,8 +23551,7 @@ const openTwitchPrepAfterSetup = ref(false);
 
 const twitchPrepStatusLabel = computed(() =>
   getTwitchPrepStatusLabel({
-    predictionsConfigured: predictionsConfigured.value,
-    twitchTokenValid: twitchTokenValid.value,
+    twitchIntegrationValid: twitchTokenValid.value,
     prepPredictionsMode: prepPredictionsMode.value,
   })
 );
@@ -28891,23 +28890,43 @@ async function handleTwitchPrepSelectSubtype(subtype: IndividualPredictionSubtyp
   await refreshPrepTemplateSubtypeFromTemplate();
 }
 
+async function refreshTwitchIntegrationReady(): Promise<boolean> {
+  if (!isElectronAvailable()) {
+    return false;
+  }
+
+  try {
+    const status = await (window as any).electronAPI.getTwitchIntegrationStatus({});
+    if (!status?.is_active) {
+      twitchTokenValid.value = false;
+      return false;
+    }
+
+    const validation = await (window as any).electronAPI.validateTwitchToken();
+    if (validation?.valid === true) {
+      twitchTokenValid.value = true;
+      return true;
+    }
+    if (validation?.needsReauth || validation?.valid === false) {
+      twitchTokenValid.value = false;
+      return false;
+    }
+
+    // Integration row is active; validation was inconclusive (e.g. cached valid).
+    twitchTokenValid.value = true;
+    return true;
+  } catch (error) {
+    console.warn('[refreshTwitchIntegrationReady] Error:', error);
+    twitchTokenValid.value = false;
+    return false;
+  }
+}
+
 async function openTwitchPrepDropdown(event: MouseEvent) {
   await checkPredictionsConfiguration();
 
-  if (isElectronAvailable()) {
-    try {
-      const validation = await (window as any).electronAPI.validateTwitchToken();
-      if (validation?.valid === true) {
-        twitchTokenValid.value = true;
-      } else if (validation?.needsReauth || validation?.valid === false) {
-        twitchTokenValid.value = false;
-      }
-    } catch (error) {
-      console.warn('[openTwitchPrepDropdown] Token validation error:', error);
-    }
-  }
-
-  if (!predictionsConfigured.value || !twitchTokenValid.value) {
+  const integrationReady = await refreshTwitchIntegrationReady();
+  if (!integrationReady) {
     openTwitchPrepAfterSetup.value = true;
     await openTwitchIntegrationSetup();
     return;
@@ -29081,7 +29100,7 @@ async function handleTwitchIntegrationUpdate() {
 
   await refreshPrepTemplateSubtypeFromTemplate();
 
-  if (openTwitchPrepAfterSetup.value && predictionsConfigured.value && twitchTokenValid.value && !isRunActive.value) {
+  if (openTwitchPrepAfterSetup.value && twitchTokenValid.value && !isRunActive.value) {
     openTwitchPrepAfterSetup.value = false;
     showTwitchPrepDropdown.value = true;
   } else {
@@ -29105,36 +29124,32 @@ async function checkPredictionsConfiguration() {
       predictionsConfigured.value = true;
       
       // Check Twitch token validity - required for predictions to actually work
-      // Only check if profile is loaded (we check once after profile loads in loadOnlineProfile)
-      if (onlineProfile.value?.profileId) {
-        try {
-          const status = await (window as any).electronAPI.getTwitchIntegrationStatus({
-            profileUuid: onlineProfile.value.profileId
-          });
-          
-          // Token is valid if status exists and is_active is true
-          twitchTokenValid.value = !!(status && status.is_active === true);
-          
-          if (!twitchTokenValid.value) {
-            console.log('[checkPredictionsConfiguration] Template exists but Twitch token is invalid - reconnection needed');
-          }
-        } catch (tokenError) {
-          // Error checking token - assume invalid
-          twitchTokenValid.value = false;
-          console.warn('[checkPredictionsConfiguration] Error checking Twitch token:', tokenError);
+      try {
+        const status = await (window as any).electronAPI.getTwitchIntegrationStatus({});
+        twitchTokenValid.value = !!(status && status.is_active === true);
+
+        if (!twitchTokenValid.value) {
+          console.log('[checkPredictionsConfiguration] Template exists but Twitch token is invalid - reconnection needed');
         }
+      } catch (tokenError) {
+        twitchTokenValid.value = false;
+        console.warn('[checkPredictionsConfiguration] Error checking Twitch token:', tokenError);
       }
-      // If profile not loaded yet, don't change twitchTokenValid - wait for profile to load
     } else {
-      // No template exists - setup is not complete
-      // Only set to false if we don't have a saved enabled state
-      // (This prevents clearing configured status when resuming a run that was enabled)
+      // No template saved yet — predictions template still needs Setup, but Twitch may be connected
       if (!predictionsEnabled.value) {
         predictionsConfigured.value = false;
       }
-      // If predictionsEnabled is true, keep configured as is (might be loading state)
-      // Token validity doesn't matter if template doesn't exist
-      twitchTokenValid.value = false;
+
+      try {
+        const status = await (window as any).electronAPI.getTwitchIntegrationStatus({});
+        twitchTokenValid.value = !!(status && status.is_active === true);
+      } catch (tokenError) {
+        console.warn('[checkPredictionsConfiguration] Error checking Twitch integration without template:', tokenError);
+        if (!predictionsEnabled.value) {
+          twitchTokenValid.value = false;
+        }
+      }
     }
   } catch (error) {
     console.error('[checkPredictionsConfiguration] Error:', error);

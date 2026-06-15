@@ -6,11 +6,10 @@
 export type PrepPredictionsMode = 'none' | 'same_item' | 'whole_challenge';
 
 export function getTwitchPrepStatusLabel(params: {
-  predictionsConfigured: boolean;
-  twitchTokenValid: boolean;
+  twitchIntegrationValid: boolean;
   prepPredictionsMode: PrepPredictionsMode;
 }): string {
-  if (!params.predictionsConfigured || !params.twitchTokenValid) {
+  if (!params.twitchIntegrationValid) {
     return '(Off)';
   }
   if (params.prepPredictionsMode === 'same_item') {

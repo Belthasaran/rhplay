@@ -42,6 +42,7 @@ const usbfxpServer = require('./main/usb2snes/usbfxpServer');
 const { HostFP } = require('./main/HostFP');
 const TrustManager = require('./utils/TrustManager');
 const { getTwitchClientId, getTwitchRedirectUri } = require('./twitch-config');
+const { assessTwitchToken } = require('./utils/twitch-token-service');
 const PermissionHelper = require('./utils/PermissionHelper');
 const ModerationManager = require('./utils/ModerationManager');
 const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
@@ -14160,136 +14161,39 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Validate Twitch token and check if re-authentication is needed
    * Channel: validate_twitch_token
+   * Params: { force?: boolean } — force contacts Twitch even if recently validated
    */
   ipcMain.handle('validate_twitch_token', async (event, params = {}) => {
     try {
       const keyguardKey = getKeyguardKey(event);
-      if (!keyguardKey) {
-        return { valid: false, needsReauth: true, reason: 'Profile Guard not unlocked' };
-      }
-      
       const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      const currentProfileId = profileManager.getCurrentProfileId();
-      
-      if (!currentProfileId) {
-        return { valid: false, needsReauth: false, reason: 'No active profile' };
-      }
-      
+      const currentProfileId = keyguardKey ? profileManager.getCurrentProfileId() : null;
       const db = dbManager.getConnection('clientdata');
-      const integration = db.prepare(`
-        SELECT 
-          encrypted_access_token,
-          expires_in,
-          obtainment_timestamp,
-          last_validated_at,
-          is_active
-        FROM twitch_integration
-        WHERE profile_uuid = ? AND is_active = 1
-      `).get(currentProfileId);
-      
-      if (!integration) {
-        return { valid: false, needsReauth: false, reason: 'No Twitch integration found' };
-      }
-      
-      const now = Date.now();
-      const lastValidated = integration.last_validated_at || 0;
-      const obtainmentTime = integration.obtainment_timestamp || 0;
-      const expiresIn = integration.expires_in || 0;
-      
-      // Check if token has expired based on expiration time
-      let tokenExpired = false;
-      if (expiresIn > 0 && obtainmentTime > 0) {
-        const expirationTime = obtainmentTime + (expiresIn * 1000);
-        tokenExpired = now >= expirationTime;
-      }
-      
-      // Check if validation is needed:
-      // 1. Never validated this session (last_validated_at is 0 or very old)
-      // 2. Not validated within past 24 hours
-      // 3. Token has expired
-      const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-      const needsValidation = lastValidated === 0 || lastValidated < twentyFourHoursAgo || tokenExpired;
-      
-      if (!needsValidation) {
-        // Token is still valid, no need to check with Twitch
-        return { 
-          valid: true, 
-          needsReauth: false,
-          lastValidated: lastValidated,
-          expiresAt: expiresIn > 0 && obtainmentTime > 0 ? obtainmentTime + (expiresIn * 1000) : null
-        };
-      }
-      
-      // Need to validate with Twitch API
-      try {
-        const accessToken = decryptTwitchToken(integration.encrypted_access_token, keyguardKey);
-        
-        // Validate token with Twitch API
-        const https = require('https');
-        const validateUrl = 'https://id.twitch.tv/oauth2/validate';
-        
-        const validateResponse = await new Promise((resolve, reject) => {
-          const req = https.request(validateUrl, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken.trim()}`
-            }
-          }, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  resolve(JSON.parse(data));
-                } catch (e) {
-                  reject(new Error('Failed to parse validation response'));
-                }
-              } else {
-                reject(new Error(`Token validation failed: ${res.statusCode}`));
-              }
-            });
-          });
-          
-          req.on('error', reject);
-          req.end();
-        });
-        
-        // Token is valid - update last_validated_at
-        db.prepare(`
-          UPDATE twitch_integration
-          SET last_validated_at = ?, last_used_at = CURRENT_TIMESTAMP
-          WHERE profile_uuid = ?
-        `).run(now, currentProfileId);
-        
-        return { 
-          valid: true, 
-          needsReauth: false,
-          lastValidated: now,
-          expiresAt: expiresIn > 0 && obtainmentTime > 0 ? obtainmentTime + (expiresIn * 1000) : null
-        };
-        
-      } catch (error) {
-        // Token validation failed - needs re-authentication
-        console.error('[validate_twitch_token] Token validation failed:', error);
-        
-        // Mark integration as needing re-auth (but don't delete it)
-        db.prepare(`
-          UPDATE twitch_integration
-          SET is_active = 0, last_used_at = CURRENT_TIMESTAMP
-          WHERE profile_uuid = ?
-        `).run(currentProfileId);
-        
-        return { 
-          valid: false, 
-          needsReauth: true, 
-          reason: error.message || 'Token validation failed',
-          lastValidated: lastValidated
-        };
-      }
-      
+
+      const result = await assessTwitchToken({
+        db,
+        profileId: currentProfileId,
+        keyguardKey,
+        force: params.force === true,
+        decryptTwitchToken,
+        getTwitchClientId,
+        storeRefreshedToken: validateAndStoreTwitchToken,
+      });
+
+      return {
+        ...result,
+        lastValidated: result.lastValidatedAt,
+      };
     } catch (error) {
       console.error('[validate_twitch_token] Error:', error);
-      return { valid: false, needsReauth: true, reason: error.message || 'Unknown error' };
+      return {
+        connected: false,
+        valid: false,
+        needsRefresh: false,
+        needsReauth: true,
+        cached: false,
+        reason: error.message || 'Unknown error',
+      };
     }
   });
 

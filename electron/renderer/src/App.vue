@@ -9633,7 +9633,8 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   <TwitchIntegrationSetup
     :visible="showTwitchIntegrationSetup"
     :profileGuardEnabled="profileGuardEnabled"
-    @close="showTwitchIntegrationSetup = false"
+    :autoStartOAuth="openTwitchSetupAutoOAuth"
+    @close="handleCloseTwitchIntegrationSetup"
     @update="handleTwitchIntegrationUpdate"
   />
 
@@ -9816,7 +9817,6 @@ import {
 import { serializePlanSnapshot, normalizeWinRulesJson } from './utils/run-plan-snapshot';
 import {
   getTwitchPrepStatusLabel,
-  isTwitchIntegrationConnected,
   prepModeFromPredictionState,
   predictionStateFromPrepMode,
   type PrepPredictionsMode,
@@ -23551,10 +23551,12 @@ const prepPredictionsMode = ref<PrepPredictionsMode>('none');
 const prepIndividualSubtype = ref<IndividualPredictionSubtype>('yes_no');
 const prepTimeRangeOutcomeCount = ref(5);
 const openTwitchPrepAfterSetup = ref(false);
+const openTwitchSetupAutoOAuth = ref(false);
 
 const twitchPrepStatusLabel = computed(() =>
   getTwitchPrepStatusLabel({
-    twitchIntegrationValid: twitchIntegrationConnected.value,
+    twitchIntegrationConnected: twitchIntegrationConnected.value,
+    twitchTokenValid: twitchTokenValid.value,
     prepPredictionsMode: prepPredictionsMode.value,
   })
 );
@@ -24502,39 +24504,27 @@ async function openRunModal() {
     }
   }
   
-  // Validate Twitch token if integration is active
+  // Validate Twitch token if integration exists
   if (isElectronAvailable()) {
     try {
-      const integrationStatus = await (window as any).electronAPI.getTwitchIntegrationStatus();
-      if (integrationStatus && integrationStatus.is_active) {
-        const validationResult = await (window as any).electronAPI.validateTwitchToken();
-        
-        if (validationResult && validationResult.needsReauth) {
-          // Token needs re-authentication
-          const confirmed = await showConfirm(
-            `Your Twitch connection needs to be re-authenticated. ${validationResult.reason ? `Reason: ${validationResult.reason}` : ''}\n\nWould you like to re-authenticate now?`,
-            'Twitch Re-authentication Required'
-          );
-          
-          if (confirmed) {
-            // Open Twitch Integration Setup modal for re-authentication
-            await openTwitchIntegrationSetup();
-            // Don't open run modal if user needs to re-authenticate
-            return;
-          } else {
-            // User declined - still open run modal but they won't be able to use predictions
-            await showAlert('Twitch predictions will not be available until you re-authenticate.', 'Twitch Connection Expired');
-          }
+      await checkPredictionsConfiguration();
+      if (twitchIntegrationConnected.value && !twitchTokenValid.value) {
+        const confirmed = await showConfirm(
+          `Your Twitch token needs to be refreshed before predictions can be used.\n\nWould you like to re-authenticate now?`,
+          'Twitch Re-authentication Required'
+        );
+
+        if (confirmed) {
+          await openTwitchIntegrationSetup({ autoStartOAuth: true });
+          return;
         }
+
+        await showAlert('Twitch predictions will not be available until you re-authenticate.', 'Twitch Connection Expired');
       }
     } catch (error) {
       console.error('[openRunModal] Error validating Twitch token:', error);
       // Continue to open modal even if validation fails
     }
-  }
-  
-  if (isElectronAvailable()) {
-    await checkPredictionsConfiguration();
   }
   
   runModalOpen.value = true;
@@ -28838,8 +28828,46 @@ function handleCloseWinRulesDropdown() {
   winRulesDropdownPosition.value = null;
 }
 
+async function refreshTwitchTokenStatus(options?: { force?: boolean }) {
+  if (!isElectronAvailable()) {
+    twitchIntegrationConnected.value = false;
+    twitchTokenValid.value = false;
+    return {
+      connected: false,
+      valid: false,
+      needsRefresh: false,
+      needsReauth: false,
+      cached: true,
+    };
+  }
+
+  try {
+    const result = await (window as any).electronAPI.validateTwitchToken(options || {});
+    twitchIntegrationConnected.value = !!result.connected;
+    twitchTokenValid.value = !!result.valid;
+    return result;
+  } catch (error) {
+    console.warn('[refreshTwitchTokenStatus] Error:', error);
+    twitchIntegrationConnected.value = false;
+    twitchTokenValid.value = false;
+    return {
+      connected: false,
+      valid: false,
+      needsRefresh: false,
+      needsReauth: true,
+      cached: false,
+      reason: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+function handleCloseTwitchIntegrationSetup() {
+  showTwitchIntegrationSetup.value = false;
+  openTwitchSetupAutoOAuth.value = false;
+}
+
 // Twitch Integration Setup
-async function openTwitchIntegrationSetup() {
+async function openTwitchIntegrationSetup(options?: { autoStartOAuth?: boolean }) {
   // Check if profile guard is enabled
   if (!profileGuardEnabled.value) {
     await showAlert('Profile Guard must be enabled before setting up Twitch integration.', 'Profile Guard Required');
@@ -28848,6 +28876,7 @@ async function openTwitchIntegrationSetup() {
   
   // Profile check is now handled by OnlineProfileManager in the backend
   // No need to check here - the backend will return appropriate errors if no profile exists
+  openTwitchSetupAutoOAuth.value = options?.autoStartOAuth === true;
   showTwitchIntegrationSetup.value = true;
   
   // Load predictions configuration status
@@ -28895,40 +28924,29 @@ async function handleTwitchPrepSelectSubtype(subtype: IndividualPredictionSubtyp
 }
 
 async function refreshTwitchIntegrationReady(): Promise<boolean> {
-  if (!isElectronAvailable()) {
-    return false;
-  }
-
-  try {
-    const status = await (window as any).electronAPI.getTwitchIntegrationStatus({});
-    twitchIntegrationConnected.value = isTwitchIntegrationConnected(status);
-    if (!twitchIntegrationConnected.value) {
-      twitchTokenValid.value = false;
-      return false;
-    }
-
-    const validation = await (window as any).electronAPI.validateTwitchToken();
-    if (validation?.valid === true) {
-      twitchTokenValid.value = true;
-      return true;
-    }
-    if (validation?.needsReauth || validation?.valid === false) {
-      twitchTokenValid.value = false;
-      return false;
-    }
-
-    // Integration row exists; validation was inconclusive (e.g. cached valid).
-    twitchTokenValid.value = !!(status && status.is_active === true);
-    return twitchTokenValid.value;
-  } catch (error) {
-    console.warn('[refreshTwitchIntegrationReady] Error:', error);
-    twitchTokenValid.value = false;
-    return false;
-  }
+  const result = await refreshTwitchTokenStatus();
+  return !!result.valid;
 }
 
 async function openTwitchPrepDropdown(event: MouseEvent) {
+  const tokenStatus = await refreshTwitchTokenStatus();
   await checkPredictionsConfiguration();
+
+  if (!tokenStatus.connected) {
+    openTwitchPrepAfterSetup.value = true;
+    await openTwitchIntegrationSetup();
+    return;
+  }
+
+  if (!tokenStatus.valid) {
+    const confirmed = await showConfirm(
+      `Your Twitch token needs to be refreshed before predictions can be used.${tokenStatus.reason ? `\n\nReason: ${tokenStatus.reason}` : ''}\n\nWould you like to re-authenticate now?`,
+      'Twitch Re-authentication Required'
+    );
+    openTwitchPrepAfterSetup.value = true;
+    await openTwitchIntegrationSetup({ autoStartOAuth: confirmed });
+    return;
+  }
 
   const button = event.currentTarget as HTMLElement;
   const rect = button.getBoundingClientRect();
@@ -29075,6 +29093,7 @@ async function handleTwitchIntegrationUpdate() {
   const previousMode = predictionsOperationalMode.value;  // Remember the mode
   
   await checkPredictionsConfiguration();
+  await refreshTwitchTokenStatus();
   
   // If token is now valid and predictions were previously enabled, resume them
   if (twitchTokenValid.value && wasEnabled && previousMode && currentRunUuid.value) {
@@ -29098,7 +29117,7 @@ async function handleTwitchIntegrationUpdate() {
 
   await refreshPrepTemplateSubtypeFromTemplate();
 
-  if (openTwitchPrepAfterSetup.value && twitchIntegrationConnected.value && !isRunActive.value) {
+  if (openTwitchPrepAfterSetup.value && twitchTokenValid.value && twitchIntegrationConnected.value && !isRunActive.value) {
     openTwitchPrepAfterSetup.value = false;
     showTwitchPrepDropdown.value = true;
   } else {
@@ -29115,22 +29134,7 @@ async function checkPredictionsConfiguration() {
 
     await loadPredictionsTemplateObject();
     predictionsConfigured.value = true;
-
-    try {
-      const status = await (window as any).electronAPI.getTwitchIntegrationStatus({});
-      twitchIntegrationConnected.value = isTwitchIntegrationConnected(status);
-      twitchTokenValid.value = !!(status && status.is_active === true);
-
-      if (!twitchIntegrationConnected.value) {
-        console.log('[checkPredictionsConfiguration] No Twitch integration found');
-      } else if (!twitchTokenValid.value) {
-        console.log('[checkPredictionsConfiguration] Twitch integration needs re-authentication');
-      }
-    } catch (tokenError) {
-      twitchIntegrationConnected.value = false;
-      twitchTokenValid.value = false;
-      console.warn('[checkPredictionsConfiguration] Error checking Twitch integration:', tokenError);
-    }
+    await refreshTwitchTokenStatus();
   } catch (error) {
     console.error('[checkPredictionsConfiguration] Error:', error);
   }

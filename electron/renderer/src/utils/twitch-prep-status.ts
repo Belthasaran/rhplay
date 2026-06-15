@@ -15,11 +15,15 @@ export function isTwitchIntegrationConnected(status: unknown): boolean {
 }
 
 export function getTwitchPrepStatusLabel(params: {
-  twitchIntegrationValid: boolean;
+  twitchIntegrationConnected: boolean;
+  twitchTokenValid: boolean;
   prepPredictionsMode: PrepPredictionsMode;
 }): string {
-  if (!params.twitchIntegrationValid) {
+  if (!params.twitchIntegrationConnected) {
     return '(Off)';
+  }
+  if (!params.twitchTokenValid) {
+    return '(Needs refresh)';
   }
   if (params.prepPredictionsMode === 'same_item') {
     return '(On, Per-Item)';

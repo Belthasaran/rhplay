@@ -42,8 +42,14 @@ const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
 const { HostFP } = require('./main/HostFP');
 const TrustManager = require('./utils/TrustManager');
-const { getTwitchClientId, getTwitchRedirectUri } = require('./twitch-config');
-const { assessTwitchToken } = require('./utils/twitch-token-service');
+const { getTwitchClientId, getTwitchRedirectUri, getTwitchLoopbackRedirectUri } = require('./twitch-config');
+const { assessTwitchToken, markTwitchProfileValidatedThisSession } = require('./utils/twitch-token-service');
+const {
+  buildTwitchImplicitAuthUrl,
+  parseImplicitGrantFragment,
+  startTwitchOAuthLoopbackServer,
+  cancelActiveTwitchOAuthLoopback,
+} = require('./utils/twitch-oauth-loopback');
 const PermissionHelper = require('./utils/PermissionHelper');
 const ModerationManager = require('./utils/ModerationManager');
 const { NostrLocalDBManager } = require('./utils/NostrLocalDBManager');
@@ -14199,159 +14205,216 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
-   * Open Twitch OAuth window and handle callback
+   * Open Twitch OAuth (system browser or embedded app window)
+   * Channel: open_twitch_oauth
+   * Params: { mode?: 'external' | 'embedded' }
+   */
+  ipcMain.handle('open_twitch_oauth', async (event, params = {}) => {
+    const mode = params.mode === 'embedded' ? 'embedded' : 'external';
+
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        throw new Error('Profile Guard must be unlocked to connect Twitch');
+      }
+
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const currentProfileId = profileManager.getCurrentProfileId();
+      if (!currentProfileId) {
+        throw new Error('No active profile found');
+      }
+
+      const clientId = getTwitchClientId();
+      if (!clientId) {
+        throw new Error('Twitch client ID not configured');
+      }
+
+      const state = crypto.randomUUID();
+
+      if (mode === 'external') {
+        const loopback = await startTwitchOAuthLoopbackServer({ expectedState: state });
+        const authUrl = buildTwitchImplicitAuthUrl({
+          clientId,
+          redirectUri: loopback.redirectUri,
+          state,
+        });
+
+        // shell.openExternal resolves void on success; only thrown errors indicate failure.
+        try {
+          await shell.openExternal(authUrl);
+        } catch (openErr) {
+          cancelActiveTwitchOAuthLoopback();
+          throw new Error(
+            `Failed to open system browser for Twitch authorization: ${openErr.message || openErr}`
+          );
+        }
+
+        const { accessToken, tokenType } = await loopback.waitForCallback();
+        const result = await validateAndStoreTwitchToken(
+          accessToken,
+          tokenType,
+          currentProfileId,
+          keyguardKey
+        );
+        markTwitchProfileValidatedThisSession(currentProfileId);
+        return result;
+      }
+
+      const redirectUri = getTwitchRedirectUri();
+      const authUrl = buildTwitchImplicitAuthUrl({ clientId, redirectUri, state });
+      return await new Promise((resolve, reject) => {
+        openTwitchOAuthEmbeddedWindow({
+          event,
+          url: authUrl,
+          redirectUri,
+          state,
+          profileUuid: currentProfileId,
+          resolve: (result) => {
+            markTwitchProfileValidatedThisSession(currentProfileId);
+            resolve(result);
+          },
+          reject,
+        });
+      });
+    } catch (error) {
+      console.error('[open_twitch_oauth] Error:', error);
+      return { success: false, error: error.message || 'OAuth failed' };
+    }
+  });
+
+  /**
+   * Open Twitch OAuth window and handle callback (embedded / legacy)
    * Channel: open_twitch_oauth_window
    */
   ipcMain.handle('open_twitch_oauth_window', async (event, { url, redirectUri, state }) => {
     return new Promise((resolve, reject) => {
       try {
-        // Get current profile using OnlineProfileManager
         const keyguardKey = getKeyguardKey(event);
         const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
         const currentProfileId = profileManager.getCurrentProfileId();
-        
+
         if (!currentProfileId) {
           reject(new Error('No active profile found'));
           return;
         }
-        
-        const clientId = getTwitchClientId();
-        if (!clientId) {
-          reject(new Error('Twitch client ID not configured'));
-          return;
-        }
-        
-        // Create OAuth window
-        const oauthWindow = new BrowserWindow({
-          width: 500,
-          height: 650,
-          show: false,
-          modal: true,
-          parent: BrowserWindow.getFocusedWindow() || undefined,
-          webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            webSecurity: true, // Keep web security enabled
-            partition: 'in-memory-session'
-          }
+
+        openTwitchOAuthEmbeddedWindow({
+          event,
+          url,
+          redirectUri,
+          state,
+          profileUuid: currentProfileId,
+          resolve: (result) => {
+            markTwitchProfileValidatedThisSession(currentProfileId);
+            resolve(result);
+          },
+          reject,
         });
-        
-        let callbackHandled = false; // Prevent multiple callback handling
-        let windowClosed = false; // Track if window was closed
-        
-        // Prevent navigation to redirect URI (we'll handle it manually)
-        // This must be set BEFORE loadURL
-        oauthWindow.webContents.on('will-navigate', (navEvent, navigationUrl) => {
-          console.log('[Twitch OAuth] will-navigate:', navigationUrl);
-          if (navigationUrl.startsWith(redirectUri)) {
-            navEvent.preventDefault(); // Prevent actual navigation to localhost
-            if (!callbackHandled && !windowClosed) {
-              callbackHandled = true;
-              console.log('[Twitch OAuth] Handling callback from will-navigate');
-              handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
-            }
-          }
-        });
-        
-        // Also prevent new window navigation to redirect URI
-        oauthWindow.webContents.setWindowOpenHandler(({ url }) => {
-          console.log('[Twitch OAuth] setWindowOpenHandler:', url);
-          if (url.startsWith(redirectUri)) {
-            if (!callbackHandled && !windowClosed) {
-              callbackHandled = true;
-              console.log('[Twitch OAuth] Handling callback from setWindowOpenHandler');
-              handleOAuthCallback(url, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
-            }
-            return { action: 'deny' }; // Prevent opening new window
-          }
-          return { action: 'allow' };
-        });
-        
-        // Listen for in-page navigation (for fragment-based redirects in implicit grant flow)
-        // The fragment (#access_token=...) doesn't trigger did-navigate, so we need did-navigate-in-page
-        // This is the primary handler for implicit grant flow
-        oauthWindow.webContents.on('did-navigate-in-page', (navEvent, navigationUrl, isMainFrame) => {
-          console.log('[Twitch OAuth] did-navigate-in-page:', navigationUrl, 'isMainFrame:', isMainFrame);
-          if (isMainFrame && navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
-            callbackHandled = true;
-            console.log('[Twitch OAuth] Handling callback from did-navigate-in-page');
-            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
-          }
-        });
-        
-        // Fallback: Listen for navigation (for redirect-based flows, though implicit grant uses fragments)
-        oauthWindow.webContents.on('did-navigate', (navEvent, navigationUrl) => {
-          console.log('[Twitch OAuth] did-navigate:', navigationUrl);
-          if (navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
-            callbackHandled = true;
-            console.log('[Twitch OAuth] Handling callback from did-navigate');
-            handleOAuthCallback(navigationUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
-          }
-        });
-        
-        // Monitor URL changes (for debugging and as additional fallback)
-        oauthWindow.webContents.on('dom-ready', () => {
-          const currentUrl = oauthWindow.webContents.getURL();
-          console.log('[Twitch OAuth] dom-ready, current URL:', currentUrl);
-          if (currentUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
-            callbackHandled = true;
-            console.log('[Twitch OAuth] Handling callback from dom-ready');
-            handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
-          }
-        });
-        
-        // Periodic check for URL changes (fallback for fragment-based redirects)
-        // Fragment changes might not always trigger navigation events
-        const urlCheckInterval = setInterval(() => {
-          if (callbackHandled || windowClosed || oauthWindow.isDestroyed()) {
-            clearInterval(urlCheckInterval);
-            return;
-          }
-          
-          try {
-            const currentUrl = oauthWindow.webContents.getURL();
-            if (currentUrl && currentUrl.startsWith(redirectUri) && currentUrl.includes('#')) {
-              console.log('[Twitch OAuth] Periodic check found redirect URL:', currentUrl);
-              if (!callbackHandled && !windowClosed) {
-                callbackHandled = true;
-                clearInterval(urlCheckInterval);
-                console.log('[Twitch OAuth] Handling callback from periodic check');
-                handleOAuthCallback(currentUrl, redirectUri, state, currentProfileId, oauthWindow, resolve, reject, event);
-              }
-            }
-          } catch (error) {
-            // Window might be destroyed, ignore
-            if (!oauthWindow.isDestroyed()) {
-              console.error('[Twitch OAuth] Error in periodic URL check:', error);
-            }
-          }
-        }, 500); // Check every 500ms
-        
-        // Clean up interval when window closes
-        oauthWindow.on('closed', () => {
-          clearInterval(urlCheckInterval);
-        });
-        
-        oauthWindow.loadURL(url);
-        oauthWindow.show();
-        
-        // Handle window close - only reject if callback wasn't handled
-        oauthWindow.on('closed', () => {
-          windowClosed = true;
-          if (!callbackHandled) {
-            console.log('[Twitch OAuth] Window closed before callback was handled');
-            reject(new Error('OAuth window closed by user'));
-          } else {
-            console.log('[Twitch OAuth] Window closed after callback was handled (this is normal)');
-          }
-        });
-        
       } catch (error) {
         console.error('[open_twitch_oauth_window] Error:', error);
         reject(error);
       }
     });
   });
+
+  function openTwitchOAuthEmbeddedWindow({ event, url, redirectUri, state, profileUuid, resolve, reject }) {
+    try {
+      const oauthWindow = new BrowserWindow({
+        width: 500,
+        height: 650,
+        show: false,
+        modal: true,
+        parent: BrowserWindow.getFocusedWindow() || undefined,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          webSecurity: true,
+          partition: 'in-memory-session',
+        },
+      });
+
+      let callbackHandled = false;
+      let windowClosed = false;
+
+      oauthWindow.webContents.on('will-navigate', (navEvent, navigationUrl) => {
+        if (navigationUrl.startsWith(redirectUri)) {
+          navEvent.preventDefault();
+          if (!callbackHandled && !windowClosed) {
+            callbackHandled = true;
+            handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject, event);
+          }
+        }
+      });
+
+      oauthWindow.webContents.setWindowOpenHandler(({ url: openUrl }) => {
+        if (openUrl.startsWith(redirectUri)) {
+          if (!callbackHandled && !windowClosed) {
+            callbackHandled = true;
+            handleOAuthCallback(openUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject, event);
+          }
+          return { action: 'deny' };
+        }
+        return { action: 'allow' };
+      });
+
+      oauthWindow.webContents.on('did-navigate-in-page', (navEvent, navigationUrl, isMainFrame) => {
+        if (isMainFrame && navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
+          callbackHandled = true;
+          handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject, event);
+        }
+      });
+
+      oauthWindow.webContents.on('did-navigate', (navEvent, navigationUrl) => {
+        if (navigationUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
+          callbackHandled = true;
+          handleOAuthCallback(navigationUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject, event);
+        }
+      });
+
+      oauthWindow.webContents.on('dom-ready', () => {
+        const currentUrl = oauthWindow.webContents.getURL();
+        if (currentUrl.startsWith(redirectUri) && !callbackHandled && !windowClosed) {
+          callbackHandled = true;
+          handleOAuthCallback(currentUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject, event);
+        }
+      });
+
+      const urlCheckInterval = setInterval(() => {
+        if (callbackHandled || windowClosed || oauthWindow.isDestroyed()) {
+          clearInterval(urlCheckInterval);
+          return;
+        }
+        try {
+          const currentUrl = oauthWindow.webContents.getURL();
+          if (currentUrl && currentUrl.startsWith(redirectUri) && currentUrl.includes('#')) {
+            if (!callbackHandled && !windowClosed) {
+              callbackHandled = true;
+              clearInterval(urlCheckInterval);
+              handleOAuthCallback(currentUrl, redirectUri, state, profileUuid, oauthWindow, resolve, reject, event);
+            }
+          }
+        } catch (error) {
+          if (!oauthWindow.isDestroyed()) {
+            console.error('[Twitch OAuth] Error in periodic URL check:', error);
+          }
+        }
+      }, 500);
+
+      oauthWindow.on('closed', () => {
+        clearInterval(urlCheckInterval);
+        windowClosed = true;
+        if (!callbackHandled) {
+          reject(new Error('OAuth window closed by user'));
+        }
+      });
+
+      oauthWindow.loadURL(url);
+      oauthWindow.show();
+    } catch (error) {
+      console.error('[openTwitchOAuthEmbeddedWindow] Error:', error);
+      reject(error);
+    }
+  }
 
   /**
    * Handle OAuth callback (helper function)
@@ -14364,53 +14427,22 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       const url = new URL(navigationUrl);
-      
-      console.log('[handleOAuthCallback] Full navigation URL:', navigationUrl);
-      console.log('[handleOAuthCallback] URL hash:', url.hash);
-      
-      // Extract access token from fragment (implicit grant flow)
-      const hash = url.hash.substring(1); // Remove leading #
-      const params = new URLSearchParams(hash);
-      
-      const accessToken = params.get('access_token');
-      const tokenType = params.get('token_type');
-      const state = params.get('state');
-      const error = params.get('error');
-      const errorDescription = params.get('error_description');
-      
-      console.log('[handleOAuthCallback] Extracted params:', {
-        hasAccessToken: !!accessToken,
-        accessTokenLength: accessToken ? accessToken.length : 0,
-        tokenType: tokenType,
-        hasState: !!state,
-        hasError: !!error
-      });
-      
-      if (error) {
+      const parsed = parseImplicitGrantFragment(url.hash ? url.hash.substring(1) : navigationUrl, expectedState);
+
+      if (parsed.error) {
         if (oauthWindow && !oauthWindow.isDestroyed()) {
           oauthWindow.close();
         }
-        reject(new Error(`OAuth error: ${error} - ${errorDescription || 'Unknown error'}`));
+        reject(new Error(`OAuth error: ${parsed.error}${parsed.errorDescription ? ` - ${parsed.errorDescription}` : ''}`));
         return;
       }
-      
-      // Verify state
-      if (state !== expectedState) {
-        if (oauthWindow && !oauthWindow.isDestroyed()) {
-          oauthWindow.close();
-        }
-        reject(new Error('OAuth state mismatch - possible CSRF attack'));
+
+      if (!parsed.accessToken) {
         return;
       }
-      
-      if (!accessToken) {
-        console.log('[Twitch OAuth] No access token found in callback URL');
-        return; // Still waiting for token
-      }
-      
-      console.log('[Twitch OAuth] Access token received, tokenType:', tokenType, 'token length:', accessToken ? accessToken.length : 0);
-      // NEVER log the actual token value - it's sensitive
-      
+
+      const accessToken = parsed.accessToken;
+      const tokenType = parsed.tokenType;
       // Close OAuth window
       if (oauthWindow && !oauthWindow.isDestroyed()) {
         oauthWindow.close();

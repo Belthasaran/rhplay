@@ -75,10 +75,32 @@ function templateTypeForPrepMode(prepMode) {
   return null;
 }
 
+/**
+ * @param {{ connected: boolean, tokenValid: boolean }} params
+ * @returns {boolean}
+ */
+function canEnableTwitchPredictions({ connected, tokenValid }) {
+  return connected && tokenValid;
+}
+
+/**
+ * @param {PrepPredictionsMode} currentMode
+ * @param {boolean} canEnable
+ * @returns {PrepPredictionsMode}
+ */
+function restrictedPrepPredictionsMode(currentMode, canEnable) {
+  if (!canEnable) {
+    return 'none';
+  }
+  return currentMode;
+}
+
 module.exports = {
   isTwitchIntegrationConnected,
   getTwitchPrepStatusLabel,
   prepModeFromPredictionState,
   predictionStateFromPrepMode,
   templateTypeForPrepMode,
+  canEnableTwitchPredictions,
+  restrictedPrepPredictionsMode,
 };

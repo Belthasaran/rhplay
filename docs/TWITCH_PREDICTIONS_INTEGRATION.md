@@ -87,6 +87,42 @@ Stored in `csettings` table:
 
 ## OAuth Flow
 
+RHTools uses the **implicit grant** (`response_type=token`) — no centralized authorization-code server is required.
+
+### Redirect URIs (register both in Twitch Developer Console)
+
+| URI | Used for |
+|-----|----------|
+| `https://localhost` | Embedded in-app OAuth window (fallback; Twitch may block embedded browsers) |
+| `http://localhost:47832/` | Primary — system browser OAuth loopback listener |
+| `http://localhost:56218/` | Fallback if 47832 is in use |
+| `http://localhost:51158/` | Fallback if 56218 is in use |
+
+Register **all three** under **OAuth Redirect URLs** for your Twitch application at [dev.twitch.tv/console](https://dev.twitch.tv/console). The app tries ports in that order and uses the matching redirect URI for the port it binds.
+
+Twitch does not allow `http://` redirect URIs that use a raw IP address (e.g. `http://127.0.0.1:47832/`); those require HTTPS. Using the `localhost` hostname with HTTP is supported.
+
+### System browser flow (default)
+
+1. User clicks **Connect to Twitch** or **Open In System Browser** on re-auth.
+2. Main process binds the first available loopback port (`47832`, then `56218`, then `51158`).
+3. System browser opens Twitch authorize URL with the redirect URI for that port.
+4. After approval, Twitch redirects to e.g. `http://localhost:56218/#access_token=...`.
+5. A callback HTML page reads the URL hash and POSTs it to the local server.
+6. App validates `state`, stores the encrypted token, and shuts down the listener.
+
+### Embedded in-app flow (fallback)
+
+1. User chooses **Open In App** on the re-authentication dialog.
+2. Electron opens a modal `BrowserWindow` with redirect `https://localhost`.
+3. Navigation handlers capture the fragment and store the token.
+
+### Re-authentication dialog
+
+When the token is invalid, the app shows **Cancel**, **Open In System Browser**, and **Open In App** instead of a simple OK/Cancel confirm.
+
+### Legacy flow description
+
 ### Implicit Grant Flow
 
 We use the Implicit Grant Flow because our Electron app does not have a remote server:

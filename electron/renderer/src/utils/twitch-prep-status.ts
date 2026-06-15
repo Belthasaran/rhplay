@@ -67,3 +67,20 @@ export function templateTypeForPrepMode(
   if (prepMode === 'whole_challenge') return 'whole_challenge';
   return null;
 }
+
+export function canEnableTwitchPredictions(params: {
+  connected: boolean;
+  tokenValid: boolean;
+}): boolean {
+  return params.connected && params.tokenValid;
+}
+
+export function restrictedPrepPredictionsMode(
+  currentMode: PrepPredictionsMode,
+  canEnable: boolean
+): PrepPredictionsMode {
+  if (!canEnable) {
+    return 'none';
+  }
+  return currentMode;
+}

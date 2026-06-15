@@ -9429,6 +9429,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     :stage-difficulty-label="isCurrentChallengeAnyStage && currentStageDifficulty !== null ? formatStageDifficulty(currentStageDifficulty) : ''"
     :show-stage-feedback="isCurrentChallengeAnyStage"
     :show-full-feedback-form="showFullRunFeedbackForm"
+    :show-difficulty-tiles="isCurrentChallengeRandomStage && !showFullRunFeedbackForm"
     :initial-stage="currentStageRow"
     :initial-feedback-value="runFeedbackFormInitial"
     @choice="handleRunExitDetectedChoice"

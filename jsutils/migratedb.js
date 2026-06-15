@@ -694,6 +694,17 @@ const MIGRATIONS = {
         return columnExists(db, 'patchblobs', 'result_sha256');
       },
     },
+    {
+      id: 'rhdata_068_gameversions_local_stages_sealed',
+      description: 'Add gameversions_local table and stages_sealed columns on gameversions',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/068_rhdata_gameversions_local_stages_sealed.sql'),
+      skipIf(db) {
+        return tableExists(db, 'gameversions_local')
+          && columnExists(db, 'gameversions', 'stages_sealed')
+          && columnExists(db, 'gameversions', 'stages_sealed_at');
+      },
+    },
   ],
   clientdata: [
     {

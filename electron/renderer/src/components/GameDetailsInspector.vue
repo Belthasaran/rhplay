@@ -74,11 +74,15 @@
           </tr>
           
           <!-- Avail Stages -->
-          <tr v-if="availStagesCount > 0 || availStagesText">
+          <tr>
             <th>Avail Stages</th>
             <td>
-              <span v-if="availStagesText" class="clickable avail-stages-link" @click="$emit('open-stages-dialog')">
-                {{ availStagesText }}
+              <span
+                v-if="availStagesLinkText"
+                class="clickable avail-stages-link"
+                @click="handleAvailStagesClick"
+              >
+                {{ availStagesLinkText }}
               </span>
               <span v-else class="readonly-field">None</span>
             </td>
@@ -357,11 +361,15 @@
                   </td>
                 </tr>
                 
-                <tr v-if="availStagesCount > 0 || availStagesText">
+                <tr>
                   <th>Avail Stages</th>
                   <td>
-                    <span v-if="availStagesText" class="clickable avail-stages-link" @click="closePopoutModal; $emit('open-stages-dialog')">
-                      {{ availStagesText }}
+                    <span
+                      v-if="availStagesLinkText"
+                      class="clickable avail-stages-link"
+                      @click="closePopoutModal(); handleAvailStagesClick()"
+                    >
+                      {{ availStagesLinkText }}
                     </span>
                     <span v-else class="readonly-field">None</span>
                   </td>
@@ -742,7 +750,7 @@ const emit = defineEmits<{
   'view-json-details': [];
   'open-tags-modal': [];
   'open-description-modal': [];
-  'open-stages-dialog': [];
+  'open-stages-dialog': [options?: { editMode?: boolean }];
   'refresh-rating-summaries': [];
   'add-stage-to-run': [];
 }>();
@@ -770,9 +778,45 @@ const availStagesText = computed(() => {
   return parts.length > 0 ? parts.join(', ') : '';
 });
 
-const availStagesCount = computed(() => {
-  return stagesCounts.value.P;
+const stagesEditPermission = ref<{ canEdit?: boolean; stages_sealed?: number | null } | null>(null);
+
+const availStagesLinkText = computed(() => {
+  if (availStagesText.value) {
+    return availStagesText.value;
+  }
+  return 'Stages not set yet';
 });
+
+function handleAvailStagesClick() {
+  const openInEditMode = !availStagesText.value
+    && !!stagesEditPermission.value?.canEdit
+    && stagesEditPermission.value?.stages_sealed !== 2;
+  emit('open-stages-dialog', { editMode: openInEditMode });
+}
+
+async function loadStagesEditPermission() {
+  if (!props.game?.Id) {
+    stagesEditPermission.value = null;
+    return;
+  }
+
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getGameStagesEditPermission) return;
+
+    const result = await api.getGameStagesEditPermission({
+      gameid: props.game.Id,
+      version: props.selectedVersion,
+    });
+
+    if (result?.success) {
+      stagesEditPermission.value = result;
+    }
+  } catch (error) {
+    console.error('Error loading stages edit permission:', error);
+    stagesEditPermission.value = null;
+  }
+}
 
 async function loadGameStages() {
   if (!props.game?.Id) return;
@@ -816,6 +860,7 @@ async function loadGameStages() {
 watch(() => props.game?.Id, () => {
   if (props.game?.Id) {
     loadGameStages();
+    loadStagesEditPermission();
     checkScreenshots();
     checkForBans();
     loadGameLinks();
@@ -825,19 +870,15 @@ watch(() => props.game?.Id, () => {
 watch(() => props.selectedVersion, () => {
   if (props.game?.Id) {
     loadGameStages();
+    loadStagesEditPermission();
     loadGameLinks();
-  }
-});
-
-watch(() => props.selectedVersion, () => {
-  if (props.game?.Id) {
-    loadGameStages();
   }
 });
 
 onMounted(() => {
   if (props.game?.Id) {
     loadGameStages();
+    loadStagesEditPermission();
     checkScreenshots();
     checkForBans();
     loadGameLinks();

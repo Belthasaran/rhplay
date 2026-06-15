@@ -1895,14 +1895,45 @@ Added `game_submission_drafts` table to store draft game submissions in the clie
 ### Migrations
 - Applied via `jsutils/migratedb.js` (migration identifier `clientdata_032_game_submission_drafts`)
 
+---
+
+## gameversions_local table and stages_sealed columns
+
+### Date
+June 14, 2026
+
+### Description
+Added `gameversions_local` table to track when a user has locally edited game stages, and added `stages_sealed` / `stages_sealed_at` columns to `gameversions` to control stage editing policy per game version.
+
+### Rationale
+- Most games have no author-defined stages; users should be able to define stages locally without DEVADMIN mode.
+- Author-defined stage lists should remain protected unless explicitly opened (`stages_sealed=0`) or grandfathered (`stages_sealed=1`).
+- `stages_sealed=2` preserves the previous strict DEVADMIN-only behavior for specific games.
+
+### Tables/Columns Affected
+
+**Database**: `rhdata.db`
+
+**New table**: `gameversions_local`
+- `gameid TEXT PRIMARY KEY`
+- `stages_edited_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
+
+**Table**: `gameversions`
+- `stages_sealed INTEGER NULL` — `NULL` permissive default, `0` open, `1` grandfather local edits before seal date, `2` strict (DEVADMIN only)
+- `stages_sealed_at TIMESTAMP NULL` — seal timestamp used when `stages_sealed=1`
+
+**Indexes**:
+- `idx_gameversions_local_edited_at` on `gameversions_local(stages_edited_at)`
+- `idx_gameversions_stages_sealed` on `gameversions(stages_sealed)`
+
+### Migration File
+`electron/sql/migrations/068_rhdata_gameversions_local_stages_sealed.sql`
+
 ### Related Code
-- `electron/ipc-handlers.js`: Added IPC handlers for draft operations:
-  - `online:submission:draft:save` - Save or update a draft
-  - `online:submission:draft:list` - List all drafts for current user
-  - `online:submission:draft:load` - Load a specific draft by UUID
-  - `online:submission:draft:delete` - Delete a draft
-- `electron/preload.js`: Exposed draft APIs to renderer process
-- `electron/renderer/src/components/submit/GameSubmissionDashboard.vue`: Updated to use database persistence instead of JSON file save/load
+- `electron/gamestages-edit-permission.js` — permission evaluation
+- `electron/ipc-handlers.js` — `gamestages:get-edit-permission`, updated save/delete permission checks
+- `electron/renderer/src/components/GameStagesDialog.vue` — Edit button and save flow
+- `electron/renderer/src/components/GameDetailsInspector.vue` — "Stages not set yet" link
 
 ---
 

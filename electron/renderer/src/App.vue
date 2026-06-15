@@ -8534,7 +8534,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   :game-id="selectedItem?.Id || ''"
   :game-name="selectedItem?.Name || ''"
   :game-version="selectedVersion"
-  mode="select"
+  :mode="gameStagesDialogMode"
   :show-add-to-run-button="true"
   :active-launch-method="activeLaunchMethod"
   @close="showGameStagesDialog = false"
@@ -10079,6 +10079,7 @@ const advancedPatchGameId = ref('');
 const advancedPatchGameVersion = ref(0);
 const advancedPatchGameName = ref('');
 const showGameStagesDialog = ref(false);
+const gameStagesDialogMode = ref<'select' | 'edit'>('select');
 const usb2snesFxpPermissionResult = ref<any>(null);
 const grantingPermission = ref(false);
 const usbOptionsWizardOpen = ref(false);
@@ -21820,8 +21821,9 @@ function handleClearReview() {
   }
 }
 
-function openGameStagesDialog() {
+function openGameStagesDialog(options?: { editMode?: boolean }) {
   if (selectedItem.value?.Id) {
+    gameStagesDialogMode.value = options?.editMode ? 'edit' : 'select';
     showGameStagesDialog.value = true;
   }
 }

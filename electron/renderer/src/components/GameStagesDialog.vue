@@ -437,7 +437,7 @@
             Select
           </button>
           <button 
-            v-if="isDevAdmin && currentMode !== 'edit'" 
+            v-if="canShowEditButton" 
             @click="currentMode = 'edit'" 
             class="btn-primary"
           >
@@ -912,9 +912,16 @@ const props = withDefaults(defineProps<Props>(), {
 const currentMode = ref<'select' | 'edit'>(props.mode || 'select');
 
 // Computed property to determine if we should allow editing
-// Allow editing if: DEVADMIN is enabled OR forceAuthorMode is true AND mode is edit
+// Allow editing if: DEVADMIN, forceAuthorMode, or local/permissive edit permission AND mode is edit
+const stagesEditAllowed = ref(false);
+
 const canEdit = computed(() => {
-  return (isDevAdmin.value || props.forceAuthorMode) && currentMode.value === 'edit';
+  return (isDevAdmin.value || props.forceAuthorMode || stagesEditAllowed.value) && currentMode.value === 'edit';
+});
+
+const canShowEditButton = computed(() => {
+  if (props.forceAuthorMode || currentMode.value === 'edit') return false;
+  return isDevAdmin.value || stagesEditAllowed.value;
 });
 
 // Computed property for dialog title that shows the current mode
@@ -927,6 +934,8 @@ const dialogTitle = computed(() => {
       return 'Edit Game Stages (Submission Draft Mode)';
     } else if (isDevAdmin.value) {
       return 'Edit Game Stages (Database Admin Mode)';
+    } else if (stagesEditAllowed.value) {
+      return 'Edit Game Stages';
     }
     return 'Edit Game Stages';
   }
@@ -1433,6 +1442,32 @@ async function loadStages() {
     stages.value = [];
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadStagesEditPermission() {
+  stagesEditAllowed.value = false;
+  if (props.forceAuthorMode || !props.gameId) {
+    return;
+  }
+
+  try {
+    const api = (window as any)?.electronAPI;
+    if (!api?.getGameStagesEditPermission) {
+      return;
+    }
+
+    const result = await api.getGameStagesEditPermission({
+      gameid: props.gameId,
+      version: props.gameVersion,
+    });
+
+    if (result?.success) {
+      stagesEditAllowed.value = !!result.canEdit;
+    }
+  } catch (error) {
+    console.error('Error loading stages edit permission:', error);
+    stagesEditAllowed.value = false;
   }
 }
 
@@ -2013,7 +2048,10 @@ async function deleteStage(stage: GameStage) {
       return;
     }
     
-    const result = await api.deleteGameStage({ stage_uuid: stage.stage_uuid });
+    const result = await api.deleteGameStage({
+      stage_uuid: stage.stage_uuid,
+      version: props.gameVersion,
+    });
     
     if (result?.success) {
       await loadStages();
@@ -2079,6 +2117,8 @@ async function saveAll() {
       const result = await api.saveGameStage({
         stage_uuid: stage.stage_uuid || null,
         gameid: stage.gameid,
+        version: props.gameVersion,
+        gameVersion: props.gameVersion,
         levelnumber: stage.levelnumber,
         levelname: stage.levelname,
         versions: stage.versions || '*',
@@ -2124,6 +2164,7 @@ async function saveAll() {
       }, 100);
     } else {
       emit('saved');
+      await loadStagesEditPermission();
       await loadStages(); // This will restore scroll position
       // Also restore scroll after a longer delay to handle alert dialog from parent
       // The parent's handleStagesSaved will show an alert, so we wait for that
@@ -2899,12 +2940,12 @@ watch(() => props.isOpen, async (newVal) => {
   if (newVal) {
     currentMode.value = props.mode || 'select';
     await checkDevAdmin();
+    await loadStagesEditPermission();
+    if (props.mode === 'edit' && (isDevAdmin.value || props.forceAuthorMode || stagesEditAllowed.value)) {
+      currentMode.value = 'edit';
+    }
     await loadAvailablePatches(); // Load patches for tag selector
     await loadStages();
-    // If DEVADMIN is enabled and mode is select, default to edit mode
-    if (isDevAdmin.value && currentMode.value === 'select') {
-      // Keep select mode but allow switching to edit
-    }
   }
 });
 
@@ -2916,6 +2957,14 @@ watch(() => props.mode, (newMode) => {
 
 watch(() => props.gameId, async () => {
   if (props.isOpen) {
+    await loadStagesEditPermission();
+    await loadStages();
+  }
+});
+
+watch(() => props.gameVersion, async () => {
+  if (props.isOpen) {
+    await loadStagesEditPermission();
     await loadStages();
   }
 });

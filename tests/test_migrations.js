@@ -95,6 +95,9 @@ function main() {
     assert(columnExists(rhDb, 'gameversions', 'lmlevels'), 'lmlevels column missing in gameversions.');
     assert(columnExists(rhDb, 'gameversions', 'detectedlevels'), 'detectedlevels column missing in gameversions.');
     assert(tableExists(rhDb, 'gameversions_translevels'), 'gameversions_translevels table missing.');
+    assert(tableExists(rhDb, 'gameversions_local'), 'gameversions_local table missing.');
+    assert(columnExists(rhDb, 'gameversions', 'stages_sealed'), 'stages_sealed column missing in gameversions.');
+    assert(columnExists(rhDb, 'gameversions', 'stages_sealed_at'), 'stages_sealed_at column missing in gameversions.');
 
     const remainingGames = rhDb.prepare('SELECT COUNT(DISTINCT gameid) AS count FROM gameversions').get().count;
     assert(remainingGames === metadata.actualCount, 'Sample game count does not match metadata.');

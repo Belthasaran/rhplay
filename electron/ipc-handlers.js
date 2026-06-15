@@ -19,6 +19,11 @@ const {
 const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
+const {
+  getStagesEditPermissionForGame,
+  recordLocalStagesEdit,
+  assertStagesEditAllowed,
+} = require('./gamestages-edit-permission');
 const { generateRunview } = require('./runview-generator');
 const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
 const GameVersionBanManager = require('./gameversion-banmanager');
@@ -5164,6 +5169,30 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get stages edit permission for a game
+   * Channel: gamestages:get-edit-permission
+   */
+  ipcMain.handle('gamestages:get-edit-permission', async (_event, { gameid, version }) => {
+    try {
+      if (!gameid) {
+        return { success: false, error: 'Missing gameid' };
+      }
+
+      const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
+      const db = dbManager.getConnection('rhdata');
+      const permission = getStagesEditPermissionForGame(db, gameid, version, isDevAdmin);
+
+      return {
+        success: true,
+        ...permission,
+      };
+    } catch (error) {
+      console.error('[gamestages:get-edit-permission] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Get game stages for a game
    * Channel: gamestages:get
    */
@@ -5237,12 +5266,13 @@ function registerDatabaseHandlers(dbManager) {
         return { success: false, error: 'Missing required fields: gameid, levelname' };
       }
 
-      // Check DEVADMIN mode - only skip check if saving for a draft submission (though draft submissions
-      // should not be calling this handler anymore since they work exclusively with draft data)
-      if (1 || !isDraftSubmission) {
-        const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
-        if (!isDevAdmin) {
-          return { success: false, error: 'Gamestages can only be edited in DEVADMIN mode. Set DEVADMIN=1 or set csetting DEVADMIN=1' };
+      const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
+      if (!isDraftSubmission && !isDevAdmin) {
+        const db = dbManager.getConnection('rhdata');
+        const version = params.version ?? params.gameVersion ?? null;
+        const access = assertStagesEditAllowed(db, gameid, version, false);
+        if (!access.allowed) {
+          return { success: false, error: access.error };
         }
       }
 
@@ -5422,8 +5452,12 @@ function registerDatabaseHandlers(dbManager) {
           lock ? 1 : 0,
           playlevel_patch_code || null,
           extradescription || null,
-	  stagetags || null
+          stagetags || null
         );
+      }
+
+      if (!isDraftSubmission && !isDevAdmin) {
+        recordLocalStagesEdit(db, gameid);
       }
 
       return { success: true };
@@ -5633,24 +5667,36 @@ function registerDatabaseHandlers(dbManager) {
    * Delete game stage
    * Channel: gamestages:delete
    */
-  ipcMain.handle('gamestages:delete', async (_event, { stage_uuid }) => {
+  ipcMain.handle('gamestages:delete', async (_event, { stage_uuid, version }) => {
     try {
       if (!stage_uuid) {
         return { success: false, error: 'Missing stage_uuid' };
       }
 
-      // Check DEVADMIN mode
       const isDevAdmin = process.env.DEVADMIN === '1' || getClientSetting('DEVADMIN') === '1';
-      if (!isDevAdmin) {
-        return { success: false, error: 'Gamestages can only be deleted in DEVADMIN mode. Set DEVADMIN=1 or set csetting DEVADMIN=1' };
+      const db = dbManager.getConnection('rhdata');
+
+      const stageRow = db.prepare('SELECT gameid FROM gamestages WHERE stage_uuid = ?').get(stage_uuid);
+      if (!stageRow) {
+        return { success: false, error: 'Stage not found' };
       }
 
-      const db = dbManager.getConnection('rhdata');
+      if (!isDevAdmin) {
+        const access = assertStagesEditAllowed(db, stageRow.gameid, version, false);
+        if (!access.allowed) {
+          return { success: false, error: access.error };
+        }
+      }
+
       const stmt = db.prepare('DELETE FROM gamestages WHERE stage_uuid = ?');
       const result = stmt.run(stage_uuid);
 
       if (result.changes === 0) {
         return { success: false, error: 'Stage not found' };
+      }
+
+      if (!isDevAdmin) {
+        recordLocalStagesEdit(db, stageRow.gameid);
       }
 
       return { success: true };

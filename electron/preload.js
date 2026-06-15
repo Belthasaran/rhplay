@@ -524,6 +524,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Game Stages Operations
   // =============================
     getGameStages: (params) => ipcRenderer.invoke('gamestages:get', params),
+    getGameStagesEditPermission: (params) => ipcRenderer.invoke('gamestages:get-edit-permission', params),
     
     /**
      * Get game links (URLs, downloads, patchblob links, etc.)

@@ -2129,4 +2129,40 @@ sqlite3 electron/moderation.db < electron/sql/moderation.sql
 
 ---
 
+## rhdata_068_gameversions_local_stages_sealed
+
+### Date Added
+June 14, 2026
+
+### Purpose
+Track per-user local game stage edits and add author sealing controls on `gameversions`.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+```
+
+Optional verbose output:
+```bash
+./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --verbose
+```
+
+### What It Does
+- Creates `gameversions_local` with `gameid` and `stages_edited_at`.
+- Adds `stages_sealed` and `stages_sealed_at` columns to `gameversions`.
+- Adds indexes for local edit timestamps and seal status lookups.
+
+### Prerequisites
+- Existing `rhdata.db` with `gameversions` and `gamestages` tables.
+
+### Expected Outcome
+- Non-DEVADMIN users can edit stages for games with no author-defined stages.
+- Local stage edits are recorded in `gameversions_local`.
+- Admins can set `stages_sealed` per game version to control editing policy.
+
+### Warnings
+- Safe to rerun; migration is skipped if table/columns already exist.
+
+---
+
 

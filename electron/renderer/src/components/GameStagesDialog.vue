@@ -2901,7 +2901,6 @@ async function applyPlaylevelPatch() {
 }
 
 function handleDetectedLevelsSelected(selectedLevels: any[]) {
-  // Add selected detected levels as new stages
   for (const level of selectedLevels) {
     const newStage: GameStage = {
       stage_uuid: undefined,
@@ -2917,20 +2916,22 @@ function handleDetectedLevelsSelected(selectedLevels: any[]) {
       requisites: null,
       playable: 0,
       rando: 0,
-      difficulty: 2,
-      mainexit: 1,
-      keyhole: 0,
-      credits: 0,
-      ghouse: 0,
-      spalace: 0,
-      castle: 0,
-      boss: 0,
-    secret: 0,
-    troll: 0,
-    final: 0,
-    lock: 0,
-    playlevel_patch_code: null,
-  };
+      difficulty: level.difficulty ?? 2,
+      mainexit: level.mainexit ?? 1,
+      keyhole: level.keyhole ?? 0,
+      credits: level.credits ?? 0,
+      water: level.water ?? 0,
+      ghouse: level.ghouse ?? 0,
+      spalace: level.spalace ?? 0,
+      castle: level.castle ?? 0,
+      boss: level.boss ?? 0,
+      secret: 0,
+      troll: 0,
+      final: 0,
+      lock: 0,
+      playlevel_patch_code: null,
+      stagetags: level.stagetags || (Array.isArray(level.suggestedTags) ? level.suggestedTags.join(',') : null),
+    };
     stages.value.push(newStage);
   }
   showDetectedLevelsDialog.value = false;

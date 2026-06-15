@@ -183,7 +183,18 @@ async function createPatchedSFC(params) {
       fs.copyFileSync(tempOutputPath, outputPath);
       fs.rmSync(tempDir, { recursive: true, force: true });
 
-      return { success: true, patchSource: resolved.source };
+      const crypto = require('crypto');
+      const patchedData = fs.readFileSync(outputPath);
+      const patchedRomSha1 = crypto.createHash('sha1').update(patchedData).digest('hex');
+      const patchBpsSha256 = crypto.createHash('sha256').update(decodedData).digest('hex');
+
+      return {
+        success: true,
+        patchSource: resolved.source,
+        patchedRomSha1,
+        patchBpsSha256,
+        patchSha256: patchBpsSha256,
+      };
     } catch (error) {
       if (fs.existsSync(tempDir)) {
         fs.rmSync(tempDir, { recursive: true, force: true });

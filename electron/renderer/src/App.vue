@@ -12388,6 +12388,9 @@ async function refreshRunStagedSfcFilenames() {
 }
 
 async function launchStagedFolderFile(folderPath: string, challengeIndex: number) {
+  if (!folderPath?.trim()) {
+    throw new Error('No run staging folder available');
+  }
   const folderContents = await (window as any).electronAPI.readDirectory(folderPath);
   runStagedSfcFilenames.value = sortRunStagedSfcFilenames(folderContents);
   const basename = resolveRunStagedSfcFromList(folderContents, challengeIndex);
@@ -12453,6 +12456,7 @@ function startRunLaunchMonitoring(expectedBasename: string, sessionId?: string |
       runLaunchSessionId.value = null;
       runLaunchMonitorActive.value = false;
       if (usbPollingHandlingGoalEvent.value) return;
+      if (!isRunActive.value) return;
       runExitDetectedModalOpen.value = true;
     }
   });
@@ -12486,14 +12490,34 @@ async function handleRunExitDetectedChoice(payload: {
     }
   }
 
+  const challengeIndexBefore = currentChallengeIndex.value;
+
   if (payload.outcome === 'win') {
     await nextChallenge();
   } else {
     await skipChallenge();
   }
 
-  if (isRunActive.value && activeLaunchMethod.value !== 'manual') {
+  if (!isRunActive.value || activeLaunchMethod.value === 'manual') {
+    return;
+  }
+  // Only auto-launch when advancing to the next challenge, not when finishing the run.
+  if (currentChallengeIndex.value <= challengeIndexBefore) {
+    return;
+  }
+  if (!currentChallenge.value) {
+    return;
+  }
+  if (activeLaunchMethod.value === 'program') {
+    if (!stagingFolderPath.value?.trim()) return;
+  } else if (!currentChallengeSfcPath.value) {
+    return;
+  }
+
+  try {
     await launchCurrentChallenge();
+  } catch (error) {
+    console.error('[handleRunExitDetectedChoice] Auto-launch failed:', error);
   }
 }
 
@@ -26294,10 +26318,11 @@ async function startRun() {
 
 async function launchCurrentChallenge() {
   if (!currentChallenge.value) return;
+  if (!isRunActive.value) return;
   
   try {
     if (activeLaunchMethod.value === 'program') {
-      if (!stagingFolderPath.value) {
+      if (!stagingFolderPath.value?.trim()) {
         await showAlert('No staging folder available for emulator launch', 'Launch Failed');
         return;
       }
@@ -26656,7 +26681,7 @@ async function nextChallenge() {
       }
       
       // Run completed
-      completeRun();
+      await completeRun();
     }
   } catch (error) {
     console.error('Error recording challenge result:', error);
@@ -26783,7 +26808,7 @@ async function skipChallenge() {
       }
       
       // Run completed
-      completeRun();
+      await completeRun();
     }
   } catch (error) {
     console.error('Error recording skip:', error);

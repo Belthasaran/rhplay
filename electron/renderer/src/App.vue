@@ -27645,6 +27645,11 @@ async function loadPastRun() {
   await loadPastRunFromUuid(selectedPastRunUuid.value);
 }
 
+async function exportPastRunToFile(runUuid: string | null) {
+  if (!runUuid) return;
+  await exportRunToFile(runUuid);
+}
+
 async function runAgainFromPastRun() {
   if (!canRunAgainPastRun.value || !selectedPastRunUuid.value || !selectedPastRun.value) return;
   if (!isElectronAvailable()) {

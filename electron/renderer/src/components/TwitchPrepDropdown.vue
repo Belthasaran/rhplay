@@ -119,6 +119,7 @@ function onSubtypeChange(event: Event) {
   min-width: 300px;
   max-width: 360px;
   background: var(--bg-primary, #fff);
+  color: var(--text-primary, #111827);
   border: 1px solid var(--border-secondary, #d1d5db);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
@@ -136,6 +137,7 @@ function onSubtypeChange(event: Event) {
 .twitch-prep-header h3 {
   margin: 0;
   font-size: 1rem;
+  color: var(--text-primary, #111827);
 }
 
 .twitch-prep-header .close {
@@ -143,6 +145,7 @@ function onSubtypeChange(event: Event) {
   background: transparent;
   cursor: pointer;
   font-size: 1rem;
+  color: var(--text-primary, #111827);
 }
 
 .twitch-prep-body {
@@ -159,6 +162,7 @@ function onSubtypeChange(event: Event) {
   border: 1px solid var(--border-secondary, #d1d5db);
   border-radius: 6px;
   background: var(--button-bg, #f9fafb);
+  color: var(--button-text, var(--text-primary, #111827));
   cursor: pointer;
   font-weight: 600;
 }
@@ -189,6 +193,7 @@ function onSubtypeChange(event: Event) {
   border: 2px solid var(--border-secondary, #d1d5db);
   border-radius: 6px;
   background: var(--button-bg, #fff);
+  color: var(--text-primary, #111827);
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 600;
@@ -219,6 +224,7 @@ function onSubtypeChange(event: Event) {
 .subtype-row label {
   font-weight: 600;
   font-size: 0.9rem;
+  color: var(--text-primary, #111827);
 }
 
 .subtype-row select {
@@ -226,6 +232,13 @@ function onSubtypeChange(event: Event) {
   padding: 8px 10px;
   border: 1px solid var(--border-secondary, #d1d5db);
   border-radius: 6px;
-  background: var(--bg-primary, #fff);
+  background-color: var(--bg-secondary, #fafafa);
+  color: var(--text-primary, #111827);
+  font-size: var(--base-font-size, 14px);
+}
+
+.subtype-row select option {
+  background-color: var(--bg-primary, #fff);
+  color: var(--text-primary, #111827);
 }
 </style>

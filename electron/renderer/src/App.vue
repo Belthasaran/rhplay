@@ -28990,13 +28990,20 @@ async function refreshTwitchIntegrationReady(): Promise<boolean> {
   return !!result.valid;
 }
 
-async function openTwitchPrepDropdownAfterAuth(event: MouseEvent) {
-  const button = event.currentTarget as HTMLElement;
+function captureTwitchPrepDropdownPosition(event: MouseEvent): { x: number; y: number } | null {
+  const button = (event.currentTarget ?? event.target) as HTMLElement | null;
+  if (!button?.getBoundingClientRect) {
+    return null;
+  }
   const rect = button.getBoundingClientRect();
-  twitchPrepDropdownPosition.value = {
+  return {
     x: rect.right,
     y: rect.bottom + 5,
   };
+}
+
+async function showTwitchPrepDropdownAt(position: { x: number; y: number } | null) {
+  twitchPrepDropdownPosition.value = position;
   await refreshPrepTemplateSubtypeFromTemplate();
   syncPrepModeFromPredictionState();
   showTwitchPrepDropdown.value = true;
@@ -29030,6 +29037,8 @@ async function handleTwitchReauthUserChoice(
 }
 
 async function openTwitchPrepDropdown(event: MouseEvent) {
+  const dropdownPosition = captureTwitchPrepDropdownPosition(event);
+
   const tokenStatus = await refreshTwitchTokenStatus();
   await checkPredictionsConfiguration();
 
@@ -29047,7 +29056,7 @@ async function openTwitchPrepDropdown(event: MouseEvent) {
     );
     const outcome = await handleTwitchReauthUserChoice(choice, { showDismissAlert: false });
     if (outcome === 'oauth_success') {
-      await openTwitchPrepDropdownAfterAuth(event);
+      await showTwitchPrepDropdownAt(dropdownPosition);
       return;
     }
     if (choice === 'in_app') {
@@ -29056,11 +29065,11 @@ async function openTwitchPrepDropdown(event: MouseEvent) {
       return;
     }
     await ensureTwitchPredictionsDisabledUntilReconnect();
-    await openTwitchPrepDropdownAfterAuth(event);
+    await showTwitchPrepDropdownAt(dropdownPosition);
     return;
   }
 
-  await openTwitchPrepDropdownAfterAuth(event);
+  await showTwitchPrepDropdownAt(dropdownPosition);
 }
 
 async function cancelAllActiveTwitchPredictionsBeforeRun() {

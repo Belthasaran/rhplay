@@ -86,7 +86,13 @@
                       @click.stop
                     />
                   </td>
-                  <td>
+                  <td class="lev-cell">
+                    <span
+                      v-if="canEdit && stageTestStatusIsCurrent(stage)"
+                      class="test-status-icon"
+                      :class="stage.test_status === 'accept' ? 'test-accept' : 'test-reject'"
+                      :title="stage.test_status === 'accept' ? 'Test accepted' : 'Test rejected'"
+                    >{{ stage.test_status === 'accept' ? '✓' : '✗' }}</span>
                     <input 
                       v-if="canEdit"
                       v-model="stage.levelnumber"
@@ -370,7 +376,7 @@
                       @click.stop="testLevel(stage)" 
                       class="btn-icon btn-test"
                       title="Test level - Build and Boot with 2lvno patch"
-                      :disabled="testingLevel || !stage.levelnumber || !canTestStage(stage)"
+                      :disabled="stageTestDialogOpen || !stage.levelnumber || !canTestStage(stage)"
                     >
                       🧪
                     </button>
@@ -449,27 +455,22 @@
     </div>
   </div>
 
-  <!-- Level Patch Test Progress Dialog -->
-  <Teleport to="body">
-    <div v-if="testProgressDialogOpen" class="modal-backdrop" @click.self.prevent>
-      <div class="modal test-progress-modal">
-        <header class="modal-header">
-          <h3>🧪 Level Patch Test</h3>
-        </header>
-        <section class="modal-body">
-          <div class="test-progress-content">
-            <div class="test-progress-message" v-if="testProgressMessage">
-              {{ testProgressMessage }}
-            </div>
-            <div v-if="testingLevel" class="loading-spinner"></div>
-          </div>
-        </section>
-        <footer class="modal-footer">
-          <button @click="testProgressDialogOpen = false; testingLevel = false" class="btn-secondary">Close</button>
-        </footer>
-      </div>
-    </div>
-  </Teleport>
+  <StageTestDialog
+    :is-open="stageTestDialogOpen"
+    :stage="stageTestTarget"
+    :game-id="gameId"
+    :game-name="gameName"
+    :game-version="gameVersion"
+    :active-launch-method="activeLaunchMethod"
+    :can-edit="canEdit"
+    :get-playlevel-patch-code="getPlaylevelPatchCode"
+    :get-requisite-tags="getRequisiteTags"
+    :format-level-number-hex="formatLevelNumberHex"
+    :calculate-translevel="calculateTranslevel"
+    @close="closeStageTestDialog"
+    @saved="handleStageTestSaved"
+    @stage-updated="handleStageTestUpdated"
+  />
 
   <!-- Detected Levels Dialog - Rendered outside parent modal -->
   <Teleport to="body">
@@ -481,28 +482,6 @@
       @close="closeDetectedLevelsDialog"
       @levels-selected="handleDetectedLevelsSelected"
     />
-  </Teleport>
-
-  <!-- Level Patch Test Progress Dialog -->
-  <Teleport to="body">
-    <div v-if="testProgressDialogOpen" class="modal-backdrop" @click.self.prevent>
-      <div class="modal test-progress-modal">
-        <header class="modal-header">
-          <h3>🧪 Level Patch Test</h3>
-        </header>
-        <section class="modal-body">
-          <div class="test-progress-content">
-            <div class="test-progress-message" v-if="testProgressMessage">
-              {{ testProgressMessage }}
-            </div>
-            <div v-if="testingLevel" class="loading-spinner"></div>
-          </div>
-        </section>
-        <footer class="modal-footer">
-          <button @click="testProgressDialogOpen = false; testingLevel = false" class="btn-secondary">Close</button>
-        </footer>
-      </div>
-    </div>
   </Teleport>
 
   <!-- Set Playlevel Patch Dialog -->
@@ -832,6 +811,8 @@
 import { ref, computed, watch, onMounted, nextTick, Teleport } from 'vue';
 import Papa from 'papaparse';
 import DetectedLevelsDialog from './DetectedLevelsDialog.vue';
+import StageTestDialog from './StageTestDialog.vue';
+import { stageTestStatusIsCurrent } from '@/utils/stage-test-utils';
 import ToastNotification from './ToastNotification.vue';
 import AlertDialog from './AlertDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
@@ -883,6 +864,11 @@ interface GameStage {
   excluded_patchcodes?: string | null; // JSON array of patch codes or declarative tags to exclude
   extradescription?: string | null; // Optional free-form description
   stagetags?: string | null; // Comma-separated list of arbitrary tags (e.g., "cape", "autoscroller")
+  test_status?: string | null;
+  test_status_at?: number | null;
+  test_verified_levelnumber?: string | null;
+  test_verified_playlevel_patch_code?: string | null;
+  test_verified_requisites?: string | null;
 }
 
 interface Props {
@@ -952,11 +938,10 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const saving = ref(false);
-const testingLevel = ref(false);
+const stageTestDialogOpen = ref(false);
+const stageTestTarget = ref<GameStage | null>(null);
 const stagesTableWrapper = ref<HTMLElement | null>(null);
 const savedScrollPosition = ref<number>(0);
-const testProgressDialogOpen = ref(false);
-const testProgressMessage = ref('');
 const stages = ref<GameStage[]>([]);
 const selectedStageUuid = ref<string | null>(null);
 const selectedStageUuids = ref<Set<string>>(new Set()); // Multiple selected stages for "Add to Run"
@@ -1686,328 +1671,29 @@ async function testLevel(stage: GameStage) {
     await showAlert('Level number is required to test this level', 'Test Level');
     return;
   }
-  
-  if (testingLevel.value) {
-    return; // Already testing
+  if (stageTestDialogOpen.value) return;
+  stageTestTarget.value = stage;
+  stageTestDialogOpen.value = true;
+}
+
+function closeStageTestDialog() {
+  stageTestDialogOpen.value = false;
+  stageTestTarget.value = null;
+}
+
+async function handleStageTestSaved() {
+  if (!props.forceAuthorMode) {
+    await loadStages();
   }
-  
-  try {
-    testingLevel.value = true;
-    testProgressDialogOpen.value = true;
-    testProgressMessage.value = 'Preparing test build...';
-    
-    const api = (window as any)?.electronAPI;
-    if (!api?.buildPlusPatchedGame || !api?.getAllExtraPatches) {
-      testProgressMessage.value = 'Error: Test functionality not available';
-      return;
-    }
-    
-    // Get all patches to find the "2lvno" patch
-    testProgressMessage.value = 'Finding 2lvno patch...';
-    const patchesResult = await api.getAllExtraPatches();
-    
-    if (!patchesResult?.success) {
-      testProgressMessage.value = `Error: Failed to load patches - ${patchesResult?.error || 'Unknown error'}`;
-      return;
-    }
-    
-    const allPatches = patchesResult.patches || [];
-    // Get the playlevel patch code for this stage
-    const playlevelPatchCode = getPlaylevelPatchCode(stage);
-    const playlevelPatch = allPatches.find((p: any) => p.patch_code === playlevelPatchCode);
-    
-    if (!playlevelPatch) {
-      testProgressMessage.value = `Error: Playlevel patch "${playlevelPatchCode}" not found. Please ensure the patch is defined in the system.`;
-      return;
-    }
-    
-    // Collect patches from requisites
-    const selectedPatchUuids: string[] = [];
-    
-    // Add playlevel patch if not already in requisites
-    const requisiteTags = getRequisiteTags(stage);
-    const playlevelInRequisites = requisiteTags.includes(playlevelPatchCode);
-    if (!playlevelInRequisites) {
-      selectedPatchUuids.push(playlevelPatch.epuuid);
-    }
-    
-    // Get requisite tags from stage and find matching patches
-    if (requisiteTags.length > 0) {
-      for (const tag of requisiteTags) {
-        // Find patch with matching patch_code
-        const matchingPatch = allPatches.find((p: any) => p.patch_code === tag);
-        if (matchingPatch && !selectedPatchUuids.includes(matchingPatch.epuuid)) {
-          selectedPatchUuids.push(matchingPatch.epuuid);
-        }
-      }
-    }
-    
-    // If playlevel patch was in requisites, make sure it's included
-    if (playlevelInRequisites) {
-      if (!selectedPatchUuids.includes(playlevelPatch.epuuid)) {
-        selectedPatchUuids.push(playlevelPatch.epuuid);
-      }
-    }
-    
-    // Get settings for paths
-    testProgressMessage.value = 'Loading settings...';
-    let currentSettings: any = {};
-    if (api.getSettings) {
-      const settingsResult = await api.getSettings();
-      if (settingsResult && typeof settingsResult === 'object') {
-        currentSettings = settingsResult;
-      }
-    }
-    
-    // Prepare build parameters
-    testProgressMessage.value = 'Starting build...';
-    const levelHex = formatLevelNumberHex(stage.levelnumber);
-    
-    const buildParams = {
-      gameId: props.gameId,
-      gameVersion: props.gameVersion || 1,
-      selectedPatches: selectedPatchUuids,
-      globalParams: {
-        glevelnum: levelHex,
-        gonoffv: []
-      },
-      localParams: {},
-      action: 'boot' as const,
-      vanillaRomPath: currentSettings.vanillaRomPath || '',
-      flipsPath: currentSettings.flipsPath || '',
-      asarPath: currentSettings.asarPath || '',
-    };
-    
-    testProgressMessage.value = `Building with level number ${levelHex}...`;
-    
-    const result = await api.buildPlusPatchedGame(buildParams);
-    
-    if (!result?.success) {
-      testProgressMessage.value = `Build failed: ${result?.error || 'Unknown error'}`;
-      testingLevel.value = false;
-      return;
-    }
+}
 
-    const launchMethod = props.activeLaunchMethod || 'usb2snes';
-
-    if (launchMethod === 'manual') {
-      testProgressMessage.value = `✓ Build complete! Level ${levelHex} - ${stage.levelname}`;
-    } else if (launchMethod === 'program') {
-      const launchProgram = currentSettings.launchProgram || '';
-      const launchArgs = currentSettings.launchProgramArgs || '%file';
-      if (!launchProgram) {
-        testProgressMessage.value = 'Error: No launch program configured in settings';
-        testingLevel.value = false;
-        return;
-      }
-      testProgressMessage.value = `Launching ${result.filename} with program...`;
-      try {
-        await api.launchProgram(launchProgram, launchArgs, result.outputPath);
-        if (api.recordCurBooted) {
-          await api.recordCurBooted({
-            launch_method: 'program',
-            launch_mode: 'stage_test',
-            gameid: props.gameId,
-            name: props.gameName,
-            sfc_basename: result.filename,
-            sfc_path: result.outputPath,
-            stage: {
-              levelnumber: stage.levelnumber,
-              levelname: stage.levelname,
-              difficulty: stage.difficulty
-            }
-          });
-        }
-        testProgressMessage.value = `✓ Test complete! Level ${levelHex} - ${stage.levelname} launched in emulator`;
-      } catch (launchError: any) {
-        testProgressMessage.value = `Launch failed: ${launchError?.message || String(launchError)}`;
-        testingLevel.value = false;
-        return;
-      }
-    } else {
-    testProgressMessage.value = 'Build complete! Connecting to USB2SNES...';
-    
-    // Check USB2SNES connection and upload/boot if needed
-    if (api.usb2snesConnect && api.usb2snesUploadRom && api.usb2snesBoot) {
-      // Check if USB2SNES is configured
-      if (currentSettings.usb2snesEnabled !== 'yes') {
-        testProgressMessage.value = 'Error: USB2SNES is not enabled. Please enable it in Settings first.';
-        testingLevel.value = false;
-        return;
-      }
-      
-      // Get USB2SNES connection status
-      testProgressMessage.value = 'Checking USB2SNES connection...';
-      let usb2snesConnected = false;
-      
-      try {
-        const statusResult = await api.usb2snesStatus?.();
-        if (statusResult && statusResult.connected) {
-          usb2snesConnected = true;
-        }
-      } catch (statusError) {
-        console.warn('Failed to get USB2SNES status:', statusError);
-      }
-      
-        // Auto-connect if configured but not connected
-        if (!usb2snesConnected) {
-          testProgressMessage.value = 'Connecting to USB2SNES...';
-          try {
-            // Build connection options from settings
-            // Library must be one of: usb2snes_a, usb2snes_b, qusb2snes, node-usb
-            const library = currentSettings.usb2snesLibrary || 'usb2snes_a';
-            if (!['usb2snes_a', 'usb2snes_b', 'qusb2snes', 'node-usb'].includes(library)) {
-              throw new Error(`Invalid USB2SNES library setting: ${library}. Must be one of: usb2snes_a, usb2snes_b, qusb2snes, node-usb`);
-            }
-            
-            const connectOptions: any = {
-              library: library,
-              address: currentSettings.usb2snesAddress || 'ws://localhost:64213',
-              hostingMethod: currentSettings.usb2snesHostingMethod || 'external',
-              proxyMode: currentSettings.usb2snesProxyMode || 'direct'
-            };
-          
-          if (currentSettings.usb2snesProxyMode === 'socks' && currentSettings.usb2snesSocksProxyUrl) {
-            connectOptions.socksProxyUrl = currentSettings.usb2snesSocksProxyUrl;
-          }
-          
-          if (currentSettings.usb2snesProxyMode === 'ssh' || currentSettings.usb2snesProxyMode === 'direct-with-ssh') {
-            connectOptions.ssh = {
-              host: currentSettings.usb2snesSshHost,
-              username: currentSettings.usb2snesSshUsername,
-              localPort: currentSettings.usb2snesSshLocalPort || 64213,
-              remotePort: currentSettings.usb2snesSshRemotePort || 64213,
-              identityFile: currentSettings.usb2snesSshIdentityFile
-            };
-          }
-          
-          const connectResult = await api.usb2snesConnect(connectOptions);
-          usb2snesConnected = true;
-          console.log('[TestLevel] USB2SNES connected:', connectResult);
-        } catch (connectError: any) {
-          testProgressMessage.value = `Failed to connect to USB2SNES: ${connectError?.message || String(connectError)}`;
-          testingLevel.value = false;
-          return;
-        }
-      }
-      
-      const filename = result.filename;
-      const srcPath = result.outputPath;
-      const dstPath = `/work/${filename}`;
-      
-      testProgressMessage.value = `Uploading ${filename} to USB2SNES...`;
-      
-      try {
-        // Setup progress listener if available
-        let uploadPercent = 0;
-        const removeProgressListener = api.onUploadProgress?.((transferred: number, total: number, percent: number) => {
-          uploadPercent = percent;
-          testProgressMessage.value = `Uploading ${filename}... ${percent}%`;
-        });
-        
-        // Upload file
-        const uploadResult = await api.usb2snesUploadRom(srcPath, dstPath);
-        
-        if (removeProgressListener) {
-          removeProgressListener();
-        }
-        
-        if (!uploadResult?.success) {
-          testProgressMessage.value = `Upload failed: ${uploadResult?.error || 'Unknown error'}`;
-          testingLevel.value = false;
-          return;
-        }
-        
-        // Record upload to snes_contents
-        try {
-          const uploadedFileInfo = {
-            fullpath: dstPath,
-            filename: filename,
-            gameid: props.gameId,
-            version: props.gameVersion || 1,
-            levelnumber: stage.levelnumber || null,
-            levelname: stage.levelname || null,
-            metadata: {
-              gamename: props.gameName || null
-            },
-            part_of_a_run: false
-          };
-          
-          if (api.snesContentsSync) {
-            await api.snesContentsSync(uploadedFileInfo);
-            console.log('[TestLevel] SNES contents cache synced');
-          }
-        } catch (syncError: any) {
-          console.warn('[TestLevel] Cache sync failed:', syncError);
-          // Don't fail the upload if sync fails
-        }
-        
-        // Record to recentboots
-        try {
-          if (api.recordRecentBoot) {
-            await api.recordRecentBoot({
-              filename: filename,
-              fullpath: dstPath,
-              gameid: props.gameId,
-              gamename: props.gameName || null,
-              levelnumber: stage.levelnumber || null,
-              levelname: stage.levelname || null
-            });
-            console.log('[TestLevel] Recent boot recorded');
-          }
-        } catch (recordError: any) {
-          console.warn('[TestLevel] Recent boot recording failed:', recordError);
-          // Don't fail the upload if recording fails
-        }
-        
-        testProgressMessage.value = `Upload complete! Booting ${filename}...`;
-        
-        // Boot the file
-        try {
-          await api.usb2snesBoot(dstPath);
-          if (api.recordCurBooted) {
-            await api.recordCurBooted({
-              launch_method: 'usb2snes',
-              launch_mode: 'stage_test',
-              gameid: props.gameId,
-              name: props.gameName,
-              sfc_basename: filename,
-              sfc_path: srcPath,
-              stage: {
-                levelnumber: stage.levelnumber,
-                levelname: stage.levelname,
-                difficulty: stage.difficulty
-              }
-            });
-          }
-          testProgressMessage.value = `✓ Test complete! Level ${levelHex} - ${stage.levelname} is now running on SNES`;
-        } catch (bootError: any) {
-          testProgressMessage.value = `Uploaded but boot failed: ${bootError?.message || String(bootError)}`;
-          testingLevel.value = false;
-          return;
-        }
-        
-      } catch (uploadError: any) {
-        testProgressMessage.value = `Upload failed: ${uploadError?.message || String(uploadError)}`;
-        testingLevel.value = false;
-        return;
-      }
-    } else {
-      testProgressMessage.value = `✓ Build complete! Level ${levelHex} - ${stage.levelname}`;
-    }
-    }
-    
-    // Close dialog after a delay
-    setTimeout(() => {
-      testProgressDialogOpen.value = false;
-      testingLevel.value = false;
-      testProgressMessage.value = '';
-    }, 3000);
-    
-  } catch (error: any) {
-    console.error('Error testing level:', error);
-    testProgressMessage.value = `Error: ${error?.message || String(error)}`;
-    testingLevel.value = false;
+function handleStageTestUpdated(updated: GameStage) {
+  const idx = stages.value.findIndex(
+    (s) => (s.stage_uuid && s.stage_uuid === updated.stage_uuid)
+      || (s === stageTestTarget.value)
+  );
+  if (idx >= 0) {
+    stages.value[idx] = { ...stages.value[idx], ...updated };
   }
 }
 
@@ -2146,6 +1832,7 @@ async function saveAll() {
         playlevel_patch_code: stage.playlevel_patch_code || '2lvno',
         extradescription: stage.extradescription || null,
         stagetags: stage.stagetags || null,
+        test_status: stage.test_status ?? undefined,
       });
       
       if (!result?.success) {
@@ -3347,6 +3034,27 @@ watch(() => props.initialLevelNumber, () => {
   background: var(--bg-primary);
   border-color: #f44336;
   color: #f44336;
+}
+
+.lev-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.test-status-icon {
+  font-weight: 700;
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.test-status-icon.test-accept {
+  color: #2ecc71;
+}
+
+.test-status-icon.test-reject {
+  color: #e74c3c;
 }
 
 .btn-delete:hover:not(:disabled) {

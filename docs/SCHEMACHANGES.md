@@ -1,3 +1,23 @@
+- 2026-06-14: rhdata - gamestages test status
+  - Description: Add `test_status`, `test_status_at`, and `test_verified_*` snapshot columns on `gamestages` for Stage Test accept/reject tracking; invalidated when levelnumber, playlevel_patch_code, or requisites change.
+  - Tables/columns: `gamestages.test_status`, `test_status_at`, `test_verified_levelnumber`, `test_verified_playlevel_patch_code`, `test_verified_requisites`
+  - Migration: `rhdata_069_gamestages_test_status` via `jsutils/migratedb.js`
+
+- 2026-06-14: clientdata - stage_feedback triplet key
+  - Description: Change `stage_feedback` uniqueness to `(gameid, levelnumber, playlevel_patchcode)`; backfill null playlevel to `2lvno`.
+  - Tables/columns: `stage_feedback` UNIQUE constraint; `playlevel_patchcode NOT NULL`
+  - Migration: `clientdata_068_stage_feedback_triplet_key` via `jsutils/migratedb.js`
+
+- 2026-06-14: clientdata - run_plan untested stage filters
+  - Description: Add `stage_filter_include_untested` and `stage_filter_untested_only` to `run_plan_entries` for random stage selection.
+  - Tables/columns: `run_plan_entries.stage_filter_include_untested`, `stage_filter_untested_only`
+  - Migration: `clientdata_069_run_plan_untested_filters` via `jsutils/migratedb.js`
+
+- 2026-06-14: clientdata - stage_feedback test fields
+  - Description: Extend `stage_feedback` with `feedback_source`, `test_result`, `tag_feedback` (JSON), and `stage_uuid` for Stage Test and Prepare Run unified feedback.
+  - Tables/columns: `stage_feedback.feedback_source`, `test_result`, `tag_feedback`, `stage_uuid`
+  - Migration: `clientdata_067_stage_feedback_test_fields` via `jsutils/migratedb.js`
+
 - 2026-06-14: rhdata - patchblobs result_sha256
   - Description: Add nullable `result_sha256` column to `patchblobs` for catalog item lookup and future patched-ROM verification.
   - Rationale: Patch resolver Method 4 matches catalog `items.sfc_rom_sha256_hash` when populated; falls back to `result_sha1` / `sfc_rom_sha1_hash` otherwise.

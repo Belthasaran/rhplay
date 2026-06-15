@@ -5,6 +5,10 @@
 const crypto = require('crypto');
 const { matchesFilter } = require('./shared-filter-utils');
 const GameVersionBanManager = require('./gameversion-banmanager');
+const {
+  buildFeedbackTripletMap,
+  filterStagesByTestState,
+} = require('./stage-test-resolution');
 
 /**
  * Characters allowed in seeds (excluding confusing: 0, O, 1, l, I)
@@ -338,6 +342,8 @@ function selectRandomStage(params) {
     stageExcludeOnlyFlags,
     stageHasTags,
     stageExcludeTags,
+    stageIncludeUntested,
+    stageUntestedOnly,
     excludeGameids = [],
     excludeStageUuids = []
   } = params;
@@ -596,6 +602,22 @@ function selectRandomStage(params) {
       }
     });
   }
+
+  const clientdataDb = dbManager.getConnection('clientdata');
+  const gameidsForFeedback = [...new Set(filteredStages.map((s) => s.gameid))];
+  let feedbackMap = new Map();
+  if (gameidsForFeedback.length > 0) {
+    const placeholdersFb = gameidsForFeedback.map(() => '?').join(',');
+    const feedbackRows = clientdataDb.prepare(`
+      SELECT * FROM stage_feedback WHERE gameid IN (${placeholdersFb})
+    `).all(...gameidsForFeedback);
+    feedbackMap = buildFeedbackTripletMap(feedbackRows);
+  }
+
+  filteredStages = filterStagesByTestState(filteredStages, feedbackMap, {
+    includeUntestedStages: stageIncludeUntested === true || stageIncludeUntested === 1,
+    untestedStagesOnly: stageUntestedOnly === true || stageUntestedOnly === 1,
+  });
   
   if (filteredStages.length === 0) {
     throw new Error('No stages match the filter criteria');

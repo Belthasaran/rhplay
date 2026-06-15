@@ -1712,42 +1712,17 @@
           </div>
         </div>
         <div class="challenge-feedback-buttons" v-if="isCurrentChallengeAnyStage">
-          <div class="difficulty-dropdown-wrapper">
-            <button 
-              @click="difficultyDropdownOpen = !difficultyDropdownOpen" 
-              class="btn-difficulty-dropdown"
-              :class="{ 'active': currentStageFeedback?.difficulty_feedback !== null && currentStageFeedback?.difficulty_feedback !== undefined }"
-            >
-              <span v-if="currentStageDifficulty !== null && currentStageDifficulty !== undefined">
-                Set Feedback on Difficulty Level ({{ currentStageDifficulty }} - {{ formatStageDifficulty(currentStageDifficulty) }})
-              </span>
-              <span v-else>
-                Set Difficulty Feedback
-              </span>
-              <span class="dropdown-arrow">▼</span>
-            </button>
-          </div>
+          <button
+            @click="openRunStageFeedbackModal"
+            class="btn-difficulty-dropdown"
+            :class="{ 'active': currentStageFeedback?.difficulty_feedback !== null && currentStageFeedback?.difficulty_feedback !== undefined }"
+          >
+            Set Stage Feedback
+            <span class="dropdown-arrow">▼</span>
+          </button>
           <button @click="openStageCommentDialog" class="btn-comment" :class="{ 'has-comment': currentStageFeedback?.comment }">
             💬 Comment
           </button>
-        </div>
-        <div v-if="difficultyDropdownOpen && isCurrentChallengeAnyStage" class="difficulty-dropdown" @click.stop>
-              <div class="difficulty-grid">
-                <div 
-                  v-for="diff in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" 
-                  :key="diff"
-                  @click="setStageDifficultyFeedback(diff)"
-                  class="difficulty-grid-item"
-                  :class="{ 
-                    'active': currentStageFeedback?.difficulty_feedback === diff,
-                    'broken': diff === 8,
-                    'bugged': diff === 10
-                  }"
-                >
-                  <span class="difficulty-number">{{ diff }}</span>
-                  <span class="difficulty-label">{{ getDifficultyLabel(diff) }}</span>
-                </div>
-              </div>
         </div>
       </section>
 
@@ -1822,6 +1797,16 @@
             <div v-if="stageLimitsDropdownOpen" class="stage-limits-dropdown" :style="stageLimitsDropdownStyle" @click.stop ref="stageLimitsDropdownRef">
               <div class="stage-limits-columns">
                 <div class="stage-limits-left-column">
+                  <div class="stage-limits-section stage-test-filter-section">
+                    <label class="checkbox-filter">
+                      <input type="checkbox" v-model="stageFilter.includeUntested" @change="onIncludeUntestedChange" />
+                      Include untested stages
+                    </label>
+                    <label class="checkbox-filter">
+                      <input type="checkbox" v-model="stageFilter.untestedOnly" @change="onUntestedOnlyChange" />
+                      Untested stages only
+                    </label>
+                  </div>
                   <div class="stage-limits-section">
                     <label>
                       Min Difficulty (0-9)
@@ -9443,8 +9428,32 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     :stage-difficulty="isCurrentChallengeAnyStage ? currentStageDifficulty : null"
     :stage-difficulty-label="isCurrentChallengeAnyStage && currentStageDifficulty !== null ? formatStageDifficulty(currentStageDifficulty) : ''"
     :show-stage-feedback="isCurrentChallengeAnyStage"
+    :show-full-feedback-form="showFullRunFeedbackForm"
+    :initial-stage="currentStageRow"
+    :initial-feedback-value="runFeedbackFormInitial"
     @choice="handleRunExitDetectedChoice"
   />
+
+  <div v-if="runStageFeedbackModalOpen" class="modal-backdrop" @click.self="runStageFeedbackModalOpen = false">
+    <div class="modal run-stage-feedback-modal" @click.stop>
+      <header class="modal-header">
+        <h3>Stage Feedback</h3>
+        <button class="close" @click="runStageFeedbackModalOpen = false">✕</button>
+      </header>
+      <section class="modal-body">
+        <StageFeedbackForm
+          ref="runStageFeedbackFormRef"
+          :mode="showFullRunFeedbackForm ? 'full' : 'simple'"
+          :initial-stage="currentStageRow"
+          :model-value="runFeedbackFormInitial"
+        />
+      </section>
+      <footer class="modal-footer">
+        <button class="btn-primary" @click="saveRunStageFeedback">Done</button>
+        <button class="btn-secondary" @click="runStageFeedbackModalOpen = false">Cancel</button>
+      </footer>
+    </div>
+  </div>
   
   <!-- Dialog Components (Alert, Confirm, Prompt, Toast) -->
   <AlertDialog
@@ -9698,6 +9707,13 @@ import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
 import EmulatorConfigModal from './components/EmulatorConfigModal.vue';
 import GameDetailsInspector from './components/GameDetailsInspector.vue';
 import GameStagesDialog from './components/GameStagesDialog.vue';
+import StageFeedbackForm from './components/StageFeedbackForm.vue';
+import { formatStageDifficulty } from './utils/stage-difficulty';
+import {
+  needsFullRunFeedbackForm,
+  defaultPlaylevelPatchCode,
+  type StageFeedbackRow,
+} from './utils/stage-test-utils';
 import RunExitDetectedModal from './components/RunExitDetectedModal.vue';
 import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -12421,22 +12437,23 @@ async function handleRunExitDetectedChoice(payload: {
   outcome: 'win' | 'skip';
   difficultyFeedback: number | null;
   comment: string;
+  test_result?: 'no_action' | 'reject' | 'accept' | null;
+  tag_feedback?: string | null;
 }) {
   runExitDetectedModalOpen.value = false;
 
   if (isCurrentChallengeAnyStage.value && currentChallenge.value) {
-    const challenge = currentChallenge.value as any;
-    if (payload.difficultyFeedback !== null || payload.comment) {
+    const hasFeedback = payload.difficultyFeedback !== null
+      || payload.comment
+      || payload.test_result
+      || payload.tag_feedback;
+    if (hasFeedback) {
       try {
-        await (window as any).electronAPI.saveStageFeedback({
-          gameid: challenge.id,
-          levelnumber: challenge.levelnumber || challenge.exit_number || challenge.stageNumber,
+        await persistRunStageFeedback({
           difficulty_feedback: payload.difficultyFeedback,
-          comment: payload.comment || undefined,
-          run_uuid: currentRunUuid.value,
-          global_conditions: challenge.conditions || [],
-          applied_patches: challenge.appliedPatches || [],
-          playlevel_patchcode: challenge.playlevelPatchcode || null
+          comment: payload.comment || null,
+          test_result: payload.test_result || null,
+          tag_feedback: payload.tag_feedback || null,
         });
       } catch (error) {
         console.warn('[handleRunExitDetectedChoice] feedback save failed:', error);
@@ -23248,6 +23265,8 @@ type RunEntry = {
   stageFilterExcludeOnlyFlags?: string[];  // Array of flag codes: 'M', 'K', 'G', 'S', 'Ca', 'Bo'
   stageFilterHasTags?: string[];  // Array of tags: stage must have ALL of these tags
   stageFilterExcludeTags?: string[];  // Array of tags: stage with ANY of these tags is excluded
+  stageFilterIncludeUntested?: boolean;
+  stageFilterUntestedOnly?: boolean;
   seed?: string;
   matchCount?: number | null;  // Store match count for random entries
   isLocked?: boolean;  // If true, entry type cannot be changed
@@ -23744,6 +23763,34 @@ const stageCommentDialogOpen = ref(false);
 const stageCommentText = ref('');
 const difficultyDropdownOpen = ref(false);
 const currentStageInfo = ref<{ difficulty: number | null; levelname: string | null }>({ difficulty: null, levelname: null });
+const currentStageRow = ref<Record<string, any> | null>(null);
+const runStageFeedbackModalOpen = ref(false);
+const runStageFeedbackFormRef = ref<InstanceType<typeof StageFeedbackForm> | null>(null);
+
+const showFullRunFeedbackForm = computed(() => {
+  if (!currentStageRow.value) return false;
+  return needsFullRunFeedbackForm(
+    currentStageRow.value as any,
+    currentStageFeedback.value as StageFeedbackRow | null
+  );
+});
+
+const runFeedbackFormInitial = computed(() => {
+  const fb = currentStageFeedback.value;
+  if (!fb) return null;
+  let tagFeedback = null;
+  if (fb.tag_feedback) {
+    try {
+      tagFeedback = typeof fb.tag_feedback === 'string' ? JSON.parse(fb.tag_feedback) : fb.tag_feedback;
+    } catch { /* ignore */ }
+  }
+  return {
+    difficulty_feedback: fb.difficulty_feedback ?? null,
+    test_result: fb.test_result || 'no_action',
+    tag_feedback: tagFeedback,
+    comment: fb.comment || '',
+  };
+});
 
 const isCurrentChallengeAnyStage = computed(() => {
   if (!currentChallenge.value) return false;
@@ -23834,6 +23881,7 @@ watch(currentChallengeIndex, async (newIndex, oldIndex) => {
         });
         console.log('[watch:currentChallengeIndex] Loaded stageInfo:', stageInfo);
         if (stageInfo) {
+          currentStageRow.value = stageInfo;
           // Handle difficulty - it can be 0, so check for undefined/null explicitly
           // Also convert to number if it's a string
           let difficulty: number | null = null;
@@ -23859,23 +23907,30 @@ watch(currentChallengeIndex, async (newIndex, oldIndex) => {
           }
         } else {
           console.log('[watch:currentChallengeIndex] No stageInfo found for', gameid, levelnumber);
+          currentStageRow.value = null;
           currentStageInfo.value = { difficulty: null, levelname: null };
         }
         
-        // Load feedback
+        const playlevelPatchcode = defaultPlaylevelPatchCode(
+          stageInfo?.playlevel_patch_code || (challenge as any).playlevelPatchcode
+        );
         const feedback = await (window as any).electronAPI.getStageFeedback({
           gameid,
-          levelnumber
+          levelnumber,
+          playlevel_patchcode: playlevelPatchcode,
         });
         currentStageFeedback.value = feedback || null;
+        (challenge as any).playlevelPatchcode = playlevelPatchcode;
       } catch (error) {
         console.error('Error loading stage info/feedback:', error);
         currentStageFeedback.value = null;
+        currentStageRow.value = null;
         currentStageInfo.value = { difficulty: null, levelname: null };
       }
     }
   } else {
     currentStageFeedback.value = null;
+    currentStageRow.value = null;
     currentStageInfo.value = { difficulty: null, levelname: null };
   }
   
@@ -23891,126 +23946,137 @@ watch(currentChallengeIndex, async (newIndex, oldIndex) => {
   }
 });
 
-// Stage feedback functions
-function formatStageDifficulty(diff: number | null): string {
-  if (diff === null || diff === undefined) return '';
-  const map: Record<number, string> = {
-    0: 'Trivial',
-    1: 'Newcomer',
-    2: 'Casual',
-    3: 'Intermediate',
-    4: 'Advanced',
-    5: 'Xpert',
-    6: 'Master',
-    7: 'GM',
-    8: 'GM+',
-    9: 'Tool-Only',
-    10: 'Bugged'
-  };
-  return map[diff] || `Difficulty ${diff}`;
-}
+// Stage feedback functions — difficulty labels from shared module (stage-difficulty.ts)
 
-function getDifficultyLabel(diff: number): string {
-  const map: Record<number, string> = {
-    0: 'Trivial (Too easy)',
-    1: 'Newcomer',
-    2: 'Casual (Simple Kaizo Tutorial etc)',
-    3: 'Intermediate (Beginner kaizo)',
-    4: 'Advanced (Int. Kaizo)',
-    5: 'Xpert',
-    6: 'Master',
-    7: 'GM',
-    8: 'GM+',
-    9: 'Tool-Only',
-    10: 'Broken Unwinnable (Needs fix)'
-  };
-  return map[diff] || `Difficulty ${diff}`;
-}
-
-async function setStageDifficultyFeedback(difficulty: number) {
-  if (!currentChallenge.value) return;
-  
+async function getRunStageFeedbackContext() {
   const challenge = currentChallenge.value as any;
+  if (!challenge) return null;
+
   const gameid = challenge.id || challenge.gameid;
-  const levelnumber = challenge.stageNumber || challenge.levelnumber;
+  const levelnumber = challenge.stageNumber || challenge.levelnumber || challenge.exit_number;
   const translevel = challenge.transLevel || challenge.translevel;
-  const levelname = challenge.stageName || challenge.levelname;
-  
-  if (!gameid || !levelnumber) {
-    console.error('Cannot save feedback: missing gameid or levelnumber');
-    return;
-  }
-  
-  // Get current run's global conditions and applied patches
+  const levelname = challenge.stageName || challenge.levelname || currentStageInfo.value.levelname;
+
+  if (!gameid || !levelnumber) return null;
+
   let globalConditions: string[] = [];
   let appliedPatches: string[] = [];
-  let playlevelPatchcode: string | null = null;
-  
+  let playlevelPatchcode = defaultPlaylevelPatchCode(
+    currentStageRow.value?.playlevel_patch_code || challenge.playlevelPatchcode
+  );
+
   try {
-    // Get global patch codes from current run
     if (currentRunUuid.value) {
       const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
-      if (run && run.config_json) {
+      if (run?.config_json) {
         const config = JSON.parse(run.config_json);
         globalConditions = config.globalPatchCodes || [];
       }
-      
-      // Get applied patches from current challenge's conditions
-      // This would need to be extracted from the challenge's patch application info
-      // For now, we'll try to get it from the challenge's conditions field
-      if (challenge.conditions) {
-        try {
-          const conditions = typeof challenge.conditions === 'string' 
-            ? JSON.parse(challenge.conditions) 
-            : challenge.conditions;
-          if (Array.isArray(conditions)) {
-            appliedPatches = conditions
-              .filter((c: any) => c.type === 'patch' && c.patchCode)
-              .map((c: any) => c.patchCode);
-          }
-        } catch (e) {
-          console.warn('Error parsing challenge conditions:', e);
-        }
+    }
+    if (challenge.conditions) {
+      const conditions = typeof challenge.conditions === 'string'
+        ? JSON.parse(challenge.conditions)
+        : challenge.conditions;
+      if (Array.isArray(conditions)) {
+        appliedPatches = conditions
+          .filter((c: any) => c.type === 'patch' && c.patchCode)
+          .map((c: any) => c.patchCode);
       }
-      
-      // Get playlevel patchcode from gamestages table
+    }
+    if (!currentStageRow.value?.playlevel_patch_code) {
       const stageInfo = await (window as any).electronAPI.getStageInfo({ gameid, levelnumber });
-      if (stageInfo && stageInfo.playlevel_patch_code) {
-        playlevelPatchcode = stageInfo.playlevel_patch_code;
+      if (stageInfo?.playlevel_patch_code) {
+        playlevelPatchcode = defaultPlaylevelPatchCode(stageInfo.playlevel_patch_code);
       }
     }
   } catch (error) {
     console.error('Error getting run/patch info for feedback:', error);
   }
-  
+
+  return {
+    gameid,
+    levelnumber,
+    translevel: translevel || null,
+    levelname: levelname || null,
+    globalConditions,
+    appliedPatches,
+    playlevelPatchcode,
+    stage_uuid: currentStageRow.value?.stage_uuid || null,
+  };
+}
+
+async function persistRunStageFeedback(form: {
+  difficulty_feedback: number | null;
+  comment?: string | null;
+  test_result?: 'no_action' | 'reject' | 'accept' | null;
+  tag_feedback?: string | null;
+}) {
+  const ctx = await getRunStageFeedbackContext();
+  if (!ctx) {
+    throw new Error('Missing gameid or levelnumber');
+  }
+
+  const result = await (window as any).electronAPI.saveStageFeedback({
+    gameid: ctx.gameid,
+    levelnumber: ctx.levelnumber,
+    translevel: ctx.translevel,
+    levelname: ctx.levelname,
+    difficulty_feedback: form.difficulty_feedback,
+    comment: form.comment || null,
+    current_difficulty: currentStageDifficulty.value,
+    flag_values: null,
+    global_conditions: JSON.stringify(ctx.globalConditions),
+    applied_patches: JSON.stringify(ctx.appliedPatches),
+    playlevel_patchcode: ctx.playlevelPatchcode,
+    feedback_source: 'prepare_run',
+    test_result: form.test_result || null,
+    tag_feedback: form.tag_feedback || null,
+    stage_uuid: ctx.stage_uuid,
+  });
+
+  if (!result?.success) {
+    throw new Error(result?.error || 'Unknown error');
+  }
+
+  const feedback = await (window as any).electronAPI.getStageFeedback({
+    gameid: ctx.gameid,
+    levelnumber: ctx.levelnumber,
+    playlevel_patchcode: ctx.playlevelPatchcode,
+  });
+  currentStageFeedback.value = feedback || null;
+  return result;
+}
+
+function openRunStageFeedbackModal() {
+  runStageFeedbackModalOpen.value = true;
+}
+
+async function saveRunStageFeedback() {
+  const formValue = runStageFeedbackFormRef.value?.getValue();
+  if (!formValue) return;
+
   try {
-    const result = await (window as any).electronAPI.saveStageFeedback({
-      gameid,
-      levelnumber,
-      translevel: translevel || null,
-      levelname: levelname || null,
+    await persistRunStageFeedback({
+      difficulty_feedback: formValue.difficulty_feedback,
+      comment: formValue.comment || null,
+      test_result: showFullRunFeedbackForm.value ? formValue.test_result : null,
+      tag_feedback: showFullRunFeedbackForm.value ? JSON.stringify(formValue.tag_feedback) : null,
+    });
+    runStageFeedbackModalOpen.value = false;
+  } catch (error: any) {
+    console.error('Error saving stage feedback:', error);
+    await showAlert(`Error saving feedback: ${error?.message || String(error)}`, 'Save Error');
+  }
+}
+
+async function setStageDifficultyFeedback(difficulty: number) {
+  try {
+    await persistRunStageFeedback({
       difficulty_feedback: difficulty,
       comment: currentStageFeedback.value?.comment || null,
-      current_difficulty: currentStageDifficulty.value,
-      flag_values: null, // Could be extracted from stage info if needed
-      global_conditions: JSON.stringify(globalConditions),
-      applied_patches: JSON.stringify(appliedPatches),
-      playlevel_patchcode: playlevelPatchcode
     });
-    
-    if (result.success) {
-      // Reload feedback
-      const feedback = await (window as any).electronAPI.getStageFeedback({
-        gameid,
-        levelnumber
-      });
-      currentStageFeedback.value = feedback || null;
-      difficultyDropdownOpen.value = false;
-    } else {
-      console.error('Error saving stage feedback:', result.error);
-      await showAlert('Error saving feedback: ' + result.error, 'Save Failed');
-    }
-  } catch (error) {
+    difficultyDropdownOpen.value = false;
+  } catch (error: any) {
     console.error('Error saving stage feedback:', error);
     await showAlert('Error saving feedback', 'Save Error');
   }
@@ -24032,82 +24098,16 @@ function closeStageCommentDialog() {
 
 async function saveStageComment() {
   if (!currentChallenge.value) return;
-  
-  const challenge = currentChallenge.value as any;
-  const gameid = challenge.id || challenge.gameid;
-  const levelnumber = challenge.stageNumber || challenge.levelnumber;
-  const translevel = challenge.transLevel || challenge.translevel;
-  const levelname = challenge.stageName || challenge.levelname;
-  
-  if (!gameid || !levelnumber) {
-    console.error('Cannot save comment: missing gameid or levelnumber');
-    return;
-  }
-  
-  // Get current run's global conditions and applied patches (same as in setStageDifficultyFeedback)
-  let globalConditions: string[] = [];
-  let appliedPatches: string[] = [];
-  let playlevelPatchcode: string | null = null;
-  
+
   try {
-    if (currentRunUuid.value) {
-      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
-      if (run && run.config_json) {
-        const config = JSON.parse(run.config_json);
-        globalConditions = config.globalPatchCodes || [];
-      }
-      
-      if (challenge.conditions) {
-        try {
-          const conditions = typeof challenge.conditions === 'string' 
-            ? JSON.parse(challenge.conditions) 
-            : challenge.conditions;
-          if (Array.isArray(conditions)) {
-            appliedPatches = conditions
-              .filter((c: any) => c.type === 'patch' && c.patchCode)
-              .map((c: any) => c.patchCode);
-          }
-        } catch (e) {
-          console.warn('Error parsing challenge conditions:', e);
-        }
-      }
-      
-      const stageInfo = await (window as any).electronAPI.getStageInfo({ gameid, levelnumber });
-      if (stageInfo && stageInfo.playlevel_patch_code) {
-        playlevelPatchcode = stageInfo.playlevel_patch_code;
-      }
-    }
-  } catch (error) {
-    console.error('Error getting run/patch info for comment:', error);
-  }
-  
-  try {
-    const result = await (window as any).electronAPI.saveStageFeedback({
-      gameid,
-      levelnumber,
-      translevel: translevel || null,
-      levelname: levelname || null,
-      difficulty_feedback: currentStageFeedback.value?.difficulty_feedback || null,
+    await persistRunStageFeedback({
+      difficulty_feedback: currentStageFeedback.value?.difficulty_feedback ?? null,
       comment: stageCommentText.value.trim() || null,
-      current_difficulty: currentStageDifficulty.value,
-      flag_values: null,
-      global_conditions: JSON.stringify(globalConditions),
-      applied_patches: JSON.stringify(appliedPatches),
-      playlevel_patchcode: playlevelPatchcode
+      test_result: currentStageFeedback.value?.test_result || null,
+      tag_feedback: currentStageFeedback.value?.tag_feedback || null,
     });
-    
-    if (result.success) {
-      const feedback = await (window as any).electronAPI.getStageFeedback({
-        gameid,
-        levelnumber
-      });
-      currentStageFeedback.value = feedback || null;
-      closeStageCommentDialog();
-    } else {
-      console.error('Error saving comment:', result.error);
-      await showAlert('Error saving comment: ' + result.error, 'Save Failed');
-    }
-  } catch (error) {
+    closeStageCommentDialog();
+  } catch (error: any) {
     console.error('Error saving comment:', error);
     await showAlert('Error saving comment', 'Save Error');
   }
@@ -24469,6 +24469,8 @@ const stageFlags = [
 const stageFilter = reactive({
   minDifficulty: 2 as number | null,  // Default: 2
   maxDifficulty: 5 as number | null,    // Default: 5
+  includeUntested: false,
+  untestedOnly: false,
   includeFlags: [] as string[],  // MustInclude: stages must have ALL of these flags
   excludeFlags: [] as string[],  // Exclude: stages with ANY of these flags are excluded
   includeAnyOfFlags: ['M', 'K'] as string[],  // IncludeAnyOf: stages must have at least ONE of these flags (default: M or K)
@@ -24476,6 +24478,18 @@ const stageFilter = reactive({
   hasTags: [] as string[],  // Has tags: stages must have ALL of these tags
   excludeTags: [] as string[]  // Exclude tags: stages with ANY of these tags are excluded
 });
+
+function onIncludeUntestedChange() {
+  if (!stageFilter.includeUntested) {
+    stageFilter.untestedOnly = false;
+  }
+}
+
+function onUntestedOnlyChange() {
+  if (stageFilter.untestedOnly) {
+    stageFilter.includeUntested = true;
+  }
+}
 
 // Helper function to calculate cumulative count (each entry counts at least 1)
 function getCumulativeCount(): number {
@@ -24607,7 +24621,9 @@ watch(() => ({
   stageIncludeAnyOfFlags: stageFilter.includeAnyOfFlags?.slice(),  // Create copy for reactivity
   stageExcludeOnlyFlags: stageFilter.excludeOnlyFlags?.slice(),   // Create copy for reactivity
   stageHasTags: stageFilter.hasTags?.slice(),  // Create copy for reactivity
-  stageExcludeTags: stageFilter.excludeTags?.slice()   // Create copy for reactivity
+  stageExcludeTags: stageFilter.excludeTags?.slice(),   // Create copy for reactivity
+  stageIncludeUntested: stageFilter.includeUntested,
+  stageUntestedOnly: stageFilter.untestedOnly,
 }), async () => {
   // Always count games (even with no filters, shows total count)
   try {
@@ -24651,7 +24667,9 @@ watch(() => ({
       stageIncludeAnyOfFlags: JSON.parse(JSON.stringify(stageFilter.includeAnyOfFlags || [])),
       stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || [])),
       stageHasTags: JSON.parse(JSON.stringify(stageFilter.hasTags || [])),
-      stageExcludeTags: JSON.parse(JSON.stringify(stageFilter.excludeTags || []))
+      stageExcludeTags: JSON.parse(JSON.stringify(stageFilter.excludeTags || [])),
+      stageIncludeUntested: stageFilter.includeUntested,
+      stageUntestedOnly: stageFilter.untestedOnly,
     });
     
     console.log('[watch] countRandomStageMatches result:', stageResult);
@@ -24800,7 +24818,11 @@ async function addRandomStageToRun() {
       stageIncludeFlags: JSON.parse(JSON.stringify(stageFilter.includeFlags || [])),
       stageExcludeFlags: JSON.parse(JSON.stringify(stageFilter.excludeFlags || [])),
       stageIncludeAnyOfFlags: JSON.parse(JSON.stringify(stageFilter.includeAnyOfFlags || [])),
-      stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || []))
+      stageExcludeOnlyFlags: JSON.parse(JSON.stringify(stageFilter.excludeOnlyFlags || [])),
+      stageHasTags: JSON.parse(JSON.stringify(stageFilter.hasTags || [])),
+      stageExcludeTags: JSON.parse(JSON.stringify(stageFilter.excludeTags || [])),
+      stageIncludeUntested: stageFilter.includeUntested,
+      stageUntestedOnly: stageFilter.untestedOnly,
     });
     
     if (result.success) {
@@ -24859,9 +24881,11 @@ async function addRandomStageToRun() {
     stageFilterExcludeFlags: [...stageFilter.excludeFlags],
     stageFilterIncludeAnyOfFlags: [...stageFilter.includeAnyOfFlags],
     stageFilterExcludeOnlyFlags: [...stageFilter.excludeOnlyFlags],
-    stageFilterHasTags: [...stageFilter.hasTags],
-    stageFilterExcludeTags: [...stageFilter.excludeTags],
-    seed,
+      stageFilterHasTags: [...stageFilter.hasTags],
+      stageFilterExcludeTags: [...stageFilter.excludeTags],
+      stageFilterIncludeUntested: stageFilter.includeUntested,
+      stageFilterUntestedOnly: stageFilter.untestedOnly,
+      seed,
     matchCount: randomStageMatchCount.value,  // This should now always be set
     isLocked: false,
     conditions: [],
@@ -25413,6 +25437,8 @@ async function loadRestoreRun() {
       stageFilterExcludeOnlyFlags: entry.stage_filter_exclude_only_flags ? JSON.parse(entry.stage_filter_exclude_only_flags) : [],
       stageFilterHasTags: entry.stage_filter_has_tags ? JSON.parse(entry.stage_filter_has_tags) : [],
       stageFilterExcludeTags: entry.stage_filter_exclude_tags ? JSON.parse(entry.stage_filter_exclude_tags) : [],
+      stageFilterIncludeUntested: entry.stage_filter_include_untested === 1,
+      stageFilterUntestedOnly: entry.stage_filter_untested_only === 1,
       seed: entry.filter_seed || '',
       matchCount: null,  // Will be recalculated if needed
       isLocked: false,

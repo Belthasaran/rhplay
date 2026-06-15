@@ -26,6 +26,12 @@ const {
   recordLocalStagesEdit,
   assertStagesEditAllowed,
 } = require('./gamestages-edit-permission');
+const { appendStageFeedbackLog, normalizeRequisitesForKey } = require('./utils/stage-feedback-log');
+const {
+  defaultPlaylevelPatchCode,
+  buildFeedbackTripletMap,
+  filterStagesByTestState,
+} = require('./stage-test-resolution');
 const { generateRunview } = require('./runview-generator');
 const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
 const GameVersionBanManager = require('./gameversion-banmanager');
@@ -2461,8 +2467,9 @@ function registerDatabaseHandlers(dbManager) {
              stage_filter_include_flags, stage_filter_exclude_flags,
              stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
              stage_filter_has_tags, stage_filter_exclude_tags,
-             game_filter_min_difficulty, game_filter_max_difficulty)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             game_filter_min_difficulty, game_filter_max_difficulty,
+             stage_filter_include_untested, stage_filter_untested_only)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         entryList.forEach((entry, idx) => {
@@ -2490,7 +2497,9 @@ function registerDatabaseHandlers(dbManager) {
             entry.stageFilterHasTags && Array.isArray(entry.stageFilterHasTags) ? JSON.stringify(entry.stageFilterHasTags) : null,
             entry.stageFilterExcludeTags && Array.isArray(entry.stageFilterExcludeTags) ? JSON.stringify(entry.stageFilterExcludeTags) : null,
             entry.gameFilterMinDifficulty !== undefined ? entry.gameFilterMinDifficulty : null,
-            entry.gameFilterMaxDifficulty !== undefined ? entry.gameFilterMaxDifficulty : null
+            entry.gameFilterMaxDifficulty !== undefined ? entry.gameFilterMaxDifficulty : null,
+            entry.stageFilterIncludeUntested ? 1 : 0,
+            entry.stageFilterUntestedOnly === true || entry.stageFilterUntestedOnly === 1 ? 1 : 0
           );
         });
       });
@@ -4092,7 +4101,9 @@ function registerDatabaseHandlers(dbManager) {
     stageIncludeAnyOfFlags,
     stageExcludeOnlyFlags,
     stageHasTags,
-    stageExcludeTags
+    stageExcludeTags,
+    stageIncludeUntested,
+    stageUntestedOnly,
   }) => {
     try {
       console.log('[count-random-stage-matches] Called with params:', {
@@ -4265,6 +4276,22 @@ function registerDatabaseHandlers(dbManager) {
           return !stageExcludeTags.some(excludedTag => stageTags.includes(excludedTag));
         });
       }
+
+      const clientdataDb = dbManager.getConnection('clientdata');
+      const gameidsForFeedback = [...new Set(filteredStages.map((s) => s.gameid))];
+      let feedbackMap = new Map();
+      if (gameidsForFeedback.length > 0) {
+        const placeholdersFb = gameidsForFeedback.map(() => '?').join(',');
+        const feedbackRows = clientdataDb.prepare(`
+          SELECT * FROM stage_feedback WHERE gameid IN (${placeholdersFb})
+        `).all(...gameidsForFeedback);
+        feedbackMap = buildFeedbackTripletMap(feedbackRows);
+      }
+
+      filteredStages = filterStagesByTestState(filteredStages, feedbackMap, {
+        includeUntestedStages: stageIncludeUntested === true || stageIncludeUntested === 1,
+        untestedStagesOnly: stageUntestedOnly === true || stageUntestedOnly === 1,
+      });
       
       console.log(`[count-random-stage-matches] Found ${filteredStages.length} matching stages`);
       return { success: true, count: filteredStages.length };
@@ -4416,6 +4443,8 @@ function registerDatabaseHandlers(dbManager) {
                   stageExcludeOnlyFlags: stageExcludeOnlyFlags,
                   stageHasTags: stageHasTags,
                   stageExcludeTags: stageExcludeTags,
+                  stageIncludeUntested: planEntry.stage_filter_include_untested === 1,
+                  stageUntestedOnly: planEntry.stage_filter_untested_only === 1,
                   excludeGameids: usedGameids,
                   excludeStageUuids: usedStageUuids,
                   globalPatchCodes: capturedGlobalPatchCodes  // Pass global patch codes for filtering
@@ -5261,7 +5290,11 @@ function registerDatabaseHandlers(dbManager) {
         playlevel_patch_code,
         extradescription,
         stagetags,
-        isDraftSubmission
+        isDraftSubmission,
+        test_status,
+        test_verified_levelnumber,
+        test_verified_playlevel_patch_code,
+        test_verified_requisites,
       } = params;
 
       if (!gameid || !levelname) {
@@ -5349,6 +5382,22 @@ function registerDatabaseHandlers(dbManager) {
       }
 
       if (stage_uuid) {
+        const existing = db.prepare('SELECT * FROM gamestages WHERE stage_uuid = ?').get(stage_uuid);
+
+        const { computeGamestageTestStatusFields } = require('./gamestages-test-status');
+        const testFields = computeGamestageTestStatusFields({
+          existing,
+          normalizedLevelnumber,
+          playlevel_patch_code,
+          requisites,
+          test_status,
+        });
+        const finalTestStatus = testFields.test_status;
+        const finalTestStatusAt = testFields.test_status_at;
+        const finalVerifiedLevel = testFields.test_verified_levelnumber;
+        const finalVerifiedPlaylevel = testFields.test_verified_playlevel_patch_code;
+        const finalVerifiedRequisites = testFields.test_verified_requisites;
+
         // Update existing stage
         const stmt = db.prepare(`
           UPDATE gamestages SET
@@ -5379,7 +5428,12 @@ function registerDatabaseHandlers(dbManager) {
             lock = ?,
             playlevel_patch_code = ?,
             extradescription = ?,
-	    stagetags = ?,
+            stagetags = ?,
+            test_status = ?,
+            test_status_at = ?,
+            test_verified_levelnumber = ?,
+            test_verified_playlevel_patch_code = ?,
+            test_verified_requisites = ?,
             updated_at = CURRENT_TIMESTAMP
           WHERE stage_uuid = ?
         `);
@@ -5413,6 +5467,11 @@ function registerDatabaseHandlers(dbManager) {
           playlevel_patch_code || null,
           extradescription || null,
           stagetags || null,
+          finalTestStatus,
+          finalTestStatusAt,
+          finalVerifiedLevel,
+          finalVerifiedPlaylevel,
+          finalVerifiedRequisites,
           stage_uuid
         );
       } else {
@@ -7947,15 +8006,16 @@ function registerDatabaseHandlers(dbManager) {
    * Get stage feedback for a specific gameid and levelnumber
    * Channel: db:stage:get-feedback
    */
-  ipcMain.handle('db:stage:get-feedback', async (event, { gameid, levelnumber }) => {
+  ipcMain.handle('db:stage:get-feedback', async (event, { gameid, levelnumber, playlevel_patchcode }) => {
     try {
       const db = dbManager.getConnection('clientdata');
+      const resolvedPlaylevel = defaultPlaylevelPatchCode(playlevel_patchcode);
       
       const feedback = db.prepare(`
         SELECT * FROM stage_feedback
-        WHERE gameid = ? AND levelnumber = ?
+        WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ?
         LIMIT 1
-      `).get(gameid, levelnumber);
+      `).get(gameid, levelnumber, resolvedPlaylevel);
       
       return feedback || null;
     } catch (error) {
@@ -7979,21 +8039,26 @@ function registerDatabaseHandlers(dbManager) {
     flag_values,
     global_conditions,
     applied_patches,
-    playlevel_patchcode
+    playlevel_patchcode,
+    feedback_source,
+    test_result,
+    tag_feedback,
+    stage_uuid,
   }) => {
     try {
       const db = dbManager.getConnection('clientdata');
+      const rhdataDb = dbManager.getConnection('rhdata');
+      const resolvedPlaylevel = defaultPlaylevelPatchCode(playlevel_patchcode);
       
-      // Check if feedback already exists
+      // Check if feedback already exists for triplet
       const existing = db.prepare(`
         SELECT feedback_uuid FROM stage_feedback
-        WHERE gameid = ? AND levelnumber = ?
-      `).get(gameid, levelnumber);
+        WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ?
+      `).get(gameid, levelnumber, resolvedPlaylevel);
       
       const feedbackUuid = existing?.feedback_uuid || crypto.randomUUID();
       
       if (existing) {
-        // Update existing feedback
         db.prepare(`
           UPDATE stage_feedback
           SET translevel = ?,
@@ -8005,6 +8070,10 @@ function registerDatabaseHandlers(dbManager) {
               global_conditions = ?,
               applied_patches = ?,
               playlevel_patchcode = ?,
+              feedback_source = ?,
+              test_result = ?,
+              tag_feedback = ?,
+              stage_uuid = ?,
               updated_at = strftime('%s', 'now')
           WHERE feedback_uuid = ?
         `).run(
@@ -8016,18 +8085,22 @@ function registerDatabaseHandlers(dbManager) {
           flag_values || null,
           global_conditions || null,
           applied_patches || null,
-          playlevel_patchcode || null,
+          resolvedPlaylevel,
+          feedback_source || null,
+          test_result || null,
+          tag_feedback || null,
+          stage_uuid || null,
           feedbackUuid
         );
       } else {
-        // Insert new feedback
         db.prepare(`
           INSERT INTO stage_feedback
             (feedback_uuid, gameid, levelnumber, translevel, levelname,
              difficulty_feedback, comment, current_difficulty, flag_values,
              global_conditions, applied_patches, playlevel_patchcode,
+             feedback_source, test_result, tag_feedback, stage_uuid,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
         `).run(
           feedbackUuid,
           gameid,
@@ -8040,11 +8113,37 @@ function registerDatabaseHandlers(dbManager) {
           flag_values || null,
           global_conditions || null,
           applied_patches || null,
-          playlevel_patchcode || null
+          resolvedPlaylevel,
+          feedback_source || null,
+          test_result || null,
+          tag_feedback || null,
+          stage_uuid || null
         );
       }
+
+      const feedbackRow = db.prepare(`
+        SELECT * FROM stage_feedback WHERE feedback_uuid = ?
+      `).get(feedbackUuid);
+
+      let gamestageRow = null;
+      try {
+        gamestageRow = rhdataDb.prepare(`
+          SELECT * FROM gamestages WHERE gameid = ? AND levelnumber = ? LIMIT 1
+        `).get(gameid, levelnumber);
+      } catch { /* ignore */ }
+
+      try {
+        const { app } = require('electron');
+        appendStageFeedbackLog({
+          userDataPath: app.getPath('userData'),
+          feedbackRow,
+          gamestageRow,
+        });
+      } catch (logErr) {
+        console.warn('[db:stage:save-feedback] JSONL log append failed:', logErr.message);
+      }
       
-      return { success: true };
+      return { success: true, feedback_uuid: feedbackUuid };
     } catch (error) {
       console.error('Error saving stage feedback:', error);
       return { success: false, error: error.message };

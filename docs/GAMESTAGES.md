@@ -65,6 +65,21 @@ Kaizo beginner is 3, w/simple tutorial levels at 2. 5 is Master; 6 is Grandmaste
 - extradescription=Text Human-readable extra notes about the level
 - water=1 or 0 (Is a water level)
 
+TEST STATUS (Stage Test dialog, Edit mode)
+-------------------------------------------
+- test_status=`accept` or `reject` when a level passes or fails stage testing; NULL if untested or "No Action"
+- test_status_at=Unix timestamp when test_status was last set
+- test_verified_levelnumber, test_verified_playlevel_patch_code, test_verified_requisites=snapshots of patch config at test time; used to invalidate status when levelnumber, playlevel patch, or requisites change
+
+In the Game Stages table (Edit mode), the Lev# column shows a green checkmark when `test_status=accept` and snapshots still match the current row, or a red X for `reject` under the same conditions. View/select mode does not show these icons.
+
+Stage feedback (`clientdata.stage_feedback`) also records `feedback_source` (`prepare_run` or `stage_test`), optional `test_result`, `tag_feedback` JSON, and `stage_uuid`. Rows are unique per `(gameid, levelnumber, playlevel_patchcode)` triplet; newer feedback supersedes older rows for the same triplet. User `test_result` in `stage_feedback` overrides `gamestages.test_status` for random-stage filtering on that triplet. Each feedback save appends a JSON line to `{userData}/stage_feedback.txt`.
+
+Random stage selection (Prepare Run → Stage Limits):
+- **Include untested stages** (default off): post-2026-06-13 stages without test status may appear when checked.
+- **Untested stages only**: restrict pool to untested stages.
+- Stages with `test_status=reject` or user feedback `reject` on the triplet are always excluded.
+- Pre-2026-06-13 stages with `playable=1` and difficulty 2–7 are treated as passed without explicit test status.
 
 
 

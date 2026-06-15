@@ -2165,4 +2165,78 @@ Optional verbose output:
 
 ---
 
+## rhdata_069_gamestages_test_status
+
+### Date Added
+June 14, 2026
+
+### Purpose
+Track Stage Test accept/reject status on `gamestages` with patch-configuration snapshots.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db
+```
+
+### Expected Outcome
+- `gamestages` rows gain `test_status`, `test_status_at`, and `test_verified_*` columns.
+- Test status clears when levelnumber, playlevel patch code, or requisites change on save.
+
+---
+
+## clientdata_068_stage_feedback_triplet_key
+
+### Date Added
+June 14, 2026
+
+### Purpose
+Key `stage_feedback` by `(gameid, levelnumber, playlevel_patchcode)` so feedback for different level selectors does not collide.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `stage_feedback` rows are unique per triplet; null `playlevel_patchcode` backfilled to `2lvno`.
+
+---
+
+## clientdata_069_run_plan_untested_filters
+
+### Date Added
+June 14, 2026
+
+### Purpose
+Persist untested-stage filter options on random stage run plan entries.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `run_plan_entries` gains `stage_filter_include_untested` (default 0) and `stage_filter_untested_only` (default 0).
+
+---
+
+## clientdata_067_stage_feedback_test_fields
+
+### Date Added
+June 14, 2026
+
+### Purpose
+Extend `stage_feedback` for Stage Test dialog and unified Prepare Run feedback fields.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `stage_feedback` gains `feedback_source`, `test_result`, `tag_feedback`, `stage_uuid`.
+- All feedback saves append a JSON line to `{userData}/stage_feedback.txt`.
+
+---
+
 

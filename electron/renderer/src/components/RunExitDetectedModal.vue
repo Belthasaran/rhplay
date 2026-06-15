@@ -33,27 +33,37 @@
         </div>
 
         <div v-else-if="showStageFeedback" class="run-exit-feedback">
+          <div v-if="showDifficultyTiles" class="run-exit-difficulty-section">
+            <label class="run-exit-difficulty-label">Stage difficulty (optional)</label>
+            <StageDifficultyGrid v-model="selectedDifficulty" compact />
+          </div>
+
           <h4>I won</h4>
           <div class="run-exit-button-row">
-            <button class="btn-action" @click="emitChoice('win', null, '')">I won: No comment</button>
-            <button class="btn-action" @click="emitChoice('win', null, 'No gameplay')">No gameplay</button>
-            <button class="btn-action" @click="emitChoice('win', 0, 'Too Easy')">Too Easy</button>
-            <button class="btn-action" @click="emitChoice('win', 3, 'Vanilla')">Vanilla</button>
-            <button class="btn-action" @click="emitChoice('win', 8, 'Crash')">Crash</button>
-            <button class="btn-action" @click="emitChoice('win', 8, 'Not Working')">Not Working</button>
-            <button class="btn-action" @click="emitChoice('win', 10, 'Invalid/Test')">Invalid/Test</button>
+            <button
+              v-for="btn in wonButtons"
+              :key="btn.key"
+              type="button"
+              class="run-exit-feedback-btn"
+              :class="toneClass(btn.tone)"
+              @click="emitPresetChoice(btn)"
+            >
+              {{ btn.label }}
+            </button>
           </div>
 
           <h4>I Skipped it / I lost</h4>
           <div class="run-exit-button-row">
-            <button class="btn-action" @click="emitChoice('skip', null, '')">Skipped</button>
-            <button class="btn-action" @click="emitChoice('skip', null, 'No gameplay')">No gameplay</button>
-            <button class="btn-action" @click="emitChoice('skip', 3, 'Vanilla')">Vanilla</button>
-            <button class="btn-action" @click="emitChoice('skip', 8, 'Crash')">Crash</button>
-            <button class="btn-action" @click="emitChoice('skip', 8, 'Not working')">Not working</button>
-            <button class="btn-action" @click="emitChoice('skip', 10, 'Invalid/Test Level')">Invalid/Test Level</button>
-            <button class="btn-action" @click="emitChoice('skip', 7, 'Too Hard')">Too Hard</button>
-            <button class="btn-action" @click="emitChoice('skip', 10, 'Unwinnable')">Unwinnable</button>
+            <button
+              v-for="btn in lostButtons"
+              :key="btn.key"
+              type="button"
+              class="run-exit-feedback-btn"
+              :class="toneClass(btn.tone)"
+              @click="emitPresetChoice(btn)"
+            >
+              {{ btn.label }}
+            </button>
           </div>
         </div>
 
@@ -69,11 +79,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import StageDifficultyGrid from '@/components/StageDifficultyGrid.vue';
 import StageFeedbackForm, {
   type StageFeedbackFormStage,
   type StageFeedbackFormValue,
 } from '@/components/StageFeedbackForm.vue';
+
+type FeedbackTone = 'pass' | 'fail' | 'minor';
+type TestResult = 'no_action' | 'reject' | 'accept';
+
+interface PresetButton {
+  key: string;
+  label: string;
+  outcome: 'win' | 'skip';
+  difficulty: number | null;
+  comment: string;
+  tone: FeedbackTone;
+  test_result: TestResult;
+}
 
 const props = defineProps<{
   visible: boolean;
@@ -87,6 +111,7 @@ const props = defineProps<{
   stageDifficultyLabel?: string;
   showStageFeedback?: boolean;
   showFullFeedbackForm?: boolean;
+  showDifficultyTiles?: boolean;
   initialStage?: StageFeedbackFormStage | null;
   initialFeedbackValue?: Partial<StageFeedbackFormValue> | null;
 }>();
@@ -96,12 +121,60 @@ const emit = defineEmits<{
     outcome: 'win' | 'skip';
     difficultyFeedback: number | null;
     comment: string;
-    test_result?: 'no_action' | 'reject' | 'accept' | null;
+    test_result?: TestResult | null;
     tag_feedback?: string | null;
   }): void;
 }>();
 
 const feedbackFormRef = ref<InstanceType<typeof StageFeedbackForm> | null>(null);
+const selectedDifficulty = ref<number | null>(null);
+
+const wonButtons: PresetButton[] = [
+  { key: 'won-good', label: 'I won (Good)', outcome: 'win', difficulty: null, comment: '', tone: 'pass', test_result: 'accept' },
+  { key: 'won-no-gameplay', label: 'No gameplay (Fail)', outcome: 'win', difficulty: null, comment: 'No gameplay', tone: 'fail', test_result: 'reject' },
+  { key: 'won-too-easy', label: 'Too Easy (Small Problems)', outcome: 'win', difficulty: 0, comment: 'Too Easy', tone: 'minor', test_result: 'no_action' },
+  { key: 'won-vanilla', label: 'Vanilla (Fail)', outcome: 'win', difficulty: 3, comment: 'Vanilla', tone: 'fail', test_result: 'reject' },
+  { key: 'won-crash', label: 'Crash (Fail)', outcome: 'win', difficulty: 8, comment: 'Crash', tone: 'fail', test_result: 'reject' },
+  { key: 'won-not-working', label: 'Not Working (Fail)', outcome: 'win', difficulty: 8, comment: 'Not Working', tone: 'fail', test_result: 'reject' },
+  { key: 'won-invalid', label: 'Invalid / Unintended Level (Fail)', outcome: 'win', difficulty: 10, comment: 'Invalid/Test', tone: 'fail', test_result: 'reject' },
+];
+
+const lostButtons: PresetButton[] = [
+  { key: 'lost-skipped', label: 'Skipped (Small Problems)', outcome: 'skip', difficulty: null, comment: 'Skipped', tone: 'minor', test_result: 'no_action' },
+  { key: 'lost-no-gameplay', label: 'No gameplay (Fail)', outcome: 'skip', difficulty: null, comment: 'No gameplay', tone: 'fail', test_result: 'reject' },
+  { key: 'lost-vanilla', label: 'Vanilla (Fail)', outcome: 'skip', difficulty: 3, comment: 'Vanilla', tone: 'fail', test_result: 'reject' },
+  { key: 'lost-crash', label: 'Crash (Fail)', outcome: 'skip', difficulty: 8, comment: 'Crash', tone: 'fail', test_result: 'reject' },
+  { key: 'lost-not-working', label: 'Not Working (Fail)', outcome: 'skip', difficulty: 8, comment: 'Not Working', tone: 'fail', test_result: 'reject' },
+  { key: 'lost-invalid', label: 'Invalid / Unintended Level (Fail)', outcome: 'skip', difficulty: 10, comment: 'Invalid/Test Level', tone: 'fail', test_result: 'reject' },
+  { key: 'lost-too-hard', label: 'Too Hard (Small Problems)', outcome: 'skip', difficulty: 7, comment: 'Too Hard', tone: 'minor', test_result: 'no_action' },
+  { key: 'lost-unwinnable', label: 'Unwinnable (Fail)', outcome: 'skip', difficulty: 10, comment: 'Unwinnable', tone: 'fail', test_result: 'reject' },
+];
+
+watch(() => props.visible, (visible) => {
+  if (visible) {
+    selectedDifficulty.value = props.initialFeedbackValue?.difficulty_feedback ?? null;
+  }
+});
+
+function toneClass(tone: FeedbackTone): string {
+  if (tone === 'pass') return 'run-exit-btn-pass';
+  if (tone === 'fail') return 'run-exit-btn-fail';
+  return 'run-exit-btn-minor';
+}
+
+function resolveDifficulty(preset: number | null): number | null {
+  if (preset !== null) return preset;
+  return selectedDifficulty.value;
+}
+
+function emitPresetChoice(btn: PresetButton) {
+  emit('choice', {
+    outcome: btn.outcome,
+    difficultyFeedback: resolveDifficulty(btn.difficulty),
+    comment: btn.comment,
+    test_result: btn.test_result,
+  });
+}
 
 function emitChoice(outcome: 'win' | 'skip', difficultyFeedback: number | null, comment: string) {
   emit('choice', { outcome, difficultyFeedback, comment });
@@ -141,10 +214,51 @@ function emitFullChoice(outcome: 'win' | 'skip') {
   margin: 16px 0 8px;
 }
 
+.run-exit-difficulty-section {
+  margin-bottom: 12px;
+}
+
+.run-exit-difficulty-label {
+  display: block;
+  font-size: 0.85em;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
 .run-exit-button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.run-exit-feedback-btn {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.9em;
+  line-height: 1.25;
+  cursor: pointer;
+  color: #fff;
+  min-height: 32px;
+}
+
+.run-exit-feedback-btn:hover {
+  filter: brightness(1.08);
+}
+
+.run-exit-btn-pass {
+  background: #2e7d32;
+  border-color: #1b5e20;
+}
+
+.run-exit-btn-fail {
+  background: #c62828;
+  border-color: #b71c1c;
+}
+
+.run-exit-btn-minor {
+  background: #ef6c00;
+  border-color: #e65100;
 }
 
 .run-exit-outcome-row {

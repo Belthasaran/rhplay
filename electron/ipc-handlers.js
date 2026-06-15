@@ -4305,9 +4305,23 @@ function registerDatabaseHandlers(dbManager) {
    * Expand run plan and prepare for staging (select & reveal all random games)
    * Channel: db:runs:expand-and-prepare
    */
-  ipcMain.handle('db:runs:expand-and-prepare', async (event, { runUuid }) => {
+  ipcMain.handle('db:runs:expand-and-prepare', async (event, { runUuid, skipIfResultsExist }) => {
     try {
       const db = dbManager.getConnection('clientdata');
+
+      const planEntries = db.prepare(`
+        SELECT * FROM run_plan_entries WHERE run_uuid = ? ORDER BY sequence_number
+      `).all(runUuid);
+
+      if (skipIfResultsExist) {
+        const existingCount = db.prepare(`
+          SELECT COUNT(*) as count FROM run_results WHERE run_uuid = ?
+        `).get(runUuid)?.count || 0;
+        if (seedManager.shouldSkipExpandIfResultsExist(planEntries, existingCount)) {
+          console.log(`[expand-and-prepare] Skipping expansion: ${existingCount} results already match plan`);
+          return { success: true, skipped: true };
+        }
+      }
       
       // Get run to retrieve global patch codes for filtering
       const run = db.prepare(`
@@ -6456,6 +6470,56 @@ function registerDatabaseHandlers(dbManager) {
       return result;
     } catch (error) {
       console.error('Error importing run:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Clone a completed/cancelled run for Run Again
+   * Channel: db:runs:run-again
+   */
+  ipcMain.handle('db:runs:run-again', async (event, { sourceRunUuid, mode }) => {
+    try {
+      return seedManager.runAgainFromPastRun(dbManager, sourceRunUuid, mode);
+    } catch (error) {
+      console.error('Error in run again:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update a preparing run's name and global config (Run Again save path)
+   * Channel: db:runs:update-preparing
+   */
+  ipcMain.handle('db:runs:update-preparing', async (event, { runUuid, runName, globalConditions, globalPatchCodes }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const run = db.prepare(`SELECT status FROM runs WHERE run_uuid = ?`).get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+      if (run.status !== 'preparing') {
+        return { success: false, error: `Run is not in preparing status (status: ${run.status})` };
+      }
+      const configJson = {
+        globalPatchCodes: globalPatchCodes || [],
+      };
+      db.prepare(`
+        UPDATE runs
+        SET run_name = ?,
+            global_conditions = ?,
+            config_json = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE run_uuid = ?
+      `).run(
+        runName,
+        JSON.stringify(globalConditions || []),
+        JSON.stringify(configJson),
+        runUuid
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating preparing run:', error);
       return { success: false, error: error.message };
     }
   });

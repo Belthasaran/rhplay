@@ -223,6 +223,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   createRun: (runName, runDescription, globalConditions, globalPatchCodes) => 
     ipcRenderer.invoke('db:runs:create', { runName, runDescription, globalConditions, globalPatchCodes }),
+
+  /**
+   * Update a preparing run name and global config
+   */
+  updateRunPreparing: (params) => ipcRenderer.invoke('db:runs:update-preparing', params),
   
   /**
    * Save run plan entries
@@ -619,6 +624,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, runUuid?: string, warnings?: Array}>}
    */
   importRun: (importData) => ipcRenderer.invoke('db:runs:import', { importData }),
+
+  /**
+   * Clone a completed/cancelled run for Run Again
+   */
+  runAgainFromPastRun: (params) => ipcRenderer.invoke('db:runs:run-again', params),
   
   /**
    * Access to ipcRenderer for event listeners

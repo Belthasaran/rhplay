@@ -9084,6 +9084,29 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           <div v-if="selectedPastRunUuid && selectedPastRun" class="past-runs-inspector">
             <h4>Run Details</h4>
             <div class="inspector-content">
+              <div class="past-run-inspector-actions">
+                <button
+                  v-if="canRunAgainPastRun"
+                  @click="runAgainFromPastRun"
+                  class="btn-primary"
+                >
+                  Run Again
+                </button>
+                <button
+                  v-if="canLoadPastRun"
+                  @click="loadPastRun"
+                  class="btn-primary"
+                >
+                  Load
+                </button>
+                <button
+                  v-if="canExportPastRun"
+                  @click="exportPastRunToFile(selectedPastRunUuid)"
+                  class="btn-secondary"
+                >
+                  Export
+                </button>
+              </div>
               <div class="detail-row">
                 <label>Run Name:</label>
                 <span>{{ selectedPastRun.run_name }}</span>
@@ -9465,6 +9488,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     @cancel="handleAlertCancel"
   />
   
+  <RunAgainRandomChoiceModal
+    :visible="runAgainRandomChoiceOpen"
+    @cancel="handleRunAgainRandomChoice('cancel')"
+    @reseed="handleRunAgainRandomChoice('reseed')"
+    @keep="handleRunAgainRandomChoice('keep')"
+  />
+
   <ConfirmDialog
     :visible="confirmDialogVisible"
     :title="confirmDialogTitle"
@@ -9720,6 +9750,7 @@ import {
   type StageFeedbackRow,
 } from './utils/stage-test-utils';
 import RunExitDetectedModal from './components/RunExitDetectedModal.vue';
+import RunAgainRandomChoiceModal from './components/RunAgainRandomChoiceModal.vue';
 import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
@@ -23478,6 +23509,21 @@ const selectedPastRun = computed(() => {
 const selectedPastRunResults = ref<any[]>([]);
 const selectedPastRunPlanEntries = ref<any[]>([]);
 
+const canExportPastRun = computed(() => {
+  return !!selectedPastRunUuid.value && selectedPastRunPlanEntries.value.length > 0;
+});
+
+const canRunAgainPastRun = computed(() => {
+  if (!selectedPastRun.value) return false;
+  const status = selectedPastRun.value.status;
+  return (status === 'completed' || status === 'cancelled') && selectedPastRunPlanEntries.value.length > 0;
+});
+
+const canLoadPastRun = computed(() => {
+  if (!selectedPastRun.value) return false;
+  return selectedPastRun.value.status === 'preparing' && selectedPastRunPlanEntries.value.length > 0;
+});
+
 // Staging progress modal
 const stagingProgressModalOpen = ref(false);
 const stagingProgressCurrent = ref(0);
@@ -23529,6 +23575,9 @@ const runLaunchMonitor = createLaunchSessionMonitor(() => (window as any).electr
 const runExitDetectedModalOpen = ref(false);
 const runLaunchSessionId = ref<string | null>(null);
 const runLaunchMonitorActive = ref(false);
+const runAgainRandomChoiceOpen = ref(false);
+const runAgainSkipExpand = ref(false);
+let runAgainChoiceResolve: ((value: 'reseed' | 'keep' | null) => void) | null = null;
 
 function stagedGameToTileItem(game: any) {
   if (!game) return null;
@@ -25023,26 +25072,43 @@ async function saveRunToDatabase() {
     const plainGlobalConditions = JSON.parse(JSON.stringify(globalRunConditions.value));
     const plainGlobalPatchCodes = JSON.parse(JSON.stringify(globalRunPatchCodes.value));
     const plainRunEntries = JSON.parse(JSON.stringify(runEntries));
-    
-    // Create run in database (include both legacy conditions and patch codes)
-    const result = await (window as any).electronAPI.createRun(
-      runName,
-      '',  // runDescription
-      plainGlobalConditions,
-      plainGlobalPatchCodes  // Pass patch codes as separate parameter
-    );
-    
-    if (!result.success) {
-      await showAlert('Failed to create run: ' + result.error, 'Create Failed');
-      return;
+
+    let targetRunUuid = currentRunUuid.value;
+    if (targetRunUuid) {
+      const updateResult = await (window as any).electronAPI.updateRunPreparing({
+        runUuid: targetRunUuid,
+        runName,
+        globalConditions: plainGlobalConditions,
+        globalPatchCodes: plainGlobalPatchCodes,
+      });
+      if (!updateResult.success) {
+        await showAlert('Failed to update run: ' + updateResult.error, 'Update Failed');
+        return;
+      }
+    } else {
+      // Create run in database (include both legacy conditions and patch codes)
+      const result = await (window as any).electronAPI.createRun(
+        runName,
+        '',  // runDescription
+        plainGlobalConditions,
+        plainGlobalPatchCodes  // Pass patch codes as separate parameter
+      );
+
+      if (!result.success) {
+        await showAlert('Failed to create run: ' + result.error, 'Create Failed');
+        return;
+      }
+      targetRunUuid = result.runUuid;
+      currentRunUuid.value = result.runUuid;
+      currentRunStatus.value = 'preparing';
     }
     
     // CRITICAL: Load win rules from database before saving run plan
     // This ensures we always have the latest win rules, even if currentWinRulesJson.value is null
     let winRulesToSave = currentWinRulesJson.value;
-    if (result.runUuid) {
+    if (targetRunUuid) {
       try {
-        const run = await (window as any).electronAPI.getRun({ runUuid: result.runUuid });
+        const run = await (window as any).electronAPI.getRun({ runUuid: targetRunUuid });
         if (run && run.win_rules_json) {
           winRulesToSave = run.win_rules_json;
           currentWinRulesJson.value = run.win_rules_json;
@@ -25062,7 +25128,7 @@ async function saveRunToDatabase() {
     // Save run plan (ALWAYS include win rules - either from DB or from currentWinRulesJson)
     console.log('[saveRun] Saving run plan with win rules:', winRulesToSave);
     const planResult = await (window as any).electronAPI.saveRunPlan(
-      result.runUuid,
+      targetRunUuid,
       plainRunEntries,
       winRulesToSave || null  // Include win rules if set
     );
@@ -25072,12 +25138,10 @@ async function saveRunToDatabase() {
       return;
     }
     
-    currentRunUuid.value = result.runUuid;
-    currentRunStatus.value = 'preparing';
-    console.log('Run saved with UUID:', result.runUuid);
+    console.log('Run saved with UUID:', targetRunUuid);
     
     // Now stage the run (generate SFC files)
-    await stageRunGames(result.runUuid, runName);
+    await stageRunGames(targetRunUuid, runName);
     
   } catch (error: any) {
     console.error('Error saving run:', error);
@@ -25094,7 +25158,11 @@ async function stageRunGames(runUuid: string, runName: string) {
     stagingProgressGameName.value = 'Expanding run plan...';
     
     // Step 1: Expand plan and select all random games
-    const expandResult = await (window as any).electronAPI.expandAndStageRun({ runUuid });
+    const expandResult = await (window as any).electronAPI.expandAndStageRun({
+      runUuid,
+      skipIfResultsExist: runAgainSkipExpand.value,
+    });
+    runAgainSkipExpand.value = false;
     
     if (!expandResult.success) {
       stagingProgressModalOpen.value = false;
@@ -25422,147 +25490,19 @@ async function loadRestoreRun() {
   if (!canLoadRestoreRun.value || !isElectronAvailable()) {
     return;
   }
-  
-  const preparingRunUuid = checkedPastRuns.value.find(runUuid => {
-    const run = pastRuns.value.find(r => r.run_uuid === runUuid);
+
+  const preparingRunUuid = checkedPastRuns.value.find((runUuid) => {
+    const run = pastRuns.value.find((r) => r.run_uuid === runUuid);
     return run && run.status === 'preparing';
   });
-  
+
   if (!preparingRunUuid) {
     await showAlert('Please select a run in "preparing" status to restore', 'Selection Required');
     return;
   }
-  
-  const run = pastRuns.value.find(r => r.run_uuid === preparingRunUuid);
-  if (!run) {
-    await showAlert('Run not found', 'Error');
-    return;
-  }
-  
+
   try {
-    // Confirm if there's a current run in progress
-    if (currentRunUuid.value && currentRunUuid.value !== preparingRunUuid) {
-      const confirmed = await showConfirm(
-        `You have a current run "${currentRunName.value}" in progress.\n\n` +
-        `Loading this run will replace it. Continue?`,
-        'Replace Current Run'
-      );
-      if (!confirmed) return;
-    }
-    
-    // Load run plan entries
-    const planEntries = await (window as any).electronAPI.getRunPlanEntries({
-      runUuid: preparingRunUuid
-    });
-    
-    if (!planEntries || planEntries.length === 0) {
-      await showAlert('No plan entries found for this run', 'No Plan Entries');
-      return;
-    }
-    
-    // Load global conditions and patch codes from run config
-    const runConfig = run.config_json ? JSON.parse(run.config_json) : {};
-    const globalConditions = runConfig.globalConditions || run.global_conditions ? JSON.parse(run.global_conditions) : [];
-    const globalPatchCodes = runConfig.globalPatchCodes || [];
-    
-    // Convert plan entries to runEntries format
-    const restoredEntries: any[] = planEntries.map((entry: any) => ({
-      key: entry.entry_uuid,
-      id: entry.gameid || (entry.entry_type?.startsWith('random') ? '(random)' : ''),
-      entryType: entry.entry_type || 'game',
-      name: entry.entry_type?.startsWith('random') 
-        ? (entry.entry_type === 'random_stage' ? 'Random Stage' : 'Random Game')
-        : '',
-      stageNumber: entry.exit_number || entry.levelnumber || '',
-      transLevel: entry.trans_level || '',
-      stageName: '',
-      count: entry.count || 1,
-      filterDifficulty: entry.filter_difficulty || '',
-      filterType: entry.filter_type || '',
-      filterPattern: entry.filter_pattern || '',
-      gameFilterMinDifficulty: entry.game_filter_min_difficulty !== null && entry.game_filter_min_difficulty !== undefined ? entry.game_filter_min_difficulty : null,
-      gameFilterMaxDifficulty: entry.game_filter_max_difficulty !== null && entry.game_filter_max_difficulty !== undefined ? entry.game_filter_max_difficulty : null,
-      stageFilterMinDifficulty: entry.stage_filter_min_difficulty,
-      stageFilterMaxDifficulty: entry.stage_filter_max_difficulty,
-      stageFilterIncludeFlags: entry.stage_filter_include_flags ? JSON.parse(entry.stage_filter_include_flags) : [],
-      stageFilterExcludeFlags: entry.stage_filter_exclude_flags ? JSON.parse(entry.stage_filter_exclude_flags) : [],
-      stageFilterIncludeAnyOfFlags: entry.stage_filter_include_any_of_flags ? JSON.parse(entry.stage_filter_include_any_of_flags) : [],
-      stageFilterExcludeOnlyFlags: entry.stage_filter_exclude_only_flags ? JSON.parse(entry.stage_filter_exclude_only_flags) : [],
-      stageFilterHasTags: entry.stage_filter_has_tags ? JSON.parse(entry.stage_filter_has_tags) : [],
-      stageFilterExcludeTags: entry.stage_filter_exclude_tags ? JSON.parse(entry.stage_filter_exclude_tags) : [],
-      stageFilterIncludeUntested: entry.stage_filter_include_untested === 1,
-      stageFilterUntestedOnly: entry.stage_filter_untested_only === 1,
-      seed: entry.filter_seed || '',
-      matchCount: null,  // Will be recalculated if needed
-      isLocked: false,
-      conditions: []
-    }));
-    
-    // Load expanded results if run was staged
-    const expandedResults = await (window as any).electronAPI.getRunResults({
-      runUuid: preparingRunUuid
-    });
-    
-    let restoredStagingFolderPath: string | null = null;
-    let restoredStagingSfcCount = 0;
-    
-    if (expandedResults && expandedResults.length > 0) {
-      // Run was staged - check if staging folder exists
-      const stagingInfo = await (window as any).electronAPI.getRunStagingInfo({
-        runUuid: preparingRunUuid
-      });
-      
-      if (stagingInfo && stagingInfo.success && stagingInfo.folderPath) {
-        // Check if folder exists
-        const folderExists = await (window as any).electronAPI.checkPathExists({ path: stagingInfo.folderPath });
-        if (folderExists) {
-          restoredStagingFolderPath = stagingInfo.folderPath;
-          restoredStagingSfcCount = stagingInfo.sfcCount || expandedResults.length;
-        }
-      }
-      
-      // Note: We keep the plan entries as-is (not expanded results) because
-      // the user should see the plan, not the expanded results, when restoring
-      // Expanded results are only used to check staging status
-    }
-    
-    // Restore run state
-    currentRunUuid.value = preparingRunUuid;
-    currentRunName.value = run.run_name;
-    currentRunStatus.value = 'preparing';
-    runEntries.splice(0, runEntries.length, ...restoredEntries);
-    globalRunConditions.value = globalConditions;
-    globalRunPatchCodes.value = globalPatchCodes;
-    skipUploadAcknowledged.value = false;
-    
-    // Restore staging info if available
-    if (restoredStagingFolderPath) {
-      stagingFolderPath.value = restoredStagingFolderPath;
-      stagingSfcCount.value = restoredStagingSfcCount;
-      expandedRunResults.value = expandedResults || [];
-      await refreshRunStagedSfcFilenames();
-    } else {
-      stagingFolderPath.value = '';
-      runStagedSfcFilenames.value = [];
-      stagingSfcCount.value = 0;
-      expandedRunResults.value = expandedResults || [];  // Still load results even if folder missing (for regenerate option)
-    }
-    
-    // Check if staging needs regeneration after restore
-    await checkNeedsRegenerateStaging();
-    
-    // Generate runview.html after restoring
-    try {
-      await (window as any).electronAPI.generateRunview({ runUuid: preparingRunUuid });
-    } catch (error) {
-      console.warn('[loadRestoreRun] Failed to generate runview:', error);
-    }
-    
-    // Close past runs modal and open run modal
-    closePastRunsModal();
-    runModalOpen.value = true;
-    
-    console.log(`Restored run "${run.run_name}" with ${restoredEntries.length} entries`);
+    await loadPastRunFromUuid(preparingRunUuid);
   } catch (error: any) {
     console.error('Error loading/restoring run:', error);
     await showAlert(`Error loading run: ${error.message || error}`, 'Load Error');
@@ -27493,6 +27433,270 @@ function editConditions(entry: RunEntry) {
 }
 
 // Past Runs Modal Functions
+
+function planEntryToRunEntry(entry: any) {
+  return {
+    key: entry.entry_uuid,
+    id: entry.gameid || (entry.entry_type?.startsWith('random') ? '(random)' : ''),
+    entryType: entry.entry_type || 'game',
+    name: entry.entry_type?.startsWith('random')
+      ? (entry.entry_type === 'random_stage' ? 'Random Stage' : 'Random Game')
+      : '',
+    stageNumber: entry.exit_number || entry.levelnumber || '',
+    transLevel: entry.trans_level || '',
+    stageName: '',
+    count: entry.count || 1,
+    filterDifficulty: entry.filter_difficulty || '',
+    filterType: entry.filter_type || '',
+    filterPattern: entry.filter_pattern || '',
+    gameFilterMinDifficulty: entry.game_filter_min_difficulty !== null && entry.game_filter_min_difficulty !== undefined ? entry.game_filter_min_difficulty : null,
+    gameFilterMaxDifficulty: entry.game_filter_max_difficulty !== null && entry.game_filter_max_difficulty !== undefined ? entry.game_filter_max_difficulty : null,
+    stageFilterMinDifficulty: entry.stage_filter_min_difficulty,
+    stageFilterMaxDifficulty: entry.stage_filter_max_difficulty,
+    stageFilterIncludeFlags: entry.stage_filter_include_flags ? JSON.parse(entry.stage_filter_include_flags) : [],
+    stageFilterExcludeFlags: entry.stage_filter_exclude_flags ? JSON.parse(entry.stage_filter_exclude_flags) : [],
+    stageFilterIncludeAnyOfFlags: entry.stage_filter_include_any_of_flags ? JSON.parse(entry.stage_filter_include_any_of_flags) : [],
+    stageFilterExcludeOnlyFlags: entry.stage_filter_exclude_only_flags ? JSON.parse(entry.stage_filter_exclude_only_flags) : [],
+    stageFilterHasTags: entry.stage_filter_has_tags ? JSON.parse(entry.stage_filter_has_tags) : [],
+    stageFilterExcludeTags: entry.stage_filter_exclude_tags ? JSON.parse(entry.stage_filter_exclude_tags) : [],
+    stageFilterIncludeUntested: entry.stage_filter_include_untested === 1,
+    stageFilterUntestedOnly: entry.stage_filter_untested_only === 1,
+    seed: entry.filter_seed || '',
+    matchCount: null as number | null,
+    isLocked: false,
+    conditions: [],
+  };
+}
+
+async function refreshRandomEntryMatchCounts() {
+  if (!isElectronAvailable()) return;
+  for (const entry of runEntries) {
+    if (entry.entryType === 'random_game') {
+      try {
+        const result = await (window as any).electronAPI.countRandomMatches({
+          filterType: entry.filterType || '',
+          filterDifficulty: entry.filterDifficulty || '',
+          filterPattern: entry.filterPattern || '',
+          minDifficulty: entry.gameFilterMinDifficulty,
+          maxDifficulty: entry.gameFilterMaxDifficulty,
+        });
+        if (result?.success !== false && result?.count !== undefined) {
+          entry.matchCount = result.count;
+        }
+      } catch (error) {
+        console.warn('[refreshRandomEntryMatchCounts] game count failed:', error);
+      }
+    } else if (entry.entryType === 'random_stage') {
+      try {
+        const result = await (window as any).electronAPI.countRandomStageMatches({
+          filterType: entry.filterType || '',
+          filterDifficulty: entry.filterDifficulty || '',
+          filterPattern: entry.filterPattern || '',
+          minDifficulty: entry.gameFilterMinDifficulty,
+          maxDifficulty: entry.gameFilterMaxDifficulty,
+          stageMinDifficulty: entry.stageFilterMinDifficulty,
+          stageMaxDifficulty: entry.stageFilterMaxDifficulty,
+          stageIncludeFlags: JSON.parse(JSON.stringify(entry.stageFilterIncludeFlags || [])),
+          stageExcludeFlags: JSON.parse(JSON.stringify(entry.stageFilterExcludeFlags || [])),
+          stageIncludeAnyOfFlags: JSON.parse(JSON.stringify(entry.stageFilterIncludeAnyOfFlags || [])),
+          stageExcludeOnlyFlags: JSON.parse(JSON.stringify(entry.stageFilterExcludeOnlyFlags || [])),
+          stageHasTags: JSON.parse(JSON.stringify(entry.stageFilterHasTags || [])),
+          stageExcludeTags: JSON.parse(JSON.stringify(entry.stageFilterExcludeTags || [])),
+          stageIncludeUntested: entry.stageFilterIncludeUntested,
+          stageUntestedOnly: entry.stageFilterUntestedOnly,
+        });
+        if (result?.success !== false && result?.count !== undefined) {
+          entry.matchCount = result.count;
+        }
+      } catch (error) {
+        console.warn('[refreshRandomEntryMatchCounts] stage count failed:', error);
+      }
+    }
+  }
+}
+
+async function confirmReplaceCurrentRunPlan(actionLabel: string): Promise<boolean> {
+  const hasUnsavedPlan = isRunActive.value
+    || runEntries.length > 0
+    || (!!currentRunUuid.value && currentRunStatus.value === 'preparing');
+  if (!hasUnsavedPlan) return true;
+  return await showConfirm(
+    `This will replace your current Prepare Run plan.\n\nAny unsaved work in Prepare Run will be discarded.\n\nContinue with ${actionLabel}?`,
+    'Replace Current Run',
+    'Continue',
+    'Cancel'
+  );
+}
+
+function showRunAgainRandomChoice(): Promise<'reseed' | 'keep' | null> {
+  return new Promise((resolve) => {
+    runAgainChoiceResolve = resolve;
+    runAgainRandomChoiceOpen.value = true;
+  });
+}
+
+function handleRunAgainRandomChoice(choice: 'reseed' | 'keep' | 'cancel') {
+  runAgainRandomChoiceOpen.value = false;
+  if (runAgainChoiceResolve) {
+    runAgainChoiceResolve(choice === 'cancel' ? null : choice);
+    runAgainChoiceResolve = null;
+  }
+}
+
+async function hydrateRunPlanFromDb(runUuid: string, run: any) {
+  const planEntries = await (window as any).electronAPI.getRunPlanEntries({ runUuid });
+  if (!planEntries || planEntries.length === 0) {
+    throw new Error('No plan entries found for this run');
+  }
+
+  const runConfig = run.config_json ? JSON.parse(run.config_json) : {};
+  const globalConditions = runConfig.globalConditions || (run.global_conditions ? JSON.parse(run.global_conditions) : []);
+  const globalPatchCodes = runConfig.globalPatchCodes || [];
+
+  const restoredEntries = planEntries.map((entry: any) => planEntryToRunEntry(entry));
+
+  const expandedResults = await (window as any).electronAPI.getRunResults({ runUuid });
+
+  let restoredStagingFolderPath: string | null = null;
+  let restoredStagingSfcCount = 0;
+
+  if (expandedResults && expandedResults.length > 0) {
+    const stagingInfo = await (window as any).electronAPI.getRunStagingInfo({ runUuid });
+    if (stagingInfo?.success && stagingInfo.folderPath) {
+      const folderExists = await (window as any).electronAPI.checkPathExists({ path: stagingInfo.folderPath });
+      if (folderExists) {
+        restoredStagingFolderPath = stagingInfo.folderPath;
+        restoredStagingSfcCount = stagingInfo.sfcCount || expandedResults.length;
+      }
+    }
+  }
+
+  return {
+    restoredEntries,
+    expandedResults: expandedResults || [],
+    globalConditions,
+    globalPatchCodes,
+    restoredStagingFolderPath,
+    restoredStagingSfcCount,
+  };
+}
+
+function applyHydratedRunPlan(
+  runUuid: string,
+  runName: string,
+  hydrated: Awaited<ReturnType<typeof hydrateRunPlanFromDb>>
+) {
+  currentRunUuid.value = runUuid;
+  currentRunName.value = runName;
+  currentRunStatus.value = 'preparing';
+  runEntries.splice(0, runEntries.length, ...hydrated.restoredEntries);
+  globalRunConditions.value = hydrated.globalConditions;
+  globalRunPatchCodes.value = hydrated.globalPatchCodes;
+  skipUploadAcknowledged.value = false;
+
+  if (hydrated.restoredStagingFolderPath) {
+    stagingFolderPath.value = hydrated.restoredStagingFolderPath;
+    stagingSfcCount.value = hydrated.restoredStagingSfcCount;
+    expandedRunResults.value = hydrated.expandedResults;
+  } else {
+    stagingFolderPath.value = '';
+    runStagedSfcFilenames.value = [];
+    stagingSfcCount.value = 0;
+    expandedRunResults.value = hydrated.expandedResults;
+  }
+}
+
+async function loadPastRunFromUuid(runUuid: string, options: { closePastRuns?: boolean } = {}) {
+  if (!isElectronAvailable()) return;
+
+  const run = await (window as any).electronAPI.getRun({ runUuid });
+  if (!run) {
+    await showAlert('Run not found', 'Error');
+    return;
+  }
+  if (run.status !== 'preparing') {
+    await showAlert('Load is only available for runs in preparing status', 'Load Failed');
+    return;
+  }
+
+  if (!(await confirmReplaceCurrentRunPlan('Load'))) return;
+
+  clearRunState();
+  const hydrated = await hydrateRunPlanFromDb(runUuid, run);
+  applyHydratedRunPlan(runUuid, run.run_name, hydrated);
+  await refreshRunStagedSfcFilenames();
+  await checkNeedsRegenerateStaging();
+
+  try {
+    await (window as any).electronAPI.generateRunview({ runUuid });
+  } catch (error) {
+    console.warn('[loadPastRunFromUuid] Failed to generate runview:', error);
+  }
+
+  if (options.closePastRuns !== false) {
+    closePastRunsModal();
+  }
+  runModalOpen.value = true;
+  await loadWinRules();
+}
+
+async function loadPastRun() {
+  if (!canLoadPastRun.value || !selectedPastRunUuid.value) return;
+  await loadPastRunFromUuid(selectedPastRunUuid.value);
+}
+
+async function runAgainFromPastRun() {
+  if (!canRunAgainPastRun.value || !selectedPastRunUuid.value || !selectedPastRun.value) return;
+  if (!isElectronAvailable()) {
+    await showAlert('Run Again requires Electron environment', 'Error');
+    return;
+  }
+
+  if (!(await confirmReplaceCurrentRunPlan('Run Again'))) return;
+
+  const hasRandomEntries = selectedPastRunPlanEntries.value.some(
+    (e: any) => e.entry_type === 'random_game' || e.entry_type === 'random_stage'
+  );
+
+  let mode: 'reseed' | 'keep' = 'reseed';
+  if (hasRandomEntries) {
+    const choice = await showRunAgainRandomChoice();
+    if (!choice) return;
+    mode = choice;
+  }
+
+  try {
+    const cloneResult = await (window as any).electronAPI.runAgainFromPastRun({
+      sourceRunUuid: selectedPastRunUuid.value,
+      mode,
+    });
+    if (!cloneResult.success) {
+      await showAlert('Failed to prepare run again: ' + cloneResult.error, 'Run Again Failed');
+      return;
+    }
+
+    runAgainSkipExpand.value = mode === 'keep';
+    clearRunState();
+
+    const newRun = await (window as any).electronAPI.getRun({ runUuid: cloneResult.runUuid });
+    const hydrated = await hydrateRunPlanFromDb(cloneResult.runUuid, newRun);
+    applyHydratedRunPlan(cloneResult.runUuid, '', hydrated);
+    currentWinRulesJson.value = newRun?.win_rules_json || null;
+
+    await refreshRandomEntryMatchCounts();
+
+    closePastRunsModal();
+    runModalOpen.value = true;
+    await loadWinRules();
+
+    await stageRun('save');
+  } catch (error: any) {
+    runAgainSkipExpand.value = false;
+    console.error('Error in Run Again:', error);
+    await showAlert(`Error in Run Again: ${error.message || error}`, 'Run Again Error');
+  }
+}
+
 async function openPastRunsModal() {
   try {
     pastRunsModalOpen.value = true;
@@ -32549,8 +32753,9 @@ async function setVersionSpecificRating() {
 }
 
 // Export/Import Run
-async function exportRunToFile() {
-  if (!currentRunUuid.value) {
+async function exportRunToFile(runUuid?: string | null) {
+  const targetUuid = runUuid || currentRunUuid.value;
+  if (!targetUuid) {
     await showAlert('No run to export. Please save the run first.', 'No Run');
     return;
   }
@@ -32559,9 +32764,21 @@ async function exportRunToFile() {
     await showAlert('Export requires Electron environment', 'Error');
     return;
   }
+
+  let exportName = currentRunName.value;
+  if (runUuid && selectedPastRun.value?.run_uuid === runUuid) {
+    exportName = selectedPastRun.value.run_name;
+  } else if (runUuid) {
+    try {
+      const run = await (window as any).electronAPI.getRun({ runUuid });
+      exportName = run?.run_name || 'run';
+    } catch {
+      exportName = 'run';
+    }
+  }
   
   try {
-    const result = await (window as any).electronAPI.exportRun(currentRunUuid.value);
+    const result = await (window as any).electronAPI.exportRun(targetUuid);
     
     if (result.success) {
       const exportJson = JSON.stringify(result.data, null, 2);
@@ -32569,7 +32786,7 @@ async function exportRunToFile() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `run-${currentRunName.value.replace(/[^a-z0-9]/gi, '_')}-${Date.now()}.json`;
+      a.download = `run-${(exportName || 'run').replace(/[^a-z0-9]/gi, '_')}-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       
@@ -36564,6 +36781,13 @@ button:disabled {
   display: flex;
   gap: 10px;
   margin-bottom: 15px;
+}
+
+.past-run-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .past-runs-content {

@@ -24508,6 +24508,7 @@ async function handleShareExport() {
 
 async function handleShareImport() {
   runShareDropdownOpen.value = false;
+  if (!(await confirmReplaceCurrentRunPlan('Import'))) return;
   await importRunFromFile();
 }
 function toggleCheckAllRun(e: Event) {
@@ -32985,39 +32986,63 @@ async function importRunFromFile() {
     await showAlert('Import requires Electron environment', 'Error');
     return;
   }
-  
+
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.json';
-  
+
   input.onchange = async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    
+
     try {
       const text = await file.text();
       const importData = JSON.parse(text);
-      
+
       const result = await (window as any).electronAPI.importRun(importData);
-      
-      if (result.success) {
-        let message = `Run imported successfully!`;
-        if (result.warnings && result.warnings.length > 0) {
-          message += `\n\nWarnings:\n${result.warnings.join('\n')}`;
-        }
-        await showAlert(message, 'Import Successful');
-        
-        // Close modal and reload (could load the imported run)
-        closeRunModal();
-      } else {
+
+      if (!result.success) {
         await showAlert('Failed to import run: ' + result.error, 'Import Failed');
+        return;
       }
+
+      clearRunState();
+
+      const importedRun = await (window as any).electronAPI.getRun({ runUuid: result.runUuid });
+      if (!importedRun) {
+        await showAlert('Imported run not found in database', 'Import Failed');
+        return;
+      }
+
+      const hydrated = await hydrateRunPlanFromDb(result.runUuid, importedRun);
+      applyHydratedRunPlan(result.runUuid, importedRun.run_name, hydrated);
+      currentWinRulesJson.value = importedRun.win_rules_json || null;
+
+      await refreshRandomEntryMatchCounts();
+      await refreshRunStagedSfcFilenames();
+      await checkNeedsRegenerateStaging();
+
+      try {
+        await (window as any).electronAPI.generateRunview({ runUuid: result.runUuid });
+      } catch (error) {
+        console.warn('[importRunFromFile] Failed to generate runview:', error);
+      }
+
+      await loadWinRules();
+      runModalOpen.value = true;
+
+      let toastMessage = 'Run imported into Prepare Run. Use Stage and Save, then Start Run.';
+      if (result.warnings && result.warnings.length > 0) {
+        toastMessage += ` (${result.warnings.length} warning${result.warnings.length === 1 ? '' : 's'})`;
+        console.warn('[importRunFromFile] Import warnings:', result.warnings);
+      }
+      showToastNotification(toastMessage, 'success', 5000);
     } catch (error) {
       console.error('Error importing run:', error);
       await showAlert('Error importing run: Invalid file or format', 'Import Error');
     }
   };
-  
+
   input.click();
 }
 

@@ -8,6 +8,7 @@
 - **Prepare Run export fix**: Export button no longer passes click event as run UUID (fixes SQL parameter error).
 - **Prepare Run UI**: Share dropdown (Export/Import), Reset button to clear saved plan/staging, removed redundant Check All/Uncheck All.
 - **Rename run**: Rename from Prep Status dropdown or Past Runs inspector; saves immediately to database.
+- **Prepare Run import**: Share > Import resets the dialog and loads the imported run for staging (dialog stays open).
 - **Stage Test dialog**: Replaced auto-closing Level Patch Test modal with persistent launch + feedback flow (`StageTestDialog.vue`); `gamestages.test_status` columns with Lev# checkmark/X in Edit mode; extended `stage_feedback` and JSONL backup log on save.
 - **JIT.LevelInfo**: Added `lib/jit-levels/levelinfo/` JS port of `lmlevelinfo` parse pipeline (`parseLevelInfo`, `mapLevelInfoToStageDefaults`, `deriveTagsFromLevelInfo`); parity with `level_info1 --json` on akogare `0x109`.
 

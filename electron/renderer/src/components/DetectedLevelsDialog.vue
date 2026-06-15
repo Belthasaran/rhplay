@@ -6,7 +6,9 @@
         <button class="close" @click="close">✕</button>
       </header>
       <section class="modal-body">
-        <div v-if="loading" class="loading-message">Loading detected levels...</div>
+        <div v-if="loading" class="loading-message">
+          {{ progressMessage || 'Loading detected levels...' }}
+        </div>
         
         <template v-else>
           <!-- Source Filters -->
@@ -26,15 +28,31 @@
                 <input type="checkbox" v-model="showSources.levelnames" /> Levelnames
               </label>
               <label>
+                <input type="checkbox" v-model="showSources.jitnames" /> JITNames
+              </label>
+              <label>
+                <input type="checkbox" v-model="showSources.jittrans" /> JIT.Trans
+              </label>
+              <label>
+                <input type="checkbox" v-model="showSources.jitlmfilter" /> JIT.LMFilter
+              </label>
+              <label>
+                <input type="checkbox" v-model="showSources.jitlevelinfo" /> JIT.LevelInfo
+              </label>
+              <label>
+                <input type="checkbox" v-model="showSources.jitscore" /> JIT.Score
+              </label>
+              <label>
                 <input type="checkbox" v-model="hideExisting" /> Hide Already Added
+              </label>
+              <label>
+                <input type="checkbox" v-model="showScoreColumns" /> Show Scores
               </label>
             </div>
             <div class="filter-control">
               <label for="min-source-count">Minimum sources:</label>
               <select id="min-source-count" v-model.number="minSourceCount" class="source-count-select">
-                <option :value="1">1</option>
-                <option :value="2">2</option>
-                <option :value="3">3</option>
+                <option v-for="n in 9" :key="n" :value="n">{{ n }}</option>
               </select>
             </div>
           </div>
@@ -59,6 +77,10 @@
                   <th>Sub</th>
                   <th>X</th>
                   <th>Y</th>
+                  <th>Tile</th>
+                  <th v-if="showScoreColumns">Orig</th>
+                  <th v-if="showScoreColumns">Int</th>
+                  <th v-if="showScoreColumns">Comp</th>
                   <th>Sources</th>
                 </tr>
               </thead>
@@ -85,6 +107,10 @@
                   <td class="monospace">{{ level.submapid || '-' }}</td>
                   <td class="monospace">{{ level.tile_x || '-' }}</td>
                   <td class="monospace">{{ level.tile_y || '-' }}</td>
+                  <td class="monospace">{{ level.tile_value || '-' }}</td>
+                  <td v-if="showScoreColumns" class="monospace">{{ level.scores?.originality ?? '-' }}</td>
+                  <td v-if="showScoreColumns" class="monospace">{{ level.scores?.internalSimilarity ?? '-' }}</td>
+                  <td v-if="showScoreColumns" class="monospace">{{ level.scores?.completeness ?? '-' }}</td>
                   <td class="sources-cell">
                     <span 
                       v-for="source in level.sources" 
@@ -97,7 +123,7 @@
                   </td>
                 </tr>
                 <tr v-if="filteredLevels.length === 0">
-                  <td :colspan="8" class="empty-message">No detected levels found</td>
+                  <td :colspan="showScoreColumns ? 12 : 9" class="empty-message">No detected levels found</td>
                 </tr>
               </tbody>
             </table>
@@ -119,7 +145,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUpdated, nextTick } from 'vue';
+import { ref, computed, watch, onUpdated, nextTick, onUnmounted } from 'vue';
+import { showAlert, showPrompt } from '@/utils/dialogs';
 
 interface Props {
   isOpen: boolean;
@@ -148,16 +175,40 @@ interface DetectedLevel {
   tile_value?: string | null;
   sources: string[];
   sourceCount: number;
+  scores?: {
+    originality?: number;
+    internalSimilarity?: number;
+    completeness?: number;
+  };
+  levelInfo?: any;
+  suggestedTags?: string[];
+  water?: number;
+  ghouse?: number;
+  spalace?: number;
+  castle?: number;
+  boss?: number;
+  mainexit?: number;
+  keyhole?: number;
+  credits?: number;
+  stagetags?: string;
+  difficulty?: number;
 }
 
 const loading = ref(false);
+const progressMessage = ref('');
 const detectedLevels = ref<DetectedLevel[]>([]);
 const selectedLevels = ref<Set<string>>(new Set());
+const showScoreColumns = ref(true);
 const showSources = ref({
   lmlevels: true,
   detect: true,
   trans: true,
   levelnames: true,
+  jitnames: true,
+  jittrans: true,
+  jitlmfilter: true,
+  jitlevelinfo: true,
+  jitscore: true,
 });
 const hideExisting = ref(true);
 const minSourceCount = ref<number>(1); // Minimum number of sources required (1, 2, or 3)
@@ -172,6 +223,11 @@ const filteredLevels = computed(() => {
       if (source === 'detect') return showSources.value.detect;
       if (source === 'trans') return showSources.value.trans;
       if (source === 'levelnames') return showSources.value.levelnames;
+      if (source === 'jitnames') return showSources.value.jitnames;
+      if (source === 'jittrans') return showSources.value.jittrans;
+      if (source === 'jitlmfilter') return showSources.value.jitlmfilter;
+      if (source === 'jitlevelinfo') return showSources.value.jitlevelinfo;
+      if (source === 'jitscore') return showSources.value.jitscore;
       return false;
     });
     
@@ -188,6 +244,11 @@ const filteredLevels = computed(() => {
     }
     
     return true;
+  }).sort((a, b) => {
+    const compA = a.scores?.completeness ?? 0;
+    const compB = b.scores?.completeness ?? 0;
+    if (compB !== compA) return compB - compA;
+    return b.sourceCount - a.sourceCount;
   });
 });
 
@@ -218,35 +279,85 @@ function toggleSelectAll(event: Event) {
   }
 }
 
-async function loadDetectedLevels() {
+async function loadDetectedLevels(runCalisto = false) {
   if (!props.isOpen || !props.gameId) return;
-  
+
   loading.value = true;
+  progressMessage.value = 'Building ROM…';
+  let removeProgressListener: (() => void) | null = null;
+
   try {
     const api = (window as any)?.electronAPI;
-    if (!api?.getDetectedLevels) {
-      console.error('getDetectedLevels IPC not available');
-      detectedLevels.value = [];
+    if (!api?.runJitLevelDetection) {
+      if (api?.getDetectedLevels) {
+        const result = await api.getDetectedLevels({
+          gameid: props.gameId,
+          version: props.gameVersion || null,
+        });
+        if (result?.success) {
+          detectedLevels.value = result.levels || [];
+          gameName.value = result.gameName || '';
+        }
+      }
       return;
     }
-    
-    const result = await api.getDetectedLevels({
+
+    if (api.onJitDetectionProgress) {
+      removeProgressListener = api.onJitDetectionProgress((payload: any) => {
+        progressMessage.value = payload?.message || payload?.phase || 'Analyzing…';
+      });
+    }
+
+    let currentSettings: any = {};
+    if (api.getSettings) {
+      const settingsResult = await api.getSettings();
+      if (settingsResult && typeof settingsResult === 'object') {
+        currentSettings = settingsResult;
+      }
+    }
+
+    const result = await api.runJitLevelDetection({
       gameid: props.gameId,
       version: props.gameVersion || null,
+      runCalisto,
+      includeDbSources: true,
+      tempDirOverride: currentSettings.tempDirOverride || '',
+      vanillaRomPath: currentSettings.vanillaRomPath || '',
+      flipsPath: currentSettings.flipsPath || '',
     });
-    
+
     if (result?.success) {
       detectedLevels.value = result.levels || [];
       gameName.value = result.gameName || '';
+
+      if (result.calistoNeeded && !runCalisto) {
+        const answer = await showPrompt(
+          'LMFilter data not found. Would you like to launch Lunar Magic (jitlevels/lm363.exe) and Calisto to attempt a definitive level list?\n\nRequires Wine on Linux.',
+          '',
+          'LMFilter Not Found',
+          'Run Calisto export?'
+        );
+        if (answer && String(answer).trim().toLowerCase() !== 'cancel') {
+          await loadDetectedLevels(true);
+          return;
+        }
+      }
+
+      if (result.warnings?.length) {
+        console.warn('[DetectedLevels] JIT warnings:', result.warnings);
+      }
     } else {
-      console.error('Failed to load detected levels:', result?.error);
+      await showAlert(result?.error || 'JIT detection failed', 'Detected Levels');
       detectedLevels.value = [];
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error loading detected levels:', error);
+    await showAlert(error?.message || String(error), 'Detected Levels Error');
     detectedLevels.value = [];
   } finally {
+    if (removeProgressListener) removeProgressListener();
     loading.value = false;
+    progressMessage.value = '';
   }
 }
 
@@ -255,6 +366,11 @@ function getSourceName(source: string): string {
   if (source === 'detect') return 'Detect';
   if (source === 'trans') return 'Trans';
   if (source === 'levelnames') return 'Levelnames';
+  if (source === 'jitnames') return 'JITNames';
+  if (source === 'jittrans') return 'JIT.Trans';
+  if (source === 'jitlmfilter') return 'JIT.LMFilter';
+  if (source === 'jitlevelinfo') return 'JIT.LevelInfo';
+  if (source === 'jitscore') return 'JIT.Score';
   return source;
 }
 
@@ -263,6 +379,11 @@ function getSourceInitial(source: string): string {
   if (source === 'detect') return 'D';
   if (source === 'trans') return 'T';
   if (source === 'levelnames') return 'N';
+  if (source === 'jitnames') return 'N';
+  if (source === 'jittrans') return 'T';
+  if (source === 'jitlmfilter') return 'F';
+  if (source === 'jitlevelinfo') return 'I';
+  if (source === 'jitscore') return 'S';
   return source.charAt(0).toUpperCase();
 }
 
@@ -560,6 +681,12 @@ onUpdated(() => {
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
+
+.source-jitnames { background: #4a90d9; color: #fff; }
+.source-jittrans { background: #6a5acd; color: #fff; }
+.source-jitlmfilter { background: #2e8b57; color: #fff; }
+.source-jitlevelinfo { background: #c17817; color: #fff; }
+.source-jitscore { background: #8b4513; color: #fff; }
 
 .empty-message {
   text-align: center;

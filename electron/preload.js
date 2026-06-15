@@ -525,6 +525,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // =============================
     getGameStages: (params) => ipcRenderer.invoke('gamestages:get', params),
     getGameStagesEditPermission: (params) => ipcRenderer.invoke('gamestages:get-edit-permission', params),
+    runJitLevelDetection: (params) => ipcRenderer.invoke('gamestages:run-jit-detection', params),
+    onJitDetectionProgress: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('gamestages:jit-detection-progress', handler);
+      return () => ipcRenderer.removeListener('gamestages:jit-detection-progress', handler);
+    },
     
     /**
      * Get game links (URLs, downloads, patchblob links, etc.)

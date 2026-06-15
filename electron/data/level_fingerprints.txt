@@ -1,0 +1,4 @@
+# Level fingerprint corpus for JIT.Score originality comparisons
+# Format: gameid,levelid,fingerprint
+# gameid 0 = unknown; empty gameid column means vanilla SMW reference
+,levelid,screen,fingerprint

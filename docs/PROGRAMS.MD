@@ -975,6 +975,19 @@ python3 create_blob_python.py <patch_file> <gameid> <blobs_dir> <pat_sha224> [re
 
 **Documentation**: `devdocs/SMW_ROM_STRUCTURE.md`, `devdocs/SMW_CHARACTER_ENCODING.md`
 
+### level_fingerprint.js
+**Purpose**: Dump Layer1 screen fingerprints (v1) from a ROM for JIT.Score originality corpus
+
+**Usage**:
+```bash
+./enode.sh jstools/level_fingerprint.js --rom path/to.sfc [--gameid ID] [--out fingerprints.txt]
+./enode.sh jstools/level_fingerprint.js --help
+```
+
+**Output**: TSV rows `gameid,levelid,screen,fingerprint` (gameid `0` = unknown)
+
+**Documentation**: `devdocs/JIT_LEVELS1.md`
+
 ---
 
 ### smw_level_names.py

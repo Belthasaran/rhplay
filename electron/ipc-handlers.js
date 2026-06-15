@@ -19,6 +19,8 @@ const {
 const { registerNostrRuntimeIPC } = require('./main/NostrRuntimeIPC');
 const seedManager = require('./seed-manager');
 const gameStager = require('./game-stager');
+const manifestResolver = require('./utils/manifest-resolver');
+const { runJitLevelDetection } = require('../lib/jit-levels/orchestrator');
 const {
   getStagesEditPermissionForGame,
   recordLocalStagesEdit,
@@ -5659,6 +5661,122 @@ function registerDatabaseHandlers(dbManager) {
       };
     } catch (error) {
       console.error('[gamestages:get-detected-levels] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Run JIT level detection (build ROM + analyze)
+   * Channel: gamestages:run-jit-detection
+   */
+  ipcMain.handle('gamestages:run-jit-detection', async (event, params) => {
+    const fs = require('fs');
+    const path = require('path');
+    const { app } = require('electron');
+    const { buildPatchResolverContext } = require('./utils/patch-resolver-context');
+
+    try {
+      const {
+        gameid,
+        version,
+        tempDirOverride,
+        runCalisto = false,
+        includeDbSources = true,
+        vanillaRomPath,
+        flipsPath,
+      } = params || {};
+
+      if (!gameid) {
+        return { success: false, error: 'Missing gameid' };
+      }
+
+      const userDataPath = app.getPath('userData');
+      const vanilla = vanillaRomPath || getClientSetting('vanillaRomPath') || '';
+      const flips = flipsPath || getClientSetting('flipsPath') || '';
+
+      if (!vanilla || !fs.existsSync(vanilla)) {
+        return { success: false, error: 'Vanilla ROM not configured or not found' };
+      }
+      if (!flips || !fs.existsSync(flips)) {
+        return { success: false, error: 'FLIPS not configured or not found' };
+      }
+
+      const tempBase = path.join(
+        tempDirOverride && tempDirOverride.trim()
+          ? tempDirOverride.trim()
+          : manifestResolver.getUserSpecificTempBase(),
+        'jitlevels',
+        `${gameid}-${Date.now()}`
+      );
+      fs.mkdirSync(tempBase, { recursive: true });
+      const patchedRomPath = path.join(tempBase, 'patched.sfc');
+
+      const sendProgress = (payload) => {
+        if (event.sender && !event.sender.isDestroyed()) {
+          event.sender.send('gamestages:jit-detection-progress', payload);
+        }
+      };
+
+      sendProgress({ phase: 'rom', message: 'Building patched ROM…' });
+
+      const patchResult = await gameStager.createPatchedSFC({
+        dbManager,
+        gameid,
+        version,
+        vanillaRomPath: vanilla,
+        flipsPath: flips,
+        outputPath: patchedRomPath,
+        userDataPath,
+        patchResolverCtx: buildPatchResolverContext(dbManager, {
+          userDataPath,
+          flipsPath: flips,
+          vanillaRomPath: vanilla,
+        }),
+      });
+
+      if (!patchResult.success) {
+        return { success: false, error: patchResult.error || 'Failed to build patched ROM' };
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      const projectRoot = path.resolve(__dirname, '..');
+      const jitlevelsZipPath = path.join(projectRoot, 'refmaterial', 'jitlevels.zip');
+      const catalogIndexDir = path.join(projectRoot, 'jstools', 'smwc_world', 'bpsindex');
+
+      const result = await runJitLevelDetection({
+        db,
+        gameid,
+        version,
+        patchedRomPath,
+        tempBase,
+        projectRoot,
+        includeDbSources,
+        runCalisto,
+        jitlevelsZipPath,
+        vanillaRomPath: vanilla,
+        catalogIndexDir,
+        patchedRomSha1: patchResult.patchedRomSha1 || null,
+        patchBpsSha256: patchResult.patchBpsSha256 || patchResult.patchSha256 || null,
+        onProgress: sendProgress,
+      });
+
+      let gameName = '';
+      try {
+        const gv = db.prepare(`
+          SELECT name FROM gameversions
+          WHERE gameid = ? AND (version = ? OR ? IS NULL)
+          ORDER BY version DESC LIMIT 1
+        `).get(gameid, version || null, version || null);
+        gameName = gv?.name || '';
+      } catch { /* ignore */ }
+
+      return {
+        ...result,
+        gameName,
+        patchedRomPath,
+      };
+    } catch (error) {
+      console.error('[gamestages:run-jit-detection] Failed:', error);
       return { success: false, error: error.message };
     }
   });

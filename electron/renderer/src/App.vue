@@ -1485,8 +1485,34 @@
           <!-- Preparing state -->
           <template v-if="!isRunActive">
             <button @click="openPastRunsModal" class="btn-past-runs">📜 Past Runs</button>
-            <button @click="exportRunToFile()" :disabled="!isRunSaved">📤 Export</button>
-            <button @click="importRunFromFile">📥 Import</button>
+            <div class="run-share-button-wrapper" style="position: relative; display: inline-block;">
+              <button
+                @click="toggleRunShareDropdown"
+                class="btn-run-share"
+                :class="{ active: runShareDropdownOpen }"
+              >
+                Share ▼
+              </button>
+              <div v-if="runShareDropdownOpen" class="run-share-dropdown">
+                <button
+                  @click="handleShareExport"
+                  class="dropdown-item"
+                  :disabled="!isRunSaved"
+                >
+                  📤 Export
+                </button>
+                <button @click="handleShareImport" class="dropdown-item">
+                  📥 Import
+                </button>
+              </div>
+            </div>
+            <button
+              @click="resetPrepareRun"
+              class="btn-reset-prepare-run"
+              :disabled="!canResetPrepareRun"
+            >
+              Reset
+            </button>
             <button @click="stageRun('save')" :disabled="runEntries.length === 0">Stage and Save</button>
               <div v-if="isRunSaved" class="run-status-button-wrapper" style="position: relative; display: inline-block;">
               <button @click="toggleRunStatusDropdown" class="btn-run-status" :class="{ 'ready': isRunReadyToStart, 'needs-upload': !isRunReadyToStart }">
@@ -1729,8 +1755,6 @@
       <!-- Toolbar only shown when preparing -->
       <section v-if="!isRunActive" class="modal-toolbar">
         <div class="left">
-          <button @click="checkAllRun">Check All</button>
-          <button @click="uncheckAllRun">Uncheck All</button>
           <button @click="removeCheckedRun" :disabled="checkedRunCount === 0">Remove</button>
           <button @click="moveCheckedUp" :disabled="!canMoveCheckedUp">↑ Move Up</button>
           <button @click="moveCheckedDown" :disabled="!canMoveCheckedDown">↓ Move Down</button>
@@ -20572,7 +20596,12 @@ function handleGlobalClick(e: MouseEvent) {
   if (runStatusWrapper && runStatusWrapper.contains(target)) {
     clickedInsideAnyDropdown = true;
   }
-  
+
+  const runShareWrapper = document.querySelector('.run-share-button-wrapper');
+  if (runShareWrapper && runShareWrapper.contains(target)) {
+    clickedInsideAnyDropdown = true;
+  }
+
   if (!clickedInsideAnyDropdown) {
     closeFilterDropdown();
     closeSelectDropdown();
@@ -20583,6 +20612,7 @@ function handleGlobalClick(e: MouseEvent) {
     // to prevent losing unsaved work in forms
     // closeOnlineDropdown();
     runStatusDropdownOpen.value = false;
+    runShareDropdownOpen.value = false;
     activeAdminKeypairDropdown.value = null;
     showAdminKeypairActionDropdown.value = false;
     showMasterKeypairActionDropdown.value = false;
@@ -23550,6 +23580,7 @@ let runUploadCancelRequested = false;
 
 // Run status and upload readiness
 const runStatusDropdownOpen = ref(false);
+const runShareDropdownOpen = ref(false);
 const skipUploadAcknowledged = ref(false);
 const expandedRunResults = ref<any[]>([]);  // Store expanded results to check sfcPath
 const needsRegenerateStaging = ref(false);  // Flag to indicate if staging needs regeneration
@@ -23807,8 +23838,11 @@ async function uploadStagedToSnes(andBoot: boolean = false) {
 
 const allRunChecked = computed(() => runEntries.length > 0 && runEntries.every((e) => checkedRun.value.has(e.key)));
 const checkedRunCount = computed(() => checkedRun.value.size);
-const isRunSaved = computed(() => currentRunUuid.value !== null && currentRunStatus.value === 'preparing');
+const isRunSaved = computed(() => !!currentRunUuid.value && currentRunStatus.value === 'preparing');
 const isRunActive = computed(() => currentRunStatus.value === 'active');
+const canResetPrepareRun = computed(() => {
+  return !isRunActive.value && (isRunSaved.value || runEntries.length > 0);
+});
 
 // Check if all expanded run results have sfcPath
 const allResultsHaveSfcPath = computed(() => {
@@ -24348,7 +24382,7 @@ function closeRunModal() {
 
 function clearRunState() {
   // Clear all run-related state to prepare for a new run
-  currentRunUuid.value = '';
+  currentRunUuid.value = null;
   currentRunName.value = '';
   currentRunStatus.value = 'preparing';
   currentChallengeIndex.value = 0;
@@ -24384,17 +24418,56 @@ function clearRunState() {
   
   // Clear global conditions
   globalRunConditions.value = [];
-  
+  globalRunPatchCodes.value = [];
+
   // Clear win rules
   currentWinRulesJson.value = null;
-  
+
   // Clear staging-related state
   stagingFolderPath.value = '';
   runStagedSfcFilenames.value = [];
   stagingSfcCount.value = 0;
   runStagingActionStatus.value = '';
-  
+  expandedRunResults.value = [];
+  skipUploadAcknowledged.value = false;
+  needsRegenerateStaging.value = false;
+  runStatusDropdownOpen.value = false;
+  runShareDropdownOpen.value = false;
+  runAgainSkipExpand.value = false;
+  stagingProgressModalOpen.value = false;
+
   console.log('[clearRunState] Run state cleared, ready for new run');
+}
+
+async function resetPrepareRun() {
+  if (!canResetPrepareRun.value) return;
+
+  const confirmed = await showConfirm(
+    'Reset will clear this run plan and staging from the dialog. Any saved preparing run stays in Past Runs, but Stage and Save will create a new run.\n\nContinue?',
+    'Reset Prepare Run',
+    'Reset',
+    'Cancel'
+  );
+  if (!confirmed) return;
+
+  clearRunState();
+}
+
+function toggleRunShareDropdown() {
+  runShareDropdownOpen.value = !runShareDropdownOpen.value;
+  if (runShareDropdownOpen.value) {
+    runStatusDropdownOpen.value = false;
+  }
+}
+
+async function handleShareExport() {
+  runShareDropdownOpen.value = false;
+  await exportRunToFile();
+}
+
+async function handleShareImport() {
+  runShareDropdownOpen.value = false;
+  await importRunFromFile();
 }
 function toggleCheckAllRun(e: Event) {
   const target = e.target as HTMLInputElement;
@@ -25247,6 +25320,7 @@ function closeStagingSuccess() {
 async function toggleRunStatusDropdown() {
   runStatusDropdownOpen.value = !runStatusDropdownOpen.value;
   if (runStatusDropdownOpen.value) {
+    runShareDropdownOpen.value = false;
     // Load expanded results to check sfcPath
     await loadExpandedRunResults();
     // Check if staging needs regeneration
@@ -37526,6 +37600,75 @@ button:disabled {
 
 .btn-past-runs:hover:not(:disabled) {
   background: var(--button-hover-bg);
+}
+
+.btn-run-share {
+  padding: var(--button-padding);
+  font-size: var(--base-font-size);
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-run-share:hover:not(:disabled),
+.btn-run-share.active {
+  background: var(--button-hover-bg);
+}
+
+.run-share-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.run-share-dropdown .dropdown-item {
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.run-share-dropdown .dropdown-item:hover:not(:disabled) {
+  background: var(--bg-secondary);
+}
+
+.run-share-dropdown .dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-reset-prepare-run {
+  padding: var(--button-padding);
+  font-size: var(--base-font-size);
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #b91c1c;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-reset-prepare-run:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-reset-prepare-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Skill rating caption */

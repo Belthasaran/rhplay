@@ -1515,10 +1515,20 @@
             </button>
             <button @click="stageRun('save')" :disabled="runEntries.length === 0">Stage and Save</button>
               <div v-if="isRunSaved" class="run-status-button-wrapper" style="position: relative; display: inline-block;">
-              <button @click="toggleRunStatusDropdown" class="btn-run-status" :class="{ 'ready': isRunReadyToStart, 'needs-upload': !isRunReadyToStart }">
+              <button
+                @click="toggleRunStatusDropdown"
+                class="btn-run-status"
+                :class="{
+                  'needs-restaging': planDirty,
+                  'needs-save': winRulesDirty && !planDirty,
+                  'ready': isRunReadyToStart && !hasPrepUnsavedChanges,
+                  'needs-upload': !isRunReadyToStart && !hasPrepUnsavedChanges,
+                }"
+              >
                 {{ runStatusText }}
               </button>
               <div v-if="runStatusDropdownOpen" class="run-status-dropdown">
+                <button v-if="planDirty" @click="revertPrepChanges" class="dropdown-item">Revert Changes</button>
                 <button @click="openRenameRunFromPrepStatus" class="dropdown-item">Rename Run</button>
                 <button @click="reopenStagingWindow" class="dropdown-item">Reopen Staging Window</button>
                 <button @click="manualUploadSearch" class="dropdown-item">Manual Upload: Search USB2SNES For Files</button>
@@ -9557,6 +9567,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     @keep="handleRunAgainRandomChoice('keep')"
   />
 
+  <PrepSaveRequiredModal
+    :visible="prepSaveRequiredModalOpen"
+    @cancel="closePrepSaveRequiredModal"
+    @save-minor="handlePrepSaveMinor"
+    @stage-and-save="handlePrepStageAndSave"
+  />
+
   <ConfirmDialog
     :visible="confirmDialogVisible"
     :title="confirmDialogTitle"
@@ -9783,6 +9800,7 @@ import {
   resolveRunStagedSfcFilename as resolveRunStagedSfcFromList,
   sortRunStagedSfcFilenames,
 } from './utils/run-staging';
+import { serializePlanSnapshot, normalizeWinRulesJson } from './utils/run-plan-snapshot';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
@@ -9813,6 +9831,7 @@ import {
 } from './utils/stage-test-utils';
 import RunExitDetectedModal from './components/RunExitDetectedModal.vue';
 import RunAgainRandomChoiceModal from './components/RunAgainRandomChoiceModal.vue';
+import PrepSaveRequiredModal from './components/PrepSaveRequiredModal.vue';
 import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
@@ -23439,6 +23458,55 @@ const showWinRulesDropdown = ref(false);  // Win rules dropdown visibility
 const winRulesDropdownPosition = ref<{ x: number; y: number } | null>(null);  // Position for win rules dropdown
 const currentWinRulesJson = ref<string | null>(null);  // Current win rules JSON from run
 
+type SavedRunSnapshot = {
+  planJson: string;
+  winRulesJson: string | null;
+};
+const savedRunSnapshot = ref<SavedRunSnapshot | null>(null);
+const prepSaveRequiredModalOpen = ref(false);
+
+function buildCurrentPlanSnapshotJson(): string {
+  return serializePlanSnapshot({
+    runEntries,
+    globalRunConditions: globalRunConditions.value,
+    globalRunPatchCodes: globalRunPatchCodes.value,
+  });
+}
+
+function captureSavedRunSnapshot() {
+  savedRunSnapshot.value = {
+    planJson: buildCurrentPlanSnapshotJson(),
+    winRulesJson: normalizeWinRulesJson(currentWinRulesJson.value),
+  };
+}
+
+function clearSavedRunSnapshot() {
+  savedRunSnapshot.value = null;
+}
+
+function maybeCaptureSnapshotAfterHydrate(
+  hydrated: Awaited<ReturnType<typeof hydrateRunPlanFromDb>>
+) {
+  if (hydrated.restoredStagingFolderPath) {
+    captureSavedRunSnapshot();
+  } else {
+    clearSavedRunSnapshot();
+  }
+}
+
+const planDirty = computed(() => {
+  if (!savedRunSnapshot.value || !isRunSaved.value) return false;
+  return buildCurrentPlanSnapshotJson() !== savedRunSnapshot.value.planJson;
+});
+
+const winRulesDirty = computed(() => {
+  if (!savedRunSnapshot.value || !isRunSaved.value || planDirty.value) return false;
+  const current = normalizeWinRulesJson(currentWinRulesJson.value);
+  return current !== savedRunSnapshot.value.winRulesJson;
+});
+
+const hasPrepUnsavedChanges = computed(() => planDirty.value || winRulesDirty.value);
+
 // Twitch Integration
 const showTwitchIntegrationSetup = ref(false);  // Twitch Integration Setup modal visibility
 const predictionsEnabled = ref(false);  // Whether predictions are enabled for current run
@@ -23901,11 +23969,16 @@ const isRunReadyToStart = computed(() => {
 
 // Prep status text
 const runStatusText = computed(() => {
+  if (planDirty.value) {
+    return 'Prep Status: Edits made, Save needed';
+  }
+  if (winRulesDirty.value) {
+    return 'Prep Status: Save Required';
+  }
   if (isRunReadyToStart.value) {
     return 'Prep Status: Ready to Start';
-  } else {
-    return 'Prep Status: Need Upload';
   }
+  return 'Prep Status: Need Upload';
 });
 
 const showActiveRunLaunchButton = computed(() => {
@@ -23916,9 +23989,9 @@ const showActiveRunLaunchButton = computed(() => {
   return !!currentChallengeSfcPath.value;
 });
 
-// Can start run (must be saved AND ready)
+// Can start run (must be saved, ready, and no unsaved prep changes)
 const canStartRun = computed(() => {
-  return isRunSaved.value && isRunReadyToStart.value;
+  return isRunSaved.value && isRunReadyToStart.value && !hasPrepUnsavedChanges.value;
 });
 const currentChallenge = computed(() => {
   if (!isRunActive.value || currentChallengeIndex.value >= runEntries.length) return null;
@@ -24476,6 +24549,7 @@ function clearRunState() {
   runShareDropdownOpen.value = false;
   runAgainSkipExpand.value = false;
   stagingProgressModalOpen.value = false;
+  clearSavedRunSnapshot();
 
   console.log('[clearRunState] Run state cleared, ready for new run');
 }
@@ -25218,26 +25292,24 @@ async function saveRunToDatabase() {
       currentRunStatus.value = 'preparing';
     }
     
-    // CRITICAL: Load win rules from database before saving run plan
-    // This ensures we always have the latest win rules, even if currentWinRulesJson.value is null
+    // Use in-memory win rules when set (includes deferred post-stage edits); else load from DB
     let winRulesToSave = currentWinRulesJson.value;
-    if (targetRunUuid) {
+    if (targetRunUuid && !winRulesToSave) {
       try {
         const run = await (window as any).electronAPI.getRun({ runUuid: targetRunUuid });
         if (run && run.win_rules_json) {
           winRulesToSave = run.win_rules_json;
           currentWinRulesJson.value = run.win_rules_json;
           console.log('[saveRun] Loaded win rules from database:', winRulesToSave);
-        } else if (currentWinRulesJson.value) {
-          console.log('[saveRun] Using win rules from currentWinRulesJson.value:', currentWinRulesJson.value);
         } else {
           console.log('[saveRun] No win rules found in database or currentWinRulesJson.value');
         }
       } catch (error) {
         console.error('[saveRun] Error loading win rules from database:', error);
-        // Fall back to currentWinRulesJson.value if database load fails
         winRulesToSave = currentWinRulesJson.value;
       }
+    } else if (winRulesToSave) {
+      console.log('[saveRun] Using win rules from currentWinRulesJson.value:', winRulesToSave);
     }
     
     // Save run plan (ALWAYS include win rules - either from DB or from currentWinRulesJson)
@@ -25331,6 +25403,8 @@ async function stageRunGames(runUuid: string, runName: string) {
     
     // Load expanded results to check sfcPath status
     await loadExpandedRunResults();
+
+    captureSavedRunSnapshot();
     
   } catch (error: any) {
     console.error('Error staging run games:', error);
@@ -25418,6 +25492,11 @@ function closeStagingSuccess() {
 
 // Run status dropdown functions
 async function toggleRunStatusDropdown() {
+  if (winRulesDirty.value && !planDirty.value) {
+    prepSaveRequiredModalOpen.value = true;
+    return;
+  }
+
   runStatusDropdownOpen.value = !runStatusDropdownOpen.value;
   if (runStatusDropdownOpen.value) {
     runShareDropdownOpen.value = false;
@@ -25425,6 +25504,86 @@ async function toggleRunStatusDropdown() {
     await loadExpandedRunResults();
     // Check if staging needs regeneration
     await checkNeedsRegenerateStaging();
+  }
+}
+
+function closePrepSaveRequiredModal() {
+  prepSaveRequiredModalOpen.value = false;
+}
+
+async function handlePrepSaveMinor() {
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    closePrepSaveRequiredModal();
+    return;
+  }
+
+  const winRulesJson = currentWinRulesJson.value;
+  if (winRulesJson == null) {
+    await showAlert('No win rules to save', 'Save Failed');
+    closePrepSaveRequiredModal();
+    return;
+  }
+
+  try {
+    const result = await (window as any).electronAPI.saveMinorPrepChanges({
+      runUuid: currentRunUuid.value,
+      winRulesJson,
+    });
+    if (!result?.success) {
+      await showAlert('Failed to save changes: ' + (result?.error || 'Unknown error'), 'Save Failed');
+      return;
+    }
+
+    captureSavedRunSnapshot();
+    closePrepSaveRequiredModal();
+    showToastNotification('Win rules saved', 'success', 2500);
+  } catch (error: any) {
+    console.error('[handlePrepSaveMinor] Error:', error);
+    await showAlert('Error saving changes: ' + (error.message || error), 'Save Error');
+  }
+}
+
+async function handlePrepStageAndSave() {
+  closePrepSaveRequiredModal();
+  await stageRun('save');
+}
+
+async function revertPrepChanges() {
+  if (!planDirty.value || !currentRunUuid.value || !isElectronAvailable()) return;
+
+  const confirmed = await showConfirm(
+    'Revert all plan edits made since the last Stage and Save?\n\nThis reloads the saved plan and win rules from the last staging.',
+    'Revert Changes',
+    'Revert',
+    'Cancel'
+  );
+  if (!confirmed) return;
+
+  runStatusDropdownOpen.value = false;
+
+  try {
+    const runUuid = currentRunUuid.value;
+    const run = await (window as any).electronAPI.getRun({ runUuid });
+    if (!run) {
+      await showAlert('Run not found', 'Revert Failed');
+      return;
+    }
+
+    const hydrated = await hydrateRunPlanFromDb(runUuid, run);
+    applyHydratedRunPlan(runUuid, run.run_name, hydrated);
+
+    if (savedRunSnapshot.value) {
+      currentWinRulesJson.value = savedRunSnapshot.value.winRulesJson;
+    } else {
+      await loadWinRules();
+    }
+
+    await loadExpandedRunResults();
+    await refreshRunStagedSfcFilenames();
+    showToastNotification('Reverted to last saved plan', 'success', 2500);
+  } catch (error: any) {
+    console.error('[revertPrepChanges] Error:', error);
+    await showAlert('Error reverting changes: ' + (error.message || error), 'Revert Error');
   }
 }
 
@@ -27812,6 +27971,7 @@ async function loadPastRunFromUuid(runUuid: string, options: { closePastRuns?: b
   }
   runModalOpen.value = true;
   await loadWinRules();
+  maybeCaptureSnapshotAfterHydrate(hydrated);
 }
 
 async function loadPastRun() {
@@ -31075,15 +31235,20 @@ function canReopenPrediction() {
 async function handleSaveWinRules(winRulesJson: string) {
   console.log('[handleSaveWinRules] Called with winRulesJson:', winRulesJson);
   console.log('[handleSaveWinRules] currentRunUuid:', currentRunUuid.value);
-  
+
+  currentWinRulesJson.value = winRulesJson;
+
   if (!currentRunUuid.value) {
     console.warn('[handleSaveWinRules] No current run UUID, cannot save win rules');
     console.warn('[handleSaveWinRules] Win rules will be saved when the run is created/saved');
-    // Store win rules temporarily - they'll be saved when the run is created
-    currentWinRulesJson.value = winRulesJson;
     return;
   }
-  
+
+  if (savedRunSnapshot.value) {
+    console.log('[handleSaveWinRules] Post-stage snapshot exists; deferring DB save until minor save or Stage and Save');
+    return;
+  }
+
   try {
     if (isElectronAvailable()) {
       console.log('[handleSaveWinRules] Calling updateRunWinRules IPC...');
@@ -31095,8 +31260,7 @@ async function handleSaveWinRules(winRulesJson: string) {
       console.log('[handleSaveWinRules] IPC result:', result);
       
       if (result && result.success) {
-        currentWinRulesJson.value = winRulesJson;
-        console.log('[handleSaveWinRules] Win rules saved successfully, currentWinRulesJson.value set to:', currentWinRulesJson.value);
+        console.log('[handleSaveWinRules] Win rules saved successfully');
         
         // Verify the save by querying the database
         const verifyRun = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
@@ -33029,6 +33193,7 @@ async function importRunFromFile() {
       }
 
       await loadWinRules();
+      maybeCaptureSnapshotAfterHydrate(hydrated);
       runModalOpen.value = true;
 
       let toastMessage = 'Run imported into Prepare Run. Use Stage and Save, then Start Run.';
@@ -34765,6 +34930,18 @@ button:disabled {
   background: #f59e0b;
   color: white;
   border-color: #d97706;
+}
+
+.btn-run-status.needs-restaging {
+  background: #ef4444;
+  color: white;
+  border-color: #dc2626;
+}
+
+.btn-run-status.needs-save {
+  background: #8b5cf6;
+  color: white;
+  border-color: #7c3aed;
 }
 
 .btn-run-status:hover {

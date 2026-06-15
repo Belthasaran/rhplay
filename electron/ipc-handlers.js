@@ -3404,6 +3404,64 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Save minor prep changes (win rules only): DB + runinfo.json + runview, no SFC rebuild
+   * Channel: db:runs:save-minor-prep
+   */
+  ipcMain.handle('db:runs:save-minor-prep', async (event, { runUuid, winRulesJson }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+
+      const run = db.prepare('SELECT run_uuid FROM runs WHERE run_uuid = ?').get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+
+      const nowMs = Date.now();
+      db.prepare(`
+        UPDATE runs
+        SET win_rules_json = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            updated_at_ms = ?
+        WHERE run_uuid = ?
+      `).run(winRulesJson, nowMs, runUuid);
+
+      const refreshResult = gameStager.refreshRunInfoJson(dbManager, runUuid);
+      if (!refreshResult.success) {
+        console.warn('[db:runs:save-minor-prep] refreshRunInfoJson:', refreshResult.error);
+      }
+
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[db:runs:save-minor-prep] Failed to generate runview:', error);
+      }
+
+      return {
+        success: true,
+        folderPath: refreshResult.folderPath,
+        runinfoRefreshed: refreshResult.success,
+      };
+    } catch (error) {
+      console.error('[db:runs:save-minor-prep] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Refresh runinfo.json in staging folder without rebuilding SFC files
+   * Channel: db:runs:refresh-runinfo
+   */
+  ipcMain.handle('db:runs:refresh-runinfo', async (event, { runUuid }) => {
+    try {
+      return gameStager.refreshRunInfoJson(dbManager, runUuid);
+    } catch (error) {
+      console.error('[db:runs:refresh-runinfo] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Get run results (expanded challenges)
    * Channel: db:runs:get-results
    */

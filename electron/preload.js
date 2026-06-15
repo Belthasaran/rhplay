@@ -362,6 +362,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   updateRunWinRules: (params) => ipcRenderer.invoke('db:runs:update-win-rules', params),
+
+  /**
+   * Save minor prep changes (win rules): DB + runinfo.json + runview
+   * @param {Object} params - {runUuid: string, winRulesJson: string}
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  saveMinorPrepChanges: (params) => ipcRenderer.invoke('db:runs:save-minor-prep', params),
+
+  /**
+   * Refresh runinfo.json in staging folder without SFC rebuild
+   * @param {Object} params - {runUuid: string}
+   * @returns {Promise<{success: boolean, folderPath?: string, error?: string}>}
+   */
+  refreshRunInfoJson: (params) => ipcRenderer.invoke('db:runs:refresh-runinfo', params),
   
   /**
    * Generate runview.html file

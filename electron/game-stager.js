@@ -2320,10 +2320,43 @@ async function applyUberASMTreePatch(params) {
   }
 }
 
+/**
+ * Rewrite runinfo.json in an existing staging folder without rebuilding SFC files.
+ * @param {object} dbManager
+ * @param {string} runUuid
+ * @returns {{ success: boolean, folderPath?: string, error?: string }}
+ */
+function refreshRunInfoJson(dbManager, runUuid) {
+  try {
+    const db = dbManager.getConnection('clientdata');
+    const run = db.prepare('SELECT staging_folder FROM runs WHERE run_uuid = ?').get(runUuid);
+    if (!run?.staging_folder) {
+      return { success: false, error: 'No staging folder for run' };
+    }
+
+    const runFolder = run.staging_folder;
+    if (!fs.existsSync(runFolder)) {
+      return { success: false, error: 'Staging folder not found on disk' };
+    }
+
+    const seedManager = require('./seed-manager');
+    const exportData = seedManager.exportRun(dbManager, runUuid);
+    const runInfoPath = path.join(runFolder, 'runinfo.json');
+    fs.writeFileSync(runInfoPath, JSON.stringify(exportData, null, 2));
+    console.log(`[refreshRunInfoJson] Updated ${runInfoPath}`);
+
+    return { success: true, folderPath: runFolder };
+  } catch (error) {
+    console.error('[refreshRunInfoJson] Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   createPatchedSFC,
   stageRunGames,
   stageQuickLaunchGames,
+  refreshRunInfoJson,
   getStagingBasePath,
   getQuickLaunchBasePath,
   generateRunFolderName,

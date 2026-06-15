@@ -33,7 +33,7 @@ const {
   filterStagesByTestState,
 } = require('./stage-test-resolution');
 const { generateRunview } = require('./runview-generator');
-const { matchesDifficultyFilter } = require('./utils/difficulty-mapper');
+const { matchesDifficultyFilter, getGameDifficultyLevel } = require('./utils/difficulty-mapper');
 const GameVersionBanManager = require('./gameversion-banmanager');
 const { matchesFilter } = require('./shared-filter-utils');
 const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
@@ -538,6 +538,44 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('[db:difficulty-map:get] Failed:', error);
       return { success: false, error: error.message, difficultyNumber: null };
+    }
+  });
+
+  ipcMain.handle('db:game:get-difficulty-level', (_event, { gameid, version, fallback = 2 } = {}) => {
+    try {
+      if (!gameid) {
+        return { success: false, error: 'gameid is required', difficultyLevel: fallback };
+      }
+
+      const db = dbManager.getConnection('rhdata');
+      const game = db.prepare(`
+        SELECT difficulty, raw_difficulty, legacy_type, combinedtype
+        FROM gameversions
+        WHERE gameid = ? AND (version = ? OR ? IS NULL)
+        ORDER BY version DESC
+        LIMIT 1
+      `).get(gameid, version ?? null, version ?? null);
+
+      if (!game) {
+        return { success: true, difficultyLevel: fallback };
+      }
+
+      const mapStmt = db.prepare(`
+        SELECT difficulty_number
+        FROM game_difficulty_map
+        WHERE map_type = ? AND map_string = ?
+        LIMIT 1
+      `);
+      const dbQueryFn = (mapType, mapString) => {
+        const row = mapStmt.get(mapType, mapString);
+        return row ? row.difficulty_number : null;
+      };
+
+      const difficultyLevel = getGameDifficultyLevel(game, dbQueryFn, fallback);
+      return { success: true, difficultyLevel };
+    } catch (error) {
+      console.error('[db:game:get-difficulty-level] Failed:', error);
+      return { success: false, error: error.message, difficultyLevel: fallback };
     }
   });
 

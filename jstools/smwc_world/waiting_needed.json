@@ -1,140 +1,63 @@
 [
   {
-    "id": 42537,
+    "id": 42540,
     "section": "smwhacks",
-    "name": "MrUg's Mini Level Pack",
-    "time": 1781449438,
-    "submitted_at": 1781449438,
+    "name": "Tortured Souls 3",
+    "time": 1781498647,
+    "submitted_at": 1781498647,
     "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 73180,
-        "name": "MrUg123"
+        "id": 40619,
+        "name": "RZRider"
       }
     ],
     "submitter": {
-      "id": 73180,
-      "name": "MrUg123"
+      "id": 40619,
+      "name": "RZRider"
     },
     "moderator": null,
-    "tags": [
-      "altered physics",
-      "custom music"
-    ],
+    "tags": [],
     "images": [
-      "https://dl.smwcentral.net/image/124521.png",
-      "https://dl.smwcentral.net/image/124522.png",
-      "https://dl.smwcentral.net/image/124523.png",
-      "https://dl.smwcentral.net/image/124524.png",
-      "https://dl.smwcentral.net/image/124525.png",
-      "https://dl.smwcentral.net/image/124526.png",
-      "https://dl.smwcentral.net/image/124527.png",
-      "https://dl.smwcentral.net/image/124528.png"
+      "https://dl.smwcentral.net/image/124541.png",
+      "https://dl.smwcentral.net/image/124542.png",
+      "https://dl.smwcentral.net/image/124543.png"
     ],
-    "rating": 4.6667,
-    "size": 206292,
-    "downloads": 556,
-    "download_url": "https://dl.smwcentral.net/42537/MMLP.zip",
+    "rating": 5,
+    "size": 2061726,
+    "downloads": 12,
+    "download_url": "https://dl.smwcentral.net/42540/Tortured%20Souls%203-Birth%20of%20a%20True%20Lord.zip",
     "obsoleted_by": null,
     "fields": {
       "version": "",
       "changelog": "",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "length": "4 exit(s)",
+      "difficulty": "Master",
+      "type": "Kaizo",
+      "length": "62 exit(s)",
       "hof": "No",
       "demo": "No",
       "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "This is my first rom hack of smw. It doesn't really have any story, just Bowser kidnapping the princess. I don't really have anything else to say about it."
+      "sa1": "Yes",
+      "warnings": "Possible Photosensitivity Triggers",
+      "description": "The fire fades, and kingdoms fall to ash. <br>\r\n<br>\r\n<br>\r\nWARNING: there are 2 mode 7 sections, one being a boss that will NOT work on SD2SNES, but is seemingly functional on FXPAKPro. The rest of the game is fully functional on SD2SNES, but you will more than likely need to fight the boss on emulator than transfer your save. I am sorry for the inconvenience, but I legitimately don't think there is anything I can do about it. <br>\r\n"
     },
     "raw_fields": {
       "version": "",
       "changelog": "",
-      "difficulty": "diff_2",
+      "difficulty": "diff_6",
       "type": [
-        "standard"
+        "kaizo"
       ],
-      "length": 4,
+      "length": 62,
       "hof": false,
       "demo": false,
       "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "This is my first rom hack of smw. It doesn't really have any story, just Bowser kidnapping the princess. I don't really have anything else to say about it."
-    }
-  },
-  {
-    "id": 42538,
-    "section": "smwhacks",
-    "name": "Super XLer8 World",
-    "time": 1781460500,
-    "submitted_at": 1781460500,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 54818,
-        "name": "XLer8"
-      }
-    ],
-    "submitter": {
-      "id": 54818,
-      "name": "XLer8"
-    },
-    "moderator": null,
-    "tags": [
-      "bosses",
-      "custom music",
-      "gimmick",
-      "luigi",
-      "semi-vanilla",
-      "super xler8 world",
-      "traditional"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/124532.png",
-      "https://dl.smwcentral.net/image/124533.png",
-      "https://dl.smwcentral.net/image/124534.png",
-      "https://dl.smwcentral.net/image/124535.png",
-      "https://dl.smwcentral.net/image/124536.png",
-      "https://dl.smwcentral.net/image/124537.png",
-      "https://dl.smwcentral.net/image/124538.png"
-    ],
-    "rating": 0,
-    "size": 567179,
-    "downloads": 2,
-    "download_url": "https://dl.smwcentral.net/42538/XL8.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Intermediate",
-      "type": "Standard",
-      "length": "20 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "Super XLer8 World, is, well, a romhack by, you guessed it, XLer8.<br>\r\n<br>\r\nThere's 20 exits, you can walljump, and I'm sure the readme has more important information."
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_3",
-      "type": [
-        "standard"
+      "sa1": true,
+      "warnings": [
+        "photosensitivity"
       ],
-      "length": 20,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "Super XLer8 World, is, well, a romhack by, you guessed it, XLer8.\r\n\r\nThere's 20 exits, you can walljump, and I'm sure the readme has more important information."
+      "description": "The fire fades, and kingdoms fall to ash. \r\n\r\n\r\nWARNING: there are 2 mode 7 sections, one being a boss that will NOT work on SD2SNES, but is seemingly functional on FXPAKPro. The rest of the game is fully functional on SD2SNES, but you will more than likely need to fight the boss on emulator than transfer your save. I am sorry for the inconvenience, but I legitimately don't think there is anything I can do about it. \r\n"
     }
   }
 ]

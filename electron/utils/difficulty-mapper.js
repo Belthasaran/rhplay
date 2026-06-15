@@ -131,9 +131,10 @@ function parseRawDifficulty(rawDifficulty) {
  * Get numeric difficulty level for a game
  * @param {Object} game - Game object from database
  * @param {Function|null} dbQueryFn - Optional function to query game_difficulty_map table
+ * @param {number} [defaultDifficulty=DEFAULT_DIFFICULTY] - Fallback when no mapping matches
  * @returns {number} Numeric difficulty level (0-10)
  */
-function getGameDifficultyLevel(game, dbQueryFn = null) {
+function getGameDifficultyLevel(game, dbQueryFn = null, defaultDifficulty = DEFAULT_DIFFICULTY) {
   // 1. First, try raw_difficulty (e.g., "diff_4" -> 4)
   if (game.raw_difficulty) {
     const parsed = parseRawDifficulty(game.raw_difficulty);
@@ -176,8 +177,8 @@ function getGameDifficultyLevel(game, dbQueryFn = null) {
     }
   }
   
-  // 5. Default to Intermediate (3) - note: changed from 2 to match new mapping
-  return DEFAULT_DIFFICULTY;
+  // 5. Default when no mapping matched
+  return defaultDifficulty;
 }
 
 /**

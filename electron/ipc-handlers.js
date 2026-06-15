@@ -14865,15 +14865,6 @@ function registerDatabaseHandlers(dbManager) {
    */
   ipcMain.handle('get_predictions_template', async (event) => {
     try {
-      // Get current profile using OnlineProfileManager
-      const keyguardKey = getKeyguardKey(event);
-      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      const currentProfileId = profileManager.getCurrentProfileId();
-      
-      if (!currentProfileId) {
-        return null;
-      }
-      
       const db = dbManager.getConnection('clientdata');
       
       const row = db.prepare(`

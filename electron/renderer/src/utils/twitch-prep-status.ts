@@ -5,6 +5,15 @@
 
 export type PrepPredictionsMode = 'none' | 'same_item' | 'whole_challenge';
 
+/** Matches Twitch Integration Setup: connected when an integration row exists. */
+export function isTwitchIntegrationConnected(status: unknown): boolean {
+  if (!status || typeof status !== 'object') {
+    return false;
+  }
+  const row = status as { twitch_user_id?: string; twitch_username?: string };
+  return !!(row.twitch_user_id || row.twitch_username);
+}
+
 export function getTwitchPrepStatusLabel(params: {
   twitchIntegrationValid: boolean;
   prepPredictionsMode: PrepPredictionsMode;

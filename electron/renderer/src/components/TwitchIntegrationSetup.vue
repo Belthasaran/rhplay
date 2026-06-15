@@ -21,17 +21,24 @@
           <!-- Twitch Connection Status (Compact) -->
           <div class="connection-status-bar">
             <div class="connection-info">
-              <span v-if="integrationStatus" class="status-indicator connected">●</span>
+              <span v-if="integrationStatus && tokenValid" class="status-indicator connected">●</span>
+              <span v-else-if="integrationStatus && !tokenValid" class="status-indicator needs-refresh">●</span>
               <span v-else class="status-indicator disconnected">●</span>
               <span class="status-text">
-                <span v-if="integrationStatus">
+                <span v-if="integrationStatus && tokenValid">
                   Connected as {{ integrationStatus.twitch_username || 'Unknown' }}
+                </span>
+                <span v-else-if="integrationStatus && !tokenValid">
+                  Token needs refresh ({{ integrationStatus.twitch_username || 'Unknown' }})
                 </span>
                 <span v-else>
                   Not connected to Twitch
                 </span>
               </span>
             </div>
+            <p v-if="tokenRefreshError && integrationStatus && !tokenValid" class="token-refresh-error">
+              {{ tokenRefreshError }}
+            </p>
             <div class="connection-actions">
               <button 
                 v-if="!integrationStatus"
@@ -41,13 +48,22 @@
               >
                 {{ oauthInProgress ? 'Connecting...' : 'Connect to Twitch' }}
               </button>
-              <button 
-                v-else
-                @click="revokeTokens" 
-                class="btn-disconnect"
-              >
-                Disconnect
-              </button>
+              <template v-else>
+                <button
+                  @click="refreshTokens"
+                  class="btn-refresh"
+                  :disabled="refreshButtonDisabled"
+                >
+                  {{ refreshButtonLabel }}
+                </button>
+                <button 
+                  @click="revokeTokens" 
+                  class="btn-disconnect"
+                  :disabled="refreshInProgress || oauthInProgress"
+                >
+                  Disconnect
+                </button>
+              </template>
             </div>
           </div>
 
@@ -66,7 +82,7 @@
                   name="predictionType" 
                   value="whole_challenge"
                   v-model="predictionType"
-                  :disabled="!integrationStatus"
+                  :disabled="!tokenValid"
                 />
                 <span class="type-label">Whole Challenge</span>
                 <span class="type-description">
@@ -79,7 +95,7 @@
                   name="predictionType" 
                   value="individual_item"
                   v-model="predictionType"
-                  :disabled="!integrationStatus"
+                  :disabled="!tokenValid"
                 />
                 <span class="type-label">Individual Item</span>
                 <span class="type-description">
@@ -97,7 +113,7 @@
                   Number of Outcomes:
                   <select 
                     v-model.number="wholeChallengeOutcomeCount"
-                    :disabled="!integrationStatus"
+                    :disabled="!tokenValid"
                     class="config-select"
                   >
                     <option :value="2">2 (Less/More than half)</option>
@@ -118,7 +134,7 @@
                     min="30"
                     max="3600"
                     step="30"
-                    :disabled="!integrationStatus"
+                    :disabled="!tokenValid"
                     class="config-input"
                   />
                 </label>
@@ -133,7 +149,7 @@
                   <input 
                     type="text"
                     v-model="wholeChallengeCustomTitle"
-                    :disabled="!integrationStatus"
+                    :disabled="!tokenValid"
                     class="config-input"
                     placeholder="How many total challenge items will we win?"
                   />
@@ -155,7 +171,7 @@
                     name="individualPredictionType" 
                     value="yes_no"
                     v-model="individualPredictionType"
-                    :disabled="!integrationStatus"
+                    :disabled="!tokenValid"
                   />
                   <span class="subtype-label">Yes/No (Success/Fail)</span>
                   <span class="subtype-description">
@@ -171,7 +187,7 @@
                     name="individualPredictionType" 
                     value="time_range"
                     v-model="individualPredictionType"
-                    :disabled="!integrationStatus"
+                    :disabled="!tokenValid"
                   />
                   <span class="subtype-label">Time Range</span>
                   <span class="subtype-description">
@@ -190,7 +206,7 @@
                     min="0"
                     max="300"
                     step="5"
-                    :disabled="!integrationStatus"
+                    :disabled="!tokenValid"
                     class="config-input"
                   />
                 </label>
@@ -210,7 +226,7 @@
                       min="30"
                       max="300"
                       step="5"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                     />
                   </label>
@@ -225,7 +241,7 @@
                     <input 
                       type="text"
                       v-model="yesNoCustomTitle"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                       placeholder="Will we win at the current challenge item?"
                     />
@@ -241,7 +257,7 @@
                     <input 
                       type="text"
                       v-model="yesOutcomeName"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                       placeholder="Yes"
                     />
@@ -257,7 +273,7 @@
                     <input 
                       type="text"
                       v-model="noOutcomeName"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                       placeholder="No"
                     />
@@ -276,7 +292,7 @@
                       min="0"
                       max="300"
                       step="5"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                       placeholder=""
                     />
@@ -298,7 +314,7 @@
                       min="30"
                       max="300"
                       step="5"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                     />
                   </label>
@@ -313,7 +329,7 @@
                     <input 
                       type="text"
                       v-model="timeRangeCustomTitle"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                       placeholder="How many minutes do we spend on the current challenge item?"
                     />
@@ -328,7 +344,7 @@
                     Number of Time Outcomes:
                     <select 
                       v-model.number="timeRangeOutcomeCount"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-select"
                     >
                       <option v-for="n in 5" :key="n + 2" :value="n + 2">{{ n + 2 }}</option>
@@ -347,7 +363,7 @@
                       v-model.number="timeRangeMaxMinutes"
                       min="5"
                       max="120"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                     />
                   </label>
@@ -361,7 +377,7 @@
                     <input 
                       type="checkbox"
                       v-model="timeRangeLowTimeRangesOnlyOnSuccess"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-checkbox"
                     />
                     <span>Low time ranges only eligible on success</span>
@@ -376,7 +392,7 @@
                     <input 
                       type="checkbox"
                       v-model="timeRangeUseTemplateMax"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-checkbox"
                     />
                     <span>Use template maximum even if win rules allow less</span>
@@ -391,7 +407,7 @@
                     <input 
                       type="checkbox"
                       v-model="timeRangeExcludePredictionWindow"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-checkbox"
                     />
                     <span>Exclude the prediction time window</span>
@@ -410,7 +426,7 @@
                       min="0"
                       max="300"
                       step="5"
-                      :disabled="!integrationStatus"
+                      :disabled="!tokenValid"
                       class="config-input"
                       placeholder=""
                     />
@@ -427,7 +443,7 @@
               <button 
                 @click="saveTemplate"
                 class="btn-save"
-                :disabled="!integrationStatus || !predictionType"
+                :disabled="!tokenValid || !predictionType"
               >
                 Save Configuration
               </button>
@@ -457,6 +473,7 @@ import {
 const props = defineProps<{
   visible: boolean;
   profileGuardEnabled?: boolean;
+  autoStartOAuth?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -464,8 +481,14 @@ const emit = defineEmits<{
   (e: 'update'): void;
 }>();
 
+const REFRESH_COOLDOWN_MS = 3000;
+
 const oauthInProgress = ref(false);
 const integrationStatus = ref<any>(null);
+const tokenValid = ref(false);
+const tokenRefreshError = ref('');
+const refreshInProgress = ref(false);
+const lastRefreshAt = ref(0);
 
 // Prediction template state
 const predictionType = ref<string>('whole_challenge'); // 'whole_challenge' | 'individual_item'
@@ -491,21 +514,54 @@ const timeRangeCancelIfSuccessWithinSeconds = ref<number | null>(null); // Null 
 // Check profile guard requirement
 const profileGuardEnabled = computed(() => props.profileGuardEnabled === true);
 
-// Note: Profile UUID is now handled by OnlineProfileManager in the backend
-// No need to pass it as a prop or watch it
+const refreshButtonDisabled = computed(() => {
+  if (!integrationStatus.value) {
+    return true;
+  }
+  if (refreshInProgress.value || oauthInProgress.value) {
+    return true;
+  }
+  if (lastRefreshAt.value > 0 && Date.now() - lastRefreshAt.value < REFRESH_COOLDOWN_MS) {
+    return true;
+  }
+  return false;
+});
+
+const refreshButtonLabel = computed(() => (refreshInProgress.value ? 'Refreshing...' : 'Refresh'));
+
+function applyTokenAssessment(assessment: any, status: any) {
+  integrationStatus.value = status;
+  tokenValid.value = !!assessment?.valid;
+  tokenRefreshError.value = assessment?.valid
+    ? ''
+    : (assessment?.reason || 'Token needs refresh');
+}
+
+async function assessCurrentToken(force = false) {
+  const status = await (window as any).electronAPI.getTwitchIntegrationStatus();
+  if (!status) {
+    applyTokenAssessment({ connected: false, valid: false }, null);
+    return { connected: false, valid: false };
+  }
+
+  const assessment = await (window as any).electronAPI.validateTwitchToken(
+    force ? { force: true } : {}
+  );
+  applyTokenAssessment(assessment, status);
+  return assessment;
+}
 
 // Load integration status and template configuration
 const loadData = async () => {
   if (!profileGuardEnabled.value) {
     integrationStatus.value = null;
+    tokenValid.value = false;
+    tokenRefreshError.value = '';
     return;
   }
   
   try {
-    // Load integration status (uses OnlineProfileManager internally)
-    const status = await (window as any).electronAPI.getTwitchIntegrationStatus();
-    integrationStatus.value = status;
-    
+    await assessCurrentToken(false);
     // Load prediction template configuration (uses OnlineProfileManager internally)
     const template = await (window as any).electronAPI.getPredictionsTemplate();
     const normalized = normalizePredictionsTemplate(template);
@@ -531,6 +587,40 @@ const loadData = async () => {
   } catch (error) {
     console.error('[TwitchIntegrationSetup] Error loading data:', error);
     integrationStatus.value = null;
+    tokenValid.value = false;
+    tokenRefreshError.value = '';
+  }
+};
+
+const refreshTokens = async () => {
+  if (refreshButtonDisabled.value) {
+    return;
+  }
+
+  refreshInProgress.value = true;
+  lastRefreshAt.value = Date.now();
+
+  try {
+    const assessment = await assessCurrentToken(true);
+    if (assessment?.valid) {
+      emit('update');
+      return;
+    }
+
+    if (assessment?.needsReauth) {
+      const confirmed = await showConfirm(
+        `Twitch token validation failed.${assessment.reason ? ` ${assessment.reason}` : ''}\n\nWould you like to re-authenticate with Twitch now?`,
+        'Twitch Re-authentication Required'
+      );
+      if (confirmed) {
+        await startOAuthFlow();
+      }
+    }
+  } catch (error: any) {
+    console.error('[TwitchIntegrationSetup] Refresh error:', error);
+    tokenRefreshError.value = error.message || 'Token refresh failed';
+  } finally {
+    refreshInProgress.value = false;
   }
 };
 
@@ -592,6 +682,8 @@ const revokeTokens = async () => {
     
     if (result && result.success) {
       integrationStatus.value = null;
+      tokenValid.value = false;
+      tokenRefreshError.value = '';
       emit('update');
     } else {
       // Check if revocation failed but token was valid
@@ -612,6 +704,8 @@ const revokeTokens = async () => {
           const forceResult = await (window as any).electronAPI.revokeTwitchIntegration({ force: true });
           if (forceResult && forceResult.success) {
             integrationStatus.value = null;
+            tokenValid.value = false;
+            tokenRefreshError.value = '';
             emit('update');
           } else {
             await showAlert(`Failed to disconnect: ${forceResult?.error || 'Unknown error'}`, 'Disconnect Error');
@@ -708,15 +802,21 @@ const handleClose = () => {
 };
 
 // Watch for visibility changes
-watch(() => props.visible, (newVal) => {
+watch(() => props.visible, async (newVal) => {
   if (newVal) {
-    loadData();
+    await loadData();
+    if (props.autoStartOAuth && integrationStatus.value && !tokenValid.value) {
+      await startOAuthFlow();
+    }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
   if (props.visible) {
-    loadData();
+    await loadData();
+    if (props.autoStartOAuth && integrationStatus.value && !tokenValid.value) {
+      await startOAuthFlow();
+    }
   }
 });
 </script>
@@ -834,8 +934,18 @@ onMounted(() => {
   color: #10b981;
 }
 
+.status-indicator.needs-refresh {
+  color: #f59e0b;
+}
+
 .status-indicator.disconnected {
   color: #ef4444;
+}
+
+.token-refresh-error {
+  margin: 8px 0 0;
+  color: #fbbf24;
+  font-size: 13px;
 }
 
 .status-text {
@@ -849,6 +959,7 @@ onMounted(() => {
 }
 
 .btn-connect,
+.btn-refresh,
 .btn-disconnect {
   padding: 6px 12px;
   border: none;
@@ -857,6 +968,20 @@ onMounted(() => {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.btn-refresh {
+  background: #d97706;
+  color: #fff;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #f59e0b;
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-connect {

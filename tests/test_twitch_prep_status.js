@@ -26,23 +26,31 @@ function testIntegrationConnected() {
 
 function testStatusLabels() {
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ twitchIntegrationValid: false, prepPredictionsMode: 'none' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: false, twitchTokenValid: false, prepPredictionsMode: 'none' }),
     '(Off)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ twitchIntegrationValid: false, prepPredictionsMode: 'same_item' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: false, twitchTokenValid: true, prepPredictionsMode: 'same_item' }),
     '(Off)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ twitchIntegrationValid: true, prepPredictionsMode: 'none' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: true, twitchTokenValid: false, prepPredictionsMode: 'none' }),
+    '(Needs refresh)'
+  );
+  assert.strictEqual(
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: true, twitchTokenValid: false, prepPredictionsMode: 'same_item' }),
+    '(Needs refresh)'
+  );
+  assert.strictEqual(
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: true, twitchTokenValid: true, prepPredictionsMode: 'none' }),
     '(Ready)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ twitchIntegrationValid: true, prepPredictionsMode: 'same_item' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: true, twitchTokenValid: true, prepPredictionsMode: 'same_item' }),
     '(On, Per-Item)'
   );
   assert.strictEqual(
-    getTwitchPrepStatusLabel({ twitchIntegrationValid: true, prepPredictionsMode: 'whole_challenge' }),
+    getTwitchPrepStatusLabel({ twitchIntegrationConnected: true, twitchTokenValid: true, prepPredictionsMode: 'whole_challenge' }),
     '(On, Per-Run)'
   );
 }

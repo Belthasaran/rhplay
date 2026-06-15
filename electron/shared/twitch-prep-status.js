@@ -17,12 +17,15 @@ function isTwitchIntegrationConnected(status) {
 }
 
 /**
- * @param {{ twitchIntegrationValid: boolean, prepPredictionsMode: PrepPredictionsMode }} params
+ * @param {{ twitchIntegrationConnected: boolean, twitchTokenValid: boolean, prepPredictionsMode: PrepPredictionsMode }} params
  * @returns {string}
  */
-function getTwitchPrepStatusLabel({ twitchIntegrationValid, prepPredictionsMode }) {
-  if (!twitchIntegrationValid) {
+function getTwitchPrepStatusLabel({ twitchIntegrationConnected, twitchTokenValid, prepPredictionsMode }) {
+  if (!twitchIntegrationConnected) {
     return '(Off)';
+  }
+  if (!twitchTokenValid) {
+    return '(Needs refresh)';
   }
   if (prepPredictionsMode === 'same_item') {
     return '(On, Per-Item)';

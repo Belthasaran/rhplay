@@ -1,4 +1,5 @@
-- **Prepare Run Twitch button**: Clicking Twitch in Prepare Run always opens the prep dropdown (Setup is inside it); status label uses the same “connected” check as Twitch Integration Setup instead of requiring an active token.
+- **Prepare Run Twitch button**: Opens prep dropdown when token is valid; routes to Setup (with re-auth prompt) when disconnected or token needs refresh; labels include `(Needs refresh)`.
+- **Twitch token validation**: Centralized 10-minute + per-session cache; Setup shows green/orange/red connection state, Refresh button with cooldown, and prep routes to Setup when disconnected or token invalid.
 - **Prepare Run Twitch predictions**: Purple Twitch dropdown in Prepare Run to pre-select None, Per-Item, or Per-Run prediction mode before Start Run.
 - **Twitch prediction templates**: Template save merges inactive mode settings; defaults apply when unset; custom titles are per-mode (whole run / win-lose / time-range).
 - **Run emulator launch**: Active-run Launch resolves staged ROMs by sequence prefix (`02_<timestamp>[_codes].sfc`) instead of assuming `02.sfc`.

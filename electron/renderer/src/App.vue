@@ -1485,7 +1485,7 @@
           <!-- Preparing state -->
           <template v-if="!isRunActive">
             <button @click="openPastRunsModal" class="btn-past-runs">📜 Past Runs</button>
-            <button @click="exportRunToFile" :disabled="!isRunSaved">📤 Export</button>
+            <button @click="exportRunToFile()" :disabled="!isRunSaved">📤 Export</button>
             <button @click="importRunFromFile">📥 Import</button>
             <button @click="stageRun('save')" :disabled="runEntries.length === 0">Stage and Save</button>
               <div v-if="isRunSaved" class="run-status-button-wrapper" style="position: relative; display: inline-block;">
@@ -32759,7 +32759,8 @@ async function setVersionSpecificRating() {
 
 // Export/Import Run
 async function exportRunToFile(runUuid?: string | null) {
-  const targetUuid = runUuid || currentRunUuid.value;
+  const explicitUuid = typeof runUuid === 'string' && runUuid.length > 0 ? runUuid : null;
+  const targetUuid = explicitUuid || currentRunUuid.value;
   if (!targetUuid) {
     await showAlert('No run to export. Please save the run first.', 'No Run');
     return;
@@ -32771,11 +32772,11 @@ async function exportRunToFile(runUuid?: string | null) {
   }
 
   let exportName = currentRunName.value;
-  if (runUuid && selectedPastRun.value?.run_uuid === runUuid) {
+  if (explicitUuid && selectedPastRun.value?.run_uuid === explicitUuid) {
     exportName = selectedPastRun.value.run_name;
-  } else if (runUuid) {
+  } else if (explicitUuid) {
     try {
-      const run = await (window as any).electronAPI.getRun({ runUuid });
+      const run = await (window as any).electronAPI.getRun({ runUuid: explicitUuid });
       exportName = run?.run_name || 'run';
     } catch {
       exportName = 'run';

@@ -1,3 +1,4 @@
+- **Twitch token decrypt fix**: Use Node `crypto` module in ipc-handlers so Twitch token decrypt/validate works (global Web Crypto lacks `createDecipheriv`).
 - **Prepare Run Twitch button**: Opens prep dropdown when token is valid; routes to Setup (with re-auth prompt) when disconnected or token needs refresh; labels include `(Needs refresh)`.
 - **Twitch token validation**: Centralized 10-minute + per-session cache; Setup shows green/orange/red connection state, Refresh button with cooldown, and prep routes to Setup when disconnected or token invalid.
 - **Prepare Run Twitch predictions**: Purple Twitch dropdown in Prepare Run to pre-select None, Per-Item, or Per-Run prediction mode before Start Run.

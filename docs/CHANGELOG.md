@@ -1,3 +1,5 @@
+- **Untested stage filtering**: Random stage selection respects test status (cutoff 2026-06-13), Stage Limits checkboxes (include untested off by default), triplet-keyed `stage_feedback` user overrides, and full run-mode feedback form for untested stages.
+- **Stage Test dialog**: Replaced auto-closing Level Patch Test modal with persistent launch + feedback flow (`StageTestDialog.vue`); `gamestages.test_status` columns with Lev# checkmark/X in Edit mode; extended `stage_feedback` and JSONL backup log on save.
 - **JIT.LevelInfo**: Added `lib/jit-levels/levelinfo/` JS port of `lmlevelinfo` parse pipeline (`parseLevelInfo`, `mapLevelInfoToStageDefaults`, `deriveTagsFromLevelInfo`); parity with `level_info1 --json` on akogare `0x109`.
 
 - **Game stages local editing**: Users can edit stages for games with no author-defined stages; `gameversions_local` tracks local edits; `stages_sealed`/`stages_sealed_at` on `gameversions` control sealing policy; Game Details shows "Stages not set yet" link.

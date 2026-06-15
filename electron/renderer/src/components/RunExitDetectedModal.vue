@@ -18,7 +18,21 @@
           </p>
         </div>
 
-        <div v-if="showStageFeedback" class="run-exit-feedback">
+        <div v-if="showStageFeedback && showFullFeedbackForm" class="run-exit-feedback">
+          <StageFeedbackForm
+            ref="feedbackFormRef"
+            mode="full"
+            :initial-stage="initialStage"
+            :model-value="initialFeedbackValue"
+            :show-comment="true"
+          />
+          <div class="run-exit-button-row run-exit-outcome-row">
+            <button class="btn-primary" @click="emitFullChoice('win')">I won — Save</button>
+            <button class="btn-secondary" @click="emitFullChoice('skip')">Skipped — Save</button>
+          </div>
+        </div>
+
+        <div v-else-if="showStageFeedback" class="run-exit-feedback">
           <h4>I won</h4>
           <div class="run-exit-button-row">
             <button class="btn-action" @click="emitChoice('win', null, '')">I won: No comment</button>
@@ -55,6 +69,12 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
+import StageFeedbackForm, {
+  type StageFeedbackFormStage,
+  type StageFeedbackFormValue,
+} from '@/components/StageFeedbackForm.vue';
+
 const props = defineProps<{
   visible: boolean;
   gameId?: string | number | null;
@@ -66,14 +86,40 @@ const props = defineProps<{
   stageDifficulty?: number | null;
   stageDifficultyLabel?: string;
   showStageFeedback?: boolean;
+  showFullFeedbackForm?: boolean;
+  initialStage?: StageFeedbackFormStage | null;
+  initialFeedbackValue?: Partial<StageFeedbackFormValue> | null;
 }>();
 
 const emit = defineEmits<{
-  (e: 'choice', payload: { outcome: 'win' | 'skip'; difficultyFeedback: number | null; comment: string }): void;
+  (e: 'choice', payload: {
+    outcome: 'win' | 'skip';
+    difficultyFeedback: number | null;
+    comment: string;
+    test_result?: 'no_action' | 'reject' | 'accept' | null;
+    tag_feedback?: string | null;
+  }): void;
 }>();
+
+const feedbackFormRef = ref<InstanceType<typeof StageFeedbackForm> | null>(null);
 
 function emitChoice(outcome: 'win' | 'skip', difficultyFeedback: number | null, comment: string) {
   emit('choice', { outcome, difficultyFeedback, comment });
+}
+
+function emitFullChoice(outcome: 'win' | 'skip') {
+  const formValue = feedbackFormRef.value?.getValue();
+  if (!formValue) {
+    emit('choice', { outcome, difficultyFeedback: null, comment: '' });
+    return;
+  }
+  emit('choice', {
+    outcome,
+    difficultyFeedback: formValue.difficulty_feedback,
+    comment: formValue.comment || '',
+    test_result: formValue.test_result,
+    tag_feedback: JSON.stringify(formValue.tag_feedback),
+  });
 }
 </script>
 
@@ -99,5 +145,9 @@ function emitChoice(outcome: 'win' | 'skip', difficultyFeedback: number | null, 
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.run-exit-outcome-row {
+  margin-top: 16px;
 }
 </style>

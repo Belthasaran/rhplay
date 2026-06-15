@@ -705,6 +705,16 @@ const MIGRATIONS = {
           && columnExists(db, 'gameversions', 'stages_sealed_at');
       },
     },
+    {
+      id: 'rhdata_069_gamestages_test_status',
+      description: 'Add test_status and verified patch snapshot columns to gamestages',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/069_rhdata_gamestages_test_status.sql'),
+      skipIf(db) {
+        return columnExists(db, 'gamestages', 'test_status')
+          && columnExists(db, 'gamestages', 'test_verified_requisites');
+      },
+    },
   ],
   clientdata: [
     {
@@ -1558,6 +1568,39 @@ const MIGRATIONS = {
         return columnExists(db, 'user_profiles', 'account_verification_level')
           && tableExists(db, 'nostr_profile_verification_status')
           && tableExists(db, 'nostr_social_id_verification_status');
+      },
+    },
+    {
+      id: 'clientdata_067_stage_feedback_test_fields',
+      description: 'Extend stage_feedback with test result, tag feedback, and source fields',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/067_clientdata_stage_feedback_test_fields.sql'),
+      skipIf(db) {
+        return columnExists(db, 'stage_feedback', 'feedback_source')
+          && columnExists(db, 'stage_feedback', 'tag_feedback')
+          && columnExists(db, 'stage_feedback', 'stage_uuid');
+      },
+    },
+    {
+      id: 'clientdata_068_stage_feedback_triplet_key',
+      description: 'Key stage_feedback by gameid, levelnumber, and playlevel_patchcode',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/068_clientdata_stage_feedback_triplet_key.sql'),
+      skipIf(db) {
+        const row = db.prepare(`
+          SELECT sql FROM sqlite_master WHERE type='table' AND name='stage_feedback'
+        `).get();
+        return row?.sql?.includes('playlevel_patchcode TEXT NOT NULL') ?? false;
+      },
+    },
+    {
+      id: 'clientdata_069_run_plan_untested_filters',
+      description: 'Add untested stage filter columns to run_plan_entries',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/069_clientdata_run_plan_untested_filters.sql'),
+      skipIf(db) {
+        return columnExists(db, 'run_plan_entries', 'stage_filter_include_untested')
+          && columnExists(db, 'run_plan_entries', 'stage_filter_untested_only');
       },
     },
   ],

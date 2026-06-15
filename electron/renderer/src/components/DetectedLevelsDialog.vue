@@ -146,7 +146,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUpdated, nextTick, onUnmounted } from 'vue';
-import { showAlert, showPrompt } from '@/utils/dialogs';
+import { showAlert, showConfirm } from '@/utils/dialogs';
 
 interface Props {
   isOpen: boolean;
@@ -332,13 +332,13 @@ async function loadDetectedLevels(runCalisto = false) {
       gameName.value = result.gameName || '';
 
       if (result.calistoNeeded && !runCalisto) {
-        const answer = await showPrompt(
+        const confirmed = await showConfirm(
           'LMFilter data not found. Would you like to launch Lunar Magic (jitlevels/lm363.exe) and Calisto to attempt a definitive level list?\n\nRequires Wine on Linux.',
-          '',
           'LMFilter Not Found',
-          'Run Calisto export?'
+          'Yes',
+          'No'
         );
-        if (answer && String(answer).trim().toLowerCase() !== 'cancel') {
+        if (confirmed) {
           await loadDetectedLevels(true);
           return;
         }

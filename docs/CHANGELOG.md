@@ -3,6 +3,7 @@
 - **Run exit auto-launch**: Do not auto-launch after the last challenge completes; await `completeRun()` so run state is cleared before any follow-up launch attempt.
 - **Run exit feedback UI**: Random-stage exit modal shows compact 0–10 difficulty row; preset buttons use green/red/orange tones with test-result labels.
 - **Past Runs actions**: Run Again (completed/cancelled), Load (preparing), and Export buttons in run inspector; Run Again supports reseed vs keep random selections.
+- **Run Again save fix**: Saving a cloned run with kept random selections no longer fails on foreign-key constraint (plan upsert preserves `run_results` links).
 - **Stage Test dialog**: Replaced auto-closing Level Patch Test modal with persistent launch + feedback flow (`StageTestDialog.vue`); `gamestages.test_status` columns with Lev# checkmark/X in Edit mode; extended `stage_feedback` and JSONL backup log on save.
 - **JIT.LevelInfo**: Added `lib/jit-levels/levelinfo/` JS port of `lmlevelinfo` parse pipeline (`parseLevelInfo`, `mapLevelInfoToStageDefaults`, `deriveTagsFromLevelInfo`); parity with `level_info1 --json` on akogare `0x109`.
 

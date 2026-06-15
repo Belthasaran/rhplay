@@ -1,6 +1,9 @@
 -- Migration 068: stage_feedback triplet unique key
 -- Date: 2026-06-14
 -- Description: Key stage_feedback by (gameid, levelnumber, playlevel_patchcode)
+--
+-- Note: migratedb drops/recreates v_run_results_timing_compat around this script
+-- (partial DBs may lack pause_end_ms; see clientdata_068 apply in migratedb.js).
 
 UPDATE stage_feedback SET playlevel_patchcode = '2lvno'
 WHERE playlevel_patchcode IS NULL OR TRIM(playlevel_patchcode) = '';

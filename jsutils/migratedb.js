@@ -185,6 +185,33 @@ function ensureColumn(db, table, column, definition) {
   }
 }
 
+function recreateRunResultsTimingCompatView(db) {
+  if (!tableExists(db, 'run_results')) {
+    return;
+  }
+  db.exec('DROP VIEW IF EXISTS v_run_results_timing_compat');
+  db.exec(`CREATE VIEW IF NOT EXISTS v_run_results_timing_compat AS
+SELECT
+    result_uuid,
+    started_at_ms,
+    completed_at_ms,
+    pause_start_ms,
+    pause_end_ms,
+    pause_milliseconds,
+    duration_milliseconds,
+    CAST(COALESCE(started_at_ms, 0) / 1000 AS INTEGER) as started_at_seconds,
+    CAST(COALESCE(completed_at_ms, 0) / 1000 AS INTEGER) as completed_at_seconds,
+    CAST(COALESCE(pause_milliseconds, 0) / 1000 AS INTEGER) as pause_seconds_rounded,
+    CAST(COALESCE(duration_milliseconds, 0) / 1000 AS INTEGER) as duration_seconds_rounded,
+    started_at,
+    completed_at,
+    pause_start,
+    pause_end,
+    pause_seconds,
+    duration_seconds
+FROM run_results`);
+}
+
 function ensureTranslevelsStructures(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS gameversions_translevels (
     gvtuuid varchar(255) primary key DEFAULT (lower(hex(randomblob(16)))),
@@ -1584,8 +1611,16 @@ const MIGRATIONS = {
     {
       id: 'clientdata_068_stage_feedback_triplet_key',
       description: 'Key stage_feedback by gameid, levelnumber, and playlevel_patchcode',
-      type: 'sql',
-      file: resolveRelative('electron/sql/migrations/068_clientdata_stage_feedback_triplet_key.sql'),
+      type: 'function',
+      apply(db) {
+        db.exec('DROP VIEW IF EXISTS v_run_results_timing_compat');
+        const sqlPath = resolveRelative('electron/sql/migrations/068_clientdata_stage_feedback_triplet_key.sql');
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+        db.exec(sql);
+        ensureColumn(db, 'run_results', 'pause_end', 'TIMESTAMP NULL');
+        ensureColumn(db, 'run_results', 'pause_end_ms', 'INTEGER NULL');
+        recreateRunResultsTimingCompatView(db);
+      },
       skipIf(db) {
         const row = db.prepare(`
           SELECT sql FROM sqlite_master WHERE type='table' AND name='stage_feedback'

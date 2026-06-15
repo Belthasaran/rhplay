@@ -1,5 +1,5 @@
 <template>
-  <div class="difficulty-grid">
+  <div class="difficulty-grid" :class="{ compact }">
     <div
       v-for="diff in difficultyValues"
       :key="diff"
@@ -12,7 +12,7 @@
       @click="$emit('update:modelValue', diff)"
     >
       <span class="difficulty-number">{{ diff }}</span>
-      <span class="difficulty-label">{{ getDifficultyLabel(diff) }}</span>
+      <span v-if="!compact" class="difficulty-label">{{ getDifficultyLabel(diff) }}</span>
     </div>
   </div>
 </template>
@@ -20,9 +20,12 @@
 <script setup lang="ts">
 import { DIFFICULTY_VALUES, getDifficultyLabel } from '@/utils/stage-difficulty';
 
-defineProps<{
+withDefaults(defineProps<{
   modelValue: number | null;
-}>();
+  compact?: boolean;
+}>(), {
+  compact: false,
+});
 
 defineEmits<{
   'update:modelValue': [value: number];
@@ -77,5 +80,27 @@ const difficultyValues = DIFFICULTY_VALUES;
   opacity: 0.85;
   margin-top: 2px;
   line-height: 1.2;
+}
+
+.difficulty-grid.compact {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-top: 0;
+}
+
+.difficulty-grid.compact .difficulty-grid-item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 0;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.difficulty-grid.compact .difficulty-number {
+  font-size: 0.85em;
+  font-weight: 600;
 }
 </style>

@@ -907,6 +907,186 @@ function importRun(dbManager, importData) {
   }
 }
 
+function expectedResultCountFromPlan(planEntries) {
+  return planEntries.reduce((sum, entry) => sum + (entry.count || 1), 0);
+}
+
+function shouldSkipExpandIfResultsExist(planEntries, existingCount) {
+  if (!existingCount || existingCount <= 0) return false;
+  return existingCount === expectedResultCountFromPlan(planEntries);
+}
+
+/**
+ * Clone a completed/cancelled run into a new preparing run for Run Again.
+ * @param {Object} dbManager
+ * @param {string} sourceRunUuid
+ * @param {'reseed'|'keep'} mode
+ */
+function runAgainFromPastRun(dbManager, sourceRunUuid, mode) {
+  const db = dbManager.getConnection('clientdata');
+  const sourceRun = db.prepare(`SELECT * FROM runs WHERE run_uuid = ?`).get(sourceRunUuid);
+  if (!sourceRun) {
+    return { success: false, error: 'Run not found' };
+  }
+  if (sourceRun.status !== 'completed' && sourceRun.status !== 'cancelled') {
+    return { success: false, error: `Run Again requires a completed or cancelled run (status: ${sourceRun.status})` };
+  }
+
+  const planEntries = db.prepare(`
+    SELECT * FROM run_plan_entries WHERE run_uuid = ? ORDER BY sequence_number
+  `).all(sourceRunUuid);
+  if (!planEntries.length) {
+    return { success: false, error: 'Run has no plan entries' };
+  }
+
+  const hasRandomEntries = planEntries.some(
+    (e) => e.entry_type === 'random_game' || e.entry_type === 'random_stage'
+  );
+  if (mode !== 'reseed' && mode !== 'keep') {
+    return { success: false, error: `Invalid mode: ${mode}` };
+  }
+
+  const newRunUuid = crypto.randomUUID();
+  const suggestedName = `${sourceRun.run_name} (Again)`;
+
+  const insertPlanStmt = db.prepare(`
+    INSERT INTO run_plan_entries
+      (entry_uuid, run_uuid, sequence_number, entry_type, gameid, exit_number,
+       count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions, entry_notes,
+       trans_level, stage_filter_min_difficulty, stage_filter_max_difficulty,
+       stage_filter_include_flags, stage_filter_exclude_flags,
+       stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
+       stage_filter_has_tags, stage_filter_exclude_tags,
+       game_filter_min_difficulty, game_filter_max_difficulty,
+       stage_filter_include_untested, stage_filter_untested_only)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertResultStmt = db.prepare(`
+    INSERT INTO run_results
+      (result_uuid, run_uuid, plan_entry_uuid, sequence_number,
+       gameid, game_name, exit_number, stage_description,
+       was_random, revealed_early, status, conditions,
+       levelnumber, translevel, levelname)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?)
+  `);
+
+  const entryUuidMap = new Map();
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, win_rules_json)
+      VALUES (?, ?, ?, 'preparing', ?, ?, ?)
+    `).run(
+      newRunUuid,
+      suggestedName,
+      sourceRun.run_description || '',
+      sourceRun.global_conditions,
+      sourceRun.config_json,
+      sourceRun.win_rules_json || null
+    );
+
+    let reseedDefaultMapping = null;
+
+    planEntries.forEach((entry, idx) => {
+      const newEntryUuid = crypto.randomUUID();
+      entryUuidMap.set(entry.entry_uuid, newEntryUuid);
+
+      let filterSeed = entry.filter_seed;
+      if (mode === 'reseed' && (entry.entry_type === 'random_game' || entry.entry_type === 'random_stage')) {
+        let mapId = null;
+        if (entry.filter_seed) {
+          try {
+            mapId = parseSeed(entry.filter_seed).mapId;
+          } catch {
+            mapId = null;
+          }
+        }
+        if (!mapId || !getSeedMapping(dbManager, mapId)) {
+          if (!reseedDefaultMapping) {
+            reseedDefaultMapping = getOrCreateDefaultMapping(dbManager);
+          }
+          mapId = reseedDefaultMapping.mapId;
+        }
+        filterSeed = generateSeedWithMap(mapId);
+      }
+
+      insertPlanStmt.run(
+        newEntryUuid,
+        newRunUuid,
+        idx + 1,
+        entry.entry_type,
+        entry.gameid,
+        entry.exit_number,
+        entry.count || 1,
+        entry.filter_difficulty,
+        entry.filter_type,
+        entry.filter_pattern,
+        filterSeed,
+        entry.conditions,
+        entry.entry_notes || null,
+        entry.trans_level || null,
+        entry.stage_filter_min_difficulty ?? null,
+        entry.stage_filter_max_difficulty ?? null,
+        entry.stage_filter_include_flags || null,
+        entry.stage_filter_exclude_flags || null,
+        entry.stage_filter_include_any_of_flags || null,
+        entry.stage_filter_exclude_only_flags || null,
+        entry.stage_filter_has_tags || null,
+        entry.stage_filter_exclude_tags || null,
+        entry.game_filter_min_difficulty ?? null,
+        entry.game_filter_max_difficulty ?? null,
+        entry.stage_filter_include_untested ?? 0,
+        entry.stage_filter_untested_only ?? 0
+      );
+    });
+
+    if (mode === 'keep') {
+      const sourceResults = db.prepare(`
+        SELECT * FROM run_results WHERE run_uuid = ? ORDER BY sequence_number
+      `).all(sourceRunUuid);
+
+      if (sourceResults.length === 0) {
+        throw new Error('Keep mode requires expanded run results from the source run');
+      }
+
+      for (const result of sourceResults) {
+        const mappedPlanUuid = entryUuidMap.get(result.plan_entry_uuid) || null;
+        insertResultStmt.run(
+          crypto.randomUUID(),
+          newRunUuid,
+          mappedPlanUuid,
+          result.sequence_number,
+          result.gameid,
+          result.game_name,
+          result.exit_number,
+          result.stage_description,
+          result.was_random ? 1 : 0,
+          result.conditions,
+          result.levelnumber || null,
+          result.translevel || null,
+          result.levelname || null
+        );
+      }
+    }
+  });
+
+  try {
+    transaction();
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+
+  return {
+    success: true,
+    runUuid: newRunUuid,
+    suggestedName,
+    hasRandomEntries,
+    mode,
+    expectedResultCount: expectedResultCountFromPlan(planEntries),
+  };
+}
+
 module.exports = {
   generateMapId,
   generateSeedWithMap,
@@ -922,6 +1102,9 @@ module.exports = {
   validateSeed,
   exportRun,
   importRun,
+  runAgainFromPastRun,
+  expectedResultCountFromPlan,
+  shouldSkipExpandIfResultsExist,
   SEED_CHARS
 };
 

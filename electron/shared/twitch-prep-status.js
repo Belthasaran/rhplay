@@ -8,11 +8,11 @@
 /** @typedef {'none' | 'same_item' | 'whole_challenge'} PrepPredictionsMode */
 
 /**
- * @param {{ predictionsConfigured: boolean, twitchTokenValid: boolean, prepPredictionsMode: PrepPredictionsMode }} params
+ * @param {{ twitchIntegrationValid: boolean, prepPredictionsMode: PrepPredictionsMode }} params
  * @returns {string}
  */
-function getTwitchPrepStatusLabel({ predictionsConfigured, twitchTokenValid, prepPredictionsMode }) {
-  if (!predictionsConfigured || !twitchTokenValid) {
+function getTwitchPrepStatusLabel({ twitchIntegrationValid, prepPredictionsMode }) {
+  if (!twitchIntegrationValid) {
     return '(Off)';
   }
   if (prepPredictionsMode === 'same_item') {

@@ -1,3 +1,5 @@
+- **Prepare Run Twitch dropdown contrast**: Prediction style select and dropdown text use theme text/background colors (fixes black-on-black in dark themes).
+- **Prepare Run Twitch dropdown fix**: Capture button position before async token checks (event.currentTarget is null after await).
 - **Prepare Run Twitch decouple**: Invalid Twitch token no longer blocks Prepare Run; re-auth prompts once per session on open; predictions forced to None until reconnect; Start Run works without valid token.
 - **Twitch system-browser OAuth**: Loopback listener tries ports 47832 → 56218 → 51158 (register all in Twitch console); re-auth dialog offers Cancel / Open In System Browser / Open In App.
 - **Twitch OAuth browser open fix**: Do not treat `shell.openExternal` return value as failure (Electron resolves void on success); loopback waits up to 5 minutes for callback.

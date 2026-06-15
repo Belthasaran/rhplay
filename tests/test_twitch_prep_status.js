@@ -8,6 +8,8 @@ const {
   prepModeFromPredictionState,
   predictionStateFromPrepMode,
   templateTypeForPrepMode,
+  canEnableTwitchPredictions,
+  restrictedPrepPredictionsMode,
 } = require('../electron/shared/twitch-prep-status');
 
 function testIntegrationConnected() {
@@ -69,10 +71,36 @@ function testModeMapping() {
   assert.strictEqual(templateTypeForPrepMode('none'), null);
 }
 
+function testPredictionRestriction() {
+  assert.strictEqual(
+    canEnableTwitchPredictions({ connected: false, tokenValid: false }),
+    false
+  );
+  assert.strictEqual(
+    canEnableTwitchPredictions({ connected: true, tokenValid: false }),
+    false
+  );
+  assert.strictEqual(
+    canEnableTwitchPredictions({ connected: false, tokenValid: true }),
+    false
+  );
+  assert.strictEqual(
+    canEnableTwitchPredictions({ connected: true, tokenValid: true }),
+    true
+  );
+
+  assert.strictEqual(restrictedPrepPredictionsMode('same_item', false), 'none');
+  assert.strictEqual(restrictedPrepPredictionsMode('whole_challenge', false), 'none');
+  assert.strictEqual(restrictedPrepPredictionsMode('none', false), 'none');
+  assert.strictEqual(restrictedPrepPredictionsMode('same_item', true), 'same_item');
+  assert.strictEqual(restrictedPrepPredictionsMode('whole_challenge', true), 'whole_challenge');
+}
+
 function main() {
   testIntegrationConnected();
   testStatusLabels();
   testModeMapping();
+  testPredictionRestriction();
   console.log('test_twitch_prep_status: ok');
 }
 

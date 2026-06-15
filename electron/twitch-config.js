@@ -82,15 +82,35 @@ function getTwitchClientId() {
 }
 
 /**
- * Get the redirect URI for OAuth
+ * Loopback ports for system-browser OAuth (each must be registered in Twitch Developer Console).
+ * Tried in order when the preferred port is already in use.
+ */
+const TWITCH_OAUTH_LOOPBACK_PORTS = [47832, 56218, 51158];
+
+/** @deprecated Use TWITCH_OAUTH_LOOPBACK_PORTS[0] */
+const TWITCH_OAUTH_LOOPBACK_PORT = TWITCH_OAUTH_LOOPBACK_PORTS[0];
+
+/**
+ * Get the redirect URI for embedded in-app OAuth window
  */
 function getTwitchRedirectUri() {
-  // Use https://localhost as specified
   return 'https://localhost';
 }
 
+/**
+ * Get the redirect URI for system-browser OAuth via local loopback server.
+ * Must use the localhost hostname (not 127.0.0.1) — Twitch rejects HTTP redirect URIs on IP addresses.
+ * @param {number} [port]
+ */
+function getTwitchLoopbackRedirectUri(port = TWITCH_OAUTH_LOOPBACK_PORTS[0]) {
+  return `http://localhost:${port}/`;
+}
+
 module.exports = {
+  TWITCH_OAUTH_LOOPBACK_PORT,
+  TWITCH_OAUTH_LOOPBACK_PORTS,
   getTwitchClientId,
-  getTwitchRedirectUri
+  getTwitchRedirectUri,
+  getTwitchLoopbackRedirectUri,
 };
 

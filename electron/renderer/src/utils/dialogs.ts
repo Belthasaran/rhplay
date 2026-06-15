@@ -200,6 +200,38 @@ export function handleConfirmCancel() {
 }
 
 // ============================================================================
+// Twitch Re-auth Choice Dialog State
+// ============================================================================
+
+export type TwitchReauthChoice = 'cancel' | 'system_browser' | 'in_app';
+
+export const twitchReauthChoiceDialogVisible = ref(false);
+export const twitchReauthChoiceDialogTitle = ref('');
+export const twitchReauthChoiceDialogMessage = ref('');
+let twitchReauthChoiceDialogResolve: ((value: TwitchReauthChoice) => void) | null = null;
+
+export function showTwitchReauthChoice(
+  message: string,
+  title?: string
+): Promise<TwitchReauthChoice> {
+  const dialogTitle = title || 'Twitch Re-authentication Required';
+  return new Promise((resolve) => {
+    twitchReauthChoiceDialogTitle.value = dialogTitle;
+    twitchReauthChoiceDialogMessage.value = message;
+    twitchReauthChoiceDialogResolve = resolve;
+    twitchReauthChoiceDialogVisible.value = true;
+  });
+}
+
+export function handleTwitchReauthChoice(choice: TwitchReauthChoice) {
+  twitchReauthChoiceDialogVisible.value = false;
+  if (twitchReauthChoiceDialogResolve) {
+    twitchReauthChoiceDialogResolve(choice);
+    twitchReauthChoiceDialogResolve = null;
+  }
+}
+
+// ============================================================================
 // Prompt Dialog State
 // ============================================================================
 

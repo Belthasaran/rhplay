@@ -9584,6 +9584,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     @confirm="handleConfirmConfirm"
     @cancel="handleConfirmCancel"
   />
+
+  <TwitchReauthChoiceDialog
+    :visible="twitchReauthChoiceDialogVisible"
+    :title="twitchReauthChoiceDialogTitle"
+    :message="twitchReauthChoiceDialogMessage"
+    @choice="handleTwitchReauthChoiceDialog"
+  />
   
   <PromptDialog
     :visible="promptDialogVisible"
@@ -9633,7 +9640,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   <TwitchIntegrationSetup
     :visible="showTwitchIntegrationSetup"
     :profileGuardEnabled="profileGuardEnabled"
-    :autoStartOAuth="openTwitchSetupAutoOAuth"
+    :autoStartOAuthMode="openTwitchSetupAutoOAuthMode"
     @close="handleCloseTwitchIntegrationSetup"
     @update="handleTwitchIntegrationUpdate"
   />
@@ -9644,6 +9651,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     :selectedMode="prepPredictionsMode"
     :individualSubtype="prepIndividualSubtype"
     :timeRangeOutcomeCount="prepTimeRangeOutcomeCount"
+    :predictionsAvailable="twitchTokenValid"
     @close="handleCloseTwitchPrepDropdown"
     @setup="handleTwitchPrepSetup"
     @select-mode="handleTwitchPrepSelectMode"
@@ -9816,6 +9824,7 @@ import {
 } from './utils/run-staging';
 import { serializePlanSnapshot, normalizeWinRulesJson } from './utils/run-plan-snapshot';
 import {
+  canEnableTwitchPredictions,
   getTwitchPrepStatusLabel,
   prepModeFromPredictionState,
   predictionStateFromPrepMode,
@@ -9864,6 +9873,7 @@ import PrepSaveRequiredModal from './components/PrepSaveRequiredModal.vue';
 import TwitchPrepDropdown from './components/TwitchPrepDropdown.vue';
 import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import TwitchReauthChoiceDialog from './components/TwitchReauthChoiceDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import WinRulesDropdown from './components/WinRulesDropdown.vue';
@@ -9890,6 +9900,10 @@ import {
   confirmDialogCancelText,
   handleConfirmConfirm,
   handleConfirmCancel,
+  twitchReauthChoiceDialogVisible,
+  twitchReauthChoiceDialogTitle,
+  twitchReauthChoiceDialogMessage,
+  handleTwitchReauthChoice,
   promptDialogVisible,
   promptDialogTitle,
   promptDialogMessage,
@@ -9907,6 +9921,11 @@ import {
   showPrompt,
   showPromptSync
 } from './utils/dialogs';
+import {
+  promptTwitchReauthentication,
+  runTwitchOAuth,
+  type TwitchOAuthMode,
+} from './utils/twitch-oauth-flow';
 
 // Debounce utility
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -20647,7 +20666,8 @@ function handleGlobalClick(e: MouseEvent) {
   const alertDialog = target.closest('.alert-dialog');
   const confirmDialog = target.closest('.confirm-dialog');
   const promptDialog = target.closest('.prompt-dialog');
-  if (alertDialog || confirmDialog || promptDialog) {
+  const twitchReauthDialog = target.closest('.twitch-reauth-choice-dialog');
+  if (alertDialog || confirmDialog || promptDialog || twitchReauthDialog) {
     return; // Click is inside a modal dialog, don't close dropdowns
   }
   
@@ -23551,7 +23571,8 @@ const prepPredictionsMode = ref<PrepPredictionsMode>('none');
 const prepIndividualSubtype = ref<IndividualPredictionSubtype>('yes_no');
 const prepTimeRangeOutcomeCount = ref(5);
 const openTwitchPrepAfterSetup = ref(false);
-const openTwitchSetupAutoOAuth = ref(false);
+const openTwitchSetupAutoOAuthMode = ref<TwitchOAuthMode | null>(null);
+const twitchReauthPromptedThisSession = ref(false);
 
 const twitchPrepStatusLabel = computed(() =>
   getTwitchPrepStatusLabel({
@@ -24504,22 +24525,21 @@ async function openRunModal() {
     }
   }
   
-  // Validate Twitch token if integration exists
+  // Validate Twitch token if integration exists (prompt at most once per session)
   if (isElectronAvailable()) {
     try {
       await checkPredictionsConfiguration();
-      if (twitchIntegrationConnected.value && !twitchTokenValid.value) {
-        const confirmed = await showConfirm(
-          `Your Twitch token needs to be refreshed before predictions can be used.\n\nWould you like to re-authenticate now?`,
-          'Twitch Re-authentication Required'
-        );
-
-        if (confirmed) {
-          await openTwitchIntegrationSetup({ autoStartOAuth: true });
-          return;
-        }
-
-        await showAlert('Twitch predictions will not be available until you re-authenticate.', 'Twitch Connection Expired');
+      if (
+        twitchIntegrationConnected.value &&
+        !twitchTokenValid.value &&
+        !twitchReauthPromptedThisSession.value
+      ) {
+        twitchReauthPromptedThisSession.value = true;
+        const choice = await promptTwitchReauthentication();
+        await handleTwitchReauthUserChoice(choice, { showDismissAlert: true });
+      }
+      if (!twitchTokenValid.value) {
+        await ensureTwitchPredictionsDisabledUntilReconnect();
       }
     } catch (error) {
       console.error('[openRunModal] Error validating Twitch token:', error);
@@ -26523,8 +26543,12 @@ async function startRun() {
       }
       
       await updateManualControlAvailability();
-      
-      if (predictionsEnabled.value && predictionsOperationalMode.value) {
+
+      if (!twitchTokenValid.value) {
+        predictionsEnabled.value = false;
+      }
+
+      if (predictionsEnabled.value && predictionsOperationalMode.value && twitchTokenValid.value) {
         await cancelAllActiveTwitchPredictionsBeforeRun();
 
         const mode = predictionsOperationalMode.value;
@@ -28861,24 +28885,28 @@ async function refreshTwitchTokenStatus(options?: { force?: boolean }) {
   }
 }
 
+function handleTwitchReauthChoiceDialog(choice: 'cancel' | 'system_browser' | 'in_app') {
+  handleTwitchReauthChoice(choice);
+}
+
 function handleCloseTwitchIntegrationSetup() {
   showTwitchIntegrationSetup.value = false;
-  openTwitchSetupAutoOAuth.value = false;
+  openTwitchSetupAutoOAuthMode.value = null;
 }
 
 // Twitch Integration Setup
-async function openTwitchIntegrationSetup(options?: { autoStartOAuth?: boolean }) {
+async function openTwitchIntegrationSetup(options?: { autoStartOAuthMode?: TwitchOAuthMode | null }) {
   // Check if profile guard is enabled
   if (!profileGuardEnabled.value) {
     await showAlert('Profile Guard must be enabled before setting up Twitch integration.', 'Profile Guard Required');
     return;
   }
-  
+
   // Profile check is now handled by OnlineProfileManager in the backend
   // No need to check here - the backend will return appropriate errors if no profile exists
-  openTwitchSetupAutoOAuth.value = options?.autoStartOAuth === true;
+  openTwitchSetupAutoOAuthMode.value = options?.autoStartOAuthMode ?? null;
   showTwitchIntegrationSetup.value = true;
-  
+
   // Load predictions configuration status
   await checkPredictionsConfiguration();
 }
@@ -28894,7 +28922,32 @@ async function handleTwitchPrepSetup() {
   await openTwitchIntegrationSetup();
 }
 
+async function ensureTwitchPredictionsDisabledUntilReconnect() {
+  if (twitchTokenValid.value) {
+    return;
+  }
+
+  prepPredictionsMode.value = 'none';
+  predictionsEnabled.value = false;
+  predictionsOperationalMode.value = null;
+  activePredictionUuid.value = null;
+
+  if (currentRunUuid.value && isElectronAvailable()) {
+    await savePredictionManagementState();
+  }
+}
+
 async function armPredictionsMode(mode: PrepPredictionsMode) {
+  if (
+    mode !== 'none' &&
+    !canEnableTwitchPredictions({
+      connected: twitchIntegrationConnected.value,
+      tokenValid: twitchTokenValid.value,
+    })
+  ) {
+    return;
+  }
+
   const state = predictionStateFromPrepMode(mode);
   prepPredictionsMode.value = mode;
   predictionsEnabled.value = state.enabled;
@@ -28914,6 +28967,15 @@ async function armPredictionsMode(mode: PrepPredictionsMode) {
 }
 
 async function handleTwitchPrepSelectMode(mode: PrepPredictionsMode) {
+  if (
+    mode !== 'none' &&
+    !canEnableTwitchPredictions({
+      connected: twitchIntegrationConnected.value,
+      tokenValid: twitchTokenValid.value,
+    })
+  ) {
+    return;
+  }
   await armPredictionsMode(mode);
 }
 
@@ -28928,6 +28990,45 @@ async function refreshTwitchIntegrationReady(): Promise<boolean> {
   return !!result.valid;
 }
 
+async function openTwitchPrepDropdownAfterAuth(event: MouseEvent) {
+  const button = event.currentTarget as HTMLElement;
+  const rect = button.getBoundingClientRect();
+  twitchPrepDropdownPosition.value = {
+    x: rect.right,
+    y: rect.bottom + 5,
+  };
+  await refreshPrepTemplateSubtypeFromTemplate();
+  syncPrepModeFromPredictionState();
+  showTwitchPrepDropdown.value = true;
+}
+
+async function handleTwitchReauthUserChoice(
+  choice: 'cancel' | 'system_browser' | 'in_app',
+  options?: { showDismissAlert?: boolean }
+): Promise<'oauth_success' | 'setup' | 'dismissed'> {
+  if (choice === 'system_browser') {
+    const result = await runTwitchOAuth('external');
+    await refreshTwitchTokenStatus({ force: true });
+    if (result.success && twitchTokenValid.value) {
+      return 'oauth_success';
+    }
+    if (result.error) {
+      await showAlert(`Failed to complete Twitch authorization: ${result.error}`, 'OAuth Error');
+    }
+    return 'setup';
+  }
+
+  if (choice === 'in_app') {
+    await openTwitchIntegrationSetup({ autoStartOAuthMode: 'embedded' });
+    return 'setup';
+  }
+
+  if (options?.showDismissAlert) {
+    await showAlert('Twitch predictions will not be available until you re-authenticate.', 'Twitch Connection Expired');
+  }
+  return 'dismissed';
+}
+
 async function openTwitchPrepDropdown(event: MouseEvent) {
   const tokenStatus = await refreshTwitchTokenStatus();
   await checkPredictionsConfiguration();
@@ -28939,25 +29040,27 @@ async function openTwitchPrepDropdown(event: MouseEvent) {
   }
 
   if (!tokenStatus.valid) {
-    const confirmed = await showConfirm(
-      `Your Twitch token needs to be refreshed before predictions can be used.${tokenStatus.reason ? `\n\nReason: ${tokenStatus.reason}` : ''}\n\nWould you like to re-authenticate now?`,
-      'Twitch Re-authentication Required'
+    const choice = await promptTwitchReauthentication(
+      tokenStatus.reason
+        ? `Your Twitch token needs to be refreshed.${tokenStatus.reason ? ` Reason: ${tokenStatus.reason}` : ''}`
+        : undefined
     );
-    openTwitchPrepAfterSetup.value = true;
-    await openTwitchIntegrationSetup({ autoStartOAuth: confirmed });
+    const outcome = await handleTwitchReauthUserChoice(choice, { showDismissAlert: false });
+    if (outcome === 'oauth_success') {
+      await openTwitchPrepDropdownAfterAuth(event);
+      return;
+    }
+    if (choice === 'in_app') {
+      openTwitchPrepAfterSetup.value = true;
+      await openTwitchIntegrationSetup({ autoStartOAuthMode: 'embedded' });
+      return;
+    }
+    await ensureTwitchPredictionsDisabledUntilReconnect();
+    await openTwitchPrepDropdownAfterAuth(event);
     return;
   }
 
-  const button = event.currentTarget as HTMLElement;
-  const rect = button.getBoundingClientRect();
-  twitchPrepDropdownPosition.value = {
-    x: rect.right,
-    y: rect.bottom + 5,
-  };
-
-  await refreshPrepTemplateSubtypeFromTemplate();
-  syncPrepModeFromPredictionState();
-  showTwitchPrepDropdown.value = true;
+  await openTwitchPrepDropdownAfterAuth(event);
 }
 
 async function cancelAllActiveTwitchPredictionsBeforeRun() {

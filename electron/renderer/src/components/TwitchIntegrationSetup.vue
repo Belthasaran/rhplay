@@ -42,7 +42,7 @@
             <div class="connection-actions">
               <button 
                 v-if="!integrationStatus"
-                @click="startOAuthFlow" 
+                @click="startOAuthFlow('external')" 
                 class="btn-connect"
                 :disabled="oauthInProgress"
               >
@@ -465,6 +465,11 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { showAlert, showConfirm } from '../utils/dialogs';
 import {
+  promptTwitchReauthentication,
+  runTwitchOAuth,
+  type TwitchOAuthMode,
+} from '../utils/twitch-oauth-flow';
+import {
   mergePredictionsTemplate,
   normalizePredictionsTemplate,
   savePredictionsTemplateObject,
@@ -473,7 +478,7 @@ import {
 const props = defineProps<{
   visible: boolean;
   profileGuardEnabled?: boolean;
-  autoStartOAuth?: boolean;
+  autoStartOAuthMode?: TwitchOAuthMode | null;
 }>();
 
 const emit = defineEmits<{
@@ -608,12 +613,17 @@ const refreshTokens = async () => {
     }
 
     if (assessment?.needsReauth) {
-      const confirmed = await showConfirm(
-        `Twitch token validation failed.${assessment.reason ? ` ${assessment.reason}` : ''}\n\nWould you like to re-authenticate with Twitch now?`,
-        'Twitch Re-authentication Required'
+      const choice = await promptTwitchReauthentication(
+        assessment.reason ? `Twitch token validation failed. ${assessment.reason}` : undefined
       );
-      if (confirmed) {
-        await startOAuthFlow();
+      if (choice === 'system_browser') {
+        const result = await runTwitchOAuth('external');
+        if (result.success) {
+          await loadData();
+          emit('update');
+        }
+      } else if (choice === 'in_app') {
+        await startOAuthFlow('embedded');
       }
     }
   } catch (error: any) {
@@ -624,39 +634,18 @@ const refreshTokens = async () => {
   }
 };
 
-// Start OAuth flow
-const startOAuthFlow = async () => {
-  // Profile UUID is handled by OnlineProfileManager in the backend
-  // No need to check here
-  
+// Start OAuth flow (system browser by default)
+const startOAuthFlow = async (mode: TwitchOAuthMode = 'external') => {
   oauthInProgress.value = true;
-  
+
   try {
-    // Get client ID and redirect URI
-    const clientId = await (window as any).electronAPI.getTwitchClientId();
-    if (!clientId) {
-      await showAlert('Twitch client ID not configured. Please check your build configuration.', 'Configuration Error');
-      return;
-    }
-    
-    const redirectUri = 'https://localhost';
-    const scopes = 'channel:read:predictions channel:manage:predictions channel:read:vips moderator:read:moderators user:read:chat moderator:read:chat_messages moderator:read:chatters moderator:read:followers moderator:read:shoutouts channel:bot';
-    const state = crypto.randomUUID();
-    
-    const authUrl = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
-    
-    // Open OAuth window and handle callback (uses OnlineProfileManager internally)
-    const result = await (window as any).electronAPI.openTwitchOAuthWindow({
-      url: authUrl,
-      redirectUri: redirectUri,
-      state: state
-    });
-    
-    if (result && result.success) {
+    const result = await runTwitchOAuth(mode);
+
+    if (result.success) {
       await loadData();
       emit('update');
-    } else {
-      await showAlert('Failed to complete OAuth flow. Please try again.', 'OAuth Error');
+    } else if (result.error) {
+      await showAlert(`Failed to complete OAuth flow: ${result.error}`, 'OAuth Error');
     }
   } catch (error: any) {
     console.error('[TwitchIntegrationSetup] OAuth error:', error);
@@ -805,8 +794,8 @@ const handleClose = () => {
 watch(() => props.visible, async (newVal) => {
   if (newVal) {
     await loadData();
-    if (props.autoStartOAuth && integrationStatus.value && !tokenValid.value) {
-      await startOAuthFlow();
+    if (props.autoStartOAuthMode && integrationStatus.value && !tokenValid.value) {
+      await startOAuthFlow(props.autoStartOAuthMode);
     }
   }
 });
@@ -814,8 +803,8 @@ watch(() => props.visible, async (newVal) => {
 onMounted(async () => {
   if (props.visible) {
     await loadData();
-    if (props.autoStartOAuth && integrationStatus.value && !tokenValid.value) {
-      await startOAuthFlow();
+    if (props.autoStartOAuthMode && integrationStatus.value && !tokenValid.value) {
+      await startOAuthFlow(props.autoStartOAuthMode);
     }
   }
 });

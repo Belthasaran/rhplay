@@ -1374,6 +1374,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Twitch Integration
   getTwitchClientId: () => ipcRenderer.invoke('get_twitch_client_id'),
   getTwitchIntegrationStatus: (params) => ipcRenderer.invoke('get_twitch_integration_status', params),
+  openTwitchOAuth: (params) => ipcRenderer.invoke('open_twitch_oauth', params || {}),
   openTwitchOAuthWindow: (params) => ipcRenderer.invoke('open_twitch_oauth_window', params),
   revokeTwitchIntegration: (params) => ipcRenderer.invoke('revoke_twitch_integration', params),
   savePredictionsTemplate: (params) => ipcRenderer.invoke('save_predictions_template', params),

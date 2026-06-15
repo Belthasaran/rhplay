@@ -1,3 +1,6 @@
+- **Prepare Run Twitch decouple**: Invalid Twitch token no longer blocks Prepare Run; re-auth prompts once per session on open; predictions forced to None until reconnect; Start Run works without valid token.
+- **Twitch system-browser OAuth**: Loopback listener tries ports 47832 → 56218 → 51158 (register all in Twitch console); re-auth dialog offers Cancel / Open In System Browser / Open In App.
+- **Twitch OAuth browser open fix**: Do not treat `shell.openExternal` return value as failure (Electron resolves void on success); loopback waits up to 5 minutes for callback.
 - **Twitch token decrypt fix**: Use Node `crypto` module in ipc-handlers so Twitch token decrypt/validate works (global Web Crypto lacks `createDecipheriv`).
 - **Prepare Run Twitch button**: Opens prep dropdown when token is valid; routes to Setup (with re-auth prompt) when disconnected or token needs refresh; labels include `(Needs refresh)`.
 - **Twitch token validation**: Centralized 10-minute + per-session cache; Setup shows green/orange/red connection state, Refresh button with cooldown, and prep routes to Setup when disconnected or token invalid.

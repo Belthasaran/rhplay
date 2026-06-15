@@ -12,6 +12,10 @@
             Setup
           </button>
 
+          <p v-if="!predictionsAvailable" class="predictions-unavailable-note">
+            Reconnect Twitch to enable predictions.
+          </p>
+
           <div class="predictions-heading">Predictions:</div>
 
           <div class="prediction-tiles">
@@ -26,7 +30,8 @@
             <button
               type="button"
               class="prediction-tile"
-              :class="{ selected: selectedMode === 'same_item' }"
+              :class="{ selected: selectedMode === 'same_item', disabled: !predictionsAvailable }"
+              :disabled="!predictionsAvailable"
               @click="emit('select-mode', 'same_item')"
             >
               Per-Item
@@ -34,7 +39,8 @@
             <button
               type="button"
               class="prediction-tile"
-              :class="{ selected: selectedMode === 'whole_challenge' }"
+              :class="{ selected: selectedMode === 'whole_challenge', disabled: !predictionsAvailable }"
+              :disabled="!predictionsAvailable"
               @click="emit('select-mode', 'whole_challenge')"
             >
               Per-Run
@@ -63,13 +69,19 @@ import { computed } from 'vue';
 import type { PrepPredictionsMode } from '../utils/twitch-prep-status';
 import type { IndividualPredictionSubtype } from '../utils/twitch-predictions-template';
 
-const props = defineProps<{
-  visible: boolean;
-  position: { x: number; y: number } | null;
-  selectedMode: PrepPredictionsMode;
-  individualSubtype: IndividualPredictionSubtype;
-  timeRangeOutcomeCount: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    visible: boolean;
+    position: { x: number; y: number } | null;
+    selectedMode: PrepPredictionsMode;
+    individualSubtype: IndividualPredictionSubtype;
+    timeRangeOutcomeCount: number;
+    predictionsAvailable?: boolean;
+  }>(),
+  {
+    predictionsAvailable: true,
+  }
+);
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -155,6 +167,12 @@ function onSubtypeChange(event: Event) {
   background: var(--bg-hover, #f3f4f6);
 }
 
+.predictions-unavailable-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+}
+
 .predictions-heading {
   font-weight: 600;
   color: var(--text-secondary, #4b5563);
@@ -182,7 +200,13 @@ function onSubtypeChange(event: Event) {
   color: #5b21b6;
 }
 
-.prediction-tile:hover:not(.selected) {
+.prediction-tile.disabled,
+.prediction-tile:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prediction-tile:hover:not(.selected):not(:disabled) {
   background: var(--bg-hover, #f9fafb);
 }
 

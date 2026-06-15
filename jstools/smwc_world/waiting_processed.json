@@ -385,7 +385,7 @@
     ],
     "rating": 5,
     "size": 513307,
-    "downloads": 799,
+    "downloads": 800,
     "download_url": "https://dl.smwcentral.net/42245/SM%20Mushroom%20Kingdom%20Madness%20Demo.zip",
     "obsoleted_by": null,
     "fields": {
@@ -458,7 +458,7 @@
     ],
     "rating": 0,
     "size": 1628424,
-    "downloads": 204,
+    "downloads": 205,
     "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -729,7 +729,7 @@
     ],
     "rating": 5,
     "size": 1126564,
-    "downloads": 447,
+    "downloads": 448,
     "download_url": "https://dl.smwcentral.net/42380/Super%20Mario%20World%20-%20Bowser%27s%20Return%20Redux.zip",
     "obsoleted_by": null,
     "fields": {
@@ -807,7 +807,7 @@
     ],
     "rating": 4.8182,
     "size": 2397113,
-    "downloads": 1849,
+    "downloads": 1850,
     "download_url": "https://dl.smwcentral.net/42385/Yoshi%27s%20Revenge%201.1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -948,7 +948,7 @@
     ],
     "rating": 4.3333,
     "size": 2346234,
-    "downloads": 167,
+    "downloads": 169,
     "download_url": "https://dl.smwcentral.net/42427/ynt_mario_en_v1.0.6.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1028,7 +1028,7 @@
     ],
     "rating": 5,
     "size": 1210355,
-    "downloads": 266,
+    "downloads": 267,
     "download_url": "https://dl.smwcentral.net/42434/Ominous%20Castle%20v1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1153,7 +1153,7 @@
     ],
     "rating": 0,
     "size": 91693,
-    "downloads": 39,
+    "downloads": 40,
     "download_url": "https://dl.smwcentral.net/42446/ashorthack%20by%20lactro.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1224,7 +1224,7 @@
     ],
     "rating": 0,
     "size": 839596,
-    "downloads": 110,
+    "downloads": 111,
     "download_url": "https://dl.smwcentral.net/42459/Castlemania%20-%20REVAMPED.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1502,7 +1502,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1308,
+    "downloads": 1309,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1570,7 +1570,7 @@
     ],
     "rating": 4.6667,
     "size": 5112760,
-    "downloads": 3336,
+    "downloads": 3337,
     "download_url": "https://dl.smwcentral.net/42500/Crash%20Bandicoot%20and%20the%20Retro%20Dimension%20Enhanced.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1636,7 +1636,7 @@
     ],
     "rating": 5,
     "size": 1628128,
-    "downloads": 72,
+    "downloads": 74,
     "download_url": "https://dl.smwcentral.net/42501/Gransys.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1715,7 +1715,7 @@
     ],
     "rating": 5,
     "size": 1025181,
-    "downloads": 88,
+    "downloads": 93,
     "download_url": "https://dl.smwcentral.net/42504/Tower%20of%20Glory%202%20%281%29.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1909,7 +1909,7 @@
     ],
     "rating": 0,
     "size": 712057,
-    "downloads": 27,
+    "downloads": 28,
     "download_url": "https://dl.smwcentral.net/42509/tearsjoyandhappiness.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2080,6 +2080,144 @@
       "sa1": false,
       "warnings": [],
       "description": "This is a hack that I've been building on and off since 2023. It also has some chocolate!\r\n\r\nA Mario-like has crash landed on a small mysterious island, luckily there is a cape feather all the way up on the summit! But there are evils on this island that are unknown to its denizens. Will he escape and possibly defeat the evils, or will he be stranded forever?\r\n\r\nThere are 5 collectable moons in this hack. They only make a number go up.\r\n\r\nEnjoy!"
+    }
+  },
+  {
+    "id": 42537,
+    "section": "smwhacks",
+    "name": "MrUg's Mini Level Pack",
+    "time": 1781449438,
+    "submitted_at": 1781449438,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 73180,
+        "name": "MrUg123"
+      }
+    ],
+    "submitter": {
+      "id": 73180,
+      "name": "MrUg123"
+    },
+    "moderator": null,
+    "tags": [
+      "altered physics",
+      "custom music"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124521.png",
+      "https://dl.smwcentral.net/image/124522.png",
+      "https://dl.smwcentral.net/image/124523.png",
+      "https://dl.smwcentral.net/image/124524.png",
+      "https://dl.smwcentral.net/image/124525.png",
+      "https://dl.smwcentral.net/image/124526.png",
+      "https://dl.smwcentral.net/image/124527.png",
+      "https://dl.smwcentral.net/image/124528.png"
+    ],
+    "rating": 4.6667,
+    "size": 206292,
+    "downloads": 564,
+    "download_url": "https://dl.smwcentral.net/42537/MMLP.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Casual",
+      "type": "Standard",
+      "length": "4 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "This is my first rom hack of smw. It doesn't really have any story, just Bowser kidnapping the princess. I don't really have anything else to say about it."
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_2",
+      "type": [
+        "standard"
+      ],
+      "length": 4,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "This is my first rom hack of smw. It doesn't really have any story, just Bowser kidnapping the princess. I don't really have anything else to say about it."
+    }
+  },
+  {
+    "id": 42538,
+    "section": "smwhacks",
+    "name": "Super XLer8 World",
+    "time": 1781460500,
+    "submitted_at": 1781460500,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 54818,
+        "name": "XLer8"
+      }
+    ],
+    "submitter": {
+      "id": 54818,
+      "name": "XLer8"
+    },
+    "moderator": null,
+    "tags": [
+      "bosses",
+      "custom music",
+      "gimmick",
+      "luigi",
+      "semi-vanilla",
+      "super xler8 world",
+      "traditional"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124532.png",
+      "https://dl.smwcentral.net/image/124533.png",
+      "https://dl.smwcentral.net/image/124534.png",
+      "https://dl.smwcentral.net/image/124535.png",
+      "https://dl.smwcentral.net/image/124536.png",
+      "https://dl.smwcentral.net/image/124537.png",
+      "https://dl.smwcentral.net/image/124538.png"
+    ],
+    "rating": 0,
+    "size": 567179,
+    "downloads": 17,
+    "download_url": "https://dl.smwcentral.net/42538/XL8.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "20 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Super XLer8 World, is, well, a romhack by, you guessed it, XLer8.<br>\r\n<br>\r\nThere's 20 exits, you can walljump, and I'm sure the readme has more important information."
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_3",
+      "type": [
+        "standard"
+      ],
+      "length": 20,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Super XLer8 World, is, well, a romhack by, you guessed it, XLer8.\r\n\r\nThere's 20 exits, you can walljump, and I'm sure the readme has more important information."
     }
   }
 ]

@@ -75,6 +75,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, difficultyNumber: number|null}>}
    */
   getDifficultyMap: (mapType, mapString) => ipcRenderer.invoke('db:difficulty-map:get', { mapType, mapString }),
+
+  /**
+   * Resolve numeric difficulty for a gameversion (same mapping as Prepare Run random-game filter).
+   * @param {{ gameid: string, version?: number|null, fallback?: number }} params
+   * @returns {Promise<{success: boolean, difficultyLevel: number, error?: string}>}
+   */
+  getGameDifficultyLevel: (params) => ipcRenderer.invoke('db:game:get-difficulty-level', params),
   
   /**
    * Check if a game is banned for a specific action

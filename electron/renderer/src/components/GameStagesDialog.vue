@@ -954,6 +954,7 @@ const newRequisiteTag = ref('');
 const editingExcludedForStage = ref<string | null>(null); // stage_uuid being edited
 const newExcludedPatchCode = ref('');
 const showDetectedLevelsDialog = ref(false);
+const gameDefaultDifficulty = ref(2);
 const showSetPlaylevelPatchDialog = ref(false);
 const selectedStagesForPlaylevelPatch = ref<Set<string>>(new Set()); // stage identifier (stage_uuid or index-based key)
 const newPlaylevelPatchCode = ref('2lvno');
@@ -2587,8 +2588,38 @@ async function applyPlaylevelPatch() {
   closeSetPlaylevelPatchDialog();
 }
 
+async function loadGameDefaultDifficulty() {
+  if (!props.gameId) {
+    gameDefaultDifficulty.value = 2;
+    return;
+  }
+  const api = (window as any)?.electronAPI;
+  if (!api?.getGameDifficultyLevel) {
+    gameDefaultDifficulty.value = 2;
+    return;
+  }
+  try {
+    const result = await api.getGameDifficultyLevel({
+      gameid: props.gameId,
+      version: props.gameVersion ?? null,
+      fallback: 2,
+    });
+    gameDefaultDifficulty.value = result?.success && result.difficultyLevel != null
+      ? result.difficultyLevel
+      : 2;
+  } catch {
+    gameDefaultDifficulty.value = 2;
+  }
+}
+
+function isUntestedDetectedLevel(levelnumber: string): boolean {
+  const existing = stages.value.find(s => s.levelnumber === levelnumber);
+  return !existing || !existing.test_status;
+}
+
 function handleDetectedLevelsSelected(selectedLevels: any[]) {
   for (const level of selectedLevels) {
+    const untested = isUntestedDetectedLevel(level.levelnumber);
     const newStage: GameStage = {
       stage_uuid: undefined,
       gameid: props.gameId,
@@ -2601,9 +2632,9 @@ function handleDetectedLevelsSelected(selectedLevels: any[]) {
       tile_y: level.tile_y || null,
       tile_value: level.tile_value || null,
       requisites: null,
-      playable: 0,
-      rando: 0,
-      difficulty: level.difficulty ?? 2,
+      playable: untested ? 1 : 0,
+      rando: untested ? 1 : 0,
+      difficulty: gameDefaultDifficulty.value,
       mainexit: level.mainexit ?? 1,
       keyhole: level.keyhole ?? 0,
       credits: level.credits ?? 0,
@@ -2634,6 +2665,7 @@ watch(() => props.isOpen, async (newVal) => {
       currentMode.value = 'edit';
     }
     await loadAvailablePatches(); // Load patches for tag selector
+    await loadGameDefaultDifficulty();
     await loadStages();
   }
 });
@@ -2647,6 +2679,7 @@ watch(() => props.mode, (newMode) => {
 watch(() => props.gameId, async () => {
   if (props.isOpen) {
     await loadStagesEditPermission();
+    await loadGameDefaultDifficulty();
     await loadStages();
   }
 });
@@ -2654,6 +2687,7 @@ watch(() => props.gameId, async () => {
 watch(() => props.gameVersion, async () => {
   if (props.isOpen) {
     await loadStagesEditPermission();
+    await loadGameDefaultDifficulty();
     await loadStages();
   }
 });

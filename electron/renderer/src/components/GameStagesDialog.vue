@@ -2931,6 +2931,7 @@ function handleDetectedLevelsSelected(selectedLevels: any[]) {
       lock: 0,
       playlevel_patch_code: null,
       stagetags: level.stagetags || (Array.isArray(level.suggestedTags) ? level.suggestedTags.join(',') : null),
+      extradescription: level.extradescription || null,
     };
     stages.value.push(newStage);
   }

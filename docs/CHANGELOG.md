@@ -1,7 +1,7 @@
 - **JIT.LevelInfo**: Added `lib/jit-levels/levelinfo/` JS port of `lmlevelinfo` parse pipeline (`parseLevelInfo`, `mapLevelInfoToStageDefaults`, `deriveTagsFromLevelInfo`); parity with `level_info1 --json` on akogare `0x109`.
 
 - **Game stages local editing**: Users can edit stages for games with no author-defined stages; `gameversions_local` tracks local edits; `stages_sealed`/`stages_sealed_at` on `gameversions` control sealing policy; Game Details shows "Stages not set yet" link.
-- **JITLevels1**: Just-in-time level detection in Game Stages dialog (JITNames, JIT.Trans, JIT.LMFilter, JIT.LevelInfo, JIT.Score); `lib/jit-levels/` modules; `jstools/level_fingerprint.js` CLI; catalog LMFilter lookup by patched ROM SHA1; Map16 screen fingerprints for scoring.
+- **JITLevels1**: Just-in-time level detection in Game Stages dialog (JITNames, JIT.Trans, JIT.LMFilter, JIT.LevelInfo, JIT.Score); `lib/jit-levels/` modules; `jstools/level_fingerprint.js` CLI; catalog LMFilter lookup by patched ROM SHA1; Map16 screen fingerprints for scoring. Fix: level ids like `130` now parse as hex 0x130 for LevelInfo/stage defaults (water, tags, description).
 
 - **Quick launch program launch**: Fix Start + Emulator launching wrong ROM when stale `.sfc` files remain in `RHTools-QuickLaunch/`; `launchWithProgram()` now uses the current staging list (same as USB upload), and new Start clears old quick-launch ROMs/metadata.
 - **Active Launch Method**: Session-scoped USB2SNES / Emulator / Manual switcher in the always-visible header dropdown; Default Game Launch Method in Settings; Emulator Config modal (RetroArch/Bizhawk/Other); portable help pages under `electron/help/`; Build Plus USB/Emu modes; Prepare Run Prep Status; program launch in runs and stage tests.

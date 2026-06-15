@@ -1,5 +1,6 @@
 /**
- * Helpers for reading/updating the global Twitch predictions template.
+ * Twitch predictions template defaults and merge helpers.
+ * Keep in sync with electron/shared/twitch-predictions-template.js
  */
 
 import type { PrepPredictionsMode } from './twitch-prep-status';
@@ -7,124 +8,210 @@ import { templateTypeForPrepMode } from './twitch-prep-status';
 
 export type IndividualPredictionSubtype = 'yes_no' | 'time_range';
 
-export function getIndividualSubtypeFromTemplate(template: any): IndividualPredictionSubtype {
-  const subtype = template?.individualItem?.predictionType;
-  return subtype === 'time_range' ? 'time_range' : 'yes_no';
-}
+export type PredictionsTemplate = {
+  type: 'whole_challenge' | 'individual_item';
+  wholeChallenge: {
+    outcomeCount: number;
+    predictionWindowSeconds: number;
+    customTitle?: string;
+  };
+  individualItem: {
+    predictionType: IndividualPredictionSubtype;
+    predictionCreationDelaySeconds: number;
+    yesNo: {
+      windowSeconds: number;
+      customTitle?: string;
+      yesOutcomeName: string;
+      noOutcomeName: string;
+      cancelIfSuccessWithinSeconds?: number;
+    };
+    timeRange: {
+      windowSeconds: number;
+      customTitle?: string;
+      outcomeCount: number;
+      maxTimeMinutes: number;
+      lowTimeRangesOnlyOnSuccess: boolean;
+      useTemplateMaxEvenIfWinRulesAllowLess: boolean;
+      excludePredictionWindow: boolean;
+      cancelIfSuccessWithinSeconds?: number;
+    };
+  };
+};
 
-export function getTimeRangeOutcomeCount(template: any): number {
-  return template?.individualItem?.timeRange?.outcomeCount ?? 5;
-}
-
-/**
- * Build a save payload from an existing template, switching top-level type for prep mode.
- */
-export function buildTemplateForPrepMode(
-  existingTemplate: any,
-  prepMode: PrepPredictionsMode
-): any | null {
-  const targetType = templateTypeForPrepMode(prepMode);
-  if (!targetType || !existingTemplate) {
-    return null;
-  }
-
-  const template = JSON.parse(JSON.stringify(existingTemplate));
-  template.type = targetType;
-
-  if (targetType === 'whole_challenge' && !template.wholeChallenge) {
-    template.wholeChallenge = {
+// Defaults mirrored from shared JS module
+export function getDefaultPredictionsTemplate(
+  activeType: 'whole_challenge' | 'individual_item' = 'whole_challenge',
+  individualSubtype: IndividualPredictionSubtype = 'yes_no'
+): PredictionsTemplate {
+  return {
+    type: activeType,
+    wholeChallenge: {
       outcomeCount: 5,
       predictionWindowSeconds: 600,
-    };
-  }
-
-  if (targetType === 'individual_item' && !template.individualItem) {
-    template.individualItem = {
-      predictionType: 'yes_no',
+    },
+    individualItem: {
+      predictionType: individualSubtype,
       predictionCreationDelaySeconds: 30,
       yesNo: {
         windowSeconds: 30,
         yesOutcomeName: 'Yes',
         noOutcomeName: 'No',
       },
-    };
-  }
-
-  return template;
-}
-
-/**
- * Update individual_item subtype on a template copy (preserves other settings).
- */
-export function buildTemplateWithIndividualSubtype(
-  existingTemplate: any,
-  subtype: IndividualPredictionSubtype
-): any {
-  const template = JSON.parse(JSON.stringify(existingTemplate || { type: 'individual_item' }));
-  template.type = 'individual_item';
-  template.individualItem = template.individualItem || {
-    predictionCreationDelaySeconds: 30,
+      timeRange: {
+        windowSeconds: 45,
+        outcomeCount: 5,
+        maxTimeMinutes: 60,
+        lowTimeRangesOnlyOnSuccess: true,
+        useTemplateMaxEvenIfWinRulesAllowLess: false,
+        excludePredictionWindow: true,
+      },
+    },
   };
-  template.individualItem.predictionType = subtype;
-
-  if (subtype === 'yes_no') {
-    template.individualItem.yesNo = template.individualItem.yesNo || {
-      windowSeconds: 30,
-      yesOutcomeName: 'Yes',
-      noOutcomeName: 'No',
-    };
-  } else {
-    template.individualItem.timeRange = template.individualItem.timeRange || {
-      windowSeconds: 45,
-      outcomeCount: 5,
-      maxTimeMinutes: 60,
-      lowTimeRangesOnlyOnSuccess: true,
-      useTemplateMaxEvenIfWinRulesAllowLess: false,
-      excludePredictionWindow: true,
-    };
-  }
-
-  return template;
 }
 
-export async function savePredictionsTemplateObject(template: any): Promise<void> {
-  await (window as any).electronAPI.savePredictionsTemplate({
+export function normalizePredictionsTemplate(raw: any): PredictionsTemplate {
+  const base = getDefaultPredictionsTemplate();
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
+
+  const individual = raw.individualItem || {};
+  return {
+    type: raw.type === 'individual_item' ? 'individual_item' : 'whole_challenge',
+    wholeChallenge: {
+      ...base.wholeChallenge,
+      ...(raw.wholeChallenge || {}),
+    },
+    individualItem: {
+      ...base.individualItem,
+      ...individual,
+      predictionType: individual.predictionType === 'time_range' ? 'time_range' : 'yes_no',
+      yesNo: {
+        ...base.individualItem.yesNo,
+        ...(individual.yesNo || {}),
+      },
+      timeRange: {
+        ...base.individualItem.timeRange,
+        ...(individual.timeRange || {}),
+      },
+    },
+  };
+}
+
+export function mergePredictionsTemplate(
+  existing: any,
+  patch: {
+    type?: 'whole_challenge' | 'individual_item';
+    wholeChallenge?: Record<string, unknown>;
+    individualItem?: Record<string, unknown> & {
+      yesNo?: Record<string, unknown>;
+      timeRange?: Record<string, unknown>;
+    };
+  }
+): PredictionsTemplate {
+  const base = normalizePredictionsTemplate(existing);
+  const result: PredictionsTemplate = {
+    ...base,
+    type: patch.type || base.type,
+    wholeChallenge: { ...base.wholeChallenge },
+    individualItem: {
+      ...base.individualItem,
+      yesNo: { ...base.individualItem.yesNo },
+      timeRange: { ...base.individualItem.timeRange },
+    },
+  };
+
+  if (patch.wholeChallenge) {
+    result.wholeChallenge = {
+      ...result.wholeChallenge,
+      ...(patch.wholeChallenge as PredictionsTemplate['wholeChallenge']),
+    };
+    if (patch.wholeChallenge.customTitle === '') {
+      delete result.wholeChallenge.customTitle;
+    }
+  }
+
+  if (patch.individualItem) {
+    const ii = patch.individualItem;
+    result.individualItem = {
+      ...result.individualItem,
+      ...(ii as Partial<PredictionsTemplate['individualItem']>),
+      yesNo: { ...result.individualItem.yesNo },
+      timeRange: { ...result.individualItem.timeRange },
+    };
+
+    if (ii.yesNo) {
+      result.individualItem.yesNo = {
+        ...result.individualItem.yesNo,
+        ...(ii.yesNo as PredictionsTemplate['individualItem']['yesNo']),
+      };
+      if (ii.yesNo.customTitle === '') {
+        delete result.individualItem.yesNo.customTitle;
+      }
+    }
+
+    if (ii.timeRange) {
+      result.individualItem.timeRange = {
+        ...result.individualItem.timeRange,
+        ...(ii.timeRange as PredictionsTemplate['individualItem']['timeRange']),
+      };
+      if (ii.timeRange.customTitle === '') {
+        delete result.individualItem.timeRange.customTitle;
+      }
+    }
+  }
+
+  return result;
+}
+
+export function getIndividualSubtypeFromTemplate(template: any): IndividualPredictionSubtype {
+  const normalized = normalizePredictionsTemplate(template);
+  return normalized.individualItem.predictionType;
+}
+
+export function getTimeRangeOutcomeCount(template: any): number {
+  const normalized = normalizePredictionsTemplate(template);
+  return normalized.individualItem.timeRange.outcomeCount;
+}
+
+export async function savePredictionsTemplateObject(template: PredictionsTemplate): Promise<{ success: boolean; error?: string }> {
+  return await (window as any).electronAPI.savePredictionsTemplate({
     template: JSON.stringify(template),
   });
 }
 
-export async function loadPredictionsTemplateObject(): Promise<any | null> {
+export async function loadPredictionsTemplateObject(): Promise<PredictionsTemplate> {
   const template = await (window as any).electronAPI.getPredictionsTemplate();
-  return template && template.type ? template : null;
+  return normalizePredictionsTemplate(template);
 }
 
-export async function ensureTemplateMatchesPrepMode(prepMode: PrepPredictionsMode): Promise<any | null> {
-  if (prepMode === 'none') {
-    return loadPredictionsTemplateObject();
-  }
-
+export async function ensureTemplateMatchesPrepMode(prepMode: PrepPredictionsMode): Promise<PredictionsTemplate> {
   const existing = await loadPredictionsTemplateObject();
-  if (!existing) {
-    return null;
+  if (prepMode === 'none') {
+    return existing;
   }
 
   const targetType = templateTypeForPrepMode(prepMode);
-  if (existing.type === targetType) {
+  if (!targetType || existing.type === targetType) {
     return existing;
   }
 
-  const updated = buildTemplateForPrepMode(existing, prepMode);
-  if (!updated) {
-    return existing;
-  }
-
+  const updated = mergePredictionsTemplate(existing, { type: targetType });
   await savePredictionsTemplateObject(updated);
   return updated;
 }
 
-export async function saveIndividualSubtype(subtype: IndividualPredictionSubtype): Promise<any | null> {
+export async function saveIndividualSubtype(subtype: IndividualPredictionSubtype): Promise<PredictionsTemplate> {
   const existing = await loadPredictionsTemplateObject();
-  const updated = buildTemplateWithIndividualSubtype(existing, subtype);
-  await savePredictionsTemplateObject(updated);
+  const updated = mergePredictionsTemplate(existing, {
+    type: 'individual_item',
+    individualItem: {
+      predictionType: subtype,
+    },
+  });
+  const result = await savePredictionsTemplateObject(updated);
+  if (!result?.success) {
+    throw new Error(result?.error || 'Failed to save prediction template');
+  }
   return updated;
 }

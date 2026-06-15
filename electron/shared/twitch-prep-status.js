@@ -8,6 +8,15 @@
 /** @typedef {'none' | 'same_item' | 'whole_challenge'} PrepPredictionsMode */
 
 /**
+ * Matches Twitch Integration Setup: connected when an integration row exists.
+ * @param {object|null|undefined} status
+ * @returns {boolean}
+ */
+function isTwitchIntegrationConnected(status) {
+  return !!(status && (status.twitch_user_id || status.twitch_username));
+}
+
+/**
  * @param {{ twitchIntegrationValid: boolean, prepPredictionsMode: PrepPredictionsMode }} params
  * @returns {string}
  */
@@ -64,6 +73,7 @@ function templateTypeForPrepMode(prepMode) {
 }
 
 module.exports = {
+  isTwitchIntegrationConnected,
   getTwitchPrepStatusLabel,
   prepModeFromPredictionState,
   predictionStateFromPrepMode,

@@ -1,4 +1,6 @@
-- **Prepare Run Twitch predictions**: Purple Twitch dropdown in Prepare Run to pre-select None, Per-Item, or Per-Run prediction mode before Start Run; opens dropdown when Twitch is connected even if prediction template is not saved yet.
+- **Prepare Run Twitch button**: Clicking Twitch in Prepare Run always opens the prep dropdown (Setup is inside it); status label uses the same “connected” check as Twitch Integration Setup instead of requiring an active token.
+- **Prepare Run Twitch predictions**: Purple Twitch dropdown in Prepare Run to pre-select None, Per-Item, or Per-Run prediction mode before Start Run.
+- **Twitch prediction templates**: Template save merges inactive mode settings; defaults apply when unset; custom titles are per-mode (whole run / win-lose / time-range).
 - **Run emulator launch**: Active-run Launch resolves staged ROMs by sequence prefix (`02_<timestamp>[_codes].sfc`) instead of assuming `02.sfc`.
 - **Run exit auto-launch**: Do not auto-launch after the last challenge completes; await `completeRun()` so run state is cleared before any follow-up launch attempt.
 - **Run exit feedback UI**: Random-stage exit modal shows compact 0–10 difficulty row; preset buttons use green/red/orange tones with test-result labels.

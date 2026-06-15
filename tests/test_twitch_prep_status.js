@@ -3,11 +3,26 @@
 
 const assert = require('assert');
 const {
+  isTwitchIntegrationConnected,
   getTwitchPrepStatusLabel,
   prepModeFromPredictionState,
   predictionStateFromPrepMode,
   templateTypeForPrepMode,
 } = require('../electron/shared/twitch-prep-status');
+
+function testIntegrationConnected() {
+  assert.strictEqual(isTwitchIntegrationConnected(null), false);
+  assert.strictEqual(isTwitchIntegrationConnected({}), false);
+  assert.strictEqual(isTwitchIntegrationConnected({ is_active: false }), false);
+  assert.strictEqual(
+    isTwitchIntegrationConnected({ twitch_username: 'streamer', is_active: false }),
+    true
+  );
+  assert.strictEqual(
+    isTwitchIntegrationConnected({ twitch_user_id: '123', is_active: true }),
+    true
+  );
+}
 
 function testStatusLabels() {
   assert.strictEqual(
@@ -47,6 +62,7 @@ function testModeMapping() {
 }
 
 function main() {
+  testIntegrationConnected();
   testStatusLabels();
   testModeMapping();
   console.log('test_twitch_prep_status: ok');

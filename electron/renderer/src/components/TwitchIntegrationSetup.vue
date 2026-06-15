@@ -448,6 +448,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { showAlert, showConfirm } from '../utils/dialogs';
+import {
+  mergePredictionsTemplate,
+  normalizePredictionsTemplate,
+  savePredictionsTemplateObject,
+} from '../utils/twitch-predictions-template';
 
 const props = defineProps<{
   visible: boolean;
@@ -503,35 +508,26 @@ const loadData = async () => {
     
     // Load prediction template configuration (uses OnlineProfileManager internally)
     const template = await (window as any).electronAPI.getPredictionsTemplate();
-    if (template) {
-      predictionType.value = template.type || 'whole_challenge';
-      if (template.wholeChallenge) {
-        wholeChallengeOutcomeCount.value = template.wholeChallenge.outcomeCount || 5;
-        wholeChallengeWindowSeconds.value = template.wholeChallenge.predictionWindowSeconds || 600;
-        wholeChallengeCustomTitle.value = template.wholeChallenge.customTitle || '';
-      }
-      if (template.individualItem) {
-        individualPredictionType.value = template.individualItem.predictionType || 'yes_no';
-        predictionCreationDelaySeconds.value = template.individualItem.predictionCreationDelaySeconds || 30;
-        if (template.individualItem.yesNo) {
-          yesNoWindowSeconds.value = template.individualItem.yesNo.windowSeconds || 30;
-          yesNoCustomTitle.value = template.individualItem.yesNo.customTitle || '';
-          yesOutcomeName.value = template.individualItem.yesNo.yesOutcomeName || 'Yes';
-          noOutcomeName.value = template.individualItem.yesNo.noOutcomeName || 'No';
-          yesNoCancelIfSuccessWithinSeconds.value = template.individualItem.yesNo.cancelIfSuccessWithinSeconds ?? null;
-        }
-        if (template.individualItem.timeRange) {
-          timeRangeWindowSeconds.value = template.individualItem.timeRange.windowSeconds || 45;
-          timeRangeCustomTitle.value = template.individualItem.timeRange.customTitle || '';
-          timeRangeOutcomeCount.value = template.individualItem.timeRange.outcomeCount || 5;
-          timeRangeMaxMinutes.value = template.individualItem.timeRange.maxTimeMinutes || 60;
-          timeRangeLowTimeRangesOnlyOnSuccess.value = template.individualItem.timeRange.lowTimeRangesOnlyOnSuccess !== false; // Default true
-          timeRangeUseTemplateMax.value = template.individualItem.timeRange.useTemplateMaxEvenIfWinRulesAllowLess || false; // Default false
-          timeRangeExcludePredictionWindow.value = template.individualItem.timeRange.excludePredictionWindow !== false; // Default true
-          timeRangeCancelIfSuccessWithinSeconds.value = template.individualItem.timeRange.cancelIfSuccessWithinSeconds ?? null;
-        }
-      }
-    }
+    const normalized = normalizePredictionsTemplate(template);
+    predictionType.value = normalized.type;
+    wholeChallengeOutcomeCount.value = normalized.wholeChallenge.outcomeCount;
+    wholeChallengeWindowSeconds.value = normalized.wholeChallenge.predictionWindowSeconds;
+    wholeChallengeCustomTitle.value = normalized.wholeChallenge.customTitle || '';
+    individualPredictionType.value = normalized.individualItem.predictionType;
+    predictionCreationDelaySeconds.value = normalized.individualItem.predictionCreationDelaySeconds;
+    yesNoWindowSeconds.value = normalized.individualItem.yesNo.windowSeconds;
+    yesNoCustomTitle.value = normalized.individualItem.yesNo.customTitle || '';
+    yesOutcomeName.value = normalized.individualItem.yesNo.yesOutcomeName;
+    noOutcomeName.value = normalized.individualItem.yesNo.noOutcomeName;
+    yesNoCancelIfSuccessWithinSeconds.value = normalized.individualItem.yesNo.cancelIfSuccessWithinSeconds ?? null;
+    timeRangeWindowSeconds.value = normalized.individualItem.timeRange.windowSeconds;
+    timeRangeCustomTitle.value = normalized.individualItem.timeRange.customTitle || '';
+    timeRangeOutcomeCount.value = normalized.individualItem.timeRange.outcomeCount;
+    timeRangeMaxMinutes.value = normalized.individualItem.timeRange.maxTimeMinutes;
+    timeRangeLowTimeRangesOnlyOnSuccess.value = normalized.individualItem.timeRange.lowTimeRangesOnlyOnSuccess;
+    timeRangeUseTemplateMax.value = normalized.individualItem.timeRange.useTemplateMaxEvenIfWinRulesAllowLess;
+    timeRangeExcludePredictionWindow.value = normalized.individualItem.timeRange.excludePredictionWindow;
+    timeRangeCancelIfSuccessWithinSeconds.value = normalized.individualItem.timeRange.cancelIfSuccessWithinSeconds ?? null;
   } catch (error) {
     console.error('[TwitchIntegrationSetup] Error loading data:', error);
     integrationStatus.value = null;
@@ -632,39 +628,44 @@ const revokeTokens = async () => {
   }
 };
 
-// Save template configuration
+// Save template configuration (merges with existing — preserves inactive mode settings)
 const saveTemplate = async () => {
   if (!predictionType.value) {
     return;
   }
   
   try {
-    const template: any = {
-      type: predictionType.value
-    };
-    
+    const existing = await (window as any).electronAPI.getPredictionsTemplate();
+    let patch: Parameters<typeof mergePredictionsTemplate>[1];
+
     if (predictionType.value === 'whole_challenge') {
-      template.wholeChallenge = {
-        outcomeCount: wholeChallengeOutcomeCount.value,
-        predictionWindowSeconds: wholeChallengeWindowSeconds.value,
-        customTitle: wholeChallengeCustomTitle.value || undefined
+      patch = {
+        type: 'whole_challenge',
+        wholeChallenge: {
+          outcomeCount: wholeChallengeOutcomeCount.value,
+          predictionWindowSeconds: wholeChallengeWindowSeconds.value,
+          customTitle: wholeChallengeCustomTitle.value || undefined,
+        },
       };
-    } else if (predictionType.value === 'individual_item') {
-      template.individualItem = {
-        predictionType: individualPredictionType.value,
-        predictionCreationDelaySeconds: predictionCreationDelaySeconds.value
+    } else {
+      patch = {
+        type: 'individual_item',
+        individualItem: {
+          predictionType: individualPredictionType.value,
+          predictionCreationDelaySeconds: predictionCreationDelaySeconds.value,
+        },
       };
-      
+
       if (individualPredictionType.value === 'yes_no') {
-        template.individualItem.yesNo = {
+        patch.individualItem!.yesNo = {
           windowSeconds: yesNoWindowSeconds.value,
           customTitle: yesNoCustomTitle.value || undefined,
           yesOutcomeName: yesOutcomeName.value,
           noOutcomeName: noOutcomeName.value,
-          cancelIfSuccessWithinSeconds: yesNoCancelIfSuccessWithinSeconds.value ?? undefined
+          cancelIfSuccessWithinSeconds: yesNoCancelIfSuccessWithinSeconds.value ?? undefined,
         };
-      } else if (individualPredictionType.value === 'time_range') {
-        template.individualItem.timeRange = {
+      } else {
+        patch.individualItem!.timeRange = {
           windowSeconds: timeRangeWindowSeconds.value,
           customTitle: timeRangeCustomTitle.value || undefined,
           outcomeCount: timeRangeOutcomeCount.value,
@@ -672,15 +673,21 @@ const saveTemplate = async () => {
           lowTimeRangesOnlyOnSuccess: timeRangeLowTimeRangesOnlyOnSuccess.value,
           useTemplateMaxEvenIfWinRulesAllowLess: timeRangeUseTemplateMax.value,
           excludePredictionWindow: timeRangeExcludePredictionWindow.value,
-          cancelIfSuccessWithinSeconds: timeRangeCancelIfSuccessWithinSeconds.value ?? undefined
+          cancelIfSuccessWithinSeconds: timeRangeCancelIfSuccessWithinSeconds.value ?? undefined,
         };
       }
     }
-    
-    // Save template using IPC handler (uses OnlineProfileManager internally)
-    await (window as any).electronAPI.savePredictionsTemplate({
-      template: JSON.stringify(template)
-    });
+
+    const template = mergePredictionsTemplate(existing, patch);
+    const result = await savePredictionsTemplateObject(template);
+
+    if (!result?.success) {
+      await showAlert(
+        'Failed to save configuration: ' + (result?.error || 'Unknown error'),
+        'Save Error'
+      );
+      return;
+    }
     
     await showAlert('Template configuration saved successfully!', 'Configuration Saved');
     emit('update');

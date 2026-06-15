@@ -10,6 +10,7 @@ const { ipcMain, dialog, BrowserWindow, shell, app } = require('electron');
 const { ensureRhpakAssociation, removeRhpakAssociation } = require('./rhpak-association');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const {
   handleImportPackage: newgameHandleImportPackage,

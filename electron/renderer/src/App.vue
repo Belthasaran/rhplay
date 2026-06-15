@@ -9686,6 +9686,10 @@ import {
 import { createLaunchSessionMonitor, type LaunchFinishReason } from './composables/useLaunchSessionMonitor';
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
 import { matchesPatchFilter } from './utils/patchFilter';
+import {
+  resolveRunStagedSfcFilename as resolveRunStagedSfcFromList,
+  sortRunStagedSfcFilenames,
+} from './utils/run-staging';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
@@ -12369,15 +12373,34 @@ async function launchFileWithActiveMethod(
   return {};
 }
 
+async function refreshRunStagedSfcFilenames() {
+  if (!stagingFolderPath.value || !isElectronAvailable()) {
+    runStagedSfcFilenames.value = [];
+    return;
+  }
+  try {
+    const folderContents = await (window as any).electronAPI.readDirectory(stagingFolderPath.value);
+    runStagedSfcFilenames.value = sortRunStagedSfcFilenames(folderContents);
+  } catch (error) {
+    console.warn('[refreshRunStagedSfcFilenames] Failed:', error);
+    runStagedSfcFilenames.value = [];
+  }
+}
+
 async function launchStagedFolderFile(folderPath: string, challengeIndex: number) {
-  const seq = String(challengeIndex + 1).padStart(2, '0');
-  const filePath = `${folderPath}/${seq}.sfc`;
+  const folderContents = await (window as any).electronAPI.readDirectory(folderPath);
+  runStagedSfcFilenames.value = sortRunStagedSfcFilenames(folderContents);
+  const basename = resolveRunStagedSfcFromList(folderContents, challengeIndex);
+  if (!basename) {
+    throw new Error(`No staged .sfc found for challenge ${challengeIndex + 1}`);
+  }
+  const filePath = `${folderPath}/${basename}`;
   const challenge = runEntries[challengeIndex];
   const bootRecord: Record<string, unknown> = {
     launch_mode: 'run',
     gameid: challenge?.id,
     name: challenge?.name,
-    sfc_basename: `${seq}.sfc`,
+    sfc_basename: basename,
     sfc_path: filePath
   };
   if (challenge && (challenge as any).levelnumber) {
@@ -12388,7 +12411,7 @@ async function launchStagedFolderFile(folderPath: string, challengeIndex: number
   }
   return await launchFileWithActiveMethod(filePath, {
     boot: true,
-    uploadDstName: `${seq}.sfc`,
+    uploadDstName: basename,
     launchMode: 'run',
     bootRecord
   });
@@ -12396,6 +12419,8 @@ async function launchStagedFolderFile(folderPath: string, challengeIndex: number
 
 function buildRunExpectedRomBasename(): string {
   if (activeLaunchMethod.value === 'program' && stagingFolderPath.value) {
+    const matched = resolveRunStagedSfcFromList(runStagedSfcFilenames.value, currentChallengeIndex.value);
+    if (matched) return matched;
     const seq = String(currentChallengeIndex.value + 1).padStart(2, '0');
     return `${seq}.sfc`;
   }
@@ -23438,6 +23463,7 @@ const stagingProgressGameName = ref('');
 const stagingSuccessModalOpen = ref(false);
 const stagingFolderPath = ref('');
 const stagingSfcCount = ref(0);
+const runStagedSfcFilenames = ref<string[]>([]);
 const runStagingActionStatus = ref('');
 
 // Run upload progress modal
@@ -24290,6 +24316,7 @@ function clearRunState() {
   
   // Clear staging-related state
   stagingFolderPath.value = '';
+  runStagedSfcFilenames.value = [];
   stagingSfcCount.value = 0;
   runStagingActionStatus.value = '';
   
@@ -25088,6 +25115,7 @@ async function stageRunGames(runUuid: string, runName: string) {
     console.log('Setting games staged:', stagingResult.gamesStaged);
     stagingFolderPath.value = stagingResult.folderPath;
     stagingSfcCount.value = stagingResult.gamesStaged;
+    await refreshRunStagedSfcFilenames();
     stagingSuccessModalOpen.value = true;
     
     // Reset skip upload acknowledgment when staging completes
@@ -25487,8 +25515,10 @@ async function loadRestoreRun() {
       stagingFolderPath.value = restoredStagingFolderPath;
       stagingSfcCount.value = restoredStagingSfcCount;
       expandedRunResults.value = expandedResults || [];
+      await refreshRunStagedSfcFilenames();
     } else {
       stagingFolderPath.value = '';
+      runStagedSfcFilenames.value = [];
       stagingSfcCount.value = 0;
       expandedRunResults.value = expandedResults || [];  // Still load results even if folder missing (for regenerate option)
     }
@@ -25571,21 +25601,15 @@ async function launchRunGame(gameNumber: number) {
   }
   
   try {
-    // Get list of SFC files in the run folder
     const folderContents = await (window as any).electronAPI.readDirectory(stagingFolderPath.value);
-    const sfcFiles = folderContents.filter((f: string) => f.endsWith('.sfc')).sort();
+    runStagedSfcFilenames.value = sortRunStagedSfcFilenames(folderContents);
+    const fileToLaunch = resolveRunStagedSfcFromList(folderContents, gameNumber - 1);
     
-    if (sfcFiles.length === 0) {
-      runStagingActionStatus.value = '✗ No .sfc files found in run folder';
+    if (!fileToLaunch) {
+      runStagingActionStatus.value = `✗ Game ${gameNumber} not found (only ${runStagedSfcFilenames.value.length} games staged)`;
       return;
     }
     
-    if (gameNumber < 1 || gameNumber > sfcFiles.length) {
-      runStagingActionStatus.value = `✗ Game ${gameNumber} not found (only ${sfcFiles.length} games staged)`;
-      return;
-    }
-    
-    const fileToLaunch = sfcFiles[gameNumber - 1];
     const filePath = `${stagingFolderPath.value}/${fileToLaunch}`;
     
     runStagingActionStatus.value = `Launching game ${gameNumber}: ${fileToLaunch}...`;
@@ -26272,15 +26296,15 @@ async function launchCurrentChallenge() {
   if (!currentChallenge.value) return;
   
   try {
-    const expectedBasename = buildRunExpectedRomBasename();
-
     if (activeLaunchMethod.value === 'program') {
       if (!stagingFolderPath.value) {
         await showAlert('No staging folder available for emulator launch', 'Launch Failed');
         return;
       }
+      await refreshRunStagedSfcFilenames();
       const result = await launchStagedFolderFile(stagingFolderPath.value, currentChallengeIndex.value);
       runLaunchSessionId.value = result.sessionId || null;
+      const expectedBasename = buildRunExpectedRomBasename();
       console.log(`✓ Launched challenge ${currentChallengeIndex.value + 1} in emulator`);
       if (expectedBasename) {
         startRunLaunchMonitoring(expectedBasename, result.sessionId);
@@ -26347,6 +26371,7 @@ async function launchCurrentChallenge() {
       } : undefined
     });
     
+    const expectedBasename = buildRunExpectedRomBasename();
     if (expectedBasename) {
       startRunLaunchMonitoring(expectedBasename);
     }
@@ -32598,6 +32623,12 @@ async function resumeRunFromStartup() {
     currentRunUuid.value = run.run_uuid;
     currentRunName.value = run.run_name;
     currentRunStatus.value = 'active';
+
+    if (run.staging_folder) {
+      stagingFolderPath.value = run.staging_folder;
+      await refreshRunStagedSfcFilenames();
+      stagingSfcCount.value = runStagedSfcFilenames.value.length;
+    }
     
     // IMPORTANT: Use the original started_at timestamp from database, NEVER modify it
     // Use millisecond precision if available, otherwise convert from timestamp

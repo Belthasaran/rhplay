@@ -1,4 +1,5 @@
 - **Untested stage filtering**: Random stage selection respects test status (cutoff 2026-06-13), Stage Limits checkboxes (include untested off by default), triplet-keyed `stage_feedback` user overrides, and full run-mode feedback form for untested stages.
+- **Run emulator launch**: Active-run Launch resolves staged ROMs by sequence prefix (`02_<timestamp>[_codes].sfc`) instead of assuming `02.sfc`.
 - **Stage Test dialog**: Replaced auto-closing Level Patch Test modal with persistent launch + feedback flow (`StageTestDialog.vue`); `gamestages.test_status` columns with Lev# checkmark/X in Edit mode; extended `stage_feedback` and JSONL backup log on save.
 - **JIT.LevelInfo**: Added `lib/jit-levels/levelinfo/` JS port of `lmlevelinfo` parse pipeline (`parseLevelInfo`, `mapLevelInfoToStageDefaults`, `deriveTagsFromLevelInfo`); parity with `level_info1 --json` on akogare `0x109`.
 

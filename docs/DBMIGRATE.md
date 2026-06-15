@@ -2199,6 +2199,7 @@ Key `stage_feedback` by `(gameid, levelnumber, playlevel_patchcode)` so feedback
 
 ### Expected Outcome
 - `stage_feedback` rows are unique per triplet; null `playlevel_patchcode` backfilled to `2lvno`.
+- `v_run_results_timing_compat` is dropped before the table swap and recreated after; partial DBs missing `pause_end` / `pause_end_ms` on `run_results` get those columns added first.
 
 ---
 

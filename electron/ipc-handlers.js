@@ -6185,23 +6185,18 @@ function registerDatabaseHandlers(dbManager) {
       const updateStmt = db.prepare(`UPDATE run_results SET sfcpath = ? WHERE result_uuid = ?`);
       let updatedCount = 0;
       
-      // Try to match files by sequence number (assuming files are named like 01.sfc, 02.sfc, etc.)
+      // Match files by sequence prefix (02.sfc or 02_<timestamp>[_codes].sfc)
+      const { runStagedSfcMatchesSequence } = require('./run-staging-resolve');
+
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         const seqNum = i + 1;
         
-        // Try to find matching file by sequence number pattern
-        const seqPatterns = [
-          String(seqNum).padStart(2, '0') + '.sfc',
-          String(seqNum).padStart(3, '0') + '.sfc',
-          seqNum + '.sfc'
-        ];
-        
         let matched = false;
-        for (const pattern of seqPatterns) {
-          if (fileMappings[pattern] && !usedPaths.has(fileMappings[pattern])) {
-            updateStmt.run(fileMappings[pattern], result.result_uuid);
-            usedPaths.add(fileMappings[pattern]);
+        for (const [filename, filePath] of Object.entries(fileMappings)) {
+          if (runStagedSfcMatchesSequence(filename, seqNum) && !usedPaths.has(filePath)) {
+            updateStmt.run(filePath, result.result_uuid);
+            usedPaths.add(filePath);
             updatedCount++;
             matched = true;
             break;

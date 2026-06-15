@@ -1631,12 +1631,6 @@
                 >
                   Create Item Predictions (same items)
                 </button>
-                <button 
-                  @click="enablePredictionsMode('next_item')"
-                  class="dropdown-item"
-                >
-                  Create Item Predictions (next item, alternates)
-                </button>
               </template>
               <!-- Options when On -->
               <template v-else>
@@ -1774,6 +1768,13 @@
           </button>
           <button @click="openWinRulesDropdown($event)" :title="`Win Rules: ${hasWinRules ? 'Configured' : 'Not set'}`">
             {{ hasWinRules ? '✓ Win Rules' : 'Set Win Rules' }} ▼
+          </button>
+          <button
+            @click="openTwitchPrepDropdown($event)"
+            class="btn-twitch-prep"
+            :title="`Twitch predictions: ${twitchPrepStatusLabel}`"
+          >
+            Twitch {{ twitchPrepStatusLabel }} ▼
           </button>
         </div>
         <div class="right add-random">
@@ -9635,6 +9636,18 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     @close="showTwitchIntegrationSetup = false"
     @update="handleTwitchIntegrationUpdate"
   />
+
+  <TwitchPrepDropdown
+    :visible="showTwitchPrepDropdown"
+    :position="twitchPrepDropdownPosition"
+    :selectedMode="prepPredictionsMode"
+    :individualSubtype="prepIndividualSubtype"
+    :timeRangeOutcomeCount="prepTimeRangeOutcomeCount"
+    @close="handleCloseTwitchPrepDropdown"
+    @setup="handleTwitchPrepSetup"
+    @select-mode="handleTwitchPrepSelectMode"
+    @select-subtype="handleTwitchPrepSelectSubtype"
+  />
   
 </template>
 
@@ -9801,6 +9814,20 @@ import {
   sortRunStagedSfcFilenames,
 } from './utils/run-staging';
 import { serializePlanSnapshot, normalizeWinRulesJson } from './utils/run-plan-snapshot';
+import {
+  getTwitchPrepStatusLabel,
+  prepModeFromPredictionState,
+  predictionStateFromPrepMode,
+  type PrepPredictionsMode,
+} from './utils/twitch-prep-status';
+import {
+  ensureTemplateMatchesPrepMode,
+  getIndividualSubtypeFromTemplate,
+  getTimeRangeOutcomeCount,
+  loadPredictionsTemplateObject,
+  saveIndividualSubtype,
+  type IndividualPredictionSubtype,
+} from './utils/twitch-predictions-template';
 import ModeratorDashboard from './components/moderation/ModeratorDashboard.vue';
 import TrustSummaryModal from './components/trust/TrustSummaryModal.vue';
 import TrustDeclarationsList from './components/trust/TrustDeclarationsList.vue';
@@ -9832,6 +9859,7 @@ import {
 import RunExitDetectedModal from './components/RunExitDetectedModal.vue';
 import RunAgainRandomChoiceModal from './components/RunAgainRandomChoiceModal.vue';
 import PrepSaveRequiredModal from './components/PrepSaveRequiredModal.vue';
+import TwitchPrepDropdown from './components/TwitchPrepDropdown.vue';
 import AlertDialog from './components/AlertDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
@@ -23513,6 +23541,40 @@ const predictionsEnabled = ref(false);  // Whether predictions are enabled for c
 const predictionsConfigured = ref(false);  // Whether Twitch integration is configured
 const twitchTokenValid = ref(true);  // Whether Twitch token is valid (required for predictions to work)
 const predictionsOperationalMode = ref<'whole_challenge' | 'same_item' | 'next_item' | null>(null);  // Operational mode when enabled
+
+const showTwitchPrepDropdown = ref(false);
+const twitchPrepDropdownPosition = ref<{ x: number; y: number } | null>(null);
+const prepPredictionsMode = ref<PrepPredictionsMode>('none');
+const prepIndividualSubtype = ref<IndividualPredictionSubtype>('yes_no');
+const prepTimeRangeOutcomeCount = ref(5);
+const openTwitchPrepAfterSetup = ref(false);
+
+const twitchPrepStatusLabel = computed(() =>
+  getTwitchPrepStatusLabel({
+    predictionsConfigured: predictionsConfigured.value,
+    twitchTokenValid: twitchTokenValid.value,
+    prepPredictionsMode: prepPredictionsMode.value,
+  })
+);
+
+function syncPrepModeFromPredictionState() {
+  prepPredictionsMode.value = prepModeFromPredictionState(
+    predictionsEnabled.value,
+    predictionsOperationalMode.value
+  );
+}
+
+async function refreshPrepTemplateSubtypeFromTemplate() {
+  try {
+    const template = await loadPredictionsTemplateObject();
+    if (template) {
+      prepIndividualSubtype.value = getIndividualSubtypeFromTemplate(template);
+      prepTimeRangeOutcomeCount.value = getTimeRangeOutcomeCount(template);
+    }
+  } catch (error) {
+    console.warn('[refreshPrepTemplateSubtypeFromTemplate] Error:', error);
+  }
+}
 const showPredictionsManageDropdown = ref(false);  // Whether dropdown menu is visible
 const activePredictionUuid = ref<string | null>(null);  // UUID of currently active prediction
 const predictionRetryQueue = ref<Array<{action: string, params: any, retryCount: number, maxRetries: number}>>([]);  // Queue for retrying failed operations
@@ -24550,6 +24612,13 @@ function clearRunState() {
   runAgainSkipExpand.value = false;
   stagingProgressModalOpen.value = false;
   clearSavedRunSnapshot();
+
+  prepPredictionsMode.value = 'none';
+  predictionsEnabled.value = false;
+  predictionsOperationalMode.value = null;
+  activePredictionUuid.value = null;
+  showTwitchPrepDropdown.value = false;
+  twitchPrepDropdownPosition.value = null;
 
   console.log('[clearRunState] Run state cleared, ready for new run');
 }
@@ -26462,45 +26531,28 @@ async function startRun() {
       
       await updateManualControlAvailability();
       
-      if (predictionsEnabled.value && predictionsOperationalMode.value === 'whole_challenge') {
-        // Create whole challenge prediction when run starts
-        const template = await (window as any).electronAPI.getPredictionsTemplate();
-        if (template && template.type === 'whole_challenge') {
-          const createResult = await (window as any).electronAPI.createTwitchPrediction({
-            template: template,
-            runUuid: currentRunUuid.value,
-            challengeSequenceNumber: null, // Whole run
-            totalChallenges: runEntries.length,
-            username: onlineProfile.value?.username || 'Player',
-            gameId: null,
-            stageId: null
+      if (predictionsEnabled.value && predictionsOperationalMode.value) {
+        await cancelAllActiveTwitchPredictionsBeforeRun();
+
+        const mode = predictionsOperationalMode.value;
+        const conflictResult = await handlePredictionConflicts(mode);
+        if (!conflictResult.canProceed) {
+          showToastNotification('Could not start predictions due to conflicting Twitch predictions.', 'warning', 5000);
+        } else if (mode === 'whole_challenge') {
+          await createPredictionForOperationalMode(mode, {
+            adoptedPredictionUuid: conflictResult.adoptedPredictionUuid,
           });
-          
-          if (createResult.success) {
-            activePredictionUuid.value = createResult.predictionUuid;
-            updatePredictionStatus('created');
-            await savePredictionManagementState();
-            await updateManualControlAvailability();
-            showToastNotification('Run prediction created', 'success', 3000);
-          } else {
-            // Queue for retry
-            queuePredictionRetry('create', {
-              template: template,
-              runUuid: currentRunUuid.value,
-              challengeSequenceNumber: null,
-              totalChallenges: runEntries.length,
-              username: onlineProfile.value?.username || 'Player',
-              gameId: null,
-              stageId: null
+        } else if (mode === 'same_item') {
+          if (conflictResult.adoptedPredictionUuid) {
+            await createPredictionForOperationalMode(mode, {
+              adoptedPredictionUuid: conflictResult.adoptedPredictionUuid,
             });
-            showToastNotification('Creating run prediction... (will retry if needed)', 'info', 3000);
+          } else {
+            createPredictionForNextChallenge(0).catch(error => {
+              console.error('[startRun] Error creating prediction for first challenge:', error);
+            });
           }
         }
-      } else if (predictionsEnabled.value && predictionsOperationalMode.value === 'same_item') {
-        // Create prediction for first challenge
-        createPredictionForNextChallenge(0).catch(error => {
-          console.error('[startRun] Error creating prediction for first challenge:', error);
-        });
       }
       
       // Initialize challenge results tracking
@@ -28799,6 +28851,207 @@ async function openTwitchIntegrationSetup() {
   await checkPredictionsConfiguration();
 }
 
+function handleCloseTwitchPrepDropdown() {
+  showTwitchPrepDropdown.value = false;
+  twitchPrepDropdownPosition.value = null;
+}
+
+async function handleTwitchPrepSetup() {
+  handleCloseTwitchPrepDropdown();
+  openTwitchPrepAfterSetup.value = true;
+  await openTwitchIntegrationSetup();
+}
+
+async function armPredictionsMode(mode: PrepPredictionsMode) {
+  const state = predictionStateFromPrepMode(mode);
+  prepPredictionsMode.value = mode;
+  predictionsEnabled.value = state.enabled;
+  predictionsOperationalMode.value = state.operationalMode;
+  if (!state.enabled) {
+    activePredictionUuid.value = null;
+  }
+
+  if (mode !== 'none') {
+    await ensureTemplateMatchesPrepMode(mode);
+    await refreshPrepTemplateSubtypeFromTemplate();
+  }
+
+  if (currentRunUuid.value && isElectronAvailable()) {
+    await savePredictionManagementState();
+  }
+}
+
+async function handleTwitchPrepSelectMode(mode: PrepPredictionsMode) {
+  await armPredictionsMode(mode);
+}
+
+async function handleTwitchPrepSelectSubtype(subtype: IndividualPredictionSubtype) {
+  prepIndividualSubtype.value = subtype;
+  await saveIndividualSubtype(subtype);
+  await refreshPrepTemplateSubtypeFromTemplate();
+}
+
+async function openTwitchPrepDropdown(event: MouseEvent) {
+  await checkPredictionsConfiguration();
+
+  if (isElectronAvailable()) {
+    try {
+      const validation = await (window as any).electronAPI.validateTwitchToken();
+      if (validation?.valid === true) {
+        twitchTokenValid.value = true;
+      } else if (validation?.needsReauth || validation?.valid === false) {
+        twitchTokenValid.value = false;
+      }
+    } catch (error) {
+      console.warn('[openTwitchPrepDropdown] Token validation error:', error);
+    }
+  }
+
+  if (!predictionsConfigured.value || !twitchTokenValid.value) {
+    openTwitchPrepAfterSetup.value = true;
+    await openTwitchIntegrationSetup();
+    return;
+  }
+
+  const button = event.currentTarget as HTMLElement;
+  const rect = button.getBoundingClientRect();
+  twitchPrepDropdownPosition.value = {
+    x: rect.right,
+    y: rect.bottom + 5,
+  };
+
+  await refreshPrepTemplateSubtypeFromTemplate();
+  syncPrepModeFromPredictionState();
+  showTwitchPrepDropdown.value = true;
+}
+
+async function cancelAllActiveTwitchPredictionsBeforeRun() {
+  if (!isElectronAvailable()) return;
+
+  try {
+    const checkResult = await (window as any).electronAPI.checkTwitchPredictionsActive();
+    if (!checkResult?.success || !checkResult.hasActivePredictions) {
+      return;
+    }
+
+    const activePreds = checkResult.activePredictions || [];
+    for (const pred of activePreds) {
+      if (pred.twitch_status !== 'ACTIVE') {
+        continue;
+      }
+
+      if (pred.isManaged && pred.prediction_uuid) {
+        const cancelResult = await (window as any).electronAPI.cancelTwitchPrediction({
+          predictionUuid: pred.prediction_uuid,
+        });
+        if (!cancelResult?.success) {
+          console.warn('[cancelAllActiveTwitchPredictionsBeforeRun] Failed to cancel managed prediction:', cancelResult?.error);
+        }
+      } else if (pred.twitch_prediction_id) {
+        const cancelResult = await (window as any).electronAPI.cancelTwitchPredictionByTwitchId({
+          twitchPredictionId: pred.twitch_prediction_id,
+        });
+        if (!cancelResult?.success) {
+          console.warn('[cancelAllActiveTwitchPredictionsBeforeRun] Failed to cancel unmanaged prediction:', cancelResult?.error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[cancelAllActiveTwitchPredictionsBeforeRun] Error:', error);
+  }
+}
+
+async function createPredictionForOperationalMode(
+  mode: 'whole_challenge' | 'same_item' | 'next_item',
+  options: { adoptedPredictionUuid?: string } = {}
+) {
+  if (!currentRunUuid.value || !isElectronAvailable()) {
+    return;
+  }
+
+  if (options.adoptedPredictionUuid) {
+    predictionsEnabled.value = true;
+    predictionsOperationalMode.value = mode;
+    activePredictionUuid.value = options.adoptedPredictionUuid;
+    await savePredictionManagementState();
+    await syncPredictionStatus();
+    await updateManualControlAvailability();
+    updatePredictionStatus('created', 'Adopted existing prediction');
+    showToastNotification('Adopted existing prediction', 'success', 3000);
+    return;
+  }
+
+  const template = await ensureTemplateMatchesPrepMode(
+    mode === 'whole_challenge' ? 'whole_challenge' : 'same_item'
+  );
+  if (!template || !template.type) {
+    showToastNotification('Prediction template not configured. Please set up predictions first.', 'warning', 5000);
+    return;
+  }
+
+  let challengeSequenceNumber: number | null = null;
+  const totalChallenges = runEntries.length;
+
+  if (mode === 'whole_challenge') {
+    challengeSequenceNumber = null;
+  } else if (mode === 'same_item') {
+    challengeSequenceNumber = currentChallengeIndex.value + 1;
+  } else if (mode === 'next_item') {
+    if (currentChallengeIndex.value < runEntries.length - 1) {
+      challengeSequenceNumber = currentChallengeIndex.value + 2;
+    } else {
+      showToastNotification('No next challenge available for prediction.', 'warning', 3000);
+      return;
+    }
+  }
+
+  const currentChallenge = runEntries[currentChallengeIndex.value];
+  const gameId = currentChallenge?.id || (currentChallenge as any)?.gameid || null;
+  const stageId = currentChallenge?.stageNumber || (currentChallenge as any)?.levelnumber || null;
+
+  const createResult = await (window as any).electronAPI.createTwitchPrediction({
+    template,
+    runUuid: currentRunUuid.value,
+    challengeSequenceNumber,
+    totalChallenges,
+    username: onlineProfile.value?.username || 'Player',
+    gameId,
+    stageId,
+  });
+
+  if (!createResult.success) {
+    if (createResult.error && (createResult.error.includes('already exists') ||
+        createResult.error.includes('active prediction'))) {
+      showToastNotification(
+        'A prediction already exists on Twitch. Please cancel it first or wait for it to resolve.',
+        'error',
+        5000
+      );
+    } else {
+      queuePredictionRetry('create', {
+        template,
+        runUuid: currentRunUuid.value,
+        challengeSequenceNumber,
+        totalChallenges,
+        username: onlineProfile.value?.username || 'Player',
+        gameId,
+        stageId,
+      });
+      showToastNotification('Creating prediction... (will retry if needed)', 'info', 3000);
+    }
+    return;
+  }
+
+  predictionsEnabled.value = true;
+  predictionsOperationalMode.value = mode;
+  activePredictionUuid.value = createResult.predictionUuid;
+  syncPrepModeFromPredictionState();
+  updatePredictionStatus('created');
+  await savePredictionManagementState();
+  await updateManualControlAvailability();
+  showToastNotification('Prediction created and enabled', 'success', 3000);
+}
+
 async function handleTwitchIntegrationUpdate() {
   // Reload predictions configuration status after integration update
   const wasEnabled = predictionsEnabled.value;  // Remember if predictions were enabled
@@ -28824,6 +29077,15 @@ async function handleTwitchIntegrationUpdate() {
     await updateManualControlAvailability();
     
     console.log(`[handleTwitchIntegrationUpdate] Resumed predictions with mode: ${previousMode}`);
+  }
+
+  await refreshPrepTemplateSubtypeFromTemplate();
+
+  if (openTwitchPrepAfterSetup.value && predictionsConfigured.value && twitchTokenValid.value && !isRunActive.value) {
+    openTwitchPrepAfterSetup.value = false;
+    showTwitchPrepDropdown.value = true;
+  } else {
+    openTwitchPrepAfterSetup.value = false;
   }
 }
 
@@ -29176,108 +29438,32 @@ async function enablePredictionsMode(mode: 'whole_challenge' | 'same_item' | 'ne
   showPredictionsManageDropdown.value = false;
   
   try {
-    if (isElectronAvailable()) {
-      // Handle conflicts (adopt matching, resolve/cancel previous items, show dialog for others)
-      const conflictResult = await handlePredictionConflicts(mode);
-      
-      if (!conflictResult.canProceed) {
-        return; // User cancelled the operation
-      }
-      
-      // If we adopted an existing prediction, use it
-      if (conflictResult.adoptedPredictionUuid) {
-        predictionsEnabled.value = true;
-        predictionsOperationalMode.value = mode;
-        activePredictionUuid.value = conflictResult.adoptedPredictionUuid;
-        await savePredictionManagementState();
-        await syncPredictionStatus();
-        await updateManualControlAvailability();
-        updatePredictionStatus('created', 'Adopted existing prediction');
-        showToastNotification('Adopted existing prediction', 'success', 3000);
-        return;
-      }
-      
-      // Get prediction template
-      const template = await (window as any).electronAPI.getPredictionsTemplate();
-      if (!template || !template.type) {
-        showToastNotification('Prediction template not configured. Please set up predictions first.', 'warning', 5000);
-        return;
-      }
-      
-      // Determine which challenge to create prediction for
-      let challengeSequenceNumber: number | null = null;
-      let totalChallenges = runEntries.length;
-      
-      if (mode === 'whole_challenge') {
-        // Create prediction for entire run
-        challengeSequenceNumber = null;
-      } else if (mode === 'same_item') {
-        // Create prediction for current active challenge
-        challengeSequenceNumber = currentChallengeIndex.value + 1; // 1-indexed
-      } else if (mode === 'next_item') {
-        // Create prediction for next challenge (after current)
-        if (currentChallengeIndex.value < runEntries.length - 1) {
-          challengeSequenceNumber = currentChallengeIndex.value + 2; // Next item (1-indexed)
-        } else {
-          showToastNotification('No next challenge available for prediction.', 'warning', 3000);
-          return;
-        }
-      }
-      
-      // Get current challenge info for title
-      const currentChallenge = runEntries[currentChallengeIndex.value];
-      const gameId = currentChallenge?.id || currentChallenge?.gameid || null;
-      const stageId = currentChallenge?.stageNumber || currentChallenge?.levelnumber || null;
-      
-      // Create prediction
-      const createResult = await (window as any).electronAPI.createTwitchPrediction({
-        template: template,
-        runUuid: currentRunUuid.value,
-        challengeSequenceNumber: challengeSequenceNumber,
-        totalChallenges: totalChallenges,
-        username: onlineProfile.value?.username || 'Player',
-        gameId: gameId,
-        stageId: stageId
-      });
-      
-      if (!createResult.success) {
-        // Check if error is due to existing prediction
-        if (createResult.error && (createResult.error.includes('already exists') || 
-            createResult.error.includes('active prediction'))) {
-          showToastNotification(
-            'A prediction already exists on Twitch. Please cancel it first or wait for it to resolve.',
-            'error',
-            5000
-          );
-        } else {
-          // Queue for retry
-          queuePredictionRetry('create', {
-            template: template,
-            runUuid: currentRunUuid.value,
-            challengeSequenceNumber: challengeSequenceNumber,
-            totalChallenges: totalChallenges,
-            username: onlineProfile.value?.username || 'Player',
-            gameId: gameId,
-            stageId: stageId
-          });
-          showToastNotification(`Creating prediction... (will retry if needed)`, 'info', 3000);
-        }
-        return;
-      }
-      
-      // Success - enable predictions
-      predictionsEnabled.value = true;
-      predictionsOperationalMode.value = mode;
-      activePredictionUuid.value = createResult.predictionUuid;
-      
-      // Update status and persist state
-      updatePredictionStatus('created');
-      await savePredictionManagementState();
-      await updateManualControlAvailability();
-      
-      showToastNotification('Prediction created and enabled', 'success', 3000);
-      console.log(`[enablePredictionsMode] Enabled predictions with mode: ${mode}, prediction UUID: ${createResult.predictionUuid}`);
+    if (!isElectronAvailable()) {
+      return;
     }
+
+    const prepMode: PrepPredictionsMode =
+      mode === 'whole_challenge' ? 'whole_challenge' :
+      mode === 'same_item' ? 'same_item' : 'none';
+    if (prepMode !== 'none') {
+      await armPredictionsMode(prepMode);
+    } else if (mode === 'next_item') {
+      predictionsEnabled.value = true;
+      predictionsOperationalMode.value = 'next_item';
+      syncPrepModeFromPredictionState();
+      if (currentRunUuid.value) {
+        await savePredictionManagementState();
+      }
+    }
+
+    const conflictResult = await handlePredictionConflicts(mode);
+    if (!conflictResult.canProceed) {
+      return;
+    }
+
+    await createPredictionForOperationalMode(mode, {
+      adoptedPredictionUuid: conflictResult.adoptedPredictionUuid,
+    });
   } catch (error: any) {
     console.error('[enablePredictionsMode] Error:', error);
     showToastNotification(
@@ -31072,6 +31258,8 @@ async function loadPredictionManagementState() {
       predictionsEnabled.value = state.enabled || false;
       predictionsOperationalMode.value = state.operationalMode || null;
       activePredictionUuid.value = state.activePredictionUuid || null;
+      syncPrepModeFromPredictionState();
+      await refreshPrepTemplateSubtypeFromTemplate();
       
       // If we loaded a state with predictions enabled, ensure configured is true
       // (Double-check in case template check failed)
@@ -34942,6 +35130,22 @@ button:disabled {
   background: #8b5cf6;
   color: white;
   border-color: #7c3aed;
+}
+
+.btn-twitch-prep {
+  padding: var(--button-padding);
+  border: 1px solid #7c3aed;
+  border-radius: 4px;
+  background: #8b5cf6;
+  color: white;
+  cursor: pointer;
+  font-size: var(--base-font-size);
+  white-space: nowrap;
+}
+
+.btn-twitch-prep:hover {
+  background: #7c3aed;
+  border-color: #6d28d9;
 }
 
 .btn-run-status:hover {

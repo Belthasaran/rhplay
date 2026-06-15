@@ -1,4 +1,4 @@
-- **Prepare Run dirty state**: After Stage and Save, Prep Status tracks unsaved plan or win-rules edits; Start Run disabled until Revert, minor save, or full re-stage.
+- **Prepare Run Twitch predictions**: Purple Twitch dropdown in Prepare Run to pre-select None, Per-Item, or Per-Run prediction mode before Start Run.
 - **Run emulator launch**: Active-run Launch resolves staged ROMs by sequence prefix (`02_<timestamp>[_codes].sfc`) instead of assuming `02.sfc`.
 - **Run exit auto-launch**: Do not auto-launch after the last challenge completes; await `completeRun()` so run state is cleared before any follow-up launch attempt.
 - **Run exit feedback UI**: Random-stage exit modal shows compact 0–10 difficulty row; preset buttons use green/red/orange tones with test-result labels.

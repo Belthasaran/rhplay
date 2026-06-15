@@ -2455,11 +2455,37 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       const transaction = db.transaction((runId, entryList) => {
-        // Clear existing entries
-        db.prepare(`DELETE FROM run_plan_entries WHERE run_uuid = ?`).run(runId);
-        
-        // Insert new entries
-        const stmt = db.prepare(`
+        const hasFrozenResults = (db.prepare(`
+          SELECT COUNT(*) as count FROM run_results WHERE run_uuid = ?
+        `).get(runId)?.count || 0) > 0;
+
+        const planEntryRowValues = (entry, idx) => [
+          idx + 1,
+          entry.entryType,
+          entry.id !== '(random)' ? entry.id : null,
+          entry.stageNumber || null,
+          entry.count || 1,
+          entry.filterDifficulty || null,
+          entry.filterType || null,
+          entry.filterPattern || null,
+          entry.seed || null,
+          JSON.stringify(entry.conditions || []),
+          entry.transLevel || null,
+          entry.stageFilterMinDifficulty !== undefined ? entry.stageFilterMinDifficulty : null,
+          entry.stageFilterMaxDifficulty !== undefined ? entry.stageFilterMaxDifficulty : null,
+          entry.stageFilterIncludeFlags && Array.isArray(entry.stageFilterIncludeFlags) ? JSON.stringify(entry.stageFilterIncludeFlags) : null,
+          entry.stageFilterExcludeFlags && Array.isArray(entry.stageFilterExcludeFlags) ? JSON.stringify(entry.stageFilterExcludeFlags) : null,
+          entry.stageFilterIncludeAnyOfFlags && Array.isArray(entry.stageFilterIncludeAnyOfFlags) ? JSON.stringify(entry.stageFilterIncludeAnyOfFlags) : null,
+          entry.stageFilterExcludeOnlyFlags && Array.isArray(entry.stageFilterExcludeOnlyFlags) ? JSON.stringify(entry.stageFilterExcludeOnlyFlags) : null,
+          entry.stageFilterHasTags && Array.isArray(entry.stageFilterHasTags) ? JSON.stringify(entry.stageFilterHasTags) : null,
+          entry.stageFilterExcludeTags && Array.isArray(entry.stageFilterExcludeTags) ? JSON.stringify(entry.stageFilterExcludeTags) : null,
+          entry.gameFilterMinDifficulty !== undefined ? entry.gameFilterMinDifficulty : null,
+          entry.gameFilterMaxDifficulty !== undefined ? entry.gameFilterMaxDifficulty : null,
+          entry.stageFilterIncludeUntested ? 1 : 0,
+          entry.stageFilterUntestedOnly === true || entry.stageFilterUntestedOnly === 1 ? 1 : 0,
+        ];
+
+        const insertStmt = db.prepare(`
           INSERT INTO run_plan_entries
             (entry_uuid, run_uuid, sequence_number, entry_type, gameid, exit_number,
              count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions,
@@ -2471,37 +2497,58 @@ function registerDatabaseHandlers(dbManager) {
              stage_filter_include_untested, stage_filter_untested_only)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        
+
+        const updateStmt = db.prepare(`
+          UPDATE run_plan_entries SET
+            sequence_number = ?, entry_type = ?, gameid = ?, exit_number = ?,
+            count = ?, filter_difficulty = ?, filter_type = ?, filter_pattern = ?, filter_seed = ?, conditions = ?,
+            trans_level = ?, stage_filter_min_difficulty = ?, stage_filter_max_difficulty = ?,
+            stage_filter_include_flags = ?, stage_filter_exclude_flags = ?,
+            stage_filter_include_any_of_flags = ?, stage_filter_exclude_only_flags = ?,
+            stage_filter_has_tags = ?, stage_filter_exclude_tags = ?,
+            game_filter_min_difficulty = ?, game_filter_max_difficulty = ?,
+            stage_filter_include_untested = ?, stage_filter_untested_only = ?
+          WHERE entry_uuid = ? AND run_uuid = ?
+        `);
+
+        if (!hasFrozenResults) {
+          db.prepare(`DELETE FROM run_plan_entries WHERE run_uuid = ?`).run(runId);
+        }
+
+        const incomingUuids = new Set();
         entryList.forEach((entry, idx) => {
-          const entryUuid = crypto.randomUUID();
-          stmt.run(
-            entryUuid,
-            runId,
-            idx + 1,
-            entry.entryType,
-            entry.id !== '(random)' ? entry.id : null,
-            entry.stageNumber || null,
-            entry.count || 1,
-            entry.filterDifficulty || null,
-            entry.filterType || null,
-            entry.filterPattern || null,
-            entry.seed || null,
-            JSON.stringify(entry.conditions || []),
-            entry.transLevel || null,
-            entry.stageFilterMinDifficulty !== undefined ? entry.stageFilterMinDifficulty : null,
-            entry.stageFilterMaxDifficulty !== undefined ? entry.stageFilterMaxDifficulty : null,
-            entry.stageFilterIncludeFlags && Array.isArray(entry.stageFilterIncludeFlags) ? JSON.stringify(entry.stageFilterIncludeFlags) : null,
-            entry.stageFilterExcludeFlags && Array.isArray(entry.stageFilterExcludeFlags) ? JSON.stringify(entry.stageFilterExcludeFlags) : null,
-            entry.stageFilterIncludeAnyOfFlags && Array.isArray(entry.stageFilterIncludeAnyOfFlags) ? JSON.stringify(entry.stageFilterIncludeAnyOfFlags) : null,
-            entry.stageFilterExcludeOnlyFlags && Array.isArray(entry.stageFilterExcludeOnlyFlags) ? JSON.stringify(entry.stageFilterExcludeOnlyFlags) : null,
-            entry.stageFilterHasTags && Array.isArray(entry.stageFilterHasTags) ? JSON.stringify(entry.stageFilterHasTags) : null,
-            entry.stageFilterExcludeTags && Array.isArray(entry.stageFilterExcludeTags) ? JSON.stringify(entry.stageFilterExcludeTags) : null,
-            entry.gameFilterMinDifficulty !== undefined ? entry.gameFilterMinDifficulty : null,
-            entry.gameFilterMaxDifficulty !== undefined ? entry.gameFilterMaxDifficulty : null,
-            entry.stageFilterIncludeUntested ? 1 : 0,
-            entry.stageFilterUntestedOnly === true || entry.stageFilterUntestedOnly === 1 ? 1 : 0
-          );
+          const entryUuid = entry.key || crypto.randomUUID();
+          incomingUuids.add(entryUuid);
+          const rowValues = planEntryRowValues(entry, idx);
+
+          if (hasFrozenResults) {
+            const existing = db.prepare(`
+              SELECT entry_uuid FROM run_plan_entries WHERE entry_uuid = ? AND run_uuid = ?
+            `).get(entryUuid, runId);
+            if (existing) {
+              updateStmt.run(...rowValues, entryUuid, runId);
+            } else {
+              insertStmt.run(entryUuid, runId, ...rowValues);
+            }
+          } else {
+            insertStmt.run(entryUuid, runId, ...rowValues);
+          }
         });
+
+        if (hasFrozenResults) {
+          const existingEntries = db.prepare(`
+            SELECT entry_uuid FROM run_plan_entries WHERE run_uuid = ?
+          `).all(runId);
+          for (const row of existingEntries) {
+            if (incomingUuids.has(row.entry_uuid)) continue;
+            const refCount = db.prepare(`
+              SELECT COUNT(*) as count FROM run_results WHERE plan_entry_uuid = ?
+            `).get(row.entry_uuid)?.count || 0;
+            if (refCount === 0) {
+              db.prepare(`DELETE FROM run_plan_entries WHERE entry_uuid = ?`).run(row.entry_uuid);
+            }
+          }
+        }
       });
       
       transaction(runUuid, entries);

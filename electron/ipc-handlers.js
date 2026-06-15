@@ -6609,6 +6609,49 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  /**
+   * Rename a run (any status)
+   * Channel: db:runs:rename
+   */
+  ipcMain.handle('db:runs:rename', async (event, { runUuid, runName }) => {
+    try {
+      const trimmed = (runName || '').trim();
+      if (!trimmed) {
+        return { success: false, error: 'Run name is required' };
+      }
+      if (!runUuid) {
+        return { success: false, error: 'runUuid is required' };
+      }
+
+      const db = dbManager.getConnection('clientdata');
+      const run = db.prepare(`SELECT run_uuid FROM runs WHERE run_uuid = ?`).get(runUuid);
+      if (!run) {
+        return { success: false, error: 'Run not found' };
+      }
+
+      const nowMs = Date.now();
+      db.prepare(`
+        UPDATE runs
+        SET run_name = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            updated_at_ms = ?
+        WHERE run_uuid = ?
+      `).run(trimmed, nowMs, runUuid);
+
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[db:runs:rename] Failed to regenerate runview:', error);
+      }
+
+      return { success: true, runName: trimmed };
+    } catch (error) {
+      console.error('Error renaming run:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // ===========================================================================
   // File Selection and Validation
   // ===========================================================================

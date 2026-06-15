@@ -1519,6 +1519,7 @@
                 {{ runStatusText }}
               </button>
               <div v-if="runStatusDropdownOpen" class="run-status-dropdown">
+                <button @click="openRenameRunFromPrepStatus" class="dropdown-item">Rename Run</button>
                 <button @click="reopenStagingWindow" class="dropdown-item">Reopen Staging Window</button>
                 <button @click="manualUploadSearch" class="dropdown-item">Manual Upload: Search USB2SNES For Files</button>
                 <button @click="regenerateStaging" class="dropdown-item" v-if="needsRegenerateStaging">Regenerate Staging</button>
@@ -8933,6 +8934,37 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     </div>
   </div>
 
+  <!-- Rename Run Modal (teleported above nested modals such as Past Runs) -->
+  <Teleport to="body">
+    <div
+      v-if="renameRunModalOpen"
+      class="modal-backdrop rename-run-modal-backdrop"
+      @click.self="cancelRenameRun"
+    >
+      <div class="modal run-name-modal">
+        <header class="modal-header">
+          <h3>Rename Run</h3>
+          <button class="close" @click="cancelRenameRun">✕</button>
+        </header>
+        <section class="modal-body run-name-body">
+          <label for="rename-run-input">Run Name:</label>
+          <input
+            id="rename-run-input"
+            type="text"
+            v-model="renameRunInput"
+            placeholder="My Challenge Run"
+            @keyup.enter="confirmRenameRun"
+            autofocus
+          />
+        </section>
+        <footer class="modal-footer">
+          <button @click="confirmRenameRun" class="btn-primary">Save</button>
+          <button @click="cancelRenameRun">Cancel</button>
+        </footer>
+      </div>
+    </div>
+  </Teleport>
+
   <!-- Resume Run Modal (on app startup) -->
   <div v-if="resumeRunModalOpen" class="modal-backdrop">
     <div class="modal resume-run-modal">
@@ -9109,6 +9141,12 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             <h4>Run Details</h4>
             <div class="inspector-content">
               <div class="past-run-inspector-actions">
+                <button
+                  @click="openRenamePastRun"
+                  class="btn-secondary"
+                >
+                  Rename
+                </button>
                 <button
                   v-if="canRunAgainPastRun"
                   @click="runAgainFromPastRun"
@@ -23522,6 +23560,9 @@ const challengeResults = ref<ChallengeResult[]>([]);
 // Run name input modal
 const runNameModalOpen = ref(false);
 const runNameInput = ref<string>('My Challenge Run');
+const renameRunModalOpen = ref(false);
+const renameRunInput = ref('');
+const renameRunTargetUuid = ref<string | null>(null);
 
 // Resume run modal
 const resumeRunModalOpen = ref(false);
@@ -25309,6 +25350,64 @@ async function confirmRunName() {
 
 function cancelRunName() {
   runNameModalOpen.value = false;
+}
+
+function openRenameRunFromPrepStatus() {
+  if (!currentRunUuid.value) return;
+  renameRunTargetUuid.value = currentRunUuid.value;
+  renameRunInput.value = currentRunName.value || '';
+  runStatusDropdownOpen.value = false;
+  renameRunModalOpen.value = true;
+}
+
+function openRenamePastRun() {
+  if (!selectedPastRunUuid.value || !selectedPastRun.value) return;
+  renameRunTargetUuid.value = selectedPastRunUuid.value;
+  renameRunInput.value = selectedPastRun.value.run_name || '';
+  renameRunModalOpen.value = true;
+}
+
+function cancelRenameRun() {
+  renameRunModalOpen.value = false;
+  renameRunTargetUuid.value = null;
+  renameRunInput.value = '';
+}
+
+async function confirmRenameRun() {
+  const trimmed = renameRunInput.value.trim();
+  if (!trimmed) {
+    await showAlert('Please enter a run name', 'Run Name Required');
+    return;
+  }
+  const runUuid = renameRunTargetUuid.value;
+  if (!runUuid || !isElectronAvailable()) {
+    await showAlert('No run selected to rename', 'Rename Failed');
+    return;
+  }
+
+  try {
+    const result = await (window as any).electronAPI.renameRun({ runUuid, runName: trimmed });
+    if (!result?.success) {
+      await showAlert('Failed to rename run: ' + (result?.error || 'Unknown error'), 'Rename Failed');
+      return;
+    }
+
+    const newName = result.runName || trimmed;
+    if (currentRunUuid.value === runUuid) {
+      currentRunName.value = newName;
+    }
+
+    const pastIdx = pastRuns.value.findIndex((r) => r.run_uuid === runUuid);
+    if (pastIdx >= 0) {
+      pastRuns.value[pastIdx] = { ...pastRuns.value[pastIdx], run_name: newName };
+    }
+
+    cancelRenameRun();
+    showToastNotification('Run renamed', 'success', 2500);
+  } catch (error: any) {
+    console.error('Error renaming run:', error);
+    await showAlert('Error renaming run: ' + (error.message || error), 'Rename Error');
+  }
 }
 
 function closeStagingSuccess() {
@@ -36054,6 +36153,10 @@ button:disabled {
 
 /* Run Name Modal */
 .run-name-modal { width: 500px; max-width: 95vw; }
+
+.rename-run-modal-backdrop {
+  z-index: 25001 !important;
+}
 .run-name-body { padding: 20px; }
 .run-name-body label { display: block; font-weight: 600; margin-bottom: 8px; color: #374151; }
 .run-name-body input[type="text"] { width: 100%; padding: 10px 12px; font-size: 16px; border: 1px solid #d1d5db; border-radius: 4px; box-sizing: border-box; }

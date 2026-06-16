@@ -1647,6 +1647,18 @@ const MIGRATIONS = {
         return tableExists(db, 'rhserver_tokens');
       },
     },
+    {
+      id: 'clientdata_071_profile_wizard_hosting',
+      description: 'Add profile hosting mode and SMWResource sync flags',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/071_clientdata_profile_wizard_hosting.sql'),
+      skipIf(db) {
+        return columnExists(db, 'user_profiles', 'profile_hosting_mode')
+          && columnExists(db, 'user_profiles', 'profile_wizard_complete')
+          && columnExists(db, 'user_profiles', 'smwresource_sync_pending')
+          && columnExists(db, 'user_profiles', 'smwresource_last_sync_at');
+      },
+    },
   ],
   thumbnail_cache: [
     {

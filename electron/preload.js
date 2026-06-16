@@ -1032,6 +1032,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, profile?: Object, error?: string}>}
    */
   createOnlineProfile: (params) => ipcRenderer.invoke('online:profile:create', params),
+
+  /**
+   * Create minimal online profile (wizard step 1).
+   * @param {Object} params - {profileId?: string, username: string, displayName?: string, defaultHostingMode?: string}
+   */
+  createMinimalOnlineProfile: (params) => ipcRenderer.invoke('online:profile:create-minimal', params),
+
+  /**
+   * Update profile wizard hosting/sync state.
+   */
+  setProfileWizardState: (params) => ipcRenderer.invoke('online:profile:wizard:set-state', params),
+  getProfileWizardState: () => ipcRenderer.invoke('online:profile:wizard:get-state'),
   
   /**
    * Create a new profile (add to standby or make current)
@@ -1215,7 +1227,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   publishProfileToNostr: (params) => ipcRenderer.invoke('online:publish-profile-to-nostr', params),
   getRhserverStatus: () => ipcRenderer.invoke('online:rhserver:status'),
   openRhserverConnect: () => ipcRenderer.invoke('online:rhserver:open-connect'),
+  openRhserverConnectWithUrl: (params) => ipcRenderer.invoke('online:rhserver:open-connect', params),
   connectRhserver: (params) => ipcRenderer.invoke('online:rhserver:connect', params),
+  refreshRhserverProfile: () => ipcRenderer.invoke('online:rhserver:refresh-profile'),
   // Profile publishing preferences
   getProfilePublishingPreferences: () => ipcRenderer.invoke('online:profile:publishing-preferences:get'),
   setProfilePublishingPreferences: (prefs) => ipcRenderer.invoke('online:profile:publishing-preferences:set', prefs),

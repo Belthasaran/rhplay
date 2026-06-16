@@ -4700,14 +4700,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
     <div class="modal profile-creation-wizard">
       <header class="modal-header">
         <h3 v-if="profileCreationWizardStep === 1">Create Your Profile</h3>
-        <h3 v-else>Generate Primary Keypair</h3>
+        <h3 v-else>Profile Options</h3>
       </header>
       <section class="modal-body">
         <!-- Step 1: Profile Information -->
         <div v-if="profileCreationWizardStep === 1" class="wizard-step" :key="'wizard-step-1'">
           <p class="wizard-description">
-            <span style="font-size: 20px;">EXPERIMENTAL Nostr Profile Setup. Click "Stay Offline for Now" to omit a Social link and Create Offline-Only UID.</span><br>
-            Let's set up your basic profile information. You can always edit this later.
+            Let's set up a minimal profile first. Keys and identity data will be generated automatically.
           </p>
           
           <div class="modal-field">
@@ -4737,161 +4736,134 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
           
           <div class="modal-field">
-            <label>Display Name <span class="required">*</span>:</label>
+            <label>Display Name (optional):</label>
             <input 
               type="text" 
               v-model="profileCreationData.displayName"
-              placeholder="My Display Name"
+              :placeholder="defaultDisplayNameFromUsername((profileCreationData.username || '').trim().toLowerCase())"
               class="modal-input"
               autofocus
             />
-          </div>
-          
-          <div class="modal-field">
-            <label>Homepage (optional):</label>
-            <input 
-              type="url" 
-              v-model="profileCreationData.homepage"
-              placeholder="https://example.com"
-              class="modal-input"
-            />
-          </div>
-          
-          <div class="modal-field">
-            <label>Social IDs <span class="required">*</span> (at least 1 Tier 1-3 required for online publishing):</label>
-            <div class="social-ids-container">
-              <div v-for="(socialId, index) in profileCreationData.socialIds" :key="index" class="social-id-item">
-                <span class="social-id-type">{{ getSocialIdTypeLabel(socialId.type) }}:</span>
-                <span class="social-id-value">{{ socialId.value }}</span>
-                <span v-if="isVerifiableSocialIdType(socialId.type)" class="social-id-tier-badge">Tier {{ getSocialIdType(socialId.type)?.tier }}</span>
-                <button @click="removeSocialId(index)" class="btn-link-small">Remove</button>
-              </div>
-              <div class="add-social-id-row">
-                <select 
-                  v-model="newSocialIdType" 
-                  class="modal-input social-id-select" 
-                  @change.stop
-                  @input.stop
-                  @click.stop
-                >
-                  <optgroup label="Tier 1 - Verifiable (Challenge Posting)">
-                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 1)" :key="type.value" :value="type.value">
-                      {{ type.label }}
-                    </option>
-                  </optgroup>
-                  <optgroup label="Tier 6 - Not Currently Verifiable">
-                    <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 6)" :key="type.value" :value="type.value">
-                      {{ type.label }}
-                    </option>
-                  </optgroup>
-                </select>
-                <input 
-                  type="text" 
-                  v-model="newSocialIdValue"
-                  @keydown.enter="addSocialId"
-                  @click.stop
-                  @input.stop
-                  :placeholder="getSocialIdPlaceholder(newSocialIdType)"
-                  class="modal-input social-id-input"
-                />
-                <button @click.stop.prevent="addSocialId" class="btn-secondary-small" :disabled="!newSocialIdValue.trim()">
-                  Add
-                </button>
-              </div>
-              <p v-if="socialIdError" class="error-text">{{ socialIdError }}</p>
-              <p v-if="!meetsSocialIdRequirements(profileCreationData.socialIds)" class="warning-text" style="margin-top: 8px;">
-                ⚠️ At least one Tier 1-3 Social ID is required for online publishing. You can add one later or use "Stay Offline For Now".
-              </p>
-            </div>
-          </div>
-          
-          <div class="modal-field">
-            <label>Bio (optional):</label>
-            <textarea 
-              v-model="profileCreationData.bio"
-              placeholder="Tell us about yourself..."
-              class="modal-input"
-              rows="3"
-            ></textarea>
-          </div>
-          
-          <div class="modal-field">
-            <label>Picture URL (optional):</label>
-            <input 
-              type="url" 
-              v-model="profileCreationData.pictureUrl"
-              placeholder="https://example.com/picture.jpg"
-              class="modal-input"
-            />
-            <p class="field-help">URL to your profile picture</p>
-          </div>
-          
-          <div class="modal-field">
-            <label>Banner URL (optional):</label>
-            <input 
-              type="url" 
-              v-model="profileCreationData.bannerUrl"
-              placeholder="https://example.com/banner.jpg"
-              class="modal-input"
-            />
-            <p class="field-help">URL to your profile banner image</p>
+            <p class="field-help">If left blank, Display Name will default to Username with the first character capitalized (if alphabetic).</p>
           </div>
         </div>
         
-        <!-- Step 2: Keypair Generation -->
+        <!-- Step 2: Profile Options -->
         <div v-if="profileCreationWizardStep === 2" class="wizard-step">
           <p class="wizard-description">
-            Now let's generate your primary keypair. This will be used to sign your messages and verify your identity.
+            Choose how you want to manage your public profile fields.
           </p>
-          
+
           <div class="modal-field">
-            <label>Keypair Type:</label>
-            <select v-model="profileCreationData.keypairType" class="modal-input">
-              <option value="Nostr">Nostr (Default, Required for first profile)</option>
-              <!-- <option value="ML-DSA-44">ML-DSA-44</option>
-              <option value="ML-DSA-87">ML-DSA-87</option>
-              <option value="ED25519">ED25519</option>
-              <option value="RSA-2048">RSA-2048</option> -->
-            </select>
-            <p class="field-help">Nostr is required for your first profile key. Additional keypairs can use other types.</p>
+            <label>Display Name (optional):</label>
+            <input
+              type="text"
+              v-model="profileCreationData.displayName"
+              :placeholder="defaultDisplayNameFromUsername((profileCreationData.username || '').trim().toLowerCase())"
+              class="modal-input"
+            />
           </div>
-          
-          <div class="wizard-warning">
-            <p class="warning-text">
-              ⚠️ <strong>Important:</strong> After generating your keypair, make sure to export and backup your profile.
-              Your secret keys are encrypted with Profile Guard, but if you lose your Profile Guard password,
-              you will not be able to decrypt your keys.
+
+          <div class="modal-field">
+            <label>Profile Options:</label>
+            <div class="tab-row">
+              <button class="btn-secondary-small" :class="{ active: profileCreationHostingTab === 'smwresource' }" @click="profileCreationHostingTab = 'smwresource'">Use SMWResource</button>
+              <button class="btn-secondary-small" :class="{ active: profileCreationHostingTab === 'local' }" @click="profileCreationHostingTab = 'local'">Locally-Hosted Profile (Limited)</button>
+            </div>
+          </div>
+
+          <div v-if="profileCreationHostingTab === 'smwresource'" class="wizard-panel">
+            <p class="field-help">
+              Connect your RHPlay profile to your SMWResource account. Your profile details will be loaded from the server after you connect.
             </p>
+            <button class="btn-primary-small" @click="openSmwresourceConnectFromWizard">Connect to SMWResource</button>
+            <button class="btn-secondary-small" @click="refreshProfileFromSmwresource" style="margin-left: 8px;">Refresh</button>
+            <p v-if="profileCreationSmwresourceStatus" class="field-help" style="margin-top: 8px;">{{ profileCreationSmwresourceStatus }}</p>
+          </div>
+
+          <div v-else class="wizard-panel">
+            <div class="modal-field">
+              <label>Homepage (optional):</label>
+              <input type="url" v-model="profileCreationData.homepage" placeholder="https://example.com" class="modal-input" />
+            </div>
+
+            <div class="modal-field">
+              <label>Social IDs (optional):</label>
+              <div class="social-ids-container">
+                <div v-for="(socialId, index) in profileCreationData.socialIds" :key="index" class="social-id-item">
+                  <span class="social-id-type">{{ getSocialIdTypeLabel(socialId.type) }}:</span>
+                  <span class="social-id-value">{{ socialId.value }}</span>
+                  <span v-if="isVerifiableSocialIdType(socialId.type)" class="social-id-tier-badge">Tier {{ getSocialIdType(socialId.type)?.tier }}</span>
+                  <button @click="removeSocialId(index)" class="btn-link-small">Remove</button>
+                </div>
+                <div class="add-social-id-row">
+                  <select v-model="newSocialIdType" class="modal-input social-id-select">
+                    <optgroup label="Tier 1 - Verifiable (Challenge Posting)">
+                      <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 1)" :key="type.value" :value="type.value">{{ type.label }}</option>
+                    </optgroup>
+                    <optgroup label="Tier 6 - Not Currently Verifiable">
+                      <option v-for="type in SOCIAL_ID_TYPES.filter(t => t.tier === 6)" :key="type.value" :value="type.value">{{ type.label }}</option>
+                    </optgroup>
+                  </select>
+                  <input type="text" v-model="newSocialIdValue" @keydown.enter="addSocialId" :placeholder="getSocialIdPlaceholder(newSocialIdType)" class="modal-input social-id-input" />
+                  <button @click.stop.prevent="addSocialId" class="btn-secondary-small" :disabled="!newSocialIdValue.trim()">Add</button>
+                </div>
+                <p v-if="socialIdError" class="error-text">{{ socialIdError }}</p>
+                <p v-if="!meetsSocialIdRequirements(profileCreationData.socialIds)" class="warning-text" style="margin-top: 8px;">
+                  ⚠️ At least one Tier 1-3 Social ID is required to publish your profile. You can add one later.
+                </p>
+              </div>
+            </div>
+
+            <div class="modal-field">
+              <label>Bio (optional):</label>
+              <textarea v-model="profileCreationData.bio" placeholder="Tell us about yourself..." class="modal-input" rows="3"></textarea>
+            </div>
+
+            <div class="modal-field">
+              <label>Picture URL (optional):</label>
+              <input type="url" v-model="profileCreationData.pictureUrl" placeholder="https://example.com/picture.jpg" class="modal-input" />
+            </div>
+
+            <div class="modal-field">
+              <label>Banner URL (optional):</label>
+              <input type="url" v-model="profileCreationData.bannerUrl" placeholder="https://example.com/banner.jpg" class="modal-input" />
+            </div>
           </div>
         </div>
         
         <div class="wizard-actions">
           <button 
             v-if="profileCreationWizardStep === 1"
-            @click="nextWizardStep" 
+            @click="nextWizardStep"
             class="btn-primary-small"
-            :disabled="!canProceedToKeypairStep">
-            Next: Generate Keypair
+            :disabled="!canAdvanceFromStep1">
+            Next
           </button>
           <button 
             v-if="profileCreationWizardStep === 1"
             @click="createProfileOffline" 
             class="btn-secondary-small"
-            :disabled="!canCreateProfileOffline">
+            :disabled="!canAdvanceFromStep1">
             Stay Offline For Now
-          </button>
-          <button 
-            v-if="profileCreationWizardStep === 2"
-            @click="completeProfileCreation" 
-            class="btn-primary-small"
-            :disabled="profileCreationData.keypairType !== 'Nostr' || !canPublishProfile">
-            Complete and Publish Profile
           </button>
           <button 
             v-if="profileCreationWizardStep > 1"
             @click="profileCreationWizardStep--" 
             class="btn-secondary-small">
             Back
+          </button>
+          <button
+            v-if="profileCreationWizardStep === 2 && profileCreationHostingTab === 'local'"
+            @click="saveProfileWizardAndFinish('local')"
+            class="btn-primary-small">
+            Save & Finish
+          </button>
+          <button
+            v-if="profileCreationWizardStep === 2 && profileCreationHostingTab === 'local'"
+            @click="saveProfileWizardAndFinish('offline_explicit')"
+            class="btn-secondary-small">
+            Save as Offline Profile
           </button>
           <button 
             v-if="profileCreationWizardMode === 'new-profile'"
@@ -13188,9 +13160,21 @@ const masterSeedPassword = ref('');
 const masterSeedMnemonic = ref<string | null>(null);
 const masterSeedError = ref<string | null>(null);
 const masterSeedLoading = ref(false);
-const profileCreationWizardStep = ref(1); // 1 = profile info, 2 = keypair generation
+const profileCreationWizardStep = ref(1); // 1 = minimal identity, 2 = profile options
 const profileCreationWizardInitialized = ref(false); // Track if wizard has been initialized
 const profileCreationWizardMode = ref<'create-first' | 'new-profile'>('create-first'); // 'create-first' = wizard opened automatically, 'new-profile' = opened from New Profile button
+
+const profileCreationHostingTab = ref<'smwresource' | 'local'>('smwresource');
+const profileCreationSmwresourcePending = ref(false);
+const profileCreationSmwresourceLastRefreshAt = ref(0);
+const profileCreationSmwresourceStatus = ref<string>('');
+const profileCreationConnectParams = ref<{ profile_uuid: string, username: string, nostr_pubkey: string, mldsa_pubkey_sha256: string } | null>(null);
+
+function defaultDisplayNameFromUsername(username: string): string {
+  if (!username) return '';
+  if (/^[a-zA-Z]/.test(username)) return username.charAt(0).toUpperCase() + username.slice(1);
+  return username;
+}
 
 // Computed property to check if selected profile is the current one
 const isCurrentProfile = computed(() => {
@@ -13214,21 +13198,8 @@ const usernameError = ref('');
 const socialIdError = ref('');
 
 // Profile Creation Wizard computed
-const canProceedToKeypairStep = computed(() => {
-  // Basic requirements: username, displayName, and at least one social ID
-  // Note: Social ID verification requirements are checked in nextWizardStep with a warning
-  return profileCreationData.value.username.trim() !== '' &&
-         !usernameError.value &&
-         profileCreationData.value.displayName.trim() !== '' &&
-         profileCreationData.value.socialIds.length > 0 &&
-         !socialIdError.value;
-});
-
-const canCreateProfileOffline = computed(() => {
-  return profileCreationData.value.username.trim() !== '' &&
-         !usernameError.value &&
-         profileCreationData.value.displayName.trim() !== '';
-  // No social ID requirement for offline profile
+const canAdvanceFromStep1 = computed(() => {
+  return profileCreationData.value.username.trim() !== '' && !usernameError.value;
 });
 
 const canPublishProfile = computed(() => {
@@ -14109,6 +14080,11 @@ async function checkAndCreateProfileIfNeeded() {
   
   // Load profile first to check current state
   await loadOnlineProfile();
+  let wizardState: any = null;
+  try {
+    const ws = await (window as any).electronAPI.getProfileWizardState?.();
+    if (ws && ws.success) wizardState = ws.state;
+  } catch {}
   
   console.log('[Profile Wizard] Checking profile:', {
     hasProfile: !!onlineProfile.value,
@@ -14121,14 +14097,38 @@ async function checkAndCreateProfileIfNeeded() {
   if (!onlineProfile.value || !onlineProfile.value.primaryKeypair) {
     console.log('[Profile Wizard] Profile or primary keypair missing, showing wizard');
     if (!showProfileCreationWizard.value) {
-      // Only initialize if wizard is not already open
       showProfileCreationWizard.value = true;
       profileCreationWizardStep.value = 1;
       initializeProfileCreationWizard('create-first');
     }
-  } else {
-    console.log('[Profile Wizard] Profile and primary keypair exist, no wizard needed');
+    return;
   }
+
+  // If wizard is incomplete and user did not explicitly choose offline, reopen step 2.
+  const hostingMode = wizardState?.profile_hosting_mode || null;
+  const wizardComplete = wizardState?.profile_wizard_complete === 1;
+  if (!wizardComplete && hostingMode !== 'offline_explicit') {
+    if (!showProfileCreationWizard.value) {
+      showProfileCreationWizard.value = true;
+      profileCreationWizardStep.value = 2;
+      initializeProfileCreationWizard('create-first');
+      profileCreationHostingTab.value = hostingMode === 'local' ? 'local' : 'smwresource';
+    }
+    return;
+  }
+
+  // For local profiles, if user lacks publish social IDs, keep step 2 available.
+  if (hostingMode === 'local' && !meetsSocialIdRequirements(onlineProfile.value.socialIds || []) && hostingMode !== 'offline_explicit') {
+    if (!showProfileCreationWizard.value) {
+      showProfileCreationWizard.value = true;
+      profileCreationWizardStep.value = 2;
+      initializeProfileCreationWizard('create-first');
+      profileCreationHostingTab.value = 'local';
+    }
+    return;
+  }
+
+  console.log('[Profile Wizard] Profile and primary keypair exist; wizard state complete');
 }
 
 function openProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'create-first') {
@@ -14139,6 +14139,47 @@ function openProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'creat
     profileCreationWizardStep.value = 1;
     profileCreationWizardMode.value = mode;
     initializeProfileCreationWizard(mode);
+  }
+}
+
+async function openSmwresourceConnectFromWizard() {
+  try {
+    if (!profileCreationConnectParams.value) {
+      await showAlert('Profile connect parameters not available yet.', 'Connect');
+      return;
+    }
+    const qp = new URLSearchParams(profileCreationConnectParams.value as any).toString();
+    const url = `https://smwresource.net/connect/rhplay?${qp}`;
+    await (window as any).electronAPI.openRhserverConnectWithUrl?.({ url });
+    profileCreationSmwresourcePending.value = true;
+    profileCreationSmwresourceStatus.value = 'Connecting…';
+  } catch (error) {
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Connect Error');
+  }
+}
+
+async function refreshProfileFromSmwresource() {
+  const now = Date.now();
+  if (now - profileCreationSmwresourceLastRefreshAt.value < 60_000) {
+    await showAlert('Refresh is limited to once per minute.', 'Please wait');
+    return;
+  }
+  profileCreationSmwresourceLastRefreshAt.value = now;
+  profileCreationSmwresourceStatus.value = 'Refreshing…';
+  try {
+    const res = await (window as any).electronAPI.refreshRhserverProfile?.();
+    if (!res?.success) {
+      await showAlert(`Refresh failed: ${res?.error || 'unknown error'}`, 'Refresh');
+      profileCreationSmwresourceStatus.value = 'Connecting…';
+      return;
+    }
+    profileCreationSmwresourceStatus.value = 'Profile loaded from SMWResource.';
+    showProfileCreationWizard.value = false;
+    profileCreationWizardStep.value = 1;
+    await loadOnlineProfile();
+  } catch (error) {
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Refresh');
+    profileCreationSmwresourceStatus.value = 'Connecting…';
   }
 }
 
@@ -19642,38 +19683,90 @@ async function nextWizardStep() {
     usernameError.value = 'Username is required';
     return;
   }
-  
-  if (!profileCreationData.value.displayName.trim()) {
-    showAlertSync('Display name is required', 'Validation Error', {blocking:false});
+
+  if (usernameError.value) return;
+  await createMinimalProfileAndAdvance('smwresource');
+}
+
+async function createMinimalProfileAndAdvance(defaultHostingMode: 'smwresource' | 'local') {
+  if (!isElectronAvailable()) {
+    await showAlert('Profile creation requires Electron environment', 'Error');
     return;
   }
   
-  // Check if social ID requirements are met for publishing
-  // Note: Social IDs are optional if user will use "Stay Offline For Now"
-  // But if proceeding to keypair step, we should warn if requirements aren't met
-  if (profileCreationData.value.socialIds.length === 0) {
-    socialIdError.value = 'At least one social ID is required to proceed. Use "Stay Offline For Now" to create profile without social IDs.';
+  // If Profile Guard is enabled, it must be unlocked to encrypt the keypair
+  if (profileGuardEnabled.value && !profileGuardUnlocked.value) {
+    await showAlert('Profile Guard must be unlocked to create profile (keys need to be encrypted)', 'Profile Guard Locked');
     return;
   }
   
-  // Check if at least one Tier 1-3 social ID exists (for publishing)
-  if (!meetsSocialIdRequirements(profileCreationData.value.socialIds)) {
-    const confirmed = await showConfirm(
-      'You do not have any Tier 1-3 verifiable Social IDs. You will not be able to publish your profile online until you add and verify at least one.\n\n' +
-      'Do you want to continue anyway? You can add verifiable Social IDs later.'
-    );
-    if (!confirmed) {
+  validateUsername();
+  if (!profileCreationData.value.username.trim() || usernameError.value) {
+    await showAlert('Please enter a valid username', 'Validation Error');
+    return;
+  }
+  
+  const trimString = (value: any) => (typeof value === 'string' ? value.trim() : '');
+  const uname = trimString(profileCreationData.value.username).toLowerCase();
+  const dname = trimString(profileCreationData.value.displayName) || defaultDisplayNameFromUsername(uname);
+  
+  try {
+    const result = await (window as any).electronAPI.createMinimalOnlineProfile({
+      profileId: profileCreationData.value.profileId,
+      username: uname,
+      displayName: dname,
+      defaultHostingMode
+    });
+    
+    if (!result.success) {
+      await showAlert(`Failed to create profile: ${result.error}`, 'Profile Creation Failed');
       return;
     }
+    
+    if (result.connectParams?.profile_uuid) {
+      profileCreationData.value.profileId = result.connectParams.profile_uuid;
+    }
+    profileCreationData.value.username = uname;
+    profileCreationData.value.displayName = dname;
+    profileCreationConnectParams.value = result.connectParams || null;
+    profileCreationHostingTab.value = defaultHostingMode;
+    profileCreationWizardStep.value = 2;
+    
+    socialIdError.value = '';
+    profileCreationSmwresourcePending.value = false;
+    profileCreationSmwresourceStatus.value = '';
+    profileCreationSmwresourceLastRefreshAt.value = 0;
+    
+    await loadOnlineProfile();
+    await loadOnlineProfilesList();
+  } catch (error) {
+    console.error('Error creating minimal profile:', error);
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
-  
-  if (usernameError.value || socialIdError.value) {
-    return;
+}
+
+async function saveProfileWizardAndFinish(mode: 'local' | 'offline_explicit') {
+  try {
+    const profileId = profileCreationData.value.profileId;
+    if (!profileId) {
+      await showAlert('Profile ID missing.', 'Error');
+      return;
+    }
+    const setResult = await (window as any).electronAPI.setProfileWizardState({
+      profileId,
+      profile_hosting_mode: mode,
+      profile_wizard_complete: 1,
+      smwresource_sync_pending: 0
+    });
+    if (!setResult?.success) {
+      await showAlert(`Failed to save wizard state: ${setResult?.error || 'unknown error'}`, 'Error');
+      return;
+    }
+    showProfileCreationWizard.value = false;
+    profileCreationWizardStep.value = 1;
+  } catch (error) {
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
   }
-  
-  // Advance to next step - preserve all data
-  profileCreationWizardStep.value = 2;
-  console.log('[Profile Wizard] Moving to step 2, preserving data:', profileCreationData.value);
 }
 
 async function createProfileOffline() {
@@ -19688,121 +19781,7 @@ async function createProfileOffline() {
     return;
   }
   
-  // Validate basic fields
-  if (!profileCreationData.value.username.trim() || usernameError.value) {
-    await showAlert('Please enter a valid username', 'Validation Error');
-    return;
-  }
-  
-  if (!profileCreationData.value.displayName.trim()) {
-    await showAlert('Please enter a display name', 'Validation Error');
-    return;
-  }
-  
-  try {
-    const trimString = (value: any) => {
-      if (typeof value !== 'string') {
-        return '';
-      }
-      return value.trim();
-    };
-
-    // Create profile with basic info (no social ID requirements for offline)
-    const profileData = {
-      profileId: profileCreationData.value.profileId,
-      username: trimString(profileCreationData.value.username).toLowerCase(),
-      displayName: trimString(profileCreationData.value.displayName),
-      homepage: trimString(profileCreationData.value.homepage) || undefined,
-      socialIds: profileCreationData.value.socialIds || [], // Allow empty for offline
-      bio: trimString(profileCreationData.value.bio) || undefined,
-      pictureUrl: trimString(profileCreationData.value.pictureUrl) || undefined,
-      bannerUrl: trimString(profileCreationData.value.bannerUrl) || undefined,
-      primaryKeypair: null, // Will be created next
-      additionalKeypairs: [],
-      adminKeypairs: [],
-      isAdmin: false,
-      verificationLevel: 0
-    };
-    
-    // Create primary keypair
-    const keypairResult = await (window as any).electronAPI.createOnlineKeypair({
-      keyType: 'Nostr', // Always Nostr for first profile
-      isPrimary: true,
-      username: profileCreationData.value.username
-    });
-    
-    if (!keypairResult.success) {
-      await showAlert(`Failed to create keypair: ${keypairResult.error}`, 'Keypair Creation Failed');
-      return;
-    }
-    
-    // Add keypair to profile
-    profileData.primaryKeypair = {
-      type: String(keypairResult.keypair.type),
-      publicKey: String(keypairResult.keypair.publicKey),
-      privateKey: String(keypairResult.keypair.privateKey),
-      publicKeyHex: String(keypairResult.keypair.publicKeyHex || ''),
-      fingerprint: String(keypairResult.keypair.fingerprint || ''),
-      localName: String(keypairResult.keypair.localName || ''),
-      canonicalName: String(keypairResult.keypair.canonicalName || ''),
-      encrypted: keypairResult.keypair.encrypted === true,
-      createdAt: String(keypairResult.keypair.createdAt || new Date().toISOString())
-    };
-    
-    // Save profile
-    const hasExistingProfile = onlineProfile.value && onlineProfile.value.primaryKeypair;
-    
-    let saveResult;
-    if (hasExistingProfile) {
-      saveResult = await (window as any).electronAPI.createNewOnlineProfile({
-        profileData: JSON.parse(JSON.stringify(profileData))
-      });
-    } else {
-      saveResult = await (window as any).electronAPI.saveOnlineProfile(JSON.parse(JSON.stringify(profileData)));
-    }
-    
-    if (!saveResult.success) {
-      await showAlert(`Failed to save profile: ${saveResult.error}`, 'Save Failed');
-      return;
-    }
-    
-    // Update local state
-    if (hasExistingProfile) {
-      await loadOnlineProfilesList();
-      await loadOnlineProfile();
-    } else {
-      onlineProfile.value = profileData;
-    }
-    
-    // Close wizard
-    showProfileCreationWizard.value = false;
-    profileCreationWizardStep.value = 1;
-    
-    // Reset form
-    profileCreationData.value = {
-      profileId: '',
-      username: '',
-      displayName: '',
-      homepage: '',
-      socialIds: [],
-      bio: '',
-      pictureUrl: '',
-      bannerUrl: '',
-      keypairType: 'Nostr'
-    };
-    newSocialIdType.value = 'discord';
-    newSocialIdValue.value = '';
-    usernameError.value = '';
-    socialIdError.value = '';
-    
-    await showAlert(
-      'Profile created successfully! You can add Social IDs and verify them later to enable online publishing.',
-      'Profile Created'
-    );
-  } catch (error) {
-    console.error('Error creating offline profile:', error);
-    await showAlert(`Error: ${formatErrorMessage(error)}`, 'Error');
-  }
+  await createMinimalProfileAndAdvance('local');
 }
 
 async function completeProfileCreation() {

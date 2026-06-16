@@ -137,6 +137,18 @@ class RHServerManager {
       return { synced: false, error: err.message };
     }
   }
+
+  async fetchHostedProfile() {
+    if (!this.getClient().isConnected()) {
+      return { success: false, error: 'not-connected' };
+    }
+    try {
+      const data = await this.getClient().getProfileMe();
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
 }
 
 module.exports = { RHServerManager };

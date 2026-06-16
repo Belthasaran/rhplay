@@ -40,6 +40,21 @@ export interface VerificationMethod {
 export const SOCIAL_ID_TYPES: SocialIdType[] = [
   // Tier 1 - High-Level Verify (Challenge Posting)
   {
+    value: 'smwresource',
+    label: 'SMWResource Account',
+    tier: 1,
+    placeholder: 'SMWResource profile UUID',
+    verificationMethods: [
+      {
+        id: 'server-binding',
+        label: 'Server Binding',
+        description: 'Verified by smwresource.net when you connect RHPlay in the browser',
+        supported: true,
+        clientSideVerifiable: false
+      }
+    ]
+  },
+  {
     value: 'twitch',
     label: 'Twitch Username',
     tier: 1,

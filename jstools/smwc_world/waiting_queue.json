@@ -1,1 +1,147 @@
-[]
+[
+  {
+    "gameid": "42541",
+    "authors_json": [
+      {
+        "id": 21068,
+        "name": "bandicoot"
+      }
+    ],
+    "authors": "bandicoot",
+    "author": "bandicoot",
+    "submitter_json": {
+      "id": 21068,
+      "name": "bandicoot"
+    },
+    "submitter": "bandicoot",
+    "length": "120 exit(s)",
+    "difficulty": "Intermediate",
+    "fields_type": "Standard",
+    "gametype": "Standard",
+    "demo": "No",
+    "sa1": "No",
+    "collab": "No",
+    "description": "Crash Bandicoot is back for another adventure on the Super Nintendo!\r\n\r\nCrash Bandicoot and the Retro dimension 2: The Crystal Hunt is a Crash Bandicoot themed Super Mario World Romhack and a sequel to Crash Bandicoot and the Retro Dimension. Just like it’s predecessor this hack aims to mix the elements of the classic Crash Bandicoot games into Super Mario World creating a unique experience that mix the best of both worlds.\r\n\r\nCrash can use his iconic moves such as the spin, the slide and body slam and lots of new things have been added to make the hack feel more like a proper Crash Bandicoot game. Some of those things includes lots of custom music( with a lot of them being from the Crash Bandicoot series), NPCS characters and bosses from the Crash universe, custom graphics, lots of ASM modyfing some of the mechanics and more\r\n\r\nThis time around the hack features a more open design where the player can play through the game with more freedom for exploring the map in wathever order the player feels like. The hack features 93 levels with 120 crystals and 93 gems and relics to collect. It’s a bigger adventure than the last one.\r\n\r\nStory: One month after the last adventure Dr.Cortex found out a new source of power in the retro dimension, power crystals! He intends to use the crystals on his new evil plan to power his Doomsday machine a device capable of distorting reality itself. Now it’s up to Crash Bandicoot and his friends to save the day! The player must collect power crystals at the end of each level to progress through the game and defeat the evil Dr. Neo Cortex.\r\n\r\nThe hack is available in English and Brazilian Portuguese.",
+    "raw_difficulty": "diff_3",
+    "warnings": "",
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_3",
+      "type": [
+        "standard"
+      ],
+      "length": 120,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Crash Bandicoot is back for another adventure on the Super Nintendo!\r\n\r\nCrash Bandicoot and the Retro dimension 2: The Crystal Hunt is a Crash Bandicoot themed Super Mario World Romhack and a sequel to Crash Bandicoot and the Retro Dimension. Just like it’s predecessor this hack aims to mix the elements of the classic Crash Bandicoot games into Super Mario World creating a unique experience that mix the best of both worlds.\r\n\r\nCrash can use his iconic moves such as the spin, the slide and body slam and lots of new things have been added to make the hack feel more like a proper Crash Bandicoot game. Some of those things includes lots of custom music( with a lot of them being from the Crash Bandicoot series), NPCS characters and bosses from the Crash universe, custom graphics, lots of ASM modyfing some of the mechanics and more\r\n\r\nThis time around the hack features a more open design where the player can play through the game with more freedom for exploring the map in wathever order the player feels like. The hack features 93 levels with 120 crystals and 93 gems and relics to collect. It’s a bigger adventure than the last one.\r\n\r\nStory: One month after the last adventure Dr.Cortex found out a new source of power in the retro dimension, power crystals! He intends to use the crystals on his new evil plan to power his Doomsday machine a device capable of distorting reality itself. Now it’s up to Crash Bandicoot and his friends to save the day! The player must collect power crystals at the end of each level to progress through the game and defeat the evil Dr. Neo Cortex.\r\n\r\nThe hack is available in English and Brazilian Portuguese."
+    },
+    "combinedtype": "Standard: Intermediate (diff_3) (standard)",
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=42541",
+    "name": "Crash Bandicoot and the Retro Dimension 2 - The Crystal Hunt",
+    "section": "smwhacks",
+    "time": 1781538626,
+    "moderated": null,
+    "tags": [
+      "choconilla",
+      "crash bandicoot",
+      "new mechanics",
+      "non kaizo",
+      "traditional"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124562.png",
+      "https://dl.smwcentral.net/image/124563.png",
+      "https://dl.smwcentral.net/image/124564.png",
+      "https://dl.smwcentral.net/image/124565.png",
+      "https://dl.smwcentral.net/image/124566.png",
+      "https://dl.smwcentral.net/image/124567.png",
+      "https://dl.smwcentral.net/image/124568.png",
+      "https://dl.smwcentral.net/image/124569.png",
+      "https://dl.smwcentral.net/image/124570.png",
+      "https://dl.smwcentral.net/image/124571.png",
+      "https://dl.smwcentral.net/image/124572.png",
+      "https://dl.smwcentral.net/image/124573.png",
+      "https://dl.smwcentral.net/image/124574.png",
+      "https://dl.smwcentral.net/image/124575.png"
+    ],
+    "rating": null,
+    "size": 4870309,
+    "downloads": 30,
+    "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
+    "obsoleted_by": null
+  },
+  {
+    "gameid": "42543",
+    "authors_json": [
+      {
+        "id": 69636,
+        "name": "Insanit"
+      }
+    ],
+    "authors": "Insanit",
+    "author": "Insanit",
+    "submitter_json": {
+      "id": 69636,
+      "name": "Insanit"
+    },
+    "submitter": "Insanit",
+    "length": "17 exit(s)",
+    "difficulty": "Expert",
+    "fields_type": "Kaizo",
+    "gametype": "Kaizo",
+    "demo": "No",
+    "sa1": "No",
+    "collab": "No",
+    "description": "Welcome to PLAYTIME!\r\n\r\nA chocolate Kaizo featuring all the levels from my previous cancelled collab. Some of the levels might be familiar because they were in a demo released in 2023. There is 17 exits with secrets required to beat the game, mostly inspired by Invictus but aiming to an accessible difficulty, should be easier than both Darkside 1 and 2. You wouldn't find any shell jumps, cape or water levels. It does have trolls tho.\r\n\r\nImportant:\r\n- The hack uses auto-checkpoints and they do not save your progress when you reset.\r\n- Visual glitches can occur on the original SNES console.\r\n_________________________\r\n\r\nI hope you all enjoy the hack.\r\nHave fun!",
+    "raw_difficulty": "diff_5",
+    "warnings": "",
+    "raw_fields": {
+      "version": "1.11",
+      "changelog": "1.11\r\n- Small fixes\r\n\r\n1.1\r\nFIXES:\r\n- Fixed screen scrolling pipes hardlock caused by start-select\r\n- Fixed \"softlock\" in Wrapping Duct\r\n- Fixed 2 cheeses in Bumpy Slide\r\n- Fixed spawn inconsistency in the secret section of Bumpy Slide\r\n- Fixed the glitched Chuck in Crawling Depths by using an extended sprite shooter instead\r\n- Fixed spawn inconsistency in the second section of Crawling Depths\r\n- Fixed \"softlock\" in the second half of Crawling Depths\r\n- Fixed cheese in the second half of Thronfelt Swamp\r\n\r\nBALANCING:\r\n- Increased difficulty in the second half of Crawling Depths\r\n- Changed Setup in the second half of Thornfelt Swamp\r\n- Increased difficulty in Green Switch Palace\r\n- Slight increase in the difficulty of the final boss\r\n\r\nMISC:\r\n- Removed lightning effect from Yellow Switch Palace (no more photosensitive triggers)",
+      "difficulty": "diff_5",
+      "type": [
+        "kaizo"
+      ],
+      "length": 17,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Welcome to PLAYTIME!\r\n\r\nA chocolate Kaizo featuring all the levels from my previous cancelled collab. Some of the levels might be familiar because they were in a demo released in 2023. There is 17 exits with secrets required to beat the game, mostly inspired by Invictus but aiming to an accessible difficulty, should be easier than both Darkside 1 and 2. You wouldn't find any shell jumps, cape or water levels. It does have trolls tho.\r\n\r\nImportant:\r\n- The hack uses auto-checkpoints and they do not save your progress when you reset.\r\n- Visual glitches can occur on the original SNES console.\r\n_________________________\r\n\r\nI hope you all enjoy the hack.\r\nHave fun!"
+    },
+    "combinedtype": "Kaizo: Expert (diff_5) (kaizo)",
+    "url": "https://www.smwcentral.net/?p=section&a=details&id=42543",
+    "name": "PLAYTIME",
+    "section": "smwhacks",
+    "time": 1781573380,
+    "moderated": null,
+    "tags": [
+      "asm",
+      "bosses",
+      "chocolate",
+      "custom music",
+      "gimmick",
+      "platforming"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124576.png",
+      "https://dl.smwcentral.net/image/124577.png",
+      "https://dl.smwcentral.net/image/124578.png",
+      "https://dl.smwcentral.net/image/124579.png",
+      "https://dl.smwcentral.net/image/124580.png",
+      "https://dl.smwcentral.net/image/124581.png",
+      "https://dl.smwcentral.net/image/124582.png",
+      "https://dl.smwcentral.net/image/124583.png"
+    ],
+    "rating": 5,
+    "size": 829582,
+    "downloads": 497,
+    "download_url": "https://dl.smwcentral.net/42543/playtime_1.11.zip",
+    "obsoleted_by": null
+  }
+]

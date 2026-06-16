@@ -37,10 +37,18 @@ console.log(`  Patchbin DB: ${testConfig.databases.patchbin}`);
 console.log();
 
 // Launch server with test databases
-const serverScript = path.join(__dirname, '..', 'mdserver', 'server.js');
+const serverScript = path.join(__dirname, '..', '..', 'rhserver', 'app.js');
+const serverExists = fs.existsSync(serverScript);
+const fallbackScript = path.join(__dirname, '..', 'mdserver', 'server.js');
+const scriptToRun = serverExists ? serverScript : fallbackScript;
+
+if (!fs.existsSync(scriptToRun)) {
+  console.error('Error: Neither ../rhserver/app.js nor mdserver/server.js found.');
+  process.exit(1);
+}
 
 const serverProcess = spawn('node', [
-  serverScript,
+  scriptToRun,
   `--serverdatadb=${testConfig.databases.serverdata}`,
   `--rhdatadb=${testConfig.databases.rhdata}`,
   `--patchbindb=${testConfig.databases.patchbin}`

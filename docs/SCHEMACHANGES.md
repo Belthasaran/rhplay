@@ -1,3 +1,8 @@
+- 2026-06-15: clientdata - RHServer bearer token storage
+  - Description: Add `rhserver_tokens` table for encrypted RHServer API bearer/refresh tokens and connection state.
+  - Tables/columns: `rhserver_tokens` (token_uuid, api_base_url, encrypted_access_token, encrypted_refresh_token, profile_uuid, expires_at, connected_at, is_active)
+  - Migration: `clientdata_070_rhserver_tokens` via `jsutils/migratedb.js`
+
 - 2026-06-14: rhdata - gamestages test status
   - Description: Add `test_status`, `test_status_at`, and `test_verified_*` snapshot columns on `gamestages` for Stage Test accept/reject tracking; invalidated when levelnumber, playlevel_patch_code, or requisites change.
   - Tables/columns: `gamestages.test_status`, `test_status_at`, `test_verified_levelnumber`, `test_verified_playlevel_patch_code`, `test_verified_requisites`

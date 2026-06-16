@@ -141,6 +141,8 @@ function registerDatabaseHandlers(dbManager) {
   }
   // Import OnlineProfileManager for profile management
   const OnlineProfileManager = require('./utils/OnlineProfileManager');
+  const { RHServerManager } = require('./utils/RHServerManager');
+  const rhServerManager = new RHServerManager(dbManager);
   const trustManager = new TrustManager(dbManager, { logger: console });
   const permissionHelper = new PermissionHelper(dbManager, { trustManager, logger: console });
   const moderationManager = new ModerationManager(dbManager, { trustManager, permissionHelper, logger: console });
@@ -2010,11 +2012,81 @@ function registerDatabaseHandlers(dbManager) {
       
       console.log('[Save Annotation] Database write result:', result);
       console.log('[Save Annotation] Changes:', result.changes);
+
+      setImmediate(() => {
+        rhServerManager.queueReview({
+          gameid,
+          status: status || 'Default',
+          user_rating: myReviewRating ?? null,
+          user_difficulty_rating: myDifficultyRating ?? null,
+          user_review_rating: myReviewRating ?? null,
+          user_skill_rating: mySkillRating ?? null,
+          hidden: hidden ? 1 : 0,
+          exclude_from_random: excludeFromRandom ? 1 : 0,
+          user_notes: mynotes || null
+        }).catch(() => {});
+      });
       
       return { success: true };
     } catch (error) {
       console.error('Error saving annotation:', error);
       console.error('Error stack:', error.stack);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:status', async () => {
+    try {
+      return { success: true, ...rhServerManager.getStatus() };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:open-connect', async () => {
+    try {
+      const base = rhServerManager.getApiBaseUrl().replace('api.', '').replace(/\/v1api$/, '');
+      const url = base.includes('localhost') ? 'http://localhost:3000/connect/rhplay' : 'https://smwresource.net/connect/rhplay';
+      await shell.openExternal(url);
+      return { success: true, url };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:connect', async (event, { profileUuid } = {}) => {
+    try {
+      const keyguardKey = global.keyguardKey || null;
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const pid = profileUuid || profileManager.getCurrentProfileId();
+      if (!pid) return { success: false, error: 'No profile selected' };
+
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const pid = profileUuid || profileManager.getCurrentProfileId();
+      if (!pid) return { success: false, error: 'No profile selected' };
+
+      const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(pid);
+      if (!primaryKeypair?.privateKey) {
+        return { success: false, error: 'Profile Guard unlock required' };
+      }
+
+      const { finalizeEvent } = require('nostr-tools');
+      const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
+      const signNostrMessage = async (message) => {
+        return finalizeEvent({
+          kind: 1,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [],
+          content: message
+        }, privateKeyBytes);
+      };
+
+      const result = await rhServerManager.connect({
+        profileUuid: pid,
+        signNostrMessage
+      });
+      return { success: true, ...result };
+    } catch (error) {
       return { success: false, error: error.message };
     }
   });
@@ -8395,6 +8467,27 @@ function registerDatabaseHandlers(dbManager) {
       } catch (logErr) {
         console.warn('[db:stage:save-feedback] JSONL log append failed:', logErr.message);
       }
+
+      setImmediate(() => {
+        rhServerManager.queueStageFeedback({
+          gameid,
+          levelnumber,
+          translevel,
+          levelname,
+          difficulty_feedback,
+          comment,
+          current_difficulty,
+          flag_values,
+          global_conditions,
+          applied_patches,
+          playlevel_patchcode: resolvedPlaylevel,
+          feedback_source,
+          test_result,
+          tag_feedback,
+          stage_uuid,
+          feedback_uuid: feedbackUuid
+        }).catch(() => {});
+      });
       
       return { success: true, feedback_uuid: feedbackUuid };
     } catch (error) {

@@ -1638,6 +1638,15 @@ const MIGRATIONS = {
           && columnExists(db, 'run_plan_entries', 'stage_filter_untested_only');
       },
     },
+    {
+      id: 'clientdata_070_rhserver_tokens',
+      description: 'Add rhserver_tokens table for RHServer API bearer token storage',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/070_clientdata_rhserver_tokens.sql'),
+      skipIf(db) {
+        return tableExists(db, 'rhserver_tokens');
+      },
+    },
   ],
   thumbnail_cache: [
     {

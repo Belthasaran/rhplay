@@ -51,6 +51,14 @@ function buildPatchResolverContext(dbManager, overrides = {}) {
   return {
     dbManager,
     userDataPath,
+    rhserverClient: (() => {
+      try {
+        const { RHServerManager } = require('./RHServerManager');
+        return new RHServerManager(dbManager).getClient();
+      } catch (_) {
+        return null;
+      }
+    })(),
     tempBase: manifestResolver.getUserSpecificTempBase(),
     rhsearchCatDbPath: overrides.rhsearchCatDbPath || (userDataPath ? path.join(userDataPath, 'rhsearch_cat.db') : null),
     flipsPath: overrides.flipsPath || null,

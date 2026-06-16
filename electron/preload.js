@@ -1213,6 +1213,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean, eventId?: string, error?: string}>}
    */
   publishProfileToNostr: (params) => ipcRenderer.invoke('online:publish-profile-to-nostr', params),
+  getRhserverStatus: () => ipcRenderer.invoke('online:rhserver:status'),
+  openRhserverConnect: () => ipcRenderer.invoke('online:rhserver:open-connect'),
+  connectRhserver: (params) => ipcRenderer.invoke('online:rhserver:connect', params),
   // Profile publishing preferences
   getProfilePublishingPreferences: () => ipcRenderer.invoke('online:profile:publishing-preferences:get'),
   setProfilePublishingPreferences: (prefs) => ipcRenderer.invoke('online:profile:publishing-preferences:set', prefs),

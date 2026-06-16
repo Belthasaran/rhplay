@@ -2203,6 +2203,24 @@ Key `stage_feedback` by `(gameid, levelnumber, playlevel_patchcode)` so feedback
 
 ---
 
+## clientdata_070_rhserver_tokens
+
+### Date Added
+June 15, 2026
+
+### Purpose
+Store encrypted RHServer API bearer/refresh tokens for online profile connection.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `clientdata` gains `rhserver_tokens` table for API connection state.
+
+---
+
 ## clientdata_069_run_plan_untested_filters
 
 ### Date Added

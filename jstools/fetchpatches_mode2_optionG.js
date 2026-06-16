@@ -262,7 +262,21 @@ function addToDoNotSearch(db, url, reason, stopTime = 17200) {
 async function searchAPI(attachment, options, db) {
   console.log(`  🌐 Searching API: ${options.apiUrl}`);
   
-  if (!options.apiUrl || !options.apiClient || !options.apiSecret) {
+  if (!options.apiUrl || (!options.apiClient && !options.apiBearer)) {
+    console.log(`    ⚠ API credentials not configured`);
+    return null;
+  }
+  
+  if (!options.apiClient && options.apiBearer) {
+    const { RHServerClient } = require('../lib/rhserver-client');
+    const client = new RHServerClient({
+      apiBaseUrl: options.apiUrl.replace(/\/search$/, ''),
+      accessToken: options.apiBearer
+    });
+    return client.searchAttachment(attachment);
+  }
+  
+  if (!options.apiClient || !options.apiSecret) {
     console.log(`    ⚠ API credentials not configured`);
     return null;
   }

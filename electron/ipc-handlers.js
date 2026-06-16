@@ -2061,10 +2061,6 @@ function registerDatabaseHandlers(dbManager) {
       const pid = profileUuid || profileManager.getCurrentProfileId();
       if (!pid) return { success: false, error: 'No profile selected' };
 
-      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
-      const pid = profileUuid || profileManager.getCurrentProfileId();
-      if (!pid) return { success: false, error: 'No profile selected' };
-
       const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(pid);
       if (!primaryKeypair?.privateKey) {
         return { success: false, error: 'Profile Guard unlock required' };

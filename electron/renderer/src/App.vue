@@ -4847,12 +4847,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             :disabled="!canAdvanceFromStep1">
             Stay Offline For Now
           </button>
-          <button 
-            v-if="profileCreationWizardStep > 1"
-            @click="profileCreationWizardStep--" 
-            class="btn-secondary-small">
-            Back
-          </button>
+          <!-- No Back button: profile + keys already created by step 2 -->
           <button
             v-if="profileCreationWizardStep === 2 && profileCreationHostingTab === 'local'"
             @click="saveProfileWizardAndFinish('local')"

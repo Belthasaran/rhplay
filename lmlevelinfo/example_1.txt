@@ -1,0 +1,5 @@
+./level_visual test/mq2/mq2.sfc 0x109 --suite=mq2 --export-ppm=out.ppm
+# or explicitly:
+./level_visual test/mq2/mq2.sfc 0x109 --map16=test/mq2/AllMap16.map16 --export-ppm=out.ppm
+
+

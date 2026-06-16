@@ -1,0 +1,4 @@
+*.AppImage
+*.exe
+linux-unpacked
+win-unpacked

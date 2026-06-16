@@ -1226,6 +1226,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   publishProfileToNostr: (params) => ipcRenderer.invoke('online:publish-profile-to-nostr', params),
   getRhserverStatus: () => ipcRenderer.invoke('online:rhserver:status'),
+  getRhserverTestMode: () => ipcRenderer.invoke('online:rhserver:get-testmode'),
+  setRhserverTestMode: (params) => ipcRenderer.invoke('online:rhserver:set-testmode', params),
+  getRhserverConnectUrl: (params) => ipcRenderer.invoke('online:rhserver:get-connect-url', params),
   openRhserverConnect: () => ipcRenderer.invoke('online:rhserver:open-connect'),
   openRhserverConnectWithUrl: (params) => ipcRenderer.invoke('online:rhserver:open-connect', params),
   connectRhserver: (params) => ipcRenderer.invoke('online:rhserver:connect', params),

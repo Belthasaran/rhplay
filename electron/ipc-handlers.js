@@ -136,6 +136,8 @@ function registerDatabaseHandlers(dbManager) {
         ON CONFLICT(csetting_name) DO NOTHING
       `).run(crypto.randomUUID(), 'overlayRemoteConnectionsEnabled', 'Off');
     }
+    const { applyRhserverTestBuildPolicy } = require('./utils/RHServerManager');
+    applyRhserverTestBuildPolicy(dbManager);
   } catch (error) {
     console.warn('[runview] Failed to initialize default settings:', error);
   }
@@ -2037,16 +2039,42 @@ function registerDatabaseHandlers(dbManager) {
 
   ipcMain.handle('online:rhserver:status', async () => {
     try {
-      return { success: true, ...rhServerManager.getStatus() };
+      return { success: true, ...rhServerManager.getStatus(), ...rhServerManager.getTestModePolicy() };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('online:rhserver:open-connect', async (event, { url } = {}) => {
+  ipcMain.handle('online:rhserver:get-testmode', async () => {
     try {
-      const base = rhServerManager.getApiBaseUrl().replace('api.', '').replace(/\/v1api$/, '');
-      const target = url || (base.includes('localhost') ? 'http://localhost:3000/connect/rhplay' : 'https://smwresource.net/connect/rhplay');
+      return { success: true, ...rhServerManager.getTestModePolicy() };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:set-testmode', async (event, { enabled } = {}) => {
+    try {
+      const mode = enabled ? 'On' : 'Off';
+      const result = rhServerManager.setTestMode(mode);
+      return { success: true, ...rhServerManager.getTestModePolicy(), ...result };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:get-connect-url', async (event, { queryString } = {}) => {
+    try {
+      const url = rhServerManager.getConnectUrl(queryString || '');
+      return { success: true, url };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:open-connect', async (event, { url, queryString } = {}) => {
+    try {
+      const target = url || rhServerManager.getConnectUrl(queryString || '');
       await shell.openExternal(target);
       return { success: true, url: target };
     } catch (error) {

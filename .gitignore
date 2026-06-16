@@ -84,4 +84,8 @@ backups/
 
 # lmlevelinfo built binaries (compile from source)
 lmlevelinfo/level_info1
+rhtools-launcher/renderer/dist/assets/*.js
+rhtools-launcher/renderer/dist/assets/*.css
+rhtools-launcher/renderer/dist/index.html
+lmlevelinfo/*.ppm
 

@@ -1,3 +1,25 @@
 ./level_info1
-./levelinfo_tests
+levelinfo_tests
+probe_*.ppm
+./.*.log
+quick_map16_gate
+_generated_exanim_*
+*.log
+map16-parity
+map16_parity_quick
+gfx_chr_probe
+.filesize.sh
 
+.run_ac.sh
+.alias_check.log
+.run_alias.sh
+.run_rom21.sh
+.levelinfo_grep_last.txt
+dump_03ba
+emit_list_pipe
+level_visual
+lv109.txt
+
+out.png
+out.stats
+out_exgfx

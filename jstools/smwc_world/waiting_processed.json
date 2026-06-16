@@ -33,7 +33,7 @@
     ],
     "rating": 5,
     "size": 565170,
-    "downloads": 354,
+    "downloads": 355,
     "download_url": "https://dl.smwcentral.net/34054/Flying_High_Again_1.1.bps.zip",
     "obsoleted_by": null,
     "fields": {
@@ -385,7 +385,7 @@
     ],
     "rating": 5,
     "size": 513307,
-    "downloads": 800,
+    "downloads": 801,
     "download_url": "https://dl.smwcentral.net/42245/SM%20Mushroom%20Kingdom%20Madness%20Demo.zip",
     "obsoleted_by": null,
     "fields": {
@@ -659,7 +659,7 @@
     ],
     "rating": 0,
     "size": 1267003,
-    "downloads": 300,
+    "downloads": 303,
     "download_url": "https://dl.smwcentral.net/42379/Super%20Mario%20World%20-%20Bowser%27s%20Return.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1028,7 +1028,7 @@
     ],
     "rating": 5,
     "size": 1210355,
-    "downloads": 272,
+    "downloads": 274,
     "download_url": "https://dl.smwcentral.net/42434/Ominous%20Castle%20v1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1091,7 +1091,7 @@
     ],
     "rating": 0,
     "size": 86274,
-    "downloads": 70,
+    "downloads": 71,
     "download_url": "https://dl.smwcentral.net/42443/SMUCH1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1153,7 +1153,7 @@
     ],
     "rating": 0,
     "size": 91693,
-    "downloads": 42,
+    "downloads": 43,
     "download_url": "https://dl.smwcentral.net/42446/ashorthack%20by%20lactro.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1224,7 +1224,7 @@
     ],
     "rating": 0,
     "size": 839481,
-    "downloads": 114,
+    "downloads": 117,
     "download_url": "https://dl.smwcentral.net/42459/Castlemania%20-%20REVAMPED.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1291,7 +1291,7 @@
     ],
     "rating": 5,
     "size": 473199,
-    "downloads": 232,
+    "downloads": 234,
     "download_url": "https://dl.smwcentral.net/42466/SMTQFB_v1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1357,7 +1357,7 @@
     ],
     "rating": 0,
     "size": 1319477,
-    "downloads": 103,
+    "downloads": 104,
     "download_url": "https://dl.smwcentral.net/42470/JumpsRhymesLife.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1502,7 +1502,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1315,
+    "downloads": 1317,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1570,7 +1570,7 @@
     ],
     "rating": 4.6667,
     "size": 5112760,
-    "downloads": 3341,
+    "downloads": 3348,
     "download_url": "https://dl.smwcentral.net/42500/Crash%20Bandicoot%20and%20the%20Retro%20Dimension%20Enhanced.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1838,7 +1838,7 @@
     ],
     "rating": 0,
     "size": 239426,
-    "downloads": 30,
+    "downloads": 31,
     "download_url": "https://dl.smwcentral.net/42507/thereturns.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1974,7 +1974,7 @@
     ],
     "rating": 0,
     "size": 324171,
-    "downloads": 24,
+    "downloads": 26,
     "download_url": "https://dl.smwcentral.net/42523/Erre%27s%20Anabisis.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2049,7 +2049,7 @@
     ],
     "rating": 0,
     "size": 739656,
-    "downloads": 13,
+    "downloads": 15,
     "download_url": "https://dl.smwcentral.net/42535/Isle%20of%20Infestation%201.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2117,7 +2117,7 @@
     ],
     "rating": 4.6667,
     "size": 206292,
-    "downloads": 569,
+    "downloads": 572,
     "download_url": "https://dl.smwcentral.net/42537/MMLP.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2188,7 +2188,7 @@
     ],
     "rating": 0,
     "size": 567179,
-    "downloads": 26,
+    "downloads": 30,
     "download_url": "https://dl.smwcentral.net/42538/XL8.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2247,7 +2247,7 @@
     ],
     "rating": 5,
     "size": 2061726,
-    "downloads": 57,
+    "downloads": 67,
     "download_url": "https://dl.smwcentral.net/42540/Tortured%20Souls%203-Birth%20of%20a%20True%20Lord.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2279,6 +2279,366 @@
         "photosensitivity"
       ],
       "description": "The fire fades, and kingdoms fall to ash. \r\n\r\n\r\nWARNING: there are 2 mode 7 sections, one being a boss that will NOT work on SD2SNES, but is seemingly functional on FXPAKPro. The rest of the game is fully functional on SD2SNES, but you will more than likely need to fight the boss on emulator than transfer your save. I am sorry for the inconvenience, but I legitimately don't think there is anything I can do about it. \r\n"
+    }
+  },
+  {
+    "id": 42541,
+    "section": "smwhacks",
+    "name": "Crash Bandicoot and the Retro Dimension 2 - The Crystal Hunt",
+    "time": 1781538626,
+    "submitted_at": 1781538626,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 21068,
+        "name": "bandicoot"
+      }
+    ],
+    "submitter": {
+      "id": 21068,
+      "name": "bandicoot"
+    },
+    "moderator": null,
+    "tags": [
+      "choconilla",
+      "crash bandicoot",
+      "new mechanics",
+      "non kaizo",
+      "traditional"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124562.png",
+      "https://dl.smwcentral.net/image/124563.png",
+      "https://dl.smwcentral.net/image/124564.png",
+      "https://dl.smwcentral.net/image/124565.png",
+      "https://dl.smwcentral.net/image/124566.png",
+      "https://dl.smwcentral.net/image/124567.png",
+      "https://dl.smwcentral.net/image/124568.png",
+      "https://dl.smwcentral.net/image/124569.png",
+      "https://dl.smwcentral.net/image/124570.png",
+      "https://dl.smwcentral.net/image/124571.png",
+      "https://dl.smwcentral.net/image/124572.png",
+      "https://dl.smwcentral.net/image/124573.png",
+      "https://dl.smwcentral.net/image/124574.png",
+      "https://dl.smwcentral.net/image/124575.png"
+    ],
+    "rating": 0,
+    "size": 4870309,
+    "downloads": 76,
+    "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "120 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Crash Bandicoot is back for another adventure on the Super Nintendo!<br>\r\n<br>\r\nCrash Bandicoot and the Retro dimension 2: The Crystal Hunt is a Crash Bandicoot themed Super Mario World Romhack and a sequel to Crash Bandicoot and the Retro Dimension. Just like it’s predecessor this hack aims to mix the elements of the classic Crash Bandicoot games into Super Mario World creating a unique experience that mix the best of both worlds.<br>\r\n<br>\r\nCrash can use his iconic moves such as the spin, the slide and body slam and lots of new things have been added to make the hack feel more like a proper Crash Bandicoot game. Some of those things includes lots of custom music( with a lot of them being from the Crash Bandicoot series), NPCS characters and bosses from the Crash universe, custom graphics, lots of ASM modyfing some of the mechanics and more<br>\r\n<br>\r\nThis time around the hack features a more open design where the player can play through the game with more freedom for exploring the map in wathever order the player feels like. The hack features 93 levels with 120 crystals and 93 gems and relics to collect. It’s a bigger adventure than the last one.<br>\r\n<br>\r\nStory: One month after the last adventure Dr.Cortex found out a new source of power in the retro dimension, power crystals! He intends to use the crystals on his new evil plan to power his Doomsday machine a device capable of distorting reality itself. Now it’s up to Crash Bandicoot and his friends to save the day! The player must collect power crystals at the end of each level to progress through the game and defeat the evil Dr. Neo Cortex.<br>\r\n<br>\r\nThe hack is available in English and Brazilian Portuguese."
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_3",
+      "type": [
+        "standard"
+      ],
+      "length": 120,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Crash Bandicoot is back for another adventure on the Super Nintendo!\r\n\r\nCrash Bandicoot and the Retro dimension 2: The Crystal Hunt is a Crash Bandicoot themed Super Mario World Romhack and a sequel to Crash Bandicoot and the Retro Dimension. Just like it’s predecessor this hack aims to mix the elements of the classic Crash Bandicoot games into Super Mario World creating a unique experience that mix the best of both worlds.\r\n\r\nCrash can use his iconic moves such as the spin, the slide and body slam and lots of new things have been added to make the hack feel more like a proper Crash Bandicoot game. Some of those things includes lots of custom music( with a lot of them being from the Crash Bandicoot series), NPCS characters and bosses from the Crash universe, custom graphics, lots of ASM modyfing some of the mechanics and more\r\n\r\nThis time around the hack features a more open design where the player can play through the game with more freedom for exploring the map in wathever order the player feels like. The hack features 93 levels with 120 crystals and 93 gems and relics to collect. It’s a bigger adventure than the last one.\r\n\r\nStory: One month after the last adventure Dr.Cortex found out a new source of power in the retro dimension, power crystals! He intends to use the crystals on his new evil plan to power his Doomsday machine a device capable of distorting reality itself. Now it’s up to Crash Bandicoot and his friends to save the day! The player must collect power crystals at the end of each level to progress through the game and defeat the evil Dr. Neo Cortex.\r\n\r\nThe hack is available in English and Brazilian Portuguese."
+    }
+  },
+  {
+    "id": 42543,
+    "section": "smwhacks",
+    "name": "PLAYTIME",
+    "time": 1781573380,
+    "submitted_at": 1781573380,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 69636,
+        "name": "Insanit"
+      }
+    ],
+    "submitter": {
+      "id": 69636,
+      "name": "Insanit"
+    },
+    "moderator": null,
+    "tags": [
+      "asm",
+      "bosses",
+      "chocolate",
+      "custom music",
+      "gimmick",
+      "platforming"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124576.png",
+      "https://dl.smwcentral.net/image/124577.png",
+      "https://dl.smwcentral.net/image/124578.png",
+      "https://dl.smwcentral.net/image/124579.png",
+      "https://dl.smwcentral.net/image/124580.png",
+      "https://dl.smwcentral.net/image/124581.png",
+      "https://dl.smwcentral.net/image/124582.png",
+      "https://dl.smwcentral.net/image/124583.png"
+    ],
+    "rating": 5,
+    "size": 829582,
+    "downloads": 505,
+    "download_url": "https://dl.smwcentral.net/42543/playtime_1.11.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "1.11",
+      "changelog": "1.11<br>\r\n- Fixed misplaced block in Crawling Depths<br>\r\nand other small fixes<br>\r\n<br>\r\n1.1<br>\r\nFIXES:<br>\r\n- Fixed screen scrolling pipes hardlock caused by start-select<br>\r\n- Fixed \"softlock\" in Wrapping Duct<br>\r\n- Fixed 2 cheeses in Bumpy Slide<br>\r\n- Fixed spawn inconsistency in the secret section of Bumpy Slide<br>\r\n- Fixed the glitched Chuck in Crawling Depths by using an extended sprite shooter instead<br>\r\n- Fixed spawn inconsistency in the second section of Crawling Depths<br>\r\n- Fixed \"softlock\" in the second half of Crawling Depths<br>\r\n- Fixed cheese in the second half of Thronfelt Swamp<br>\r\n<br>\r\nBALANCING:<br>\r\n- Increased difficulty in the second half of Crawling Depths<br>\r\n- Changed Setup in the second half of Thornfelt Swamp<br>\r\n- Increased difficulty in Green Switch Palace<br>\r\n- Slight increase in the difficulty of the final boss<br>\r\n<br>\r\nMISC:<br>\r\n- Removed lightning effect from Yellow Switch Palace (no more photosensitive triggers)",
+      "difficulty": "Expert",
+      "type": "Kaizo",
+      "length": "17 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Welcome to PLAYTIME!<br>\r\n<br>\r\nA chocolate Kaizo featuring all the levels from my previous cancelled collab. Some of the levels might be familiar because they were in a demo released in 2023. There is 17 exits with secrets required to beat the game, mostly inspired by Invictus but aiming to an accessible difficulty, should be easier than both Darkside 1 and 2. You wouldn't find any shell jumps, cape or water levels. It does have trolls tho.<br>\r\n<br>\r\nImportant:<br>\r\n- The hack uses auto-checkpoints and they do not save your progress when you reset.<br>\r\n- Visual glitches can occur on the original SNES console.<br>\r\n_________________________<br>\r\n<br>\r\nI hope you all enjoy the hack.<br>\r\nHave fun!"
+    },
+    "raw_fields": {
+      "version": "1.11",
+      "changelog": "1.11\r\n- Fixed misplaced block in Crawling Depths\r\nand other small fixes\r\n\r\n1.1\r\nFIXES:\r\n- Fixed screen scrolling pipes hardlock caused by start-select\r\n- Fixed \"softlock\" in Wrapping Duct\r\n- Fixed 2 cheeses in Bumpy Slide\r\n- Fixed spawn inconsistency in the secret section of Bumpy Slide\r\n- Fixed the glitched Chuck in Crawling Depths by using an extended sprite shooter instead\r\n- Fixed spawn inconsistency in the second section of Crawling Depths\r\n- Fixed \"softlock\" in the second half of Crawling Depths\r\n- Fixed cheese in the second half of Thronfelt Swamp\r\n\r\nBALANCING:\r\n- Increased difficulty in the second half of Crawling Depths\r\n- Changed Setup in the second half of Thornfelt Swamp\r\n- Increased difficulty in Green Switch Palace\r\n- Slight increase in the difficulty of the final boss\r\n\r\nMISC:\r\n- Removed lightning effect from Yellow Switch Palace (no more photosensitive triggers)",
+      "difficulty": "diff_5",
+      "type": [
+        "kaizo"
+      ],
+      "length": 17,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Welcome to PLAYTIME!\r\n\r\nA chocolate Kaizo featuring all the levels from my previous cancelled collab. Some of the levels might be familiar because they were in a demo released in 2023. There is 17 exits with secrets required to beat the game, mostly inspired by Invictus but aiming to an accessible difficulty, should be easier than both Darkside 1 and 2. You wouldn't find any shell jumps, cape or water levels. It does have trolls tho.\r\n\r\nImportant:\r\n- The hack uses auto-checkpoints and they do not save your progress when you reset.\r\n- Visual glitches can occur on the original SNES console.\r\n_________________________\r\n\r\nI hope you all enjoy the hack.\r\nHave fun!"
+    }
+  },
+  {
+    "id": 42544,
+    "section": "smwhacks",
+    "name": "Let's A Go!",
+    "time": 1781579807,
+    "submitted_at": 1781579807,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 33861,
+        "name": "ThirdWall"
+      }
+    ],
+    "submitter": {
+      "id": 33861,
+      "name": "ThirdWall"
+    },
+    "moderator": null,
+    "tags": [
+      "art",
+      "vanilla"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124584.png",
+      "https://dl.smwcentral.net/image/124585.png",
+      "https://dl.smwcentral.net/image/124586.png",
+      "https://dl.smwcentral.net/image/124587.png",
+      "https://dl.smwcentral.net/image/124588.png",
+      "https://dl.smwcentral.net/image/124589.png",
+      "https://dl.smwcentral.net/image/124590.png",
+      "https://dl.smwcentral.net/image/124591.png",
+      "https://dl.smwcentral.net/image/124592.png",
+      "https://dl.smwcentral.net/image/124593.png",
+      "https://dl.smwcentral.net/image/124594.png",
+      "https://dl.smwcentral.net/image/124595.png"
+    ],
+    "rating": 0,
+    "size": 716798,
+    "downloads": 20,
+    "download_url": "https://dl.smwcentral.net/42544/LAG.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Expert",
+      "type": "Kaizo",
+      "length": "34 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "It's LAG. That's the hack. Don't take it too seriously.  Don't question it. DontBeHasty<br>\r\n<br>\r\nL+R to kill mario, OW is open and saves on movement.<br>\r\n<br>\r\nCredits in Zip<br>\r\n<br>\r\nThere is no prize for winning.<br>\r\n<br>\r\nThis hack contains:<br>\r\nLAG<br>\r\n"
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_5",
+      "type": [
+        "kaizo"
+      ],
+      "length": 34,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "It's LAG. That's the hack. Don't take it too seriously.  Don't question it. DontBeHasty\r\n\r\nL+R to kill mario, OW is open and saves on movement.\r\n\r\nCredits in Zip\r\n\r\nThere is no prize for winning.\r\n\r\nThis hack contains:\r\nLAG\r\n"
+    }
+  },
+  {
+    "id": 42545,
+    "section": "smwhacks",
+    "name": "Super Mario World Challenges 2",
+    "time": 1781589461,
+    "submitted_at": 1781589461,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 11520,
+        "name": "Daizo Dee Von"
+      }
+    ],
+    "submitter": {
+      "id": 11520,
+      "name": "Daizo Dee Von"
+    },
+    "moderator": null,
+    "tags": [
+      "beyond the worlds",
+      "bosses",
+      "custom music",
+      "gimmick",
+      "traditional",
+      "variety"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124606.png",
+      "https://dl.smwcentral.net/image/124607.png",
+      "https://dl.smwcentral.net/image/124608.png",
+      "https://dl.smwcentral.net/image/124609.png",
+      "https://dl.smwcentral.net/image/124610.png",
+      "https://dl.smwcentral.net/image/124611.png",
+      "https://dl.smwcentral.net/image/124612.png",
+      "https://dl.smwcentral.net/image/124613.png",
+      "https://dl.smwcentral.net/image/124614.png",
+      "https://dl.smwcentral.net/image/124615.png"
+    ],
+    "rating": 5,
+    "size": 791305,
+    "downloads": 20,
+    "download_url": "https://dl.smwcentral.net/42545/%5BHack%5D%20Super%20Mario%20World%20Challenges%202%20v1.0.0..zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Advanced",
+      "type": "Standard",
+      "length": "6 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "Yes",
+      "warnings": "",
+      "description": "Take on a handful of <u>new challenging variants</u> of <b>existing Super Mario World levels</b>, now with the <i>latest technological capabilities</i> of \"the creator.\" Levels will demand more as you trek through familiar environments, and <i>knowledge of the original game</i> <u>will be tested.</u><br>\r\n<br>\r\nCheck out the previous hack <a href=\"https://smwc.me/s/28581\">here</a>.<br>\r\n<br>\r\nA handful of bosses await you; opponents brand new, or foes awaiting a rematch. You have to <u>earn</u> your victory to overcome them, no matter the odds.<br>\r\n<br>\r\n<span style=\"font-size: 12pt;\">Will you join the victors of this challenge?</span><br>\r\n<br>\r\n<hr><br>\r\nUnlike the original game, dragon coins behave like they do in vanilla (<u>5 in one go</u>). They <u>do save to SRAM</u>. An <i>unlockable extra</i> can be found by finding <u>3 sets</u>. Be forewarned, said optional unlock is a challenge <u>beyond the game's difficulty</u> (you don't get an exit for clearing it)."
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_4",
+      "type": [
+        "standard"
+      ],
+      "length": 6,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": true,
+      "warnings": [],
+      "description": "Take on a handful of [u]new challenging variants[/u] of [b]existing Super Mario World levels[/b], now with the [i]latest technological capabilities[/i] of \"the creator.\" Levels will demand more as you trek through familiar environments, and [i]knowledge of the original game[/i] [u]will be tested.[/u]\r\n\r\nCheck out the previous hack [url=https://smwc.me/s/28581]here[/url].\r\n\r\nA handful of bosses await you; opponents brand new, or foes awaiting a rematch. You have to [u]earn[/u] your victory to overcome them, no matter the odds.\r\n\r\n[size=12]Will you join the victors of this challenge?[/size]\r\n\r\n<hr>\r\nUnlike the original game, dragon coins behave like they do in vanilla ([u]5 in one go[/u]). They [u]do save to SRAM[/u]. An [i]unlockable extra[/i] can be found by finding [u]3 sets[/u]. Be forewarned, said optional unlock is a challenge [u]beyond the game's difficulty[/u] (you don't get an exit for clearing it)."
+    }
+  },
+  {
+    "id": 42546,
+    "section": "smwhacks",
+    "name": "Pit of Gui!! (Reformulated Version)",
+    "time": 1781621186,
+    "submitted_at": 1781621186,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 64825,
+        "name": "GuilhermeYT"
+      }
+    ],
+    "submitter": {
+      "id": 64825,
+      "name": "GuilhermeYT"
+    },
+    "moderator": null,
+    "tags": [],
+    "images": [
+      "https://dl.smwcentral.net/image/124616.png",
+      "https://dl.smwcentral.net/image/124617.png",
+      "https://dl.smwcentral.net/image/124618.png",
+      "https://dl.smwcentral.net/image/124619.png",
+      "https://dl.smwcentral.net/image/124620.png",
+      "https://dl.smwcentral.net/image/124621.png",
+      "https://dl.smwcentral.net/image/124622.png",
+      "https://dl.smwcentral.net/image/124623.png",
+      "https://dl.smwcentral.net/image/124624.png",
+      "https://dl.smwcentral.net/image/124625.png",
+      "https://dl.smwcentral.net/image/124626.png",
+      "https://dl.smwcentral.net/image/124627.png"
+    ],
+    "rating": 0,
+    "size": 408801,
+    "downloads": 3,
+    "download_url": "https://dl.smwcentral.net/42546/Pit%20of%20Gui%21%21%20%28Reformulated%20Version%29.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "Expert",
+      "type": "Tool-Assisted, Pit",
+      "length": "1 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "A while back I did a Pit Hack named:<br>\r\nPit of Gui!! ,and the hack had a lot of breaks and very basic background and songs, but I made a Reformulation.<br>\r\nAll the necessary credits are in the hack, after you beat the Big boo.<br>\r\nI don't change the level design too much, only a few things.<br>\r\nI made this Reformulation in about 1 month.<br>\r\nI hope you guys like the new version about the:<br>\r\nPit of Gui!!<br>\r\nVideo showing the Hack: https://youtu.be/-ctm1ABdwyg<br>\r\n----------------------------------------------------------------------------------------------<br>\r\nAnd I need to thanks a lot Noise de Gole and Flips_Bad for showing me a lot of breaks about my Hack."
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "",
+      "difficulty": "diff_5",
+      "type": [
+        "tool_assisted",
+        "pit"
+      ],
+      "length": 1,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "A while back I did a Pit Hack named:\r\nPit of Gui!! ,and the hack had a lot of breaks and very basic background and songs, but I made a Reformulation.\r\nAll the necessary credits are in the hack, after you beat the Big boo.\r\nI don't change the level design too much, only a few things.\r\nI made this Reformulation in about 1 month.\r\nI hope you guys like the new version about the:\r\nPit of Gui!!\r\nVideo showing the Hack: https://youtu.be/-ctm1ABdwyg\r\n----------------------------------------------------------------------------------------------\r\nAnd I need to thanks a lot Noise de Gole and Flips_Bad for showing me a lot of breaks about my Hack."
     }
   }
 ]

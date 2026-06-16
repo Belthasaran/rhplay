@@ -1,3 +1,4 @@
+- **RHServer local testing**: `rhserver_testmode` csetting (On/Off/Disabled) with UI toggles in profile wizard and Online menu; centralized release/testing endpoint config; `RHPLAY_TEST_STATUS=disabled` build embed locks test mode off.
 - **RHServer integration**: Metadata API moved to standalone `~/rhserver`; RHPlay adds `RHServerClient`, bearer-token connect flow, patch-resolver method 7, and optional sync of stage feedback/reviews when connected. Legacy `mdserver/` deprecated.
 - **Prepare Run Twitch dropdown contrast**: Prediction style select and dropdown text use theme text/background colors (fixes black-on-black in dark themes).
 - **Prepare Run Twitch dropdown fix**: Capture button position before async token checks (event.currentTarget is null after await).

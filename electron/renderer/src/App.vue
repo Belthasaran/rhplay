@@ -250,10 +250,19 @@
               <div v-if="onlineActiveTab === 'profile-keys'" class="tab-content">
               <p style="font-size: 16px; font-weight: bold; background: black; color: white;">Prototype UI:  In the future; this allows going online to Update the games list (currently you must manually update it). Feature would also allow you to share your game ratings and hacks/mods publicly through a decentralized network based on <a href="https://en.wikipedia.org/wiki/Nostr" style="color: lightgray;" target="_blank">Nostr</a> and IPFS.</p>
               <!-- Admin Options Toggle -->
-              <div class="online-section">
+              <div class="online-section online-toggle-row">
                 <label class="admin-toggle">
                   <input type="checkbox" v-model="onlineShowAdminOptions" @change="onAdminOptionsToggle" />
                   Show admin options
+                </label>
+                <label class="admin-toggle">
+                  <input
+                    type="checkbox"
+                    :checked="rhserverTestModeOn"
+                    :disabled="!rhserverTestModeToggleEnabled"
+                    @change="onRhserverTestModeToggle"
+                  />
+                  RHServer test mode
                 </label>
               </div>
 
@@ -4701,6 +4710,15 @@ Do you recommend; is the game fun and worthwhile?</span></label>
       <header class="modal-header">
         <h3 v-if="profileCreationWizardStep === 1">Create Your Profile</h3>
         <h3 v-else>Profile Options</h3>
+        <label class="admin-toggle wizard-testmode-toggle">
+          <input
+            type="checkbox"
+            :checked="rhserverTestModeOn"
+            :disabled="!rhserverTestModeToggleEnabled"
+            @change="onRhserverTestModeToggle"
+          />
+          RHServer test mode
+        </label>
       </header>
       <section class="modal-body">
         <!-- Step 1: Profile Information -->
@@ -10083,6 +10101,8 @@ const filterDropdownOpen = ref(false);
 const profileDropdownOpen = ref(false);
 const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
+const rhserverTestModeOn = ref(false);
+const rhserverTestModeToggleEnabled = ref(true);
 const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing' | 'submissions'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
 
@@ -13701,6 +13721,7 @@ function toggleOnlineDropdown() {
   onlineDropdownOpen.value = !onlineDropdownOpen.value;
   if (onlineDropdownOpen.value) {
     loadOnlineProfile();
+    loadRhserverTestMode();
     if (onlineShowAdminOptions.value) {
       loadAdminKeypairsList();
     }
@@ -14144,7 +14165,8 @@ async function openSmwresourceConnectFromWizard() {
       return;
     }
     const qp = new URLSearchParams(profileCreationConnectParams.value as any).toString();
-    const url = `https://smwresource.net/connect/rhplay?${qp}`;
+    const urlRes = await (window as any).electronAPI.getRhserverConnectUrl?.({ queryString: qp });
+    const url = urlRes?.url || `https://smwresource.net/connect/rhplay?${qp}`;
     await (window as any).electronAPI.openRhserverConnectWithUrl?.({ url });
     profileCreationSmwresourcePending.value = true;
     profileCreationSmwresourceStatus.value = 'Connecting…';
@@ -15252,6 +15274,38 @@ function onAdminOptionsToggle() {
   } else {
     selectedAdminKeypairUuid.value = null;
     selectedAdminKeypair.value = null;
+  }
+}
+
+async function loadRhserverTestMode() {
+  if (!isElectronAvailable()) return;
+  try {
+    const res = await (window as any).electronAPI.getRhserverTestMode?.();
+    if (res?.success) {
+      rhserverTestModeOn.value = Boolean(res.testModeOn);
+      rhserverTestModeToggleEnabled.value = res.toggleEnabled !== false;
+    }
+  } catch (error) {
+    console.warn('[RHServer] Failed to load test mode:', error);
+  }
+}
+
+async function onRhserverTestModeToggle(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const enabled = target.checked;
+  if (!isElectronAvailable()) return;
+  try {
+    const res = await (window as any).electronAPI.setRhserverTestMode?.({ enabled });
+    if (!res?.success) {
+      await showAlert(`Failed to update test mode: ${res?.error || 'unknown error'}`, 'RHServer Test Mode');
+      await loadRhserverTestMode();
+      return;
+    }
+    rhserverTestModeOn.value = Boolean(res.testModeOn);
+    rhserverTestModeToggleEnabled.value = res.toggleEnabled !== false;
+  } catch (error) {
+    await showAlert(`Error: ${formatErrorMessage(error)}`, 'RHServer Test Mode');
+    await loadRhserverTestMode();
   }
 }
 
@@ -19512,6 +19566,7 @@ async function exportAllAdminKeypairs() {
 
 // Profile Creation Wizard functions
 function initializeProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'create-first') {
+  loadRhserverTestMode();
   // Only initialize if not already initialized or if data is empty
   if (profileCreationWizardInitialized.value && profileCreationData.value.profileId && mode === 'create-first') {
     console.log('[Profile Wizard] Already initialized, preserving existing data');
@@ -39239,6 +39294,19 @@ button:disabled {
 
 .admin-toggle input[type="checkbox"] {
   cursor: pointer;
+}
+
+.online-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.wizard-testmode-toggle {
+  margin-top: 8px;
+  font-weight: normal;
+  font-size: 12px;
 }
 
 .profile-empty {

@@ -2043,12 +2043,12 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
-  ipcMain.handle('online:rhserver:open-connect', async () => {
+  ipcMain.handle('online:rhserver:open-connect', async (event, { url } = {}) => {
     try {
       const base = rhServerManager.getApiBaseUrl().replace('api.', '').replace(/\/v1api$/, '');
-      const url = base.includes('localhost') ? 'http://localhost:3000/connect/rhplay' : 'https://smwresource.net/connect/rhplay';
-      await shell.openExternal(url);
-      return { success: true, url };
+      const target = url || (base.includes('localhost') ? 'http://localhost:3000/connect/rhplay' : 'https://smwresource.net/connect/rhplay');
+      await shell.openExternal(target);
+      return { success: true, url: target };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -2086,6 +2086,55 @@ function registerDatabaseHandlers(dbManager) {
         signNostrMessage
       });
       return { success: true, ...result };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:refresh-profile', async (event) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) return { success: false, error: 'Profile Guard must be unlocked' };
+
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const pid = profileManager.getCurrentProfileId();
+      if (!pid) return { success: false, error: 'No current profile' };
+
+      const hosted = await rhServerManager.fetchHostedProfile();
+      if (!hosted.success) return hosted;
+
+      const profile = profileManager.getProfile(pid);
+      if (!profile) return { success: false, error: 'Profile not found' };
+
+      // Merge hosted fields into local profile (public fields only)
+      profile.displayName = hosted.data.displayName || profile.displayName || '';
+      profile.homepage = hosted.data.homepage || profile.homepage || '';
+      profile.bio = hosted.data.bio || profile.bio || '';
+      profile.pictureUrl = hosted.data.pictureUrl || profile.pictureUrl || '';
+      profile.bannerUrl = hosted.data.bannerUrl || profile.bannerUrl || '';
+      if (Array.isArray(hosted.data.socialIds)) {
+        profile.socialIds = hosted.data.socialIds;
+      }
+
+      // Ensure SMWResource Tier-1 social ID exists after successful hosted fetch.
+      if (!Array.isArray(profile.socialIds)) profile.socialIds = [];
+      if (!profile.socialIds.some((s) => s && s.type === 'smwresource')) {
+        profile.socialIds.unshift({ type: 'smwresource', value: String(pid) });
+      }
+
+      profileManager.saveProfile(profile, true);
+
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        UPDATE user_profiles
+        SET smwresource_sync_pending = 0,
+            smwresource_last_sync_at = strftime('%s','now'),
+            profile_hosting_mode = 'smwresource',
+            profile_wizard_complete = 1
+        WHERE profile_uuid = ?
+      `).run(pid);
+
+      return { success: true, profile };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -9161,6 +9210,28 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
+   * Get profile wizard hosting/sync state for the current profile.
+   * Channel: online:profile:wizard:get-state
+   */
+  ipcMain.handle('online:profile:wizard:get-state', async (event) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const row = db.prepare(`
+        SELECT profile_uuid, profile_hosting_mode, profile_wizard_complete,
+               smwresource_sync_pending, smwresource_last_sync_at
+        FROM user_profiles
+        WHERE is_current_profile = 1
+        LIMIT 1
+      `).get();
+      if (!row) return { success: true, state: null };
+      return { success: true, state: row };
+    } catch (error) {
+      console.error('Error reading profile wizard state:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * List all profiles
    * Channel: online:profiles:list
    */
@@ -9762,6 +9833,162 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Create minimal profile for wizard Step 1.
+   * Channel: online:profile:create-minimal
+   *
+   * Creates/ensures:
+   * - master seed + did:pkh (existing ProfileSeedManager)
+   * - seed-derived Nostr primary keypair (m/identity/nostr/0)
+   * - seed-derived ML-DSA-44 additional keypair (m/identity/mldsa/0)
+   *
+   * Returns summary fields needed for SMWResource connect URL.
+   */
+  ipcMain.handle('online:profile:create-minimal', async (event, { profileId, username, displayName, defaultHostingMode }) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked to create profiles' };
+      }
+
+      const rawUsername = typeof username === 'string' ? username.trim() : '';
+      if (!rawUsername) {
+        return { success: false, error: 'Username is required' };
+      }
+      const normalizedUsername = rawUsername.toLowerCase();
+
+      const rawDisplayName = typeof displayName === 'string' ? displayName.trim() : '';
+      const computedDisplayName = rawDisplayName || (/^[a-zA-Z]/.test(normalizedUsername)
+        ? normalizedUsername.charAt(0).toUpperCase() + normalizedUsername.slice(1)
+        : normalizedUsername);
+
+      const finalProfileId = profileId || crypto.randomUUID();
+
+      const { generateProfileSeedAndDidPkh, decryptMasterSeed } = require('./utils/ProfileSeedManager');
+      const {
+        encryptedSeed,
+        encryptedEthereumPrivateKey,
+        ethereumAddress,
+        didPkh,
+        seedGeneratedAt
+      } = generateProfileSeedAndDidPkh(keyguardKey);
+
+      const masterSeed = decryptMasterSeed(encryptedSeed, keyguardKey);
+
+      const nostrKeypair = await generateKeypair('Nostr', { masterSeed, derivationPath: 'm/identity/nostr/0' });
+      const mldsaKeypair = await generateKeypair('ML-DSA-44', { masterSeed, derivationPath: 'm/identity/mldsa/0' });
+
+      const profile = {
+        profileId: finalProfileId,
+        username: normalizedUsername,
+        displayName: computedDisplayName,
+        homepage: '',
+        socialIds: [],
+        bio: '',
+        pictureUrl: '',
+        bannerUrl: '',
+        primaryKeypair: {
+          type: nostrKeypair.type,
+          publicKey: nostrKeypair.publicKey,
+          privateKey: nostrKeypair.privateKey,
+          publicKeyHex: nostrKeypair.publicKeyHex,
+          fingerprint: nostrKeypair.fingerprint,
+          isSeedBased: nostrKeypair.isSeedBased,
+          derivationPath: nostrKeypair.derivationPath
+        },
+        additionalKeypairs: [
+          {
+            type: mldsaKeypair.type,
+            publicKey: mldsaKeypair.publicKey,
+            privateKey: mldsaKeypair.privateKey,
+            publicKeyHex: mldsaKeypair.publicKeyHex,
+            fingerprint: mldsaKeypair.fingerprint,
+            isSeedBased: mldsaKeypair.isSeedBased,
+            derivationPath: mldsaKeypair.derivationPath
+          }
+        ],
+        adminKeypairs: [],
+        isAdmin: false,
+        verificationLevel: 0
+      };
+
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const profileFp = await calculateProfileFp(finalProfileId);
+      profile.fp = profileFp;
+
+      profileManager.saveProfile(profile, true);
+
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        UPDATE user_profiles
+        SET encrypted_master_seed = ?,
+            encrypted_ethereum_private_key = ?,
+            ethereum_address = ?,
+            did_pkh = ?,
+            seed_generated_at = ?,
+            profile_hosting_mode = ?,
+            profile_wizard_complete = 0,
+            smwresource_sync_pending = 0,
+            smwresource_last_sync_at = NULL
+        WHERE profile_uuid = ?
+      `).run(
+        encryptedSeed,
+        encryptedEthereumPrivateKey,
+        ethereumAddress,
+        didPkh,
+        seedGeneratedAt,
+        defaultHostingMode || null,
+        finalProfileId
+      );
+
+      // Persist keypairs (including seed-tracking columns)
+      profileManager.migrateKeypairToDatabase(finalProfileId, profile.primaryKeypair, 'primary');
+      profileManager.migrateKeypairToDatabase(finalProfileId, profile.additionalKeypairs[0], 'additional');
+
+      const mldsaPubkeySha256 = crypto.createHash('sha256').update(Buffer.from(mldsaKeypair.publicKeyHex, 'hex')).digest('hex');
+
+      return {
+        success: true,
+        profile: profileManager.getProfile(finalProfileId),
+        connectParams: {
+          profile_uuid: finalProfileId,
+          username: normalizedUsername,
+          nostr_pubkey: nostrKeypair.publicKeyHex,
+          mldsa_pubkey_sha256: mldsaPubkeySha256
+        }
+      };
+    } catch (error) {
+      console.error('Error creating minimal profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Update profile wizard hosting/sync flags.
+   * Channel: online:profile:wizard:set-state
+   */
+  ipcMain.handle('online:profile:wizard:set-state', async (event, { profileId, profile_hosting_mode, profile_wizard_complete, smwresource_sync_pending }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      db.prepare(`
+        UPDATE user_profiles
+        SET profile_hosting_mode = COALESCE(?, profile_hosting_mode),
+            profile_wizard_complete = COALESCE(?, profile_wizard_complete),
+            smwresource_sync_pending = COALESCE(?, smwresource_sync_pending)
+        WHERE profile_uuid = ?
+      `).run(
+        profile_hosting_mode ?? null,
+        typeof profile_wizard_complete === 'number' ? profile_wizard_complete : (profile_wizard_complete === true ? 1 : (profile_wizard_complete === false ? 0 : null)),
+        typeof smwresource_sync_pending === 'number' ? smwresource_sync_pending : (smwresource_sync_pending === true ? 1 : (smwresource_sync_pending === false ? 0 : null)),
+        profileId
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating profile wizard state:', error);
+      return { success: false, error: error.message };
+    }
+  });
   /**
    * Save online profile
    * Channel: online:profile:save
@@ -9890,8 +10117,9 @@ function registerDatabaseHandlers(dbManager) {
    * @param {string} keyType - Nostr, ML-DSA-44, ML-DSA-87, ED25519, or RSA-2048
    * @returns {Promise<Object>} Keypair with publicKey, privateKey, and metadata
    */
-  async function generateKeypair(keyType) {
+  async function generateKeypair(keyType, options = {}) {
     const crypto = require('crypto');
+    const derivationPath = options.derivationPath || null;
     
     switch (keyType) {
       case 'Nostr': {
@@ -9900,7 +10128,18 @@ function registerDatabaseHandlers(dbManager) {
         const nip19 = require('nostr-tools/nip19');
         
         // Generate a 32-byte private key (secp256k1) - returns Uint8Array
-        const privateKeyBytes = generateSecretKey();
+        // If master seed is provided, derive deterministically (m/identity/nostr/0).
+        let privateKeyBytes;
+        let isSeedBased = 0;
+        let usedDerivationPath = null;
+        if (options.masterSeed) {
+          const { deriveNostrKeyFromSeed } = require('./utils/ProfileSeedManager');
+          privateKeyBytes = deriveNostrKeyFromSeed(options.masterSeed);
+          isSeedBased = 1;
+          usedDerivationPath = derivationPath || 'm/identity/nostr/0';
+        } else {
+          privateKeyBytes = generateSecretKey();
+        }
         const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
         console.log('[generateKeypair:Nostr] Generated private key hex length:', privateKeyHex.length);
         
@@ -9932,7 +10171,9 @@ function registerDatabaseHandlers(dbManager) {
           privateKey: privateKeyPem,
           publicKeyHex: publicKeyHex, // Store hex for internal use
           privateKeyRaw: privateKeyHex, // Store raw hex for encryption
-          fingerprint: fingerprint
+          fingerprint: fingerprint,
+          isSeedBased,
+          derivationPath: usedDerivationPath
         };
       }
       
@@ -9994,7 +10235,18 @@ function registerDatabaseHandlers(dbManager) {
         
         // Generate keypair
         // Note: @noble/post-quantum uses 'secretKey' not 'privateKey'
-        const { publicKey, secretKey } = ml_dsa44.keygen();
+        let isSeedBased = 0;
+        let usedDerivationPath = null;
+        let publicKey, secretKey;
+        if (options.masterSeed) {
+          const { deriveMldsa44SeedFromMasterSeed } = require('./utils/ProfileSeedManager');
+          const seed = deriveMldsa44SeedFromMasterSeed(options.masterSeed);
+          ({ publicKey, secretKey } = ml_dsa44.keygen(seed));
+          isSeedBased = 1;
+          usedDerivationPath = derivationPath || 'm/identity/mldsa/0';
+        } else {
+          ({ publicKey, secretKey } = ml_dsa44.keygen());
+        }
         
         // Convert Uint8Array to hex for storage (must convert immediately to avoid cloning issues)
         const publicKeyHex = Buffer.from(publicKey).toString('hex');
@@ -10022,7 +10274,9 @@ function registerDatabaseHandlers(dbManager) {
           privateKey: privateKeyPem,
           publicKeyHex: publicKeyHex,
           privateKeyRaw: privateKeyHex, // Store raw private key for encryption
-          fingerprint: fingerprint
+          fingerprint: fingerprint,
+          isSeedBased,
+          derivationPath: usedDerivationPath
         };
       }
       

@@ -495,6 +495,8 @@ class OnlineProfileManager {
             trust_level = ?,
             local_name = ?,
             canonical_name = ?,
+            is_seed_based = ?,
+            derivation_path = ?,
             name = ?,
             label = ?,
             comments = ?,
@@ -514,6 +516,8 @@ class OnlineProfileManager {
         keypairData.trustLevel || null,
         keypairData.localName || null,
         keypairData.canonicalName || null,
+        keypairData.isSeedBased ? 1 : 0,
+        keypairData.derivationPath || null,
         keypairData.name || null,
         keypairData.label || null,
         keypairData.comments || null,
@@ -527,9 +531,9 @@ class OnlineProfileManager {
         INSERT INTO profile_keypairs (
           keypair_uuid, profile_uuid, keypair_type, key_usage, storage_status,
           public_key, public_key_hex, fingerprint, encrypted_private_key, private_key_format,
-          trust_level, local_name, canonical_name, name, label, comments,
+          trust_level, local_name, canonical_name, is_seed_based, derivation_path, name, label, comments,
           nostr_event_id, nostr_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         finalUuid,
         profileUuid,
@@ -544,6 +548,8 @@ class OnlineProfileManager {
         keypairData.trustLevel || null,
         keypairData.localName || null,
         keypairData.canonicalName || null,
+        keypairData.isSeedBased ? 1 : 0,
+        keypairData.derivationPath || null,
         keypairData.name || null,
         keypairData.label || null,
         keypairData.comments || null,

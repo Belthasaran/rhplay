@@ -102,6 +102,47 @@ function deriveEthereumWallet(masterSeed) {
 }
 
 /**
+ * Derive a deterministic 32-byte seed for an identity purpose/path.
+ * This uses the same HMAC-SHA256 approach as deriveEthereumWallet (HKDF-like).
+ *
+ * @param {Buffer} masterSeed - 32-byte master seed
+ * @param {string} derivationPath - e.g. "m/identity/nostr/0"
+ * @param {string} saltLabel - e.g. "profile-seed-nostr"
+ * @returns {Buffer} 32-byte derived seed
+ */
+function deriveIdentitySeed(masterSeed, derivationPath, saltLabel) {
+  const salt = Buffer.from(saltLabel, 'utf8');
+  const info = Buffer.from(derivationPath, 'utf8');
+  return crypto.createHmac('sha256', salt).update(masterSeed).update(info).digest();
+}
+
+/**
+ * Derive Nostr private key bytes from master seed.
+ * Path: m/identity/nostr/0 (per devdocs/profile_extension_spec_v0.1.md).
+ *
+ * @param {Buffer} masterSeed - 32-byte master seed
+ * @returns {Uint8Array} 32-byte private key bytes
+ */
+function deriveNostrKeyFromSeed(masterSeed) {
+  const derivationPath = 'm/identity/nostr/0';
+  const seed = deriveIdentitySeed(masterSeed, derivationPath, 'profile-seed-nostr');
+  return new Uint8Array(seed);
+}
+
+/**
+ * Derive ML-DSA-44 seed (32 bytes) from master seed.
+ * Path: m/identity/mldsa/0.
+ *
+ * @param {Buffer} masterSeed - 32-byte master seed
+ * @returns {Uint8Array} 32-byte seed
+ */
+function deriveMldsa44SeedFromMasterSeed(masterSeed) {
+  const derivationPath = 'm/identity/mldsa/0';
+  const seed = deriveIdentitySeed(masterSeed, derivationPath, 'profile-seed-mldsa44');
+  return new Uint8Array(seed);
+}
+
+/**
  * Generate did:pkh from Ethereum address
  * Format: did:pkh:eip155:1:<EthereumAddress>
  * @param {string} ethereumAddress - Ethereum address (0x... format)
@@ -193,6 +234,9 @@ module.exports = {
   encryptEthereumPrivateKey,
   generateDidPkh,
   generateProfileSeedAndDidPkh,
-  needsSeedGeneration
+  needsSeedGeneration,
+  deriveIdentitySeed,
+  deriveNostrKeyFromSeed,
+  deriveMldsa44SeedFromMasterSeed
 };
 

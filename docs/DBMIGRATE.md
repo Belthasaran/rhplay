@@ -2221,6 +2221,24 @@ Store encrypted RHServer API bearer/refresh tokens for online profile connection
 
 ---
 
+## clientdata_071_profile_wizard_hosting
+
+### Date Added
+June 16, 2026
+
+### Purpose
+Track profile hosting mode (SMWResource vs local/offline), wizard completion, and hosted profile sync status.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `user_profiles` gains `profile_hosting_mode`, `profile_wizard_complete`, `smwresource_sync_pending`, `smwresource_last_sync_at`.
+
+---
+
 ## clientdata_069_run_plan_untested_filters
 
 ### Date Added

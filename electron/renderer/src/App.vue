@@ -14205,7 +14205,7 @@ async function openSmwresourceConnectFromWizard() {
     const url = urlRes?.url || `https://smwresource.net/connect/rhplay?${qp}`;
     await (window as any).electronAPI.openRhserverConnectWithUrl?.({ url });
     profileCreationSmwresourcePending.value = true;
-    profileCreationSmwresourceStatus.value = 'Connecting…';
+    profileCreationSmwresourceStatus.value = 'Complete login in browser, then click Refresh here.';
   } catch (error) {
     await showAlert(`Error: ${formatErrorMessage(error)}`, 'Connect Error');
   }

@@ -1,0 +1,86 @@
+directories:
+  output: /home/steamu/rhplay/dist-builds-launcher
+  buildResources: /home/steamu/rhplay/rhtools-launcher/build
+appId: com.rhtools.launcher
+productName: RHTools Launcher
+copyright: Copyright © RHTools
+electronVersion: 36.9.5
+files:
+  - filter:
+      - main.js
+      - preload.js
+      - paths.js
+      - progress-window.html
+      - electron-builder.cjs
+      - renderer/dist/**/*
+  - from: /home/steamu/rhplay/electron/utils
+    to: electron/utils
+    filter:
+      - '**/*.js'
+  - from: /home/steamu/rhplay/electron/installer
+    to: electron/installer
+    filter:
+      - '**/*.js'
+  - from: /home/steamu/rhplay/electron
+    to: electron
+    filter:
+      - coremanifest.json
+      - dbmanifest.json
+      - bpsarchives.json
+  - from: /home/steamu/rhplay/lib
+    to: lib
+    filter:
+      - '**/*.js'
+  - from: /home/steamu/rhplay/jsutils
+    to: jsutils
+    filter:
+      - migratedb.js
+  - from: /home/steamu/rhplay/electron/sql/migrations
+    to: electron/sql/migrations
+    filter:
+      - '**/*'
+  - from: /home/steamu/rhplay/node_modules
+    to: node_modules
+    filter:
+      - '**/*'
+      - '!.bin/**'
+      - '!**/.bin/**'
+extraResources:
+  - from: /home/steamu/rhplay/electron/dbmanifest.json
+    to: db/dbmanifest.json
+  - from: /home/steamu/rhplay/electron/bpsarchives.json
+    to: db/bpsarchives.json
+  - from: /home/steamu/rhplay/electron/packed_db
+    to: db/packed_db
+    filter:
+      - '**/*'
+  - from: /home/steamu/rhplay/electron/installer/prepare_databases.js
+    to: db/prepare_databases.js
+  - from: /home/steamu/rhplay/node_modules/7zip-mini
+    to: app.asar.unpacked/node_modules/7zip-mini
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
+  - node_modules/lzma-native/**/*
+  - node_modules/tar/**/*
+  - node_modules/chownr/**/*
+  - node_modules/fs-minipass/**/*
+  - node_modules/minipass/**/*
+  - node_modules/minizlib/**/*
+  - node_modules/mkdirp/**/*
+  - node_modules/yallist/**/*
+  - node_modules/readable-stream/**/*
+  - electron/installer/**/*
+  - electron/utils/ipfs-fetch-config.js
+  - electron/utils/arweave-fetch-config.js
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+portable:
+  artifactName: rhtools-launcher-${version}-portable.exe
+linux:
+  target:
+    - AppImage
+  category: Utility
+  artifactName: rhtools-launcher-${version}.AppImage

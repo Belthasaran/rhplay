@@ -2085,28 +2085,22 @@ function registerDatabaseHandlers(dbManager) {
 
   ipcMain.handle('online:rhserver:connect', async (event, { profileUuid } = {}) => {
     try {
-      const keyguardKey = global.keyguardKey || null;
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked' };
+      }
+
       const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
       const pid = profileUuid || profileManager.getCurrentProfileId();
       if (!pid) return { success: false, error: 'No profile selected' };
 
-      const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(pid);
-      if (!primaryKeypair?.privateKey) {
-        return { success: false, error: 'Profile Guard unlock required' };
-      }
-
-      const { finalizeEvent } = require('nostr-tools');
-      const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
-      const signNostrMessage = async (message) => {
-        const tsMatch = String(message).match(/:(\d+)$/);
-        const created_at = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000);
-        return finalizeEvent({
-          kind: 1,
-          created_at,
-          tags: [],
-          content: message
-        }, privateKeyBytes);
-      };
+      const db = dbManager.getConnection('clientdata');
+      const { signNostrMessage } = await prepareRhserverNostrSigner(
+        profileManager,
+        pid,
+        keyguardKey,
+        db
+      );
 
       const result = await rhServerManager.connect({
         profileUuid: pid,
@@ -10013,9 +10007,9 @@ function registerDatabaseHandlers(dbManager) {
   });
 
   /**
-   * Build signed SMWResource connect params for a profile.
+   * Prepare Nostr signer for RHServer API token auth (PoW + nostr_event).
    */
-  async function buildSignedConnectParamsForProfile(profileManager, profileUuid, keyguardKey, db) {
+  async function prepareRhserverNostrSigner(profileManager, profileUuid, keyguardKey, db) {
     const {
       upgradeMldsa44KeypairIfNeeded,
       ensurePrimaryNostrKeypairForConnect
@@ -10034,19 +10028,43 @@ function registerDatabaseHandlers(dbManager) {
       keyguardKey
     });
 
+    const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(profileUuid);
+    if (!primaryKeypair?.privateKey) {
+      throw new Error('Profile Guard unlock required');
+    }
+
+    const { finalizeEvent } = require('nostr-tools');
+    const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
+    const signNostrMessage = async (message) => {
+      const tsMatch = String(message).match(/:(\d+)$/);
+      const created_at = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000);
+      return finalizeEvent({
+        kind: 1,
+        created_at,
+        tags: [],
+        content: message
+      }, privateKeyBytes);
+    };
+
+    return { signNostrMessage, primaryKeypair, privateKeyBytes };
+  }
+
+  /**
+   * Build signed SMWResource connect params for a profile.
+   */
+  async function buildSignedConnectParamsForProfile(profileManager, profileUuid, keyguardKey, db) {
+    await prepareRhserverNostrSigner(profileManager, profileUuid, keyguardKey, db);
+
     const profile = profileManager.getProfile(profileUuid);
     const { buildSignedProfileConnectParams } = require('../lib/profile-connect-params');
     const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(profileUuid);
-    if (!primaryKeypair?.privateKey) {
-      throw new Error('Profile Guard unlock required to sign connect URL');
-    }
-
-    const { finalizeEvent, getPublicKey } = require('nostr-tools');
+    const { getPublicKey } = require('nostr-tools');
     const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
     const signingPubkeyHex = getPublicKey(privateKeyBytes);
     const signNostrMessage = async (message) => {
       const tsMatch = String(message).match(/:(\d+)$/);
       const created_at = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000);
+      const { finalizeEvent } = require('nostr-tools');
       return finalizeEvent({
         kind: 1,
         created_at,

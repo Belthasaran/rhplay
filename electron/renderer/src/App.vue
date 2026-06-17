@@ -14252,6 +14252,10 @@ async function refreshProfileFromSmwresource() {
     await showAlert('Refresh is limited to once per minute.', 'Please wait');
     return;
   }
+  if (!(await ensureProfileGuardUnlockedForConnect())) {
+    profileCreationSmwresourceStatus.value = 'Unlock Profile Guard, then click Refresh.';
+    return;
+  }
   profileCreationSmwresourceLastRefreshAt.value = now;
   profileCreationSmwresourceStatus.value = 'Refreshing…';
   try {

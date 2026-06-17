@@ -380,7 +380,6 @@ class RHServerManager {
   }
 
   async queueStageFeedback(feedback, keyguardKey = null) {
-    // Back-compat: keep the call site API but just schedule a batch flush.
     const key = keyguardKey || global.keyguardKey || null;
     this.enqueueStageFeedbackFlush(key);
     return { queued: true };

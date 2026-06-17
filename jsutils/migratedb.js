@@ -1631,8 +1631,14 @@ const MIGRATIONS = {
     {
       id: 'clientdata_068b_stage_feedback_rhserver_sync',
       description: 'Key stage_feedback by applied_patches_hash and track RHServer sync + review state',
-      type: 'js',
-      file: resolveRelative('electron/sql/migrations/069_clientdata_stage_feedback_rhserver_sync.js'),
+      type: 'function',
+      apply(db) {
+        // Stored as a module exporting (db) => void, not a standalone script.
+        // This must run inside the app at startup (DatabaseManager autoApplyMigrations),
+        // so we run it in-process rather than spawning Node.
+        const applyMigration = require(resolveRelative('electron/sql/migrations/069_clientdata_stage_feedback_rhserver_sync.js'));
+        applyMigration(db);
+      },
       skipIf(db) {
         return columnExists(db, 'stage_feedback', 'rhserver_sync_pending')
           && columnExists(db, 'stage_feedback', 'applied_patches_hash')
@@ -1680,6 +1686,22 @@ const MIGRATIONS = {
       skipIf(db) {
         return columnExists(db, 'rhserver_tokens', 'access_expires_at')
           && columnExists(db, 'rhserver_tokens', 'refresh_expires_at');
+      },
+    },
+    {
+      // Repair migration: some dev DBs recorded 068b but did not rebuild stage_feedback.
+      // This re-applies the stage_feedback patchhash+sync schema if it's still missing.
+      id: 'clientdata_073_stage_feedback_patchhash_sync_repair',
+      description: 'Ensure stage_feedback has applied_patches_hash/content_hash + RHServer sync columns',
+      type: 'function',
+      apply(db) {
+        const applyMigration = require(resolveRelative('electron/sql/migrations/069_clientdata_stage_feedback_rhserver_sync.js'));
+        applyMigration(db);
+      },
+      skipIf(db) {
+        return columnExists(db, 'stage_feedback', 'rhserver_sync_pending')
+          && columnExists(db, 'stage_feedback', 'applied_patches_hash')
+          && columnExists(db, 'stage_feedback', 'content_hash');
       },
     },
   ],

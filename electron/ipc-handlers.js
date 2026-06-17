@@ -87,6 +87,59 @@ function getKeyguardKey(event) {
   return event?.sender?.session?.keyguardKey || null;
 }
 
+function stableJson(obj) {
+  if (obj === null || obj === undefined) return 'null';
+  if (typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return `[${obj.map((v) => stableJson(v)).join(',')}]`;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableJson(obj[k])}`).join(',')}}`;
+}
+
+function sha256Hex(s) {
+  return crypto.createHash('sha256').update(String(s)).digest('hex');
+}
+
+function canonicalizeAppliedPatches(appliedPatches) {
+  if (!appliedPatches) return '';
+  const raw = String(appliedPatches).trim();
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((s) => String(s || '').trim())
+        .filter(Boolean)
+        .sort()
+        .join('\n');
+    }
+  } catch { /* ignore */ }
+  return raw
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .sort()
+    .join('\n');
+}
+
+function computeStageFeedbackHashes(fields) {
+  const appliedCanonical = canonicalizeAppliedPatches(fields.applied_patches || '');
+  const appliedHash = sha256Hex(appliedCanonical);
+  const content = {
+    translevel: fields.translevel || null,
+    levelname: fields.levelname || null,
+    difficulty_feedback: fields.difficulty_feedback ?? null,
+    comment: fields.comment || null,
+    current_difficulty: fields.current_difficulty ?? null,
+    flag_values: fields.flag_values || null,
+    global_conditions: fields.global_conditions || null,
+    tag_feedback: fields.tag_feedback || null,
+    test_result: fields.test_result || null,
+    stage_uuid: fields.stage_uuid || null
+  };
+  const contentHash = sha256Hex(stableJson(content));
+  return { appliedHash, contentHash };
+}
+
 /**
  * Register all IPC handlers with the database manager
  * @param {DatabaseManager} dbManager - Database manager instance
@@ -8469,12 +8522,25 @@ function registerDatabaseHandlers(dbManager) {
       const db = dbManager.getConnection('clientdata');
       const rhdataDb = dbManager.getConnection('rhdata');
       const resolvedPlaylevel = defaultPlaylevelPatchCode(playlevel_patchcode);
+      const { appliedHash: appliedPatchesHash, contentHash } = computeStageFeedbackHashes({
+        translevel,
+        levelname,
+        difficulty_feedback,
+        comment,
+        current_difficulty,
+        flag_values,
+        global_conditions,
+        applied_patches,
+        test_result,
+        tag_feedback,
+        stage_uuid
+      });
       
-      // Check if feedback already exists for triplet
+      // Check if feedback already exists for key
       const existing = db.prepare(`
         SELECT feedback_uuid FROM stage_feedback
-        WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ?
-      `).get(gameid, levelnumber, resolvedPlaylevel);
+        WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ? AND applied_patches_hash = ?
+      `).get(gameid, levelnumber, resolvedPlaylevel, appliedPatchesHash);
       
       const feedbackUuid = existing?.feedback_uuid || crypto.randomUUID();
       
@@ -8489,12 +8555,16 @@ function registerDatabaseHandlers(dbManager) {
               flag_values = ?,
               global_conditions = ?,
               applied_patches = ?,
+              applied_patches_hash = ?,
               playlevel_patchcode = ?,
               feedback_source = ?,
               test_result = ?,
               tag_feedback = ?,
               stage_uuid = ?,
+              content_hash = ?,
               rhserver_sync_pending = 1,
+              rhserver_review_state = NULL,
+              rhserver_review_state_set_at = NULL,
               updated_at = strftime('%s', 'now')
           WHERE feedback_uuid = ?
         `).run(
@@ -8506,11 +8576,13 @@ function registerDatabaseHandlers(dbManager) {
           flag_values || null,
           global_conditions || null,
           applied_patches || null,
+          appliedPatchesHash,
           resolvedPlaylevel,
           feedback_source || null,
           test_result || null,
           tag_feedback || null,
           stage_uuid || null,
+          contentHash,
           feedbackUuid
         );
       } else {
@@ -8518,11 +8590,12 @@ function registerDatabaseHandlers(dbManager) {
           INSERT INTO stage_feedback
             (feedback_uuid, gameid, levelnumber, translevel, levelname,
              difficulty_feedback, comment, current_difficulty, flag_values,
-             global_conditions, applied_patches, playlevel_patchcode,
+             global_conditions, applied_patches, applied_patches_hash, playlevel_patchcode,
              feedback_source, test_result, tag_feedback, stage_uuid,
+             content_hash,
              rhserver_sync_pending,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), strftime('%s', 'now'))
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), strftime('%s', 'now'))
         `).run(
           feedbackUuid,
           gameid,
@@ -8535,11 +8608,13 @@ function registerDatabaseHandlers(dbManager) {
           flag_values || null,
           global_conditions || null,
           applied_patches || null,
+          appliedPatchesHash,
           resolvedPlaylevel,
           feedback_source || null,
           test_result || null,
           tag_feedback || null,
-          stage_uuid || null
+          stage_uuid || null,
+          contentHash
         );
       }
 

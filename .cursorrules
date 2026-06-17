@@ -26,6 +26,7 @@ documentation.
 
 ### Schema Documentation
 **REQUIRED:** All new database schema changes MUST be documented in `docs/SCHEMACHANGES.md`.
+Schema migrations are to be applied at program startu.
 
 When making any schema changes (adding tables, modifying columns, adding indexes, etc.):
 1. Document the change in `docs/SCHEMACHANGES.md` with:

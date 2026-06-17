@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
-const { finalizeEvent, generateSecretKey } = require('nostr-tools');
+const { finalizeEvent, generateSecretKey, getPublicKey } = require('nostr-tools');
 const {
   buildProfileConnectParams,
   buildSignedProfileConnectParams,
@@ -53,6 +53,19 @@ async function run() {
     connect_ts: signed.connect_ts
   });
   assert.strictEqual(event.content, expected);
+
+  const staleProfile = {
+    ...profile,
+    primaryKeypair: { type: 'Nostr', publicKeyHex: 'b'.repeat(64) }
+  };
+  const signingPubkeyHex = getPublicKey(sk);
+  const signedWithSigner = await buildSignedProfileConnectParams(staleProfile, null, {
+    signNostrMessage,
+    signingPubkeyHex
+  });
+  assert.strictEqual(signedWithSigner.nostr_pubkey, signingPubkeyHex);
+  const signedEvent = JSON.parse(Buffer.from(signedWithSigner.connect_event, 'base64url').toString('utf8'));
+  assert.strictEqual(signedEvent.pubkey, signingPubkeyHex);
 
   assert.throws(() => buildProfileConnectParams(null), /Profile not found/);
   console.log('✓ test_profile_connect_params passed');

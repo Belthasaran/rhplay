@@ -445,6 +445,21 @@ async function ensurePrimaryNostrKeypairForConnect({ db, profileManager, profile
   const masterSeed = decryptMasterSeed(profileRow.encrypted_master_seed, keyguardKey);
   const nostrKeypair = await generateNostrKeypairFromMasterSeed(masterSeed);
   profileManager.migrateKeypairToDatabase(profileUuid, nostrKeypair, 'primary');
+
+  const profile = profileManager.getProfile(profileUuid);
+  if (profile) {
+    profile.primaryKeypair = {
+      ...(profile.primaryKeypair || {}),
+      type: nostrKeypair.type,
+      publicKey: nostrKeypair.publicKey,
+      publicKeyHex: nostrKeypair.publicKeyHex,
+      fingerprint: nostrKeypair.fingerprint,
+      isSeedBased: true,
+      derivationPath: nostrKeypair.derivationPath
+    };
+    profileManager.saveProfile(profile, false);
+  }
+
   return { ok: true, derived: true };
 }
 

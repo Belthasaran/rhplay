@@ -10041,8 +10041,9 @@ function registerDatabaseHandlers(dbManager) {
       throw new Error('Profile Guard unlock required to sign connect URL');
     }
 
-    const { finalizeEvent } = require('nostr-tools');
+    const { finalizeEvent, getPublicKey } = require('nostr-tools');
     const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
+    const signingPubkeyHex = getPublicKey(privateKeyBytes);
     const signNostrMessage = async (message) => {
       const tsMatch = String(message).match(/:(\d+)$/);
       const created_at = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000);
@@ -10056,7 +10057,8 @@ function registerDatabaseHandlers(dbManager) {
 
     return buildSignedProfileConnectParams(profile, profileUuid, {
       profileManager,
-      signNostrMessage
+      signNostrMessage,
+      signingPubkeyHex
     });
   }
 

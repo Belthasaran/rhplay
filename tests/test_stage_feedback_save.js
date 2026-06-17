@@ -24,14 +24,17 @@ function createTestClientdataDb(dbPath) {
   db.exec(fs.readFileSync(path.join(root, '043_clientdata_stage_feedback_extend.sql'), 'utf8'));
   db.exec(fs.readFileSync(path.join(root, '067_clientdata_stage_feedback_test_fields.sql'), 'utf8'));
   db.exec(fs.readFileSync(path.join(root, '068_clientdata_stage_feedback_triplet_key.sql'), 'utf8'));
+  // Upgrade to patch-hash key + RHServer sync columns.
+  require(path.join(root, '069_clientdata_stage_feedback_rhserver_sync.js'))(db);
   return db;
 }
 
 function saveStageFeedback(db, payload) {
   const playlevel = defaultPlaylevelPatchCode(payload.playlevel_patchcode);
+  const appliedPatchesHash = payload.applied_patches_hash || '';
   const existing = db.prepare(
-    'SELECT feedback_uuid FROM stage_feedback WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ?'
-  ).get(payload.gameid, payload.levelnumber, playlevel);
+    'SELECT feedback_uuid FROM stage_feedback WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ? AND applied_patches_hash = ?'
+  ).get(payload.gameid, payload.levelnumber, playlevel, appliedPatchesHash);
 
   const feedbackUuid = existing?.feedback_uuid || crypto.randomUUID();
 
@@ -43,7 +46,8 @@ function saveStageFeedback(db, payload) {
         test_result = ?,
         tag_feedback = ?,
         stage_uuid = ?,
-        playlevel_patchcode = ?
+        playlevel_patchcode = ?,
+        applied_patches_hash = ?
       WHERE feedback_uuid = ?
     `).run(
       payload.difficulty_feedback,
@@ -52,14 +56,15 @@ function saveStageFeedback(db, payload) {
       payload.tag_feedback,
       payload.stage_uuid,
       playlevel,
+      appliedPatchesHash,
       feedbackUuid
     );
   } else {
     db.prepare(`
       INSERT INTO stage_feedback
         (feedback_uuid, gameid, levelnumber, difficulty_feedback,
-         feedback_source, test_result, tag_feedback, stage_uuid, playlevel_patchcode)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         feedback_source, test_result, tag_feedback, stage_uuid, playlevel_patchcode, applied_patches_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       feedbackUuid,
       payload.gameid,
@@ -69,7 +74,8 @@ function saveStageFeedback(db, payload) {
       payload.test_result,
       payload.tag_feedback,
       payload.stage_uuid,
-      playlevel
+      playlevel,
+      appliedPatchesHash
     );
   }
 
@@ -160,6 +166,7 @@ function testUpsertReplacesSameTriplet() {
     tag_feedback: JSON.stringify({ troll: true }),
     stage_uuid: 's2',
     playlevel_patchcode: '2lvno',
+    applied_patches_hash: '',
   });
 
   const count = db.prepare('SELECT COUNT(*) AS c FROM stage_feedback').get().c;
@@ -191,11 +198,45 @@ function testNullPlaylevelBackfill() {
   db.close();
 }
 
+function testDifferentAppliedPatchesHashCreatesNewRow() {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-fb-save-'));
+  const dbPath = path.join(tmpDir, 'clientdata.db');
+  const db = createTestClientdataDb(dbPath);
+
+  saveStageFeedback(db, {
+    gameid: '300',
+    levelnumber: '003',
+    difficulty_feedback: 1,
+    feedback_source: 'prepare_run',
+    test_result: null,
+    tag_feedback: null,
+    stage_uuid: null,
+    playlevel_patchcode: '2lvno',
+    applied_patches_hash: 'aaa'
+  });
+  saveStageFeedback(db, {
+    gameid: '300',
+    levelnumber: '003',
+    difficulty_feedback: 2,
+    feedback_source: 'prepare_run',
+    test_result: null,
+    tag_feedback: null,
+    stage_uuid: null,
+    playlevel_patchcode: '2lvno',
+    applied_patches_hash: 'bbb'
+  });
+
+  const count = db.prepare('SELECT COUNT(*) AS c FROM stage_feedback WHERE gameid = ? AND levelnumber = ?').get('300', '003').c;
+  assert(count === 2, 'Expected two rows for different applied_patches_hash');
+  db.close();
+}
+
 function main() {
   testSaveWithTestFields();
   testTripletAllowsDifferentPlaylevel();
   testUpsertReplacesSameTriplet();
   testNullPlaylevelBackfill();
+  testDifferentAppliedPatchesHashCreatesNewRow();
   console.log('✅ test_stage_feedback_save passed');
 }
 

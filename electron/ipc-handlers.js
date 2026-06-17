@@ -8494,6 +8494,7 @@ function registerDatabaseHandlers(dbManager) {
               test_result = ?,
               tag_feedback = ?,
               stage_uuid = ?,
+              rhserver_sync_pending = 1,
               updated_at = strftime('%s', 'now')
           WHERE feedback_uuid = ?
         `).run(
@@ -8519,8 +8520,9 @@ function registerDatabaseHandlers(dbManager) {
              difficulty_feedback, comment, current_difficulty, flag_values,
              global_conditions, applied_patches, playlevel_patchcode,
              feedback_source, test_result, tag_feedback, stage_uuid,
+             rhserver_sync_pending,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), strftime('%s', 'now'))
         `).run(
           feedbackUuid,
           gameid,
@@ -8563,25 +8565,9 @@ function registerDatabaseHandlers(dbManager) {
         console.warn('[db:stage:save-feedback] JSONL log append failed:', logErr.message);
       }
 
+      // Debounced batch sync (no per-save network chatter).
       setImmediate(() => {
-        rhServerManager.queueStageFeedback({
-          gameid,
-          levelnumber,
-          translevel,
-          levelname,
-          difficulty_feedback,
-          comment,
-          current_difficulty,
-          flag_values,
-          global_conditions,
-          applied_patches,
-          playlevel_patchcode: resolvedPlaylevel,
-          feedback_source,
-          test_result,
-          tag_feedback,
-          stage_uuid,
-          feedback_uuid: feedbackUuid
-        }, global.keyguardKey || null).catch(() => {});
+        rhServerManager.enqueueStageFeedbackFlush(getKeyguardKey(event), 2500);
       });
       
       return { success: true, feedback_uuid: feedbackUuid };

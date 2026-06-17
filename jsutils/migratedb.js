@@ -1629,6 +1629,19 @@ const MIGRATIONS = {
       },
     },
     {
+      id: 'clientdata_068b_stage_feedback_rhserver_sync',
+      description: 'Key stage_feedback by applied_patches_hash and track RHServer sync + review state',
+      type: 'js',
+      file: resolveRelative('electron/sql/migrations/069_clientdata_stage_feedback_rhserver_sync.js'),
+      skipIf(db) {
+        return columnExists(db, 'stage_feedback', 'rhserver_sync_pending')
+          && columnExists(db, 'stage_feedback', 'applied_patches_hash')
+          && (db.prepare(`
+            SELECT sql FROM sqlite_master WHERE type='table' AND name='stage_feedback'
+          `).get()?.sql?.includes('applied_patches_hash') ?? false);
+      },
+    },
+    {
       id: 'clientdata_069_run_plan_untested_filters',
       description: 'Add untested stage filter columns to run_plan_entries',
       type: 'sql',

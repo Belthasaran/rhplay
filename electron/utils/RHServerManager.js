@@ -207,6 +207,7 @@ class RHServerManager {
       accessToken,
       refreshToken,
       profileUuid: row.profile_uuid,
+      rhplayProfileUuid: row.profile_uuid,
       accessExpiresAt,
       refreshExpiresAt: row.refresh_expires_at,
       obtainmentTimestamp: row.obtainment_timestamp,
@@ -234,7 +235,8 @@ class RHServerManager {
 
   saveTokens(client, keyguardKey) {
     if (!keyguardKey) throw new Error('Profile Guard must be unlocked to save RHServer tokens');
-    if (!client.profileUuid) throw new Error('profileUuid required to save tokens');
+    const rhplayProfileUuid = client.rhplayProfileUuid || this.getCurrentProfileId(keyguardKey);
+    if (!rhplayProfileUuid) throw new Error('profileUuid required to save tokens');
 
     const db = this.getDb();
     const apiBase = (client.apiBaseUrl || this.getApiBaseUrl()).replace(/\/$/, '');
@@ -247,7 +249,7 @@ class RHServerManager {
     db.prepare(`
       UPDATE rhserver_tokens SET is_active = 0
       WHERE profile_uuid = ? AND api_base_url = ?
-    `).run(client.profileUuid, apiBase);
+    `).run(rhplayProfileUuid, apiBase);
 
     const tokenUuid = crypto.randomUUID();
     db.prepare(`
@@ -261,7 +263,7 @@ class RHServerManager {
       apiBase,
       client.accessToken ? encryptToken(client.accessToken, keyguardKey, 'keyguard') : null,
       client.refreshToken ? encryptToken(client.refreshToken, keyguardKey, 'keyguard') : null,
-      client.profileUuid,
+      rhplayProfileUuid,
       accessExpiresAt,
       accessExpiresAt,
       refreshExpiresAt,
@@ -269,7 +271,7 @@ class RHServerManager {
       client.expiresIn || 3600
     );
     this._client = client;
-    this._loadedProfileUuid = client.profileUuid;
+    this._loadedProfileUuid = rhplayProfileUuid;
   }
 
   async ensureAccessToken(keyguardKey) {

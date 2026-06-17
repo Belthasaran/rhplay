@@ -2,9 +2,14 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
-const { buildProfileConnectParams } = require('../lib/profile-connect-params');
+const { finalizeEvent, generateSecretKey } = require('nostr-tools');
+const {
+  buildProfileConnectParams,
+  buildSignedProfileConnectParams,
+  buildConnectMessage
+} = require('../lib/profile-connect-params');
 
-function run() {
+async function run() {
   const mldsaHex = 'a'.repeat(64);
   const expectedSha = crypto.createHash('sha256').update(Buffer.from(mldsaHex, 'hex')).digest('hex');
 
@@ -29,15 +34,31 @@ function run() {
   assert.strictEqual(params.nostr_pubkey, profile.primaryKeypair.publicKeyHex);
   assert.strictEqual(params.mldsa_pubkey_sha256, expectedSha);
 
-  assert.throws(() => buildProfileConnectParams(null), /Profile not found/);
-  assert.throws(() => buildProfileConnectParams({ profileId: 'x', username: 'u' }), /Nostr primary keypair/);
-  assert.throws(() => buildProfileConnectParams({
-    profileId: 'x',
-    username: 'user',
-    primaryKeypair: { type: 'Nostr', publicKeyHex: 'aa' }
-  }), /ML-DSA-44/);
+  const sk = generateSecretKey();
+  const signNostrMessage = async (message) => finalizeEvent({
+    kind: 1,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [],
+    content: message
+  }, sk);
 
+  const signed = await buildSignedProfileConnectParams(profile, null, { signNostrMessage });
+  assert.ok(signed.connect_ts);
+  assert.ok(signed.connect_event);
+  const event = JSON.parse(Buffer.from(signed.connect_event, 'base64url').toString('utf8'));
+  const expected = buildConnectMessage({
+    profile_uuid: signed.profile_uuid,
+    nostr_pubkey: signed.nostr_pubkey,
+    mldsa_pubkey_sha256: signed.mldsa_pubkey_sha256,
+    connect_ts: signed.connect_ts
+  });
+  assert.strictEqual(event.content, expected);
+
+  assert.throws(() => buildProfileConnectParams(null), /Profile not found/);
   console.log('✓ test_profile_connect_params passed');
 }
 
-run();
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

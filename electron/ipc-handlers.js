@@ -2098,9 +2098,11 @@ function registerDatabaseHandlers(dbManager) {
       const { finalizeEvent } = require('nostr-tools');
       const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
       const signNostrMessage = async (message) => {
+        const tsMatch = String(message).match(/:(\d+)$/);
+        const created_at = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000);
         return finalizeEvent({
           kind: 1,
-          created_at: Math.floor(Date.now() / 1000),
+          created_at,
           tags: [],
           content: message
         }, privateKeyBytes);
@@ -9992,22 +9994,71 @@ function registerDatabaseHandlers(dbManager) {
       profileManager.migrateKeypairToDatabase(finalProfileId, profile.primaryKeypair, 'primary');
       profileManager.migrateKeypairToDatabase(finalProfileId, profile.additionalKeypairs[0], 'additional');
 
-      const { buildProfileConnectParams } = require('../lib/profile-connect-params');
+      const connectParams = await buildSignedConnectParamsForProfile(
+        profileManager,
+        finalProfileId,
+        keyguardKey,
+        db
+      );
 
       return {
         success: true,
         profile: profileManager.getProfile(finalProfileId),
-        connectParams: buildProfileConnectParams(
-          profileManager.getProfile(finalProfileId),
-          finalProfileId,
-          { profileManager }
-        )
+        connectParams
       };
     } catch (error) {
       console.error('Error creating minimal profile:', error);
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Build signed SMWResource connect params for a profile.
+   */
+  async function buildSignedConnectParamsForProfile(profileManager, profileUuid, keyguardKey, db) {
+    const {
+      upgradeMldsa44KeypairIfNeeded,
+      ensurePrimaryNostrKeypairForConnect
+    } = require('./utils/ProfileSeedManager');
+
+    await upgradeMldsa44KeypairIfNeeded({
+      db,
+      profileManager,
+      profileUuid,
+      keyguardKey
+    });
+    await ensurePrimaryNostrKeypairForConnect({
+      db,
+      profileManager,
+      profileUuid,
+      keyguardKey
+    });
+
+    const profile = profileManager.getProfile(profileUuid);
+    const { buildSignedProfileConnectParams } = require('../lib/profile-connect-params');
+    const primaryKeypair = profileManager.getDecryptedPrimaryKeypair(profileUuid);
+    if (!primaryKeypair?.privateKey) {
+      throw new Error('Profile Guard unlock required to sign connect URL');
+    }
+
+    const { finalizeEvent } = require('nostr-tools');
+    const privateKeyBytes = new Uint8Array(Buffer.from(primaryKeypair.privateKey, 'hex'));
+    const signNostrMessage = async (message) => {
+      const tsMatch = String(message).match(/:(\d+)$/);
+      const created_at = tsMatch ? parseInt(tsMatch[1], 10) : Math.floor(Date.now() / 1000);
+      return finalizeEvent({
+        kind: 1,
+        created_at,
+        tags: [],
+        content: message
+      }, privateKeyBytes);
+    };
+
+    return buildSignedProfileConnectParams(profile, profileUuid, {
+      profileManager,
+      signNostrMessage
+    });
+  }
 
   /**
    * Build SMWResource connect params from an existing profile.
@@ -10028,8 +10079,7 @@ function registerDatabaseHandlers(dbManager) {
 
       const {
         needsSeedGeneration,
-        generateProfileSeedAndDidPkh,
-        upgradeMldsa44KeypairIfNeeded
+        generateProfileSeedAndDidPkh
       } = require('./utils/ProfileSeedManager');
       const db = dbManager.getConnection('clientdata');
 
@@ -10061,17 +10111,7 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
 
-      await upgradeMldsa44KeypairIfNeeded({
-        db,
-        profileManager,
-        profileUuid: pid,
-        keyguardKey
-      });
-
-      const profile = profileManager.getProfile(pid);
-      const { buildProfileConnectParams } = require('../lib/profile-connect-params');
-      const connectParams = buildProfileConnectParams(profile, pid, { profileManager });
-
+      const connectParams = await buildSignedConnectParamsForProfile(profileManager, pid, keyguardKey, db);
       return { success: true, connectParams };
     } catch (error) {
       console.error('Error building profile connect params:', error);

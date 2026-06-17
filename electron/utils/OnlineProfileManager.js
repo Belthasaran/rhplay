@@ -763,16 +763,44 @@ class OnlineProfileManager {
    * @param {string} keyUsage - Key usage ('primary', 'additional', 'admin')
    */
   migrateKeypairToDatabase(profileUuid, keypair, keyUsage) {
+    let encryptedPrivateKey = null;
+    let privateKeyFormat = keypair.privateKeyFormat
+      || (keypair.type === 'Nostr' ? 'hex' : 'pem');
+    let storageStatus = keypair.encrypted ? 'full' : 'public-only';
+
+    const rawPrivate = keypair.privateKey || null;
+    const privateKeyRaw = keypair.privateKeyRaw || null;
+
+    if ((rawPrivate || privateKeyRaw) && this.keyguardKey) {
+      const { encryptKeypairPrivateKeyForStorage } = require('./ProfileSeedManager');
+      if (rawPrivate && typeof rawPrivate === 'string' && rawPrivate.includes(':') && rawPrivate.split(':').length === 2) {
+        encryptedPrivateKey = rawPrivate;
+      } else {
+        const enc = encryptKeypairPrivateKeyForStorage(this.keyguardKey, {
+          privateKey: rawPrivate,
+          privateKeyRaw: privateKeyRaw
+            || (keypair.type === 'Nostr' && typeof rawPrivate === 'string' && /^[0-9a-f]{64}$/i.test(rawPrivate)
+              ? rawPrivate
+              : undefined)
+        });
+        encryptedPrivateKey = enc.encryptedPrivateKey;
+        privateKeyFormat = enc.privateKeyFormat;
+      }
+      storageStatus = 'full';
+    } else if ((rawPrivate || privateKeyRaw) && !this.keyguardKey) {
+      throw new Error('Profile Guard must be unlocked to save keypairs with private keys');
+    }
+
     const keypairData = {
       uuid: keypair.uuid || crypto.randomUUID(),
       type: keypair.type,
       keyUsage: keyUsage,
-      storageStatus: keypair.encrypted ? 'full' : 'public-only',
+      storageStatus,
       publicKey: keypair.publicKey,
       publicKeyHex: keypair.publicKeyHex || null,
       fingerprint: keypair.fingerprint || null,
-      encryptedPrivateKey: keypair.privateKey || null,
-      privateKeyFormat: keypair.privateKeyFormat || (keypair.type === 'Nostr' ? 'hex' : 'pem'),
+      encryptedPrivateKey,
+      privateKeyFormat,
       trustLevel: keypair.trustLevel || null,
       localName: keypair.localName || null,
       canonicalName: keypair.canonicalName || null,
@@ -833,6 +861,11 @@ class OnlineProfileManager {
       try {
         const parts = row.encrypted_private_key.split(':');
         if (parts.length !== 2) {
+          if (/^[0-9a-f]{64}$/i.test(row.encrypted_private_key)
+            && (row.keypair_type === 'Nostr' || row.keypair_type.toLowerCase().includes('nostr'))) {
+            keypair.privateKey = row.encrypted_private_key.toLowerCase();
+            return keypair;
+          }
           throw new Error('Invalid encrypted private key format');
         }
         

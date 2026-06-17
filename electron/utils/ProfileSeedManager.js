@@ -368,6 +368,86 @@ async function upgradeMldsa44KeypairIfNeeded({ db, profileManager, profileUuid, 
   return { upgraded: true };
 }
 
+/**
+ * Build seed-derived Nostr keypair (m/identity/nostr/0).
+ * @param {Buffer} masterSeed
+ * @returns {Promise<Object>}
+ */
+async function generateNostrKeypairFromMasterSeed(masterSeed) {
+  const { getPublicKey } = require('nostr-tools');
+  const nip19 = require('nostr-tools/nip19');
+  const privateKeyBytes = deriveNostrKeyFromSeed(masterSeed);
+  const privateKeyHex = Buffer.from(privateKeyBytes).toString('hex');
+  const publicKeyHex = getPublicKey(privateKeyBytes);
+  const fingerprint = crypto.createHash('sha256').update(Buffer.from(publicKeyHex, 'hex')).digest('hex');
+  const privateKeyBase64 = Buffer.from(privateKeyHex, 'hex').toString('base64');
+  const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g)
+    ? privateKeyBase64.match(/.{1,64}/g).join('\n')
+    : privateKeyBase64;
+  const privateKeyPem = `-----BEGIN NOSTR PRIVATE KEY-----\n${privateKeyWrapped}\n-----END NOSTR PRIVATE KEY-----`;
+
+  return {
+    type: 'Nostr',
+    publicKey: nip19.npubEncode(publicKeyHex),
+    privateKey: privateKeyPem,
+    publicKeyHex,
+    privateKeyRaw: privateKeyHex,
+    fingerprint,
+    isSeedBased: true,
+    derivationPath: 'm/identity/nostr/0'
+  };
+}
+
+/**
+ * Ensure primary Nostr keypair is stored encrypted and decryptable for connect signing.
+ */
+async function ensurePrimaryNostrKeypairForConnect({ db, profileManager, profileUuid, keyguardKey }) {
+  if (!keyguardKey) {
+    throw new Error('Profile Guard must be unlocked');
+  }
+
+  try {
+    const existing = profileManager.getDecryptedPrimaryKeypair(profileUuid);
+    if (existing?.privateKey) {
+      return { ok: true };
+    }
+  } catch (_) {
+    // fall through to repair / derive
+  }
+
+  const row = db.prepare(`
+    SELECT * FROM profile_keypairs
+    WHERE profile_uuid = ? AND key_usage = 'primary'
+    ORDER BY created_at ASC
+    LIMIT 1
+  `).get(profileUuid);
+
+  if (row?.encrypted_private_key && !row.encrypted_private_key.includes(':')
+    && /^[0-9a-f]{64}$/i.test(row.encrypted_private_key)) {
+    const { encryptedPrivateKey, privateKeyFormat } = encryptKeypairPrivateKeyForStorage(keyguardKey, {
+      privateKeyRaw: row.encrypted_private_key.toLowerCase()
+    });
+    db.prepare(`
+      UPDATE profile_keypairs
+      SET encrypted_private_key = ?, private_key_format = ?, storage_status = 'full'
+      WHERE keypair_uuid = ?
+    `).run(encryptedPrivateKey, privateKeyFormat, row.keypair_uuid);
+    return { ok: true, repaired: true };
+  }
+
+  const profileRow = db.prepare(`
+    SELECT encrypted_master_seed FROM user_profiles WHERE profile_uuid = ?
+  `).get(profileUuid);
+  if (!profileRow?.encrypted_master_seed || profileRow.encrypted_master_seed === '0') {
+    throw new Error('Profile has no decryptable Nostr private key. Unlock Profile Guard and try again.');
+  }
+
+  const masterSeed = decryptMasterSeed(profileRow.encrypted_master_seed, keyguardKey);
+  const nostrKeypair = await generateNostrKeypairFromMasterSeed(masterSeed);
+  profileManager.migrateKeypairToDatabase(profileUuid, nostrKeypair, 'primary');
+  return { ok: true, derived: true };
+}
+
 module.exports = {
   generateMasterSeed,
   encryptMasterSeed,
@@ -380,6 +460,8 @@ module.exports = {
   needsMldsa44Keypair,
   encryptKeypairPrivateKeyForStorage,
   generateMldsa44KeypairFromMasterSeed,
+  generateNostrKeypairFromMasterSeed,
+  ensurePrimaryNostrKeypairForConnect,
   upgradeMldsa44KeypairIfNeeded,
   deriveIdentitySeed,
   deriveNostrKeyFromSeed,

@@ -1,3 +1,4 @@
+- **RHServer secure connect**: RHPlay Nostr-signs connect payload before opening `/connect/rhplay`; wizard prompts for Profile Guard unlock when needed; legacy keypair storage is repaired automatically.
 - **RHServer auto-bind connect**: `/connect/rhplay` auto-links profile after Kinde login; wizard prompts to Refresh after browser connect.
 - **Profile ML-DSA upgrade**: Legacy profiles without an ML-DSA-44 keypair are auto-upgraded on load/connect (deterministic from master seed at `m/identity/mldsa/0`); connect params resolve keypairs from `profile_keypairs` when `profile_json` is incomplete.
 - **RHServer token storage**: API bearer/refresh tokens stored per-profile in `rhserver_tokens` with Profile Guard encryption, JWT-backed expiry, and lazy refresh on organic v1api requests.

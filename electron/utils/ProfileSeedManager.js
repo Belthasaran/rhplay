@@ -226,6 +226,148 @@ function needsSeedGeneration(db, profileUuid) {
   return !row || !row.encrypted_master_seed;
 }
 
+/**
+ * Check if profile is missing an ML-DSA-44 additional keypair (required for SMWResource connect).
+ * @param {Database} db
+ * @param {string} profileUuid
+ * @returns {boolean}
+ */
+function needsMldsa44Keypair(db, profileUuid) {
+  const row = db.prepare(`
+    SELECT 1 FROM profile_keypairs
+    WHERE profile_uuid = ? AND keypair_type = 'ML-DSA-44' AND key_usage = 'additional'
+    LIMIT 1
+  `).get(profileUuid);
+  return !row;
+}
+
+/**
+ * Encrypt a keypair private key for profile_keypairs storage (Profile Guard AES-256-CBC).
+ * @param {Buffer} keyguardKey
+ * @param {Object} keypairData - generateMldsa44KeypairFromMasterSeed output
+ * @returns {{ encryptedPrivateKey: string, privateKeyFormat: string }}
+ */
+function encryptKeypairPrivateKeyForStorage(keyguardKey, keypairData) {
+  const keyToEncrypt = keypairData.privateKeyRaw || keypairData.privateKey;
+  const keyData = keypairData.privateKeyRaw
+    ? Buffer.from(keyToEncrypt, 'hex')
+    : Buffer.from(keyToEncrypt, 'utf8');
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', keyguardKey, iv);
+  let encrypted = cipher.update(keyData);
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return {
+    encryptedPrivateKey: iv.toString('hex') + ':' + encrypted.toString('hex'),
+    privateKeyFormat: keypairData.privateKeyRaw ? 'hex' : 'pem'
+  };
+}
+
+/**
+ * Deterministically generate ML-DSA-44 keypair from master seed (m/identity/mldsa/0).
+ * @param {Buffer} masterSeed
+ * @returns {Promise<Object>}
+ */
+async function generateMldsa44KeypairFromMasterSeed(masterSeed) {
+  const mlDsaModule = await import('@noble/post-quantum/ml-dsa.js');
+  const ml_dsa44 = mlDsaModule.ml_dsa44;
+  const seed = deriveMldsa44SeedFromMasterSeed(masterSeed);
+  const { publicKey, secretKey } = ml_dsa44.keygen(seed);
+  const derivationPath = 'm/identity/mldsa/0';
+
+  const publicKeyHex = Buffer.from(publicKey).toString('hex');
+  const privateKeyHex = Buffer.from(secretKey).toString('hex');
+  const fingerprint = crypto.createHash('sha256').update(Buffer.from(publicKey)).digest('hex');
+
+  const publicKeyBase64 = Buffer.from(publicKey).toString('base64');
+  const publicKeyWrapped = publicKeyBase64.match(/.{1,64}/g)
+    ? publicKeyBase64.match(/.{1,64}/g).join('\n')
+    : publicKeyBase64;
+  const publicKeyPem = `-----BEGIN ML-DSA-44 PUBLIC KEY-----\n${publicKeyWrapped}\n-----END ML-DSA-44 PUBLIC KEY-----`;
+
+  const privateKeyBase64 = Buffer.from(secretKey).toString('base64');
+  const privateKeyWrapped = privateKeyBase64.match(/.{1,64}/g)
+    ? privateKeyBase64.match(/.{1,64}/g).join('\n')
+    : privateKeyBase64;
+  const privateKeyPem = `-----BEGIN ML-DSA-44 PRIVATE KEY-----\n${privateKeyWrapped}\n-----END ML-DSA-44 PRIVATE KEY-----`;
+
+  return {
+    type: 'ML-DSA-44',
+    publicKey: publicKeyPem,
+    privateKey: privateKeyPem,
+    publicKeyHex,
+    privateKeyRaw: privateKeyHex,
+    fingerprint,
+    isSeedBased: true,
+    derivationPath
+  };
+}
+
+/**
+ * One-time upgrade: add seed-derived ML-DSA-44 additional keypair when missing.
+ * Requires encrypted_master_seed (run seed upgrade first for legacy profiles).
+ *
+ * @param {Object} params
+ * @param {Database} params.db
+ * @param {import('./OnlineProfileManager')} params.profileManager
+ * @param {string} params.profileUuid
+ * @param {Buffer} params.keyguardKey
+ * @returns {Promise<{ upgraded: boolean }>}
+ */
+async function upgradeMldsa44KeypairIfNeeded({ db, profileManager, profileUuid, keyguardKey }) {
+  if (!needsMldsa44Keypair(db, profileUuid)) {
+    return { upgraded: false };
+  }
+
+  if (needsSeedGeneration(db, profileUuid)) {
+    throw new Error('Profile needs master seed before ML-DSA-44 keypair can be generated');
+  }
+
+  const row = db.prepare(`
+    SELECT encrypted_master_seed FROM user_profiles WHERE profile_uuid = ?
+  `).get(profileUuid);
+  const masterSeed = decryptMasterSeed(row.encrypted_master_seed, keyguardKey);
+  const mldsaKeypairData = await generateMldsa44KeypairFromMasterSeed(masterSeed);
+  const { encryptedPrivateKey, privateKeyFormat } = encryptKeypairPrivateKeyForStorage(
+    keyguardKey,
+    mldsaKeypairData
+  );
+
+  const keypairForDb = {
+    type: mldsaKeypairData.type,
+    encrypted: true,
+    publicKey: mldsaKeypairData.publicKey,
+    publicKeyHex: mldsaKeypairData.publicKeyHex,
+    fingerprint: mldsaKeypairData.fingerprint,
+    privateKey: encryptedPrivateKey,
+    privateKeyFormat,
+    isSeedBased: true,
+    derivationPath: mldsaKeypairData.derivationPath
+  };
+
+  profileManager.migrateKeypairToDatabase(profileUuid, keypairForDb, 'additional');
+
+  const profile = profileManager.getProfile(profileUuid);
+  if (profile) {
+    if (!Array.isArray(profile.additionalKeypairs)) {
+      profile.additionalKeypairs = [];
+    }
+    const hasMldsa = profile.additionalKeypairs.some((kp) => kp && kp.type === 'ML-DSA-44');
+    if (!hasMldsa) {
+      profile.additionalKeypairs.push({
+        type: mldsaKeypairData.type,
+        publicKey: mldsaKeypairData.publicKey,
+        publicKeyHex: mldsaKeypairData.publicKeyHex,
+        fingerprint: mldsaKeypairData.fingerprint,
+        isSeedBased: true,
+        derivationPath: mldsaKeypairData.derivationPath
+      });
+      profileManager.saveProfile(profile, false);
+    }
+  }
+
+  return { upgraded: true };
+}
+
 module.exports = {
   generateMasterSeed,
   encryptMasterSeed,
@@ -235,6 +377,10 @@ module.exports = {
   generateDidPkh,
   generateProfileSeedAndDidPkh,
   needsSeedGeneration,
+  needsMldsa44Keypair,
+  encryptKeypairPrivateKeyForStorage,
+  generateMldsa44KeypairFromMasterSeed,
+  upgradeMldsa44KeypairIfNeeded,
   deriveIdentitySeed,
   deriveNostrKeyFromSeed,
   deriveMldsa44SeedFromMasterSeed

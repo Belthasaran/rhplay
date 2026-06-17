@@ -780,7 +780,9 @@ class OnlineProfileManager {
       label: keypair.label || null,
       comments: keypair.comments || null,
       nostrEventId: keypair.nostrEventId || null,
-      nostrStatus: keypair.nostrStatus || null
+      nostrStatus: keypair.nostrStatus || null,
+      isSeedBased: keypair.isSeedBased === true || keypair.isSeedBased === 1,
+      derivationPath: keypair.derivationPath || null
     };
     
     this.saveProfileKeypair(profileUuid, keypairData);

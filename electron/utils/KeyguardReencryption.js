@@ -255,6 +255,44 @@ function reencryptAllSecrets(
     }
     
     // ========================================================================
+    // 6b. RHSERVER TOKENS: encrypted_access_token and encrypted_refresh_token
+    // ========================================================================
+    const rhserverTokens = db.prepare(`
+      SELECT token_uuid, encrypted_access_token, encrypted_refresh_token, encryption_method
+      FROM rhserver_tokens
+      WHERE encryption_method IS NULL OR encryption_method = 'keyguard'
+    `).all();
+
+    for (const row of rhserverTokens) {
+      try {
+        let accessToken;
+        let refreshToken = null;
+        if (row.encryption_method === 'vault') {
+          continue;
+        }
+        try {
+          accessToken = decryptWithKeyguard(row.encrypted_access_token, oldKeyguardKey);
+        } catch (e) {
+          continue;
+        }
+        const reencryptedAccess = encryptWithKeyguard(accessToken, newKeyguardKey);
+        let reencryptedRefresh = row.encrypted_refresh_token;
+        if (row.encrypted_refresh_token) {
+          refreshToken = decryptWithKeyguard(row.encrypted_refresh_token, oldKeyguardKey);
+          reencryptedRefresh = encryptWithKeyguard(refreshToken, newKeyguardKey);
+        }
+        db.prepare(`
+          UPDATE rhserver_tokens
+          SET encrypted_access_token = ?, encrypted_refresh_token = ?
+          WHERE token_uuid = ?
+        `).run(reencryptedAccess, reencryptedRefresh, row.token_uuid);
+        reencryptedCount += row.encrypted_refresh_token ? 2 : 1;
+      } catch (error) {
+        throw new Error(`Failed to re-encrypt RHServer tokens for ${row.token_uuid}: ${error.message}`);
+      }
+    }
+
+    // ========================================================================
     // 7. ENCRYPTION KEYS: keydata (only where encrypted = 1)
     // ========================================================================
     const encryptionKeys = db.prepare(`
@@ -456,6 +494,28 @@ function verifyReencryption(db, keyguardKey) {
       }
     }
     
+    // Verify rhserver_tokens (keyguard-encrypted only)
+    const rhserverTokenRows = db.prepare(`
+      SELECT token_uuid, encrypted_access_token, encrypted_refresh_token, encryption_method
+      FROM rhserver_tokens
+      WHERE is_active = 1 AND (encryption_method IS NULL OR encryption_method = 'keyguard')
+    `).all();
+
+    for (const row of rhserverTokenRows) {
+      try {
+        if (row.encrypted_access_token) {
+          decryptWithKeyguard(row.encrypted_access_token, keyguardKey);
+          verifiedCount++;
+        }
+        if (row.encrypted_refresh_token) {
+          decryptWithKeyguard(row.encrypted_refresh_token, keyguardKey);
+          verifiedCount++;
+        }
+      } catch (error) {
+        errors.push(`rhserver_tokens (token ${row.token_uuid}): ${error.message}`);
+      }
+    }
+
     // Verify encryption_keys.keydata (where encrypted = 1)
     const encryptionKeys = db.prepare(`
       SELECT key_uuid, keydata 
@@ -488,6 +548,8 @@ function verifyReencryption(db, keyguardKey) {
 
 module.exports = {
   reencryptAllSecrets,
-  verifyReencryption
+  verifyReencryption,
+  encryptWithKeyguard,
+  decryptWithKeyguard
 };
 

@@ -13759,12 +13759,18 @@ async function loadOnlineProfile() {
     
     // Check if profile was upgraded with master seed (one-time upgrade for existing profiles)
     if (profile && (profile as any)._seedUpgraded) {
-      // Remove the flag from profile object
       delete (profile as any)._seedUpgraded;
-      
-      // Show alert to inform user their profile has been upgraded
       await showAlert(
         'Your profile has been upgraded with a master seed. ' +
+        'Please export and backup your profile again to ensure you have the latest encrypted data.',
+        'Profile Upgraded'
+      );
+    }
+
+    if (profile && (profile as any)._mldsaUpgraded) {
+      delete (profile as any)._mldsaUpgraded;
+      await showAlert(
+        'Your profile has been upgraded with an ML-DSA-44 signing key (derived from your master seed). ' +
         'Please export and backup your profile again to ensure you have the latest encrypted data.',
         'Profile Upgraded'
       );
@@ -14129,6 +14135,7 @@ async function checkAndCreateProfileIfNeeded() {
       profileCreationWizardStep.value = 2;
       initializeProfileCreationWizard('create-first');
       profileCreationHostingTab.value = hostingMode === 'local' ? 'local' : 'smwresource';
+      await loadProfileCreationConnectParams();
     }
     return;
   }
@@ -14140,6 +14147,7 @@ async function checkAndCreateProfileIfNeeded() {
       profileCreationWizardStep.value = 2;
       initializeProfileCreationWizard('create-first');
       profileCreationHostingTab.value = 'local';
+      await loadProfileCreationConnectParams();
     }
     return;
   }
@@ -14158,10 +14166,38 @@ function openProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'creat
   }
 }
 
+async function loadProfileCreationConnectParams() {
+  if (profileCreationConnectParams.value) {
+    return true;
+  }
+  if (!isElectronAvailable()) {
+    return false;
+  }
+
+  const profileId = profileCreationData.value.profileId || onlineProfile.value?.profileId;
+  if (!profileId) {
+    return false;
+  }
+
+  try {
+    const res = await (window as any).electronAPI.getProfileConnectParams?.({ profileId });
+    if (res?.success && res.connectParams) {
+      profileCreationConnectParams.value = res.connectParams;
+      return true;
+    }
+    console.warn('[Profile Wizard] Failed to load connect params:', res?.error);
+    return false;
+  } catch (error) {
+    console.warn('[Profile Wizard] Error loading connect params:', error);
+    return false;
+  }
+}
+
 async function openSmwresourceConnectFromWizard() {
   try {
+    await loadProfileCreationConnectParams();
     if (!profileCreationConnectParams.value) {
-      await showAlert('Profile connect parameters not available yet.', 'Connect');
+      await showAlert('Profile connect parameters are not available. Ensure your profile has Nostr and ML-DSA-44 keys.', 'Connect');
       return;
     }
     const qp = new URLSearchParams(profileCreationConnectParams.value as any).toString();
@@ -14184,6 +14220,15 @@ async function refreshProfileFromSmwresource() {
   profileCreationSmwresourceLastRefreshAt.value = now;
   profileCreationSmwresourceStatus.value = 'Refreshing…';
   try {
+    const status = await (window as any).electronAPI.getRhserverStatus?.();
+    if (!status?.connected) {
+      const conn = await (window as any).electronAPI.connectRhserver?.({});
+      if (!conn?.success) {
+        await showAlert(`API connect failed: ${conn?.error || 'Profile Guard unlock and Nostr keys required'}`, 'Connect');
+        profileCreationSmwresourceStatus.value = 'Connecting…';
+        return;
+      }
+    }
     const res = await (window as any).electronAPI.refreshRhserverProfile?.();
     if (!res?.success) {
       await showAlert(`Refresh failed: ${res?.error || 'unknown error'}`, 'Refresh');
@@ -19632,6 +19677,10 @@ function initializeProfileCreationWizard(mode: 'create-first' | 'new-profile' = 
   profileCreationWizardInitialized.value = true;
   
   console.log('[Profile Wizard] Initialized with profileId:', profileId);
+
+  if (existingProfile?.primaryKeypair) {
+    void loadProfileCreationConnectParams();
+  }
 }
 
 function validateUsername() {

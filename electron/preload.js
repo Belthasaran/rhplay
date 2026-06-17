@@ -1038,6 +1038,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {Object} params - {profileId?: string, username: string, displayName?: string, defaultHostingMode?: string}
    */
   createMinimalOnlineProfile: (params) => ipcRenderer.invoke('online:profile:create-minimal', params),
+  getProfileConnectParams: (params) => ipcRenderer.invoke('online:profile:get-connect-params', params),
 
   /**
    * Update profile wizard hosting/sync state.
@@ -1232,6 +1233,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openRhserverConnect: () => ipcRenderer.invoke('online:rhserver:open-connect'),
   openRhserverConnectWithUrl: (params) => ipcRenderer.invoke('online:rhserver:open-connect', params),
   connectRhserver: (params) => ipcRenderer.invoke('online:rhserver:connect', params),
+  disconnectRhserver: (params) => ipcRenderer.invoke('online:rhserver:disconnect', params),
   refreshRhserverProfile: () => ipcRenderer.invoke('online:rhserver:refresh-profile'),
   // Profile publishing preferences
   getProfilePublishingPreferences: () => ipcRenderer.invoke('online:profile:publishing-preferences:get'),

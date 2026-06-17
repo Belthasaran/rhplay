@@ -14166,8 +14166,35 @@ function openProfileCreationWizard(mode: 'create-first' | 'new-profile' = 'creat
   }
 }
 
-async function loadProfileCreationConnectParams() {
-  if (profileCreationConnectParams.value) {
+async function ensureProfileGuardUnlockedForConnect(): Promise<boolean> {
+  if (!isElectronAvailable()) {
+    return false;
+  }
+  if (!profileGuardEnabled.value || profileGuardUnlocked.value) {
+    return true;
+  }
+  try {
+    const unlockResult = await (window as any).electronAPI.unlockProfileGuard();
+    if (unlockResult?.success) {
+      profileGuardUnlocked.value = true;
+      return true;
+    }
+  } catch (error) {
+    console.warn('[Profile Wizard] Profile Guard auto-unlock failed:', error);
+  }
+  if (!welcomeWizardOpen.value) {
+    showProfileGuardPasswordPrompt.value = true;
+    await showAlert(
+      'Profile Guard must be unlocked to sign the SMWResource connect link. Enter your Profile Guard password, then try Connect again.',
+      'Profile Guard Locked'
+    );
+  }
+  return false;
+}
+
+async function loadProfileCreationConnectParams(force = false) {
+  const cached = profileCreationConnectParams.value as Record<string, unknown> | null;
+  if (!force && cached?.connect_event) {
     return true;
   }
   if (!isElectronAvailable()) {
@@ -14176,6 +14203,10 @@ async function loadProfileCreationConnectParams() {
 
   const profileId = profileCreationData.value.profileId || onlineProfile.value?.profileId;
   if (!profileId) {
+    return false;
+  }
+
+  if (!(await ensureProfileGuardUnlockedForConnect())) {
     return false;
   }
 
@@ -14195,9 +14226,13 @@ async function loadProfileCreationConnectParams() {
 
 async function openSmwresourceConnectFromWizard() {
   try {
-    await loadProfileCreationConnectParams();
-    if (!profileCreationConnectParams.value) {
-      await showAlert('Profile connect parameters are not available. Ensure your profile has Nostr and ML-DSA-44 keys.', 'Connect');
+    profileCreationConnectParams.value = null;
+    const loaded = await loadProfileCreationConnectParams(true);
+    if (!loaded || !profileCreationConnectParams.value) {
+      await showAlert(
+        'Could not prepare connect link. Unlock Profile Guard, then ensure your profile has Nostr and ML-DSA-44 keys.',
+        'Connect'
+      );
       return;
     }
     const qp = new URLSearchParams(profileCreationConnectParams.value as any).toString();

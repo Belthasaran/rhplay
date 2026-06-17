@@ -315,6 +315,28 @@ class RHServerManager {
     return { success: true };
   }
 
+  async disconnectRemote(keyguardKey, profileUuid = null) {
+    if (!keyguardKey) throw new Error('Profile Guard must be unlocked');
+    const pid = profileUuid || this.getCurrentProfileId(keyguardKey);
+    if (!pid) throw new Error('No current profile');
+
+    const ensured = await this.ensureAccessToken(keyguardKey);
+    if (!ensured.ok) {
+      // Still clear local tokens if we can't reach server or are already disconnected.
+      this.disconnect(pid, keyguardKey);
+      return { success: false, error: ensured.reason };
+    }
+
+    const res = await ensured.client.apiRequest('POST', '/profile/disconnect', {});
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Remote disconnect failed: HTTP ${res.status} ${txt}`);
+    }
+
+    this.disconnect(pid, keyguardKey);
+    return { success: true };
+  }
+
   async connect({ profileUuid, signNostrMessage, keyguardKey }) {
     if (!keyguardKey) throw new Error('Profile Guard must be unlocked');
     const client = this.getClient(keyguardKey);

@@ -282,16 +282,11 @@
 
                 <div v-else class="profile-guard-status">
                   <div class="profile-guard-status-item">
-                    <span class="status-indicator connected">●</span>
-                    <span>Profile Guard is active</span>
-                  </div>
-                  <div class="profile-guard-actions">
-                    <button @click="changeProfileGuardKey" class="btn-secondary-small">
+                    <button @click="changeProfileGuardKey" class="btn-secondary-small" style="margin-right: 10px;">
                       Change Master Password
                     </button>
-                    <button @click="removeProfileGuard" class="btn-danger-small" style="visibility: hidden;">
-                      Remove Profile Guard
-                    </button>
+                    <span class="status-indicator connected">●</span>
+                    <span>Profile Guard is active</span>
                   </div>
                 </div>
               </div>
@@ -312,9 +307,45 @@
                     <span class="profile-summary-label">My Current Profile:</span>
                     <span class="profile-summary-username">{{ onlineProfile.username || 'Unknown' }}</span>
                   </div>
-                  <button @click="openProfileDetailsModal" class="btn-secondary-small">
-                    Details/Edit
-                  </button>
+                  <div class="profile-summary-actions">
+                    <button @click="openProfileDetailsModal" class="btn-secondary-small">
+                      Details/Edit
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="onlineProfile?.primaryKeypair" class="profile-summary" style="margin-top: 8px;">
+                  <div class="profile-summary-info">
+                    <span class="profile-summary-label">SMWResource:</span>
+                    <span class="profile-summary-username">
+                      {{ smwresourceStatusText }}
+                    </span>
+                  </div>
+                  <div class="profile-summary-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button
+                      v-if="!smwresourceConnected"
+                      @click="openSmwresourceConnectFromProfileBox"
+                      class="btn-primary-small"
+                      :disabled="smwresourceBusy || !onlineProfile"
+                    >
+                      Connect
+                    </button>
+                    <button
+                      v-else
+                      @click="disconnectSmwresourceFromProfileBox"
+                      class="btn-danger-small"
+                      :disabled="smwresourceBusy"
+                    >
+                      Disconnect
+                    </button>
+                    <button
+                      @click="refreshSmwresourceFromProfileBox"
+                      class="btn-secondary-small"
+                      :disabled="smwresourceBusy || !onlineProfile"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -10103,8 +10134,18 @@ const onlineDropdownOpen = ref(false);
 const onlineShowAdminOptions = ref(false);
 const rhserverTestModeOn = ref(false);
 const rhserverTestModeToggleEnabled = ref(true);
+const smwresourceConnected = ref(false);
+const smwresourceNeedsReauth = ref(false);
+const smwresourceBusy = ref(false);
+const smwresourceLastStatusError = ref<string | null>(null);
 const onlineActiveTab = ref<'profile-keys' | 'trust-declarations' | 'trust-assignments' | 'moderation' | 'relay-health' | 'publishing' | 'profile-publishing' | 'ratings-publishing' | 'submissions'>('profile-keys');
 const filterSearchInput = ref<HTMLInputElement | null>(null);
+
+const smwresourceStatusText = computed(() => {
+  if (smwresourceLastStatusError.value) return `Error (${smwresourceLastStatusError.value})`;
+  if (smwresourceConnected.value) return smwresourceNeedsReauth.value ? 'Needs re-auth' : 'Connected';
+  return 'Not connected';
+});
 
 // Authors by year state
 const authorsByYearOpen = ref(false);
@@ -13722,6 +13763,7 @@ function toggleOnlineDropdown() {
   if (onlineDropdownOpen.value) {
     loadOnlineProfile();
     loadRhserverTestMode();
+    void refreshSmwresourceStatus();
     if (onlineShowAdminOptions.value) {
       loadAdminKeypairsList();
     }
@@ -14190,6 +14232,65 @@ async function ensureProfileGuardUnlockedForConnect(): Promise<boolean> {
     );
   }
   return false;
+}
+
+async function refreshSmwresourceStatus() {
+  if (!isElectronAvailable()) return;
+  try {
+    const status = await (window as any).electronAPI.getRhserverStatus?.();
+    if (status?.success === false) {
+      smwresourceLastStatusError.value = status?.error || 'status failed';
+      smwresourceConnected.value = false;
+      smwresourceNeedsReauth.value = false;
+      return;
+    }
+    smwresourceLastStatusError.value = null;
+    smwresourceConnected.value = Boolean(status?.connected);
+    smwresourceNeedsReauth.value = Boolean(status?.needsReauth);
+  } catch (e: any) {
+    smwresourceLastStatusError.value = e?.message || 'status failed';
+    smwresourceConnected.value = false;
+    smwresourceNeedsReauth.value = false;
+  }
+}
+
+async function openSmwresourceConnectFromProfileBox() {
+  smwresourceBusy.value = true;
+  try {
+    await openSmwresourceConnectFromWizard();
+    await refreshSmwresourceStatus();
+  } finally {
+    smwresourceBusy.value = false;
+  }
+}
+
+async function refreshSmwresourceFromProfileBox() {
+  smwresourceBusy.value = true;
+  try {
+    await refreshProfileFromSmwresource();
+    await refreshSmwresourceStatus();
+  } finally {
+    smwresourceBusy.value = false;
+  }
+}
+
+async function disconnectSmwresourceFromProfileBox() {
+  if (!isElectronAvailable()) return;
+  smwresourceBusy.value = true;
+  try {
+    if (!(await ensureProfileGuardUnlockedForConnect())) {
+      return;
+    }
+    const res = await (window as any).electronAPI.disconnectRhserver?.({});
+    if (!res?.success) {
+      await showAlert(`Disconnect failed: ${res?.error || 'unknown error'}`, 'Disconnect');
+      return;
+    }
+    await loadOnlineProfile();
+    await refreshSmwresourceStatus();
+  } finally {
+    smwresourceBusy.value = false;
+  }
 }
 
 async function loadProfileCreationConnectParams(force = false) {

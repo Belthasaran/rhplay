@@ -2116,7 +2116,22 @@ function registerDatabaseHandlers(dbManager) {
   ipcMain.handle('online:rhserver:disconnect', async (event, { profileUuid } = {}) => {
     try {
       const keyguardKey = getKeyguardKey(event);
-      return { success: true, ...rhServerManager.disconnect(profileUuid, keyguardKey) };
+      const result = await rhServerManager.disconnectRemote(keyguardKey, profileUuid);
+
+      // Remove local SMWResource social link (so users can reconnect later).
+      if (result.success) {
+        const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+        const pid = profileUuid || profileManager.getCurrentProfileId();
+        if (pid) {
+          const profile = profileManager.getProfile(pid);
+          if (profile && Array.isArray(profile.socialIds)) {
+            profile.socialIds = profile.socialIds.filter((s) => !(s && s.type === 'smwresource'));
+            profileManager.saveProfile(profile, true);
+          }
+        }
+      }
+
+      return { success: true, ...result };
     } catch (error) {
       return { success: false, error: error.message };
     }

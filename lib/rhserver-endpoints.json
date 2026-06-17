@@ -1,0 +1,12 @@
+{
+  "release": {
+    "api": "https://api.smwresource.net",
+    "web": "https://smwresource.net",
+    "admin": "https://admin.smwresource.net"
+  },
+  "testing": {
+    "api": "http://localhost:3000",
+    "web": "http://localhost:3000",
+    "admin": "http://localhost:3000/admin"
+  }
+}

@@ -62,6 +62,8 @@ class RHServerManager {
     this.dbManager = dbManager;
     this._client = null;
     this._loadedProfileUuid = null;
+    this._stageFeedbackFlushTimer = null;
+    this._stageFeedbackStatusSince = 0;
   }
 
   getDb() {
@@ -378,16 +380,117 @@ class RHServerManager {
   }
 
   async queueStageFeedback(feedback, keyguardKey = null) {
+    // Back-compat: keep the call site API but just schedule a batch flush.
+    const key = keyguardKey || global.keyguardKey || null;
+    this.enqueueStageFeedbackFlush(key);
+    return { queued: true };
+  }
+
+  enqueueStageFeedbackFlush(keyguardKey, delayMs = 2500) {
+    if (this._stageFeedbackFlushTimer) return;
+    this._stageFeedbackFlushTimer = setTimeout(() => {
+      this._stageFeedbackFlushTimer = null;
+      this.flushPendingStageFeedback(keyguardKey).catch((err) => {
+        console.warn('[RHServer] flushPendingStageFeedback failed:', err.message);
+      });
+    }, delayMs);
+  }
+
+  async flushPendingStageFeedback(keyguardKey, limit = 50) {
     const key = keyguardKey || global.keyguardKey || null;
     const ensured = await this.ensureAccessToken(key);
-    if (!ensured.ok) return { queued: false, reason: ensured.reason };
-    try {
-      await ensured.client.submitStageFeedback(feedback);
-      return { synced: true };
-    } catch (err) {
-      console.warn('[RHServer] stage feedback sync failed:', err.message);
-      return { synced: false, error: err.message };
+    if (!ensured.ok) return { ok: false, reason: ensured.reason };
+
+    const db = this.getDb();
+    const pending = db.prepare(`
+      SELECT * FROM stage_feedback
+      WHERE rhserver_sync_pending = 1
+      ORDER BY updated_at ASC
+      LIMIT ?
+    `).all(limit);
+
+    if (!pending.length) {
+      // still poll status (lightweight) while connected
+      await this.pollStageFeedbackStatus(key);
+      return { ok: true, submitted: 0 };
     }
+
+    const items = pending.map((r) => ({
+      feedback_uuid: r.feedback_uuid,
+      gameid: r.gameid,
+      levelnumber: r.levelnumber,
+      translevel: r.translevel,
+      levelname: r.levelname,
+      difficulty_feedback: r.difficulty_feedback,
+      comment: r.comment,
+      current_difficulty: r.current_difficulty,
+      flag_values: r.flag_values,
+      global_conditions: r.global_conditions,
+      applied_patches: r.applied_patches,
+      playlevel_patchcode: r.playlevel_patchcode,
+      feedback_source: r.feedback_source,
+      test_result: r.test_result,
+      tag_feedback: r.tag_feedback,
+      stage_uuid: r.stage_uuid
+    }));
+
+    const out = await ensured.client.submitStageFeedbackBulk(items);
+    const now = Math.floor(Date.now() / 1000);
+    const update = db.prepare(`
+      UPDATE stage_feedback
+      SET rhserver_sync_pending = 0,
+          rhserver_last_submitted_at = ?,
+          rhserver_last_submitted_hash = COALESCE(content_hash, rhserver_last_submitted_hash)
+      WHERE feedback_uuid = ?
+    `);
+    if (Array.isArray(out?.results)) {
+      for (let i = 0; i < out.results.length; i++) {
+        const r = out.results[i];
+        const fb = pending[i];
+        if (r?.ok && fb?.feedback_uuid) {
+          update.run(now, fb.feedback_uuid);
+        }
+      }
+    } else {
+      for (const fb of pending) {
+        update.run(now, fb.feedback_uuid);
+      }
+    }
+
+    await this.pollStageFeedbackStatus(key);
+    return { ok: true, submitted: pending.length };
+  }
+
+  async pollStageFeedbackStatus(keyguardKey) {
+    const ensured = await this.ensureAccessToken(keyguardKey);
+    if (!ensured.ok) return { ok: false, reason: ensured.reason };
+    const since = this._stageFeedbackStatusSince || 0;
+    const res = await ensured.client.getStageFeedbackStatus(since);
+    const items = Array.isArray(res?.items) ? res.items : [];
+    if (!items.length) return { ok: true, updated: 0 };
+    const db = this.getDb();
+    const upd = db.prepare(`
+      UPDATE stage_feedback
+      SET rhserver_review_state = ?,
+          rhserver_review_state_set_at = ?
+      WHERE gameid = ? AND levelnumber = ? AND playlevel_patchcode = ?
+        AND applied_patches_hash = ?
+    `);
+    let maxUpdated = since;
+    for (const it of items) {
+      upd.run(
+        it.review_state || null,
+        it.review_state_set_at || null,
+        it.gameid,
+        it.levelnumber,
+        it.playlevel_patchcode || '2lvno',
+        it.applied_patches_hash || ''
+      );
+      const u = parseInt(it.updated_at || '0', 10);
+      if (Number.isFinite(u) && u > maxUpdated) maxUpdated = u;
+    }
+    this._stageFeedbackStatusSince = maxUpdated;
+    return { ok: true, updated: items.length };
   }
 
   async queueReview(annotation, keyguardKey = null) {

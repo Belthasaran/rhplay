@@ -2239,6 +2239,25 @@ Track profile hosting mode (SMWResource vs local/offline), wizard completion, an
 
 ---
 
+## clientdata_072_rhserver_token_expiry
+
+### Date Added
+June 16, 2026
+
+### Purpose
+Add JWT-backed expiry columns to `rhserver_tokens`, Keyguard encryption method tracking, and per-profile+api_base_url unique active index.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `rhserver_tokens` gains `access_expires_at`, `refresh_expires_at`, `obtainment_timestamp`, `expires_in`, `encryption_method`.
+- Legacy rows with `expires_at` copy into `access_expires_at` with `encryption_method='vault'`.
+
+---
+
 ## clientdata_069_run_plan_untested_filters
 
 ### Date Added

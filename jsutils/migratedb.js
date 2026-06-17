@@ -1659,6 +1659,16 @@ const MIGRATIONS = {
           && columnExists(db, 'user_profiles', 'smwresource_last_sync_at');
       },
     },
+    {
+      id: 'clientdata_072_rhserver_token_expiry',
+      description: 'Add RHServer token expiry columns and per-profile unique index',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/072_clientdata_rhserver_token_expiry.sql'),
+      skipIf(db) {
+        return columnExists(db, 'rhserver_tokens', 'access_expires_at')
+          && columnExists(db, 'rhserver_tokens', 'refresh_expires_at');
+      },
+    },
   ],
   thumbnail_cache: [
     {

@@ -51,14 +51,20 @@ function buildPatchResolverContext(dbManager, overrides = {}) {
   return {
     dbManager,
     userDataPath,
-    rhserverClient: (() => {
+    getRhserverClient: async () => {
       try {
         const { RHServerManager } = require('./RHServerManager');
-        return new RHServerManager(dbManager).getClient();
+        const mgr = new RHServerManager(dbManager);
+        const key = global.keyguardKey || null;
+        if (!key) return null;
+        const ensured = await mgr.ensureAccessToken(key);
+        if (!ensured.ok) return null;
+        return ensured.client;
       } catch (_) {
         return null;
       }
-    })(),
+    },
+    rhserverClient: null,
     tempBase: manifestResolver.getUserSpecificTempBase(),
     rhsearchCatDbPath: overrides.rhsearchCatDbPath || (userDataPath ? path.join(userDataPath, 'rhsearch_cat.db') : null),
     flipsPath: overrides.flipsPath || null,

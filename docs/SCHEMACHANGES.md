@@ -1,3 +1,8 @@
+- 2026-06-16: clientdata - RHServer token expiry and per-profile scoping
+  - Description: Extend `rhserver_tokens` with JWT-backed expiry fields, obtainment timestamp, encryption method, and unique active index per profile+api_base_url.
+  - Tables/columns: `rhserver_tokens.access_expires_at`, `refresh_expires_at`, `obtainment_timestamp`, `expires_in`, `encryption_method`
+  - Migration: `clientdata_072_rhserver_token_expiry` via `jsutils/migratedb.js`
+
 - 2026-06-15: clientdata - RHServer bearer token storage
   - Description: Add `rhserver_tokens` table for encrypted RHServer API bearer/refresh tokens and connection state.
   - Tables/columns: `rhserver_tokens` (token_uuid, api_base_url, encrypted_access_token, encrypted_refresh_token, profile_uuid, expires_at, connected_at, is_active)

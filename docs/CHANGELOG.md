@@ -1,3 +1,6 @@
+- **Profile ML-DSA upgrade**: Legacy profiles without an ML-DSA-44 keypair are auto-upgraded on load/connect (deterministic from master seed at `m/identity/mldsa/0`); connect params resolve keypairs from `profile_keypairs` when `profile_json` is incomplete.
+- **RHServer token storage**: API bearer/refresh tokens stored per-profile in `rhserver_tokens` with Profile Guard encryption, JWT-backed expiry, and lazy refresh on organic v1api requests.
+- **SMWResource connect fix**: Profile wizard loads connect params from existing profile when reopening step 2 or clicking Connect (not only right after create-minimal).
 - **RHServer local testing**: `rhserver_testmode` csetting (On/Off/Disabled) with UI toggles in profile wizard and Online menu; centralized release/testing endpoint config; `RHPLAY_TEST_STATUS=disabled` build embed locks test mode off.
 - **RHServer integration**: Metadata API moved to standalone `~/rhserver`; RHPlay adds `RHServerClient`, bearer-token connect flow, patch-resolver method 7, and optional sync of stage feedback/reviews when connected. Legacy `mdserver/` deprecated.
 - **Prepare Run Twitch dropdown contrast**: Prediction style select and dropdown text use theme text/background colors (fixes black-on-black in dark themes).

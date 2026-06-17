@@ -2026,7 +2026,7 @@ function registerDatabaseHandlers(dbManager) {
           hidden: hidden ? 1 : 0,
           exclude_from_random: excludeFromRandom ? 1 : 0,
           user_notes: mynotes || null
-        }).catch(() => {});
+        }, global.keyguardKey || null).catch(() => {});
       });
       
       return { success: true };
@@ -2037,9 +2037,10 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
-  ipcMain.handle('online:rhserver:status', async () => {
+  ipcMain.handle('online:rhserver:status', async (event) => {
     try {
-      return { success: true, ...rhServerManager.getStatus(), ...rhServerManager.getTestModePolicy() };
+      const keyguardKey = getKeyguardKey(event);
+      return { success: true, ...rhServerManager.getStatus(keyguardKey), ...rhServerManager.getTestModePolicy() };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -2107,9 +2108,19 @@ function registerDatabaseHandlers(dbManager) {
 
       const result = await rhServerManager.connect({
         profileUuid: pid,
-        signNostrMessage
+        signNostrMessage,
+        keyguardKey
       });
       return { success: true, ...result };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('online:rhserver:disconnect', async (event, { profileUuid } = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      return { success: true, ...rhServerManager.disconnect(profileUuid, keyguardKey) };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -2124,7 +2135,7 @@ function registerDatabaseHandlers(dbManager) {
       const pid = profileManager.getCurrentProfileId();
       if (!pid) return { success: false, error: 'No current profile' };
 
-      const hosted = await rhServerManager.fetchHostedProfile();
+      const hosted = await rhServerManager.fetchHostedProfile(keyguardKey);
       if (!hosted.success) return hosted;
 
       const profile = profileManager.getProfile(pid);
@@ -8559,7 +8570,7 @@ function registerDatabaseHandlers(dbManager) {
           tag_feedback,
           stage_uuid,
           feedback_uuid: feedbackUuid
-        }).catch(() => {});
+        }, global.keyguardKey || null).catch(() => {});
       });
       
       return { success: true, feedback_uuid: feedbackUuid };
@@ -9144,86 +9155,98 @@ function registerDatabaseHandlers(dbManager) {
         }
       }
       
-      // Check if profile needs master seed generation (one-time upgrade)
+      // One-time profile upgrades: master seed (did:pkh) and ML-DSA-44 keypair for SMWResource connect
+      let seedUpgraded = false;
+      let mldsaUpgraded = false;
       if (profile && keyguardKey) {
         const profileUuid = (profile._metadata && profile._metadata.profileUuid) || profile.profileId;
         if (profileUuid) {
-          const { needsSeedGeneration, generateProfileSeedAndDidPkh } = require('./utils/ProfileSeedManager');
+          const {
+            needsSeedGeneration,
+            generateProfileSeedAndDidPkh,
+            upgradeMldsa44KeypairIfNeeded
+          } = require('./utils/ProfileSeedManager');
           const db = dbManager.getConnection('clientdata');
-          
+
           if (needsSeedGeneration(db, profileUuid)) {
             try {
               console.log(`[online:profile:get] Profile ${profileUuid} needs seed generation, generating now...`);
-              
-              // Generate master seed, Ethereum wallet, and did:pkh
-              const { 
-                encryptedSeed, 
-                encryptedEthereumPrivateKey, 
-                ethereumAddress, 
-                didPkh, 
-                seedGeneratedAt 
+              const {
+                encryptedSeed,
+                encryptedEthereumPrivateKey,
+                ethereumAddress,
+                didPkh,
+                seedGeneratedAt
               } = generateProfileSeedAndDidPkh(keyguardKey);
-              
-              // Verify seed is not null or zero
+
               if (encryptedSeed && encryptedSeed !== '0' && encryptedSeed !== '') {
-                console.log(`[online:profile:get] Updating profile ${profileUuid} with master seed, Ethereum wallet, and did:pkh...`);
-                
-                // Update profile with master seed, Ethereum wallet, and did:pkh in database columns
-                // PRIVATE: encrypted_master_seed, encrypted_ethereum_private_key (database columns only, NOT in profile_json)
-                // PUBLIC: ethereum_address, did_pkh (database columns, can optionally be added to profile_json for publishing)
                 db.prepare(`
-                  UPDATE user_profiles 
-                  SET encrypted_master_seed = ?, 
+                  UPDATE user_profiles
+                  SET encrypted_master_seed = ?,
                       encrypted_ethereum_private_key = ?,
                       ethereum_address = ?,
-                      did_pkh = ?, 
+                      did_pkh = ?,
                       seed_generated_at = ?
                   WHERE profile_uuid = ?
-                `).run(encryptedSeed, encryptedEthereumPrivateKey, ethereumAddress, didPkh, seedGeneratedAt, profileUuid);
-                
-                console.log(`[online:profile:get] Successfully updated profile ${profileUuid} with seed and wallet data`);
-                
-                // NOTE: We do NOT add Ethereum wallet data to profile JSON
-                // because profile_json is published to Nostr (kind 0 event).
-                // PRIVATE data (encrypted_ethereum_private_key) is stored in database column only.
-                // PUBLIC data (ethereum_address, did_pkh) is stored in database columns.
-                // If we want to publish did_pkh or ethereum_address to Nostr, we can add
-                // them to profile_json later, but private keys must NEVER be in profile_json.
-                
-                // Reload profile to include new fields
+                `).run(
+                  encryptedSeed,
+                  encryptedEthereumPrivateKey,
+                  ethereumAddress,
+                  didPkh,
+                  seedGeneratedAt,
+                  profileUuid
+                );
+                seedUpgraded = true;
                 profile = profileManager.getCurrentProfile();
-                
-                // Return upgrade flag so UI can show alert
-                if (profile) {
-                  const metadata = profile._metadata || {};
-                  const { _metadata, ...profileWithoutMetadata } = profile;
-                  return { ...profileWithoutMetadata, _seedUpgraded: true };
-                }
+                console.log(`[online:profile:get] Successfully updated profile ${profileUuid} with seed and wallet data`);
               } else {
                 console.error(`[online:profile:get] Generated seed is null or zero for profile ${profileUuid}`);
               }
             } catch (seedError) {
               console.error(`[online:profile:get] Error generating master seed for existing profile ${profileUuid}:`, seedError);
-              // Continue without seed generation if it fails
             }
-          } else {
-            console.log(`[online:profile:get] Profile ${profileUuid} already has a seed, skipping generation`);
+          }
+
+          if (!needsSeedGeneration(db, profileUuid)) {
+            try {
+              const mldsaResult = await upgradeMldsa44KeypairIfNeeded({
+                db,
+                profileManager,
+                profileUuid,
+                keyguardKey
+              });
+              if (mldsaResult.upgraded) {
+                mldsaUpgraded = true;
+                profile = profileManager.getCurrentProfile();
+                console.log(`[online:profile:get] Added seed-derived ML-DSA-44 keypair for profile ${profileUuid}`);
+              }
+            } catch (mldsaError) {
+              console.error(`[online:profile:get] Error upgrading ML-DSA-44 keypair for profile ${profileUuid}:`, mldsaError);
+            }
           }
         } else {
-          console.log(`[online:profile:get] Cannot determine profile UUID for seed generation`);
+          console.log(`[online:profile:get] Cannot determine profile UUID for profile upgrades`);
         }
-      } else {
-        if (!profile) {
-          console.log(`[online:profile:get] No profile found, skipping seed generation`);
-        } else if (!keyguardKey) {
-          console.log(`[online:profile:get] Profile Guard not unlocked, skipping seed generation`);
-        }
+      } else if (!profile) {
+        console.log(`[online:profile:get] No profile found, skipping profile upgrades`);
+      } else if (!keyguardKey) {
+        console.log(`[online:profile:get] Profile Guard not unlocked, skipping profile upgrades`);
       }
-      
+
       // Remove metadata before returning (for backward compatibility)
       if (profile && profile._metadata) {
         const { _metadata, ...profileWithoutMetadata } = profile;
-        return profileWithoutMetadata;
+        const result = { ...profileWithoutMetadata };
+        if (seedUpgraded) result._seedUpgraded = true;
+        if (mldsaUpgraded) result._mldsaUpgraded = true;
+        return result;
+      }
+
+      if (profile && (seedUpgraded || mldsaUpgraded)) {
+        const result = { ...profile };
+        if (seedUpgraded) result._seedUpgraded = true;
+        if (mldsaUpgraded) result._mldsaUpgraded = true;
+        return result;
       }
       
       return profile || null;
@@ -9512,8 +9535,7 @@ function registerDatabaseHandlers(dbManager) {
       
       // Set target profile as current
       profileManager.setCurrentProfileId(profileId);
-      
-      // Sync to csettings for backward compatibility
+      rhServerManager.invalidateClient();
       profileManager.syncProfileToCsettings(profileId);
       
       console.log(`[Profile Switch] Updated online_current_profile_id to: ${profileId}`);
@@ -9970,20 +9992,89 @@ function registerDatabaseHandlers(dbManager) {
       profileManager.migrateKeypairToDatabase(finalProfileId, profile.primaryKeypair, 'primary');
       profileManager.migrateKeypairToDatabase(finalProfileId, profile.additionalKeypairs[0], 'additional');
 
-      const mldsaPubkeySha256 = crypto.createHash('sha256').update(Buffer.from(mldsaKeypair.publicKeyHex, 'hex')).digest('hex');
+      const { buildProfileConnectParams } = require('../lib/profile-connect-params');
 
       return {
         success: true,
         profile: profileManager.getProfile(finalProfileId),
-        connectParams: {
-          profile_uuid: finalProfileId,
-          username: normalizedUsername,
-          nostr_pubkey: nostrKeypair.publicKeyHex,
-          mldsa_pubkey_sha256: mldsaPubkeySha256
-        }
+        connectParams: buildProfileConnectParams(
+          profileManager.getProfile(finalProfileId),
+          finalProfileId,
+          { profileManager }
+        )
       };
     } catch (error) {
       console.error('Error creating minimal profile:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Build SMWResource connect params from an existing profile.
+   * Channel: online:profile:get-connect-params
+   */
+  ipcMain.handle('online:profile:get-connect-params', async (event, { profileId } = {}) => {
+    try {
+      const keyguardKey = getKeyguardKey(event);
+      if (!keyguardKey) {
+        return { success: false, error: 'Profile Guard must be unlocked' };
+      }
+
+      const profileManager = new OnlineProfileManager(dbManager, keyguardKey);
+      const pid = profileId || profileManager.getCurrentProfileId();
+      if (!pid) {
+        return { success: false, error: 'No profile selected' };
+      }
+
+      const {
+        needsSeedGeneration,
+        generateProfileSeedAndDidPkh,
+        upgradeMldsa44KeypairIfNeeded
+      } = require('./utils/ProfileSeedManager');
+      const db = dbManager.getConnection('clientdata');
+
+      if (needsSeedGeneration(db, pid)) {
+        const {
+          encryptedSeed,
+          encryptedEthereumPrivateKey,
+          ethereumAddress,
+          didPkh,
+          seedGeneratedAt
+        } = generateProfileSeedAndDidPkh(keyguardKey);
+        if (encryptedSeed && encryptedSeed !== '0' && encryptedSeed !== '') {
+          db.prepare(`
+            UPDATE user_profiles
+            SET encrypted_master_seed = ?,
+                encrypted_ethereum_private_key = ?,
+                ethereum_address = ?,
+                did_pkh = ?,
+                seed_generated_at = ?
+            WHERE profile_uuid = ?
+          `).run(
+            encryptedSeed,
+            encryptedEthereumPrivateKey,
+            ethereumAddress,
+            didPkh,
+            seedGeneratedAt,
+            pid
+          );
+        }
+      }
+
+      await upgradeMldsa44KeypairIfNeeded({
+        db,
+        profileManager,
+        profileUuid: pid,
+        keyguardKey
+      });
+
+      const profile = profileManager.getProfile(pid);
+      const { buildProfileConnectParams } = require('../lib/profile-connect-params');
+      const connectParams = buildProfileConnectParams(profile, pid, { profileManager });
+
+      return { success: true, connectParams };
+    } catch (error) {
+      console.error('Error building profile connect params:', error);
       return { success: false, error: error.message };
     }
   });

@@ -49,6 +49,7 @@
     "test:rhserver-endpoints": "node tests/test_rhserver_endpoints.js",
     "test:rhserver-testmode": "./enode.sh tests/test_rhserver_testmode.js",
     "test:profile-connect-params": "node tests/test_profile_connect_params.js",
+    "test:social-ids-merge": "node tests/test_social_ids_merge.js",
     "test:profile-mldsa-upgrade": "node tests/test_profile_mldsa_upgrade.js",
     "test:rhserver-token-storage": "node tests/test_rhserver_token_storage.js",
     "test:rhserver-token-manager": "./enode.sh tests/test_rhserver_token_manager.js",

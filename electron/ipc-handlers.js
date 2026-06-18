@@ -2205,23 +2205,30 @@ function registerDatabaseHandlers(dbManager) {
       const profile = profileManager.getProfile(pid);
       if (!profile) return { success: false, error: 'Profile not found' };
 
+      const { mergeSocialIds } = require('../../lib/social-ids-merge');
+      const localSocialIds = Array.isArray(profile.socialIds) ? profile.socialIds : [];
+      const remoteSocialIds = Array.isArray(hosted.data.socialIds) ? hosted.data.socialIds : [];
+      const mergedSocialIds = mergeSocialIds(localSocialIds, remoteSocialIds, {
+        smwresourceValue: String(pid),
+        smwresourceSource: 'rhplay_bind'
+      });
+
       // Merge hosted fields into local profile (public fields only)
       profile.displayName = hosted.data.displayName || profile.displayName || '';
       profile.homepage = hosted.data.homepage || profile.homepage || '';
       profile.bio = hosted.data.bio || profile.bio || '';
       profile.pictureUrl = hosted.data.pictureUrl || profile.pictureUrl || '';
       profile.bannerUrl = hosted.data.bannerUrl || profile.bannerUrl || '';
-      if (Array.isArray(hosted.data.socialIds)) {
-        profile.socialIds = hosted.data.socialIds;
-      }
-
-      // Ensure SMWResource Tier-1 social ID exists after successful hosted fetch.
-      if (!Array.isArray(profile.socialIds)) profile.socialIds = [];
-      if (!profile.socialIds.some((s) => s && s.type === 'smwresource')) {
-        profile.socialIds.unshift({ type: 'smwresource', value: String(pid) });
-      }
+      profile.socialIds = mergedSocialIds;
 
       profileManager.saveProfile(profile, true);
+
+      const putResult = await rhServerManager.updateHostedProfile(keyguardKey, {
+        socialIds: mergedSocialIds
+      });
+      if (!putResult.success) {
+        console.warn('[RHServer] PUT profile/me after refresh failed:', putResult.error);
+      }
 
       const db = dbManager.getConnection('clientdata');
       db.prepare(`

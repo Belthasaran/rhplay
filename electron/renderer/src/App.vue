@@ -759,40 +759,13 @@
           </button>
 
           <div v-if="usb2snesDropdownOpen" class="usb2snes-dropdown" @click.stop>
-            <!-- Active Launch Method Tiles -->
-            <div class="launch-method-tiles">
-              <div class="launch-method-tile-wrap">
-                <button
-                  type="button"
-                  class="launch-method-tile"
-                  :class="{ active: activeLaunchMethod === 'usb2snes', disabled: settings.usb2snesEnabled !== 'yes' }"
-                  :disabled="settings.usb2snesEnabled !== 'yes'"
-                  @click="setActiveLaunchMethod('usb2snes')"
-                >
-                  USB2SNES
-                </button>
-                <button type="button" class="launch-method-edit-link" @click.stop="openUsbOptionsWizard">Edit</button>
-              </div>
-              <div class="launch-method-tile-wrap">
-                <button
-                  type="button"
-                  class="launch-method-tile"
-                  :class="{ active: activeLaunchMethod === 'program' }"
-                  @click="setActiveLaunchMethod('program')"
-                >
-                  Emulator / Program
-                </button>
-                <button type="button" class="launch-method-edit-link" @click.stop="openEmulatorConfigModal">Edit</button>
-              </div>
-              <button
-                type="button"
-                class="launch-method-tile"
-                :class="{ active: activeLaunchMethod === 'manual' }"
-                @click="setActiveLaunchMethod('manual')"
-              >
-                Manual
-              </button>
-            </div>
+            <LaunchMethodTiles
+              :active-method="activeLaunchMethod"
+              :usb2snes-enabled="settings.usb2snesEnabled"
+              @select="setActiveLaunchMethod"
+              @edit-usb="openUsbOptionsWizard"
+              @edit-emulator="openEmulatorConfigModal"
+            />
 
             <!-- Status Section -->
             <div class="usb2snes-dropdown-header">
@@ -9457,20 +9430,34 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
 
           <div class="launch-instructions">
-            <h4>🚀 Quick Actions:</h4>
+            <div class="quick-actions-header-row">
+              <h4>🚀 Quick Actions:</h4>
+              <LaunchMethodDropdown
+                class="quick-actions-launch-dropdown"
+                :active-method="activeLaunchMethod"
+                :usb2snes-enabled="settings.usb2snesEnabled"
+                @select="setActiveLaunchMethod"
+                @edit-usb="openUsbOptionsWizard"
+                @edit-emulator="openEmulatorConfigModal"
+              />
+            </div>
             
             <div class="quick-actions-buttons">
-              <!-- Launch Program Action -->
-              <div v-if="settings.launchProgram && settings.launchProgram.trim()" class="action-group">
+              <div v-if="activeLaunchMethod === 'program' && settings.launchProgram && settings.launchProgram.trim()" class="action-group">
                 <button @click="launchRunGame(1)" class="btn-action">
-                  🎮 Launch Game 1
+                  🎮 Launch Game 1 and start
                 </button>
               </div>
               
-              <!-- USB2SNES Actions -->
-              <div v-if="settings.usb2snesEnabled === 'yes'" class="action-group">
-                <button @click="uploadRunToSnes" class="btn-action">
-                  📤 Upload to USB2SNES
+              <div v-if="activeLaunchMethod === 'usb2snes' && settings.usb2snesEnabled === 'yes'" class="action-group">
+                <button @click="uploadRunToSnesAndLaunchGame1" class="btn-action" :disabled="!usb2snesStatus.connected">
+                  📤 USB Upload and Launch
+                </button>
+              </div>
+
+              <div v-if="activeLaunchMethod === 'manual'" class="action-group">
+                <button @click="confirmManualLaunchAndStartRun" class="btn-action" :disabled="!canStartRun">
+                  ✓ Confirm I launched it Manually - Start Run
                 </button>
               </div>
             </div>
@@ -9484,8 +9471,14 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
         </div>
       </section>
-      <footer class="modal-footer">
-        <button @click="closeStagingSuccess" class="btn-primary">Close</button>
+      <footer class="modal-footer staging-success-footer">
+        <button @click="closeStagingSuccess" class="btn-secondary">Continue Editing</button>
+        <button
+          v-if="activeLaunchMethod !== 'manual'"
+          @click="startRunFromStaging"
+          :disabled="!canStartRunFromStagingModal"
+          class="btn-danger"
+        >Start Run</button>
       </footer>
     </div>
   </div>
@@ -9555,6 +9548,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           <div class="launch-instructions">
             <div class="quick-launch-toggles-row">
               <h4>🚀 Quick Actions:</h4>
+              <LaunchMethodDropdown
+                :active-method="activeLaunchMethod"
+                :usb2snes-enabled="settings.usb2snesEnabled"
+                @select="setActiveLaunchMethod"
+                @edit-usb="openUsbOptionsWizard"
+                @edit-emulator="openEmulatorConfigModal"
+              />
               <div class="quick-launch-toggles">
                 <label class="quick-launch-toggle">
                   <span>Auto-Launch</span>
@@ -9574,16 +9574,16 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             </div>
             
             <div class="quick-actions-buttons">
-              <div v-if="settings.usb2snesEnabled === 'yes'" class="action-group">
-                <button @click="uploadStagedToSnes(false)" class="btn-action" :disabled="quickLaunchLaunchLocked">
+              <div v-if="activeLaunchMethod === 'usb2snes' && settings.usb2snesEnabled === 'yes'" class="action-group">
+                <button @click="uploadStagedToSnes(false)" class="btn-action" :disabled="quickLaunchLaunchLocked || !usb2snesStatus.connected">
                   📤 Upload to SNES
                 </button>
-                <button @click="uploadStagedToSnes(true)" class="btn-action" :disabled="quickLaunchLaunchLocked">
+                <button @click="uploadStagedToSnes(true)" class="btn-action" :disabled="quickLaunchLaunchLocked || !usb2snesStatus.connected">
                   🚀 Upload and Boot
                 </button>
               </div>
               
-              <div v-if="settings.launchProgram && settings.launchProgram.trim()" class="action-group">
+              <div v-if="activeLaunchMethod === 'program' && settings.launchProgram && settings.launchProgram.trim()" class="action-group">
                 <button @click="launchWithProgram" class="btn-action">
                   {{ quickLaunchLaunchLocked && quickLaunchEmulatorRunningLabel ? quickLaunchEmulatorRunningLabel : '🎮 Launch with Program' }}
                 </button>
@@ -9992,6 +9992,8 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import TwitchReauthChoiceDialog from './components/TwitchReauthChoiceDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import ToastNotification from './components/ToastNotification.vue';
+import LaunchMethodDropdown from './components/LaunchMethodDropdown.vue';
+import LaunchMethodTiles from './components/LaunchMethodTiles.vue';
 import WinRulesDropdown from './components/WinRulesDropdown.vue';
 import TwitchIntegrationSetup from './components/TwitchIntegrationSetup.vue';
 import PredictionConflictDialog from './components/PredictionConflictDialog.vue';
@@ -24590,6 +24592,7 @@ const stagingFolderPath = ref('');
 const stagingSfcCount = ref(0);
 const runStagedSfcFilenames = ref<string[]>([]);
 const runStagingActionStatus = ref('');
+const runStagingGame1Ready = ref(false);
 
 // Run upload progress modal
 const runUploadProgressModalOpen = ref(false);
@@ -24907,6 +24910,16 @@ const showActiveRunLaunchButton = computed(() => {
 // Can start run (must be saved, ready, and no unsaved prep changes)
 const canStartRun = computed(() => {
   return isRunSaved.value && isRunReadyToStart.value && !hasPrepUnsavedChanges.value;
+});
+
+const canStartRunFromStagingModal = computed(() => {
+  if (!canStartRun.value) return false;
+  if (activeLaunchMethod.value === 'manual') return true;
+  return runStagingGame1Ready.value;
+});
+
+watch(activeLaunchMethod, () => {
+  runStagingGame1Ready.value = false;
 });
 const currentChallenge = computed(() => {
   if (!isRunActive.value || currentChallengeIndex.value >= runEntries.length) return null;
@@ -26313,6 +26326,7 @@ async function stageRunGames(runUuid: string, runName: string) {
     stagingFolderPath.value = stagingResult.folderPath;
     stagingSfcCount.value = stagingResult.gamesStaged;
     await refreshRunStagedSfcFilenames();
+    runStagingGame1Ready.value = false;
     stagingSuccessModalOpen.value = true;
     
     // Reset skip upload acknowledgment when staging completes
@@ -26405,6 +26419,7 @@ async function confirmRenameRun() {
 function closeStagingSuccess() {
   stagingSuccessModalOpen.value = false;
   runStagingActionStatus.value = '';
+  runStagingGame1Ready.value = false;
 }
 
 // Run status dropdown functions
@@ -26525,6 +26540,7 @@ async function loadExpandedRunResults() {
 async function reopenStagingWindow() {
   runStatusDropdownOpen.value = false;
   if (stagingFolderPath.value) {
+    runStagingGame1Ready.value = false;
     stagingSuccessModalOpen.value = true;
   } else {
     await showAlert('No staging folder found. Please stage the run again.', 'Staging Required');
@@ -26832,15 +26848,18 @@ async function launchRunGame(gameNumber: number) {
     await launchProgramFile(filePath);
     
     runStagingActionStatus.value = `✓ Launched game ${gameNumber}: ${fileToLaunch}`;
+    if (gameNumber === 1) {
+      runStagingGame1Ready.value = true;
+    }
   } catch (error) {
     runStagingActionStatus.value = `✗ Launch error: ${error}`;
   }
 }
 
-async function uploadRunToSnes() {
+async function uploadRunToSnes(): Promise<{ success: boolean; snesPath?: string }> {
   if (!stagingFolderPath.value || !currentRunUuid.value) {
     runStagingActionStatus.value = '✗ No run staged';
-    return;
+    return { success: false };
   }
   
   // Reset state and show progress modal
@@ -26896,19 +26915,19 @@ async function uploadRunToSnes() {
           addToLog('✗ Failed to connect to USB2SNES');
           runUploadInProgress.value = false;
           runStagingActionStatus.value = '✗ Upload failed: Could not connect to USB2SNES';
-          return;
+          return { success: false };
         }
       } catch (connectError) {
         addToLog(`✗ Connection error: ${connectError}`);
         runUploadInProgress.value = false;
         runStagingActionStatus.value = `✗ Upload failed: ${connectError}`;
-        return;
+        return { success: false };
       }
     } else {
       addToLog('✗ USB2SNES is disabled in settings');
       runUploadInProgress.value = false;
       runStagingActionStatus.value = '✗ Upload failed: USB2SNES is disabled in settings';
-      return;
+      return { success: false };
     }
   } else {
     addToLog('✓ USB2SNES already connected');
@@ -26955,10 +26974,12 @@ async function uploadRunToSnes() {
           runUploadProgressModalOpen.value = false;
         }
       }, 2000);
+      return { success: true, snesPath: result.snesPath };
     } else {
       addToLog(`✗ Upload failed: ${result.error}`);
       runStagingActionStatus.value = `✗ Upload failed: ${result.error}`;
       // Keep modal open on error so user can see the log
+      return { success: false };
     }
   } catch (error) {
     // Clean up listeners
@@ -26971,6 +26992,39 @@ async function uploadRunToSnes() {
     addToLog(`✗ Upload error: ${error}`);
     runStagingActionStatus.value = `✗ Upload error: ${error}`;
     // Keep modal open on error
+    return { success: false };
+  }
+}
+
+async function uploadRunToSnesAndLaunchGame1() {
+  const uploadResult = await uploadRunToSnes();
+  if (!uploadResult.success || !uploadResult.snesPath) {
+    return;
+  }
+
+  if (!stagingFolderPath.value) {
+    runStagingActionStatus.value = '✗ No run folder available';
+    return;
+  }
+
+  try {
+    const folderContents = await (window as any).electronAPI.readDirectory(stagingFolderPath.value);
+    runStagedSfcFilenames.value = sortRunStagedSfcFilenames(folderContents);
+    const fileToBoot = resolveRunStagedSfcFromList(folderContents, 0);
+
+    if (!fileToBoot) {
+      runStagingActionStatus.value = '✗ Game 1 not found for boot';
+      return;
+    }
+
+    const bootPath = `${uploadResult.snesPath}/${fileToBoot}`;
+    runStagingActionStatus.value = `Booting game 1: ${fileToBoot}...`;
+    await (window as any).electronAPI.usb2snesBoot(bootPath);
+    await loadExpandedRunResults();
+    runStagingGame1Ready.value = true;
+    runStagingActionStatus.value = `✓ USB upload and launch complete: ${fileToBoot}`;
+  } catch (error) {
+    runStagingActionStatus.value = `✗ Boot failed: ${error}`;
   }
 }
 
@@ -27152,13 +27206,19 @@ async function uploadToUsb2Snes() {
   // This will be implemented in a later phase
 }
 
-async function manuallyUploadedConfirm() {
-  // TODO: Implement USB2SNES launch after manual upload
-  await showAlert('USB2SNES launch - to be implemented', 'Not Implemented');
-  // This will be implemented in a later phase
+async function confirmManualLaunchAndStartRun() {
+  if (!canStartRunFromStagingModal.value) return;
+  closeStagingSuccess();
+  await startRun({ skipConfirm: true });
 }
 
-async function startRun() {
+async function startRunFromStaging() {
+  if (!canStartRunFromStagingModal.value) return;
+  closeStagingSuccess();
+  await startRun({ skipConfirm: true });
+}
+
+async function startRun(options?: { skipConfirm?: boolean }) {
   if (!currentRunUuid.value) {
     await showAlert('No run saved. Please save the run first.', 'Validation Error');
     return;
@@ -27169,15 +27229,17 @@ async function startRun() {
     return;
   }
   
-  const confirmed = await showConfirm(
-    `Start run "${currentRunName.value}"?\n\n` +
-    `${runEntries.length} plan entries\n` +
-    `Global conditions: ${globalRunConditions.value.length > 0 ? globalRunConditions.value.join(', ') : 'None'}\n\n` +
-    `Once started, the run cannot be edited.`,
-    'Start Run'
-  );
-  
-  if (!confirmed) return;
+  if (!options?.skipConfirm) {
+    const confirmed = await showConfirm(
+      `Start run "${currentRunName.value}"?\n\n` +
+      `${runEntries.length} plan entries\n` +
+      `Global conditions: ${globalRunConditions.value.length > 0 ? globalRunConditions.value.join(', ') : 'None'}\n\n` +
+      `Once started, the run cannot be edited.`,
+      'Start Run'
+    );
+    
+    if (!confirmed) return;
+  }
   
   try {
     console.log('[startRun] Starting run:', currentRunUuid.value);
@@ -38663,6 +38725,28 @@ button:disabled {
   font-size: 16px;
 }
 
+.quick-actions-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.quick-actions-header-row h4 {
+  margin: 0;
+}
+
+.quick-actions-launch-dropdown {
+  margin-left: auto;
+}
+
+.staging-success-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .launch-instructions .quick-launch-toggle > span {
   color: #374151;
   font-size: 16px;
@@ -41174,57 +41258,6 @@ button:disabled {
   padding: 16px;
   border-bottom: 1px solid var(--border-primary);
   background-color: var(--bg-secondary);
-}
-
-.launch-method-tiles {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-primary);
-  background-color: var(--bg-secondary);
-}
-
-.launch-method-tile-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-}
-
-.launch-method-tile {
-  padding: 10px 8px;
-  border: 1px solid var(--border-primary);
-  border-radius: 6px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.launch-method-tile.active {
-  border-color: #0b57d0;
-  background: rgba(11, 87, 208, 0.12);
-  box-shadow: inset 0 0 0 1px #0b57d0;
-}
-
-.launch-method-tile.disabled,
-.launch-method-tile:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.launch-method-edit-link {
-  background: none;
-  border: none;
-  color: var(--link-color, #0b57d0);
-  font-size: 20px;
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-  align-self: center;
 }
 
 .action-status-display {

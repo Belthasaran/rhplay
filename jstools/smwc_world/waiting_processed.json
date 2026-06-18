@@ -458,7 +458,7 @@
     ],
     "rating": 0,
     "size": 1628424,
-    "downloads": 216,
+    "downloads": 217,
     "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -692,76 +692,6 @@
     }
   },
   {
-    "id": 42380,
-    "section": "smwhacks",
-    "name": "Super Mario World - Bowser's Return Redux",
-    "time": 1779004484,
-    "submitted_at": 1779004484,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 63,
-        "name": "Ice Man"
-      }
-    ],
-    "submitter": {
-      "id": 63,
-      "name": "Ice Man"
-    },
-    "moderator": null,
-    "tags": [
-      "asm",
-      "bugfix",
-      "custom bosses",
-      "custom graphics",
-      "custom music",
-      "exgfx",
-      "hdma",
-      "sa1",
-      "standard"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/123809.png",
-      "https://dl.smwcentral.net/image/123810.png",
-      "https://dl.smwcentral.net/image/123811.png",
-      "https://dl.smwcentral.net/image/123812.png"
-    ],
-    "rating": 5,
-    "size": 1126564,
-    "downloads": 452,
-    "download_url": "https://dl.smwcentral.net/42380/Super%20Mario%20World%20-%20Bowser%27s%20Return%20Redux.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "length": "62 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "Yes",
-      "warnings": "",
-      "description": "Modernized version of Super Mario World - Bowser's Return with new graphics, bosses, enemies and improved levels."
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_2",
-      "type": [
-        "standard"
-      ],
-      "length": 62,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": true,
-      "warnings": [],
-      "description": "Modernized version of Super Mario World - Bowser's Return with new graphics, bosses, enemies and improved levels."
-    }
-  },
-  {
     "id": 42385,
     "section": "smwhacks",
     "name": "Yoshi's Revenge",
@@ -807,7 +737,7 @@
     ],
     "rating": 4.8182,
     "size": 2397113,
-    "downloads": 1852,
+    "downloads": 1853,
     "download_url": "https://dl.smwcentral.net/42385/Yoshi%27s%20Revenge%201.1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -948,7 +878,7 @@
     ],
     "rating": 4.3333,
     "size": 2346234,
-    "downloads": 180,
+    "downloads": 181,
     "download_url": "https://dl.smwcentral.net/42427/ynt_mario_en_v1.0.6.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1028,7 +958,7 @@
     ],
     "rating": 5,
     "size": 1210355,
-    "downloads": 292,
+    "downloads": 294,
     "download_url": "https://dl.smwcentral.net/42434/Ominous%20Castle%20v1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1291,7 +1221,7 @@
     ],
     "rating": 5,
     "size": 473199,
-    "downloads": 243,
+    "downloads": 244,
     "download_url": "https://dl.smwcentral.net/42466/SMTQFB_v1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1357,7 +1287,7 @@
     ],
     "rating": 0,
     "size": 1319477,
-    "downloads": 108,
+    "downloads": 109,
     "download_url": "https://dl.smwcentral.net/42470/JumpsRhymesLife.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1438,7 +1368,7 @@
     ],
     "rating": 0,
     "size": 1070034,
-    "downloads": 60,
+    "downloads": 61,
     "download_url": "https://dl.smwcentral.net/42477/super%20Miles%20world%201.4.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1502,7 +1432,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1322,
+    "downloads": 1323,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1636,7 +1566,7 @@
     ],
     "rating": 5,
     "size": 1628128,
-    "downloads": 79,
+    "downloads": 80,
     "download_url": "https://dl.smwcentral.net/42501/Gransys.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2168,7 +2098,7 @@
     ],
     "rating": 5,
     "size": 2061726,
-    "downloads": 98,
+    "downloads": 99,
     "download_url": "https://dl.smwcentral.net/42540/Tortured%20Souls%203-Birth%20of%20a%20True%20Lord.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2246,7 +2176,7 @@
     ],
     "rating": 0,
     "size": 4870309,
-    "downloads": 151,
+    "downloads": 155,
     "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2317,7 +2247,7 @@
     ],
     "rating": 5,
     "size": 829582,
-    "downloads": 516,
+    "downloads": 517,
     "download_url": "https://dl.smwcentral.net/42543/playtime_1.11.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2388,7 +2318,7 @@
     ],
     "rating": 5,
     "size": 716798,
-    "downloads": 47,
+    "downloads": 50,
     "download_url": "https://dl.smwcentral.net/42544/LAG.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2462,7 +2392,7 @@
     ],
     "rating": 5,
     "size": 791647,
-    "downloads": 54,
+    "downloads": 55,
     "download_url": "https://dl.smwcentral.net/42545/%5BHack%5D%20Super%20Mario%20World%20Challenges%202%20v1.0.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2530,7 +2460,7 @@
     ],
     "rating": 0,
     "size": 408801,
-    "downloads": 15,
+    "downloads": 16,
     "download_url": "https://dl.smwcentral.net/42546/Pit%20of%20Gui%21%21%20%28Reformulated%20Version%29.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2605,7 +2535,7 @@
     ],
     "rating": 0,
     "size": 1276995,
-    "downloads": 42,
+    "downloads": 44,
     "download_url": "https://dl.smwcentral.net/42550/Dreadful%20Mario.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2685,7 +2615,7 @@
     ],
     "rating": 0,
     "size": 252432,
-    "downloads": 16,
+    "downloads": 23,
     "download_url": "https://dl.smwcentral.net/42555/Super%20Mario%20World%20II.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2715,6 +2645,74 @@
       "sa1": false,
       "warnings": [],
       "description": "Super Mario World II is a semi-vanilla hack that takes place in Pancake Land, a massive island heavily inspired by the original Dinosaur Land but a little more dangerous and with more secrets to find. The story is the same of the original game, but the themes vary from the more traditional SMW ones to completely original world, with a few surprises.\r\n\r\nI took way too long to produce this hack (i started it in the year 2010), but finally, after some demos and short projects, and after many interruptions and abandonements, i can say i have finished a full lenght hack. I hope you enjoy playing this!"
+    }
+  },
+  {
+    "id": 42560,
+    "section": "smwhacks",
+    "name": "Aperitif",
+    "time": 1781820959,
+    "submitted_at": 1781820959,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 63161,
+        "name": "bald_ridge"
+      }
+    ],
+    "submitter": {
+      "id": 63161,
+      "name": "bald_ridge"
+    },
+    "moderator": null,
+    "tags": [
+      "custom",
+      "kaizo beginner",
+      "shell"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124718.gif",
+      "https://dl.smwcentral.net/image/124719.gif",
+      "https://dl.smwcentral.net/image/124720.gif",
+      "https://dl.smwcentral.net/image/124721.gif",
+      "https://dl.smwcentral.net/image/124722.gif",
+      "https://dl.smwcentral.net/image/124723.gif",
+      "https://dl.smwcentral.net/image/124724.gif",
+      "https://dl.smwcentral.net/image/124725.gif"
+    ],
+    "rating": 4.5,
+    "size": 1717105,
+    "downloads": 320,
+    "download_url": "https://dl.smwcentral.net/42560/Aperitif1.1.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "",
+      "changelog": "1.1 Fixes an overworld issue that allowed for a soft lock if the player went right at the hard mode exit. Levels unchanged.",
+      "difficulty": "Casual",
+      "type": "Kaizo",
+      "length": "13 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "Welcome to Aperitif! A beginner hack to hopefully whet your appetite for your full Kaizo meal! There are 13 exits and each level adds on to the one before it. While not a full tutorial hack Aperitif starts with simple jumps and adds mechanics as you go! There are also some additional challenges for players who already have some Kaizo completions. Each level has a Padlock Coin™ you can lock in and try to collect! In addition there is a hard mode that strings the normal mode levels together into one SUPER LEVEL!<br>\r\n<br>\r\nI hope you enjoy playing Aperitif, and if this is one of your first Kaizo hacks I hope it leads to you playing more SMW hacks and joining the wonderful SMW community!<br>\r\n<br>\r\nNote: While there is no additional exit for getting all the Padlock Coins™ it does unlock an additional level for you to play!<br>\r\nAnother note: Beating Hard Mode does give you an exit it is the same exit as the final level of normal mode and does not go beyond the normal 13 exits.<br>\r\nOne final note: In order to make sure a beginner could play this I had my teenage son with 0 SMW experience play the hack as the first playtester. GG to THE BOI™"
+    },
+    "raw_fields": {
+      "version": "",
+      "changelog": "1.1 Fixes an overworld issue that allowed for a soft lock if the player went right at the hard mode exit. Levels unchanged.",
+      "difficulty": "diff_2",
+      "type": [
+        "kaizo"
+      ],
+      "length": 13,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "Welcome to Aperitif! A beginner hack to hopefully whet your appetite for your full Kaizo meal! There are 13 exits and each level adds on to the one before it. While not a full tutorial hack Aperitif starts with simple jumps and adds mechanics as you go! There are also some additional challenges for players who already have some Kaizo completions. Each level has a Padlock Coin™ you can lock in and try to collect! In addition there is a hard mode that strings the normal mode levels together into one SUPER LEVEL!\r\n\r\nI hope you enjoy playing Aperitif, and if this is one of your first Kaizo hacks I hope it leads to you playing more SMW hacks and joining the wonderful SMW community!\r\n\r\nNote: While there is no additional exit for getting all the Padlock Coins™ it does unlock an additional level for you to play!\r\nAnother note: Beating Hard Mode does give you an exit it is the same exit as the final level of normal mode and does not go beyond the normal 13 exits.\r\nOne final note: In order to make sure a beginner could play this I had my teenage son with 0 SMW experience play the hack as the first playtester. GG to THE BOI™"
     }
   }
 ]

@@ -1,6 +1,7 @@
 - **Renderer dist .gitignore**: Post-build step restores `electron/renderer/dist/assets/.gitignore` after Vite `emptyOutDir` wipes `dist/`.
 - **App mount fix**: Moved USB2SNES address-test `watch()` handlers to after `settings` is declared (fixes "Cannot access 'settings' before initialization" on dev startup).
 - **RetroArch append.cfg fix**: Template path resolution uses multiple fallbacks; empty append.cfg files are re-seeded from template; restore uses read/write (asar-safe); Emulator Config shows errors when read/restore fails.
+- **RetroArch Linux path search**: Program-data AppImage search uses flat `{userData}/RetroArch-Linux-x86_64.AppImage` (with nested tarball fallback); cores searched under `{AppImageBasename}.home/.config/retroarch/cores/`.
 - **Packaging fix**: electron-builder `files` now includes all of `lib/**/*` (fixes missing `rhserver-client`, `jit-levels/orchestrator`, and similar startup/module errors in packaged builds).
 - **USB2SNES address presets**: Settings and Setup Wizard Connection tab show preset chips (SNI, QUSB2Snes, CrowdControl, Legacy) and a connection-test indicator beside the WebSocket URL field (green/orange/red for device found / server only / unreachable).
 - **RHServer secure connect**: RHPlay Nostr-signs connect payload before opening `/connect/rhplay`; wizard prompts for Profile Guard unlock when needed; legacy keypair storage is repaired automatically.

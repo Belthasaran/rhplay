@@ -763,6 +763,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Array>} Console history entries
    */
   usb2snesGetFxpConsoleHistory: () => ipcRenderer.invoke('usb2snes:fxp-console-history'),
+  usb2snesSniStart: (config) => ipcRenderer.invoke('usb2snes:sni-start', config),
+  usb2snesSniStop: () => ipcRenderer.invoke('usb2snes:sni-stop'),
+  usb2snesGetSniStatus: () => ipcRenderer.invoke('usb2snes:sni-status'),
+  onUsb2snesSniStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on('usb2snes:sni-status', handler);
+    return () => ipcRenderer.removeListener('usb2snes:sni-status', handler);
+  },
   /**
    * Check USB/serial device permissions
    * @returns {Promise<{hasPermissions: boolean, platform: string, issues: string[], instructions: string[]}>}
@@ -845,6 +853,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getEmulatorInstallCapabilities: () => ipcRenderer.invoke('fs:getEmulatorInstallCapabilities'),
   installRetroarch: () => ipcRenderer.invoke('fs:installRetroarch'),
   applyEmulatorPreset: (preset, paths) => ipcRenderer.invoke('fs:applyEmulatorPreset', preset, paths),
+  readRetroarchAppendConfig: () => ipcRenderer.invoke('retroarch:read-append-config'),
+  writeRetroarchAppendConfig: (content) => ipcRenderer.invoke('retroarch:write-append-config', content),
+  restoreRetroarchAppendConfig: () => ipcRenderer.invoke('retroarch:restore-append-config'),
+  getRetroarchAppendConfigPath: () => ipcRenderer.invoke('retroarch:get-append-config-path'),
   openSetupHelpDoc: (docId) => ipcRenderer.invoke('help:open-setup-doc', { docId }),
   
   /**

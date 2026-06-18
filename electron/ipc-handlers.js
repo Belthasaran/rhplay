@@ -40,6 +40,7 @@ const { matchesFilter } = require('./shared-filter-utils');
 const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
 const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
+const sniManager = require('./main/usb2snes/sniManager');
 const { testUsb2snesConnection } = require('./main/usb2snes/testConnection');
 const { HostFP } = require('./main/HostFP');
 const TrustManager = require('./utils/TrustManager');
@@ -566,6 +567,22 @@ function registerDatabaseHandlers(dbManager) {
 
   usbfxpServer.on('status', broadcastUsb2snesFxpStatus);
   broadcastUsb2snesFxpStatus(usbfxpServer.getStatus());
+
+  const broadcastUsb2snesSniStatus = (status) => {
+    try {
+      const windows = BrowserWindow.getAllWindows();
+      windows.forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('usb2snes:sni-status', status);
+        }
+      });
+    } catch (error) {
+      console.warn('[USB2SNES][SNI] Failed to broadcast status:', error);
+    }
+  };
+
+  sniManager.on('status', broadcastUsb2snesSniStatus);
+  broadcastUsb2snesSniStatus(sniManager.getStatus());
 
   // Initialize Nostr runtime IPC stubs
   registerNostrRuntimeIPC(dbManager);
@@ -7302,6 +7319,36 @@ function registerDatabaseHandlers(dbManager) {
     return usbfxpServer.getConsoleHistory();
   });
 
+  ipcMain.handle('usb2snes:sni-start', async (_event, config) => {
+    try {
+      const status = await sniManager.start(config || {});
+      broadcastUsb2snesSniStatus(status);
+      return { success: true, status };
+    } catch (error) {
+      console.error('[USB2SNES][SNI] Start error:', error);
+      const status = sniManager.getStatus();
+      broadcastUsb2snesSniStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:sni-stop', async () => {
+    try {
+      const result = sniManager.stop();
+      broadcastUsb2snesSniStatus(result.status);
+      return result;
+    } catch (error) {
+      console.error('[USB2SNES][SNI] Stop error:', error);
+      const status = sniManager.getStatus();
+      broadcastUsb2snesSniStatus(status);
+      return { success: false, error: error.message, status };
+    }
+  });
+
+  ipcMain.handle('usb2snes:sni-status', async () => {
+    return sniManager.getStatus();
+  });
+
   /**
    * Check USB/serial device permissions
    * Channel: usb2snes:fxp-check-permissions
@@ -7486,12 +7533,67 @@ function registerDatabaseHandlers(dbManager) {
    */
   const emulatorPaths = require('../lib/emulator-paths');
   const emulatorInstall = require('../lib/emulator-install');
+  const retroarchAppendConfig = require('./utils/retroarch-append-config');
+  const manifestResolver = require('./utils/manifest-resolver');
   const helpDocResolver = require('./utils/help-doc-resolver');
   const helpDocWindow = require('./utils/help-doc-window');
 
+  function getProgramDataDir() {
+    return manifestResolver.getUserDataDir();
+  }
+
+  function withRetroarchAppendConfig(paths = {}) {
+    const appendPath = retroarchAppendConfig.ensureAppendConfig();
+    return { ...paths, programDataDir: getProgramDataDir(), retroarch_append_config_path: appendPath };
+  }
+
+  ipcMain.handle('retroarch:read-append-config', async () => {
+    try {
+      const result = retroarchAppendConfig.readAppendConfig();
+      return { success: true, path: result.path, content: result.content };
+    } catch (error) {
+      console.error('[retroarch:read-append-config] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('retroarch:write-append-config', async (_event, content) => {
+    try {
+      const configPath = retroarchAppendConfig.writeAppendConfig(content);
+      return { success: true, path: configPath };
+    } catch (error) {
+      console.error('[retroarch:write-append-config] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('retroarch:restore-append-config', async () => {
+    try {
+      const configPath = retroarchAppendConfig.restoreAppendConfigDefault();
+      const result = retroarchAppendConfig.readAppendConfig();
+      return { success: true, path: configPath, content: result.content };
+    } catch (error) {
+      console.error('[retroarch:restore-append-config] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('retroarch:get-append-config-path', async () => {
+    try {
+      const configPath = retroarchAppendConfig.ensureAppendConfig();
+      return { success: true, path: configPath };
+    } catch (error) {
+      console.error('[retroarch:get-append-config-path] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('fs:searchEmulatorPaths', async (_event, { kind, retroarch_path } = {}) => {
     try {
-      const result = emulatorPaths.searchPaths(kind, { retroarch_path: retroarch_path || '' });
+      const result = emulatorPaths.searchPaths(kind, {
+        retroarch_path: retroarch_path || '',
+        programDataDir: getProgramDataDir(),
+      });
       return { success: true, ...result };
     } catch (error) {
       console.error('[searchEmulatorPaths] Error:', error);
@@ -7519,7 +7621,10 @@ function registerDatabaseHandlers(dbManager) {
 
   ipcMain.handle('fs:detectEmulatorPaths', async (_event, existing = {}) => {
     try {
-      return { success: true, ...emulatorPaths.detectEmulatorPaths(existing || {}) };
+      return {
+        success: true,
+        ...emulatorPaths.detectEmulatorPaths(existing || {}, getProgramDataDir()),
+      };
     } catch (error) {
       console.error('[detectEmulatorPaths] Error:', error);
       return { success: false, error: error.message };
@@ -7528,7 +7633,11 @@ function registerDatabaseHandlers(dbManager) {
 
   ipcMain.handle('fs:applyEmulatorPreset', async (_event, preset, paths = {}) => {
     try {
-      const settings = emulatorPaths.applyPresetLaunchSettings(preset, paths || {});
+      const mergedPaths = preset === 'retroarch' ? withRetroarchAppendConfig(paths || {}) : {
+        ...paths,
+        programDataDir: getProgramDataDir(),
+      };
+      const settings = emulatorPaths.applyPresetLaunchSettings(preset, mergedPaths);
       return { success: true, settings };
     } catch (error) {
       console.error('[applyEmulatorPreset] Error:', error);
@@ -7555,15 +7664,26 @@ function registerDatabaseHandlers(dbManager) {
     const path = require('path');
     
     try {
+      let launchArgs = args;
+      if (launchArgs && !launchArgs.includes('--appendconfig') && program && /retroarch/i.test(program)) {
+        try {
+          const appendPath = retroarchAppendConfig.ensureAppendConfig();
+          const quoted = appendPath.includes(' ') ? `"${appendPath}"` : appendPath;
+          launchArgs = `--appendconfig ${quoted} ${launchArgs}`;
+        } catch (appendError) {
+          console.warn('[Launch] Could not ensure RetroArch append config:', appendError.message);
+        }
+      }
+
       console.log('[Launch] Program:', program);
-      console.log('[Launch] Args template:', args);
+      console.log('[Launch] Args template:', launchArgs);
       console.log('[Launch] File:', filePath);
       
       // Quote file path if it contains spaces
       const quotedPath = filePath.includes(' ') ? `"${filePath}"` : filePath;
       
       // Replace %file with the actual file path
-      const processedArgs = args.replace(/%file/g, quotedPath);
+      const processedArgs = launchArgs.replace(/%file/g, quotedPath);
       
       console.log('[Launch] Processed args:', processedArgs);
       

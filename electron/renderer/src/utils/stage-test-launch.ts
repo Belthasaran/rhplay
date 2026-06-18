@@ -1,6 +1,4 @@
-/**
- * Build and launch a stage test (shared by GameStagesDialog / StageTestDialog).
- */
+import { maybeReconnectUsb2snesAfterEmulatorLaunchViaApi } from './emulator-launch-hooks';
 
 export interface StageTestLaunchStage {
   levelnumber?: string | null;
@@ -134,6 +132,7 @@ export async function runStageTestLaunch(
       onProgress(`Launching ${result.filename} with program...`);
       try {
         await api.launchProgram(launchProgram, launchArgs, result.outputPath);
+        await maybeReconnectUsb2snesAfterEmulatorLaunchViaApi(api, currentSettings);
         if (api.recordCurBooted) {
           await api.recordCurBooted({
             launch_method: 'program',

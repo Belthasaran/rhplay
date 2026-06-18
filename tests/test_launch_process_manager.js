@@ -24,25 +24,101 @@ function assert(condition, message) {
 const programA = '/tmp/rhtools-launch-test/retroarch.AppImage';
 const programB = '/tmp/rhtools-launch-test/bizhawk/EmuHawk';
 
+const alivePids = new Set();
+const originalKill = process.kill.bind(process);
+
+process.kill = (pid, signal) => {
+  if (signal === 0) {
+    if (!alivePids.has(pid)) {
+      const err = new Error('ESRCH');
+      err.code = 'ESRCH';
+      throw err;
+    }
+    return;
+  }
+  if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+    if (alivePids.has(pid)) {
+      alivePids.delete(pid);
+    }
+    return;
+  }
+  return originalKill(pid, signal);
+};
+
 assert(
   launchProcessManager.normalizeLaunchProgram('  /usr/bin/retroarch  ') === '/usr/bin/retroarch',
   'normalizeLaunchProgram trims whitespace'
 );
 
 const sessions = new Map();
-sessions.set('session-a', { pid: process.pid, program: programA, filePath: '/rom/a.sfc', startedAt: Date.now() });
-sessions.set('session-b', { pid: process.pid + 999999, program: programB, filePath: '/rom/b.sfc', startedAt: Date.now() });
+sessions.set('session-a', { pid: 888002, program: programA, filePath: '/rom/a.sfc', startedAt: Date.now() });
+sessions.set('session-b', { pid: 888003, program: programB, filePath: '/rom/b.sfc', startedAt: Date.now() });
 
 const matchesA = launchProcessManager.getSessionsForProgram(sessions, programA);
 assert(matchesA.length === 1, 'getSessionsForProgram finds matching program session');
 assert(matchesA[0].sessionId === 'session-a', 'getSessionsForProgram returns correct session id');
 
-const stopped = launchProcessManager.stopLaunchProgramInstances(sessions, programA, { signal: 0 });
-assert(stopped >= 0, 'stopLaunchProgramInstances runs without throwing for tracked session');
+alivePids.add(888002);
+const stopped = launchProcessManager.stopLaunchProgramInstances(sessions, programA, { signal: 'SIGTERM' });
+assert(stopped === 1, 'stopLaunchProgramInstances stops tracked session pid');
+assert(!alivePids.has(888002), 'stopLaunchProgramInstances removes pid from alive set');
+
+assert(
+  launchProcessManager.processMatchesProgram(
+    '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage',
+    '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage\0rom.sfc',
+    '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage',
+    '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage',
+    'RetroArch-Linux-x86_64.AppImage'
+  ),
+  'processMatchesProgram matches AppImage exe and cmdline'
+);
+
+assert(
+  launchProcessManager.processMatchesProgram(
+    '/usr/bin/retroarch',
+    '/usr/bin/retroarch\0-L\0core.so\0game.sfc',
+    '/usr/bin/retroarch',
+    '/usr/bin/retroarch',
+    'retroarch'
+  ),
+  'processMatchesProgram matches system retroarch path'
+);
+
+assert(
+  !launchProcessManager.processMatchesProgram(
+    '/usr/bin/bash',
+    '/usr/bin/bash\0-c\0retroarch',
+    '/usr/bin/retroarch',
+    '/usr/bin/retroarch',
+    'retroarch'
+  ),
+  'processMatchesProgram does not match unrelated process by substring'
+);
+
+const mockProcEntries = [
+  {
+    pid: 4242,
+    exePath: '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage',
+    cmdline: '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage\0-L\0core.so\0game.sfc',
+  },
+  {
+    pid: 5150,
+    exePath: '/usr/bin/other',
+    cmdline: '/usr/bin/other\0--help',
+  },
+];
+
+const externalPids = launchProcessManager.findExternalProgramPids(
+  '/home/user/.config/Electron/RetroArch-Linux-x86_64.AppImage',
+  { excludedPids: new Set([process.pid]), procEntries: mockProcEntries }
+);
+assert(externalPids.length === 1 && externalPids[0] === 4242, 'findExternalProgramPids finds matching external process');
 
 (async () => {
+  const fakePid = 888001;
+  alivePids.add(fakePid);
   const testSessions = new Map();
-  const fakePid = process.pid;
   testSessions.set('fake', {
     pid: fakePid,
     program: '/opt/RetroArch/retroarch',
@@ -50,53 +126,62 @@ assert(stopped >= 0, 'stopLaunchProgramInstances runs without throwing for track
     startedAt: Date.now(),
   });
 
-  const originalKill = process.kill.bind(process);
-  let killCalls = 0;
-  process.kill = (pid, signal) => {
-    if (pid === fakePid && signal === 'SIGTERM') {
-      killCalls += 1;
-      const err = new Error('ESRCH');
-      err.code = 'ESRCH';
-      throw err;
-    }
-    return originalKill(pid, signal);
-  };
-
   const started = Date.now();
   const result = await launchProcessManager.ensureLaunchProgramStopped(
     testSessions,
     '/opt/RetroArch/retroarch',
-    { minWaitMs: 1000, timeoutMs: 1500, pollMs: 50 }
+    { minWaitMs: 200, timeoutMs: 500, pollMs: 25, procEntries: [] }
   );
   const elapsed = Date.now() - started;
 
-  process.kill = originalKill;
-
-  assert(elapsed >= 1000, 'ensureLaunchProgramStopped waits at least minWaitMs');
-  assert(killCalls >= 1, 'ensureLaunchProgramStopped sends SIGTERM to matching process');
+  assert(elapsed >= 200, 'ensureLaunchProgramStopped waits at least minWaitMs');
+  assert(!alivePids.has(fakePid), 'ensureLaunchProgramStopped stops tracked session pid');
   assert(!testSessions.has('fake'), 'ensureLaunchProgramStopped removes exited session');
-  assert(result.stopped >= 0, 'ensureLaunchProgramStopped returns stopped count');
+  assert(result.stopped >= 1, 'ensureLaunchProgramStopped returns stopped count');
 
+  alivePids.add(777002);
   const untouched = new Map();
   untouched.set('other', {
-    pid: process.pid,
+    pid: 777002,
     program: programB,
     filePath: '/other.sfc',
     startedAt: Date.now(),
   });
   untouched.set('dead', {
-    pid: process.pid + 999999,
+    pid: 999999,
     program: programA,
     filePath: '/dead.sfc',
     startedAt: Date.now(),
   });
 
   await launchProcessManager.ensureLaunchProgramStopped(untouched, programA, {
-    minWaitMs: 1000,
-    timeoutMs: 1500,
-    pollMs: 50,
+    minWaitMs: 200,
+    timeoutMs: 500,
+    pollMs: 25,
+    procEntries: [],
   });
   assert(untouched.has('other'), 'ensureLaunchProgramStopped does not remove other program sessions');
+  assert(alivePids.has(777002), 'ensureLaunchProgramStopped leaves other program pid running');
+  alivePids.delete(777002);
+
+  const externalPid = 9001;
+  alivePids.add(externalPid);
+  const externalOnlySessions = new Map();
+  const externalProcEntries = [
+    {
+      pid: externalPid,
+      exePath: '/opt/RetroArch/retroarch',
+      cmdline: '/opt/RetroArch/retroarch\0game.sfc',
+    },
+  ];
+
+  await launchProcessManager.ensureLaunchProgramStopped(externalOnlySessions, '/opt/RetroArch/retroarch', {
+    minWaitMs: 200,
+    timeoutMs: 500,
+    pollMs: 25,
+    procEntries: externalProcEntries,
+  });
+  assert(!alivePids.has(externalPid), 'ensureLaunchProgramStopped stops untracked external emulator process');
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

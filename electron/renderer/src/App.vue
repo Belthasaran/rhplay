@@ -761,15 +761,18 @@
           <div v-if="usb2snesDropdownOpen" class="usb2snes-dropdown" @click.stop>
             <!-- Active Launch Method Tiles -->
             <div class="launch-method-tiles">
-              <button
-                type="button"
-                class="launch-method-tile"
-                :class="{ active: activeLaunchMethod === 'usb2snes', disabled: settings.usb2snesEnabled !== 'yes' }"
-                :disabled="settings.usb2snesEnabled !== 'yes'"
-                @click="setActiveLaunchMethod('usb2snes')"
-              >
-                USB2SNES
-              </button>
+              <div class="launch-method-tile-wrap">
+                <button
+                  type="button"
+                  class="launch-method-tile"
+                  :class="{ active: activeLaunchMethod === 'usb2snes', disabled: settings.usb2snesEnabled !== 'yes' }"
+                  :disabled="settings.usb2snesEnabled !== 'yes'"
+                  @click="setActiveLaunchMethod('usb2snes')"
+                >
+                  USB2SNES
+                </button>
+                <button type="button" class="launch-method-edit-link" @click.stop="openUsbOptionsWizard">Edit</button>
+              </div>
               <div class="launch-method-tile-wrap">
                 <button
                   type="button"
@@ -794,6 +797,27 @@
             <!-- Status Section -->
             <div class="usb2snes-dropdown-header">
               <div class="status-indicators">
+                <div
+                  v-if="settings.usb2snesEnabled === 'yes' && settings.usb2snesHostingMethod === 'sni'"
+                  class="status-item"
+                >
+                  <span class="status-label">Server:</span>
+                  <span class="ssh-health-indicator" :class="usb2snesSniStatus.health">
+                    {{ getUsb2snesSniStatusLabel() }}
+                  </span>
+                  <button
+                    v-if="!usb2snesSniStatus.running && usb2snesSniStatus.status !== 'restarting'"
+                    type="button"
+                    class="btn-small"
+                    @click="startUsb2snesSni"
+                  >Start</button>
+                  <button
+                    v-if="usb2snesSniStatus.running || usb2snesSniStatus.status === 'restarting'"
+                    type="button"
+                    class="btn-small"
+                    @click="stopUsb2snesSni"
+                  >Stop</button>
+                </div>
                 <div class="status-item">
                   <span class="status-label">Connection:</span>
                   <span class="status-indicator" :class="usb2snesStatus.connected ? 'connected' : 'disconnected'">
@@ -5672,6 +5696,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
              <div class="Setting-control">
               <select v-model="settings.usb2snesHostingMethod">
                 <option value="remote">Connect to a USB2SNES Server - Specify WebSocket URL</option>
+                <option value="sni">SNI Server (bundled / program data)</option>
                 <option value="embedded">Run an Embedded USB2SNES/FXP Server</option>
                 <option value="embedded-divert">Embedded Server - Divert Connections to another Host:Port, Always</option>
                 <option value="embedded-divert-fallback">Embedded Server - Divert Connections, With error fallback to Local USB</option>
@@ -5680,7 +5705,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
         </div>
 
-        <template v-if="settings.usb2snesHostingMethod === 'remote'">
+        <template v-if="settings.usb2snesHostingMethod === 'remote' || settings.usb2snesHostingMethod === 'sni'">
           <div class="settings-section">
             <div class="setting-row">
               <label class="setting-label">USB2SNES WebSocket Address</label>
@@ -6515,6 +6540,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                 v-model="usbOptionsWizardDraftSettings.usb2snesHostingMethod"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;">
                 <option value="remote">Do not run server, Connect to Remote 3rd party Server instead (CrowdControl, QUSB2SNES, etc.)</option>
+                <option value="sni">SNI Server (program data directory)</option>
                 <option value="embedded">Use an Embedded Server Built into this Application</option>
               </select>
               <p style="font-size: 18px; color: red; text-decoration: bold; background: black;">
@@ -6668,7 +6694,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           </div>
           
           <!-- Tab 1 or 2: Client Settings (if remote hosting) -->
-          <div v-if="usbOptionsWizardTab === 1 && usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes' && usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'remote'" class="wizard-page">
+          <div v-if="usbOptionsWizardTab === 1 && usbOptionsWizardDraftSettings?.usb2snesEnabled === 'yes' && (usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'remote' || usbOptionsWizardDraftSettings?.usb2snesHostingMethod === 'sni')" class="wizard-page">
             <h4 style="margin-bottom: 16px;">Client Connection Settings</h4>
             
             <div class="wizard-field" style="margin-bottom: 20px;">
@@ -8623,6 +8649,17 @@ Do you recommend; is the game fun and worthwhile?</span></label>
   @save="handleEmulatorConfigSave"
 />
 
+<FirstTimeLaunchConfigModal
+  :is-open="firstTimeLaunchModalOpen"
+  :emulator-draft="firstTimeLaunchEmulatorDraft"
+  :append-config-path="firstTimeLaunchAppendConfigPath"
+  :auto-detected-retroarch-path="firstTimeLaunchAutoRetroarchPath"
+  :auto-detected-retroarch-core-path="firstTimeLaunchAutoRetroarchCorePath"
+  :customized="firstTimeLaunchEmulatorCustomized"
+  @customize="openFirstTimeLaunchCustomize"
+  @save="handleFirstTimeLaunchSave"
+/>
+
 <!-- Game Stages Dialog -->
 <GameStagesDialog
   :is-open="showGameStagesDialog"
@@ -9932,6 +9969,7 @@ import RatingsPublishingDashboard from './components/publish/RatingsPublishingDa
 import GameSubmissionDashboard from './components/submit/GameSubmissionDashboard.vue';
 import AdvancedPatchModal from './components/AdvancedPatchModal.vue';
 import EmulatorConfigModal from './components/EmulatorConfigModal.vue';
+import FirstTimeLaunchConfigModal from './components/FirstTimeLaunchConfigModal.vue';
 import GameDetailsInspector from './components/GameDetailsInspector.vue';
 import GameStagesDialog from './components/GameStagesDialog.vue';
 import StageFeedbackForm from './components/StageFeedbackForm.vue';
@@ -10332,6 +10370,18 @@ const usb2snesFxpStatus = reactive({
   deviceCount: 0
 });
 
+const usb2snesSniStatus = reactive({
+  running: false,
+  desired: false,
+  status: 'stopped' as 'stopped' | 'starting' | 'running' | 'restarting' | 'error',
+  health: 'red' as 'green' | 'yellow' | 'red',
+  restartAttempts: 0,
+  lastError: '',
+  lastChange: '',
+  binaryPath: '',
+  wsAddress: 'ws://localhost:23074',
+});
+
 const sshConsoleModalOpen = ref(false);
 const sshConsoleHistory = ref<any[]>([]);
 const currentSshCommand = ref('');
@@ -10394,6 +10444,7 @@ const usb2snesSshStatusLabel = computed(() => {
 
 let removeUsb2snesSshStatusListener: (() => void) | null = null;
 let removeUsb2snesFxpStatusListener: (() => void) | null = null;
+let removeUsb2snesSniStatusListener: (() => void) | null = null;
 let removeTrustChangedListener: (() => void) | null = null;
 let removeNostrStatusListener: (() => void) | null = null;
 let trustChangeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -11940,6 +11991,15 @@ function isUsb2snesAddressPresetActive(
 }
 
 function buildUsb2snesConnectOptions() {
+  if (settings.usb2snesHostingMethod === 'sni') {
+    return {
+      library: usb2snesCurrentLibrary.value,
+      address: settings.usb2snesAddress || 'ws://localhost:23074',
+      hostingMethod: 'sni',
+      proxyMode: 'direct',
+    };
+  }
+
   // For embedded mode: use localhost with configured port
   if (settings.usb2snesHostingMethod === 'embedded' || 
       settings.usb2snesHostingMethod === 'embedded-divert' || 
@@ -12382,6 +12442,67 @@ function updateUsb2snesFxpStatus(status: any) {
   usb2snesFxpStatus.deviceCount = typeof status.deviceCount === 'number' ? status.deviceCount : 0;
 }
 
+const usb2snesSniStatusLabel = computed(() => {
+  switch (usb2snesSniStatus.status) {
+    case 'running':
+      return usb2snesSniStatus.health === 'green' ? 'Running' : usb2snesSniStatus.health === 'yellow' ? 'Running (no devices)' : 'Running (unhealthy)';
+    case 'starting':
+      return 'Starting...';
+    case 'restarting':
+      return `Restarting (${usb2snesSniStatus.restartAttempts}/4)`;
+    case 'error':
+      return usb2snesSniStatus.lastError ? 'Error' : 'Error';
+    default:
+      return 'Not running';
+  }
+});
+
+function getUsb2snesSniStatusLabel() {
+  return usb2snesSniStatusLabel.value;
+}
+
+function updateUsb2snesSniStatus(status: any) {
+  if (!status) return;
+  usb2snesSniStatus.running = Boolean(status.running);
+  usb2snesSniStatus.desired = Boolean(status.desired);
+  usb2snesSniStatus.status = (status.status || 'stopped') as typeof usb2snesSniStatus.status;
+  usb2snesSniStatus.health = (status.health || 'red') as typeof usb2snesSniStatus.health;
+  usb2snesSniStatus.restartAttempts = typeof status.restartAttempts === 'number' ? status.restartAttempts : 0;
+  usb2snesSniStatus.lastError = status.lastError || '';
+  usb2snesSniStatus.lastChange = status.lastChange || '';
+  usb2snesSniStatus.binaryPath = status.binaryPath || '';
+  usb2snesSniStatus.wsAddress = status.wsAddress || 'ws://localhost:23074';
+}
+
+async function startUsb2snesSni() {
+  if (!isElectronAvailable()) {
+    await showAlert('SNI server requires Electron environment', 'Error');
+    return;
+  }
+  dropdownActionStatus.value = 'Starting SNI server...';
+  try {
+    const result = await (window as any).electronAPI.usb2snesSniStart({
+      wsAddress: settings.usb2snesAddress || 'ws://localhost:23074',
+    });
+    if (result?.status) updateUsb2snesSniStatus(result.status);
+    dropdownActionStatus.value = result?.success ? '✓ SNI server started' : `✗ ${result?.error || 'Start failed'}`;
+  } catch (error) {
+    dropdownActionStatus.value = `✗ SNI start failed: ${formatErrorMessage(error)}`;
+  }
+}
+
+async function stopUsb2snesSni() {
+  if (!isElectronAvailable()) return;
+  dropdownActionStatus.value = 'Stopping SNI server...';
+  try {
+    const result = await (window as any).electronAPI.usb2snesSniStop();
+    if (result?.status) updateUsb2snesSniStatus(result.status);
+    dropdownActionStatus.value = '✓ SNI server stopped';
+  } catch (error) {
+    dropdownActionStatus.value = `✗ SNI stop failed: ${formatErrorMessage(error)}`;
+  }
+}
+
 async function startUsb2snesFxp() {
   if (!isElectronAvailable()) {
     await showAlert('USBFXP server requires Electron environment', 'Error');
@@ -12664,6 +12785,20 @@ const uploadSuccess = ref(false);
 const usb2snesDropdownOpen = ref(false);
 const activeLaunchMethod = ref<'manual' | 'program' | 'usb2snes'>('manual');
 const emulatorConfigModalOpen = ref(false);
+const firstTimeLaunchModalOpen = ref(false);
+const firstTimeLaunchEmulatorCustomized = ref(false);
+const firstTimeLaunchAppendConfigPath = ref('');
+const firstTimeLaunchAutoRetroarchPath = ref('');
+const firstTimeLaunchAutoRetroarchCorePath = ref('');
+const firstTimeLaunchEmulatorDraft = reactive({
+  launchProgramPreset: 'retroarch' as 'other' | 'retroarch' | 'bizhawk',
+  launchProgram: '',
+  launchProgramArgs: '%file',
+  retroarch_path: '',
+  retroarch_core_path: '',
+  bizhawk_path: '',
+});
+let pendingLaunchConfigAction: (() => void | Promise<void>) | null = null;
 
 function initActiveLaunchMethod() {
   let method = settings.launchMethod;
@@ -12680,6 +12815,136 @@ function setActiveLaunchMethod(method: 'manual' | 'program' | 'usb2snes') {
 
 function openEmulatorConfigModal() {
   emulatorConfigModalOpen.value = true;
+}
+
+function isEmulatorConfigured(): boolean {
+  if (settings.launchProgramPreset === 'retroarch') {
+    return Boolean(settings.launchProgram?.trim() && settings.retroarch_core_path?.trim());
+  }
+  if (settings.launchProgramPreset === 'bizhawk') {
+    return Boolean(settings.bizhawk_path?.trim());
+  }
+  return Boolean(settings.launchProgram?.trim());
+}
+
+function needsFirstTimeLaunchConfig(): boolean {
+  if (settings.launchConfigCompleted === 'yes') return false;
+  if (settings.launchMethod === 'manual') return true;
+  if (!settings.launchProgram?.trim() && settings.launchProgramPreset === 'other') return true;
+  if (settings.launchProgramPreset === 'retroarch' && (!settings.retroarch_path?.trim() || !settings.retroarch_core_path?.trim())) {
+    return true;
+  }
+  if (settings.launchProgram && /launch_rand/i.test(settings.launchProgram)) return true;
+  if (activeLaunchMethod.value === 'program' && !isEmulatorConfigured()) return true;
+  return false;
+}
+
+async function prepareFirstTimeLaunchModal() {
+  firstTimeLaunchEmulatorCustomized.value = false;
+  firstTimeLaunchEmulatorDraft.launchProgramPreset = 'retroarch';
+  firstTimeLaunchEmulatorDraft.launchProgram = '';
+  firstTimeLaunchEmulatorDraft.launchProgramArgs = '%file';
+  firstTimeLaunchEmulatorDraft.retroarch_path = '';
+  firstTimeLaunchEmulatorDraft.retroarch_core_path = '';
+  firstTimeLaunchEmulatorDraft.bizhawk_path = '';
+
+  if (isElectronAvailable()) {
+    const api = (window as any).electronAPI;
+    try {
+      const pathResult = await api.getRetroarchAppendConfigPath?.();
+      if (pathResult?.success) firstTimeLaunchAppendConfigPath.value = pathResult.path || '';
+    } catch (_err) {
+      firstTimeLaunchAppendConfigPath.value = '';
+    }
+    try {
+      const detected = await api.detectEmulatorPaths({});
+      if (detected?.success) {
+        firstTimeLaunchAutoRetroarchPath.value = detected.retroarch_path || '';
+        firstTimeLaunchAutoRetroarchCorePath.value = detected.retroarch_core_path || '';
+        firstTimeLaunchEmulatorDraft.retroarch_path = detected.retroarch_path || '';
+        firstTimeLaunchEmulatorDraft.retroarch_core_path = detected.retroarch_core_path || '';
+      }
+    } catch (_err) {
+      // ignore
+    }
+  }
+}
+
+async function ensureFirstTimeLaunchConfig(action: () => void | Promise<void>): Promise<boolean> {
+  if (!needsFirstTimeLaunchConfig()) {
+    return true;
+  }
+  pendingLaunchConfigAction = action;
+  await prepareFirstTimeLaunchModal();
+  firstTimeLaunchModalOpen.value = true;
+  return false;
+}
+
+function openFirstTimeLaunchCustomize() {
+  firstTimeLaunchEmulatorCustomized.value = true;
+  settings.launchProgramPreset = firstTimeLaunchEmulatorDraft.launchProgramPreset;
+  settings.launchProgram = firstTimeLaunchEmulatorDraft.launchProgram;
+  settings.launchProgramArgs = firstTimeLaunchEmulatorDraft.launchProgramArgs;
+  settings.retroarch_path = firstTimeLaunchEmulatorDraft.retroarch_path;
+  settings.retroarch_core_path = firstTimeLaunchEmulatorDraft.retroarch_core_path;
+  settings.bizhawk_path = firstTimeLaunchEmulatorDraft.bizhawk_path;
+  emulatorConfigModalOpen.value = true;
+}
+
+async function handleFirstTimeLaunchSave(payload: { primaryLaunch: 'usb2snes' | 'emulator' }) {
+  const api = (window as any).electronAPI;
+  let applied = {
+    launchProgramPreset: 'retroarch' as const,
+    launchProgram: firstTimeLaunchEmulatorDraft.launchProgram || firstTimeLaunchAutoRetroarchPath.value,
+    launchProgramArgs: '%file',
+    retroarch_path: firstTimeLaunchEmulatorDraft.retroarch_path || firstTimeLaunchAutoRetroarchPath.value,
+    retroarch_core_path: firstTimeLaunchEmulatorDraft.retroarch_core_path || firstTimeLaunchAutoRetroarchCorePath.value,
+    bizhawk_path: '',
+  };
+
+  if (api?.applyEmulatorPreset) {
+    const result = await api.applyEmulatorPreset('retroarch', {
+      retroarch_path: applied.retroarch_path,
+      retroarch_core_path: applied.retroarch_core_path,
+    });
+    if (result?.success && result.settings) {
+      applied = { ...applied, ...result.settings };
+    }
+  }
+
+  settings.launchProgramPreset = applied.launchProgramPreset;
+  settings.launchProgram = applied.launchProgram || '';
+  settings.launchProgramArgs = applied.launchProgramArgs || '%file';
+  settings.retroarch_path = applied.retroarch_path || '';
+  settings.retroarch_core_path = applied.retroarch_core_path || '';
+  settings.launchConfigCompleted = 'yes';
+
+  if (payload.primaryLaunch === 'usb2snes') {
+    settings.launchMethod = 'usb2snes';
+    activeLaunchMethod.value = 'usb2snes';
+    settings.usb2snesEnabled = 'yes';
+  } else {
+    settings.launchMethod = 'program';
+    activeLaunchMethod.value = 'program';
+    settings.usb2snesEnabled = 'yes';
+    settings.usb2snesAddress = 'ws://localhost:23074';
+    settings.usb2snesProxyMode = 'direct';
+    settings.usb2snesHostingMethod = 'remote';
+  }
+
+  await saveSettings();
+  firstTimeLaunchModalOpen.value = false;
+
+  const resume = pendingLaunchConfigAction;
+  pendingLaunchConfigAction = null;
+
+  if (payload.primaryLaunch === 'usb2snes') {
+    openUsbOptionsWizard();
+  }
+
+  if (resume) {
+    await resume();
+  }
 }
 
 const emulatorConfigSettings = computed(() => ({
@@ -12739,6 +13004,17 @@ async function handleEmulatorConfigSave(draft: {
       return;
     }
   }
+
+  if (firstTimeLaunchModalOpen.value) {
+    firstTimeLaunchEmulatorDraft.launchProgramPreset = draft.launchProgramPreset;
+    firstTimeLaunchEmulatorDraft.launchProgram = draft.launchProgram;
+    firstTimeLaunchEmulatorDraft.launchProgramArgs = draft.launchProgramArgs;
+    firstTimeLaunchEmulatorDraft.retroarch_path = draft.retroarch_path;
+    firstTimeLaunchEmulatorDraft.retroarch_core_path = draft.retroarch_core_path;
+    firstTimeLaunchEmulatorDraft.bizhawk_path = draft.bizhawk_path;
+    firstTimeLaunchEmulatorCustomized.value = true;
+  }
+
   emulatorConfigModalOpen.value = false;
 }
 
@@ -20783,7 +21059,7 @@ function validateWizardTab(tabIndex: number): boolean {
       
     case 3: // Client settings
       // Only validate if remote hosting is selected
-      if (draft.usb2snesEnabled === 'yes' && draft.usb2snesHostingMethod === 'remote') {
+      if (draft.usb2snesEnabled === 'yes' && (draft.usb2snesHostingMethod === 'remote' || draft.usb2snesHostingMethod === 'sni')) {
         if (!draft.usb2snesAddress) {
           return false;
         }
@@ -20811,7 +21087,7 @@ function getWizardTotalTabs(): number {
           draft.usb2snesHostingMethod === 'embedded-divert-fallback') {
         tabs += 1; // Tab 2: Diversion target
       }
-    } else if (draft.usb2snesHostingMethod === 'remote') {
+    } else if (draft.usb2snesHostingMethod === 'remote' || draft.usb2snesHostingMethod === 'sni') {
       tabs += 1; // Tab 1: Client settings
     }
     
@@ -20862,6 +21138,17 @@ async function finishUsbOptionsWizard() {
       await startUsb2snesFxp();
     } catch (error) {
       console.warn('[USB Options] Failed to auto-start server:', error);
+    }
+  }
+
+  if (settings.usb2snesEnabled === 'yes' && settings.usb2snesHostingMethod === 'sni') {
+    if (!settings.usb2snesAddress || settings.usb2snesAddress === 'ws://localhost:64213') {
+      settings.usb2snesAddress = 'ws://localhost:23074';
+    }
+    try {
+      await startUsb2snesSni();
+    } catch (error) {
+      console.warn('[USB Options] Failed to auto-start SNI server:', error);
     }
   }
   
@@ -20950,7 +21237,7 @@ function getWizardTabList() {
           draft.usb2snesHostingMethod === 'embedded-divert-fallback') {
         tabs.push({ name: 'Diversion', index: 2 });
       }
-    } else if (draft.usb2snesHostingMethod === 'remote') {
+    } else if (draft.usb2snesHostingMethod === 'remote' || draft.usb2snesHostingMethod === 'sni') {
       tabs.push({ name: 'Connection', index: 1 });
     }
     
@@ -22372,6 +22659,13 @@ function getSingleSelected(): Item | null {
 }
 
 async function startSelected() {
+  if (!(await ensureFirstTimeLaunchConfig(() => startSelectedInternal()))) {
+    return;
+  }
+  await startSelectedInternal();
+}
+
+async function startSelectedInternal() {
   // Get selected game IDs
   const selectedGameIds = Array.from(selectedIds.value);
   
@@ -22874,7 +23168,8 @@ const settings = reactive({
   retroarch_path: '',
   retroarch_core_path: '',
   bizhawk_path: '',
-  usb2snesHostingMethod: 'remote' as 'remote' | 'embedded' | 'embedded-divert' | 'embedded-divert-fallback',
+  launchConfigCompleted: 'no' as 'yes' | 'no',
+  usb2snesHostingMethod: 'remote' as 'remote' | 'sni' | 'embedded' | 'embedded-divert' | 'embedded-divert-fallback',
   usb2snesAddress: 'ws://localhost:64213',
   usb2snesFxpAutoStart: 'yes' as 'yes' | 'no',
   usb2snesFxpUseDummyDevice: 'no' as 'yes' | 'no',
@@ -22986,6 +23281,9 @@ async function openSettings() {
       if (savedSettings.retroarch_path) settings.retroarch_path = savedSettings.retroarch_path;
       if (savedSettings.retroarch_core_path) settings.retroarch_core_path = savedSettings.retroarch_core_path;
       if (savedSettings.bizhawk_path) settings.bizhawk_path = savedSettings.bizhawk_path;
+      if (savedSettings.launchConfigCompleted) {
+        settings.launchConfigCompleted = savedSettings.launchConfigCompleted as typeof settings.launchConfigCompleted;
+      }
       if (savedSettings.usb2snesHostingMethod) settings.usb2snesHostingMethod = savedSettings.usb2snesHostingMethod as typeof settings.usb2snesHostingMethod;
       if (savedSettings.usb2snesAddress) settings.usb2snesAddress = savedSettings.usb2snesAddress;
       if (savedSettings.usb2snesFxpAutoStart) settings.usb2snesFxpAutoStart = savedSettings.usb2snesFxpAutoStart as typeof settings.usb2snesFxpAutoStart;
@@ -23154,6 +23452,7 @@ async function saveSettings() {
       retroarch_path: settings.retroarch_path,
       retroarch_core_path: settings.retroarch_core_path,
       bizhawk_path: settings.bizhawk_path,
+      launchConfigCompleted: settings.launchConfigCompleted,
       usb2snesHostingMethod: settings.usb2snesHostingMethod,
       usb2snesAddress: settings.usb2snesAddress,
       usb2snesFxpAutoStart: settings.usb2snesFxpAutoStart,
@@ -25013,6 +25312,13 @@ function enforceCountMax() {
 }
 
 async function openRunModal() {
+  if (!(await ensureFirstTimeLaunchConfig(() => openRunModalInternal()))) {
+    return;
+  }
+  await openRunModalInternal();
+}
+
+async function openRunModalInternal() {
   if (!randomFilter.count) randomFilter.count = 1;
   
   // Load filter values if not already loaded
@@ -32388,6 +32694,9 @@ async function loadSettings() {
     if (savedSettings.retroarch_path) settings.retroarch_path = savedSettings.retroarch_path;
     if (savedSettings.retroarch_core_path) settings.retroarch_core_path = savedSettings.retroarch_core_path;
     if (savedSettings.bizhawk_path) settings.bizhawk_path = savedSettings.bizhawk_path;
+    if (savedSettings.launchConfigCompleted) {
+      settings.launchConfigCompleted = savedSettings.launchConfigCompleted as any;
+    }
     if (savedSettings.usb2snesHostingMethod) settings.usb2snesHostingMethod = savedSettings.usb2snesHostingMethod as any;
     if (savedSettings.usb2snesAddress) settings.usb2snesAddress = savedSettings.usb2snesAddress;
     if (savedSettings.usb2snesFxpAutoStart) settings.usb2snesFxpAutoStart = savedSettings.usb2snesFxpAutoStart as any;
@@ -32992,6 +33301,21 @@ onMounted(async () => {
           updateUsb2snesFxpStatus(status);
         });
       }
+
+      try {
+        const sniStatus = await (window as any).electronAPI.usb2snesGetSniStatus();
+        if (sniStatus) {
+          updateUsb2snesSniStatus(sniStatus);
+        }
+      } catch (error) {
+        console.warn('[USB2SNES] Failed to fetch SNI status:', error);
+      }
+
+      if (typeof (window as any).electronAPI.onUsb2snesSniStatus === 'function') {
+        removeUsb2snesSniStatusListener = (window as any).electronAPI.onUsb2snesSniStatus((status: any) => {
+          updateUsb2snesSniStatus(status);
+        });
+      }
       
       // Check if embedded server option is selected but server is not running (only if auto-start is enabled)
       if ((settings.usb2snesHostingMethod === 'embedded' || 
@@ -33157,6 +33481,10 @@ onUnmounted(() => {
   if (removeUsb2snesFxpStatusListener) {
     removeUsb2snesFxpStatusListener();
     removeUsb2snesFxpStatusListener = null;
+  }
+  if (removeUsb2snesSniStatusListener) {
+    removeUsb2snesSniStatusListener();
+    removeUsb2snesSniStatusListener = null;
   }
   if (removeTrustChangedListener) {
     removeTrustChangedListener();
@@ -40238,7 +40566,8 @@ button:disabled {
   z-index: 10000 !important;
 }
 
-.welcome-wizard-blocking {
+.welcome-wizard-blocking,
+.first-time-launch-blocking {
   pointer-events: all !important;
   z-index: 9999 !important;
   background: rgba(0, 0, 0, 0.8);

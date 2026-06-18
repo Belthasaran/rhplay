@@ -62,6 +62,27 @@
               <button type="button" class="btn-secondary" @click="openSearch('retroarch_core')">Search</button>
             </div>
           </div>
+          <div class="form-field">
+            <label>RetroArch append.cfg</label>
+            <div v-if="appendConfigPath" class="hint">
+              Path: <code>{{ appendConfigPath }}</code>
+            </div>
+            <div class="append-config-actions">
+              <button type="button" class="btn-secondary" @click="toggleAppendEditor">
+                {{ appendEditorOpen ? 'Hide Editor' : 'View / Edit' }}
+              </button>
+              <button type="button" class="btn-secondary" @click="restoreAppendConfigDefault">Restore Default</button>
+            </div>
+            <div v-if="appendEditorOpen" class="append-config-editor">
+              <textarea
+                v-model="appendConfigContent"
+                class="input append-config-textarea"
+                rows="12"
+                spellcheck="false"
+              />
+              <button type="button" class="btn-secondary" @click="saveAppendConfig">Save append.cfg</button>
+            </div>
+          </div>
         </template>
 
         <template v-else-if="draft.launchProgramPreset === 'bizhawk'">
@@ -100,6 +121,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
 import EmulatorPathSearchModal, { type EmulatorSearchKind } from './EmulatorPathSearchModal.vue';
+import { showAlert } from '../utils/dialogs';
 
 export interface EmulatorConfigDraft {
   launchProgramPreset: 'other' | 'retroarch' | 'bizhawk';
@@ -131,6 +153,9 @@ const draft = reactive<EmulatorConfigDraft>({
 
 const searchModalOpen = ref(false);
 const searchKind = ref<EmulatorSearchKind>('retroarch_exe');
+const appendConfigPath = ref('');
+const appendConfigContent = ref('');
+const appendEditorOpen = ref(false);
 
 function openSearch(kind: EmulatorSearchKind) {
   searchKind.value = kind;
@@ -161,8 +186,85 @@ watch(() => props.isOpen, async (open) => {
   if (open) {
     copyFromSettings();
     await detectPathsIfNeeded();
+    await loadAppendConfigMeta();
+  } else {
+    appendEditorOpen.value = false;
   }
 });
+
+async function loadAppendConfigMeta() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.getRetroarchAppendConfigPath) {
+    await showAlert('RetroArch append.cfg is unavailable in this build. Restart the app after updating.', 'Append Config Unavailable');
+    return;
+  }
+  try {
+    const pathResult = await api.getRetroarchAppendConfigPath();
+    if (pathResult?.success && pathResult.path) {
+      appendConfigPath.value = pathResult.path;
+    } else {
+      await showAlert(pathResult?.error || 'Could not resolve append.cfg path.', 'Append Config Error');
+    }
+  } catch (err) {
+    console.warn('[EmulatorConfigModal] getRetroarchAppendConfigPath failed:', err);
+    await showAlert(String((err as Error)?.message || err), 'Append Config Error');
+  }
+}
+
+async function loadAppendConfigContent() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.readRetroarchAppendConfig) {
+    await showAlert('RetroArch append.cfg is unavailable in this build. Restart the app after updating.', 'Append Config Unavailable');
+    return;
+  }
+  const result = await api.readRetroarchAppendConfig();
+  if (result?.success) {
+    appendConfigPath.value = result.path || appendConfigPath.value;
+    appendConfigContent.value = result.content || '';
+    if (!appendConfigContent.value.trim()) {
+      await showAlert('append.cfg is empty. Use Restore Default to load the bundled template.', 'Append Config Empty');
+    }
+  } else {
+    await showAlert(result?.error || 'Could not read append.cfg.', 'Append Config Error');
+  }
+}
+
+async function toggleAppendEditor() {
+  appendEditorOpen.value = !appendEditorOpen.value;
+  if (appendEditorOpen.value) {
+    await loadAppendConfigContent();
+  }
+}
+
+async function saveAppendConfig() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.writeRetroarchAppendConfig) return;
+  const result = await api.writeRetroarchAppendConfig(appendConfigContent.value);
+  if (!result?.success) {
+    console.warn('[EmulatorConfigModal] writeRetroarchAppendConfig failed:', result?.error);
+  } else if (result.path) {
+    appendConfigPath.value = result.path;
+  }
+}
+
+async function restoreAppendConfigDefault() {
+  const api = (window as any)?.electronAPI;
+  if (!api?.restoreRetroarchAppendConfig) {
+    await showAlert('RetroArch append.cfg is unavailable in this build. Restart the app after updating.', 'Append Config Unavailable');
+    return;
+  }
+  const result = await api.restoreRetroarchAppendConfig();
+  if (result?.success) {
+    appendConfigPath.value = result.path || appendConfigPath.value;
+    appendConfigContent.value = result.content || '';
+    appendEditorOpen.value = true;
+    if (!appendConfigContent.value.trim()) {
+      await showAlert('Restore completed but append.cfg is still empty. The bundled template may be missing from this install.', 'Append Config Empty');
+    }
+  } else {
+    await showAlert(result?.error || 'Could not restore append.cfg default.', 'Append Config Error');
+  }
+}
 
 async function detectPathsIfNeeded() {
   const api = (window as any)?.electronAPI;
@@ -345,5 +447,25 @@ function cancel() {
   justify-content: flex-end;
   padding: 12px 16px;
   border-top: 1px solid var(--border-primary, #ddd);
+}
+
+.append-config-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.append-config-editor {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.append-config-textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  min-height: 200px;
 }
 </style>

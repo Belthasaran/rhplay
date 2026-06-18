@@ -80,6 +80,7 @@
     "test:updategames": "node tests/test_updategames.js",
     "test:usb2snes-list": "node tests/test_usb2snes_list.js",
     "test:usb2snes-test-connection": "node tests/test_usb2snes_test_connection.js",
+    "test:retroarch-append-config": "node tests/test_retroarch_append_config.js",
     "test:usb2snes-mkdir": "node tests/test_usb2snes_mkdir.js",
     "test:usb2snes-putfile": "node tests/test_usb2snes_putfile.js",
     "test:usb2snes-full": "node tests/test_usb2snes_mkdir_then_upload.js",
@@ -295,6 +296,10 @@
       {
         "from": "electron/help/BIZHAWK_SETUP.html",
         "to": "help/BIZHAWK_SETUP.html"
+      },
+      {
+        "from": "electron/append.cfg.templmate",
+        "to": "electron/append.cfg.templmate"
       }
     ],
     "asarUnpack": [

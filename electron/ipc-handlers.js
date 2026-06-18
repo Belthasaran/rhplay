@@ -7668,7 +7668,7 @@ function registerDatabaseHandlers(dbManager) {
     try {
       if (program) {
         const stopResult = await launchProcessManager.ensureLaunchProgramStopped(launchProcessSessions, program);
-        if (stopResult.stopped > 0 || stopResult.forced) {
+        if (stopResult.stopped > 0 || stopResult.forced || stopResult.externalStopped > 0) {
           console.log('[Launch] Stopped existing instance(s) before launch:', stopResult);
         }
       }

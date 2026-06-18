@@ -40,6 +40,7 @@ const { matchesFilter } = require('./shared-filter-utils');
 const { fetchNetworkTime, determineRunValidity } = require('./utils/network-time');
 const sshManager = require('./main/usb2snes/sshManager');
 const usbfxpServer = require('./main/usb2snes/usbfxpServer');
+const { testUsb2snesConnection } = require('./main/usb2snes/testConnection');
 const { HostFP } = require('./main/HostFP');
 const TrustManager = require('./utils/TrustManager');
 const { getTwitchClientId, getTwitchRedirectUri, getTwitchLoopbackRedirectUri } = require('./twitch-config');
@@ -7180,6 +7181,24 @@ function registerDatabaseHandlers(dbManager) {
     } catch (error) {
       console.error('[USB2SNES] Connection error:', error);
       throw error;
+    }
+  });
+
+  /**
+   * Quick test of USB2SNES WebSocket reachability (does not use SNESWrapper singleton).
+   * Channel: usb2snes:test-connection
+   * @param {Object} options - { address, proxyMode, socksProxyUrl }
+   * @returns {Object} { status: 'success'|'warning'|'failure', devices?, error? }
+   */
+  ipcMain.handle('usb2snes:test-connection', async (_event, options = {}) => {
+    try {
+      return await testUsb2snesConnection(options);
+    } catch (error) {
+      console.error('[USB2SNES] Test connection error:', error);
+      return {
+        status: 'failure',
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
   });
 

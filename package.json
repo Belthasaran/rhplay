@@ -79,6 +79,7 @@
     "test:python-compat": "node tests/test_python_script_compat.js",
     "test:updategames": "node tests/test_updategames.js",
     "test:usb2snes-list": "node tests/test_usb2snes_list.js",
+    "test:usb2snes-test-connection": "node tests/test_usb2snes_test_connection.js",
     "test:usb2snes-mkdir": "node tests/test_usb2snes_mkdir.js",
     "test:usb2snes-putfile": "node tests/test_usb2snes_putfile.js",
     "test:usb2snes-full": "node tests/test_usb2snes_mkdir_then_upload.js",

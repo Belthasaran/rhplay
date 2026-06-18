@@ -88,4 +88,5 @@ rhtools-launcher/renderer/dist/assets/*.js
 rhtools-launcher/renderer/dist/assets/*.css
 rhtools-launcher/renderer/dist/index.html
 lmlevelinfo/*.ppm
+test.srm
 

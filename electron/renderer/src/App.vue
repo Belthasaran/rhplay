@@ -5684,8 +5684,29 @@ Do you recommend; is the game fun and worthwhile?</span></label>
           <div class="settings-section">
             <div class="setting-row">
               <label class="setting-label">USB2SNES WebSocket Address</label>
-              <div class="setting-control">
-                <input type="text" v-model="settings.usb2snesAddress" />
+              <div class="setting-control setting-control-column">
+                <div class="usb2snes-address-row">
+                  <input
+                    type="text"
+                    v-model="settings.usb2snesAddress"
+                    @blur="onUsb2snesAddressBlur('settings')"
+                  />
+                  <span
+                    class="usb2snes-address-test-icon"
+                    :class="settingsUsb2snesAddressTestDisplay.cssClass"
+                    :title="settingsUsb2snesAddressTestDisplay.tooltip"
+                  >{{ settingsUsb2snesAddressTestDisplay.icon }}</span>
+                </div>
+                <div class="usb2snes-address-presets">
+                  <button
+                    v-for="preset in USB2SNES_ADDRESS_PRESETS"
+                    :key="preset.label"
+                    type="button"
+                    class="catalog-chip catalog-chip-clickable"
+                    :class="{ active: isUsb2snesAddressPresetActive(preset, 'settings') }"
+                    @click="applyUsb2snesAddressPreset(preset, 'settings')"
+                  >{{ preset.label }}</button>
+                </div>
               </div>
             </div>
             <div class="setting-caption warning">
@@ -6654,12 +6675,30 @@ Do you recommend; is the game fun and worthwhile?</span></label>
               <label style="display: block; font-weight: 600; margin-bottom: 8px;">
                 USB2SNES WebSocket Address <span style="color: red;">*</span>
               </label>
-              <input 
-                type="text"
-                v-model="usbOptionsWizardDraftSettings.usb2snesAddress"
-                placeholder="ws://localhost:64213"
-                style="width: 100%; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;"
-                :class="{ 'invalid': !usbOptionsWizardDraftSettings?.usb2snesAddress }">
+              <div class="usb2snes-address-row" style="width: 100%;">
+                <input 
+                  type="text"
+                  v-model="usbOptionsWizardDraftSettings.usb2snesAddress"
+                  placeholder="ws://localhost:64213"
+                  style="flex: 1; min-width: 0; padding: 8px; border: 1px solid var(--border-primary); border-radius: 4px;"
+                  :class="{ 'invalid': !usbOptionsWizardDraftSettings?.usb2snesAddress }"
+                  @blur="onUsb2snesAddressBlur('wizard')">
+                <span
+                  class="usb2snes-address-test-icon"
+                  :class="wizardUsb2snesAddressTestDisplay.cssClass"
+                  :title="wizardUsb2snesAddressTestDisplay.tooltip"
+                >{{ wizardUsb2snesAddressTestDisplay.icon }}</span>
+              </div>
+              <div class="usb2snes-address-presets">
+                <button
+                  v-for="preset in USB2SNES_ADDRESS_PRESETS"
+                  :key="preset.label"
+                  type="button"
+                  class="catalog-chip catalog-chip-clickable"
+                  :class="{ active: isUsb2snesAddressPresetActive(preset, 'wizard') }"
+                  @click="applyUsb2snesAddressPreset(preset, 'wizard')"
+                >{{ preset.label }}</button>
+              </div>
               <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
                 The WebSocket address of the USB2SNES server (e.g., ws://localhost:64213)<br />
                 Some apps use ws://localhost:64213 (our default)<br />
@@ -10317,6 +10356,25 @@ const usbOptionsWizardFirstTime = ref(false);
 const usbOptionsWizardDraftSettings = ref<any>(null);
 const permissionGrantResult = ref<{success: boolean, message: string} | null>(null);
 
+type Usb2snesAddressTestStatus = 'unknown' | 'testing' | 'success' | 'warning' | 'failure';
+type Usb2snesAddressTestContext = 'settings' | 'wizard';
+
+const USB2SNES_ADDRESS_PRESETS = [
+  { label: '23074 (SNI)', address: 'ws://localhost:23074' },
+  { label: '23074 (QUSB2Snes)', address: 'ws://localhost:23074' },
+  { label: '64213 (CrowdControl)', address: 'ws://localhost:64213' },
+  { label: '8080 (Legacy)', address: 'ws://localhost:8080' },
+] as const;
+
+const settingsUsb2snesAddressTest = ref<Usb2snesAddressTestStatus>('unknown');
+const wizardUsb2snesAddressTest = ref<Usb2snesAddressTestStatus>('unknown');
+const settingsUsb2snesAddressTestDevices = ref<string[]>([]);
+const wizardUsb2snesAddressTestDevices = ref<string[]>([]);
+const settingsUsb2snesAddressTestError = ref('');
+const wizardUsb2snesAddressTestError = ref('');
+let settingsUsb2snesAddressTestSeq = 0;
+let wizardUsb2snesAddressTestSeq = 0;
+
 // Note: softwareUpdateDialogVisible and softwareUpdateInfo are initialized at the top of the script (line ~9281)
 
 const usb2snesSshStatusLabel = computed(() => {
@@ -11707,6 +11765,194 @@ async function refreshUsb2snesStatus() {
 
 function closeUsb2snesTools() {
   usb2snesToolsModalOpen.value = false;
+}
+
+function getUsb2snesAddressTestRef(context: Usb2snesAddressTestContext) {
+  return context === 'settings' ? settingsUsb2snesAddressTest : wizardUsb2snesAddressTest;
+}
+
+function resetUsb2snesAddressTest(context: Usb2snesAddressTestContext) {
+  getUsb2snesAddressTestRef(context).value = 'unknown';
+  if (context === 'settings') {
+    settingsUsb2snesAddressTestDevices.value = [];
+    settingsUsb2snesAddressTestError.value = '';
+  } else {
+    wizardUsb2snesAddressTestDevices.value = [];
+    wizardUsb2snesAddressTestError.value = '';
+  }
+}
+
+function shouldSkipUsb2snesAddressTest(proxyMode: string): boolean {
+  if (proxyMode === 'ssh') return true;
+  if (proxyMode === 'direct-with-ssh' && usb2snesSshStatus.running) return true;
+  return false;
+}
+
+function buildUsb2snesTestOptions(context: Usb2snesAddressTestContext): {
+  address: string;
+  proxyMode: 'direct' | 'socks';
+  socksProxyUrl?: string;
+} | null {
+  const address = context === 'settings'
+    ? settings.usb2snesAddress
+    : usbOptionsWizardDraftSettings.value?.usb2snesAddress;
+  const proxyMode = context === 'settings'
+    ? settings.usb2snesProxyMode
+    : (usbOptionsWizardDraftSettings.value?.usb2snesProxyMode || 'direct');
+  const socksProxyUrl = context === 'settings'
+    ? settings.usb2snesSocksProxyUrl
+    : (usbOptionsWizardDraftSettings.value?.usb2snesSocksProxyUrl || '');
+
+  if (!address || !String(address).trim()) {
+    return null;
+  }
+
+  if (shouldSkipUsb2snesAddressTest(proxyMode)) {
+    return null;
+  }
+
+  if (proxyMode === 'socks') {
+    if (!socksProxyUrl) return null;
+    return { address: String(address).trim(), proxyMode: 'socks', socksProxyUrl };
+  }
+
+  return { address: String(address).trim(), proxyMode: 'direct' };
+}
+
+function getUsb2snesAddressTestDisplay(
+  status: Usb2snesAddressTestStatus,
+  devices: string[] = []
+): { icon: string; cssClass: string; tooltip: string } {
+  switch (status) {
+    case 'testing':
+      return { icon: '…', cssClass: 'test-testing', tooltip: 'Testing connection...' };
+    case 'success':
+      return {
+        icon: '✓',
+        cssClass: 'test-success',
+        tooltip: devices.length ? `Connected: ${devices.join(', ')}` : 'Device found'
+      };
+    case 'warning':
+      return {
+        icon: '⚠',
+        cssClass: 'test-warning',
+        tooltip: 'Server reachable but no devices found (e.g. emulator not started)'
+      };
+    case 'failure':
+      return { icon: '✗', cssClass: 'test-failure', tooltip: 'Could not connect' };
+    default:
+      return { icon: '?', cssClass: 'test-unknown', tooltip: 'Connection not tested yet' };
+  }
+}
+
+const settingsUsb2snesAddressTestDisplay = computed(() => {
+  const display = getUsb2snesAddressTestDisplay(
+    settingsUsb2snesAddressTest.value,
+    settingsUsb2snesAddressTestDevices.value
+  );
+  if (settingsUsb2snesAddressTest.value === 'failure' && settingsUsb2snesAddressTestError.value) {
+    return { ...display, tooltip: settingsUsb2snesAddressTestError.value };
+  }
+  return display;
+});
+
+const wizardUsb2snesAddressTestDisplay = computed(() => {
+  const display = getUsb2snesAddressTestDisplay(
+    wizardUsb2snesAddressTest.value,
+    wizardUsb2snesAddressTestDevices.value
+  );
+  if (wizardUsb2snesAddressTest.value === 'failure' && wizardUsb2snesAddressTestError.value) {
+    return { ...display, tooltip: wizardUsb2snesAddressTestError.value };
+  }
+  return display;
+});
+
+watch(() => settings.usb2snesProxyMode, () => {
+  resetUsb2snesAddressTest('settings');
+});
+
+watch(() => usb2snesSshStatus.running, () => {
+  if (settings.usb2snesProxyMode === 'direct-with-ssh' && usb2snesSshStatus.running) {
+    resetUsb2snesAddressTest('settings');
+  }
+});
+
+watch(() => usbOptionsWizardDraftSettings.value?.usb2snesProxyMode, () => {
+  if (usbOptionsWizardDraftSettings.value) {
+    resetUsb2snesAddressTest('wizard');
+  }
+});
+
+async function testUsb2snesAddressConnection(context: Usb2snesAddressTestContext) {
+  const options = buildUsb2snesTestOptions(context);
+  const statusRef = getUsb2snesAddressTestRef(context);
+  const devicesRef = context === 'settings' ? settingsUsb2snesAddressTestDevices : wizardUsb2snesAddressTestDevices;
+  const errorRef = context === 'settings' ? settingsUsb2snesAddressTestError : wizardUsb2snesAddressTestError;
+
+  if (!options) {
+    resetUsb2snesAddressTest(context);
+    return;
+  }
+
+  const seq = context === 'settings' ? ++settingsUsb2snesAddressTestSeq : ++wizardUsb2snesAddressTestSeq;
+  statusRef.value = 'testing';
+
+  if (!isElectronAvailable()) {
+    statusRef.value = 'unknown';
+    return;
+  }
+
+  try {
+    const result = await (window as any).electronAPI.usb2snesTestConnection(options);
+    const currentSeq = context === 'settings' ? settingsUsb2snesAddressTestSeq : wizardUsb2snesAddressTestSeq;
+    if (currentSeq !== seq) {
+      return;
+    }
+
+    devicesRef.value = Array.isArray(result?.devices) ? result.devices : [];
+    errorRef.value = result?.error || '';
+
+    if (result?.status === 'success' || result?.status === 'warning' || result?.status === 'failure') {
+      statusRef.value = result.status;
+    } else {
+      statusRef.value = 'failure';
+      errorRef.value = errorRef.value || 'Unexpected test response';
+    }
+  } catch (error) {
+    const currentSeq = context === 'settings' ? settingsUsb2snesAddressTestSeq : wizardUsb2snesAddressTestSeq;
+    if (currentSeq !== seq) {
+      return;
+    }
+    devicesRef.value = [];
+    errorRef.value = formatErrorMessage(error);
+    statusRef.value = 'failure';
+  }
+}
+
+function onUsb2snesAddressBlur(context: Usb2snesAddressTestContext) {
+  testUsb2snesAddressConnection(context);
+}
+
+function applyUsb2snesAddressPreset(
+  preset: { label: string; address: string },
+  context: Usb2snesAddressTestContext
+) {
+  if (context === 'settings') {
+    settings.usb2snesAddress = preset.address;
+  } else if (usbOptionsWizardDraftSettings.value) {
+    usbOptionsWizardDraftSettings.value.usb2snesAddress = preset.address;
+  }
+  testUsb2snesAddressConnection(context);
+}
+
+function isUsb2snesAddressPresetActive(
+  preset: { address: string },
+  context: Usb2snesAddressTestContext
+): boolean {
+  const address = context === 'settings'
+    ? settings.usb2snesAddress
+    : usbOptionsWizardDraftSettings.value?.usb2snesAddress;
+  return String(address || '').trim() === preset.address;
 }
 
 function buildUsb2snesConnectOptions() {
@@ -20464,6 +20710,7 @@ function openUsbOptionsWizard() {
     usb2snesUploadDir: settings.usb2snesUploadDir || '/work'
   };
   usbOptionsWizardTab.value = 0;
+  resetUsb2snesAddressTest('wizard');
   usbOptionsWizardOpen.value = true;
 }
 
@@ -22701,6 +22948,7 @@ function openAboutDialog() {
 
 async function openSettings() {
   settingsModalOpen.value = true;
+  resetUsb2snesAddressTest('settings');
   
   // Load settings from database when opening the modal
   if (isElectronAvailable()) {
@@ -36143,6 +36391,45 @@ button:disabled {
 }
 .status-icon { color: var(--success-color); font-weight: bold; font-size: 18px; width: 20px; }
 .setting-control { flex: 1; display: flex; gap: 8px; align-items: center; }
+.setting-control-column {
+  flex-direction: column;
+  align-items: stretch;
+}
+.usb2snes-address-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.usb2snes-address-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+.usb2snes-address-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.usb2snes-address-presets .catalog-chip.active {
+  background: var(--bg-tertiary, #e0e0e0);
+  border-color: var(--accent-primary, #2196F3);
+  color: var(--accent-primary, #2196F3);
+}
+.usb2snes-address-test-icon {
+  flex: 0 0 20px;
+  width: 20px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 18px;
+  line-height: 1;
+  user-select: none;
+}
+.usb2snes-address-test-icon.test-unknown { color: var(--text-secondary, #888); }
+.usb2snes-address-test-icon.test-testing { color: var(--text-secondary, #888); }
+.usb2snes-address-test-icon.test-success { color: #10b981; }
+.usb2snes-address-test-icon.test-warning { color: #f59e0b; }
+.usb2snes-address-test-icon.test-failure { color: #ef4444; }
 .setting-control input[type="text"], .setting-control select { 
   flex: 1; 
   padding: var(--input-padding); 

@@ -689,6 +689,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
    */
   usb2snesConnect: (options) => ipcRenderer.invoke('usb2snes:connect', options),
   /**
+   * Quick test USB2SNES WebSocket reachability without affecting active session
+   * @param {Object} options - { address, proxyMode, socksProxyUrl }
+   * @returns {Promise<{status: string, devices?: string[], error?: string}>}
+   */
+  usb2snesTestConnection: (options) => ipcRenderer.invoke('usb2snes:test-connection', options),
+  /**
    * Start managed SSH client for USB2SNES tunneling
    * @param {Object} config - SSH configuration
    * @returns {Promise<{success: boolean, status?: Object, error?: string}>}

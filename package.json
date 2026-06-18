@@ -74,6 +74,7 @@
     "test:blob-compat": "node tests/test_blob_compatibility.js",
     "test:patch-resolver": "node tests/test_patch_resolver.js",
     "test:emulator-paths": "node tests/test-emulator-paths.js",
+    "test:launch-process-manager": "node tests/test_launch_process_manager.js",
     "test:cur-booted-writer": "node tests/test-cur-booted-writer.js",
     "test:help-doc-resolver": "node tests/test-help-doc-resolver.js",
     "test:python-compat": "node tests/test_python_script_compat.js",

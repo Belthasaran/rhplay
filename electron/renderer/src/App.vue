@@ -9584,7 +9584,7 @@ Do you recommend; is the game fun and worthwhile?</span></label>
               </div>
               
               <div v-if="settings.launchProgram && settings.launchProgram.trim()" class="action-group">
-                <button @click="launchWithProgram" class="btn-action" :disabled="quickLaunchLaunchLocked">
+                <button @click="launchWithProgram" class="btn-action">
                   {{ quickLaunchLaunchLocked && quickLaunchEmulatorRunningLabel ? quickLaunchEmulatorRunningLabel : '🎮 Launch with Program' }}
                 </button>
               </div>
@@ -9927,6 +9927,10 @@ import {
   type TextSize 
 } from './themeConfig';
 import { createLaunchSessionMonitor, type LaunchFinishReason } from './composables/useLaunchSessionMonitor';
+import {
+  maybeReconnectUsb2snesAfterEmulatorLaunch,
+  performUsb2snesReconnectCycle,
+} from './utils/emulator-launch-hooks';
 import { matchesFilter, getItemAttribute } from './shared-filter-utils';
 import { matchesPatchFilter } from './utils/patchFilter';
 import {
@@ -12191,44 +12195,10 @@ async function reconnectUsb2snes() {
   dropdownActionStatus.value = 'Reconnecting...';
   
   try {
-    // Refresh status first
-    await refreshUsb2snesStatus();
-    
-    // If connected, disconnect first
-    if (usb2snesStatus.connected) {
-      await (window as any).electronAPI.usb2snesDisconnect();
-      usb2snesStatus.connected = false;
-      usb2snesStatus.device = '';
-      usb2snesStatus.firmwareVersion = '';
-      usb2snesStatus.versionString = '';
-      usb2snesStatus.romRunning = '';
-      stopHealthMonitoring();
-      
-      // Small delay to ensure clean disconnect
-    await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    // Now connect
-    let connectOptions;
-    try {
-      connectOptions = buildUsb2snesConnectOptions();
-    } catch (configError: any) {
-      dropdownActionStatus.value = `✗ ${configError.message}`;
-      return;
-    }
-
-    const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
-    
-    usb2snesStatus.connected = true;
-    usb2snesStatus.device = result.device;
-    usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
-    usb2snesStatus.versionString = result.versionString || 'N/A';
-    usb2snesStatus.romRunning = result.romRunning || 'N/A';
-    usb2snesStatus.lastError = '';
-    
-    // Start health monitoring
-    startHealthMonitoring();
-    
+    const result = await performUsb2snesReconnectCycle(
+      buildUsb2snesReconnectHandlers(),
+      usb2snesStatus.connected
+    );
     dropdownActionStatus.value = `✓ Reconnected: ${result.device}`;
   } catch (error) {
     usb2snesStatus.lastError = String(error);
@@ -12236,6 +12206,51 @@ async function reconnectUsb2snes() {
     stopHealthMonitoring();
     dropdownActionStatus.value = `✗ Reconnection failed: ${formatErrorMessage(error)}`;
   }
+}
+
+function buildUsb2snesReconnectHandlers() {
+  return {
+    refreshStatus: refreshUsb2snesStatus,
+    disconnect: () => (window as any).electronAPI.usb2snesDisconnect(),
+    connect: (options: Record<string, unknown>) => (window as any).electronAPI.usb2snesConnect(options),
+    buildConnectOptions: buildUsb2snesConnectOptions,
+    onDisconnected: () => {
+      usb2snesStatus.connected = false;
+      usb2snesStatus.device = '';
+      usb2snesStatus.firmwareVersion = '';
+      usb2snesStatus.versionString = '';
+      usb2snesStatus.romRunning = '';
+      stopHealthMonitoring();
+    },
+    onConnected: (result: {
+      device?: string;
+      firmwareVersion?: string;
+      versionString?: string;
+      romRunning?: string;
+    }) => {
+      usb2snesStatus.connected = true;
+      usb2snesStatus.device = result.device || '';
+      usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
+      usb2snesStatus.versionString = result.versionString || 'N/A';
+      usb2snesStatus.romRunning = result.romRunning || 'N/A';
+      usb2snesStatus.lastError = '';
+    },
+    startHealthMonitoring,
+    stopHealthMonitoring,
+    onError: (error: unknown) => {
+      console.warn('[USB2SNES] Reconnect failed:', error);
+    },
+  };
+}
+
+async function reconnectUsb2snesAfterEmulatorLaunchIfNeeded() {
+  const wasConnected = usb2snesStatus.connected;
+  await maybeReconnectUsb2snesAfterEmulatorLaunch(
+    settings,
+    usb2snesSniStatus.running,
+    wasConnected,
+    buildUsb2snesReconnectHandlers()
+  );
 }
 
 async function startUsb2snesSsh() {
@@ -13024,7 +13039,11 @@ async function launchProgramFile(filePath: string): Promise<{ sessionId?: string
   if (!launchProgram) {
     throw new Error('No launch program configured in settings');
   }
-  return await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
+  quickLaunchMonitor.stopMonitoring();
+  runLaunchMonitor.stopMonitoring();
+  const result = await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
+  await reconnectUsb2snesAfterEmulatorLaunchIfNeeded();
+  return result;
 }
 
 async function recordCurBooted(payload: Record<string, unknown>) {
@@ -24640,9 +24659,9 @@ const quickLaunchActiveTileItem = computed(() => stagedGameToTileItem(quickLaunc
 const quickLaunchEmulatorRunningLabel = computed(() => {
   if (quickLaunchMonitor.state.value !== 'running' && quickLaunchMonitor.state.value !== 'waiting_start') return '';
   const preset = settings.launchProgramPreset;
-  if (preset === 'retroarch') return 'RetroArch Still Running';
-  if (preset === 'bizhawk') return 'BizHawk Still Running';
-  return 'Emulator Still Running';
+  if (preset === 'retroarch') return 'RetroArch Running — RESTART';
+  if (preset === 'bizhawk') return 'BizHawk Running — RESTART';
+  return 'Emulator Running — RESTART';
 });
 
 const quickLaunchLaunchLocked = computed(() =>
@@ -26810,17 +26829,7 @@ async function launchRunGame(gameNumber: number) {
     
     runStagingActionStatus.value = `Launching game ${gameNumber}: ${fileToLaunch}...`;
     
-    // Get launch program from settings
-    const launchProgram = settings.launchProgram || '';
-    const launchArgs = settings.launchProgramArgs || '';
-    
-    if (!launchProgram) {
-      runStagingActionStatus.value = '✗ No launch program configured in settings';
-      return;
-    }
-    
-    // Use IPC to launch program with arguments
-    await (window as any).electronAPI.launchProgram(launchProgram, launchArgs, filePath);
+    await launchProgramFile(filePath);
     
     runStagingActionStatus.value = `✓ Launched game ${gameNumber}: ${fileToLaunch}`;
   } catch (error) {

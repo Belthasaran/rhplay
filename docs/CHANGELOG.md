@@ -1,4 +1,5 @@
 - **Renderer dist .gitignore**: Post-build step restores `electron/renderer/dist/assets/.gitignore` after Vite `emptyOutDir` wipes `dist/`.
+- **Emulator single-instance launch**: New launches stop any tracked instance of the configured emulator first (1s wait, then relaunch); Quick Launch shows **Running — RESTART** instead of disabling the button; SNI mode on port 23074 triggers USB2SNES reconnect ~1s after emulator launch.
 - **App mount fix**: Moved USB2SNES address-test `watch()` handlers to after `settings` is declared (fixes "Cannot access 'settings' before initialization" on dev startup).
 - **RetroArch append.cfg fix**: Template path resolution uses multiple fallbacks; empty append.cfg files are re-seeded from template; restore uses read/write (asar-safe); Emulator Config shows errors when read/restore fails.
 - **RetroArch Linux path search**: Program-data AppImage search uses flat `{userData}/RetroArch-Linux-x86_64.AppImage` (with nested tarball fallback); cores searched under `{AppImageBasename}.home/.config/retroarch/cores/`.

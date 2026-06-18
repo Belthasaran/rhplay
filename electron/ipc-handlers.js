@@ -7660,10 +7660,19 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  const launchProcessManager = require('./utils/launch-process-manager');
+
   ipcMain.handle('fs:launchProgram', async (event, program, args, filePath) => {
     const path = require('path');
     
     try {
+      if (program) {
+        const stopResult = await launchProcessManager.ensureLaunchProgramStopped(launchProcessSessions, program);
+        if (stopResult.stopped > 0 || stopResult.forced) {
+          console.log('[Launch] Stopped existing instance(s) before launch:', stopResult);
+        }
+      }
+
       let launchArgs = args;
       if (launchArgs && !launchArgs.includes('--appendconfig') && program && /retroarch/i.test(program)) {
         try {
@@ -7749,6 +7758,16 @@ function registerDatabaseHandlers(dbManager) {
 
   ipcMain.handle('launch:isRunning', async (event, sessionId) => {
     return { running: isLaunchProcessRunning(sessionId) };
+  });
+
+  ipcMain.handle('launch:stopProgram', async (_event, program) => {
+    try {
+      const result = await launchProcessManager.ensureLaunchProgramStopped(launchProcessSessions, program);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[launch:stopProgram] Error:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   ipcMain.handle('boot:record-current', async (event, payload) => {

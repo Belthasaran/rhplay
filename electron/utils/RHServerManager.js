@@ -15,6 +15,7 @@ const {
   encryptWithKeyguard,
   decryptWithKeyguard
 } = require('./KeyguardReencryption');
+const { verifyAndTrustRhserverResponse } = require('../../lib/rhserver-auto-trust');
 
 const SETTING_TEST_MODE = 'rhserver_testmode';
 
@@ -152,13 +153,28 @@ class RHServerManager {
     return storedExp || null;
   }
 
+  _clientBaseOptions(extra = {}) {
+    return {
+      apiBaseUrl: this.getApiBaseUrl(),
+      verifyResponses: true,
+      onVerifiedResponse: (json) => {
+        try {
+          verifyAndTrustRhserverResponse(this.dbManager, json);
+        } catch (err) {
+          console.warn('[RHServer] auto-trust after verified response failed:', err.message);
+        }
+      },
+      ...extra
+    };
+  }
+
   loadClient(keyguardKey) {
     const db = this.getDb();
     const apiBase = this.getApiBaseUrl();
     const profileUuid = this.getCurrentProfileId(keyguardKey);
 
     if (!profileUuid) {
-      this._client = new RHServerClient({ apiBaseUrl: apiBase });
+      this._client = new RHServerClient(this._clientBaseOptions());
       this._loadedProfileUuid = null;
       return this._client;
     }
@@ -170,7 +186,7 @@ class RHServerManager {
     `).get(profileUuid, apiBase);
 
     if (!row) {
-      this._client = new RHServerClient({ apiBaseUrl: apiBase, profileUuid });
+      this._client = new RHServerClient(this._clientBaseOptions({ profileUuid }));
       this._loadedProfileUuid = profileUuid;
       return this._client;
     }
@@ -204,7 +220,7 @@ class RHServerManager {
       ? this._resolveAccessExpiresAt(accessToken, row.access_expires_at || row.expires_at)
       : null;
 
-    this._client = new RHServerClient({
+    this._client = new RHServerClient(this._clientBaseOptions({
       apiBaseUrl: row.api_base_url || apiBase,
       accessToken,
       refreshToken,
@@ -215,7 +231,7 @@ class RHServerManager {
       obtainmentTimestamp: row.obtainment_timestamp,
       expiresIn: row.expires_in,
       onTokensUpdated: (client) => this.saveTokens(client, keyguardKey)
-    });
+    }));
     this._loadedProfileUuid = profileUuid;
     return this._client;
   }
@@ -513,6 +529,20 @@ class RHServerManager {
     }
     try {
       const data = await ensured.client.getProfileMe();
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  async updateHostedProfile(keyguardKey, payload) {
+    const key = keyguardKey || global.keyguardKey || null;
+    const ensured = await this.ensureAccessToken(key);
+    if (!ensured.ok) {
+      return { success: false, error: ensured.reason };
+    }
+    try {
+      const data = await ensured.client.updateProfileMe(payload);
       return { success: true, data };
     } catch (err) {
       return { success: false, error: err.message };

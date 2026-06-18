@@ -296,9 +296,10 @@ class TrustManager {
           row.target_user_profile_id
         ]
           .filter(Boolean)
-          .map((value) => String(value).toLowerCase());
+          .flatMap((value) => this.expandPubkeyVariants(String(value)));
 
-        const matches = pubkeyVariants.some((variant) => candidateTargets.includes(variant.toLowerCase()));
+        const normalizedCandidates = [...new Set(candidateTargets.map((v) => v.toLowerCase()))];
+        const matches = pubkeyVariants.some((variant) => normalizedCandidates.includes(variant.toLowerCase()));
 
         if (!matches) {
           return;

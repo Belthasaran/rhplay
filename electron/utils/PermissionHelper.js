@@ -85,6 +85,7 @@ class PermissionHelper {
       'metadata.update-game': { permissionKeys: ['can_update_metadata'], minTrustLevel: 6 },
       'trust.assign': { permissionKeys: ['can_sign_trust_declarations'], minTrustLevel: 11 },
       'trust.delegate': { permissionKeys: ['can_delegate_moderators', 'can_delegate_updaters'], minTrustLevel: 8 },
+      'attestation.user': { permissionKeys: ['can_sign_user_attestations'], minTrustLevel: 8 },
       'ratings.review': { permissionKeys: [], minTrustLevel: 0 }
     };
     return map[action] || null;

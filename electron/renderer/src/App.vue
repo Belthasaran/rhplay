@@ -7624,7 +7624,26 @@ Do you recommend; is the game fun and worthwhile?</span></label>
                       />
                       Can Delegate Updaters
                     </label>
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        v-model="trustDeclarationWizardData.content.permissions.canUserAttest"
+                      />
+                      Can Sign User Attestations
+                    </label>
                   </div>
+                </div>
+
+                <div class="modal-field">
+                  <label>Max Verification Level (User Attestations):</label>
+                  <input 
+                    type="number" 
+                    v-model.number="trustDeclarationWizardData.content.permissions.maxVerificationLevel" 
+                    class="modal-input"
+                    placeholder="e.g., 5 (leave empty for no limit)"
+                    min="0"
+                  />
+                  <p class="field-hint">Optional ceiling for verification level in user attestations signed by this delegate.</p>
                 </div>
 
                 <div class="modal-field">
@@ -12984,7 +13003,9 @@ const trustDeclarationWizardData = ref({
       canUpdateMetadata: false,
       canDelegateModerators: false,
       canDelegateUpdaters: false,
-      maxDelegationDuration: null as number | null, // seconds
+      canUserAttest: false,
+      maxVerificationLevel: null as number | null,
+      maxDelegationDuration: null as number | null,
       maxBlockDuration: null as number | null // seconds
     },
     requiredCountersignatures: {
@@ -13029,7 +13050,8 @@ type DelegationPreset = {
     canUpdateMetadata?: boolean;
     canDelegateModerators?: boolean;
     canDelegateUpdaters?: boolean;
-    maxDelegationDuration?: number | null;
+    canUserAttest?: boolean;
+    maxVerificationLevel?: number | null;
     maxBlockDuration?: number | null;
   };
   countersignatures?: {
@@ -14109,7 +14131,8 @@ function addSocialIdToProfile() {
   onlineProfile.value.socialIds.push({
     type: selectedType,
     value: value,
-    verified: false
+    verified: false,
+    addedAt: Date.now()
   });
   
   // Clear input but keep the selected type
@@ -17016,6 +17039,8 @@ function applyDelegationPreset(presetId: string) {
   content.permissions.canUpdateMetadata = Boolean(preset.permissions.canUpdateMetadata);
   content.permissions.canDelegateModerators = Boolean(preset.permissions.canDelegateModerators);
   content.permissions.canDelegateUpdaters = Boolean(preset.permissions.canDelegateUpdaters);
+  content.permissions.canUserAttest = Boolean(preset.permissions.canUserAttest);
+  content.permissions.maxVerificationLevel = preset.permissions.maxVerificationLevel ?? null;
   content.permissions.maxDelegationDuration = preset.permissions.maxDelegationDuration ?? null;
   content.permissions.maxBlockDuration = preset.permissions.maxBlockDuration ?? null;
 
@@ -17346,9 +17371,23 @@ function onSubjectProfileSelected() {
   }
 
   trustDeclarationWizardData.value.subject.canonicalName = subjectProfile.primaryCanonicalName || '';
-  trustDeclarationWizardData.value.subject.fingerprint = subjectProfile.primaryFingerprint || subjectProfile.primaryPublicKeyHex || '';
+  const hex = subjectProfile.primaryPublicKeyHex || subjectProfile.primaryFingerprint || '';
+  trustDeclarationWizardData.value.subject.publicKeyHex = /^[0-9a-fA-F]{64}$/.test(String(hex)) ? String(hex).toLowerCase() : '';
+  if (trustDeclarationWizardData.value.subject.publicKeyHex) {
+    try {
+      trustDeclarationWizardData.value.subject.fingerprint = nip19.npubEncode(
+        Buffer.from(trustDeclarationWizardData.value.subject.publicKeyHex, 'hex')
+      );
+      if (!trustDeclarationWizardData.value.subject.canonicalName) {
+        trustDeclarationWizardData.value.subject.canonicalName = trustDeclarationWizardData.value.subject.fingerprint;
+      }
+    } catch (_) {
+      trustDeclarationWizardData.value.subject.fingerprint = subjectProfile.primaryFingerprint || trustDeclarationWizardData.value.subject.publicKeyHex;
+    }
+  } else {
+    trustDeclarationWizardData.value.subject.fingerprint = subjectProfile.primaryFingerprint || '';
+  }
   trustDeclarationWizardData.value.subject.keypairUuid = subjectProfile.primaryKeypairUuid || '';
-  trustDeclarationWizardData.value.subject.publicKeyHex = subjectProfile.primaryPublicKeyHex || '';
 }
 
 function onSubjectManualInput() {
@@ -17386,7 +17425,7 @@ function onSubjectManualInput() {
     }
 
     trustDeclarationWizardData.value.subject.canonicalName = canonical;
-    trustDeclarationWizardData.value.subject.fingerprint = hex;
+    trustDeclarationWizardData.value.subject.fingerprint = canonical;
     trustDeclarationWizardData.value.subject.publicKeyHex = hex;
   } catch (error: any) {
     trustDeclarationWizardData.value.subject.manualError =
@@ -17480,6 +17519,8 @@ function onAffectsChanged() {
       canUpdateMetadata: false,
       canDelegateModerators: false,
       canDelegateUpdaters: false,
+      canUserAttest: false,
+      maxVerificationLevel: null,
       maxDelegationDuration: null,
       maxBlockDuration: null
     };
@@ -17546,6 +17587,8 @@ function generateTrustDeclarationJsonFromForm() {
         can_update_metadata: trustDeclarationWizardData.value.content.permissions.canUpdateMetadata,
         can_delegate_moderators: trustDeclarationWizardData.value.content.permissions.canDelegateModerators,
         can_delegate_updaters: trustDeclarationWizardData.value.content.permissions.canDelegateUpdaters,
+        can_sign_user_attestations: trustDeclarationWizardData.value.content.permissions.canUserAttest,
+        max_verification_level: trustDeclarationWizardData.value.content.permissions.maxVerificationLevel || undefined,
         max_delegation_duration: trustDeclarationWizardData.value.content.permissions.maxDelegationDuration || undefined,
         max_block_duration: trustDeclarationWizardData.value.content.permissions.maxBlockDuration || undefined
       }

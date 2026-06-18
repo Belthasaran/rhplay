@@ -36,8 +36,30 @@
                   @click.stop
                 />
               </td>
-              <td><code style="font-size: 10px;">{{ formatFingerprint(decl.signing_keypair_fingerprint) }}</code></td>
-              <td><code style="font-size: 10px;">{{ formatFingerprint(decl.target_keypair_fingerprint) }}</code></td>
+              <td>
+                <span class="key-cell">
+                  <code style="font-size: 10px;">{{ formatFingerprint(decl.signing_keypair_fingerprint) }}</code>
+                  <button
+                    v-if="decl.signing_keypair_fingerprint"
+                    type="button"
+                    class="btn-copy-key"
+                    title="Copy full issuing key"
+                    @click.stop="copyKey(decl.signing_keypair_fingerprint)"
+                  >⎘</button>
+                </span>
+              </td>
+              <td>
+                <span class="key-cell">
+                  <code style="font-size: 10px;">{{ formatFingerprint(decl.target_keypair_fingerprint || decl.target_keypair_public_hex) }}</code>
+                  <button
+                    v-if="decl.target_keypair_fingerprint || decl.target_keypair_public_hex"
+                    type="button"
+                    class="btn-copy-key"
+                    title="Copy full subject key"
+                    @click.stop="copyKey(decl.target_keypair_fingerprint || decl.target_keypair_public_hex)"
+                  >⎘</button>
+                </span>
+              </td>
               <td>{{ getTrustLevelFromContent(decl) || 'N/A' }}</td>
               <td>{{ formatDate(decl.valid_from) }}</td>
               <td>{{ decl.valid_until ? formatDate(decl.valid_until) : 'No expiration' }}</td>
@@ -129,6 +151,7 @@ type TrustDeclaration = {
   declaration_uuid: string;
   signing_keypair_fingerprint?: string;
   target_keypair_fingerprint?: string;
+  target_keypair_public_hex?: string;
   valid_from?: string;
   valid_until?: string;
   status?: string;
@@ -167,6 +190,20 @@ function handleAction(action: string) {
 function formatFingerprint(fp: string | null | undefined): string {
   if (!fp) return 'N/A';
   return fp.substring(0, 16) + '...';
+}
+
+async function copyKey(value: string | null | undefined) {
+  if (!value) return;
+  try {
+    const api = (window as any).electronAPI;
+    if (api?.copyToClipboard) {
+      await api.copyToClipboard(value);
+      return;
+    }
+    await navigator.clipboard.writeText(value);
+  } catch (err) {
+    console.warn('Failed to copy key:', err);
+  }
 }
 
 function getTrustLevelFromContent(decl: TrustDeclaration): string | null {
@@ -455,6 +492,26 @@ function formatDate(dateString: string | null | undefined): string {
 .btn-secondary:hover:not(:disabled),
 .btn-primary:hover:not(:disabled) {
   opacity: 0.9;
+}
+
+.key-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-copy-key {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.btn-copy-key:hover {
+  opacity: 1;
 }
 </style>
 

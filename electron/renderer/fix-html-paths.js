@@ -5,6 +5,15 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const assetsDir = path.join(__dirname, 'dist', 'assets');
+const assetsGitignorePath = path.join(assetsDir, '.gitignore');
+const assetsGitignoreContent = 'index.html\nindex-*.css\nindex-*.js\n';
+
+// Vite emptyOutDir wipes dist/ each build; restore tracked ignore rules for hashed assets.
+fs.mkdirSync(assetsDir, { recursive: true });
+fs.writeFileSync(assetsGitignorePath, assetsGitignoreContent, 'utf8');
+console.log('Restored dist/assets/.gitignore');
+
 const htmlPath = path.join(__dirname, 'dist', 'index.html');
 if (fs.existsSync(htmlPath)) {
   let html = fs.readFileSync(htmlPath, 'utf8');

@@ -458,7 +458,7 @@
     ],
     "rating": 0,
     "size": 1628424,
-    "downloads": 213,
+    "downloads": 214,
     "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -659,7 +659,7 @@
     ],
     "rating": 0,
     "size": 1267003,
-    "downloads": 310,
+    "downloads": 312,
     "download_url": "https://dl.smwcentral.net/42379/Super%20Mario%20World%20-%20Bowser%27s%20Return.zip",
     "obsoleted_by": null,
     "fields": {
@@ -948,7 +948,7 @@
     ],
     "rating": 4.3333,
     "size": 2346234,
-    "downloads": 176,
+    "downloads": 177,
     "download_url": "https://dl.smwcentral.net/42427/ynt_mario_en_v1.0.6.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1028,7 +1028,7 @@
     ],
     "rating": 5,
     "size": 1210355,
-    "downloads": 289,
+    "downloads": 291,
     "download_url": "https://dl.smwcentral.net/42434/Ominous%20Castle%20v1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1502,7 +1502,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1321,
+    "downloads": 1322,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1666,85 +1666,6 @@
       "sa1": false,
       "warnings": [],
       "description": "This hack is a tribute hack for one of my favorite games of all times: Dragon's Dogma. The story varies a little, because this is not the tale of the arisen, but of the humble plumber Mario, who lost everything in a dragon's attack. Now he seeks for vengeance and goes out into the world, which is called \"Gransys\". \r\nThis hack is a 46-expert-exit hack, with a lot of variety, a semi-open world (there are three ways to get to the any% ending) that contains a lot of secrets and easter-eggs for Dragon's Dogma. Pawns are scattered around the world, waiting for the arisen, but helping Mario with advices. \r\n\r\nPrepare yourself for 46 flow-focussed-levels, with some cryptic levels to get your brain into action. Enjoy the variety of all exists, because no level feels the same.\r\n\r\n<iframe width=\"560\" height=\"315\" src=\"https://www.youtube.com/embed/DeRVOd64WS8?si=tvY9StyoOTw7TbZt\" title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen></iframe>\r\n\r\nI hope you'll have a great time playing this hack.\r\n\r\nAdditionally, here is a major gameplay spoiler:\r\n[spoiler]The final boss's max health is reduced by 1, for each wakestone (moon) you collect. So keep your eyes open.[/spoiler]"
-    }
-  },
-  {
-    "id": 42504,
-    "section": "smwhacks",
-    "name": "Tower Of Glory 2",
-    "time": 1780854399,
-    "submitted_at": 1780854399,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 52996,
-        "name": "ShoopDaWhoop"
-      }
-    ],
-    "submitter": {
-      "id": 52996,
-      "name": "ShoopDaWhoop"
-    },
-    "moderator": null,
-    "tags": [],
-    "images": [
-      "https://dl.smwcentral.net/image/124366.png",
-      "https://dl.smwcentral.net/image/124367.png",
-      "https://dl.smwcentral.net/image/124368.png",
-      "https://dl.smwcentral.net/image/124369.png",
-      "https://dl.smwcentral.net/image/124370.png",
-      "https://dl.smwcentral.net/image/124371.png",
-      "https://dl.smwcentral.net/image/124372.png",
-      "https://dl.smwcentral.net/image/124373.png",
-      "https://dl.smwcentral.net/image/124374.png",
-      "https://dl.smwcentral.net/image/124375.png",
-      "https://dl.smwcentral.net/image/124376.png",
-      "https://dl.smwcentral.net/image/124377.png",
-      "https://dl.smwcentral.net/image/124378.png",
-      "https://dl.smwcentral.net/image/124379.png",
-      "https://dl.smwcentral.net/image/124380.png",
-      "https://dl.smwcentral.net/image/124381.png",
-      "https://dl.smwcentral.net/image/124382.png",
-      "https://dl.smwcentral.net/image/124383.png",
-      "https://dl.smwcentral.net/image/124384.png",
-      "https://dl.smwcentral.net/image/124385.png",
-      "https://dl.smwcentral.net/image/124386.png",
-      "https://dl.smwcentral.net/image/124387.png",
-      "https://dl.smwcentral.net/image/124388.png"
-    ],
-    "rating": 5,
-    "size": 1025181,
-    "downloads": 96,
-    "download_url": "https://dl.smwcentral.net/42504/Tower%20of%20Glory%202%20%281%29.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "1.1",
-      "changelog": "-  Credits were updated",
-      "difficulty": "Advanced",
-      "type": "Kaizo",
-      "length": "0 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "Welcome to my second Kaizo Mario Rom Hack: Tower Of Glory 2, featuring:<br>\r\n<br>\r\n<br>\r\n- A multi-screen level designed to provide once again a lengthy and engaging experience.<br>\r\n<br>\r\n- Focus on fun and fast platforming rather than Hard Item Tricks.<br>\r\n<br>\r\n- Auto-save after every screen (For Players who dont want to beat the Hack in One Sitting).<br>\r\n<br>\r\n- Vanilla graphics cause im to stupid to insert Custom Graphics Lol.<br>\r\n<br>\r\n- Higher difficulty than the first Hack (but still fair and forgiving).<br>\r\n<br>\r\n- 6 moons to collect.<br>\r\n<br>\r\n- No Disco Shell Set Ups.<br>\r\n<br>\r\n- No Cape Sections.<br>\r\n<br>\r\n<br>\r\nPlease note: This Hack contains some longer and fast paced Sections.<br>\r\n<br>\r\n<br>\r\nTested With:<br>\r\n<br>\r\n- Snes9X<br>\r\n- Retroarch<br>\r\n- Super Everdrive<br>\r\n<br>\r\n<br>\r\nI hope you enjoy the Journey."
-    },
-    "raw_fields": {
-      "version": "1.1",
-      "changelog": "-  Credits were updated",
-      "difficulty": "diff_4",
-      "type": [
-        "kaizo"
-      ],
-      "length": 0,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "Welcome to my second Kaizo Mario Rom Hack: Tower Of Glory 2, featuring:\r\n\r\n\r\n- A multi-screen level designed to provide once again a lengthy and engaging experience.\r\n\r\n- Focus on fun and fast platforming rather than Hard Item Tricks.\r\n\r\n- Auto-save after every screen (For Players who dont want to beat the Hack in One Sitting).\r\n\r\n- Vanilla graphics cause im to stupid to insert Custom Graphics Lol.\r\n\r\n- Higher difficulty than the first Hack (but still fair and forgiving).\r\n\r\n- 6 moons to collect.\r\n\r\n- No Disco Shell Set Ups.\r\n\r\n- No Cape Sections.\r\n\r\n\r\nPlease note: This Hack contains some longer and fast paced Sections.\r\n\r\n\r\nTested With:\r\n\r\n- Snes9X\r\n- Retroarch\r\n- Super Everdrive\r\n\r\n\r\nI hope you enjoy the Journey."
     }
   },
   {
@@ -2049,7 +1970,7 @@
     ],
     "rating": 0,
     "size": 739656,
-    "downloads": 16,
+    "downloads": 17,
     "download_url": "https://dl.smwcentral.net/42535/Isle%20of%20Infestation%201.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2247,7 +2168,7 @@
     ],
     "rating": 5,
     "size": 2061726,
-    "downloads": 94,
+    "downloads": 96,
     "download_url": "https://dl.smwcentral.net/42540/Tortured%20Souls%203-Birth%20of%20a%20True%20Lord.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2325,7 +2246,7 @@
     ],
     "rating": 0,
     "size": 4870309,
-    "downloads": 141,
+    "downloads": 145,
     "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2467,7 +2388,7 @@
     ],
     "rating": 5,
     "size": 716798,
-    "downloads": 40,
+    "downloads": 42,
     "download_url": "https://dl.smwcentral.net/42544/LAG.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2524,7 +2445,8 @@
       "custom music",
       "gimmick",
       "traditional",
-      "variety"
+      "variety",
+      "voice acting"
     ],
     "images": [
       "https://dl.smwcentral.net/image/124658.png",
@@ -2540,7 +2462,7 @@
     ],
     "rating": 5,
     "size": 791647,
-    "downloads": 46,
+    "downloads": 50,
     "download_url": "https://dl.smwcentral.net/42545/%5BHack%5D%20Super%20Mario%20World%20Challenges%202%20v1.0.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2608,7 +2530,7 @@
     ],
     "rating": 0,
     "size": 408801,
-    "downloads": 13,
+    "downloads": 14,
     "download_url": "https://dl.smwcentral.net/42546/Pit%20of%20Gui%21%21%20%28Reformulated%20Version%29.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2683,7 +2605,7 @@
     ],
     "rating": 0,
     "size": 1276995,
-    "downloads": 29,
+    "downloads": 38,
     "download_url": "https://dl.smwcentral.net/42550/Dreadful%20Mario.zip",
     "obsoleted_by": null,
     "fields": {

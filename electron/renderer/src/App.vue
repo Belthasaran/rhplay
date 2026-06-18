@@ -11867,22 +11867,6 @@ const wizardUsb2snesAddressTestDisplay = computed(() => {
   return display;
 });
 
-watch(() => settings.usb2snesProxyMode, () => {
-  resetUsb2snesAddressTest('settings');
-});
-
-watch(() => usb2snesSshStatus.running, () => {
-  if (settings.usb2snesProxyMode === 'direct-with-ssh' && usb2snesSshStatus.running) {
-    resetUsb2snesAddressTest('settings');
-  }
-});
-
-watch(() => usbOptionsWizardDraftSettings.value?.usb2snesProxyMode, () => {
-  if (usbOptionsWizardDraftSettings.value) {
-    resetUsb2snesAddressTest('wizard');
-  }
-});
-
 async function testUsb2snesAddressConnection(context: Usb2snesAddressTestContext) {
   const options = buildUsb2snesTestOptions(context);
   const statusRef = getUsb2snesAddressTestRef(context);
@@ -22915,6 +22899,23 @@ const settings = reactive({
   overlayWebServerPort: 2599,
   overlayRemoteConnectionsEnabled: 'Off' as 'Off' | 'On',
 });
+
+watch(() => settings.usb2snesProxyMode, () => {
+  resetUsb2snesAddressTest('settings');
+});
+
+watch(() => usb2snesSshStatus.running, () => {
+  if (settings.usb2snesProxyMode === 'direct-with-ssh' && usb2snesSshStatus.running) {
+    resetUsb2snesAddressTest('settings');
+  }
+});
+
+watch(() => usbOptionsWizardDraftSettings.value?.usb2snesProxyMode, () => {
+  if (usbOptionsWizardDraftSettings.value) {
+    resetUsb2snesAddressTest('wizard');
+  }
+});
+
 let rhpakAssociationEnabledAtLoad = true;
 let rhpakOsListenerCleanup: (() => void) | null = null;
 

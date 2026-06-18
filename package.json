@@ -209,6 +209,8 @@
       "lib/emulator-paths.js",
       "lib/cur-booted-writer.js",
       "lib/emulator-install.js",
+      "lib/jit-levels/**/*",
+      "lib/profile-connect-params.js",
       "!electron/renderer/node_modules/**/*",
       "!electron/renderer/src/**/*",
       "!electron/test_data/**/*",

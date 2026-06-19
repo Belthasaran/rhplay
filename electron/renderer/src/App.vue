@@ -13198,6 +13198,66 @@ function startRunLaunchMonitoring(expectedBasename: string, sessionId?: string |
   });
 }
 
+function resetRunStagingPreLaunchState() {
+  runStagingPreLaunchSessionId.value = null;
+  runStagingPreLaunchExpectedBasename.value = null;
+}
+
+async function attachRunLaunchMonitoringAfterStart() {
+  if (!isRunActive.value || activeLaunchMethod.value === 'manual') return;
+  if (!runStagingGame1Ready.value) return;
+
+  if (activeLaunchMethod.value === 'program') {
+    const sessionId = runStagingPreLaunchSessionId.value;
+    if (!sessionId) return;
+
+    if (isElectronAvailable()) {
+      const status = await (window as any).electronAPI.isLaunchProcessRunning(sessionId);
+      if (!status?.running) {
+        console.warn('[attachRunLaunchMonitoringAfterStart] Pre-launch emulator session no longer running');
+        runStagingPreLaunchSessionId.value = null;
+        return;
+      }
+    }
+
+    await refreshRunStagedSfcFilenames();
+    const expectedBasename = buildRunExpectedRomBasename();
+    if (!expectedBasename) return;
+
+    runLaunchSessionId.value = sessionId;
+    startRunLaunchMonitoring(expectedBasename, sessionId);
+    resetRunStagingPreLaunchState();
+    return;
+  }
+
+  if (activeLaunchMethod.value === 'usb2snes') {
+    const expectedBasename = runStagingPreLaunchExpectedBasename.value || buildRunExpectedRomBasename();
+    if (!expectedBasename) return;
+
+    if (settings.usb2snesEnabled === 'yes') {
+      await refreshUsb2snesStatus();
+      if (!usb2snesStatus.connected) {
+        try {
+          const connectOptions = buildUsb2snesConnectOptions();
+          const result = await (window as any).electronAPI.usb2snesConnect(connectOptions);
+          usb2snesStatus.connected = true;
+          usb2snesStatus.device = result.device;
+          usb2snesStatus.firmwareVersion = result.firmwareVersion || 'N/A';
+          usb2snesStatus.versionString = result.versionString || 'N/A';
+          usb2snesStatus.romRunning = result.romRunning || 'N/A';
+          startHealthMonitoring();
+        } catch (error) {
+          console.warn('[attachRunLaunchMonitoringAfterStart] USB connect failed:', error);
+          return;
+        }
+      }
+    }
+
+    startRunLaunchMonitoring(expectedBasename);
+    resetRunStagingPreLaunchState();
+  }
+}
+
 async function handleRunExitDetectedChoice(payload: {
   outcome: 'win' | 'skip';
   difficultyFeedback: number | null;
@@ -24593,6 +24653,8 @@ const stagingSfcCount = ref(0);
 const runStagedSfcFilenames = ref<string[]>([]);
 const runStagingActionStatus = ref('');
 const runStagingGame1Ready = ref(false);
+const runStagingPreLaunchSessionId = ref<string | null>(null);
+const runStagingPreLaunchExpectedBasename = ref<string | null>(null);
 
 // Run upload progress modal
 const runUploadProgressModalOpen = ref(false);
@@ -24920,6 +24982,7 @@ const canStartRunFromStagingModal = computed(() => {
 
 watch(activeLaunchMethod, () => {
   runStagingGame1Ready.value = false;
+  resetRunStagingPreLaunchState();
 });
 const currentChallenge = computed(() => {
   if (!isRunActive.value || currentChallengeIndex.value >= runEntries.length) return null;
@@ -26327,6 +26390,7 @@ async function stageRunGames(runUuid: string, runName: string) {
     stagingSfcCount.value = stagingResult.gamesStaged;
     await refreshRunStagedSfcFilenames();
     runStagingGame1Ready.value = false;
+    resetRunStagingPreLaunchState();
     stagingSuccessModalOpen.value = true;
     
     // Reset skip upload acknowledgment when staging completes
@@ -26420,6 +26484,7 @@ function closeStagingSuccess() {
   stagingSuccessModalOpen.value = false;
   runStagingActionStatus.value = '';
   runStagingGame1Ready.value = false;
+  resetRunStagingPreLaunchState();
 }
 
 // Run status dropdown functions
@@ -26541,6 +26606,7 @@ async function reopenStagingWindow() {
   runStatusDropdownOpen.value = false;
   if (stagingFolderPath.value) {
     runStagingGame1Ready.value = false;
+    resetRunStagingPreLaunchState();
     stagingSuccessModalOpen.value = true;
   } else {
     await showAlert('No staging folder found. Please stage the run again.', 'Staging Required');
@@ -26845,10 +26911,11 @@ async function launchRunGame(gameNumber: number) {
     
     runStagingActionStatus.value = `Launching game ${gameNumber}: ${fileToLaunch}...`;
     
-    await launchProgramFile(filePath);
+    const launchResult = await launchProgramFile(filePath);
     
     runStagingActionStatus.value = `✓ Launched game ${gameNumber}: ${fileToLaunch}`;
     if (gameNumber === 1) {
+      runStagingPreLaunchSessionId.value = launchResult?.sessionId || null;
       runStagingGame1Ready.value = true;
     }
   } catch (error) {
@@ -27021,6 +27088,7 @@ async function uploadRunToSnesAndLaunchGame1() {
     runStagingActionStatus.value = `Booting game 1: ${fileToBoot}...`;
     await (window as any).electronAPI.usb2snesBoot(bootPath);
     await loadExpandedRunResults();
+    runStagingPreLaunchExpectedBasename.value = fileToBoot;
     runStagingGame1Ready.value = true;
     runStagingActionStatus.value = `✓ USB upload and launch complete: ${fileToBoot}`;
   } catch (error) {
@@ -27328,6 +27396,8 @@ async function startRun(options?: { skipConfirm?: boolean }) {
       console.log('[startRun] Setting run status to active, entries:', runEntries.length);
       currentRunStatus.value = 'active';
       currentChallengeIndex.value = 0;
+
+      await attachRunLaunchMonitoringAfterStart();
       
       // Get run data from database to get the actual started_at timestamp
       // IMPORTANT: Use the original started_at timestamp from database, NEVER use Date.now()
@@ -27549,6 +27619,8 @@ async function startRun(options?: { skipConfirm?: boolean }) {
 async function launchCurrentChallenge() {
   if (!currentChallenge.value) return;
   if (!isRunActive.value) return;
+
+  resetRunStagingPreLaunchState();
   
   try {
     if (activeLaunchMethod.value === 'program') {

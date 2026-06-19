@@ -133,20 +133,26 @@ export function createLaunchSessionMonitor(getApi: () => any) {
     const pollMs = options.pollIntervalMs ?? 3500;
     const api = getApi();
 
-    if (options.mode === 'program' && options.launchSessionId && api?.onLaunchProcessExited) {
-      exitCleanup = api.onLaunchProcessExited((data: { sessionId: string }) => {
-        if (!activeOptions || data.sessionId !== activeSessionId) return;
-        if (!startedNotified) {
-          startedNotified = true;
-          state.value = 'running';
-          activeOptions.onStarted?.();
-        }
-        finishMonitoring('exit');
-      });
-      intervalId = setInterval(() => {
-        pollProgramCycle().catch((err) => console.warn('[LaunchMonitor] program poll error:', err));
-      }, pollMs);
-      pollProgramCycle().catch(() => {});
+    if (options.mode === 'program') {
+      if (!options.launchSessionId) {
+        console.warn('[LaunchMonitor] program mode requires launchSessionId; monitoring not started');
+        return;
+      }
+      if (api?.onLaunchProcessExited) {
+        exitCleanup = api.onLaunchProcessExited((data: { sessionId: string }) => {
+          if (!activeOptions || data.sessionId !== activeSessionId) return;
+          if (!startedNotified) {
+            startedNotified = true;
+            state.value = 'running';
+            activeOptions.onStarted?.();
+          }
+          finishMonitoring('exit');
+        });
+        intervalId = setInterval(() => {
+          pollProgramCycle().catch((err) => console.warn('[LaunchMonitor] program poll error:', err));
+        }, pollMs);
+        pollProgramCycle().catch(() => {});
+      }
       return;
     }
 

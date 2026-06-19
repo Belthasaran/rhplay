@@ -67,6 +67,20 @@
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
       "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
     },
+    "base:light" : {
+      "file_name": "resource.db.initial.xz",
+      "format": "xz",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS96anRrb2t2Tgo=",
+      "sha256": "31ecf773f00d550426423df3cdad9981974af22facdc7654f0f244e091b24f81",
+      "ipfs_cidv1": "bafybeicmghwppy6vwgysxbu5hw3yfryeuzguqnngyqmthr52nmybllupgi",
+      "size": "37453636",
+      "ardrive_file_name": "resource.db.initial.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/resource.db.initial.xz",
+      "ardrive_file_id": "b1782d13-a883-4ff4-9584-3f2a28759d91",
+      "data_txid": "N5zUML9eJCsowv7-cW79hFCY-t-Z8Q82Wc3WWiH9EIE",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+    },
     "sqlpatches": [
       {
         "file_name": "res12_to_13.sql.xz",
@@ -105,6 +119,26 @@
   "screenshot.db": {
     "version": "13",
     "base": {
+      "x__source_path": "packed_db/screenshot.db.initial.xz",
+      "file_name": "screenshot.db.initial.xz",
+      "format": "xz",
+      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vcnliNTRhcgo=",
+      "sha256": "9ee9f45f88656f840fa0fc8e30e24338459dff32d08de87046bfa76322a04fe7",
+      "ipfs_cidv1": "bafkreie65h2f7cdfn6ca7ih4ryyoeqzyiwo76mwqrxuharv7u5rsficp44",
+      "size": "138440",
+      "ardrive_file_name": "screenshot.db.initial.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/screenshot.db.initial.xz",
+      "ardrive_file_id": "a2751c02-5516-4993-9f4a-cfa3345a2f6d",
+      "data_txid": "_8XEVQUg7Snw7ybDxP27_1NxHnyi-S8vxCUNz-AfTQk",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ]
+    },
+    "base:light" : {
       "x__source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
       "format": "xz",

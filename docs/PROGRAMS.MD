@@ -84,6 +84,8 @@ enode.sh gameversions27zfolder.js --target-7zfolder=~/proj/example \
 - `--sourcezips-folder=<path>` - Recursive local ZIP search root (required)
 - `--gameids=all|<ids>` - Latest row per gameid (required)
 - `--rhdata-db=<path>` - Override rhdata.db (default: `electron/rhdata.db`, env `RHDATA_DB_PATH`)
+- `--screenshot-db=<path>` - Use local `screenshot.db` before HTTP image download (explicit opt-in)
+- `--screenshot-data-dir=<path>` - Decrypted screenshot files root (default: user data dir, env `SCREENSHOT_DATA_DIR`)
 - `--skip-existing` - Skip when `games/{id}.json` and `smwchack_{id}.7z` exist
 - `--no-download` - Do not download missing ZIPs
 - `--skip-catalog-images` / `--skip-catalog-7z` - Same as updategames catalog flags

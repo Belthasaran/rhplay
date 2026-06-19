@@ -24,10 +24,13 @@
  *   --no-download                Do not download missing ZIPs
  *   --dry-run                    Log actions only
  *   --limit=<n>                  Process at most N games
+ *   --screenshot-db=<path>       Use local screenshot.db before HTTP image download
+ *   --screenshot-data-dir=<path> Decrypted screenshot files root (default: getUserDataDir())
  *   --help, -h                   Show help
  *
  * Environment:
  *   RHDATA_DB_PATH               Override default rhdata.db path
+ *   SCREENSHOT_DATA_DIR          Override default screenshot data directory
  */
 
 const fs = require('fs');
@@ -36,6 +39,11 @@ const Database = require('better-sqlite3');
 const { getFlipsPath, getSmwRomPath } = require('../lib/binary-finder');
 const catalogExport = require('../lib/smwc_catalog_export');
 const { resolveGameZip, findGameZip } = require('../lib/game_zip_resolver');
+const {
+  openScreenshotDb,
+  resolveScreenshotDataDir,
+  clearScreenshotCache
+} = require('../lib/screenshot_db_reader');
 
 const CONFIG = {
   RHDATA_DB_PATH: process.env.RHDATA_DB_PATH || path.join(__dirname, '..', 'electron', 'rhdata.db'),
@@ -60,7 +68,9 @@ function parseArgs(args) {
     'skip-catalog-7z-for': null,
     'no-download': false,
     'dry-run': false,
-    'limit': null
+    'limit': null,
+    'screenshot-db': null,
+    'screenshot-data-dir': null
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -110,6 +120,14 @@ function parseArgs(args) {
       parsed.limit = parseInt(arg.split('=')[1], 10);
     } else if (arg === '--limit') {
       parsed.limit = parseInt(args[++i], 10);
+    } else if (arg.startsWith('--screenshot-db=')) {
+      parsed['screenshot-db'] = path.resolve(expandHome(arg.split('=').slice(1).join('=')));
+    } else if (arg === '--screenshot-db') {
+      parsed['screenshot-db'] = path.resolve(expandHome(args[++i]));
+    } else if (arg.startsWith('--screenshot-data-dir=')) {
+      parsed['screenshot-data-dir'] = path.resolve(expandHome(arg.split('=').slice(1).join('=')));
+    } else if (arg === '--screenshot-data-dir') {
+      parsed['screenshot-data-dir'] = path.resolve(expandHome(args[++i]));
     }
   }
 
@@ -147,6 +165,8 @@ Options:
   --no-download                  Fail if ZIP not found locally
   --dry-run                      Preview without writes
   --limit=<n>                    Process at most N games
+  --screenshot-db=<path>         Use screenshot.db before HTTP image download
+  --screenshot-data-dir=<path>   Decrypted screenshot files root (env SCREENSHOT_DATA_DIR)
   --help, -h                     Show this help
 
 Output:
@@ -226,10 +246,29 @@ async function main() {
   console.log(`  Source zips:     ${sourceZipsFolder}`);
   console.log(`  Database:        ${dbPath}`);
   console.log(`  Download cache:  ${downloadZipsDir}`);
+  if (argv['screenshot-db']) {
+    console.log(`  Screenshot DB:   ${argv['screenshot-db']}`);
+    console.log(`  Screenshot data: ${resolveScreenshotDataDir({ screenshotDataDir: argv['screenshot-data-dir'] })}`);
+  }
   if (dryRun) console.log('  Mode:            DRY RUN\n');
 
   verifyPrerequisites(argv, catalogDir);
 
+  let screenshotDb = null;
+  const screenshotDataDir = argv['screenshot-db']
+    ? resolveScreenshotDataDir({ screenshotDataDir: argv['screenshot-data-dir'] })
+    : null;
+
+  if (argv['screenshot-db']) {
+    try {
+      screenshotDb = openScreenshotDb(argv['screenshot-db']);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  }
+
+  try {
   let rows = loadLatestGameversions(dbPath, argv.gameids);
   if (argv.limit != null && argv.limit > 0) {
     rows = rows.slice(0, argv.limit);
@@ -269,6 +308,8 @@ async function main() {
           tempDir: CONFIG.TEMP_DIR,
           argv,
           dryRun: true,
+          screenshotDb,
+          screenshotDataDir,
           logFn: (msg) => console.log(msg)
         });
         continue;
@@ -302,6 +343,8 @@ async function main() {
         tempDir: CONFIG.TEMP_DIR,
         argv,
         dryRun: false,
+        screenshotDb,
+        screenshotDataDir,
         logFn: (msg) => console.log(msg)
       });
 
@@ -325,6 +368,12 @@ async function main() {
   console.log(`  Failed:     ${failed}\n`);
 
   if (failed > 0) process.exit(1);
+  } finally {
+    if (screenshotDb) {
+      screenshotDb.close();
+    }
+    clearScreenshotCache();
+  }
 }
 
 if (require.main === module) {

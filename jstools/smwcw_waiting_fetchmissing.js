@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+process.env.DISPLAY = ':1'
+
 /**
  * smwcw_waiting_fetchmissing.js - Download and process missing games from SMWC Waiting
  * 

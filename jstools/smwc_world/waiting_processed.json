@@ -256,7 +256,7 @@
     ],
     "rating": 5,
     "size": 366310,
-    "downloads": 116,
+    "downloads": 117,
     "download_url": "https://dl.smwcentral.net/41532/Obstacle%20Courses%20for%20Anti-Gravity%20Horses.zip",
     "obsoleted_by": null,
     "fields": {
@@ -385,7 +385,7 @@
     ],
     "rating": 5,
     "size": 513307,
-    "downloads": 804,
+    "downloads": 806,
     "download_url": "https://dl.smwcentral.net/42245/SM%20Mushroom%20Kingdom%20Madness%20Demo.zip",
     "obsoleted_by": null,
     "fields": {
@@ -458,7 +458,7 @@
     ],
     "rating": 0,
     "size": 1628424,
-    "downloads": 217,
+    "downloads": 223,
     "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -586,7 +586,7 @@
     ],
     "rating": 0,
     "size": 36922,
-    "downloads": 77,
+    "downloads": 78,
     "download_url": "https://dl.smwcentral.net/42378/SMW%20Niko%20Moveset.zip",
     "obsoleted_by": null,
     "fields": {
@@ -616,79 +616,6 @@
       "sa1": false,
       "warnings": [],
       "description": "Niko Moveset is a movement-focused SMW hack/patch that adds sliding, long jumps,\r\nair dashes, wall sticking, charged jumps, parries, character unlocks, Shadow\r\nMario, Luigi movement, Rainbow/Star Yoshi variants, and hard-mode boss behavior.\r\n\r\nThe hack is designed around advanced movement and replay value, with unlockable\r\ncharacters and safer boss behavior to prevent softlocks caused by the new moves."
-    }
-  },
-  {
-    "id": 42379,
-    "section": "smwhacks",
-    "name": "Super Mario World - Bowser's Return",
-    "time": 1779003284,
-    "submitted_at": 1779003284,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 63,
-        "name": "Ice Man"
-      },
-      {
-        "id": 4,
-        "name": "ghettoyouth"
-      }
-    ],
-    "submitter": {
-      "id": 63,
-      "name": "Ice Man"
-    },
-    "moderator": null,
-    "tags": [
-      "asm",
-      "bugfix",
-      "custom graphics",
-      "custom music",
-      "exgfx",
-      "hdma",
-      "sa1",
-      "standard"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/123805.png",
-      "https://dl.smwcentral.net/image/123806.png",
-      "https://dl.smwcentral.net/image/123807.png",
-      "https://dl.smwcentral.net/image/123808.png"
-    ],
-    "rating": 0,
-    "size": 1267003,
-    "downloads": 312,
-    "download_url": "https://dl.smwcentral.net/42379/Super%20Mario%20World%20-%20Bowser%27s%20Return.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "length": "60 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "Yes",
-      "warnings": "",
-      "description": "My very first hack from 2007 updated to today's standards with many bugfixes and improvements."
-    },
-    "raw_fields": {
-      "version": "",
-      "changelog": "",
-      "difficulty": "diff_2",
-      "type": [
-        "standard"
-      ],
-      "length": 60,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": true,
-      "warnings": [],
-      "description": "My very first hack from 2007 updated to today's standards with many bugfixes and improvements."
     }
   },
   {
@@ -878,7 +805,7 @@
     ],
     "rating": 4.3333,
     "size": 2346234,
-    "downloads": 182,
+    "downloads": 184,
     "download_url": "https://dl.smwcentral.net/42427/ynt_mario_en_v1.0.6.zip",
     "obsoleted_by": null,
     "fields": {
@@ -958,7 +885,7 @@
     ],
     "rating": 5,
     "size": 1210355,
-    "downloads": 294,
+    "downloads": 296,
     "download_url": "https://dl.smwcentral.net/42434/Ominous%20Castle%20v1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1021,7 +948,7 @@
     ],
     "rating": 0,
     "size": 86274,
-    "downloads": 72,
+    "downloads": 74,
     "download_url": "https://dl.smwcentral.net/42443/SMUCH1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1154,7 +1081,7 @@
     ],
     "rating": 0,
     "size": 839481,
-    "downloads": 117,
+    "downloads": 118,
     "download_url": "https://dl.smwcentral.net/42459/Castlemania%20-%20REVAMPED.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1221,7 +1148,7 @@
     ],
     "rating": 5,
     "size": 473199,
-    "downloads": 244,
+    "downloads": 246,
     "download_url": "https://dl.smwcentral.net/42466/SMTQFB_v1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1368,7 +1295,7 @@
     ],
     "rating": 0,
     "size": 1070034,
-    "downloads": 61,
+    "downloads": 63,
     "download_url": "https://dl.smwcentral.net/42477/super%20Miles%20world%201.4.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1432,7 +1359,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1323,
+    "downloads": 1325,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1500,7 +1427,7 @@
     ],
     "rating": 4.6667,
     "size": 5112760,
-    "downloads": 3354,
+    "downloads": 3356,
     "download_url": "https://dl.smwcentral.net/42500/Crash%20Bandicoot%20and%20the%20Retro%20Dimension%20Enhanced.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1566,7 +1493,7 @@
     ],
     "rating": 5,
     "size": 1628128,
-    "downloads": 80,
+    "downloads": 81,
     "download_url": "https://dl.smwcentral.net/42501/Gransys.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1968,7 +1895,7 @@
     ],
     "rating": 4.6667,
     "size": 206292,
-    "downloads": 577,
+    "downloads": 578,
     "download_url": "https://dl.smwcentral.net/42537/MMLP.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2039,7 +1966,7 @@
     ],
     "rating": 0,
     "size": 567179,
-    "downloads": 34,
+    "downloads": 35,
     "download_url": "https://dl.smwcentral.net/42538/XL8.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2098,7 +2025,7 @@
     ],
     "rating": 5,
     "size": 2061726,
-    "downloads": 100,
+    "downloads": 105,
     "download_url": "https://dl.smwcentral.net/42540/Tortured%20Souls%203-Birth%20of%20a%20True%20Lord.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2176,7 +2103,7 @@
     ],
     "rating": 0,
     "size": 4870309,
-    "downloads": 157,
+    "downloads": 166,
     "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2392,7 +2319,7 @@
     ],
     "rating": 5,
     "size": 791647,
-    "downloads": 55,
+    "downloads": 57,
     "download_url": "https://dl.smwcentral.net/42545/%5BHack%5D%20Super%20Mario%20World%20Challenges%202%20v1.0.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2535,7 +2462,7 @@
     ],
     "rating": 0,
     "size": 1276995,
-    "downloads": 45,
+    "downloads": 52,
     "download_url": "https://dl.smwcentral.net/42550/Dreadful%20Mario.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2615,7 +2542,7 @@
     ],
     "rating": 0,
     "size": 252432,
-    "downloads": 28,
+    "downloads": 43,
     "download_url": "https://dl.smwcentral.net/42555/Super%20Mario%20World%20II.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2648,71 +2575,89 @@
     }
   },
   {
-    "id": 42560,
+    "id": 42562,
     "section": "smwhacks",
-    "name": "Aperitif",
-    "time": 1781820959,
-    "submitted_at": 1781820959,
+    "name": "Toad's World",
+    "time": 1781877044,
+    "submitted_at": 1781877044,
     "moderated_at": null,
     "moderated": false,
     "authors": [
       {
-        "id": 63161,
-        "name": "bald_ridge"
+        "id": 261,
+        "name": "FPI"
+      },
+      {
+        "id": 63,
+        "name": "Ice Man"
+      },
+      {
+        "id": 4,
+        "name": "ghettoyouth"
       }
     ],
     "submitter": {
-      "id": 63161,
-      "name": "bald_ridge"
+      "id": 63,
+      "name": "Ice Man"
     },
     "moderator": null,
     "tags": [
-      "custom",
-      "kaizo beginner",
-      "shell"
+      "asm",
+      "custom blocks",
+      "custom bosses",
+      "custom music",
+      "exgfx",
+      "hdma",
+      "sa1",
+      "standard",
+      "toad",
+      "traditional"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/124718.gif",
-      "https://dl.smwcentral.net/image/124719.gif",
-      "https://dl.smwcentral.net/image/124720.gif",
-      "https://dl.smwcentral.net/image/124721.gif",
-      "https://dl.smwcentral.net/image/124722.gif",
-      "https://dl.smwcentral.net/image/124723.gif",
-      "https://dl.smwcentral.net/image/124724.gif",
-      "https://dl.smwcentral.net/image/124725.gif"
+      "https://dl.smwcentral.net/image/124731.png",
+      "https://dl.smwcentral.net/image/124732.png",
+      "https://dl.smwcentral.net/image/124733.png",
+      "https://dl.smwcentral.net/image/124734.png",
+      "https://dl.smwcentral.net/image/124735.png",
+      "https://dl.smwcentral.net/image/124736.png",
+      "https://dl.smwcentral.net/image/124737.png",
+      "https://dl.smwcentral.net/image/124738.png",
+      "https://dl.smwcentral.net/image/124739.png",
+      "https://dl.smwcentral.net/image/124740.png",
+      "https://dl.smwcentral.net/image/124741.png"
     ],
-    "rating": 4.5,
-    "size": 1717105,
-    "downloads": 322,
-    "download_url": "https://dl.smwcentral.net/42560/Aperitif1.1.zip",
+    "rating": 4.3462,
+    "size": 1287420,
+    "downloads": 18254,
+    "download_url": "https://dl.smwcentral.net/42562/Toad%27s%20World%20%282026%20Update%29.zip",
     "obsoleted_by": null,
     "fields": {
-      "version": "",
-      "changelog": "1.1 Fixes an overworld issue that allowed for a soft lock if the player went right at the hard mode exit. Levels unchanged.",
-      "difficulty": "Casual",
-      "type": "Kaizo",
-      "length": "13 exit(s)",
+      "version": "2026 Update",
+      "changelog": "Upated to SA1.<br>\r\nUpdated to AddmusicK.<br>\r\nFixed dynamic sprite related issues.<br>\r\nMany QoL such as all levels having midway points and powerups and more.<br>\r\nFixed many other issues.",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "56 exit(s)",
       "hof": "No",
       "demo": "No",
       "collab": "No",
-      "sa1": "No",
+      "sa1": "Yes",
       "warnings": "",
-      "description": "Welcome to Aperitif! A beginner hack to hopefully whet your appetite for your full Kaizo meal! There are 13 exits and each level adds on to the one before it. While not a full tutorial hack Aperitif starts with simple jumps and adds mechanics as you go! There are also some additional challenges for players who already have some Kaizo completions. Each level has a Padlock Coin™ you can lock in and try to collect! In addition there is a hard mode that strings the normal mode levels together into one SUPER LEVEL!<br>\r\n<br>\r\nI hope you enjoy playing Aperitif, and if this is one of your first Kaizo hacks I hope it leads to you playing more SMW hacks and joining the wonderful SMW community!<br>\r\n<br>\r\nNote: While there is no additional exit for getting all the Padlock Coins™ it does unlock an additional level for you to play!<br>\r\nAnother note: Beating Hard Mode does give you an exit it is the same exit as the final level of normal mode and does not go beyond the normal 13 exits.<br>\r\nOne final note: In order to make sure a beginner could play this I had my teenage son with 0 SMW experience play the hack as the first playtester. GG to THE BOI™"
+      "description": "This is the final version of Toad's World. It has new music, small level changes, and improvements.<br>\r\n<br>\r\nEnjoy!<br>\r\n<br>\r\n<b>MAJOR EDIT:</b> This is now compatible with the real hardware. I managed to update AddmusicK's code manually and keep all the music/sample pointers. Hooray!<br>\r\n<br>\r\n<b>2026 Update:</b> Retrieved everything back from the previous final version and improved everything by updating to SA-1 + AddmusicK and newest Lunar Magic as well as updating this hack to todays standards. Many things were fixed and improved while keeping the game as is. All levels now have a midway point and powerups to make the game more fair overall. Also added a status bar with item box as the old pause menu is not compatible with SA-1 at all.<br>\r\nFor more information please check the changelog."
     },
     "raw_fields": {
-      "version": "",
-      "changelog": "1.1 Fixes an overworld issue that allowed for a soft lock if the player went right at the hard mode exit. Levels unchanged.",
-      "difficulty": "diff_2",
+      "version": "2026 Update",
+      "changelog": "Upated to SA1.\r\nUpdated to AddmusicK.\r\nFixed dynamic sprite related issues.\r\nMany QoL such as all levels having midway points and powerups and more.\r\nFixed many other issues.",
+      "difficulty": "diff_3",
       "type": [
-        "kaizo"
+        "standard"
       ],
-      "length": 13,
+      "length": 56,
       "hof": false,
       "demo": false,
       "collab": false,
-      "sa1": false,
+      "sa1": true,
       "warnings": [],
-      "description": "Welcome to Aperitif! A beginner hack to hopefully whet your appetite for your full Kaizo meal! There are 13 exits and each level adds on to the one before it. While not a full tutorial hack Aperitif starts with simple jumps and adds mechanics as you go! There are also some additional challenges for players who already have some Kaizo completions. Each level has a Padlock Coin™ you can lock in and try to collect! In addition there is a hard mode that strings the normal mode levels together into one SUPER LEVEL!\r\n\r\nI hope you enjoy playing Aperitif, and if this is one of your first Kaizo hacks I hope it leads to you playing more SMW hacks and joining the wonderful SMW community!\r\n\r\nNote: While there is no additional exit for getting all the Padlock Coins™ it does unlock an additional level for you to play!\r\nAnother note: Beating Hard Mode does give you an exit it is the same exit as the final level of normal mode and does not go beyond the normal 13 exits.\r\nOne final note: In order to make sure a beginner could play this I had my teenage son with 0 SMW experience play the hack as the first playtester. GG to THE BOI™"
+      "description": "This is the final version of Toad's World. It has new music, small level changes, and improvements.\r\n\r\nEnjoy!\r\n\r\n<b>MAJOR EDIT:</b> This is now compatible with the real hardware. I managed to update AddmusicK's code manually and keep all the music/sample pointers. Hooray!\r\n\r\n<b>2026 Update:</b> Retrieved everything back from the previous final version and improved everything by updating to SA-1 + AddmusicK and newest Lunar Magic as well as updating this hack to todays standards. Many things were fixed and improved while keeping the game as is. All levels now have a midway point and powerups to make the game more fair overall. Also added a status bar with item box as the old pause menu is not compatible with SA-1 at all.\r\nFor more information please check the changelog."
     }
   }
 ]

@@ -29,6 +29,7 @@ const RecordCreator = require('../lib/record-creator');
 const UpdateProcessor = require('../lib/update-processor');
 const StatsManager = require('../lib/stats-manager');
 const { getFlipsPath, getSmwRomPath, SMW_EXPECTED_SHA224 } = require('../lib/binary-finder');
+const catalogExport = require('../lib/smwc_catalog_export');
 
 // Configuration
 const CONFIG = {
@@ -94,6 +95,8 @@ if (argv['dry-run']) {
 if (argv['use-js-blobs']) {
   CONFIG.USE_PYTHON_BLOB_CREATOR = false;
 }
+
+CONFIG.CATALOG_EXPORT_DIR = catalogExport.resolveCatalogDir(argv);
 
 CONFIG.LOGGING = {
   mode: argv['log-mode'],
@@ -269,6 +272,12 @@ function parseArgs(args) {
     'use-js-blobs': false,
     'new-only': false,
     'target-folder': null,
+    'target-7zfolder': null,
+    'skip-catalog-images': false,
+    'skip-catalog-images-for': null,
+    'skip-catalog-7z-for': null,
+    'skip-catalog-7z': false,
+    'continue-on-catalog-errors': false,
     'source-folder': null,
     'subfolders': null,
     'changes-inplace': false,
@@ -313,6 +322,24 @@ function parseArgs(args) {
       parsed['target-folder'] = path.resolve(arg.split('=')[1]);
     } else if (arg === '--target-folder') {
       parsed['target-folder'] = path.resolve(args[++i]);
+    } else if (arg.startsWith('--target-7zfolder=')) {
+      parsed['target-7zfolder'] = path.resolve(arg.split('=')[1]);
+    } else if (arg === '--target-7zfolder') {
+      parsed['target-7zfolder'] = path.resolve(args[++i]);
+    } else if (arg === '--skip-catalog-images') {
+      parsed['skip-catalog-images'] = true;
+    } else if (arg.startsWith('--skip-catalog-images-for=')) {
+      parsed['skip-catalog-images-for'] = arg.split('=')[1];
+    } else if (arg === '--skip-catalog-images-for') {
+      parsed['skip-catalog-images-for'] = args[++i];
+    } else if (arg.startsWith('--skip-catalog-7z-for=')) {
+      parsed['skip-catalog-7z-for'] = arg.split('=')[1];
+    } else if (arg === '--skip-catalog-7z-for') {
+      parsed['skip-catalog-7z-for'] = args[++i];
+    } else if (arg === '--skip-catalog-7z') {
+      parsed['skip-catalog-7z'] = true;
+    } else if (arg === '--continue-on-catalog-errors') {
+      parsed['continue-on-catalog-errors'] = true;
     } else if (arg.startsWith('--source-folder=')) {
       parsed['source-folder'] = path.resolve(arg.split('=')[1]);
     } else if (arg === '--source-folder') {
@@ -395,6 +422,14 @@ Options:
   --new-only              Only process new gameids (skip updates to existing games)
   --target-folder=<path>  Export game data to folder instead of database
                           Creates RHPAK-compatible structure for each gameid
+  --target-7zfolder=<path> Catalog export root (bps/, games/, images/, etc.)
+                          Default: $HOME/proj/smwcgamesYYYYMMDD
+                          7z archives written to <path>.build/smwchack_(GAMEID).7z
+  --skip-catalog-images   Skip downloading SMWC screenshots for catalog export
+  --skip-catalog-images-for=<ids>  Skip catalog images for specific game IDs
+  --skip-catalog-7z-for=<ids>      Skip smwchack 7z build for specific game IDs
+  --skip-catalog-7z       Emergency: skip all catalog 7z builds
+  --continue-on-catalog-errors  Emergency: log catalog errors but still commit DB export
   --source-folder=<path>  Import game data from folder (created by --target-folder)
                           Requires --subfolders option
   --subfolders=<ids|all>  Process specific game IDs (comma-separated) or 'all'
@@ -651,6 +686,17 @@ async function verifyPrerequisites() {
       fs.mkdirSync(dir, { recursive: true });
       console.log(`    ✓ Created directory: ${path.basename(dir)}/`);
     }
+  }
+
+  console.log(`    Catalog export directory: ${CONFIG.CATALOG_EXPORT_DIR}`);
+  const skipCatalogPrereq = argv['source-folder'] || argv['orphan-cleanup'] || argv['force-rebuild-patch'];
+  if (!skipCatalogPrereq) {
+    catalogExport.verifyCatalogWritable(CONFIG.CATALOG_EXPORT_DIR, {
+      skip7zCheck: argv['skip-catalog-7z']
+    });
+    console.log(`    ✓ Catalog export path writable`);
+  } else {
+    console.log(`    ⓘ Skipping catalog path writability check (special mode)`);
   }
   
   console.log('    ✓ All prerequisites verified');
@@ -1364,6 +1410,61 @@ function computeCombinedType(record) {
 }
 
 /**
+ * Run SMWC catalog export before DB/folder commit (blocking unless --continue-on-catalog-errors)
+ */
+async function runCatalogExportBeforeCommit(ctx) {
+  const { gameid, queueItem, argv, patchFiles, latestVersion, primaryPatchFile, nextVersion, recordCreator, isUpdate } = ctx;
+
+  console.log(`  Catalog export to ${CONFIG.CATALOG_EXPORT_DIR}...`);
+
+  const catalogCtx = {
+    gameid,
+    queueItem,
+    argv,
+    catalogDir: CONFIG.CATALOG_EXPORT_DIR,
+    dryRun: CONFIG.DRY_RUN,
+    zipsDir: CONFIG.ZIPS_DIR,
+    flipsPath: CONFIG.FLIPS_PATH,
+    baseRomPath: CONFIG.BASE_ROM_PATH,
+    tempDir: CONFIG.TEMP_DIR,
+    logFn: (msg) => console.log(msg)
+  };
+
+  let result;
+  if (isUpdate) {
+    const metadata = ctx.metadata || (typeof queueItem.game_metadata === 'string'
+      ? JSON.parse(queueItem.game_metadata)
+      : queueItem.game_metadata);
+    result = await catalogExport.runCatalogStepForGameUpdate({
+      ...catalogCtx,
+      metadata,
+      zipPath: queueItem.zip_path || ctx.zipPath,
+      latestVersion,
+      primaryPatchFile,
+      nextVersion,
+      recordCreator
+    });
+  } else {
+    result = await catalogExport.runCatalogStepForNewGame(catalogCtx);
+  }
+
+  if (!result.ok && !argv['continue-on-catalog-errors']) {
+    const errMsg = (result.errors && result.errors.length)
+      ? result.errors.join('; ')
+      : 'Catalog export failed';
+    throw new Error(errMsg);
+  }
+
+  if (!result.ok && argv['continue-on-catalog-errors']) {
+    console.log(`  ⚠ Catalog export failed (continuing due to --continue-on-catalog-errors): ${(result.errors || []).join('; ')}`);
+  } else if (result.ok) {
+    console.log(`  ✓ Catalog export completed`);
+  }
+
+  return result;
+}
+
+/**
  * Create final database records
  */
 async function createDatabaseRecords(dbManager, recordCreator, argv) {
@@ -1408,6 +1509,14 @@ async function createDatabaseRecords(dbManager, recordCreator, argv) {
       
       // Get patch files
       const patchFiles = dbManager.getPatchFilesByQueue(queueItem.queueuuid);
+
+      await runCatalogExportBeforeCommit({
+        gameid,
+        queueItem,
+        argv,
+        patchFiles,
+        isUpdate: false
+      });
       
       if (CONFIG.DRY_RUN) {
         if (argv['target-folder']) {
@@ -1670,6 +1779,22 @@ async function processGamesNeedingUpdates(dbManager, downloadNeeded, argv) {
       if (patchFilesWithBlobs.length === 0) {
         throw new Error('Failed to create any blobs');
       }
+
+      const primaryWithBlob = patchFilesWithBlobs.find(pf => pf.pfuuid === primaryPatchFile.pfuuid) || patchFilesWithBlobs[0];
+
+      await runCatalogExportBeforeCommit({
+        gameid,
+        queueItem: { ...queueItem, metadata, zip_path: zipPath },
+        argv,
+        patchFiles: patchFilesWithBlobs,
+        metadata,
+        zipPath,
+        latestVersion,
+        primaryPatchFile: primaryWithBlob,
+        nextVersion,
+        recordCreator,
+        isUpdate: true
+      });
       
       // Create or update game records (expects patch files with blob_data already set)
       if (changesInplace) {
@@ -1742,6 +1867,18 @@ async function updateMetadataOnly(dbManager, recordCreator, metadataUpdateNeeded
       }
       
       console.log(`  Updating metadata in-place (version ${latestVersion.version})...`);
+
+      await runCatalogExportBeforeCommit({
+        gameid,
+        queueItem: { game_metadata: metadata },
+        argv,
+        metadata,
+        latestVersion,
+        primaryPatchFile: { pat_sha224: latestVersion.pat_sha224 },
+        nextVersion: latestVersion.version,
+        recordCreator,
+        isUpdate: true
+      });
       
       // Update metadata only (preserves all patch/blob information)
       const result = await recordCreator.updateMetadataOnly(

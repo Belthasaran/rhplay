@@ -230,7 +230,9 @@ async function fetchArdriveFileIndex(folderId) {
   const arweave = require('arweave');
   const arDriveCore = require('ardrive-core-js');
   //const arweaveUrl = new URL('https://arweave.net:443');
-  const   arweaveUrl = new URL('https://ardrive.net:443');
+  //const   arweaveUrl = new URL('https://ardrive.net:443');
+  const   arweaveUrl = new URL('https://turbo-gateway.com:443');
+
   const arweaveClient = arweave.init({
     host: arweaveUrl.hostname,
     protocol: arweaveUrl.protocol.replace(':', ''),

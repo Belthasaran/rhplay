@@ -105,6 +105,22 @@ enode.sh updategames.js --continue-on-catalog-errors
 
 Catalog output layout under the target folder: `bps/`, `bpsindex/`, `games/`, `extras/`, `images/`, and `{target}.build/smwchack_(GAMEID).7z`.
 
+### Backfill catalog for existing DB games
+```bash
+enode.sh gameversions27zfolder.js \
+  --target-7zfolder=~/proj/example \
+  --sourcezips-folder=~/proj/zips \
+  --gameids=all
+
+enode.sh gameversions27zfolder.js \
+  --target-7zfolder=~/proj/example \
+  --sourcezips-folder=~/proj/zips \
+  --gameids=42550,42560 \
+  --skip-existing
+```
+
+Searches `--sourcezips-folder` recursively for `{gameid}.zip` or original download filename; downloads from `download_url` if missing (unless `--no-download`).
+
 ## 🔍 Checking Results
 
 ### View Imported Games

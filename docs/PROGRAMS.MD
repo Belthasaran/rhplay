@@ -70,6 +70,28 @@ Helper scripts (also invoked by the build lines above): `launcher:install-app-de
 
 ---
 
+### gameversions27zfolder.js
+**Purpose**: Backfill SMWC catalog tree and `smwchack_(GAMEID).7z` archives for games already in `gameversions`
+
+**Usage**:
+```bash
+enode.sh gameversions27zfolder.js --target-7zfolder=~/proj/example \
+  --sourcezips-folder=~/proj/zips --gameids=all
+```
+
+**Key Options**:
+- `--target-7zfolder=<path>` - Catalog output root (required)
+- `--sourcezips-folder=<path>` - Recursive local ZIP search root (required)
+- `--gameids=all|<ids>` - Latest row per gameid (required)
+- `--rhdata-db=<path>` - Override rhdata.db (default: `electron/rhdata.db`, env `RHDATA_DB_PATH`)
+- `--skip-existing` - Skip when `games/{id}.json` and `smwchack_{id}.7z` exist
+- `--no-download` - Do not download missing ZIPs
+- `--skip-catalog-images` / `--skip-catalog-7z` - Same as updategames catalog flags
+
+**Documentation**: See `docs/UPDATEGAMES_QUICK_START.md` (catalog export section)
+
+---
+
 ### updategames.js
 **Purpose**: Main script to update game database from SMWC
 

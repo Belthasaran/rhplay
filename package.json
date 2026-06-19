@@ -80,6 +80,7 @@
     "test:python-compat": "node tests/test_python_script_compat.js",
     "test:updategames": "node tests/test_updategames.js",
     "test:catalog-export": "node tests/test_smwc_catalog_export.js",
+    "test:gameversions27zfolder": "node tests/test_gameversions27zfolder.js",
     "test:usb2snes-list": "node tests/test_usb2snes_list.js",
     "test:usb2snes-test-connection": "node tests/test_usb2snes_test_connection.js",
     "test:retroarch-append-config": "node tests/test_retroarch_append_config.js",

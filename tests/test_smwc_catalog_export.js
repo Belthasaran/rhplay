@@ -160,6 +160,43 @@ async function runTests() {
     assert(!name.includes('SMWC-Waiting'));
   });
 
+  test('resolveCatalogImageFilename keeps URL extension when present', () => {
+    const url = 'https://dl.smwcentral.net/image/119578.png';
+    assert(catalogExport.resolveCatalogImageFilename(url) === '119578.png');
+  });
+
+  test('resolveCatalogImageFilename adds .png from PNG buffer', () => {
+    const url = 'https://dl.smwcentral.net/image/25714';
+    const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    assert(catalogExport.resolveCatalogImageFilename(url, { buffer: pngHeader }) === '25714.png');
+  });
+
+  test('resolveCatalogImageFilename adds .jpg from JPEG buffer', () => {
+    const url = 'https://dl.smwcentral.net/image/25714';
+    const jpegHeader = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]);
+    assert(catalogExport.resolveCatalogImageFilename(url, { buffer: jpegHeader }) === '25714.jpg');
+  });
+
+  test('resolveCatalogImageFilename leaves bare basename when type unknown', () => {
+    const url = 'https://dl.smwcentral.net/image/25714';
+    const unknown = Buffer.from([0x00, 0x01, 0x02, 0x03]);
+    assert(catalogExport.resolveCatalogImageFilename(url, { buffer: unknown }) === '25714');
+  });
+
+  test('resolveCatalogImageFilename uses fileExt hint before buffer', () => {
+    const url = 'https://dl.smwcentral.net/image/25714';
+    assert(catalogExport.resolveCatalogImageFilename(url, { fileExt: 'gif' }) === '25714.gif');
+  });
+
+  test('findExistingCatalogImagePath finds legacy extensionless file', () => {
+    const dir = path.join(TEST_ROOT, 'images_legacy');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '25714'), Buffer.from([0x89, 0x50, 0x4E, 0x47]));
+    const found = catalogExport.findExistingCatalogImagePath(dir, '25714');
+    assert(found && found.filename === '25714');
+    assert(found.path === path.join(dir, '25714'));
+  });
+
   await testAsync('verifyCatalogWritable succeeds on writable temp directory', async () => {
     const prevHome = process.env.HOME;
     process.env.HOME = TEST_ROOT;

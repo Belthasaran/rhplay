@@ -268,6 +268,7 @@ async function main() {
     }
   }
 
+  let failed = 0;
   try {
   let rows = loadLatestGameversions(dbPath, argv.gameids);
   if (argv.limit != null && argv.limit > 0) {
@@ -278,7 +279,6 @@ async function main() {
 
   let processed = 0;
   let skipped = 0;
-  let failed = 0;
   let downloaded = 0;
 
   for (const row of rows) {
@@ -366,22 +366,24 @@ async function main() {
   console.log(`  Skipped:    ${skipped}`);
   console.log(`  Downloaded: ${downloaded}`);
   console.log(`  Failed:     ${failed}\n`);
-
-  if (failed > 0) process.exit(1);
   } finally {
     if (screenshotDb) {
       screenshotDb.close();
     }
     clearScreenshotCache();
   }
+
+  return failed > 0 ? 1 : 0;
 }
 
 if (require.main === module) {
-  main().catch(err => {
-    console.error('Fatal error:', err.message);
-    console.error(err.stack);
-    process.exit(1);
-  });
+  main()
+    .then((code) => process.exit(code))
+    .catch(err => {
+      console.error('Fatal error:', err.message);
+      console.error(err.stack);
+      process.exit(1);
+    });
 }
 
 module.exports = { main, parseArgs, loadLatestGameversions, isCatalogComplete };

@@ -10,8 +10,12 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+const Database = require('better-sqlite3');
+const fernet = require('fernet');
 
 const catalogExport = require('../lib/smwc_catalog_export');
+const { openScreenshotDb, clearScreenshotCache } = require('../lib/screenshot_db_reader');
 
 const TEST_ROOT = path.join(__dirname, 'test_data', 'catalog_export_' + process.pid);
 
@@ -195,6 +199,106 @@ async function runTests() {
     const found = catalogExport.findExistingCatalogImagePath(dir, '25714');
     assert(found && found.filename === '25714');
     assert(found.path === path.join(dir, '25714'));
+  });
+
+  function fernetTokenToBuffer(token) {
+    let base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) {
+      base64 += '=';
+    }
+    return Buffer.from(base64, 'base64');
+  }
+
+  function encryptBuffer(buffer) {
+    const UrlBase64 = require('urlsafe-base64');
+    const key = UrlBase64.encode(crypto.randomBytes(32)).toString();
+    const secret = new fernet.Secret(key);
+    const token = new fernet.Token({ secret, ttl: 0 });
+    const payload = buffer.toString('base64');
+    const tokenString = token.encode(payload);
+    const tokenBuffer = fernetTokenToBuffer(tokenString);
+    return {
+      key,
+      tokenBuffer,
+      decodedSha256: crypto.createHash('sha256').update(buffer).digest('hex')
+    };
+  }
+
+  function createScreenshotDbFixture() {
+    const dbPath = path.join(TEST_ROOT, 'screenshot_order.db');
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE res_screenshots (
+        rsuuid TEXT PRIMARY KEY,
+        gameid TEXT,
+        gvuuid TEXT,
+        rhpakuuid TEXT,
+        source_url TEXT,
+        file_name TEXT,
+        file_ext TEXT,
+        screenshot_type TEXT,
+        kind TEXT,
+        encrypted_data BLOB,
+        fernet_key TEXT,
+        decoded_sha256 TEXT,
+        file_sha256 TEXT,
+        encoded_sha256 TEXT,
+        storage_path TEXT,
+        source_path TEXT,
+        sequence_no INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE gameversion_screenshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        gameid TEXT NOT NULL,
+        rsuuid TEXT NOT NULL,
+        sequence_no INTEGER,
+        source_url TEXT,
+        file_name TEXT
+      );
+    `);
+    db.close();
+    return dbPath;
+  }
+
+  await testAsync('downloadGameImages loads .png URL from screenshot.db before HTTP', async () => {
+    clearScreenshotCache();
+    const dbPath = createScreenshotDbFixture();
+    const imageUrl = 'https://dl.smwcentral.net/image/31398.png';
+    const imageBytes = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    const enc = encryptBuffer(imageBytes);
+
+    const db = new Database(dbPath);
+    db.prepare(`
+      INSERT INTO res_screenshots (
+        rsuuid, gameid, source_url, file_name, file_ext, encrypted_data, fernet_key, decoded_sha256
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('rs-png', '11289', imageUrl, '31398.png', 'png', enc.tokenBuffer, enc.key, enc.decodedSha256);
+    db.prepare(`
+      INSERT INTO gameversion_screenshots (gameid, rsuuid, sequence_no, source_url, file_name)
+      VALUES (?, ?, ?, ?, ?)
+    `).run('11289', 'rs-png', 1, imageUrl, '31398.png');
+    db.close();
+
+    const imagesDir = path.join(TEST_ROOT, 'catalog_images');
+    const screenshotDb = openScreenshotDb(dbPath);
+    const logs = [];
+    try {
+      const files = await catalogExport.downloadGameImages(
+        { images: [imageUrl] },
+        '11289',
+        imagesDir,
+        (msg) => logs.push(msg),
+        { screenshotDb, screenshotDataDir: path.join(TEST_ROOT, 'ss_unused') }
+      );
+      assert(files.includes('31398.png'), `Expected 31398.png in ${files.join(',')}`);
+      assert(fs.existsSync(path.join(imagesDir, '11289', '31398.png')));
+      assert(logs.some(l => l.includes('loaded from screenshot.db')), `Expected db load log, got: ${logs.join(' | ')}`);
+      assert(!logs.some(l => l.includes('downloaded 31398.png')), `Should not HTTP download: ${logs.join(' | ')}`);
+    } finally {
+      screenshotDb.close();
+      clearScreenshotCache();
+    }
   });
 
   await testAsync('verifyCatalogWritable succeeds on writable temp directory', async () => {

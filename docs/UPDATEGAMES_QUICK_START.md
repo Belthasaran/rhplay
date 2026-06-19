@@ -117,9 +117,16 @@ enode.sh gameversions27zfolder.js \
   --sourcezips-folder=~/proj/zips \
   --gameids=42550,42560 \
   --skip-existing
+
+# Use local screenshot.db before HTTP image downloads
+enode.sh gameversions27zfolder.js \
+  --target-7zfolder=~/proj/example \
+  --sourcezips-folder=~/proj/zips \
+  --gameids=all \
+  --screenshot-db=~/rhplay/electron/screenshot.db
 ```
 
-Searches `--sourcezips-folder` recursively for `{gameid}.zip` or original download filename; downloads from `download_url` if missing (unless `--no-download`).
+Searches `--sourcezips-folder` recursively for `{gameid}.zip` or original download filename; downloads from `download_url` if missing (unless `--no-download`). With `--screenshot-db`, catalog images are loaded from `screenshot.db` (decrypted BLOB or `storage_path` file under `--screenshot-data-dir` / `SCREENSHOT_DATA_DIR`) before HTTP download.
 
 ## 🔍 Checking Results
 

@@ -79,6 +79,10 @@ node updategames.js [options]
 ```
 
 **Key Options**:
+- `--target-7zfolder=<path>` - SMWC catalog export root (default: `$HOME/proj/smwcgamesYYYYMMDD`)
+- `--skip-catalog-images` - Skip screenshot downloads for catalog export
+- `--skip-catalog-7z` - Skip building `smwchack_(GAMEID).7z` archives
+- `--continue-on-catalog-errors` - Commit DB/folder export even if catalog step fails
 - `--game-ids=<ids>` - Process specific game IDs only
 - `--all-patches` - Process all patches, not just primary
 - `--dry-run` - Preview changes without modifying database

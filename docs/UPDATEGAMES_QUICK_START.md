@@ -86,6 +86,25 @@ npm run updategames:all
 # Or: node updategames.js --all-patches
 ```
 
+### SMWC Catalog Export (`--target-7zfolder`)
+```bash
+# Export RHPAK folders plus catalog tree + 7z (custom path)
+enode.sh updategames.js --target-folder=games1 --target-7zfolder=example2
+
+# Default catalog path: $HOME/proj/smwcgamesYYYYMMDD (also used for DB inserts)
+enode.sh updategames.js
+
+# Skip screenshots or 7z for debugging
+enode.sh updategames.js --skip-catalog-images
+enode.sh updategames.js --skip-catalog-7z
+enode.sh updategames.js --skip-catalog-images-for=42550,42560
+
+# Emergency: allow DB commit if catalog fails
+enode.sh updategames.js --continue-on-catalog-errors
+```
+
+Catalog output layout under the target folder: `bps/`, `bpsindex/`, `games/`, `extras/`, `images/`, and `{target}.build/smwchack_(GAMEID).7z`.
+
 ## 🔍 Checking Results
 
 ### View Imported Games

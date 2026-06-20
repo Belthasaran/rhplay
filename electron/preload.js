@@ -244,6 +244,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean}>}
    */
   saveRunPlan: (runUuid, entries, winRulesJson, runType) => ipcRenderer.invoke('db:runs:save-plan', { runUuid, entries, winRulesJson, runType }),
+
+  /**
+   * Load Share code into a Prepare Run plan
+   * @param {string} shareCode
+   */
+  loadShareCode: (shareCode) => ipcRenderer.invoke('runs:load-share-code', { shareCode }),
+
+  /**
+   * Progress events for share-code loading (catalog install, JIT, etc.)
+   * @param {function} callback
+   * @returns {function} unsubscribe
+   */
+  onLoadShareCodeProgress: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('runs:load-share-code:progress', listener);
+    return () => ipcRenderer.removeListener('runs:load-share-code:progress', listener);
+  },
   
   /**
    * Start a run (change status to active, expand plan to results)

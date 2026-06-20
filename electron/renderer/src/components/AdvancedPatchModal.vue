@@ -265,8 +265,21 @@
                 </div>
                 <div class="patch-editor-actions">
                   <span v-if="patch.is_system" class="system-badge">System</span>
-                  <button @click="editPatch(patch)" class="btn-link-small" :disabled="patch.is_system && !isDevAdmin.value">Edit</button>
-                  <button @click="deletePatch(patch)" class="btn-link-small btn-danger" :disabled="patch.is_system && !isDevAdmin.value">Delete</button>
+                  <button
+                    v-if="patch.is_system && !isDevAdmin"
+                    @click="editPatch(patch)"
+                    class="btn-link-small"
+                  >View</button>
+                  <button
+                    v-else
+                    @click="editPatch(patch)"
+                    class="btn-link-small"
+                  >Edit</button>
+                  <button
+                    @click="deletePatch(patch)"
+                    class="btn-link-small btn-danger"
+                    :disabled="!!patch.is_system && !isDevAdmin"
+                  >Delete</button>
                 </div>
               </div>
               <div v-if="patch.description" class="patch-editor-description">{{ patch.description }}</div>
@@ -283,7 +296,7 @@
             <div class="patch-form-backdrop" @click="closePatchForm"></div>
             <div class="patch-form-content">
               <div class="patch-form-header">
-                <h4>{{ editingPatch ? 'Edit Patch' : 'Add New Patch' }}</h4>
+                <h4>{{ editingPatch ? (isPatchFormReadOnly ? 'Edit Patch (Read-Only)' : 'Edit Patch') : 'Add New Patch' }}</h4>
                 <button @click="closePatchForm" class="close-small">✕</button>
               </div>
               
@@ -293,8 +306,10 @@
                   <input 
                     v-model="patchForm.patch_code" 
                     type="text" 
-                    class="input" 
-                    :disabled="!!editingPatch"
+                    class="input"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :disabled="!!editingPatch && !isPatchFormReadOnly"
+                    :readonly="isPatchFormReadOnly"
                     placeholder="cc"
                   />
                 </div>
@@ -304,7 +319,9 @@
                   <input 
                     v-model="patchForm.name" 
                     type="text" 
-                    class="input" 
+                    class="input"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     placeholder="Infinite Lives"
                   />
                 </div>
@@ -313,7 +330,9 @@
                   <label>Description</label>
                   <textarea 
                     v-model="patchForm.description" 
-                    class="textarea" 
+                    class="textarea"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     rows="2"
                     placeholder="Optional description"
                   ></textarea>
@@ -321,7 +340,7 @@
 
                 <div class="form-field">
                   <label>Patch Type *</label>
-                  <select v-model="patchForm.patch_type" class="input">
+                  <select v-model="patchForm.patch_type" class="input" :disabled="isPatchFormReadOnly">
                     <option value="ips">IPS</option>
                     <option value="bps">BPS</option>
                     <option value="asar">ASAR</option>
@@ -335,7 +354,9 @@
                   <input 
                     v-model.number="patchForm.priority" 
                     type="number" 
-                    class="input" 
+                    class="input"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     placeholder="100"
                   />
                   <span class="hint">Lower numbers are applied first</span>
@@ -343,18 +364,19 @@
 
                 <!-- File-based patches (IPS, BPS, UberASMTree) -->
                 <div v-if="patchForm.patch_type === 'ips' || patchForm.patch_type === 'bps' || patchForm.patch_type === 'uberasmtree'" class="form-field">
-                  <label>Patch File <span v-if="editingPatch" class="hint">(leave empty to keep existing file)</span></label>
+                  <label>Patch File <span v-if="editingPatch && !isPatchFormReadOnly" class="hint">(leave empty to keep existing file)</span></label>
                   <div class="file-upload-area">
                     <input 
+                      v-if="!isPatchFormReadOnly"
                       type="file" 
                       ref="fileInputRef"
                       @change="handleFileSelect"
                       :accept="patchForm.patch_type === 'uberasmtree' ? '.7z' : `.${patchForm.patch_type}`"
                       style="display: none"
                     />
-                    <button @click="fileInputRef?.click()" class="btn-secondary btn-small">Choose File</button>
+                    <button v-if="!isPatchFormReadOnly" @click="fileInputRef?.click()" class="btn-secondary btn-small">Choose File</button>
                     <span v-if="patchForm.fileName" class="file-name">{{ patchForm.fileName }}</span>
-                    <span v-else-if="editingPatch" class="hint">Existing file will be kept</span>
+                    <span v-else-if="editingPatch" class="hint">{{ isPatchFormReadOnly ? 'Existing patch file on record' : 'Existing file will be kept' }}</span>
                     <span v-else class="hint">No file selected (required for new patches)</span>
                   </div>
                 </div>
@@ -364,7 +386,9 @@
                   <label>ASAR Template Text</label>
                   <textarea 
                     v-model="patchForm.template_text" 
-                    class="textarea code-textarea" 
+                    class="textarea code-textarea"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     rows="10"
                     placeholder="ASAR assembly code with template variables like ${level_number}"
                   ></textarea>
@@ -377,7 +401,8 @@
                     <textarea 
                       v-model="patchForm.template_text" 
                       class="textarea code-textarea"
-                      :class="{ 'valid': gameGenieCodesValid, 'invalid': !gameGenieCodesValid && patchForm.template_text }"
+                      :class="{ 'valid': gameGenieCodesValid, 'invalid': !gameGenieCodesValid && patchForm.template_text, readonly: isPatchFormReadOnly }"
+                      :readonly="isPatchFormReadOnly"
                       rows="10"
                       placeholder="C222-D4DD&#10;A123-B456"
                       @input="validateGameGenieCodes"
@@ -392,14 +417,14 @@
 
                 <div class="form-field" v-if="patchForm.patch_type !== 'gamegenie'">
                   <label>
-                    <input type="checkbox" v-model="patchForm.requires_parameters" />
+                    <input type="checkbox" v-model="patchForm.requires_parameters" :disabled="isPatchFormReadOnly" />
                     Requires Parameters
                   </label>
                 </div>
 
-                <div v-if="isDevAdmin.value" class="form-field">
+                <div v-if="isDevAdmin" class="form-field">
                   <label>
-                    <input type="checkbox" v-model="patchForm.is_system" />
+                    <input type="checkbox" v-model="patchForm.is_system" :disabled="isPatchFormReadOnly" />
                     System Patch (read-only for users)
                   </label>
                   <span class="hint">System patches can only be edited/deleted when DEVADMIN=1</span>
@@ -408,7 +433,7 @@
                 <div v-if="patchForm.requires_parameters" class="form-field">
                   <label>Parameter Mappings (JSON)</label>
                   <div class="parameter-mappings-editor">
-                    <div class="quick-insert-buttons">
+                    <div v-if="!isPatchFormReadOnly" class="quick-insert-buttons">
                       <button 
                         type="button" 
                         class="btn-link-small"
@@ -429,7 +454,8 @@
                     <div class="textarea-wrapper">
                       <textarea 
                         v-model="patchForm.parameter_mappings_json" 
-                        :class="['textarea', 'code-textarea', { 'invalid': !parameterMappingsValid, 'valid': parameterMappingsValid && patchForm.parameter_mappings_json }]"
+                        :class="['textarea', 'code-textarea', { 'invalid': !parameterMappingsValid, 'valid': parameterMappingsValid && patchForm.parameter_mappings_json, readonly: isPatchFormReadOnly }]"
+                        :readonly="isPatchFormReadOnly"
                         rows="6"
                         placeholder='{"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar", "description": "..."}}'
                         @input="validateParameterMappings"
@@ -447,7 +473,9 @@
                   <label>Restrictions (JSON)</label>
                   <textarea 
                     v-model="patchForm.restrictions_json" 
-                    class="textarea code-textarea" 
+                    class="textarea code-textarea"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     rows="4"
                     placeholder='{"allowed_games": ["gameid1"], "required_tags": ["tag1"], "excluded_tags": ["tag2"]}'
                   ></textarea>
@@ -458,7 +486,9 @@
                   <label>Conflicts (JSON Array)</label>
                   <textarea 
                     v-model="patchForm.conflicts_json" 
-                    class="textarea code-textarea" 
+                    class="textarea code-textarea"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     rows="2"
                     placeholder='["conflict1", "conflict2"]'
                   ></textarea>
@@ -469,7 +499,9 @@
                   <label>Dependencies (JSON Array)</label>
                   <textarea 
                     v-model="patchForm.dependencies_json" 
-                    class="textarea code-textarea" 
+                    class="textarea code-textarea"
+                    :class="{ readonly: isPatchFormReadOnly }"
+                    :readonly="isPatchFormReadOnly"
                     rows="2"
                     placeholder='["dep1", "dep2"]'
                   ></textarea>
@@ -478,7 +510,7 @@
               </div>
 
               <div class="patch-form-footer">
-                <button @click="savePatch" class="btn-primary" :disabled="!canSavePatch">Save</button>
+                <button v-if="!isPatchFormReadOnly" @click="savePatch" class="btn-primary" :disabled="!canSavePatch">Save</button>
                 <button @click="closePatchForm" class="btn-secondary">Cancel</button>
               </div>
             </div>
@@ -729,6 +761,9 @@ const filteredAllPatches = computed(() =>
 );
 const showAddPatchForm = ref(false);
 const editingPatch = ref<ExtraPatch | null>(null);
+const isPatchFormReadOnly = computed(() =>
+  !!editingPatch.value?.is_system && !isDevAdmin.value
+);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const parameterMappingsValid = ref(true);
 const parameterMappingsError = ref('');
@@ -1354,6 +1389,9 @@ function validateGameGenieCodes() {
 }
 
 async function savePatch() {
+  if (isPatchFormReadOnly.value) {
+    return;
+  }
   if (!canSavePatch.value) {
     await showAlert('Please fill in required fields (Patch Code, Name, Patch Type)', 'Validation Error');
     return;
@@ -1831,6 +1869,14 @@ async function deletePreset(preset: Preset) {
 .input:focus {
   outline: none;
   border-color: var(--accent-primary);
+}
+
+.input.readonly,
+.textarea.readonly {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--text-primary);
+  cursor: text;
+  user-select: text;
 }
 
 .hex-input {

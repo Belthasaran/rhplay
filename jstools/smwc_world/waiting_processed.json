@@ -1359,7 +1359,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1326,
+    "downloads": 1327,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1493,7 +1493,7 @@
     ],
     "rating": 5,
     "size": 1628128,
-    "downloads": 81,
+    "downloads": 83,
     "download_url": "https://dl.smwcentral.net/42501/Gransys.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2042,7 +2042,7 @@
     ],
     "rating": 0,
     "size": 4870309,
-    "downloads": 174,
+    "downloads": 175,
     "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2401,7 +2401,7 @@
     ],
     "rating": 0,
     "size": 1276995,
-    "downloads": 54,
+    "downloads": 55,
     "download_url": "https://dl.smwcentral.net/42550/Dreadful%20Mario.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2479,9 +2479,9 @@
       "https://dl.smwcentral.net/image/124702.png",
       "https://dl.smwcentral.net/image/124703.png"
     ],
-    "rating": 0,
+    "rating": 4,
     "size": 252432,
-    "downloads": 48,
+    "downloads": 49,
     "download_url": "https://dl.smwcentral.net/42555/Super%20Mario%20World%20II.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2567,7 +2567,7 @@
     ],
     "rating": 4.3462,
     "size": 1287420,
-    "downloads": 18262,
+    "downloads": 18264,
     "download_url": "https://dl.smwcentral.net/42562/Toad%27s%20World%20%282026%20Update%29.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2626,7 +2626,7 @@
     ],
     "rating": 0,
     "size": 2064493,
-    "downloads": 10,
+    "downloads": 11,
     "download_url": "https://dl.smwcentral.net/42563/Tortured%20Souls%203%201.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2658,6 +2658,98 @@
         "photosensitivity"
       ],
       "description": "The fire fades, and kingdoms fall to ash."
+    }
+  },
+  {
+    "id": 42564,
+    "section": "smwhacks",
+    "name": "Super Mario World: The Magical Golden Mushroom",
+    "time": 1781910592,
+    "submitted_at": 1781910592,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 27645,
+        "name": "Green Jerry"
+      }
+    ],
+    "submitter": {
+      "id": 27645,
+      "name": "Green Jerry"
+    },
+    "moderator": null,
+    "tags": [
+      "bosses",
+      "custom music",
+      "portuguese",
+      "spanish",
+      "traditional"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124745.png",
+      "https://dl.smwcentral.net/image/124746.png",
+      "https://dl.smwcentral.net/image/124747.png",
+      "https://dl.smwcentral.net/image/124748.png",
+      "https://dl.smwcentral.net/image/124749.png",
+      "https://dl.smwcentral.net/image/124750.png",
+      "https://dl.smwcentral.net/image/124751.png",
+      "https://dl.smwcentral.net/image/124752.png",
+      "https://dl.smwcentral.net/image/124753.png",
+      "https://dl.smwcentral.net/image/124754.png",
+      "https://dl.smwcentral.net/image/124755.png",
+      "https://dl.smwcentral.net/image/124756.png",
+      "https://dl.smwcentral.net/image/124757.png",
+      "https://dl.smwcentral.net/image/124758.png",
+      "https://dl.smwcentral.net/image/124759.png",
+      "https://dl.smwcentral.net/image/124760.png",
+      "https://dl.smwcentral.net/image/124761.png",
+      "https://dl.smwcentral.net/image/124762.png",
+      "https://dl.smwcentral.net/image/124763.png",
+      "https://dl.smwcentral.net/image/124764.png",
+      "https://dl.smwcentral.net/image/124765.png",
+      "https://dl.smwcentral.net/image/124766.png",
+      "https://dl.smwcentral.net/image/124767.png",
+      "https://dl.smwcentral.net/image/124768.png",
+      "https://dl.smwcentral.net/image/124769.png",
+      "https://dl.smwcentral.net/image/124770.png",
+      "https://dl.smwcentral.net/image/124771.png",
+      "https://dl.smwcentral.net/image/124772.png",
+      "https://dl.smwcentral.net/image/124773.png",
+      "https://dl.smwcentral.net/image/124774.png"
+    ],
+    "rating": 0,
+    "size": 1545848,
+    "downloads": 13,
+    "download_url": "https://dl.smwcentral.net/42564/Super%20Mario%20World%20-%20The%20Magical%20Golden%20Mushroom%20v1.0.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "1.0",
+      "changelog": "",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "70 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "No",
+      "sa1": "No",
+      "warnings": "",
+      "description": "This hack is a remake/redux version of <a href=\"https://smwc.me/s/20754\">Mario Rescues the Golden Mushroom</a>. With 10 worlds and 70 exits, this hack is longer than the original version!<br>\r\n<br>\r\n<b>Story:</b><br>\r\nOh, no! Bowser has stolen the Golden Mushroom! He's planning to take over the world with   it! Mario must stop Bowser to save the world!<br>\r\n<br>\r\nThis hack is available in 3 languages: English, Brazilian Portuguese and Spanish."
+    },
+    "raw_fields": {
+      "version": "1.0",
+      "changelog": "",
+      "difficulty": "diff_3",
+      "type": [
+        "standard"
+      ],
+      "length": 70,
+      "hof": false,
+      "demo": false,
+      "collab": false,
+      "sa1": false,
+      "warnings": [],
+      "description": "This hack is a remake/redux version of [url=https://smwc.me/s/20754]Mario Rescues the Golden Mushroom[/url]. With 10 worlds and 70 exits, this hack is longer than the original version!\r\n\r\n[b]Story:[/b]\r\nOh, no! Bowser has stolen the Golden Mushroom! He's planning to take over the world with   it! Mario must stop Bowser to save the world!\r\n\r\nThis hack is available in 3 languages: English, Brazilian Portuguese and Spanish."
     }
   }
 ]

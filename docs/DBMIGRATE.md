@@ -2295,4 +2295,22 @@ Extend `stage_feedback` for Stage Test dialog and unified Prepare Run feedback f
 
 ---
 
+## clientdata_074_stage_feedback_patch_identity
+
+### Date Added
+June 17, 2026
+
+### Purpose
+Add patch identity metadata columns to `stage_feedback` for RHServer sync.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `stage_feedback` gains `pat_sha224`, `pat_sha1`, `result_sha1`, `result_sha224`, `patchdb_template_hashes`.
+
+---
+
 

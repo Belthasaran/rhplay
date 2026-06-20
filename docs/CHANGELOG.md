@@ -1,3 +1,5 @@
+- **JIT MT-compat level detection**: Added `lib/jit-levels/mtcompat-levelreader.js` plus `jit-names2`, `jit-mt`, `jit-ow` extractors; Detected Levels UI gets JITNames/JITNames2 toggle, new source filters, exclude presets, and MT-only preset; tests `test_jit_names2`, `test_jit_mt`, `test_jit_ow`.
+- **+Patch MTDispatch params**: Computed extrapatch inputs `mtdispatch_code` and `mtdispatch_check` - this is to enable interoperability with a no-overworld patch version from main-patched ROM via `lib/rom-mtdispatch-code.js`; wired in `buildPlusPatchedGame`, Advanced Patch modal, and `tests/test_rom_mtdispatch_code.js`.
 - **System patch View mode**: Edit System Patch Definitions shows View (read-only modal) for is_system=1 patches when not DEVADMIN; DEVADMIN retains Edit/Delete. Read-only modal hides Save, locks Patch Type, and uses copy-friendly readonly text fields.
 - **Launch method dropdown (staged dialogs)**: Reusable `LaunchMethodDropdown` in Games Staged and Run Staged modals; quick actions gated by active launch method; Run Staged footer adds Continue Editing + red Start Run shortcut after game-1 upload/launch.
 - **updategames catalog export**: New `--target-7zfolder` SMWC catalog tree (default `$HOME/proj/smwcgamesYYYYMMDD`) with bps/, bpsindex/, games/, extras/, images/, and `{folder}.build/smwchack_(GAMEID).7z`; runs before DB commit; abbreviated `(GAMEID)_update(TS).json` for metadata-only existing-game updates.
@@ -1976,3 +1978,4 @@ and try to have a similar module system
 
 - **lmlevelinfo muncher**: Reverted pool+21 extended-CHR draw path (broke up-facing 04BD appearance); all munchers back on 012F template.
 
+- **Stage feedback patch identity**: `stage_feedback` stores base patch hashes and extrapatch usage template hashes; captured at staging and synced to RHServer.

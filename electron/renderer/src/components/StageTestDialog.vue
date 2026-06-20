@@ -50,7 +50,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import StageFeedbackForm from '@/components/StageFeedbackForm.vue';
-import { runStageTestLaunch, type StageTestLaunchStage } from '@/utils/stage-test-launch';
+import { runStageTestLaunch, type StageTestLaunchStage, type StageTestLaunchResult } from '@/utils/stage-test-launch';
 import {
   mergeTagFeedbackToStagetags,
   normalizeRequisitesForKey,
@@ -118,6 +118,7 @@ const launchMeta = ref<{
   playlevelPatchCode: string;
   appliedPatchCodes: string[];
   levelHex: string;
+  patchIdentity?: StageTestLaunchResult['patchIdentity'];
 } | null>(null);
 
 const feedbackFormRef = ref<InstanceType<typeof StageFeedbackForm> | null>(null);
@@ -155,6 +156,7 @@ async function runLaunch() {
     playlevelPatchCode: result.playlevelPatchCode || props.getPlaylevelPatchCode(props.stage),
     appliedPatchCodes: result.appliedPatchCodes || [],
     levelHex: result.levelHex || props.formatLevelNumberHex(props.stage.levelnumber),
+    patchIdentity: result.patchIdentity,
   };
 
   feedbackFormRef.value?.resetFromStage(props.stage);
@@ -205,6 +207,12 @@ async function submitFeedback() {
       test_result: testResult,
       tag_feedback: JSON.stringify(tagFeedback),
       stage_uuid: stage.stage_uuid || null,
+      gameVersion: props.gameVersion ?? null,
+      pat_sha224: meta?.patchIdentity?.pat_sha224 ?? null,
+      pat_sha1: meta?.patchIdentity?.pat_sha1 ?? null,
+      result_sha1: meta?.patchIdentity?.result_sha1 ?? null,
+      result_sha224: meta?.patchIdentity?.result_sha224 ?? null,
+      patchdb_template_hashes: meta?.patchIdentity?.patchdb_template_hashes ?? null,
     };
 
     const fbResult = await api.saveStageFeedback(feedbackPayload);

@@ -25,6 +25,15 @@ export interface StageTestLaunchResult {
   playlevelPatchCode?: string;
   appliedPatchCodes?: string[];
   levelHex?: string;
+  patchIdentity?: {
+    gameid?: string | null;
+    gameVersion?: number | null;
+    pat_sha224?: string | null;
+    pat_sha1?: string | null;
+    result_sha1?: string | null;
+    result_sha224?: string | null;
+    patchdb_template_hashes?: string | null;
+  };
 }
 
 export async function runStageTestLaunch(
@@ -116,11 +125,13 @@ export async function runStageTestLaunch(
       return { success: false, error: `Build failed: ${result?.error || 'Unknown error'}` };
     }
 
+    const patchIdentity = result.patchIdentity || null;
+
     const launchMethod = ctx.activeLaunchMethod || 'usb2snes';
 
     if (launchMethod === 'manual') {
       onProgress(`✓ Build complete! Level ${levelHex} - ${stage.levelname}`);
-      return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex };
+      return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex, patchIdentity: patchIdentity || undefined };
     }
 
     if (launchMethod === 'program') {
@@ -149,7 +160,7 @@ export async function runStageTestLaunch(
           });
         }
         onProgress(`✓ Launched! Level ${levelHex} - ${stage.levelname}`);
-        return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex };
+        return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex, patchIdentity: patchIdentity || undefined };
       } catch (launchError: any) {
         return { success: false, error: `Launch failed: ${launchError?.message || String(launchError)}` };
       }
@@ -158,7 +169,7 @@ export async function runStageTestLaunch(
     onProgress('Build complete! Connecting to USB2SNES...');
     if (!api.usb2snesConnect || !api.usb2snesUploadRom || !api.usb2snesBoot) {
       onProgress(`✓ Build complete! Level ${levelHex} - ${stage.levelname}`);
-      return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex };
+      return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex, patchIdentity: patchIdentity || undefined };
     }
 
     if (currentSettings.usb2snesEnabled !== 'yes') {
@@ -281,7 +292,7 @@ export async function runStageTestLaunch(
           });
         }
         onProgress(`✓ Running on SNES! Level ${levelHex} - ${stage.levelname}`);
-        return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex };
+        return { success: true, playlevelPatchCode, appliedPatchCodes, levelHex, patchIdentity: patchIdentity || undefined };
       } catch (bootError: any) {
         return {
           success: false,

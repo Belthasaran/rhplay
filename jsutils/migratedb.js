@@ -1704,6 +1704,18 @@ const MIGRATIONS = {
           && columnExists(db, 'stage_feedback', 'content_hash');
       },
     },
+    {
+      id: 'clientdata_074_stage_feedback_patch_identity',
+      description: 'Add patch identity columns to stage_feedback (pat_sha224, template hashes, etc.)',
+      type: 'function',
+      apply(db) {
+        const applyMigration = require(resolveRelative('electron/sql/migrations/074_clientdata_stage_feedback_patch_identity.js'));
+        applyMigration(db);
+      },
+      skipIf(db) {
+        return columnExists(db, 'stage_feedback', 'patchdb_template_hashes');
+      },
+    },
   ],
   thumbnail_cache: [
     {

@@ -13,7 +13,16 @@ const { path7za } = require('7zip-bin');
 const SKIP_CLEANUP_FOR_NOW = 0;
 const gameGenieDecoder = require('./utils/gamegenie-decoder');
 const manifestResolver = require('./utils/manifest-resolver');
+const {
+  computePatchUsageHash,
+  resolveBasePatchIdentity,
+  hashRomFile
+} = require('../lib/extrapatch-identity');
 const { resolvePatch, canResolvePatch } = require('../lib/patch-resolver');
+const {
+  computeMTDispatchParamsFromRomPath,
+  patchObjectsNeedMTDispatchParams,
+} = require('../lib/rom-mtdispatch-code');
 const { buildPatchResolverContext } = require('./utils/patch-resolver-context');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path
@@ -1022,7 +1031,9 @@ function generatePatchCodeString(patches, globalParams, localParams) {
           if (!inputVar) continue;
           
           // Skip special parameters that don't contribute to code string
-          if (inputVar === 'rom_file') continue;
+          if (inputVar === 'rom_file' || inputVar === 'mtdispatch_code' || inputVar === 'mtdispatch_check') {
+            continue;
+          }
           
           // Get value from local params (mapped by input variable name)
           const value = patchLocalParams[inputVar];
@@ -1143,6 +1154,15 @@ async function buildPlusPatchedGame(params) {
     
     if (patchObjects.length !== selectedPatches.length) {
       return { success: false, error: 'Some selected patches not found' };
+    }
+
+    if (patchObjectsNeedMTDispatchParams(patchObjects)) {
+      const mtParams = computeMTDispatchParamsFromRomPath(initialSfcPath);
+      Object.assign(globalParams, mtParams);
+      console.log(
+        `[MTDispatch] site=$009322 check=${mtParams.mtdispatch_check} ` +
+          `(relocated JML=${mtParams.mtdispatch_check === '1'})`
+      );
     }
     
     // Step 3: Check conflicts and dependencies
@@ -1283,6 +1303,29 @@ async function buildPlusPatchedGame(params) {
     
     // Copy final SFC to output location
     fs.copyFileSync(currentSfcPath, finalOutputPath);
+
+    const baseIdentity = resolveBasePatchIdentity(db, gameId, gameVersion);
+    let result_sha1 = baseIdentity.result_sha1;
+    let result_sha224 = baseIdentity.result_sha224;
+    if ((!result_sha1 || !result_sha224) && fs.existsSync(initialSfcPath)) {
+      try {
+        const romHashes = hashRomFile(initialSfcPath);
+        result_sha1 = result_sha1 || romHashes.result_sha1;
+        result_sha224 = result_sha224 || romHashes.result_sha224;
+      } catch (e) {
+        console.warn('Failed to hash initial.sfc for patch identity:', e.message);
+      }
+    }
+    const usageHashes = sortedPatches.map((patch) => computePatchUsageHash(patch));
+    const patchIdentity = {
+      gameid: String(gameId),
+      gameVersion: baseIdentity.gameVersion,
+      pat_sha224: baseIdentity.pat_sha224,
+      pat_sha1: baseIdentity.pat_sha1,
+      result_sha1,
+      result_sha224,
+      patchdb_template_hashes: usageHashes.join(',')
+    };
     
     // Step 8: Handle action (upload/boot if requested)
     if (action === 'upload' || action === 'boot') {
@@ -1302,7 +1345,8 @@ async function buildPlusPatchedGame(params) {
     return {
       success: true,
       outputPath: finalOutputPath,
-      filename: finalFilenameToUse
+      filename: finalFilenameToUse,
+      patchIdentity
     };
     
   } catch (error) {

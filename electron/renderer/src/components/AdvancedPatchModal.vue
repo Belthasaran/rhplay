@@ -180,7 +180,7 @@
                       v-for="(mapping, placeholder) in getParameterMappings(patch)" 
                       :key="placeholder"
                       class="param-field"
-                      v-if="mapping && mapping.input && mapping.input !== 'rom_file'"
+                      v-if="mapping && mapping.input && !COMPUTED_INPUT_PARAMS.has(mapping.input)"
                     >
                       <label>{{ mapping.description || mapping.input || placeholder }}:</label>
                       <input 
@@ -450,6 +450,22 @@
                       >
                         + rom_file
                       </button>
+                      <button 
+                        type="button" 
+                        class="btn-link-small"
+                        @click="insertParameterMapping('mtdispatch_code', 'dispatch_code')"
+                        title="Insert mtdispatch_code mapping (computed from main-patched ROM)"
+                      >
+                        + mtdispatch_code
+                      </button>
+                      <button 
+                        type="button" 
+                        class="btn-link-small"
+                        @click="insertParameterMapping('mtdispatch_check', 'dispatch_check')"
+                        title="Insert mtdispatch_check mapping (1=relocated JML, 0=vanilla)"
+                      >
+                        + mtdispatch_check
+                      </button>
                     </div>
                     <div class="textarea-wrapper">
                       <textarea 
@@ -465,7 +481,7 @@
                         <span v-else class="invalid-indicator">✗ {{ parameterMappingsError }}</span>
                       </div>
                     </div>
-                    <span class="hint">JSON object mapping placeholder names to input parameters. Format: {"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar", "description": "..."}}</span>
+                    <span class="hint">JSON object mapping placeholder names to input parameters. Format: {"PLACEHOLDER": {"input": "inputvar", "expression": "inputvar", "description": "..."}}. Computed inputs (rom_file, mtdispatch_code, mtdispatch_check) are filled at build time from the main-patched ROM.</span>
                   </div>
                 </div>
 
@@ -777,8 +793,17 @@ const VALID_INPUT_PARAMS = [
   'local5', 'local6', 'local7', 'local8',
   'local9', 'local10',
   'local11', 'local12',
-  'rom_file' // Special parameter
+  'rom_file', // Computed: current ROM path during patch chain
+  'mtdispatch_code', // Computed: MT. MTDispatch asm from main-patched ROM
+  'mtdispatch_check', // Computed: 1 if relocated JML at $009322, else 0
 ];
+
+/** Inputs resolved at build time — no Apply-tab fields. */
+const COMPUTED_INPUT_PARAMS = new Set([
+  'rom_file',
+  'mtdispatch_code',
+  'mtdispatch_check',
+]);
 
 const patchForm = ref({
   patch_code: '',
@@ -1008,7 +1033,7 @@ function onPatchSelectionChange(patch: ExtraPatch) {
       // New format: key is placeholder, value has "input" field
       for (const [placeholder, mapping] of Object.entries(mappings)) {
         const inputVar = mapping.input;
-        if (!inputVar || inputVar === 'rom_file') continue; // Skip special params
+        if (!inputVar || COMPUTED_INPUT_PARAMS.has(inputVar)) continue; // Skip computed params
         
         if (inputVar.startsWith('local5') || inputVar.startsWith('local6') || 
             inputVar.startsWith('local7') || inputVar.startsWith('local8') ||
@@ -1228,7 +1253,7 @@ const canSavePatch = computed(() => {
   return !!(patchForm.value.patch_code && patchForm.value.name && patchForm.value.patch_type);
 });
 
-function insertParameterMapping(inputVar: string) {
+function insertParameterMapping(inputVar: string, placeholderName?: string) {
   const textarea = document.querySelector('.parameter-mappings-editor textarea') as HTMLTextAreaElement;
   if (!textarea) return;
   
@@ -1237,10 +1262,10 @@ function insertParameterMapping(inputVar: string) {
   const textAfter = patchForm.value.parameter_mappings_json.substring(cursorPos);
   
   // Determine placeholder name (default to input variable name in uppercase)
-  const placeholderName = inputVar.toUpperCase().replace(/_/g, '');
+  const resolvedPlaceholder = placeholderName ?? inputVar.toUpperCase().replace(/_/g, '');
   
   // Build the mapping entry
-  let newEntry = `"${placeholderName}": {\n    "input": "${inputVar}"\n  }`;
+  let newEntry = `"${resolvedPlaceholder}": {\n    "input": "${inputVar}"\n  }`;
   
   // If there's existing content, add comma and newline
   if (textBefore.trim() && !textBefore.trim().endsWith('{') && !textBefore.trim().endsWith('[')) {

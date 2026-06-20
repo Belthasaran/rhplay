@@ -142,6 +142,36 @@ function computeStageFeedbackHashes(fields) {
   return { appliedHash, contentHash };
 }
 
+function parseAppliedPatchCodes(appliedPatches) {
+  if (!appliedPatches) return [];
+  const raw = String(appliedPatches).trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((s) => String(s || '').trim()).filter(Boolean);
+    }
+  } catch { /* ignore */ }
+  return raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+function resolveStageFeedbackPatchIdentity(rhdataDb, payload) {
+  const { buildPatchIdentitySnapshot } = require('../lib/extrapatch-identity');
+  const patchCodes = parseAppliedPatchCodes(payload.applied_patches);
+  const snapshot = buildPatchIdentitySnapshot(rhdataDb, {
+    gameid: payload.gameid,
+    gameVersion: payload.gameVersion ?? payload.game_version ?? null,
+    patchCodes
+  });
+  return {
+    pat_sha224: payload.pat_sha224 ?? snapshot.pat_sha224,
+    pat_sha1: payload.pat_sha1 ?? snapshot.pat_sha1,
+    result_sha1: payload.result_sha1 ?? snapshot.result_sha1,
+    result_sha224: payload.result_sha224 ?? snapshot.result_sha224,
+    patchdb_template_hashes: payload.patchdb_template_hashes ?? snapshot.patchdb_template_hashes
+  };
+}
+
 /**
  * Register all IPC handlers with the database manager
  * @param {DatabaseManager} dbManager - Database manager instance
@@ -8682,6 +8712,12 @@ function registerDatabaseHandlers(dbManager) {
     test_result,
     tag_feedback,
     stage_uuid,
+    gameVersion,
+    pat_sha224,
+    pat_sha1,
+    result_sha1,
+    result_sha224,
+    patchdb_template_hashes,
   }) => {
     try {
       const db = dbManager.getConnection('clientdata');
@@ -8699,6 +8735,16 @@ function registerDatabaseHandlers(dbManager) {
         test_result,
         tag_feedback,
         stage_uuid
+      });
+      const patchIdentity = resolveStageFeedbackPatchIdentity(rhdataDb, {
+        gameid,
+        gameVersion,
+        applied_patches,
+        pat_sha224,
+        pat_sha1,
+        result_sha1,
+        result_sha224,
+        patchdb_template_hashes
       });
       
       // Check if feedback already exists for key
@@ -8726,6 +8772,11 @@ function registerDatabaseHandlers(dbManager) {
               test_result = ?,
               tag_feedback = ?,
               stage_uuid = ?,
+              pat_sha224 = ?,
+              pat_sha1 = ?,
+              result_sha1 = ?,
+              result_sha224 = ?,
+              patchdb_template_hashes = ?,
               content_hash = ?,
               rhserver_sync_pending = 1,
               rhserver_review_state = NULL,
@@ -8747,6 +8798,11 @@ function registerDatabaseHandlers(dbManager) {
           test_result || null,
           tag_feedback || null,
           stage_uuid || null,
+          patchIdentity.pat_sha224,
+          patchIdentity.pat_sha1,
+          patchIdentity.result_sha1,
+          patchIdentity.result_sha224,
+          patchIdentity.patchdb_template_hashes,
           contentHash,
           feedbackUuid
         );
@@ -8757,10 +8813,11 @@ function registerDatabaseHandlers(dbManager) {
              difficulty_feedback, comment, current_difficulty, flag_values,
              global_conditions, applied_patches, applied_patches_hash, playlevel_patchcode,
              feedback_source, test_result, tag_feedback, stage_uuid,
+             pat_sha224, pat_sha1, result_sha1, result_sha224, patchdb_template_hashes,
              content_hash,
              rhserver_sync_pending,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), strftime('%s', 'now'))
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, strftime('%s', 'now'), strftime('%s', 'now'))
         `).run(
           feedbackUuid,
           gameid,
@@ -8779,6 +8836,11 @@ function registerDatabaseHandlers(dbManager) {
           test_result || null,
           tag_feedback || null,
           stage_uuid || null,
+          patchIdentity.pat_sha224,
+          patchIdentity.pat_sha1,
+          patchIdentity.result_sha1,
+          patchIdentity.result_sha224,
+          patchIdentity.patchdb_template_hashes,
           contentHash
         );
       }

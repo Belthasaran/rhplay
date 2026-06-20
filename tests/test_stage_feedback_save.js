@@ -26,6 +26,7 @@ function createTestClientdataDb(dbPath) {
   db.exec(fs.readFileSync(path.join(root, '068_clientdata_stage_feedback_triplet_key.sql'), 'utf8'));
   // Upgrade to patch-hash key + RHServer sync columns.
   require(path.join(root, '069_clientdata_stage_feedback_rhserver_sync.js'))(db);
+  require(path.join(root, '074_clientdata_stage_feedback_patch_identity.js'))(db);
   return db;
 }
 
@@ -47,7 +48,12 @@ function saveStageFeedback(db, payload) {
         tag_feedback = ?,
         stage_uuid = ?,
         playlevel_patchcode = ?,
-        applied_patches_hash = ?
+        applied_patches_hash = ?,
+        pat_sha224 = ?,
+        pat_sha1 = ?,
+        result_sha1 = ?,
+        result_sha224 = ?,
+        patchdb_template_hashes = ?
       WHERE feedback_uuid = ?
     `).run(
       payload.difficulty_feedback,
@@ -57,14 +63,20 @@ function saveStageFeedback(db, payload) {
       payload.stage_uuid,
       playlevel,
       appliedPatchesHash,
+      payload.pat_sha224 ?? null,
+      payload.pat_sha1 ?? null,
+      payload.result_sha1 ?? null,
+      payload.result_sha224 ?? null,
+      payload.patchdb_template_hashes ?? null,
       feedbackUuid
     );
   } else {
     db.prepare(`
       INSERT INTO stage_feedback
         (feedback_uuid, gameid, levelnumber, difficulty_feedback,
-         feedback_source, test_result, tag_feedback, stage_uuid, playlevel_patchcode, applied_patches_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         feedback_source, test_result, tag_feedback, stage_uuid, playlevel_patchcode, applied_patches_hash,
+         pat_sha224, pat_sha1, result_sha1, result_sha224, patchdb_template_hashes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       feedbackUuid,
       payload.gameid,
@@ -75,7 +87,12 @@ function saveStageFeedback(db, payload) {
       payload.tag_feedback,
       payload.stage_uuid,
       playlevel,
-      appliedPatchesHash
+      appliedPatchesHash,
+      payload.pat_sha224 ?? null,
+      payload.pat_sha1 ?? null,
+      payload.result_sha1 ?? null,
+      payload.result_sha224 ?? null,
+      payload.patchdb_template_hashes ?? null
     );
   }
 
@@ -231,12 +248,48 @@ function testDifferentAppliedPatchesHashCreatesNewRow() {
   db.close();
 }
 
+function testPatchIdentityColumnsPersist() {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-fb-save-'));
+  const dbPath = path.join(tmpDir, 'clientdata.db');
+  const db = createTestClientdataDb(dbPath);
+
+  const identity = {
+    pat_sha224: 'gv224test',
+    pat_sha1: 'pb1test',
+    result_sha1: 'res1test',
+    result_sha224: 'res224test',
+    patchdb_template_hashes: 'abc123def456'
+  };
+
+  const row = saveStageFeedback(db, {
+    gameid: '400',
+    levelnumber: '004',
+    difficulty_feedback: 7,
+    feedback_source: 'stage_test',
+    test_result: 'accept',
+    tag_feedback: null,
+    stage_uuid: null,
+    playlevel_patchcode: '2lvno',
+    applied_patches_hash: 'hash400',
+    ...identity
+  });
+
+  assert(row.pat_sha224 === identity.pat_sha224, 'Expected pat_sha224');
+  assert(row.pat_sha1 === identity.pat_sha1, 'Expected pat_sha1');
+  assert(row.result_sha1 === identity.result_sha1, 'Expected result_sha1');
+  assert(row.result_sha224 === identity.result_sha224, 'Expected result_sha224');
+  assert(row.patchdb_template_hashes === identity.patchdb_template_hashes, 'Expected patchdb_template_hashes');
+
+  db.close();
+}
+
 function main() {
   testSaveWithTestFields();
   testTripletAllowsDifferentPlaylevel();
   testUpsertReplacesSameTriplet();
   testNullPlaylevelBackfill();
   testDifferentAppliedPatchesHashCreatesNewRow();
+  testPatchIdentityColumnsPersist();
   console.log('✅ test_stage_feedback_save passed');
 }
 

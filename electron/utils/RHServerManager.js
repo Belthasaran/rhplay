@@ -446,7 +446,12 @@ class RHServerManager {
       feedback_source: r.feedback_source,
       test_result: r.test_result,
       tag_feedback: r.tag_feedback,
-      stage_uuid: r.stage_uuid
+      stage_uuid: r.stage_uuid,
+      pat_sha224: r.pat_sha224,
+      pat_sha1: r.pat_sha1,
+      result_sha1: r.result_sha1,
+      result_sha224: r.result_sha224,
+      patchdb_template_hashes: r.patchdb_template_hashes
     }));
 
     const out = await ensured.client.submitStageFeedbackBulk(items);

@@ -9999,6 +9999,12 @@ import {
   sortRunStagedSfcFilenames,
 } from './utils/run-staging';
 import { serializePlanSnapshot, normalizeWinRulesJson } from './utils/run-plan-snapshot';
+import { buildReprepareSnapshotFromActiveRun } from './utils/cancel-run-reprepare';
+import {
+  buildRunCurBootedPayload,
+  isChallengeMasked,
+  resolveChallengeIdentity,
+} from './utils/run-launch-boot-record';
 import {
   RUN_TYPE_OPTIONS,
   RUN_TYPE_STANDARD,
@@ -13203,20 +13209,12 @@ async function launchStagedFolderFile(folderPath: string, challengeIndex: number
     throw new Error(`No staged .sfc found for challenge ${challengeIndex + 1}`);
   }
   const filePath = `${folderPath}/${basename}`;
-  const challenge = runEntries[challengeIndex];
-  const bootRecord: Record<string, unknown> = {
-    launch_mode: 'run',
-    gameid: challenge?.id,
-    name: challenge?.name,
-    sfc_basename: basename,
-    sfc_path: filePath
-  };
-  if (challenge && (challenge as any).levelnumber) {
-    bootRecord.stage = {
-      levelnumber: (challenge as any).levelnumber || (challenge as any).exit_number,
-      levelname: (challenge as any).levelname
-    };
-  }
+  const challenge = await ensureChallengeRevealedForLaunch(challengeIndex);
+  const bootRecord = buildRunCurBootedPayload(challenge as Record<string, unknown>, {
+    sfcBasename: basename,
+    sfcPath: filePath,
+    launchMode: 'run',
+  });
   return await launchFileWithActiveMethod(filePath, {
     boot: true,
     uploadDstName: basename,
@@ -24587,6 +24585,7 @@ let predictionConflictDialogResolve: ((value: string) => void) | null = null;  /
 
 // Run execution state
 const currentRunUuid = ref<string | null>(null);
+const cancelledFromRunUuid = ref<string | null>(null);
 const currentRunStatus = ref<'preparing' | 'active' | 'completed' | 'cancelled'>('preparing');
 const currentRunName = ref<string>('');
 const currentChallengeIndex = ref<number>(0);
@@ -25640,6 +25639,7 @@ function clearRunState() {
   runShareDropdownOpen.value = false;
   runAgainSkipExpand.value = false;
   stagingProgressModalOpen.value = false;
+  cancelledFromRunUuid.value = null;
   clearSavedRunSnapshot();
 
   prepPredictionsMode.value = 'none';
@@ -26503,7 +26503,8 @@ async function saveRunToDatabase() {
         '',  // runDescription
         plainGlobalConditions,
         plainGlobalPatchCodes,  // Pass patch codes as separate parameter
-        currentRunType.value
+        currentRunType.value,
+        cancelledFromRunUuid.value || undefined
       );
 
       if (!result.success) {
@@ -26513,6 +26514,7 @@ async function saveRunToDatabase() {
       targetRunUuid = result.runUuid;
       currentRunUuid.value = result.runUuid;
       currentRunStatus.value = 'preparing';
+      cancelledFromRunUuid.value = null;
     }
     
     // Use in-memory win rules when set (includes deferred post-stage edits); else load from DB
@@ -27869,6 +27871,16 @@ async function launchCurrentChallenge() {
   if (!isRunActive.value) return;
 
   resetRunStagingPreLaunchState();
+
+  const challengeIndex = currentChallengeIndex.value;
+  let challenge: RunEntry;
+  try {
+    challenge = await ensureChallengeRevealedForLaunch(challengeIndex);
+  } catch (error) {
+    console.error('[launchCurrentChallenge] Failed to resolve challenge identity:', error);
+    await showAlert('Could not resolve game details for launch', 'Launch Failed');
+    return;
+  }
   
   try {
     if (activeLaunchMethod.value === 'program') {
@@ -27932,19 +27944,15 @@ async function launchCurrentChallenge() {
     
     await (window as any).electronAPI.usb2snesBoot(fullPath);
 
-    const challenge = currentChallenge.value as any;
-    await recordCurBooted({
-      launch_mode: 'run',
-      launch_method: 'usb2snes',
-      gameid: challenge?.id,
-      name: challenge?.name,
-      sfc_basename: sfcpath,
-      stage: isCurrentChallengeAnyStage.value ? {
-        levelnumber: challenge?.levelnumber || challenge?.exit_number,
-        levelname: currentStageInfo.value.levelname || challenge?.levelname,
-        difficulty: currentStageDifficulty.value
-      } : undefined
-    });
+    await recordCurBooted(buildRunCurBootedPayload(challenge as Record<string, unknown>, {
+      launchMode: 'run',
+      launchMethod: 'usb2snes',
+      sfcBasename: sfcpath,
+      stageInfo: isCurrentChallengeAnyStage.value ? {
+        levelname: currentStageInfo.value.levelname || (challenge as any)?.levelname,
+        difficulty: currentStageDifficulty.value,
+      } : null,
+    }));
     
     const expectedBasename = buildRunExpectedRomBasename();
     if (expectedBasename) {
@@ -28128,7 +28136,7 @@ async function playFreePlayStage(idx: number) {
 
     const entry = runEntries[idx];
     if (entry && (entry.entryType === 'random_game' || entry.entryType === 'random_stage') && entry.name === '???') {
-      await revealCurrentChallenge(false);
+      await revealCurrentChallenge(false, idx);
     }
 
     const cr = challengeResults.value[idx];
@@ -28175,16 +28183,19 @@ async function finalizeFreePlayRun() {
 async function cancelRun() {
   const confirmed = await showConfirm(
     `Cancel run "${currentRunName.value}"?\n\n` +
-    `This will mark the run as cancelled. You can view it later but cannot continue it.`,
+    `This will mark the run as cancelled. Your plan will stay open so you can re-stage it as a new run.`,
     'Cancel Run'
   );
   
   if (!confirmed) return;
   
+  const cancelledRunUuid = currentRunUuid.value;
+  if (!cancelledRunUuid) return;
+
   try {
     if (isElectronAvailable()) {
       await (window as any).electronAPI.cancelRun({
-        runUuid: currentRunUuid.value
+        runUuid: cancelledRunUuid
       });
     }
     
@@ -28206,6 +28217,15 @@ async function cancelRun() {
     
     currentRunStatus.value = 'cancelled';
     console.log('Run cancelled');
+
+    if (!isFreePlayRun.value) {
+      await repurposePrepareRunAfterCancel(cancelledRunUuid);
+      if (toastNotificationRef.value) {
+        toastNotificationRef.value.showToast('Run cancelled — plan ready to re-stage as a new run', 'info');
+      }
+      return;
+    }
+
     if (toastNotificationRef.value) {
       toastNotificationRef.value.showToast('Run cancelled', 'info');
     }
@@ -28214,6 +28234,86 @@ async function cancelRun() {
     console.error('Error cancelling run:', error);
     await showAlert('Error cancelling run', 'Error');
   }
+}
+
+async function repurposePrepareRunAfterCancel(cancelledRunUuid: string) {
+  let dbResults: Record<string, unknown>[] | null = null;
+  if (isElectronAvailable()) {
+    try {
+      dbResults = await (window as any).electronAPI.getRunResults({
+        runUuid: cancelledRunUuid,
+      });
+    } catch (error) {
+      console.warn('[repurposePrepareRunAfterCancel] Could not load run results:', error);
+    }
+  }
+
+  const snapshot = buildReprepareSnapshotFromActiveRun({
+    runEntries: runEntries as unknown as Record<string, unknown>[],
+    cancelledRunUuid,
+    dbResults,
+  });
+
+  cancelledFromRunUuid.value = snapshot.cancelledFromRunUuid;
+
+  currentRunUuid.value = null;
+  currentRunStatus.value = 'preparing';
+  currentChallengeIndex.value = 0;
+  runStartTime.value = null;
+  runElapsedSeconds.value = 0;
+  runPauseSeconds.value = 0;
+  isRunPaused.value = false;
+  skipDoneCooldownUntil.value = null;
+  challengeResults.value = [];
+  checkedRun.value.clear();
+
+  stagingFolderPath.value = '';
+  runStagedSfcFilenames.value = [];
+  stagingSfcCount.value = 0;
+  expandedRunResults.value = [];
+  skipUploadAcknowledged.value = false;
+  needsRegenerateStaging.value = false;
+  runAgainSkipExpand.value = false;
+  runStagingActionStatus.value = '';
+  runLaunchSessionId.value = null;
+  resetRunStagingPreLaunchState();
+
+  runEntries.splice(0, runEntries.length, ...(snapshot.entries as RunEntry[]));
+  clearSavedRunSnapshot();
+  runModalOpen.value = true;
+}
+
+async function ensureChallengeRevealedForLaunch(challengeIndex: number): Promise<RunEntry> {
+  let entry = runEntries[challengeIndex];
+  if (!entry) {
+    throw new Error(`No challenge at index ${challengeIndex + 1}`);
+  }
+
+  if (isChallengeMasked(entry as Record<string, unknown>)) {
+    await revealCurrentChallenge(false, challengeIndex);
+    entry = runEntries[challengeIndex];
+  }
+
+  if (isChallengeMasked(entry as Record<string, unknown>) && isElectronAvailable() && currentRunUuid.value) {
+    const expandedResults = await (window as any).electronAPI.getRunResults({
+      runUuid: currentRunUuid.value,
+    });
+    const dbResult = expandedResults?.[challengeIndex] as Record<string, unknown> | undefined;
+    if (dbResult) {
+      const identity = resolveChallengeIdentity(entry as Record<string, unknown>, dbResult);
+      if (identity.gameid && identity.name) {
+        const updatedEntry: RunEntry = {
+          ...entry,
+          id: identity.gameid,
+          name: identity.name,
+        };
+        runEntries.splice(challengeIndex, 1, updatedEntry);
+        entry = runEntries[challengeIndex];
+      }
+    }
+  }
+
+  return entry;
 }
 
 async function nextChallenge() {
@@ -28670,12 +28770,11 @@ async function undoChallenge() {
   }
 }
 
-async function revealCurrentChallenge(revealedEarly: boolean = false) {
+async function revealCurrentChallenge(revealedEarly: boolean = false, index?: number) {
   if (!isElectronAvailable()) return;
-  if (!currentChallenge.value) return;
-  
-  const challenge = currentChallenge.value;
-  const idx = currentChallengeIndex.value;
+  const idx = index ?? currentChallengeIndex.value;
+  const challenge = runEntries[idx];
+  if (!challenge) return;
   
   console.log('[revealCurrentChallenge] Challenge:', idx, 'id:', challenge.id, 'name:', challenge.name, 'type:', challenge.entryType);
   

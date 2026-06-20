@@ -742,6 +742,22 @@ const MIGRATIONS = {
           && columnExists(db, 'gamestages', 'test_verified_requisites');
       },
     },
+    {
+      id: 'rhdata_070_extrapatches_ignore_warnings',
+      description: 'Add ignore_warnings flag to extrapatches table',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/070_rhdata_extrapatches_ignore_warnings.sql'),
+      skipIf(db) {
+        try {
+          if (!tableExists(db, 'extrapatches')) {
+            return true;
+          }
+          return columnExists(db, 'extrapatches', 'ignore_warnings');
+        } catch (e) {
+          return false;
+        }
+      },
+    },
   ],
   clientdata: [
     {

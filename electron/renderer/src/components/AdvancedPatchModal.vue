@@ -394,6 +394,14 @@
                   ></textarea>
                 </div>
 
+                <div class="form-field" v-if="patchForm.patch_type === 'asar'">
+                  <label>
+                    <input type="checkbox" v-model="patchForm.ignore_warnings" :disabled="isPatchFormReadOnly" />
+                    Ignore Warnings
+                  </label>
+                  <span class="hint">When checked, ASAR deprecation and leak warnings on stderr will not fail the build</span>
+                </div>
+
                 <!-- GameGenie codes -->
                 <div v-if="patchForm.patch_type === 'gamegenie'" class="form-field">
                   <label>GameGenie Codes (one per line)</label>
@@ -699,6 +707,7 @@ interface ExtraPatch {
   dependencies?: string; // JSON string
   priority?: number;
   requires_parameters: number;
+  ignore_warnings?: number;
   is_system?: number; // 0 = user patch, 1 = system patch
 }
 
@@ -812,6 +821,7 @@ const patchForm = ref({
   patch_type: 'ips' as 'ips' | 'bps' | 'asar' | 'uberasmtree',
   priority: 100,
   requires_parameters: false,
+  ignore_warnings: false,
   is_system: false,
   template_text: '',
   parameter_mappings_json: '',
@@ -1161,6 +1171,7 @@ function editPatch(patch: ExtraPatch) {
     patch_type: patch.patch_type,
     priority: patch.priority || 100,
     requires_parameters: patch.patch_type === 'gamegenie' ? false : (patch.requires_parameters ? true : false),
+    ignore_warnings: patch.patch_type === 'asar' ? !!patch.ignore_warnings : false,
     is_system: patch.is_system ? true : false,
     template_text: patch.template_text || '',
     parameter_mappings_json: patch.parameter_mappings ? JSON.stringify(JSON.parse(patch.parameter_mappings), null, 2) : '',
@@ -1224,6 +1235,7 @@ function closePatchForm() {
     patch_type: 'ips',
     priority: 100,
     requires_parameters: false,
+    ignore_warnings: false,
     is_system: false,
     template_text: '',
     parameter_mappings_json: '',
@@ -1516,6 +1528,7 @@ async function savePatch() {
       patch_type: patchForm.value.patch_type,
       priority: patchForm.value.priority || 100,
       requires_parameters: patchForm.value.requires_parameters ? 1 : 0,
+      ignore_warnings: patchForm.value.patch_type === 'asar' && patchForm.value.ignore_warnings ? 1 : 0,
       is_system: patchForm.value.is_system,
       template_text: (patchForm.value.patch_type === 'asar' || patchForm.value.patch_type === 'gamegenie') ? patchForm.value.template_text : null,
       file_data: patchForm.value.fileData ? Array.from(new Uint8Array(patchForm.value.fileData)) : null,

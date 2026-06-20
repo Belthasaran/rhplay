@@ -26,6 +26,7 @@ function createRhdataDb(dbPath) {
   const db = new Database(dbPath);
   db.exec(fs.readFileSync(path.join(__dirname, '../electron/sql/migrations/033_rhdata_extrapatches.sql'), 'utf8'));
   db.exec('ALTER TABLE extrapatches ADD COLUMN is_playlevel INTEGER DEFAULT 0');
+  db.exec('ALTER TABLE extrapatches ADD COLUMN ignore_warnings INTEGER DEFAULT 0');
   db.exec(`
     CREATE TABLE IF NOT EXISTS gameversions (
       gameid TEXT NOT NULL,
@@ -58,6 +59,7 @@ function samplePatchRow(overrides = {}) {
     priority: 50,
     is_playlevel: 1,
     requires_parameters: 0,
+    ignore_warnings: 0,
     ...overrides
   };
 }
@@ -76,6 +78,13 @@ function testUsageAndDefinitionHashStability() {
   const usageWithBlob = computePatchUsageHash(samplePatchRow({ file_data: Buffer.from('abc') }));
   const usageNoBlob = computePatchUsageHash(samplePatchRow({ file_data: null }));
   assert(usageWithBlob !== usageNoBlob, 'file_data should affect usage hash');
+}
+
+function testIgnoreWarningsAffectsHash() {
+  const row = samplePatchRow({ ignore_warnings: 0 });
+  const without = computePatchUsageHash(row);
+  const withIgnore = computePatchUsageHash({ ...row, ignore_warnings: 1 });
+  assert(without !== withIgnore, 'ignore_warnings should affect usage hash');
 }
 
 function testUsageHashesForPatchCodes() {
@@ -154,6 +163,7 @@ function testBuildPatchIdentitySnapshotFromRomFallback() {
 
 function main() {
   testUsageAndDefinitionHashStability();
+  testIgnoreWarningsAffectsHash();
   testUsageHashesForPatchCodes();
   testResolveBasePatchIdentity();
   testBuildPatchIdentitySnapshotFromRomFallback();

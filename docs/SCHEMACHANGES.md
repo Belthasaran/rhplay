@@ -1,3 +1,9 @@
+- 2026-06-20: clientdata - run type and stage prerequisites schema
+  - Description: Add `run_type` to `runs` (`standard` default, `free_play` for unordered runs). Add nullable `prerequisites_json` on `run_plan_entries` and `run_results` for future non-standard entry access rules (plan node wins, expanded item wins, random expansion thresholds). JSON shape documented below; no runtime enforcement yet.
+  - Tables/columns: `runs.run_type`, `run_plan_entries.prerequisites_json`, `run_results.prerequisites_json`
+  - Migration: `clientdata_075_run_type_and_prerequisites` via `jsutils/migratedb.js`
+  - Prerequisites JSON (version 1): `{ "version": 1, "rules": [{ "kind": "plan_entry_wins"|"expanded_entry_win"|"random_expansion_wins", ... }], "accessConditionText": "..." }`
+
 - 2026-06-17: clientdata - stage_feedback patch identity hashes
   - Description: Add patch identity metadata columns to `stage_feedback` for RHServer sync: base patch hashes and extrapatch usage template hashes.
   - Tables/columns: `stage_feedback.pat_sha224`, `pat_sha1`, `result_sha1`, `result_sha224`, `patchdb_template_hashes`
@@ -1974,6 +1980,38 @@ Added `gameversions_local` table to track when a user has locally edited game st
 - `electron/ipc-handlers.js` — `gamestages:get-edit-permission`, updated save/delete permission checks
 - `electron/renderer/src/components/GameStagesDialog.vue` — Edit button and save flow
 - `electron/renderer/src/components/GameDetailsInspector.vue` — "Stages not set yet" link
+
+---
+
+## clientdata_076_run_plan_raw_code
+
+### Date
+June 20, 2026
+
+### Description
+Added `raw_level_code` and `plan_stage_name` columns to `run_plan_entries` for MT share-code import when a level hex has no `gamestages` row.
+
+### Rationale
+Share codes reference level hex codes directly. When a game has stages but not that specific level, RHPlay stores a `raw_code` plan entry instead of forcing a `gamestages` lookup at staging time.
+
+### Tables/Columns Affected
+
+**Database**: `clientdata.db`
+
+**Table**: `run_plan_entries`
+- `raw_level_code TEXT` — MT level hex used for patching
+- `plan_stage_name TEXT` — display label (JIT name or "Unknown")
+
+**New entry_type value**: `raw_code` (application-level; not a SQL CHECK change)
+
+### Migration File
+`electron/sql/migrations/076_clientdata_run_plan_raw_code.sql`
+
+### Related Code
+- `electron/shared/mt-share-code.js` — share code parser
+- `lib/mt-share-code-resolver.js` — game/stage resolution
+- `electron/ipc-handlers.js` — `runs:load-share-code`, save-plan, staging expand
+- `electron/renderer/src/App.vue` — Load Share Code UI
 
 ---
 

@@ -23,6 +23,7 @@ const {
   computeMTDispatchParamsFromRomPath,
   patchObjectsNeedMTDispatchParams,
 } = require('../lib/rom-mtdispatch-code');
+const { shouldFailAsarOutput } = require('../lib/asar-patch-result');
 const { buildPatchResolverContext } = require('./utils/patch-resolver-context');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path
@@ -1611,75 +1612,85 @@ async function applyAsarPatch(params) {
     // Build command string for logging (what it would look like in shell)
     const asarCmd = `"${asarBinary}" "${asarScriptPath}" "${inputSfcPath}"`;
     console.log(`[ASAR] Command (for reference): ${asarCmd}`);
+
+    const ignoreWarnings = !!(patch.ignore_warnings);
+    const inputHashBefore = crypto.createHash('sha256').update(fs.readFileSync(inputSfcPath)).digest('hex');
+    if (ignoreWarnings) {
+      console.log(`[ASAR] ignore_warnings enabled for patch ${patch.patch_code}`);
+    }
     
     let exitCode = 0;
     let stdout = '';
     let stderr = '';
-    try {
-      // Use spawnSync with array format to avoid shell interpretation
-      // This passes arguments directly without shell parsing, avoiding quote issues
-      const result = spawnSync(asarBinary, asarArgs, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        encoding: 'utf8'
-      });
-      
-      exitCode = result.status || 0;
-      stdout = result.stdout?.toString() || '';
-      stderr = result.stderr?.toString() || '';
-      
-      if (stdout) {
-        console.log(`[ASAR] stdout: ${stdout}`);
-      }
-      if (stderr) {
-        console.log(`[ASAR] stderr: ${stderr}`);
-      }
-      
-      if (exitCode === 0) {
-        console.log(`[ASAR] Command completed with exit code: ${exitCode}`);
-      } else {
-        throw new Error(`ASAR exited with code ${exitCode}`);
-      }
-    } catch (execError) {
-      // spawnSync doesn't throw on non-zero exit, but we check status
-      // If we get here, it's a different error (like command not found)
-      exitCode = execError.status || execError.code || -1;
-      stdout = execError.stdout?.toString() || '';
-      stderr = execError.stderr?.toString() || execError.message || '';
-      
-      console.log(`[ASAR] Command failed with exit code: ${exitCode}`);
-      if (stdout) {
-        console.log(`[ASAR] stdout: ${stdout}`);
-      }
-      if (stderr) {
-        console.log(`[ASAR] stderr: ${stderr}`);
-      }
-      console.log(`[ASAR] Error message: ${execError.message}`);
-      
-      // Check if input file was modified (ASAR modifies in place)
-      if (!fs.existsSync(inputSfcPath)) {
-        return { 
-          success: false, 
-          error: `ASAR execution failed with exit code ${exitCode}: ${stderr || execError.message}` 
-        };
-      }
-      
-      // If file exists but exit code is non-zero, log warning
-      if (exitCode !== 0) {
-        console.warn(`[ASAR] ASAR returned exit code ${exitCode}, but input file exists. This may be a warning.`);
-        // For now, we'll consider it a success if the file exists
-        // You may want to make this stricter based on specific exit codes
-      }
-    }
-    
-    // Check stderr even if exit code is 0 (ASAR might report errors but return 0)
-    // Also check stdout for error messages
-    if (stderr || (stdout && (stdout.includes('error') || stdout.includes('Error') || stdout.includes('is not an asar command')))) {
-      const errorMsg = stderr || stdout;
-      console.error(`[ASAR] ASAR reported an error (exit code ${exitCode}): ${errorMsg}`);
-      return { 
-        success: false, 
-        error: `ASAR reported an error: ${errorMsg}` 
+    const result = spawnSync(asarBinary, asarArgs, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: 'utf8'
+    });
+
+    if (result.error) {
+      console.error(`[ASAR] spawn failed: ${result.error.message}`);
+      return {
+        success: false,
+        error: `ASAR execution failed: ${result.error.message}`,
       };
+    }
+
+    exitCode = result.status ?? 0;
+    stdout = result.stdout?.toString() || '';
+    stderr = result.stderr?.toString() || '';
+
+    if (stdout) {
+      console.log(`[ASAR] stdout: ${stdout}`);
+    }
+    if (stderr) {
+      console.log(`[ASAR] stderr: ${stderr}`);
+    }
+    console.log(`[ASAR] Command completed with exit code: ${exitCode}`);
+
+    if (!fs.existsSync(inputSfcPath)) {
+      return {
+        success: false,
+        error: `ASAR execution failed with exit code ${exitCode}: ${stderr || 'input ROM missing after ASAR run'}`,
+      };
+    }
+
+    const inputHashAfter = crypto.createHash('sha256').update(fs.readFileSync(inputSfcPath)).digest('hex');
+    const romModified = inputHashBefore !== inputHashAfter;
+
+    if (ignoreWarnings) {
+      const decision = shouldFailAsarOutput({
+        ignoreWarnings: true,
+        exitCode,
+        stderr,
+        stdout,
+        romModified,
+      });
+      if (decision.fail) {
+        console.error(`[ASAR] ${decision.error}`);
+        return { success: false, error: decision.error };
+      }
+      if (decision.ignoredWarnings?.length) {
+        console.warn(
+          `[ASAR] Ignored ${decision.ignoredWarnings.length} warning(s) for patch ${patch.patch_code}`
+        );
+      }
+    } else {
+      if (exitCode !== 0) {
+        console.warn(
+          `[ASAR] ASAR returned exit code ${exitCode}, but input file exists. This may be a warning.`
+        );
+      }
+      const decision = shouldFailAsarOutput({
+        ignoreWarnings: false,
+        exitCode,
+        stderr,
+        stdout,
+        romModified: true,
+      });
+      if (decision.fail) {
+        console.error(`[ASAR] ASAR reported an error (exit code ${exitCode}): ${decision.error}`);
+        return { success: false, error: decision.error };
+      }
     }
     
     // ASAR modifies the file in place, so copy it

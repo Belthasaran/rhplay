@@ -3,6 +3,7 @@
  */
 
 const crypto = require('crypto');
+const { normalizeRunType } = require('./shared/run-types');
 const { matchesFilter } = require('./shared-filter-utils');
 const GameVersionBanManager = require('./gameversion-banmanager');
 const {
@@ -714,6 +715,7 @@ function exportRun(dbManager, runUuid) {
       rr.levelnumber,
       rr.translevel,
       rr.levelname,
+      rr.prerequisites_json,
       rpe.entry_type
     FROM run_results rr
     LEFT JOIN run_plan_entries rpe ON rr.plan_entry_uuid = rpe.entry_uuid
@@ -757,7 +759,8 @@ function exportRun(dbManager, runUuid) {
       entry_type: result.entry_type || null,  // Include entry_type from plan entry
       levelnumber: result.levelnumber || null,
       translevel: result.translevel || null,
-      levelname: result.levelname || null
+      levelname: result.levelname || null,
+      prerequisites_json: result.prerequisites_json || null,
     };
   });
   
@@ -850,14 +853,15 @@ function importRun(dbManager, importData) {
     const run = importData.run;
     
     db.prepare(`
-      INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json)
-      VALUES (?, ?, ?, 'preparing', ?, ?)
+      INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, run_type)
+      VALUES (?, ?, ?, 'preparing', ?, ?, ?)
     `).run(
       newRunUuid,
       run.run_name + ' (Imported)',
       run.run_description,
       run.global_conditions,
-      run.config_json
+      run.config_json,
+      normalizeRunType(run.run_type)
     );
     
     // Import plan entries
@@ -869,8 +873,13 @@ function importRun(dbManager, importData) {
           (entry_uuid, run_uuid, sequence_number, entry_type, gameid, exit_number,
            count, filter_difficulty, filter_type, filter_pattern, filter_seed, conditions, entry_notes,
            trans_level, stage_filter_min_difficulty, stage_filter_max_difficulty,
-           stage_filter_include_flags, stage_filter_exclude_flags)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           stage_filter_include_flags, stage_filter_exclude_flags,
+           stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
+           stage_filter_has_tags, stage_filter_exclude_tags,
+           game_filter_min_difficulty, game_filter_max_difficulty,
+           stage_filter_include_untested, stage_filter_untested_only,
+           prerequisites_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         newEntryUuid,
         newRunUuid,
@@ -888,8 +897,17 @@ function importRun(dbManager, importData) {
         entry.trans_level || null,
         entry.stage_filter_min_difficulty !== undefined ? entry.stage_filter_min_difficulty : null,
         entry.stage_filter_max_difficulty !== undefined ? entry.stage_filter_max_difficulty : null,
-        entry.stage_filter_include_flags && Array.isArray(entry.stage_filter_include_flags) ? JSON.stringify(entry.stage_filter_include_flags) : null,
-        entry.stage_filter_exclude_flags && Array.isArray(entry.stage_filter_exclude_flags) ? JSON.stringify(entry.stage_filter_exclude_flags) : null
+        entry.stage_filter_include_flags && Array.isArray(entry.stage_filter_include_flags) ? JSON.stringify(entry.stage_filter_include_flags) : (entry.stage_filter_include_flags || null),
+        entry.stage_filter_exclude_flags && Array.isArray(entry.stage_filter_exclude_flags) ? JSON.stringify(entry.stage_filter_exclude_flags) : (entry.stage_filter_exclude_flags || null),
+        entry.stage_filter_include_any_of_flags && Array.isArray(entry.stage_filter_include_any_of_flags) ? JSON.stringify(entry.stage_filter_include_any_of_flags) : (entry.stage_filter_include_any_of_flags || null),
+        entry.stage_filter_exclude_only_flags && Array.isArray(entry.stage_filter_exclude_only_flags) ? JSON.stringify(entry.stage_filter_exclude_only_flags) : (entry.stage_filter_exclude_only_flags || null),
+        entry.stage_filter_has_tags && Array.isArray(entry.stage_filter_has_tags) ? JSON.stringify(entry.stage_filter_has_tags) : (entry.stage_filter_has_tags || null),
+        entry.stage_filter_exclude_tags && Array.isArray(entry.stage_filter_exclude_tags) ? JSON.stringify(entry.stage_filter_exclude_tags) : (entry.stage_filter_exclude_tags || null),
+        entry.game_filter_min_difficulty ?? null,
+        entry.game_filter_max_difficulty ?? null,
+        entry.stage_filter_include_untested ?? 0,
+        entry.stage_filter_untested_only ?? 0,
+        entry.prerequisites_json || null
       );
     });
     
@@ -958,8 +976,9 @@ function runAgainFromPastRun(dbManager, sourceRunUuid, mode) {
        stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
        stage_filter_has_tags, stage_filter_exclude_tags,
        game_filter_min_difficulty, game_filter_max_difficulty,
-       stage_filter_include_untested, stage_filter_untested_only)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       stage_filter_include_untested, stage_filter_untested_only,
+       prerequisites_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertResultStmt = db.prepare(`
@@ -967,23 +986,24 @@ function runAgainFromPastRun(dbManager, sourceRunUuid, mode) {
       (result_uuid, run_uuid, plan_entry_uuid, sequence_number,
        gameid, game_name, exit_number, stage_description,
        was_random, revealed_early, status, conditions,
-       levelnumber, translevel, levelname)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?)
+       levelnumber, translevel, levelname, prerequisites_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', ?, ?, ?, ?, ?)
   `);
 
   const entryUuidMap = new Map();
 
   const transaction = db.transaction(() => {
     db.prepare(`
-      INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, win_rules_json)
-      VALUES (?, ?, ?, 'preparing', ?, ?, ?)
+      INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, win_rules_json, run_type)
+      VALUES (?, ?, ?, 'preparing', ?, ?, ?, ?)
     `).run(
       newRunUuid,
       suggestedName,
       sourceRun.run_description || '',
       sourceRun.global_conditions,
       sourceRun.config_json,
-      sourceRun.win_rules_json || null
+      sourceRun.win_rules_json || null,
+      normalizeRunType(sourceRun.run_type)
     );
 
     let reseedDefaultMapping = null;
@@ -1037,7 +1057,8 @@ function runAgainFromPastRun(dbManager, sourceRunUuid, mode) {
         entry.game_filter_min_difficulty ?? null,
         entry.game_filter_max_difficulty ?? null,
         entry.stage_filter_include_untested ?? 0,
-        entry.stage_filter_untested_only ?? 0
+        entry.stage_filter_untested_only ?? 0,
+        entry.prerequisites_json || null
       );
     });
 
@@ -1065,7 +1086,8 @@ function runAgainFromPastRun(dbManager, sourceRunUuid, mode) {
           result.conditions,
           result.levelnumber || null,
           result.translevel || null,
-          result.levelname || null
+          result.levelname || null,
+          result.prerequisites_json || null
         );
       }
     }

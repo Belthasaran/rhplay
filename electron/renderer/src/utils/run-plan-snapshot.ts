@@ -27,6 +27,7 @@ const PLAN_ENTRY_SNAPSHOT_FIELDS = [
   'stageFilterExcludeTags',
   'stageFilterIncludeUntested',
   'stageFilterUntestedOnly',
+  'prerequisites',
 ] as const;
 
 type SnapshotEntry = Record<string, unknown> & { entryType: string };
@@ -53,11 +54,13 @@ export function serializePlanSnapshot(params: {
   runEntries: readonly Record<string, unknown>[];
   globalRunConditions?: unknown[];
   globalRunPatchCodes?: string[];
+  runType?: string;
 }): string {
   const payload = {
     entries: (params.runEntries || []).map((entry) => serializePlanEntry(entry as Record<string, unknown>)),
     globalRunConditions: params.globalRunConditions || [],
     globalRunPatchCodes: params.globalRunPatchCodes || [],
+    runType: params.runType || 'standard',
   };
   return JSON.stringify(payload);
 }

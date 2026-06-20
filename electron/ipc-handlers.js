@@ -34,6 +34,7 @@ const {
   filterStagesByTestState,
 } = require('./stage-test-resolution');
 const { generateRunview } = require('./runview-generator');
+const { normalizeRunType, isFreePlayRunType } = require('./shared/run-types');
 const { matchesDifficultyFilter, getGameDifficultyLevel } = require('./utils/difficulty-mapper');
 const GameVersionBanManager = require('./gameversion-banmanager');
 const { matchesFilter } = require('./shared-filter-utils');
@@ -2708,7 +2709,7 @@ function registerDatabaseHandlers(dbManager) {
    * Create a new run
    * Channel: db:runs:create
    */
-  ipcMain.handle('db:runs:create', async (event, { runName, runDescription, globalConditions, globalPatchCodes }) => {
+  ipcMain.handle('db:runs:create', async (event, { runName, runDescription, globalConditions, globalPatchCodes, runType }) => {
     try {
       const db = dbManager.getConnection('clientdata');
       const runUuid = crypto.randomUUID();
@@ -2719,14 +2720,15 @@ function registerDatabaseHandlers(dbManager) {
       };
       
       db.prepare(`
-        INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json)
-        VALUES (?, ?, ?, 'preparing', ?, ?)
+        INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, run_type)
+        VALUES (?, ?, ?, 'preparing', ?, ?, ?)
       `).run(
         runUuid, 
         runName, 
         runDescription, 
         JSON.stringify(globalConditions || []),
-        JSON.stringify(configJson)
+        JSON.stringify(configJson),
+        normalizeRunType(runType)
       );
       
       return { success: true, runUuid };
@@ -2739,10 +2741,21 @@ function registerDatabaseHandlers(dbManager) {
    * Save run plan entries
    * Channel: db:runs:save-plan
    */
-  ipcMain.handle('db:runs:save-plan', async (event, { runUuid, entries, winRulesJson }) => {
+  ipcMain.handle('db:runs:save-plan', async (event, { runUuid, entries, winRulesJson, runType }) => {
     try {
       console.log(`[db:runs:save-plan] Called with runUuid: ${runUuid}, entries: ${entries?.length || 0}, winRulesJson: ${winRulesJson ? 'present' : 'null'}`);
       const db = dbManager.getConnection('clientdata');
+
+      if (runType !== undefined && runType !== null) {
+        const nowMs = Date.now();
+        db.prepare(`
+          UPDATE runs
+          SET run_type = ?,
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = ?
+          WHERE run_uuid = ?
+        `).run(normalizeRunType(runType), nowMs, runUuid);
+      }
       
       // CRITICAL: ALWAYS save winRulesJson if provided, even if it's an empty string or "null"
       // This ensures win rules are persisted when saving the run plan
@@ -2780,6 +2793,13 @@ function registerDatabaseHandlers(dbManager) {
           SELECT COUNT(*) as count FROM run_results WHERE run_uuid = ?
         `).get(runId)?.count || 0) > 0;
 
+        const serializePrerequisitesJson = (entry) => {
+          const raw = entry.prerequisites ?? entry.prerequisites_json ?? entry.prerequisitesJson;
+          if (raw == null || raw === '') return null;
+          if (typeof raw === 'string') return raw;
+          return JSON.stringify(raw);
+        };
+
         const planEntryRowValues = (entry, idx) => [
           idx + 1,
           entry.entryType,
@@ -2804,6 +2824,7 @@ function registerDatabaseHandlers(dbManager) {
           entry.gameFilterMaxDifficulty !== undefined ? entry.gameFilterMaxDifficulty : null,
           entry.stageFilterIncludeUntested ? 1 : 0,
           entry.stageFilterUntestedOnly === true || entry.stageFilterUntestedOnly === 1 ? 1 : 0,
+          serializePrerequisitesJson(entry),
         ];
 
         const insertStmt = db.prepare(`
@@ -2815,8 +2836,9 @@ function registerDatabaseHandlers(dbManager) {
              stage_filter_include_any_of_flags, stage_filter_exclude_only_flags,
              stage_filter_has_tags, stage_filter_exclude_tags,
              game_filter_min_difficulty, game_filter_max_difficulty,
-             stage_filter_include_untested, stage_filter_untested_only)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             stage_filter_include_untested, stage_filter_untested_only,
+             prerequisites_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const updateStmt = db.prepare(`
@@ -2828,7 +2850,8 @@ function registerDatabaseHandlers(dbManager) {
             stage_filter_include_any_of_flags = ?, stage_filter_exclude_only_flags = ?,
             stage_filter_has_tags = ?, stage_filter_exclude_tags = ?,
             game_filter_min_difficulty = ?, game_filter_max_difficulty = ?,
-            stage_filter_include_untested = ?, stage_filter_untested_only = ?
+            stage_filter_include_untested = ?, stage_filter_untested_only = ?,
+            prerequisites_json = ?
           WHERE entry_uuid = ? AND run_uuid = ?
         `);
 
@@ -2933,7 +2956,7 @@ function registerDatabaseHandlers(dbManager) {
         
         // Get win rules to set initial rollover for first challenge
         // Always set rollover when challengeTime is enabled (even if 0)
-        const runData = db.prepare(`SELECT win_rules_json FROM runs WHERE run_uuid = ?`).get(runId);
+        const runData = db.prepare(`SELECT win_rules_json, run_type FROM runs WHERE run_uuid = ?`).get(runId);
         let winRules = null;
         let initialRolloverMs = null;
         if (runData && runData.win_rules_json) {
@@ -2948,6 +2971,8 @@ function registerDatabaseHandlers(dbManager) {
           }
         }
         
+        const isFreePlay = isFreePlayRunType(runData?.run_type);
+        
         // Get the first pending challenge (lowest sequence_number)
         const firstPending = db.prepare(`
           SELECT result_uuid FROM run_results
@@ -2956,7 +2981,7 @@ function registerDatabaseHandlers(dbManager) {
           LIMIT 1
         `).get(runId);
         
-        if (firstPending) {
+        if (firstPending && !isFreePlay) {
           // Only set started_at and started_at_ms for the first pending challenge
           // All other challenges remain NULL until they actually start
           // Also set initial rollover time if win rules are enabled
@@ -3106,7 +3131,7 @@ function registerDatabaseHandlers(dbManager) {
       }
       
       // Get win rules from run
-      const run = db.prepare(`SELECT win_rules_json FROM runs WHERE run_uuid = ?`).get(runUuid);
+      const run = db.prepare(`SELECT win_rules_json, run_type FROM runs WHERE run_uuid = ?`).get(runUuid);
       let winRules = null;
       if (run && run.win_rules_json) {
         try {
@@ -3241,7 +3266,8 @@ function registerDatabaseHandlers(dbManager) {
         // According to RUN_TIMING_REVIEW.md, each challenge's started_at_ms should be
         // the exact time when that challenge actually started.
         if ((status === 'success' || status === 'ok' || status === 'skipped' || status === 'failed') && 
-            oldStatus !== status) {
+            oldStatus !== status &&
+            !isFreePlayRunType(run?.run_type)) {
           const nextChallenge = db.prepare(`
             SELECT result_uuid, sequence_number FROM run_results
             WHERE run_uuid = ? 
@@ -3634,6 +3660,156 @@ function registerDatabaseHandlers(dbManager) {
       return { success: true };
     } catch (error) {
       console.error('Error completing run:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Finalize a Free Play run: mark remaining pending challenges skipped, then complete.
+   * Channel: db:runs:finalize
+   */
+  ipcMain.handle('db:runs:finalize', async (event, { runUuid }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const nowMs = Date.now();
+
+      const pendingResults = db.prepare(`
+        SELECT result_uuid FROM run_results
+        WHERE run_uuid = ? AND status = 'pending'
+      `).all(runUuid);
+
+      const transaction = db.transaction((runId, pendingList) => {
+        for (const row of pendingList) {
+          db.prepare(`
+            UPDATE run_results
+            SET status = 'skipped',
+                completed_at = CURRENT_TIMESTAMP,
+                completed_at_ms = ?,
+                duration_seconds = 0,
+                duration_milliseconds = 0
+            WHERE result_uuid = ?
+          `).run(nowMs, row.result_uuid);
+        }
+
+        if (pendingList.length > 0) {
+          db.prepare(`
+            UPDATE runs
+            SET skipped_challenges = skipped_challenges + ?,
+                updated_at = CURRENT_TIMESTAMP,
+                updated_at_ms = ?
+            WHERE run_uuid = ?
+          `).run(pendingList.length, nowMs, runId);
+        }
+
+        db.prepare(`
+          UPDATE runs
+          SET status = 'completed',
+              completed_at = CURRENT_TIMESTAMP,
+              completed_at_ms = ?,
+              updated_at = CURRENT_TIMESTAMP,
+              updated_at_ms = ?
+          WHERE run_uuid = ?
+        `).run(nowMs, nowMs, runId);
+      });
+
+      transaction(runUuid, pendingResults);
+
+      try {
+        const userDataPath = app.getPath('userData');
+        await generateRunview({ dbManager, runUuid, userDataPath });
+      } catch (error) {
+        console.warn('[runview] Failed to generate after finalize:', error);
+      }
+
+      return { success: true, skippedCount: pendingResults.length };
+    } catch (error) {
+      console.error('Error finalizing run:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Activate a challenge for Free Play (set start time, optionally reset skipped/failed).
+   * Channel: db:runs:activate-challenge
+   */
+  ipcMain.handle('db:runs:activate-challenge', async (event, { runUuid, challengeIndex }) => {
+    try {
+      const db = dbManager.getConnection('clientdata');
+      const result = db.prepare(`
+        SELECT result_uuid, status, started_at_ms FROM run_results
+        WHERE run_uuid = ?
+        ORDER BY sequence_number
+        LIMIT 1 OFFSET ?
+      `).get(runUuid, challengeIndex);
+
+      if (!result) {
+        return { success: false, error: 'Challenge not found' };
+      }
+
+      const nowMs = Date.now();
+      const run = db.prepare(`SELECT win_rules_json FROM runs WHERE run_uuid = ?`).get(runUuid);
+      let initialRolloverMs = null;
+      if (run?.win_rules_json) {
+        try {
+          const winRules = JSON.parse(run.win_rules_json);
+          if (winRules?.challengeTime?.enabled) {
+            initialRolloverMs = (winRules.challengeTime.rolloverStartMinutes || 0) * 60 * 1000;
+          }
+        } catch (e) {
+          console.warn('[activate-challenge] Failed to parse win rules:', e);
+        }
+      }
+
+      const terminalStatuses = new Set(['skipped', 'failed']);
+      if (terminalStatuses.has(result.status)) {
+        db.prepare(`
+          UPDATE run_results
+          SET status = 'pending',
+              completed_at = NULL,
+              completed_at_ms = NULL,
+              duration_seconds = NULL,
+              duration_milliseconds = NULL,
+              started_at = NULL,
+              started_at_ms = NULL,
+              pause_seconds = 0,
+              pause_milliseconds = 0,
+              pause_start = NULL,
+              pause_end = NULL,
+              pause_start_ms = NULL,
+              pause_end_ms = NULL
+          WHERE result_uuid = ?
+        `).run(result.result_uuid);
+
+        if (result.status === 'skipped') {
+          db.prepare(`
+            UPDATE runs
+            SET skipped_challenges = MAX(0, skipped_challenges - 1),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_uuid = ?
+          `).run(runUuid);
+        } else if (result.status === 'failed') {
+          db.prepare(`
+            UPDATE runs
+            SET completed_challenges = MAX(0, completed_challenges - 1),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE run_uuid = ?
+          `).run(runUuid);
+        }
+      }
+
+      if (!result.started_at_ms || terminalStatuses.has(result.status)) {
+        db.prepare(`
+          UPDATE run_results
+          SET started_at = CURRENT_TIMESTAMP,
+              started_at_ms = ?,
+              rollover_time_remaining_start_ms = COALESCE(rollover_time_remaining_start_ms, ?)
+          WHERE result_uuid = ?
+        `).run(nowMs, initialRolloverMs, result.result_uuid);
+      }
+
+      return { success: true, startedAtMs: nowMs };
+    } catch (error) {
+      console.error('Error activating challenge:', error);
       return { success: false, error: error.message };
     }
   });
@@ -4785,8 +4961,8 @@ function registerDatabaseHandlers(dbManager) {
             (result_uuid, run_uuid, plan_entry_uuid, sequence_number, 
              gameid, game_name, exit_number, stage_description,
              was_random, revealed_early, status, conditions,
-             levelnumber, translevel, levelname)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+             levelnumber, translevel, levelname, prerequisites_json)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         `);
         
         let resultSequence = 1;
@@ -5028,7 +5204,8 @@ function registerDatabaseHandlers(dbManager) {
               JSON.stringify(planEntry.conditions || []),
               levelnumber,
               translevel,
-              levelname
+              levelname,
+              planEntry.prerequisites_json || null
             );
             
             resultSequence++;
@@ -6917,7 +7094,7 @@ function registerDatabaseHandlers(dbManager) {
    * Update a preparing run's name and global config (Run Again save path)
    * Channel: db:runs:update-preparing
    */
-  ipcMain.handle('db:runs:update-preparing', async (event, { runUuid, runName, globalConditions, globalPatchCodes }) => {
+  ipcMain.handle('db:runs:update-preparing', async (event, { runUuid, runName, globalConditions, globalPatchCodes, runType }) => {
     try {
       const db = dbManager.getConnection('clientdata');
       const run = db.prepare(`SELECT status FROM runs WHERE run_uuid = ?`).get(runUuid);
@@ -6930,17 +7107,22 @@ function registerDatabaseHandlers(dbManager) {
       const configJson = {
         globalPatchCodes: globalPatchCodes || [],
       };
+      const nowMs = Date.now();
       db.prepare(`
         UPDATE runs
         SET run_name = ?,
             global_conditions = ?,
             config_json = ?,
-            updated_at = CURRENT_TIMESTAMP
+            run_type = COALESCE(?, run_type),
+            updated_at = CURRENT_TIMESTAMP,
+            updated_at_ms = ?
         WHERE run_uuid = ?
       `).run(
         runName,
         JSON.stringify(globalConditions || []),
         JSON.stringify(configJson),
+        runType != null ? normalizeRunType(runType) : null,
+        nowMs,
         runUuid
       );
       return { success: true };

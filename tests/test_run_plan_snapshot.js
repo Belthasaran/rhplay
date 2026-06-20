@@ -100,6 +100,22 @@ function testDetectsCountSeedConditions() {
   assert.notStrictEqual(base, patchesChanged);
 }
 
+function testDetectsRunType() {
+  const standard = serializePlanSnapshot({
+    runEntries: [baseEntry()],
+    globalRunConditions: [],
+    globalRunPatchCodes: [],
+    runType: 'standard',
+  });
+  const freePlay = serializePlanSnapshot({
+    runEntries: [baseEntry()],
+    globalRunConditions: [],
+    globalRunPatchCodes: [],
+    runType: 'free_play',
+  });
+  assert.notStrictEqual(standard, freePlay);
+}
+
 function testNormalizeWinRulesJson() {
   assert.strictEqual(normalizeWinRulesJson(null), null);
   assert.strictEqual(normalizeWinRulesJson(''), null);
@@ -113,6 +129,7 @@ function main() {
   testIgnoresUiOnlyFields();
   testDetectsReorder();
   testDetectsCountSeedConditions();
+  testDetectsRunType();
   testNormalizeWinRulesJson();
   console.log('test_run_plan_snapshot: ok');
 }

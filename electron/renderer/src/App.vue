@@ -1579,18 +1579,20 @@
           <template v-if="isRunActive">
             <span class="run-timer">⏱ {{ formatTime(runElapsedSeconds) }}</span>
             <span class="pause-time" v-if="runPauseSeconds > 0">⏸ {{ formatTime(runPauseSeconds) }}</span>
-            <span class="run-progress">Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
+            <span class="run-progress" v-if="isFreePlayRun">Free Play — {{ freePlayCompletedCount }}/{{ runEntries.length }} done</span>
+            <span class="run-progress" v-else>Challenge {{ currentChallengeIndex + 1 }} / {{ runEntries.length }}</span>
             <button v-if="currentChallenge && currentChallengeSfcPath && activeLaunchMethod !== 'program'" @click="toggleUsbPolling" :class="['btn-poll-usb', { 'active': usbPollingEnabled }, usbPollingStatus ? `poll-status-${usbPollingStatus}` : '']" :title="usbPollingEnabled ? 'USB polling is active' : 'Enable USB polling for automatic challenge completion'">
               <input type="checkbox" :checked="usbPollingEnabled" @change="toggleUsbPolling" class="poll-checkbox" />
               <span>Poll USB</span>
             </button>
             <button @click="pauseRun" v-if="!isRunPaused" class="btn-pause">⏸ Pause</button>
             <button @click="unpauseRun" v-if="isRunPaused" class="btn-unpause">▶ Unpause</button>
-            <button @click="undoChallenge" :disabled="!canUndo || isRunPaused" class="btn-back">↶ Back</button>
+            <button @click="undoChallenge" :disabled="!canUndo || isRunPaused || isFreePlayRun" class="btn-back">↶ Back</button>
             <button @click="nextChallenge" :disabled="!currentChallenge || isRunPaused || isDoneButtonDisabled || isSkipDoneOnCooldown" class="btn-next">✓ Done</button>
             <button @click="launchCurrentChallenge" v-if="showActiveRunLaunchButton" :disabled="isRunPaused" class="btn-launch" :title="activeLaunchMethod === 'program' ? `Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} in emulator` : `Launch challenge ${String(currentChallengeIndex + 1).padStart(2, '0')} on USB2SNES`">🚀 Launch {{ String(currentChallengeIndex + 1).padStart(2, '0') }}</button>
             <button @click="skipChallenge" :disabled="!currentChallenge || isRunPaused || isSkipDoneOnCooldown" class="btn-skip">⏭ Skip</button>
-            <button @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
+            <button v-if="isFreePlayRun" @click="finalizeFreePlayRun" class="btn-cancel-run">Finalize Run</button>
+            <button v-else @click="cancelRun" class="btn-cancel-run">✕ Cancel Run</button>
           </template>
           <button class="close" @click="closeRunModal">✕</button>
         </div>
@@ -1798,13 +1800,23 @@
       <section v-if="!isRunActive" class="modal-toolbar">
         <div class="left">
           <button @click="removeCheckedRun" :disabled="checkedRunCount === 0">Remove</button>
-          <button @click="moveCheckedUp" :disabled="!canMoveCheckedUp">↑ Move Up</button>
-          <button @click="moveCheckedDown" :disabled="!canMoveCheckedDown">↓ Move Down</button>
+          <button @click="moveCheckedUp" :disabled="!canMoveCheckedUp">↑ Move</button>
+          <button @click="moveCheckedDown" :disabled="!canMoveCheckedDown">↓ Move</button>
+          <div class="run-type-wrapper">
+            <button @click="toggleRunTypeDropdown($event)" class="btn-run-type" :class="{ 'active': runTypeDropdownOpen }" :title="`Run type: ${runTypeLabel(currentRunType)}`">
+              Type ▼
+            </button>
+            <div v-if="runTypeDropdownOpen" class="run-type-dropdown" :style="runTypeDropdownStyle" @click.stop ref="runTypeDropdownRef">
+              <label v-for="opt in RUN_TYPE_OPTIONS" :key="opt.value" class="run-type-option">
+                <input type="radio" v-model="currentRunType" :value="opt.value" /> {{ opt.label }}
+              </label>
+            </div>
+          </div>
           <button @click="editGlobalConditions" :title="`Global Patches: ${globalRunPatchCodes.length > 0 ? globalRunPatchCodes.join(', ') : 'None'}`">
-            {{ globalRunPatchCodes.length > 0 ? `✓ Global Patches (${globalRunPatchCodes.length})` : 'Set Global Conditions' }}
+            {{ globalRunPatchCodes.length > 0 ? `✓ +Run Patch (${globalRunPatchCodes.length})` : '+Run Patch' }}
           </button>
           <button @click="openWinRulesDropdown($event)" :title="`Win Rules: ${hasWinRules ? 'Configured' : 'Not set'}`">
-            {{ hasWinRules ? '✓ Win Rules' : 'Set Win Rules' }} ▼
+            {{ hasWinRules ? '✓ Challenge' : 'Challenge' }} ▼
           </button>
           <button
             @click="openTwitchPrepDropdown($event)"
@@ -1832,6 +1844,11 @@
               <div class="game-limits-columns">
                 <div class="game-limits-left-column">
                   <div class="game-limits-section">
+                    <div class="match-count-indicator dropdown-match-count" :class="{ 'insufficient': randomMatchCountError }">
+                      <span v-if="randomMatchCount !== null">{{ randomMatchCount }}</span>
+                      <span v-else>...</span> games match
+                      <span v-if="randomMatchCountError" class="error-text"> (need {{ (randomFilter.count || 0) + 2 }}+)</span>
+                    </div>
           <label>
             Filter Type
             <select v-model="randomFilter.type">
@@ -1862,7 +1879,7 @@
               </div>
             </div>
           </div>
-          <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">Add Random Games</button>
+          <button @click="addRandomGameToRun" :disabled="!isRandomAddValid">[+] RNG Games</button>
           <div class="stage-limits-wrapper">
             <button @click="toggleStageLimitsDropdown($event)" class="btn-stage-limits" :class="{ 'active': stageLimitsDropdownOpen }">
               Stage Limits ▼
@@ -1871,6 +1888,11 @@
               <div class="stage-limits-columns">
                 <div class="stage-limits-left-column">
                   <div class="stage-limits-section stage-test-filter-section">
+                    <div class="match-count-indicator dropdown-match-count" :class="{ 'insufficient': randomStageMatchCountError }">
+                      <span v-if="randomStageMatchCount !== null">{{ randomStageMatchCount }}</span>
+                      <span v-else>...</span> stages match
+                      <span v-if="randomStageMatchCountError" class="error-text"> (need {{ (randomFilter.count || 0) + 2 }}+)</span>
+                    </div>
                     <label class="checkbox-filter">
                       <input type="checkbox" v-model="stageFilter.includeUntested" @change="onIncludeUntestedChange" />
                       Include untested stages
@@ -1970,7 +1992,7 @@
             </div>
             </div>
           </div>
-          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">Add Random Stages</button>
+          <button @click="addRandomStageToRun" :disabled="!isRandomStageAddValid">[+] RNG Stages</button>
           <span class="match-count-indicator" :class="{ 'insufficient': randomMatchCountError }">
             <span v-if="randomMatchCount !== null">{{ randomMatchCount }}</span>
             <span v-else>...</span> games
@@ -2022,11 +2044,20 @@
                 @dragend="handleDragEnd"
                 :class="{ 
                   'dragging': draggedIndex === idx,
-                  'current-challenge': isRunActive && idx === currentChallengeIndex
+                  'current-challenge': isRunActive && idx === currentChallengeIndex && currentChallengeIndex >= 0
                 }"
               >
                 <td class="col-check">
-                  <input type="checkbox" :checked="checkedRun.has(entry.key)" @change="toggleRunEntrySelection(entry.key, $event)" :disabled="isRunActive" />
+                  <template v-if="isRunActive && isFreePlayRun">
+                    <button
+                      v-if="canShowFreePlayButton(idx)"
+                      class="btn-mini btn-free-play"
+                      @click="playFreePlayStage(idx)"
+                      :disabled="isRunPaused && currentChallengeIndex !== idx && currentChallengeIndex >= 0"
+                      title="Play this stage"
+                    >Play</button>
+                  </template>
+                  <input v-else type="checkbox" :checked="checkedRun.has(entry.key)" @change="toggleRunEntrySelection(entry.key, $event)" :disabled="isRunActive" />
                 </td>
                 <td class="col-seq">{{ idx + 1 }}</td>
                 <td v-if="isRunActive" class="col-status" :class="getChallengeStatusClass(idx)">
@@ -9443,13 +9474,13 @@ Do you recommend; is the game fun and worthwhile?</span></label>
             </div>
             
             <div class="quick-actions-buttons">
-              <div v-if="activeLaunchMethod === 'program' && settings.launchProgram && settings.launchProgram.trim()" class="action-group">
+              <div v-if="activeLaunchMethod === 'program' && settings.launchProgram && settings.launchProgram.trim() && !isFreePlayRun" class="action-group">
                 <button @click="launchRunGame(1)" class="btn-action">
                   🎮 Launch Game 1 and start
                 </button>
               </div>
               
-              <div v-if="activeLaunchMethod === 'usb2snes' && settings.usb2snesEnabled === 'yes'" class="action-group">
+              <div v-if="activeLaunchMethod === 'usb2snes' && settings.usb2snesEnabled === 'yes' && !isFreePlayRun" class="action-group">
                 <button @click="uploadRunToSnesAndLaunchGame1" class="btn-action" :disabled="!usb2snesStatus.connected">
                   📤 USB Upload and Launch
                 </button>
@@ -9938,6 +9969,14 @@ import {
   sortRunStagedSfcFilenames,
 } from './utils/run-staging';
 import { serializePlanSnapshot, normalizeWinRulesJson } from './utils/run-plan-snapshot';
+import {
+  RUN_TYPE_OPTIONS,
+  RUN_TYPE_STANDARD,
+  normalizeRunType,
+  isFreePlayRunType,
+  runTypeLabel,
+  type RunType,
+} from './utils/run-types';
 import {
   canEnableTwitchPredictions,
   getTwitchPrepStatusLabel,
@@ -13292,6 +13331,10 @@ async function handleRunExitDetectedChoice(payload: {
     await nextChallenge();
   } else {
     await skipChallenge();
+  }
+
+  if (isFreePlayRun.value) {
+    return;
   }
 
   if (!isRunActive.value || activeLaunchMethod.value === 'manual') {
@@ -24379,6 +24422,7 @@ type RunEntry = {
   matchCount?: number | null;  // Store match count for random entries
   isLocked?: boolean;  // If true, entry type cannot be changed
   conditions: ChallengeCondition[];  // Challenge conditions for this entry
+  prerequisites?: Record<string, unknown>;  // Future access rules (non-standard runs)
 };
 
 const runModalOpen = ref(false);
@@ -24397,6 +24441,10 @@ const filteredAvailablePatchesForGlobal = computed(() =>
 const showWinRulesDropdown = ref(false);  // Win rules dropdown visibility
 const winRulesDropdownPosition = ref<{ x: number; y: number } | null>(null);  // Position for win rules dropdown
 const currentWinRulesJson = ref<string | null>(null);  // Current win rules JSON from run
+const currentRunType = ref<RunType>(RUN_TYPE_STANDARD);
+const runTypeDropdownOpen = ref(false);
+const runTypeDropdownStyle = ref({ top: '0px', left: '0px' });
+const runTypeDropdownRef = ref<HTMLElement | null>(null);
 
 type SavedRunSnapshot = {
   planJson: string;
@@ -24410,6 +24458,7 @@ function buildCurrentPlanSnapshotJson(): string {
     runEntries,
     globalRunConditions: globalRunConditions.value,
     globalRunPatchCodes: globalRunPatchCodes.value,
+    runType: currentRunType.value,
   });
 }
 
@@ -24985,8 +25034,15 @@ watch(activeLaunchMethod, () => {
   resetRunStagingPreLaunchState();
 });
 const currentChallenge = computed(() => {
-  if (!isRunActive.value || currentChallengeIndex.value >= runEntries.length) return null;
+  if (!isRunActive.value || currentChallengeIndex.value < 0 || currentChallengeIndex.value >= runEntries.length) return null;
   return runEntries[currentChallengeIndex.value];
+});
+const isFreePlayRun = computed(() => isFreePlayRunType(currentRunType.value));
+const freePlayCompletedCount = computed(() => {
+  if (!isRunActive.value) return 0;
+  return challengeResults.value.filter((r) =>
+    ['success', 'ok', 'skipped', 'failed'].includes(r.status)
+  ).length;
 });
 const currentChallengeSfcPath = computed(() => {
   if (!currentChallenge.value) return null;
@@ -25464,6 +25520,16 @@ async function openRunModalInternal() {
   if (currentRunUuid.value) {
     console.log('[openRunModal] Loading win rules for run:', currentRunUuid.value);
     await loadWinRules();
+    if (isElectronAvailable()) {
+      try {
+        const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+        if (run?.run_type) {
+          currentRunType.value = normalizeRunType(run.run_type);
+        }
+      } catch (error) {
+        console.warn('[openRunModal] Failed to load run type:', error);
+      }
+    }
   }
   
   // If a run is active, scroll to show the active challenge after modal opens
@@ -25522,6 +25588,8 @@ function clearRunState() {
 
   // Clear win rules
   currentWinRulesJson.value = null;
+  currentRunType.value = RUN_TYPE_STANDARD;
+  runTypeDropdownOpen.value = false;
 
   // Clear staging-related state
   stagingFolderPath.value = '';
@@ -25836,8 +25904,10 @@ const isRandomStageAddValid = computed(() => {
 function toggleStageLimitsDropdown(event?: Event) {
   const wasOpen = stageLimitsDropdownOpen.value;
   stageLimitsDropdownOpen.value = !wasOpen;
+  if (wasOpen) return;
+  runTypeDropdownOpen.value = false;
   
-  if (!wasOpen && event) {
+  if (event) {
     // Calculate position when opening
     nextTick(() => {
       const button = event.currentTarget as HTMLElement;
@@ -25856,8 +25926,10 @@ function toggleStageLimitsDropdown(event?: Event) {
 function toggleGameLimitsDropdown(event?: Event) {
   const wasOpen = gameLimitsDropdownOpen.value;
   gameLimitsDropdownOpen.value = !wasOpen;
+  if (wasOpen) return;
+  runTypeDropdownOpen.value = false;
   
-  if (!wasOpen && event) {
+  if (event) {
     // Calculate position when opening
     nextTick(() => {
       const button = event.currentTarget as HTMLElement;
@@ -25867,6 +25939,27 @@ function toggleGameLimitsDropdown(event?: Event) {
         gameLimitsDropdownStyle.value = {
           top: `${rect.bottom + 4}px`,
           left: `${rect.left}px`
+        };
+      }
+    });
+  }
+}
+
+function toggleRunTypeDropdown(event?: Event) {
+  const wasOpen = runTypeDropdownOpen.value;
+  runTypeDropdownOpen.value = !wasOpen;
+  if (wasOpen) return;
+  gameLimitsDropdownOpen.value = false;
+  stageLimitsDropdownOpen.value = false;
+
+  if (event) {
+    nextTick(() => {
+      const button = event.currentTarget as HTMLElement;
+      if (button) {
+        const rect = button.getBoundingClientRect();
+        runTypeDropdownStyle.value = {
+          top: `${rect.bottom + 4}px`,
+          left: `${rect.left}px`,
         };
       }
     });
@@ -26262,6 +26355,7 @@ async function saveRunToDatabase() {
         runName,
         globalConditions: plainGlobalConditions,
         globalPatchCodes: plainGlobalPatchCodes,
+        runType: currentRunType.value,
       });
       if (!updateResult.success) {
         await showAlert('Failed to update run: ' + updateResult.error, 'Update Failed');
@@ -26273,7 +26367,8 @@ async function saveRunToDatabase() {
         runName,
         '',  // runDescription
         plainGlobalConditions,
-        plainGlobalPatchCodes  // Pass patch codes as separate parameter
+        plainGlobalPatchCodes,  // Pass patch codes as separate parameter
+        currentRunType.value
       );
 
       if (!result.success) {
@@ -26310,7 +26405,8 @@ async function saveRunToDatabase() {
     const planResult = await (window as any).electronAPI.saveRunPlan(
       targetRunUuid,
       plainRunEntries,
-      winRulesToSave || null  // Include win rules if set
+      winRulesToSave || null,  // Include win rules if set
+      currentRunType.value
     );
     
     if (!planResult.success) {
@@ -26567,7 +26663,7 @@ async function revertPrepChanges() {
     }
 
     const hydrated = await hydrateRunPlanFromDb(runUuid, run);
-    applyHydratedRunPlan(runUuid, run.run_name, hydrated);
+    applyHydratedRunPlan(runUuid, run.run_name, hydrated, run.run_type);
 
     if (savedRunSnapshot.value) {
       currentWinRulesJson.value = savedRunSnapshot.value.winRulesJson;
@@ -27395,13 +27491,23 @@ async function startRun(options?: { skipConfirm?: boolean }) {
       
       console.log('[startRun] Setting run status to active, entries:', runEntries.length);
       currentRunStatus.value = 'active';
-      currentChallengeIndex.value = 0;
+
+      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
+      if (run?.run_type) {
+        currentRunType.value = normalizeRunType(run.run_type);
+      }
+
+      if (isFreePlayRun.value) {
+        currentChallengeIndex.value = -1;
+        isRunPaused.value = true;
+      } else {
+        currentChallengeIndex.value = 0;
+      }
 
       await attachRunLaunchMonitoringAfterStart();
       
       // Get run data from database to get the actual started_at timestamp
       // IMPORTANT: Use the original started_at timestamp from database, NEVER use Date.now()
-      const run = await (window as any).electronAPI.getRun({ runUuid: currentRunUuid.value });
       if (run) {
         // CRITICAL: Load win rules from run data - this MUST happen
         if (run.win_rules_json) {
@@ -27450,6 +27556,9 @@ async function startRun(options?: { skipConfirm?: boolean }) {
           } else if (run.pause_start) {
             runPauseStartTime.value = new Date(run.pause_start).getTime();
           }
+        } else if (isFreePlayRun.value) {
+          isRunPaused.value = true;
+          runPauseStartTime.value = null;
         } else {
           isRunPaused.value = false;
           runPauseStartTime.value = null;
@@ -27500,6 +27609,10 @@ async function startRun(options?: { skipConfirm?: boolean }) {
       }
       
       await updateManualControlAvailability();
+
+      if (isFreePlayRun.value && isElectronAvailable() && run && !run.pause_start && !run.pause_start_ms) {
+        await pauseRun();
+      }
 
       if (!twitchTokenValid.value) {
         predictionsEnabled.value = false;
@@ -27823,6 +27936,107 @@ async function unpauseRun() {
   }
 }
 
+function resetUsbPollingForChallengeSwitch() {
+  usbPollingConditionATime.value = 0;
+  usbPollingLastMemoryValues.value = {};
+  usbPollingCurrentMemoryValues.value = {};
+  usbPollingLastSnesInfo.value = null;
+  usbPollingHandlingGoalEvent.value = false;
+}
+
+function isFreePlayChallengeTerminal(status: string) {
+  return ['success', 'ok', 'skipped', 'failed'].includes(status);
+}
+
+function isFreePlayRunComplete() {
+  return challengeResults.value.length > 0
+    && challengeResults.value.every((r) => isFreePlayChallengeTerminal(r.status));
+}
+
+function canShowFreePlayButton(idx: number) {
+  const result = challengeResults.value[idx];
+  if (!result) return true;
+  if (result.status === 'success' || result.status === 'ok') return false;
+  if (currentChallengeIndex.value >= 0 && currentChallengeIndex.value !== idx) return false;
+  return true;
+}
+
+async function deselectActiveChallengeAndPause() {
+  currentChallengeIndex.value = -1;
+  resetUsbPollingForChallengeSwitch();
+  if (!isRunPaused.value) {
+    await pauseRun();
+  }
+}
+
+async function playFreePlayStage(idx: number) {
+  if (!isRunActive.value || !isFreePlayRun.value) return;
+  if (!canShowFreePlayButton(idx)) return;
+
+  try {
+    if (isElectronAvailable()) {
+      const activateResult = await (window as any).electronAPI.activateChallenge({
+        runUuid: currentRunUuid.value,
+        challengeIndex: idx,
+      });
+      if (!activateResult?.success) {
+        await showAlert(activateResult?.error || 'Failed to activate stage', 'Error');
+        return;
+      }
+    }
+
+    if (isRunPaused.value) {
+      await unpauseRun();
+    }
+
+    currentChallengeIndex.value = idx;
+
+    const entry = runEntries[idx];
+    if (entry && (entry.entryType === 'random_game' || entry.entryType === 'random_stage') && entry.name === '???') {
+      await revealCurrentChallenge(false);
+    }
+
+    const cr = challengeResults.value[idx];
+    if (cr) {
+      cr.status = 'pending';
+      cr.startedAtMs = Date.now();
+    }
+
+    resetUsbPollingForChallengeSwitch();
+    await launchCurrentChallenge();
+  } catch (error) {
+    console.error('[playFreePlayStage] Error:', error);
+    await showAlert('Error starting stage', 'Error');
+  }
+}
+
+async function finalizeFreePlayRun() {
+  const confirmed = await showConfirm(
+    `Finalize run "${currentRunName.value}"?\n\n` +
+    `Unattempted stages will be marked as skipped and the run will finish.`,
+    'Finalize Run'
+  );
+  if (!confirmed) return;
+
+  try {
+    if (isElectronAvailable()) {
+      const result = await (window as any).electronAPI.finalizeRun({
+        runUuid: currentRunUuid.value,
+      });
+      if (!result?.success) {
+        await showAlert(result?.error || 'Failed to finalize run', 'Error');
+        return;
+      }
+    }
+
+    await refreshChallengeResults();
+    await completeRun({ skipDbComplete: true });
+  } catch (error) {
+    console.error('Error finalizing run:', error);
+    await showAlert('Error finalizing run', 'Error');
+  }
+}
+
 async function cancelRun() {
   const confirmed = await showConfirm(
     `Cancel run "${currentRunName.value}"?\n\n` +
@@ -27919,6 +28133,17 @@ async function nextChallenge() {
       // Error already handled in handlePredictionOnChallengeComplete with toast
     });
     
+    if (isFreePlayRun.value) {
+      resetUsbPollingForChallengeSwitch();
+      cleanupStalePredictionOperations(idx);
+      if (isFreePlayRunComplete()) {
+        await completeRun();
+      } else {
+        await deselectActiveChallengeAndPause();
+      }
+      return;
+    }
+
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
@@ -28045,6 +28270,17 @@ async function skipChallenge() {
       // Error already handled in handlePredictionOnChallengeComplete with toast
     });
     
+    if (isFreePlayRun.value) {
+      resetUsbPollingForChallengeSwitch();
+      cleanupStalePredictionOperations(idx);
+      if (isFreePlayRunComplete()) {
+        await completeRun();
+      } else {
+        await deselectActiveChallengeAndPause();
+      }
+      return;
+    }
+
     // Move to next challenge
     if (idx < runEntries.length - 1) {
       currentChallengeIndex.value++;
@@ -28419,7 +28655,7 @@ async function revealCurrentChallenge(revealedEarly: boolean = false) {
   }
 }
 
-async function completeRun() {
+async function completeRun(options?: { skipDbComplete?: boolean }) {
   // Stop timer
   if (runTimerInterval.value) {
     clearInterval(runTimerInterval.value);
@@ -28430,7 +28666,7 @@ async function completeRun() {
   
   try {
     // Mark run as completed in database
-    if (isElectronAvailable()) {
+    if (isElectronAvailable() && !options?.skipDbComplete) {
       const result = await (window as any).electronAPI.completeRun({
         runUuid: currentRunUuid.value
       });
@@ -28826,6 +29062,15 @@ function planEntryToRunEntry(entry: any) {
     matchCount: null as number | null,
     isLocked: false,
     conditions: [],
+    prerequisites: (() => {
+      if (!entry.prerequisites_json) return undefined;
+      if (typeof entry.prerequisites_json === 'object') return entry.prerequisites_json;
+      try {
+        return JSON.parse(entry.prerequisites_json);
+      } catch {
+        return undefined;
+      }
+    })(),
   };
 }
 
@@ -28945,11 +29190,13 @@ async function hydrateRunPlanFromDb(runUuid: string, run: any) {
 function applyHydratedRunPlan(
   runUuid: string,
   runName: string,
-  hydrated: Awaited<ReturnType<typeof hydrateRunPlanFromDb>>
+  hydrated: Awaited<ReturnType<typeof hydrateRunPlanFromDb>>,
+  runType?: string | null
 ) {
   currentRunUuid.value = runUuid;
   currentRunName.value = runName;
   currentRunStatus.value = 'preparing';
+  currentRunType.value = normalizeRunType(runType);
   runEntries.splice(0, runEntries.length, ...hydrated.restoredEntries);
   globalRunConditions.value = hydrated.globalConditions;
   globalRunPatchCodes.value = hydrated.globalPatchCodes;
@@ -28984,7 +29231,7 @@ async function loadPastRunFromUuid(runUuid: string, options: { closePastRuns?: b
 
   clearRunState();
   const hydrated = await hydrateRunPlanFromDb(runUuid, run);
-  applyHydratedRunPlan(runUuid, run.run_name, hydrated);
+  applyHydratedRunPlan(runUuid, run.run_name, hydrated, run.run_type);
   await refreshRunStagedSfcFilenames();
   await checkNeedsRegenerateStaging();
 
@@ -29047,7 +29294,7 @@ async function runAgainFromPastRun() {
 
     const newRun = await (window as any).electronAPI.getRun({ runUuid: cloneResult.runUuid });
     const hydrated = await hydrateRunPlanFromDb(cloneResult.runUuid, newRun);
-    applyHydratedRunPlan(cloneResult.runUuid, '', hydrated);
+    applyHydratedRunPlan(cloneResult.runUuid, '', hydrated, newRun?.run_type);
     currentWinRulesJson.value = newRun?.win_rules_json || null;
 
     await refreshRandomEntryMatchCounts();
@@ -34457,7 +34704,7 @@ async function importRunFromFile() {
       }
 
       const hydrated = await hydrateRunPlanFromDb(result.runUuid, importedRun);
-      applyHydratedRunPlan(result.runUuid, importedRun.run_name, hydrated);
+      applyHydratedRunPlan(result.runUuid, importedRun.run_name, hydrated, importedRun.run_type);
       currentWinRulesJson.value = importedRun.win_rules_json || null;
 
       await refreshRandomEntryMatchCounts();
@@ -34513,6 +34760,7 @@ async function resumeRunFromStartup() {
     currentRunUuid.value = run.run_uuid;
     currentRunName.value = run.run_name;
     currentRunStatus.value = 'active';
+    currentRunType.value = normalizeRunType(run.run_type);
 
     if (run.staging_folder) {
       stagingFolderPath.value = run.staging_folder;
@@ -34673,45 +34921,48 @@ async function resumeRunFromStartup() {
     
     console.log('Loaded run entries:', runEntries.length);
     
-    // Find current challenge index: the FIRST challenge after the last completed challenge
-    // The active challenge is the one that comes immediately after all completed challenges
+    // Find current challenge index
     let activeChallengeIndex = -1;
-    
-    // First, find the last completed challenge
-    let lastCompletedIndex = -1;
-    for (let i = expandedResults.length - 1; i >= 0; i--) {
-      const res = expandedResults[i];
-      if (res.completed_at_ms) {
-        lastCompletedIndex = i;
-        break;
-      }
-    }
-    
-    // The active challenge is the one immediately after the last completed challenge
-    // If no challenges are completed yet, the active challenge is the first one (index 0)
-    if (lastCompletedIndex >= 0) {
-      // There is a completed challenge - active is the next one
-      activeChallengeIndex = lastCompletedIndex + 1;
-      
-      // Make sure it exists and is not completed
-      if (activeChallengeIndex >= expandedResults.length) {
-        // All challenges are completed
-        activeChallengeIndex = expandedResults.length - 1;
-      } else if (expandedResults[activeChallengeIndex].completed_at_ms) {
-        // This challenge is also completed (shouldn't happen but handle it)
+
+    if (isFreePlayRunType(run.run_type)) {
+      activeChallengeIndex = expandedResults.findIndex(
+        (res: any) => res.status === 'pending' && res.started_at_ms && !res.completed_at_ms
+      );
+      if (activeChallengeIndex < 0) {
         activeChallengeIndex = -1;
       }
     } else {
-      // No challenges completed yet - first challenge is active
-      activeChallengeIndex = 0;
+      // Standard run: the FIRST challenge after the last completed challenge
+      let lastCompletedIndex = -1;
+      for (let i = expandedResults.length - 1; i >= 0; i--) {
+        const res = expandedResults[i];
+        if (res.completed_at_ms) {
+          lastCompletedIndex = i;
+          break;
+        }
+      }
+
+      if (lastCompletedIndex >= 0) {
+        activeChallengeIndex = lastCompletedIndex + 1;
+        if (activeChallengeIndex >= expandedResults.length) {
+          activeChallengeIndex = expandedResults.length - 1;
+        } else if (expandedResults[activeChallengeIndex].completed_at_ms) {
+          activeChallengeIndex = -1;
+        }
+      } else {
+        activeChallengeIndex = 0;
+      }
+
+      if (activeChallengeIndex === -1) {
+        activeChallengeIndex = 0;
+      }
     }
-    
-    // If no active challenge found, default to first one
-    if (activeChallengeIndex === -1) {
-      activeChallengeIndex = 0;
-    }
-    
+
     currentChallengeIndex.value = activeChallengeIndex;
+
+    if (isFreePlayRunType(run.run_type) && activeChallengeIndex < 0 && !run.pause_start && !run.pause_start_ms) {
+      isRunPaused.value = true;
+    }
     
     console.log('Current challenge index:', currentChallengeIndex.value);
     
@@ -35433,6 +35684,15 @@ async function handleGoalEvent(goalEvent: string) {
   
   try {
     console.log(`[USB Polling] Handling goal event: ${goalEvent}`);
+
+    if (isFreePlayRun.value) {
+      if (!isDoneButtonDisabled.value) {
+        await nextChallenge();
+      } else {
+        await skipChallenge();
+      }
+      return;
+    }
     
     // Check if we're on the last challenge
     const isLastChallenge = currentChallengeIndex.value >= runEntries.length - 1;
@@ -35938,6 +36198,48 @@ button:disabled {
 }
 .match-count-indicator .error-text {
   font-weight: 600;
+}
+.match-count-indicator.dropdown-match-count {
+  margin-bottom: 10px;
+  display: block;
+}
+.run-type-wrapper {
+  position: relative;
+  display: inline-block;
+  overflow: visible;
+}
+.btn-run-type {
+  padding: var(--button-padding);
+  background-color: var(--button-bg);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  font-size: var(--base-font-size);
+  color: var(--button-text);
+  cursor: pointer;
+}
+.btn-run-type:hover,
+.btn-run-type.active {
+  background-color: var(--bg-tertiary);
+}
+.run-type-dropdown {
+  position: fixed;
+  margin-top: 4px;
+  padding: 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 50000;
+  min-width: 180px;
+}
+.run-type-option {
+  display: block;
+  margin-bottom: 8px;
+  font-size: var(--base-font-size);
+  cursor: pointer;
+}
+.btn-free-play {
+  min-width: 3.5em;
 }
 .stage-limits-wrapper {
   position: relative;

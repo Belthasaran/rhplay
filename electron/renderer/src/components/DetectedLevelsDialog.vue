@@ -11,9 +11,34 @@
         </div>
         
         <template v-else>
+          <!-- Name reader toggle -->
+          <div class="name-reader-toggle">
+            <span class="name-reader-label">Level name reader:</span>
+            <label>
+              <input type="radio" v-model="nameReaderMode" value="jitnames" /> JITNames
+            </label>
+            <label>
+              <input type="radio" v-model="nameReaderMode" value="jitnames2" /> JITNames2
+            </label>
+          </div>
+
           <!-- Source Filters -->
           <div class="filter-section">
-            <h4>Show Sources:</h4>
+            <div class="filter-section-header">
+              <h4>Show Sources:</h4>
+              <div ref="sourcePresetMenuRef" class="source-preset-menu">
+                <button type="button" class="preset-menu-btn" @click="toggleSourcePresetMenu" title="Source presets">
+                  ▾
+                </button>
+                <div v-if="sourcePresetMenuOpen" class="preset-menu-dropdown">
+                  <button type="button" @click="applySourcePreset('all')">All</button>
+                  <button type="button" @click="applySourcePreset('none')">None</button>
+                  <button type="button" @click="applySourcePreset('db')">DB Only</button>
+                  <button type="button" @click="applySourcePreset('jit')">JIT Only</button>
+                  <button type="button" @click="applySourcePreset('mt')">MT Only</button>
+                </div>
+              </div>
+            </div>
             <div class="filter-checkboxes">
               <label>
                 <input type="checkbox" v-model="showSources.lmlevels" /> LMLevels
@@ -31,6 +56,9 @@
                 <input type="checkbox" v-model="showSources.jitnames" /> JITNames
               </label>
               <label>
+                <input type="checkbox" v-model="showSources.jitnames2" /> JITNames2
+              </label>
+              <label>
                 <input type="checkbox" v-model="showSources.jittrans" /> JIT.Trans
               </label>
               <label>
@@ -43,17 +71,40 @@
                 <input type="checkbox" v-model="showSources.jitscore" /> JIT.Score
               </label>
               <label>
+                <input type="checkbox" v-model="showSources.jitmt" /> JitMT
+              </label>
+              <label>
+                <input type="checkbox" v-model="showSources.jitow" /> JITOW
+              </label>
+              <label>
                 <input type="checkbox" v-model="hideExisting" /> Hide Already Added
               </label>
               <label>
                 <input type="checkbox" v-model="showScoreColumns" /> Show Scores
               </label>
             </div>
-            <div class="filter-control">
-              <label for="min-source-count">Minimum sources:</label>
-              <select id="min-source-count" v-model.number="minSourceCount" class="source-count-select">
-                <option v-for="n in 9" :key="n" :value="n">{{ n }}</option>
-              </select>
+            <div class="filter-controls-row">
+              <div class="filter-control">
+                <label for="min-source-count">Minimum sources:</label>
+                <select id="min-source-count" v-model.number="minSourceCount" class="source-count-select">
+                  <option v-for="n in maxSourceCount" :key="n" :value="n">{{ n }}</option>
+                </select>
+              </div>
+              <div class="exclude-filters">
+                <span class="exclude-label">Exclude:</span>
+                <label>
+                  <input type="checkbox" v-model="excludePipeKeywords" /> PipeKeywords
+                </label>
+                <label>
+                  <input type="checkbox" v-model="excludeEndKeywords" /> EndKeywords
+                </label>
+                <label>
+                  <input type="checkbox" v-model="excludeMt" /> MTExclude
+                </label>
+                <label :class="{ 'exclude-disabled': !hasLmSourceData }" :title="hasLmSourceData ? '' : 'Requires LMLevels or JIT.LMFilter entries'">
+                  <input type="checkbox" v-model="excludeNonLm" :disabled="!hasLmSourceData" /> Exclude-NonLM
+                </label>
+              </div>
             </div>
           </div>
 
@@ -102,7 +153,13 @@
                     />
                   </td>
                   <td class="monospace">{{ level.levelnumber }}</td>
-                  <td>{{ level.levelname || '-' }}</td>
+                  <td>
+                    <span
+                      v-if="namesDisagree(level)"
+                      class="name-disagree-star"
+                      title="JITNames and JITNames2 disagree"
+                    >★</span>{{ displayLevelName(level) || '-' }}
+                  </td>
                   <td class="monospace">{{ level.translevel || '-' }}</td>
                   <td class="monospace">{{ level.submapid || '-' }}</td>
                   <td class="monospace">{{ level.tile_x || '-' }}</td>
@@ -168,6 +225,11 @@ const emit = defineEmits<{
 interface DetectedLevel {
   levelnumber: string;
   levelname?: string | null;
+  levelnameJitnames?: string | null;
+  levelnameJitnames2?: string | null;
+  mtIncluded?: boolean;
+  mtIsPipe?: boolean;
+  mtIsVanillaName?: boolean;
   translevel?: string | null;
   submapid?: string | null;
   tile_x?: string | null;
@@ -200,50 +262,104 @@ const progressMessage = ref('');
 const detectedLevels = ref<DetectedLevel[]>([]);
 const selectedLevels = ref<Set<string>>(new Set());
 const showScoreColumns = ref(true);
+const PIPE_KEYWORD_RE = /\b(pipe|tube|warp|portal|teleport|gateway|transport)\b/i;
+const END_KEYWORD_PATTERNS = [
+  /\bcredits?\b/i,
+  /\bthe\s+end\b/i,
+  /\bthanks?\b.*\bplaying\b/i,
+  /\bstaff\s*roll\b/i,
+  /^\s*ending\s*$/i,
+  /^\s*outro\s*$/i,
+  /^\s*game\s*over\s*$/i,
+];
+
+const maxSourceCount = 12;
+const nameReaderMode = ref<'jitnames' | 'jitnames2'>('jitnames');
+const sourcePresetMenuOpen = ref(false);
+const sourcePresetMenuRef = ref<HTMLElement | null>(null);
 const showSources = ref({
   lmlevels: true,
   detect: true,
   trans: true,
   levelnames: true,
   jitnames: true,
+  jitnames2: false,
   jittrans: true,
   jitlmfilter: true,
   jitlevelinfo: true,
   jitscore: true,
+  jitmt: false,
+  jitow: false,
 });
+const excludePipeKeywords = ref(false);
+const excludeEndKeywords = ref(false);
+const excludeMt = ref(false);
+const excludeNonLm = ref(false);
 const hideExisting = ref(true);
 const minSourceCount = ref<number>(1); // Minimum number of sources required (1, 2, or 3)
 const gameName = ref<string>('');
 
+function normalizeDisplayName(name: string | null | undefined): string {
+  return (name ?? '').toLowerCase().replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function displayLevelName(level: DetectedLevel): string {
+  if (nameReaderMode.value === 'jitnames2') {
+    return level.levelnameJitnames2 ?? level.levelname ?? '';
+  }
+  return level.levelnameJitnames ?? level.levelname ?? '';
+}
+
+function namesDisagree(level: DetectedLevel): boolean {
+  const a = level.levelnameJitnames;
+  const b = level.levelnameJitnames2;
+  if (!a?.trim() || !b?.trim()) return false;
+  return normalizeDisplayName(a) !== normalizeDisplayName(b);
+}
+
+function isPipeKeywordName(name: string): boolean {
+  const t = name.trim();
+  return t !== '' && PIPE_KEYWORD_RE.test(t);
+}
+
+function isEndKeywordName(name: string): boolean {
+  const t = name.trim();
+  return t !== '' && END_KEYWORD_PATTERNS.some((re) => re.test(t));
+}
+
+function isSourceVisible(source: string): boolean {
+  const s = showSources.value as Record<string, boolean>;
+  return s[source] === true;
+}
+
+const hasLmSourceData = computed(() =>
+  detectedLevels.value.some((level) =>
+    level.sources.includes('lmlevels') || level.sources.includes('jitlmfilter')
+  )
+);
+
 // Filter levels based on sources, existing levels, and minimum source count
 const filteredLevels = computed(() => {
+  const nonLmActive = excludeNonLm.value && hasLmSourceData.value;
+
   return detectedLevels.value.filter(level => {
-    // Filter by source visibility
-    const visibleSources = level.sources.filter(source => {
-      if (source === 'lmlevels') return showSources.value.lmlevels;
-      if (source === 'detect') return showSources.value.detect;
-      if (source === 'trans') return showSources.value.trans;
-      if (source === 'levelnames') return showSources.value.levelnames;
-      if (source === 'jitnames') return showSources.value.jitnames;
-      if (source === 'jittrans') return showSources.value.jittrans;
-      if (source === 'jitlmfilter') return showSources.value.jitlmfilter;
-      if (source === 'jitlevelinfo') return showSources.value.jitlevelinfo;
-      if (source === 'jitscore') return showSources.value.jitscore;
-      return false;
-    });
-    
+    const visibleSources = level.sources.filter(source => isSourceVisible(source));
+
     if (visibleSources.length === 0) return false;
-    
-    // Filter by minimum source count (only count visible sources)
-    if (visibleSources.length < minSourceCount.value) {
-      return false;
+    if (visibleSources.length < minSourceCount.value) return false;
+    if (hideExisting.value && props.existingLevelNumbers?.includes(level.levelnumber)) return false;
+
+    if (excludeMt.value && !level.mtIncluded) return false;
+
+    const name = displayLevelName(level);
+    if (excludePipeKeywords.value && (isPipeKeywordName(name) || level.mtIsPipe === true)) return false;
+    if (excludeEndKeywords.value && isEndKeywordName(name)) return false;
+
+    if (nonLmActive) {
+      const inLm = level.sources.includes('lmlevels') || level.sources.includes('jitlmfilter');
+      if (!inLm) return false;
     }
-    
-    // Filter by existing levels
-    if (hideExisting.value && props.existingLevelNumbers?.includes(level.levelnumber)) {
-      return false;
-    }
-    
+
     return true;
   }).sort((a, b) => {
     const compA = a.scores?.completeness ?? 0;
@@ -368,10 +484,13 @@ function getSourceName(source: string): string {
   if (source === 'trans') return 'Trans';
   if (source === 'levelnames') return 'Levelnames';
   if (source === 'jitnames') return 'JITNames';
+  if (source === 'jitnames2') return 'JITNames2';
   if (source === 'jittrans') return 'JIT.Trans';
   if (source === 'jitlmfilter') return 'JIT.LMFilter';
   if (source === 'jitlevelinfo') return 'JIT.LevelInfo';
   if (source === 'jitscore') return 'JIT.Score';
+  if (source === 'jitmt') return 'JitMT';
+  if (source === 'jitow') return 'JITOW';
   return source;
 }
 
@@ -381,11 +500,85 @@ function getSourceInitial(source: string): string {
   if (source === 'trans') return 'T';
   if (source === 'levelnames') return 'N';
   if (source === 'jitnames') return 'N';
+  if (source === 'jitnames2') return '2';
   if (source === 'jittrans') return 'T';
   if (source === 'jitlmfilter') return 'F';
   if (source === 'jitlevelinfo') return 'I';
   if (source === 'jitscore') return 'S';
+  if (source === 'jitmt') return 'M';
+  if (source === 'jitow') return 'O';
   return source.charAt(0).toUpperCase();
+}
+
+function toggleSourcePresetMenu() {
+  sourcePresetMenuOpen.value = !sourcePresetMenuOpen.value;
+}
+
+function handleSourcePresetDocumentClick(e: MouseEvent) {
+  if (!sourcePresetMenuOpen.value) return;
+  const el = sourcePresetMenuRef.value;
+  if (el && !el.contains(e.target as Node)) {
+    sourcePresetMenuOpen.value = false;
+  }
+}
+
+watch(sourcePresetMenuOpen, (open) => {
+  if (open) {
+    document.addEventListener('click', handleSourcePresetDocumentClick, true);
+  } else {
+    document.removeEventListener('click', handleSourcePresetDocumentClick, true);
+  }
+});
+
+function applySourcePreset(preset: 'all' | 'none' | 'db' | 'jit' | 'mt') {
+  const off = {
+    lmlevels: false,
+    detect: false,
+    trans: false,
+    levelnames: false,
+    jitnames: false,
+    jitnames2: false,
+    jittrans: false,
+    jitlmfilter: false,
+    jitlevelinfo: false,
+    jitscore: false,
+    jitmt: false,
+    jitow: false,
+  };
+  if (preset === 'all') {
+    showSources.value = {
+      ...off,
+      lmlevels: true,
+      detect: true,
+      trans: true,
+      levelnames: true,
+      jitnames: true,
+      jitnames2: true,
+      jittrans: true,
+      jitlmfilter: true,
+      jitlevelinfo: true,
+      jitscore: true,
+      jitmt: true,
+      jitow: true,
+    };
+  } else if (preset === 'none') {
+    showSources.value = { ...off };
+  } else if (preset === 'db') {
+    showSources.value = { ...off, lmlevels: true, detect: true, trans: true, levelnames: true };
+  } else if (preset === 'jit') {
+    showSources.value = {
+      ...off,
+      jitnames: true,
+      jitnames2: true,
+      jittrans: true,
+      jitlmfilter: true,
+      jitlevelinfo: true,
+      jitscore: true,
+    };
+  } else if (preset === 'mt') {
+    showSources.value = { ...off, jitmt: true, jitow: true };
+  }
+  sourcePresetMenuOpen.value = false;
 }
 
 function toggleLevelSelection(level: DetectedLevel) {
@@ -397,13 +590,19 @@ function toggleLevelSelection(level: DetectedLevel) {
 }
 
 function addSelected() {
-  const selected = filteredLevels.value.filter(level => selectedLevels.value.has(level.levelnumber));
+  const selected = filteredLevels.value
+    .filter(level => selectedLevels.value.has(level.levelnumber))
+    .map(level => ({
+      ...level,
+      levelname: displayLevelName(level) || level.levelname,
+    }));
   emit('levelsSelected', selected);
   selectedLevels.value.clear();
 }
 
 function close() {
   selectedLevels.value.clear();
+  sourcePresetMenuOpen.value = false;
   emit('close');
 }
 
@@ -438,6 +637,10 @@ onUpdated(() => {
       selectAllCheckbox.indeterminate = someSelected.value;
     }
   });
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleSourcePresetDocumentClick, true);
 });
 </script>
 
@@ -684,10 +887,130 @@ onUpdated(() => {
 }
 
 .source-jitnames { background: #4a90d9; color: #fff; }
+.source-jitnames2 { background: #2b6cb0; color: #fff; }
 .source-jittrans { background: #6a5acd; color: #fff; }
 .source-jitlmfilter { background: #2e8b57; color: #fff; }
 .source-jitlevelinfo { background: #c17817; color: #fff; }
 .source-jitscore { background: #8b4513; color: #fff; }
+.source-jitmt { background: #b83280; color: #fff; }
+.source-jitow { background: #556b2f; color: #fff; }
+
+.name-reader-toggle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: var(--small-font-size);
+}
+
+.name-reader-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.name-reader-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.filter-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.filter-section-header h4 {
+  margin: 0;
+}
+
+.source-preset-menu {
+  position: relative;
+}
+
+.preset-menu-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--small-font-size);
+}
+
+.preset-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 120px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.preset-menu-dropdown button {
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--small-font-size);
+}
+
+.preset-menu-dropdown button:hover {
+  background: var(--bg-hover);
+}
+
+.filter-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  margin-top: 12px;
+}
+
+.exclude-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.exclude-label {
+  font-weight: 500;
+  font-size: var(--small-font-size);
+  color: var(--text-primary);
+}
+
+.exclude-filters label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--small-font-size);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.exclude-disabled {
+  opacity: 0.5;
+}
+
+.name-disagree-star {
+  color: #e53e3e;
+  margin-right: 4px;
+  font-weight: bold;
+}
 
 .empty-message {
   text-align: center;

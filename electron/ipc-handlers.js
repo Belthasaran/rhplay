@@ -2709,7 +2709,7 @@ function registerDatabaseHandlers(dbManager) {
    * Create a new run
    * Channel: db:runs:create
    */
-  ipcMain.handle('db:runs:create', async (event, { runName, runDescription, globalConditions, globalPatchCodes, runType }) => {
+  ipcMain.handle('db:runs:create', async (event, { runName, runDescription, globalConditions, globalPatchCodes, runType, cancelledFromRunUuid }) => {
     try {
       const db = dbManager.getConnection('clientdata');
       const runUuid = crypto.randomUUID();
@@ -2718,6 +2718,9 @@ function registerDatabaseHandlers(dbManager) {
       const configJson = {
         globalPatchCodes: globalPatchCodes || []
       };
+      if (cancelledFromRunUuid) {
+        configJson.cancelledFromRunUuid = cancelledFromRunUuid;
+      }
       
       db.prepare(`
         INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, run_type)
@@ -5623,6 +5626,7 @@ function registerDatabaseHandlers(dbManager) {
         patch_type,
         priority,
         requires_parameters,
+        ignore_warnings,
         template_text,
         file_data,
         parameter_mappings,
@@ -5682,6 +5686,7 @@ function registerDatabaseHandlers(dbManager) {
               patch_type = ?,
               priority = ?,
               requires_parameters = ?,
+              ignore_warnings = ?,
               template_text = ?,
               file_data = ?,
               parameter_mappings = ?,
@@ -5699,6 +5704,7 @@ function registerDatabaseHandlers(dbManager) {
             patch_type,
             priority || 100,
             requires_parameters || 0,
+            ignore_warnings || 0,
             template_text || null,
             fileDataBuffer,
             parameter_mappings || null,
@@ -5717,6 +5723,7 @@ function registerDatabaseHandlers(dbManager) {
               patch_type = ?,
               priority = ?,
               requires_parameters = ?,
+              ignore_warnings = ?,
               template_text = ?,
               parameter_mappings = ?,
               restrictions = ?,
@@ -5733,6 +5740,7 @@ function registerDatabaseHandlers(dbManager) {
             patch_type,
             priority || 100,
             requires_parameters || 0,
+            ignore_warnings || 0,
             template_text || null,
             parameter_mappings || null,
             restrictions || null,
@@ -5748,9 +5756,9 @@ function registerDatabaseHandlers(dbManager) {
         const stmt = db.prepare(`
           INSERT INTO extrapatches (
             patch_code, name, description, patch_type, priority,
-            requires_parameters, template_text, file_data,
+            requires_parameters, ignore_warnings, template_text, file_data,
             parameter_mappings, restrictions, conflicts, dependencies, is_system
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
@@ -5760,6 +5768,7 @@ function registerDatabaseHandlers(dbManager) {
           patch_type,
           priority || 100,
           requires_parameters || 0,
+          ignore_warnings || 0,
           template_text || null,
           fileDataBuffer,
           parameter_mappings || null,

@@ -228,8 +228,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {Array} globalConditions - Global challenge conditions
    * @returns {Promise<{success: boolean, runUuid: string}>}
    */
-  createRun: (runName, runDescription, globalConditions, globalPatchCodes, runType) => 
-    ipcRenderer.invoke('db:runs:create', { runName, runDescription, globalConditions, globalPatchCodes, runType }),
+  createRun: (runName, runDescription, globalConditions, globalPatchCodes, runType, cancelledFromRunUuid) => 
+    ipcRenderer.invoke('db:runs:create', { runName, runDescription, globalConditions, globalPatchCodes, runType, cancelledFromRunUuid }),
 
   /**
    * Update a preparing run name and global config

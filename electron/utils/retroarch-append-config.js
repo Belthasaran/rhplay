@@ -7,7 +7,7 @@ const path = require('path');
 
 const APPEND_DIR = 'retroarch';
 const APPEND_FILE = 'append.cfg';
-const TEMPLATE_NAME = 'append.cfg.templmate';
+const TEMPLATE_NAME = 'append.cfg.template';
 
 function getUserDataDir() {
   const manifestResolver = require('./manifest-resolver');

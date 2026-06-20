@@ -1,3 +1,11 @@
+- 2026-06-20 — run type and stage prerequisites (clientdata)
+  - Purpose: Add `runs.run_type` and optional `prerequisites_json` on plan/result entries for Standard vs Free Play runs and future access rules
+  - Command:
+    - `./enode.sh jsutils/migratedb.js --clientdata=/path/to/clientdata.db`
+  - Applies: Migration ID `clientdata_075_run_type_and_prerequisites`
+  - SQL: `electron/sql/migrations/075_clientdata_run_type_and_prerequisites.sql`
+  - Expected outcome: `runs.run_type` defaults to `standard`; nullable `prerequisites_json` on `run_plan_entries` and `run_results`
+
 - 2026-06-14 — patchblobs result_sha256 (rhdata)
   - Purpose: Add `result_sha256` to patchblobs for catalog-based patch retrieval
   - Command:
@@ -2310,6 +2318,24 @@ Add patch identity metadata columns to `stage_feedback` for RHServer sync.
 
 ### Expected Outcome
 - `stage_feedback` gains `pat_sha224`, `pat_sha1`, `result_sha1`, `result_sha224`, `patchdb_template_hashes`.
+
+---
+
+## clientdata_076_run_plan_raw_code
+
+### Date Added
+June 20, 2026
+
+### Purpose
+Add `raw_level_code` and `plan_stage_name` to `run_plan_entries` for MT share-code `raw_code` plan entries.
+
+### Command
+```bash
+./enode.sh jsutils/migratedb.js --clientdatadb=/path/to/clientdata.db
+```
+
+### Expected Outcome
+- `run_plan_entries` gains `raw_level_code` and `plan_stage_name` columns.
 
 ---
 

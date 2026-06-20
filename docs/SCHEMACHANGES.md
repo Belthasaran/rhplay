@@ -1,3 +1,8 @@
+- 2026-06-17: clientdata - stage_feedback patch identity hashes
+  - Description: Add patch identity metadata columns to `stage_feedback` for RHServer sync: base patch hashes and extrapatch usage template hashes.
+  - Tables/columns: `stage_feedback.pat_sha224`, `pat_sha1`, `result_sha1`, `result_sha224`, `patchdb_template_hashes`
+  - Migration: `clientdata_074_stage_feedback_patch_identity` via `jsutils/migratedb.js`
+
 - 2026-06-16: clientdata - RHServer token expiry and per-profile scoping
   - Description: Extend `rhserver_tokens` with JWT-backed expiry fields, obtainment timestamp, encryption method, and unique active index per profile+api_base_url.
   - Tables/columns: `rhserver_tokens.access_expires_at`, `refresh_expires_at`, `obtainment_timestamp`, `expires_in`, `encryption_method`

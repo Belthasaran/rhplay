@@ -6,9 +6,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
-const { refreshRunInfoJson } = require('../electron/game-stager');
+const { exportRun, importRun } = require('../electron/seed-manager');
+const { normalizeRunType } = require('../electron/shared/run-types');
 
-function createMinimalClientDb(dbPath) {
+function createClientDb(dbPath) {
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
   db.exec(`
@@ -20,9 +21,7 @@ function createMinimalClientDb(dbPath) {
       global_conditions TEXT,
       config_json TEXT,
       win_rules_json TEXT,
-      staging_folder TEXT,
-      run_type TEXT NOT NULL DEFAULT 'standard',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      run_type TEXT NOT NULL DEFAULT 'standard'
     );
     CREATE TABLE run_plan_entries (
       entry_uuid TEXT PRIMARY KEY,
@@ -50,7 +49,8 @@ function createMinimalClientDb(dbPath) {
       game_filter_min_difficulty INTEGER,
       game_filter_max_difficulty INTEGER,
       stage_filter_include_untested INTEGER DEFAULT 0,
-      stage_filter_untested_only INTEGER DEFAULT 0
+      stage_filter_untested_only INTEGER DEFAULT 0,
+      prerequisites_json TEXT
     );
     CREATE TABLE run_results (
       result_uuid TEXT PRIMARY KEY,
@@ -71,24 +71,29 @@ function createMinimalClientDb(dbPath) {
       levelname TEXT,
       prerequisites_json TEXT
     );
+    CREATE TABLE seedmappings (
+      mapid TEXT PRIMARY KEY,
+      mappingdata TEXT,
+      game_count INTEGER,
+      mapping_hash TEXT,
+      created_at TEXT,
+      description TEXT
+    );
   `);
   return db;
 }
 
-function testRefreshRunInfoJson() {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rh-refresh-runinfo-'));
+function testExportImportRunType() {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rh-run-type-exp-'));
   const dbPath = path.join(tmpDir, 'clientdata.db');
-  const stagingFolder = path.join(tmpDir, 'staging');
-  fs.mkdirSync(stagingFolder);
-
-  const db = createMinimalClientDb(dbPath);
-  const runUuid = '11111111-1111-1111-1111-111111111111';
-  const entryUuid = '22222222-2222-2222-2222-222222222222';
+  const db = createClientDb(dbPath);
+  const runUuid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  const entryUuid = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
   db.prepare(`
-    INSERT INTO runs (run_uuid, run_name, status, win_rules_json, staging_folder, run_type)
-    VALUES (?, ?, 'preparing', ?, ?, 'free_play')
-  `).run(runUuid, 'Test Run', '{"challengeTime":{"enabled":true}}', stagingFolder);
+    INSERT INTO runs (run_uuid, run_name, run_description, status, global_conditions, config_json, run_type)
+    VALUES (?, 'Free Run', '', 'preparing', '[]', '{"globalPatchCodes":[]}', 'free_play')
+  `).run(runUuid);
 
   db.prepare(`
     INSERT INTO run_plan_entries (
@@ -100,36 +105,36 @@ function testRefreshRunInfoJson() {
     INSERT INTO run_results (
       result_uuid, run_uuid, plan_entry_uuid, sequence_number, gameid, game_name
     ) VALUES (?, ?, ?, 1, '10000', 'Test Game')
-  `).run('33333333-3333-3333-3333-333333333333', runUuid, entryUuid);
+  `).run('cccccccc-cccc-cccc-cccc-cccccccccccc', runUuid, entryUuid);
 
-  const dbManager = {
-    getConnection: () => db,
-  };
+  const dbManager = { getConnection: (name) => (name === 'clientdata' ? db : null) };
+  const exported = exportRun(dbManager, runUuid);
+  assert.strictEqual(exported.run.run_type, 'free_play');
 
-  const missingFolder = refreshRunInfoJson(dbManager, 'missing-uuid');
-  assert.strictEqual(missingFolder.success, false);
+  const imported = importRun(dbManager, exported);
+  if (!imported.success) {
+    throw new Error(`import failed: ${imported.error}`);
+  }
+  assert.strictEqual(imported.success, true);
 
-  const result = refreshRunInfoJson(dbManager, runUuid);
-  assert.strictEqual(result.success, true);
-  assert.strictEqual(result.folderPath, stagingFolder);
-
-  const runInfoPath = path.join(stagingFolder, 'runinfo.json');
-  assert.ok(fs.existsSync(runInfoPath), 'runinfo.json should exist');
-
-  const runInfo = JSON.parse(fs.readFileSync(runInfoPath, 'utf8'));
-  assert.strictEqual(runInfo.run.run_uuid, runUuid);
-  assert.strictEqual(runInfo.run.run_name, 'Test Run');
-  assert.strictEqual(runInfo.run.run_type, 'free_play');
-  assert.ok(Array.isArray(runInfo.planEntries));
-  assert.ok(Array.isArray(runInfo.expandedEntries));
+  const importedRun = db.prepare(`SELECT run_type, run_name FROM runs WHERE run_uuid = ?`).get(imported.runUuid);
+  assert.strictEqual(importedRun.run_type, 'free_play');
+  assert.ok(importedRun.run_name.includes('(Imported)'));
 
   db.close();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+function testNormalizeMissingRunType() {
+  assert.strictEqual(normalizeRunType(undefined), 'standard');
+  assert.strictEqual(normalizeRunType(null), 'standard');
+  assert.strictEqual(normalizeRunType('free_play'), 'free_play');
+  assert.strictEqual(normalizeRunType('invalid'), 'standard');
 }
 
 function main() {
-  testRefreshRunInfoJson();
-  console.log('test_refresh_runinfo: ok');
+  testNormalizeMissingRunType();
+  testExportImportRunType();
+  console.log('test_run_type_export_import: ok');
 }
 
 main();

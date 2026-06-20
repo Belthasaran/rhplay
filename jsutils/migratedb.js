@@ -1716,6 +1716,15 @@ const MIGRATIONS = {
         return columnExists(db, 'stage_feedback', 'patchdb_template_hashes');
       },
     },
+    {
+      id: 'clientdata_075_run_type_and_prerequisites',
+      description: 'Add run_type to runs and prerequisites_json to run_plan_entries/run_results',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/075_clientdata_run_type_and_prerequisites.sql'),
+      skipIf(db) {
+        return columnExists(db, 'runs', 'run_type');
+      },
+    },
   ],
   thumbnail_cache: [
     {

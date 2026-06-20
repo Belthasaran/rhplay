@@ -29,6 +29,7 @@ const PLAN_ENTRY_SNAPSHOT_FIELDS = [
   'stageFilterExcludeTags',
   'stageFilterIncludeUntested',
   'stageFilterUntestedOnly',
+  'prerequisites',
 ];
 
 function serializePlanEntry(entry) {
@@ -53,11 +54,12 @@ function serializePlanEntry(entry) {
  * @param {{ runEntries: object[], globalRunConditions?: unknown[], globalRunPatchCodes?: string[] }} params
  * @returns {string}
  */
-function serializePlanSnapshot({ runEntries, globalRunConditions = [], globalRunPatchCodes = [] }) {
+function serializePlanSnapshot({ runEntries, globalRunConditions = [], globalRunPatchCodes = [], runType = 'standard' }) {
   const payload = {
     entries: (runEntries || []).map(serializePlanEntry),
     globalRunConditions: globalRunConditions || [],
     globalRunPatchCodes: globalRunPatchCodes || [],
+    runType: runType || 'standard',
   };
   return JSON.stringify(payload);
 }

@@ -228,8 +228,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {Array} globalConditions - Global challenge conditions
    * @returns {Promise<{success: boolean, runUuid: string}>}
    */
-  createRun: (runName, runDescription, globalConditions, globalPatchCodes) => 
-    ipcRenderer.invoke('db:runs:create', { runName, runDescription, globalConditions, globalPatchCodes }),
+  createRun: (runName, runDescription, globalConditions, globalPatchCodes, runType) => 
+    ipcRenderer.invoke('db:runs:create', { runName, runDescription, globalConditions, globalPatchCodes, runType }),
 
   /**
    * Update a preparing run name and global config
@@ -243,7 +243,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @param {Array} entries - Run plan entries
    * @returns {Promise<{success: boolean}>}
    */
-  saveRunPlan: (runUuid, entries, winRulesJson) => ipcRenderer.invoke('db:runs:save-plan', { runUuid, entries, winRulesJson }),
+  saveRunPlan: (runUuid, entries, winRulesJson, runType) => ipcRenderer.invoke('db:runs:save-plan', { runUuid, entries, winRulesJson, runType }),
   
   /**
    * Start a run (change status to active, expand plan to results)
@@ -287,6 +287,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<{success: boolean}>}
    */
   completeRun: (params) => ipcRenderer.invoke('db:runs:complete', params),
+
+  finalizeRun: (params) => ipcRenderer.invoke('db:runs:finalize', params),
+
+  activateChallenge: (params) => ipcRenderer.invoke('db:runs:activate-challenge', params),
   
   /**
    * Get run results (expanded challenges)

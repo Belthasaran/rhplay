@@ -1541,6 +1541,9 @@
                 <button @click="handleShareImport" class="dropdown-item">
                   📥 Import
                 </button>
+                <button @click="openLoadShareCodeModal" class="dropdown-item">
+                  🔗 Load Share Code
+                </button>
               </div>
             </div>
             <button
@@ -2075,6 +2078,7 @@
                   <span class="readonly-text">
                     {{ (entry.entryType || entry.entry_type) === 'game' ? 'Game' : 
                        (entry.entryType || entry.entry_type) === 'stage' ? 'Stage' : 
+                       (entry.entryType || entry.entry_type) === 'raw_code' ? 'Raw Code' :
                        (entry.entryType || entry.entry_type) === 'random_game' ? 'Random Game' : 
                        (entry.entryType || entry.entry_type) === 'random_stage' ? 'Random Stage' : (entry.entryType || entry.entry_type) }}
                   </span>
@@ -2136,6 +2140,32 @@
           </table>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Load Share Code Modal -->
+  <div v-if="loadShareCodeModalOpen" class="modal-backdrop" @click.self="closeLoadShareCodeModal">
+    <div class="modal" style="max-width: 640px;">
+      <header class="modal-header">
+        <h3>Load Share Code</h3>
+        <button class="close" @click="closeLoadShareCodeModal">✕</button>
+      </header>
+      <section class="modal-body">
+        <p>Paste a share code (base64). Hopefully able to parse MT codes. This replaces the current run plan.</p>
+        <textarea
+          v-model="loadShareCodeInput"
+          data-testid="load-share-code-input"
+          class="load-share-code-textarea"
+          rows="6"
+          placeholder="Paste share code here…"
+          :disabled="loadShareCodeBusy"
+        />
+        <p v-if="loadShareCodeStatus" class="load-share-code-status">{{ loadShareCodeStatus }}</p>
+      </section>
+      <footer class="modal-footer">
+        <button @click="closeLoadShareCodeModal" :disabled="loadShareCodeBusy">Cancel</button>
+        <button @click="confirmLoadShareCode" :disabled="loadShareCodeBusy || !loadShareCodeInput.trim()">OK</button>
+      </footer>
     </div>
   </div>
 
@@ -24395,10 +24425,12 @@ type ChallengeCondition = 'Hitless' | 'Deathless' | 'No Coins' | 'No Powerups' |
 type RunEntry = {
   key: string;
   id: string;
-  entryType: 'game' | 'stage' | 'random_game' | 'random_stage';
+  entryType: 'game' | 'stage' | 'raw_code' | 'random_game' | 'random_stage';
   name: string;
   stageNumber?: string;
   stageName?: string;
+  rawLevelCode?: string;
+  planStageName?: string;
   transLevel?: string;  // Translevel (13BF value) for stage entries
   count: number;
   filterDifficulty?: '' | 'beginner' | 'intermediate' | 'expert';  // Legacy, kept for backwards compatibility
@@ -24719,6 +24751,11 @@ let runUploadCancelRequested = false;
 // Run status and upload readiness
 const runStatusDropdownOpen = ref(false);
 const runShareDropdownOpen = ref(false);
+const loadShareCodeModalOpen = ref(false);
+const loadShareCodeInput = ref('');
+const loadShareCodeBusy = ref(false);
+const loadShareCodeStatus = ref('');
+let loadShareCodeProgressUnsub: (() => void) | null = null;
 const skipUploadAcknowledged = ref(false);
 const expandedRunResults = ref<any[]>([]);  // Store expanded results to check sfcPath
 const needsRegenerateStaging = ref(false);  // Flag to indicate if staging needs regeneration
@@ -25645,6 +25682,104 @@ async function handleShareImport() {
   runShareDropdownOpen.value = false;
   if (!(await confirmReplaceCurrentRunPlan('Import'))) return;
   await importRunFromFile();
+}
+
+function openLoadShareCodeModal() {
+  runShareDropdownOpen.value = false;
+  loadShareCodeInput.value = '';
+  loadShareCodeStatus.value = '';
+  loadShareCodeModalOpen.value = true;
+}
+
+function closeLoadShareCodeModal() {
+  if (loadShareCodeBusy.value) return;
+  loadShareCodeModalOpen.value = false;
+  loadShareCodeInput.value = '';
+  loadShareCodeStatus.value = '';
+  if (loadShareCodeProgressUnsub) {
+    loadShareCodeProgressUnsub();
+    loadShareCodeProgressUnsub = null;
+  }
+}
+
+function applyShareCodePlan(plan: {
+  runName?: string;
+  runType?: string;
+  globalPatchCodes?: string[];
+  entries: RunEntry[];
+}) {
+  clearRunState();
+  if (plan.runName) {
+    currentRunName.value = plan.runName;
+  }
+  if (plan.runType) {
+    currentRunType.value = plan.runType as 'standard' | 'free_play';
+  }
+  if (plan.globalPatchCodes?.length) {
+    globalRunPatchCodes.value = [...plan.globalPatchCodes];
+  }
+  for (const entry of plan.entries) {
+    runEntries.push(entry);
+  }
+}
+
+async function confirmLoadShareCode() {
+  if (!isElectronAvailable()) {
+    await showAlert('Load Share Code requires Electron environment', 'Error');
+    return;
+  }
+  const code = loadShareCodeInput.value.trim();
+  if (!code) return;
+
+  loadShareCodeBusy.value = true;
+  loadShareCodeStatus.value = 'Parsing share code…';
+
+  if (loadShareCodeProgressUnsub) {
+    loadShareCodeProgressUnsub();
+  }
+  loadShareCodeProgressUnsub = (window as any).electronAPI.onLoadShareCodeProgress?.((data: { message?: string }) => {
+    if (data?.message) {
+      loadShareCodeStatus.value = data.message;
+    }
+  }) || null;
+
+  try {
+    const result = await (window as any).electronAPI.loadShareCode(code);
+    if (!result?.success) {
+      await showAlert(result?.error || 'Failed to load share code', 'Share Code Error');
+      return;
+    }
+
+    if (result.warnings) {
+      const missing = [
+        ...(result.warnings.missingSha1s || []).map((s: string) => `SHA1 ${s}`),
+        ...(result.warnings.failedCatalog || []).map((s: string) => `Catalog failed: ${s}`),
+        ...(result.warnings.missingFileIds || []).map((id: number) => `SMWC #${id}`),
+      ];
+      const continuePartial = await showConfirm(
+        `Some games could not be resolved:\n\n${missing.join('\n')}\n\nContinue with the ${result.plan?.entries?.length || 0} resolved entries?`,
+        'Partial Share Code',
+        'Continue',
+        'Cancel'
+      );
+      if (!continuePartial) return;
+    }
+
+    if (result.plan) {
+      applyShareCodePlan(result.plan);
+      loadShareCodeModalOpen.value = false;
+      loadShareCodeInput.value = '';
+      loadShareCodeStatus.value = '';
+    }
+  } catch (error: any) {
+    await showAlert(error?.message || 'Failed to load share code', 'Share Code Error');
+  } finally {
+    loadShareCodeBusy.value = false;
+    if (loadShareCodeProgressUnsub) {
+      loadShareCodeProgressUnsub();
+      loadShareCodeProgressUnsub = null;
+    }
+  }
 }
 function toggleCheckAllRun(e: Event) {
   const target = e.target as HTMLInputElement;
@@ -27460,7 +27595,7 @@ async function startRun(options?: { skipConfirm?: boolean }) {
         const entryType = res.entry_type || (res.was_random ? 'random_game' : 'game');
         
         // For stage entries, use levelnumber/translevel/levelname from results
-        const isStageEntry = entryType === 'stage' || entryType === 'random_stage';
+        const isStageEntry = entryType === 'stage' || entryType === 'random_stage' || entryType === 'raw_code';
         const stageNumber = isStageEntry ? (res.levelnumber || res.exit_number || '') : (res.exit_number || '');
         const transLevel = isStageEntry ? (res.translevel || '') : '';
         const stageName = isStageEntry 
@@ -29039,9 +29174,11 @@ function planEntryToRunEntry(entry: any) {
     name: entry.entry_type?.startsWith('random')
       ? (entry.entry_type === 'random_stage' ? 'Random Stage' : 'Random Game')
       : '',
-    stageNumber: entry.exit_number || entry.levelnumber || '',
+    stageNumber: entry.exit_number || entry.levelnumber || entry.raw_level_code || '',
     transLevel: entry.trans_level || '',
-    stageName: '',
+    stageName: entry.plan_stage_name || '',
+    rawLevelCode: entry.raw_level_code || '',
+    planStageName: entry.plan_stage_name || '',
     count: entry.count || 1,
     filterDifficulty: entry.filter_difficulty || '',
     filterType: entry.filter_type || '',

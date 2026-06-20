@@ -1725,6 +1725,15 @@ const MIGRATIONS = {
         return columnExists(db, 'runs', 'run_type');
       },
     },
+    {
+      id: 'clientdata_076_run_plan_raw_code',
+      description: 'Add raw_level_code and plan_stage_name to run_plan_entries for MT share-code import',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/076_clientdata_run_plan_raw_code.sql'),
+      skipIf(db) {
+        return columnExists(db, 'run_plan_entries', 'raw_level_code');
+      },
+    },
   ],
   thumbnail_cache: [
     {

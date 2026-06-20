@@ -618,6 +618,7 @@ async function generateRunview(params) {
     // Format current challenge details
     const entryType = currentChallenge.entry_type === 'random_game' ? 'RNG.Game' :
                       currentChallenge.entry_type === 'random_stage' ? 'RNG.Stage' :
+                      currentChallenge.entry_type === 'raw_code' ? 'Raw Code' :
                       currentChallenge.entry_type === 'stage' ? 'Stage' : 'Game';
     
     const currentGameName = currentChallenge.game_name || currentChallenge.gameid || '???';
@@ -647,6 +648,7 @@ async function generateRunview(params) {
     // Determine entry type class for color
     const entryTypeClass = currentChallenge.entry_type === 'random_stage' ? 'rng-s' :
                            currentChallenge.entry_type === 'random_game' ? 'rng-g' :
+                           currentChallenge.entry_type === 'raw_code' ? 'stage' :
                            currentChallenge.entry_type === 'stage' ? 'stage' : 'game';
     
     // Generate HTML
@@ -1051,6 +1053,9 @@ ${displayIndices.map(idx => {
     entryTypeClassForTable = 'rng-s';
   } else if (result.entry_type === 'stage') {
     entryTypeAbbrev = 'Stage';
+    entryTypeClassForTable = 'stage';
+  } else if (result.entry_type === 'raw_code') {
+    entryTypeAbbrev = 'Raw';
     entryTypeClassForTable = 'stage';
   } else {
     entryTypeAbbrev = 'Game';

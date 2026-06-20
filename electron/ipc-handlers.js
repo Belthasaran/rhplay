@@ -2825,6 +2825,8 @@ function registerDatabaseHandlers(dbManager) {
           entry.stageFilterIncludeUntested ? 1 : 0,
           entry.stageFilterUntestedOnly === true || entry.stageFilterUntestedOnly === 1 ? 1 : 0,
           serializePrerequisitesJson(entry),
+          entry.rawLevelCode || entry.raw_level_code || null,
+          entry.planStageName || entry.plan_stage_name || entry.stageName || null,
         ];
 
         const insertStmt = db.prepare(`
@@ -2837,8 +2839,8 @@ function registerDatabaseHandlers(dbManager) {
              stage_filter_has_tags, stage_filter_exclude_tags,
              game_filter_min_difficulty, game_filter_max_difficulty,
              stage_filter_include_untested, stage_filter_untested_only,
-             prerequisites_json)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             prerequisites_json, raw_level_code, plan_stage_name)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const updateStmt = db.prepare(`
@@ -2851,7 +2853,7 @@ function registerDatabaseHandlers(dbManager) {
             stage_filter_has_tags = ?, stage_filter_exclude_tags = ?,
             game_filter_min_difficulty = ?, game_filter_max_difficulty = ?,
             stage_filter_include_untested = ?, stage_filter_untested_only = ?,
-            prerequisites_json = ?
+            prerequisites_json = ?, raw_level_code = ?, plan_stage_name = ?
           WHERE entry_uuid = ? AND run_uuid = ?
         `);
 
@@ -2911,6 +2913,122 @@ function registerDatabaseHandlers(dbManager) {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * Load share code into a Prepare Run plan
+   * Channel: runs:load-share-code
+   */
+  ipcMain.handle('runs:load-share-code', async (event, { shareCode }) => {
+    try {
+      const { loadShareCodePlan } = require('../lib/mt-share-code-loader');
+      const userDataPath = app.getPath('userData');
+      const clientDbPath = path.join(userDataPath, 'clientdata.db');
+      const onProgress = (message) => {
+        if (event.sender && !event.sender.isDestroyed()) {
+          event.sender.send('runs:load-share-code:progress', { message });
+        }
+      };
+
+      const downloadSevenZ = async (item) => {
+        const catalogDownloadManager = require('./utils/catalog-download-manager');
+        const catalogManifestUtils = require('./utils/catalog-manifest-utils');
+        const manifest = catalogManifestUtils.loadBpsArchivesManifest();
+        const entry = manifest?.[item.index7z_name];
+        if (!entry?.base) {
+          throw new Error(`No manifest entry for ${item.index7z_name}`);
+        }
+        const downloadsDir = path.join(userDataPath, 'downloads');
+        fs.mkdirSync(downloadsDir, { recursive: true });
+        const tracker = catalogDownloadManager.createDownloadTracker();
+        return catalogDownloadManager.ensureArtifact(entry.base, downloadsDir, tracker, userDataPath, 20, downloadsDir);
+      };
+
+      const createRhpak = async ({ itemId, bpsPath, sfcSha256, itemJson, clientDbPath: clientDb }) => {
+        const handler = async () => {
+          const os = require('os');
+          const tempDir = path.join(os.tmpdir(), `share-code-rhpak-${Date.now()}`);
+          fs.mkdirSync(tempDir, { recursive: true });
+          const crypto = require('crypto');
+          const uuidFromSha256 = (sha256) => {
+            const hex = sha256.substring(0, 32);
+            return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
+          };
+          const deterministicUuid = uuidFromSha256(sfcSha256);
+          const generateGvuuidFromSha256 = (sha256) => {
+            if (!sha256 || sha256.length < 32) return crypto.randomUUID();
+            const hex = sha256.substring(0, 32);
+            return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
+          };
+          const deterministicGvuuid = itemJson.gameversion?.gvuuid || generateGvuuidFromSha256(sfcSha256);
+          const bpsFileName = path.basename(bpsPath);
+          const bpsDestPath = path.join(tempDir, bpsFileName);
+          fs.copyFileSync(bpsPath, bpsDestPath);
+          const title = itemJson.title || itemJson.gameversion?.name || null;
+          const versionInfo = itemJson.versioninfo || itemJson.gameversion?.version || null;
+          const author = itemJson.author || itemJson.gameversion?.author || 'Unknown';
+          const catalogPrefix = `catalog_${itemId.substring(0, 8)}`;
+          const gameName = title ? (versionInfo ? `${title} ${versionInfo} ${catalogPrefix}` : `${title} ${catalogPrefix}`) : catalogPrefix;
+          const skeleton = {
+            metadata: {
+              rhpakuuid: deterministicUuid,
+              rhpakname: `${title || catalogPrefix} - ${author}`,
+              version: '0.1.1',
+              gameids: itemJson.gameversion?.gameid ? [itemJson.gameversion.gameid] : [catalogPrefix],
+            },
+            gameversion: {
+              ...(itemJson.gameversion || {}),
+              gvuuid: deterministicGvuuid,
+              gameid: itemJson.gameversion?.gameid || catalogPrefix,
+              name: gameName,
+              author,
+              patch: bpsFileName,
+              patch_relative_path: bpsFileName,
+              patch_filename: bpsFileName,
+              patch_local_path: bpsFileName,
+            },
+            patchblob: itemJson.patchblob || {},
+            attachments: itemJson.attachments || [],
+            screenshots: itemJson.screenshots || [],
+            res_attachments: itemJson.res_attachments || [],
+          };
+          const skeletonPath = path.join(tempDir, 'skeleton.json');
+          fs.writeFileSync(skeletonPath, JSON.stringify(skeleton, null, 2));
+          const newgame = require(path.join(__dirname, '..', 'jstools', 'newgame.js'));
+          await newgame.handlePrepare(skeletonPath, { baseDir: tempDir, clientDbPath: clientDb, NO_PYTHON: true });
+          const rhpakPath = path.join(tempDir, `${deterministicUuid}.rhpak`);
+          await newgame.handlePackage(skeletonPath, rhpakPath);
+          return { success: true, rhpakPath };
+        };
+        return handler();
+      };
+
+      const importRhpak = async (filePath) => {
+        const config = buildNewgameConfig({
+          packageInput: filePath,
+          packageBaseDir: path.dirname(path.resolve(filePath)),
+        });
+        await newgameHandleImportPackage(config);
+        return { success: true };
+      };
+
+      return await loadShareCodePlan(shareCode, {
+        dbManager,
+        gameStager,
+        userDataPath,
+        clientDbPath,
+        getClientSetting,
+        manifestResolver,
+        onProgress,
+        downloadSevenZ,
+        createRhpak,
+        importRhpak,
+      });
+    } catch (error) {
+      console.error('[runs:load-share-code] Failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   /**
    * Start a run (change status to active, expand plan to results)
    * Channel: db:runs:start
@@ -4974,6 +5092,7 @@ function registerDatabaseHandlers(dbManager) {
           const isRandomGame = planEntry.entry_type === 'random_game';
           const isRandomStage = planEntry.entry_type === 'random_stage';
           const isStage = planEntry.entry_type === 'stage';
+          const isRawCode = planEntry.entry_type === 'raw_code';
           const isRandom = isRandomGame || isRandomStage;
           
           // Create multiple results if count > 1
@@ -5118,6 +5237,26 @@ function registerDatabaseHandlers(dbManager) {
               } catch (error) {
                 console.error('Error selecting random game:', error);
                 throw error;  // Fail staging if we can't select a game
+              }
+            } else if (isRawCode) {
+              gameid = planEntry.gameid;
+              exitNumber = planEntry.raw_level_code || planEntry.exit_number;
+              usedGameids.push(gameid);
+
+              const game = rhdb.prepare(`
+                SELECT name FROM gameversions
+                WHERE gameid = ? AND version = (
+                  SELECT MAX(version) FROM gameversions WHERE gameid = ?
+                )
+              `).get(gameid, gameid);
+
+              gameName = game ? game.name : 'Unknown';
+              levelnumber = planEntry.raw_level_code || planEntry.exit_number;
+              levelname = planEntry.plan_stage_name || 'Unknown';
+              stageDescription = levelname;
+
+              if (planEntry.trans_level) {
+                translevel = planEntry.trans_level;
               }
             } else if (isStage) {
               // For specific stage entries, load stage info from gamestages table

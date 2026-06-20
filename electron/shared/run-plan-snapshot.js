@@ -30,6 +30,8 @@ const PLAN_ENTRY_SNAPSHOT_FIELDS = [
   'stageFilterIncludeUntested',
   'stageFilterUntestedOnly',
   'prerequisites',
+  'rawLevelCode',
+  'planStageName',
 ];
 
 function serializePlanEntry(entry) {

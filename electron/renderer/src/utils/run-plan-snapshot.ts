@@ -28,6 +28,8 @@ const PLAN_ENTRY_SNAPSHOT_FIELDS = [
   'stageFilterIncludeUntested',
   'stageFilterUntestedOnly',
   'prerequisites',
+  'rawLevelCode',
+  'planStageName',
 ] as const;
 
 type SnapshotEntry = Record<string, unknown> & { entryType: string };

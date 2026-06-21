@@ -501,6 +501,100 @@ function testSingletonNotCached() {
   assert(Object.keys(cache.groups).length === 0, 'No groups for singleton');
 }
 
+function csvStdoutGameids(stdout) {
+  const lines = stdout.trim().split('\n').slice(1);
+  return lines.filter(Boolean).map(line => line.split(',')[3]);
+}
+
+function testLatestWaitingCsvExportsNewestCsvRow() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  setupDb(dbPath, [{
+    gvuuid: 'gv-1800',
+    gameid: '1800',
+    version: 1,
+    name: 'Accepted Old',
+    added: '2018-01-01',
+    author: 'Exp',
+    authors: 'Exp',
+    submitter: 'Exp',
+    patchblob1_name: `${HASH_A}.bps`,
+    result_sha1: HASH_A,
+  }]);
+  writeCsv(csvPath, [
+    { gameid: '1801', name: 'Waiting A', time: String(OLD_TS), author: 'Exp', authors: 'Exp', submitter: 'Exp', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1802', name: 'Waiting B', time: String(OLD_TS + 500), author: 'Exp', authors: 'Exp', submitter: 'Exp', bps_files: `['${HASH_A}.bps']` },
+  ]);
+
+  const result = runCli(['--index=' + csvPath, '--latest-waiting-csv'], { RHDATA_DB_PATH: dbPath });
+  const gameids = csvStdoutGameids(result.stdout);
+  assert(gameids.length === 1, 'One row exported');
+  assert(gameids[0] === '1802', 'Latest CSV row exported');
+}
+
+function testLatestWaitingCsvSkipsDbLatest() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  setupDb(dbPath, [{
+    gvuuid: 'gv-1900',
+    gameid: '1900',
+    version: 1,
+    name: 'Accepted New',
+    added: '2030-06-01',
+    author: 'Skip',
+    authors: 'Skip',
+    submitter: 'Skip',
+    patchblob1_name: `${HASH_A}.bps`,
+    result_sha1: HASH_A,
+  }]);
+  writeCsv(csvPath, [
+    { gameid: '1901', name: 'Waiting Old', time: String(OLD_TS), author: 'Skip', authors: 'Skip', submitter: 'Skip', bps_files: `['${HASH_A}.bps']` },
+  ]);
+
+  const result = runCli(['--index=' + csvPath, '--latest-waiting-csv'], { RHDATA_DB_PATH: dbPath });
+  const gameids = csvStdoutGameids(result.stdout);
+  assert(gameids.length === 0, 'Group skipped when DB is latest');
+}
+
+function testLatestWaitingCsvRespectsHideMatchesAll() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  setupDb(dbPath, [{
+    gvuuid: 'gv-2000',
+    gameid: '2000',
+    version: 1,
+    name: 'Accepted',
+    added: '2020-01-01',
+    author: 'Hide',
+    authors: 'Hide',
+    submitter: 'Hide',
+    patchblob1_name: `${HASH_B}.bps`,
+    result_sha1: HASH_B,
+  }]);
+  writeCsv(csvPath, [
+    {
+      gameid: '2100',
+      name: 'Waiting',
+      time: String(OLD_TS),
+      author: 'Hide',
+      authors: 'Hide',
+      submitter: 'Hide',
+      bps_files: `['${HASH_B}.bps']`,
+    },
+  ]);
+
+  const result = runCli([
+    '--index=' + csvPath,
+    '--latest-waiting-csv',
+    '--hidematches-all',
+  ], { RHDATA_DB_PATH: dbPath });
+  const gameids = csvStdoutGameids(result.stdout);
+  assert(gameids.length === 0, 'Hidden matched group excluded from CSV export');
+}
+
 function main() {
   testParseBpsHashes();
   testEntryTimestamp();
@@ -517,6 +611,9 @@ function main() {
   testSyncNewHashForKnownGameid();
   testRebuildCache();
   testSingletonNotCached();
+  testLatestWaitingCsvExportsNewestCsvRow();
+  testLatestWaitingCsvSkipsDbLatest();
+  testLatestWaitingCsvRespectsHideMatchesAll();
   console.log('✅ test_find_waiting_notincluded passed');
 }
 

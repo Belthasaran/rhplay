@@ -789,7 +789,11 @@ enode.sh jstools/find_waiting_notincluded.js --index=jstools/smwc_world/waiting_
 enode.sh jstools/find_waiting_notincluded.js --index=... --older-than=30 --hidematches-oldonly --json
 ```
 
-**Options**: `--index=PATH` (required), `--rhdatadb=PATH`, `--older-than=N`, `--hidematches-all`, `--hidematches-oldonly`, `--json`, `--help`
+**Options**: `--index=PATH` (required), `--rhdatadb=PATH`, `--cluster-cache=PATH`, `--rebuild-cache`, `--no-cache`, `--older-than=N`, `--hidematches-all`, `--hidematches-oldonly`, `--json`, `--latest-waiting-csv`, `--latest-waiting-csv=PATH`, `--help`
+
+**Cluster cache**: Writes `waiting_cache_clusters.json` beside the index CSV (unless `--no-cache`). Subsequent runs classify only new entries incrementally instead of full O(n²) matching.
+
+**Latest waiting CSV**: With `--latest-waiting-csv`, outputs one row per group (the most recent member) in `waiting_index_ar.csv` column format to stdout. Skips groups whose latest member is already in the database. Optional `--latest-waiting-csv=PATH` writes to a file instead. Respects `--hidematches-all` and other filters.
 
 **Environment**: `RHDATA_DB_PATH`
 

@@ -39,6 +39,7 @@ assert(ensuredPath === appendConfig.getAppendConfigPath(), 'ensureAppendConfig p
 const readResult = appendConfig.readAppendConfig();
 assert(typeof readResult.content === 'string' && readResult.content.length > 0, 'readAppendConfig returns content');
 assert(readResult.content.includes('network_cmd_enable'), 'default content includes network_cmd_enable');
+assert(readResult.content.includes('network_remote_enable'), 'default content includes network_remote_enable');
 
 appendConfig.writeAppendConfig('custom_test_value = "true"\n');
 const afterWrite = appendConfig.readAppendConfig();

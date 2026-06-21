@@ -373,10 +373,19 @@
                   <td v-if="canEdit || (currentMode === 'select' && (canTestStage(stage) || canViewNotesAndTags(stage)))" class="actions-cell">
                     <button 
                       v-if="canEdit || (currentMode === 'select' && canTestStage(stage))"
+                      @click.stop="autoTestLevel(stage)" 
+                      class="btn-icon btn-autotest"
+                      title="Auto Test - RetroArch + SNI automated stage verification"
+                      :disabled="autoTestDialogOpen || stageTestDialogOpen || !stage.levelnumber || !canTestStage(stage)"
+                    >
+                      🤖
+                    </button>
+                    <button 
+                      v-if="canEdit || (currentMode === 'select' && canTestStage(stage))"
                       @click.stop="testLevel(stage)" 
                       class="btn-icon btn-test"
                       title="Test level - Build and Boot with 2lvno patch"
-                      :disabled="stageTestDialogOpen || !stage.levelnumber || !canTestStage(stage)"
+                      :disabled="stageTestDialogOpen || autoTestDialogOpen || !stage.levelnumber || !canTestStage(stage)"
                     >
                       🧪
                     </button>
@@ -454,6 +463,19 @@
       </footer>
     </div>
   </div>
+
+  <StageAutoTestDialog
+    :is-open="autoTestDialogOpen"
+    :stage="autoTestTarget"
+    :game-id="gameId"
+    :game-name="gameName"
+    :game-version="gameVersion"
+    :get-playlevel-patch-code="getPlaylevelPatchCode"
+    :get-requisite-tags="getRequisiteTags"
+    :format-level-number-hex="formatLevelNumberHex"
+    @close="closeAutoTestDialog"
+    @completed="handleAutoTestCompleted"
+  />
 
   <StageTestDialog
     :is-open="stageTestDialogOpen"
@@ -812,6 +834,7 @@ import { ref, computed, watch, onMounted, nextTick, Teleport } from 'vue';
 import Papa from 'papaparse';
 import DetectedLevelsDialog from './DetectedLevelsDialog.vue';
 import StageTestDialog from './StageTestDialog.vue';
+import StageAutoTestDialog from './StageAutoTestDialog.vue';
 import { stageTestStatusIsCurrent } from '@/utils/stage-test-utils';
 import ToastNotification from './ToastNotification.vue';
 import AlertDialog from './AlertDialog.vue';
@@ -940,6 +963,8 @@ const loading = ref(false);
 const saving = ref(false);
 const stageTestDialogOpen = ref(false);
 const stageTestTarget = ref<GameStage | null>(null);
+const autoTestDialogOpen = ref(false);
+const autoTestTarget = ref<GameStage | null>(null);
 const stagesTableWrapper = ref<HTMLElement | null>(null);
 const savedScrollPosition = ref<number>(0);
 const stages = ref<GameStage[]>([]);
@@ -1672,9 +1697,28 @@ async function testLevel(stage: GameStage) {
     await showAlert('Level number is required to test this level', 'Test Level');
     return;
   }
-  if (stageTestDialogOpen.value) return;
+  if (stageTestDialogOpen.value || autoTestDialogOpen.value) return;
   stageTestTarget.value = stage;
   stageTestDialogOpen.value = true;
+}
+
+async function autoTestLevel(stage: GameStage) {
+  if (!stage.levelnumber) {
+    await showAlert('Level number is required to auto-test this level', 'Auto Test');
+    return;
+  }
+  if (autoTestDialogOpen.value || stageTestDialogOpen.value) return;
+  autoTestTarget.value = stage;
+  autoTestDialogOpen.value = true;
+}
+
+function closeAutoTestDialog() {
+  autoTestDialogOpen.value = false;
+  autoTestTarget.value = null;
+}
+
+function handleAutoTestCompleted(_payload: { success: boolean }) {
+  /* optional reload later */
 }
 
 function closeStageTestDialog() {

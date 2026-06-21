@@ -553,6 +553,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateRunResultsSfcPath: (params) => ipcRenderer.invoke('db:runs:update-sfcpath', params),
   getAvailableExtraPatches: (params) => ipcRenderer.invoke('extra-patches:get-available', params),
   buildPlusPatchedGame: (params) => ipcRenderer.invoke('extra-patches:build-plus', params),
+  runStageAutoTest: (params) => ipcRenderer.invoke('stage-autotest:run', params),
+  cancelStageAutoTest: () => ipcRenderer.invoke('stage-autotest:cancel'),
+  getStageAutoTestConfig: () => ipcRenderer.invoke('stage-autotest:get-config'),
+  saveStageAutoTestConfig: (config) => ipcRenderer.invoke('stage-autotest:save-config', config),
+  onStageAutoTestProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('stage-autotest:progress', listener);
+    return () => ipcRenderer.removeListener('stage-autotest:progress', listener);
+  },
   getAllExtraPatches: () => ipcRenderer.invoke('extra-patches:get-all'),
   saveExtraPatch: (params) => ipcRenderer.invoke('extra-patches:save', params),
   deleteExtraPatch: (params) => ipcRenderer.invoke('extra-patches:delete', params),

@@ -8130,6 +8130,44 @@ function registerDatabaseHandlers(dbManager) {
     }
   });
 
+  const { createStageAutoTestService } = require('./stage-autotest-service');
+  const stageAutoTestService = createStageAutoTestService({
+    dbManager,
+    getSnesWrapper,
+    sniManager,
+    launchProcessSessions,
+    isLaunchProcessRunning,
+    launchProcessManager,
+    userDataDir: manifestResolver.getUserDataDir(),
+    gameStager,
+  });
+
+  ipcMain.handle('stage-autotest:run', async (event, params) => {
+    try {
+      return await stageAutoTestService.run(params || {}, event);
+    } catch (error) {
+      console.error('[stage-autotest:run] Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('stage-autotest:cancel', async () => stageAutoTestService.cancel());
+
+  ipcMain.handle('stage-autotest:get-config', async () => ({
+    success: true,
+    config: stageAutoTestService.getConfig(),
+    configPath: stageAutoTestService.getConfigPath(),
+  }));
+
+  ipcMain.handle('stage-autotest:save-config', async (_event, config) => {
+    try {
+      const configPath = stageAutoTestService.saveConfig(config);
+      return { success: true, configPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('boot:record-current', async (event, payload) => {
     try {
       const userDataDir = app.getPath('userData');

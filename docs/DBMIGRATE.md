@@ -1,3 +1,11 @@
+- 2026-06-20 — extrapatches ignore_warnings (rhdata)
+  - Purpose: Add `ignore_warnings` column so ASAR extrapatch templates can ignore ASAR stderr warnings during build/staging
+  - Command:
+    - `./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db`
+  - Applies: Migration ID `rhdata_070_extrapatches_ignore_warnings`
+  - SQL: `electron/sql/migrations/070_rhdata_extrapatches_ignore_warnings.sql`
+  - Expected outcome: `extrapatches.ignore_warnings` defaults to 0 for existing rows
+
 - 2026-06-20 — run type and stage prerequisites (clientdata)
   - Purpose: Add `runs.run_type` and optional `prerequisites_json` on plan/result entries for Standard vs Free Play runs and future access rules
   - Command:

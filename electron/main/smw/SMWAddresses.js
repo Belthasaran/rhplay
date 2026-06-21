@@ -48,6 +48,11 @@ const SMWAddresses = {
   IsVerticalLvl: toSNESAddr('7E005B'),
   ScreensInLvl: toSNESAddr('7E005D'),
   IsWaterLevel: toSNESAddr('7E0085'),
+  TranslevelLo: toSNESAddr('7E13BF'),
+  LevelHighFlags: toSNESAddr('7E19D8'),
+  SlipperyAmount: toSNESAddr('7E0086'),
+  RunGame: toSNESAddr('7E0010'),
+  InNormalLevel: toSNESAddr('7E0D9B'),
   GameMode: toSNESAddr('7E0100'),               // See GAME_MODES enum
   
   // Block Interaction

@@ -1,3 +1,9 @@
+- 2026-06-20: rhdata - extrapatches ignore_warnings for ASAR patches
+  - Description: Add `ignore_warnings` flag to `extrapatches` so ASAR patch templates can treat stderr warnings as non-fatal during +Patch build and run staging.
+  - Rationale: ASAR emits deprecation/leak warnings on stderr even when patching succeeds; per-patch opt-in avoids false build failures.
+  - Tables/columns: `extrapatches.ignore_warnings` INTEGER DEFAULT 0
+  - Migration: `rhdata_070_extrapatches_ignore_warnings` via `jsutils/migratedb.js`
+
 - 2026-06-20: clientdata - run type and stage prerequisites schema
   - Description: Add `run_type` to `runs` (`standard` default, `free_play` for unordered runs). Add nullable `prerequisites_json` on `run_plan_entries` and `run_results` for future non-standard entry access rules (plan node wins, expanded item wins, random expansion thresholds). JSON shape documented below; no runtime enforcement yet.
   - Tables/columns: `runs.run_type`, `run_plan_entries.prerequisites_json`, `run_results.prerequisites_json`

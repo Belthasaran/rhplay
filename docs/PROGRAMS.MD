@@ -905,6 +905,22 @@ enode.sh electron/installer/prepare_databases.js \
 
 ## Utilities
 
+### jstools/stage_autotest.js
+**Purpose**: CLI automated stage test — builds patched ROM, launches RetroArch, verifies level entry and retry stability via SNI RAM
+
+**Usage**:
+```bash
+export RHDATA_DB_PATH=/path/to/rhdata.db
+export CLIENTDATA_DB_PATH=/path/to/clientdata.db
+./enode.sh jstools/stage_autotest.js --gameid 12345 --levelnumber 106 [--headless] [--help]
+```
+
+**Options**: `--gameid`, `--levelnumber`, `--version`, `--headless`, `--help`
+
+**Documentation**: See `docs/STAGE_AUTOTEST.md`
+
+---
+
 ### identify-incompatible-keys.js
 **Purpose**: Audit database for incompatible encryption key formats
 

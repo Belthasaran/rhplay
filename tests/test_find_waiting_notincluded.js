@@ -359,6 +359,148 @@ function testUnitEntriesMatch() {
   assert(entriesMatch(csvA, csvB, new Map()), 'BPS hash match');
 }
 
+function testCacheWriteOnFirstRun() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  const cachePath = path.join(TEST_DIR, 'waiting_cache_clusters.json');
+  setupDb(dbPath, []);
+  writeCsv(csvPath, [
+    { gameid: '1100', name: 'Game A', time: String(OLD_TS), author: 'Z', authors: 'Z', submitter: 'Z', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1101', name: 'Game A', time: String(OLD_TS + 1), author: 'Z', authors: 'Z', submitter: 'Z', bps_files: `['${HASH_A}.bps']` },
+  ]);
+
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  assert(fs.existsSync(cachePath), 'Cache file created');
+  const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  assert(cache.groups && Object.keys(cache.groups).length >= 1, 'At least one group');
+  assert(cache.memberof[HASH_A], 'Hash in memberof');
+  assert(cache.memberof['1100'] === cache.memberof['1101'], 'Same group for paired entries');
+}
+
+function testIncrementalSecondRun() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  const cachePath = path.join(TEST_DIR, 'waiting_cache_clusters.json');
+  setupDb(dbPath, [{
+    gvuuid: 'gv-1200',
+    gameid: '1200',
+    version: 1,
+    name: 'Accepted',
+    added: '2020-01-01',
+    author: 'Merge',
+    authors: 'Merge',
+    submitter: 'Merge',
+    patchblob1_name: `${HASH_A}.bps`,
+    result_sha1: HASH_A,
+  }]);
+  writeCsv(csvPath, [
+    { gameid: '1300', name: 'Waiting', time: String(OLD_TS), author: 'Merge', authors: 'Merge', submitter: 'Merge', bps_files: `['${HASH_A}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache1 = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  const groupCount1 = Object.keys(cache1.groups).length;
+
+  writeCsv(csvPath, [
+    { gameid: '1300', name: 'Waiting', time: String(OLD_TS), author: 'Merge', authors: 'Merge', submitter: 'Merge', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1301', name: 'Waiting 2', time: String(OLD_TS + 10), author: 'Merge', authors: 'Merge', submitter: 'Merge', bps_files: `['${HASH_A}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache2 = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  assert(Object.keys(cache2.groups).length >= groupCount1, 'Group still present after incremental');
+  assert(cache2.memberof['1301'], 'New entry classified');
+  assert(cache2.memberof['1301'] === cache2.memberof[HASH_A], 'New entry in hash group');
+}
+
+function testGroupMergeViaNewEntry() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  const cachePath = path.join(TEST_DIR, 'waiting_cache_clusters.json');
+  setupDb(dbPath, []);
+  writeCsv(csvPath, [
+    { gameid: '1400', name: 'Alpha Game', time: String(OLD_TS), author: 'MergeTest', authors: 'MergeTest', submitter: 'MergeTest', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1400b', name: 'Alpha Game', time: String(OLD_TS + 1), author: 'MergeTest', authors: 'MergeTest', submitter: 'MergeTest', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1401', name: 'Beta Game', time: String(OLD_TS + 2), author: 'Other', authors: 'Other', submitter: 'Other', bps_files: `['${HASH_B}.bps']` },
+    { gameid: '1401b', name: 'Beta Game', time: String(OLD_TS + 3), author: 'Other', authors: 'Other', submitter: 'Other', bps_files: `['${HASH_B}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache1 = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  assert(Object.keys(cache1.groups).length >= 2, 'Two separate groups initially');
+  const groupA = cache1.memberof['1400'];
+  const groupB = cache1.memberof['1401'];
+  assert(groupA !== groupB, 'Groups are distinct');
+
+  writeCsv(csvPath, [
+    { gameid: '1400', name: 'Alpha Game', time: String(OLD_TS), author: 'MergeTest', authors: 'MergeTest', submitter: 'MergeTest', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1400b', name: 'Alpha Game', time: String(OLD_TS + 1), author: 'MergeTest', authors: 'MergeTest', submitter: 'MergeTest', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1401', name: 'Beta Game', time: String(OLD_TS + 2), author: 'Other', authors: 'Other', submitter: 'Other', bps_files: `['${HASH_B}.bps']` },
+    { gameid: '1401b', name: 'Beta Game', time: String(OLD_TS + 3), author: 'Other', authors: 'Other', submitter: 'Other', bps_files: `['${HASH_B}.bps']` },
+    { gameid: '1402', name: 'Bridge Game', time: String(OLD_TS + 4), author: 'Bridge', authors: 'Bridge', submitter: 'Bridge', bps_files: `['${HASH_A}.bps', '${HASH_B}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache2 = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  assert(cache2.memberof['1400'] === cache2.memberof['1401'], 'Groups merged via bridge entry');
+}
+
+function testSyncNewHashForKnownGameid() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  const cachePath = path.join(TEST_DIR, 'waiting_cache_clusters.json');
+  setupDb(dbPath, []);
+  writeCsv(csvPath, [
+    { gameid: '1500', name: 'Resubmit', time: String(OLD_TS), author: 'HashSync', authors: 'HashSync', submitter: 'HashSync', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1501', name: 'Resubmit', time: String(OLD_TS + 1), author: 'HashSync', authors: 'HashSync', submitter: 'HashSync', bps_files: `['${HASH_A}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+
+  writeCsv(csvPath, [
+    { gameid: '1500', name: 'Resubmit', time: String(OLD_TS), author: 'HashSync', authors: 'HashSync', submitter: 'HashSync', bps_files: `['${HASH_A}.bps', '${HASH_B}.bps']` },
+    { gameid: '1501', name: 'Resubmit', time: String(OLD_TS + 1), author: 'HashSync', authors: 'HashSync', submitter: 'HashSync', bps_files: `['${HASH_A}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  const groupId = cache.memberof['1500'];
+  assert(cache.groups[groupId].includes(HASH_B), 'New hash synced for known gameid');
+}
+
+function testRebuildCache() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  const cachePath = path.join(TEST_DIR, 'waiting_cache_clusters.json');
+  setupDb(dbPath, []);
+  writeCsv(csvPath, [
+    { gameid: '1600', name: 'Rebuild A', time: String(OLD_TS), author: 'R', authors: 'R', submitter: 'R', bps_files: `['${HASH_A}.bps']` },
+    { gameid: '1601', name: 'Rebuild B', time: String(OLD_TS + 1), author: 'R', authors: 'R', submitter: 'R', bps_files: `['${HASH_A}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  fs.writeFileSync(cachePath, '{"version":1,"corrupt":true}\n');
+
+  runCli(['--index=' + csvPath, '--rebuild-cache', '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  assert(cache.groups && cache.memberof, 'Cache rebuilt');
+  assert(cache.memberof['1600'], 'Entries present after rebuild');
+}
+
+function testSingletonNotCached() {
+  resetFixtures();
+  const dbPath = path.join(TEST_DIR, 'rhdata.db');
+  const csvPath = path.join(TEST_DIR, 'index.csv');
+  const cachePath = path.join(TEST_DIR, 'waiting_cache_clusters.json');
+  setupDb(dbPath, []);
+  writeCsv(csvPath, [
+    { gameid: '1700', name: 'Lonely Game', time: String(OLD_TS), author: 'Solo', authors: 'Solo', submitter: 'Solo', bps_files: `['${HASH_A}.bps']` },
+  ]);
+  runCli(['--index=' + csvPath, '--json'], { RHDATA_DB_PATH: dbPath });
+  const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  assert(!cache.memberof['1700'], 'Singleton gameid not cached');
+  assert(!cache.memberof[HASH_A], 'Singleton hash not cached');
+  assert(Object.keys(cache.groups).length === 0, 'No groups for singleton');
+}
+
 function main() {
   testParseBpsHashes();
   testEntryTimestamp();
@@ -369,6 +511,12 @@ function main() {
   testHideMatchesAll();
   testHideMatchesOldOnly();
   testUnitEntriesMatch();
+  testCacheWriteOnFirstRun();
+  testIncrementalSecondRun();
+  testGroupMergeViaNewEntry();
+  testSyncNewHashForKnownGameid();
+  testRebuildCache();
+  testSingletonNotCached();
   console.log('✅ test_find_waiting_notincluded passed');
 }
 

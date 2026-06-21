@@ -5,7 +5,8 @@
  *
  * Reads a waiting index CSV, finds entries whose gameids are not in rhdata.db,
  * groups related submissions via BPS-hash and fuzzy name/author matching, and
- * reports stale waiting entries.
+ * reports stale waiting entries. Maintains waiting_cache_clusters.json for
+ * incremental cluster resolution on subsequent runs.
  *
  * Usage:
  *   enode.sh jstools/find_waiting_notincluded.js --index=jstools/smwc_world/waiting_index_ar.csv
@@ -14,6 +15,9 @@
  * Options:
  *   --index=PATH           Required. Waiting index CSV path
  *   --rhdatadb=PATH        Override rhdata.db (default: RHDATA_DB_PATH or electron/rhdata.db)
+ *   --cluster-cache=PATH   Override cluster cache path (default: beside CSV)
+ *   --rebuild-cache        Force full cluster rebuild from scratch
+ *   --no-cache             Skip cluster cache read and write
  *   --older-than=N         Exclude rows newer than N days (keep stale entries only)
  *   --hidematches-all      Hide groups with any DB fuzzy match
  *   --hidematches-oldonly  Hide groups only when DB match is newer than latest CSV entry
@@ -32,6 +36,8 @@ const Database = require('better-sqlite3');
 const Papa = require('papaparse');
 
 const DEFAULT_RHDATA_DB = path.join(__dirname, '..', 'electron', 'rhdata.db');
+const CACHE_VERSION = 1;
+const DEFAULT_CACHE_FILENAME = 'waiting_cache_clusters.json';
 
 const CSV_COLS = [
   'moderated', 'time', 'date', 'gameid', 'name', 'demo', 'sa1', 'collab',
@@ -61,6 +67,9 @@ Usage:
 Options:
   --index=PATH           Required. Waiting index CSV path
   --rhdatadb=PATH        Override rhdata.db location
+  --cluster-cache=PATH   Cluster cache file (default: waiting_cache_clusters.json beside CSV)
+  --rebuild-cache        Force full cluster rebuild
+  --no-cache             Skip cluster cache read and write
   --older-than=N         Exclude rows newer than N days (keep stale only)
   --hidematches-all      Hide groups with any accepted DB match
   --hidematches-oldonly  Hide groups when DB match is newer than latest CSV entry
@@ -76,6 +85,9 @@ function parseArgs(argv) {
   const parsed = {
     index: null,
     rhdataDb: null,
+    clusterCache: null,
+    rebuildCache: false,
+    noCache: false,
     olderThan: null,
     hideMatchesAll: false,
     hideMatchesOldOnly: false,
@@ -91,10 +103,16 @@ function parseArgs(argv) {
       parsed.hideMatchesAll = true;
     } else if (arg === '--hidematches-oldonly') {
       parsed.hideMatchesOldOnly = true;
+    } else if (arg === '--rebuild-cache') {
+      parsed.rebuildCache = true;
+    } else if (arg === '--no-cache') {
+      parsed.noCache = true;
     } else if (arg.startsWith('--index=')) {
       parsed.index = arg.split('=').slice(1).join('=');
     } else if (arg.startsWith('--rhdatadb=')) {
       parsed.rhdataDb = path.normalize(arg.split('=').slice(1).join('='));
+    } else if (arg.startsWith('--cluster-cache=')) {
+      parsed.clusterCache = path.normalize(arg.split('=').slice(1).join('='));
     } else if (arg.startsWith('--older-than=')) {
       const n = parseInt(arg.split('=')[1], 10);
       if (Number.isNaN(n) || n < 0) {
@@ -110,6 +128,11 @@ function parseArgs(argv) {
 
 function resolveRhdataPath(cliPath) {
   return cliPath || process.env.RHDATA_DB_PATH || DEFAULT_RHDATA_DB;
+}
+
+function resolveClusterCachePath(indexPath, cliPath) {
+  if (cliPath) return path.resolve(cliPath);
+  return path.join(path.dirname(path.resolve(indexPath)), DEFAULT_CACHE_FILENAME);
 }
 
 function normalizeForComparison(str) {
@@ -160,6 +183,257 @@ function entryHashes(row) {
     for (const h of row.bps_hashes) hashes.add(h);
   }
   return hashes;
+}
+
+function entryMemberKeys(entry) {
+  return { gameid: String(entry.gameid), hashes: entryHashes(entry) };
+}
+
+function entryAllKeys(entry) {
+  const { gameid, hashes } = entryMemberKeys(entry);
+  return [gameid, ...hashes];
+}
+
+function isHashKey(key) {
+  return /^[a-f0-9]{40}$/.test(key);
+}
+
+function buildEntryLookup(csvRows, dbEntries) {
+  const lookup = new Map();
+  for (const row of csvRows) lookup.set(String(row.gameid), row);
+  for (const row of dbEntries) lookup.set(String(row.gameid), row);
+  return lookup;
+}
+
+function createEmptyCache() {
+  return {
+    version: CACHE_VERSION,
+    updated_at: '',
+    next_group_num: 1,
+    groups: {},
+    memberof: {},
+  };
+}
+
+function loadClusterCache(cachePath) {
+  if (!fs.existsSync(cachePath)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    if (data.version !== CACHE_VERSION || !data.groups || !data.memberof) return null;
+    if (typeof data.next_group_num !== 'number') data.next_group_num = 1;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function saveClusterCache(cachePath, cache) {
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2) + '\n', 'utf8');
+}
+
+function allocateGroupId(cache) {
+  const id = `group${cache.next_group_num}`;
+  cache.next_group_num += 1;
+  cache.groups[id] = [];
+  return id;
+}
+
+function addKeysToGroup(cache, groupId, keys) {
+  if (!cache.groups[groupId]) cache.groups[groupId] = [];
+  for (const key of keys) {
+    if (!cache.groups[groupId].includes(key)) cache.groups[groupId].push(key);
+    cache.memberof[key] = groupId;
+  }
+}
+
+function mergeGroups(cache, targetId, sourceIds) {
+  for (const srcId of sourceIds) {
+    if (srcId === targetId || !cache.groups[srcId]) continue;
+    for (const key of cache.groups[srcId]) {
+      cache.memberof[key] = targetId;
+      if (!cache.groups[targetId].includes(key)) cache.groups[targetId].push(key);
+    }
+    delete cache.groups[srcId];
+  }
+}
+
+function pruneSmallGroups(cache) {
+  for (const [groupId, members] of Object.entries({ ...cache.groups })) {
+    if (members.length < 2) {
+      for (const key of members) delete cache.memberof[key];
+      delete cache.groups[groupId];
+    }
+  }
+}
+
+function getGroupRepresentative(groupId, cache, entryLookup) {
+  for (const key of cache.groups[groupId] || []) {
+    if (!isHashKey(key) && entryLookup.has(key)) {
+      return entryLookup.get(key);
+    }
+  }
+  return null;
+}
+
+function findMatchingGroupIds(entry, cache, entryLookup, sha1ToGameids) {
+  const matched = new Set();
+  const { hashes } = entryMemberKeys(entry);
+  for (const h of hashes) {
+    if (cache.memberof[h]) matched.add(cache.memberof[h]);
+  }
+  if (matched.size === 0) {
+    for (const groupId of Object.keys(cache.groups)) {
+      const rep = getGroupRepresentative(groupId, cache, entryLookup);
+      if (rep && entriesMatch(entry, rep, sha1ToGameids)) {
+        matched.add(groupId);
+      }
+    }
+  }
+  return matched;
+}
+
+function isEntryKnown(entry, cache) {
+  return Boolean(cache.memberof[String(entry.gameid)]);
+}
+
+function syncKnownEntries(allEntries, cache) {
+  for (const entry of allEntries) {
+    const gameid = String(entry.gameid);
+    if (!cache.memberof[gameid]) continue;
+    const groupId = cache.memberof[gameid];
+    addKeysToGroup(cache, groupId, entryAllKeys(entry));
+  }
+}
+
+function syncHashLinkedEntries(allEntries, cache) {
+  for (const entry of allEntries) {
+    const gameid = String(entry.gameid);
+    if (cache.memberof[gameid]) continue;
+    const { hashes } = entryMemberKeys(entry);
+    const matchedGroups = new Set();
+    for (const h of hashes) {
+      if (cache.memberof[h]) matchedGroups.add(cache.memberof[h]);
+    }
+    if (matchedGroups.size === 0) continue;
+    const targetId = [...matchedGroups][0];
+    if (matchedGroups.size > 1) {
+      mergeGroups(cache, targetId, [...matchedGroups].slice(1));
+    }
+    addKeysToGroup(cache, targetId, entryAllKeys(entry));
+  }
+}
+
+function resolveClustersFull(allEntries, sha1ToGameids) {
+  const cache = createEmptyCache();
+  const uf = new UnionFind(allEntries.length);
+  for (let i = 0; i < allEntries.length; i++) {
+    for (let j = i + 1; j < allEntries.length; j++) {
+      if (entriesMatch(allEntries[i], allEntries[j], sha1ToGameids)) {
+        uf.union(i, j);
+      }
+    }
+  }
+
+  const components = new Map();
+  for (let i = 0; i < allEntries.length; i++) {
+    const root = uf.find(i);
+    if (!components.has(root)) components.set(root, []);
+    components.get(root).push(i);
+  }
+
+  for (const indices of components.values()) {
+    if (indices.length < 2) continue;
+    const groupId = allocateGroupId(cache);
+    const keys = new Set();
+    for (const idx of indices) {
+      for (const k of entryAllKeys(allEntries[idx])) keys.add(k);
+    }
+    addKeysToGroup(cache, groupId, [...keys]);
+  }
+
+  pruneSmallGroups(cache);
+  return cache;
+}
+
+function resolveClustersIncremental(allEntries, sha1ToGameids, cache, entryLookup) {
+  syncKnownEntries(allEntries, cache);
+  syncHashLinkedEntries(allEntries, cache);
+
+  const unseen = allEntries.filter(e => !isEntryKnown(e, cache));
+  let classified = 0;
+  let merged = 0;
+
+  if (unseen.length === 0) {
+    pruneSmallGroups(cache);
+    return { cache, stats: { classified, merged } };
+  }
+
+  const uf = new UnionFind(unseen.length);
+  for (let i = 0; i < unseen.length; i++) {
+    for (let j = i + 1; j < unseen.length; j++) {
+      if (entriesMatch(unseen[i], unseen[j], sha1ToGameids)) {
+        uf.union(i, j);
+      }
+    }
+  }
+
+  const components = new Map();
+  for (let i = 0; i < unseen.length; i++) {
+    const root = uf.find(i);
+    if (!components.has(root)) components.set(root, []);
+    components.get(root).push(i);
+  }
+
+  for (const indices of components.values()) {
+    const entries = indices.map(i => unseen[i]);
+    const keys = new Set();
+    for (const e of entries) {
+      for (const k of entryAllKeys(e)) keys.add(k);
+    }
+
+    const matchedGroups = new Set();
+    for (const e of entries) {
+      for (const gid of findMatchingGroupIds(e, cache, entryLookup, sha1ToGameids)) {
+        matchedGroups.add(gid);
+      }
+    }
+
+    if (matchedGroups.size > 0) {
+      const targetId = [...matchedGroups][0];
+      if (matchedGroups.size > 1) {
+        mergeGroups(cache, targetId, [...matchedGroups].slice(1));
+        merged += matchedGroups.size - 1;
+      }
+      addKeysToGroup(cache, targetId, [...keys]);
+      classified += entries.length;
+    } else if (entries.length >= 2) {
+      const groupId = allocateGroupId(cache);
+      addKeysToGroup(cache, groupId, [...keys]);
+      classified += entries.length;
+    }
+  }
+
+  pruneSmallGroups(cache);
+  return { cache, stats: { classified, merged } };
+}
+
+function resolveClusterCache(allEntries, sha1ToGameids, entryLookup, options) {
+  if (options.noCache) {
+    return { cache: resolveClustersFull(allEntries, sha1ToGameids), stats: { classified: 0, merged: 0 } };
+  }
+
+  let cache = null;
+  if (!options.rebuildCache) {
+    cache = loadClusterCache(options.clusterCachePath);
+  }
+
+  if (cache) {
+    return resolveClustersIncremental(allEntries, sha1ToGameids, cache, entryLookup);
+  }
+
+  cache = resolveClustersFull(allEntries, sha1ToGameids);
+  return { cache, stats: { classified: 0, merged: 0 } };
 }
 
 function parseFlexibleDate(str) {
@@ -365,22 +639,45 @@ function loadDatabase(rhdataPath) {
   return { existingGameIds, dbEntries, sha1ToGameids };
 }
 
-function computeMatchCountsWithIndex(allEntries, sha1ToGameids) {
-  const counts = allEntries.map(() => ({ all: 0, csv: 0, ac: 0 }));
+function clusterIndicesForGroup(members, allEntries) {
+  const gameidToIndex = new Map();
   for (let i = 0; i < allEntries.length; i++) {
-    for (let j = i + 1; j < allEntries.length; j++) {
+    gameidToIndex.set(String(allEntries[i].gameid), i);
+  }
+
+  const indices = new Set();
+  for (const key of members) {
+    if (isHashKey(key)) {
+      for (let i = 0; i < allEntries.length; i++) {
+        if (entryHashes(allEntries[i]).has(key)) indices.add(i);
+      }
+    } else if (gameidToIndex.has(key)) {
+      indices.add(gameidToIndex.get(key));
+    }
+  }
+  return [...indices];
+}
+
+function computeMatchCountsForIndices(indices, allEntries, sha1ToGameids) {
+  const counts = new Map();
+  for (const i of indices) counts.set(i, { all: 0, csv: 0, ac: 0 });
+
+  for (let a = 0; a < indices.length; a++) {
+    for (let b = a + 1; b < indices.length; b++) {
+      const i = indices[a];
+      const j = indices[b];
       if (entriesMatch(allEntries[i], allEntries[j], sha1ToGameids)) {
-        counts[i].all++;
-        counts[j].all++;
+        counts.get(i).all++;
+        counts.get(j).all++;
         if (allEntries[i].rtype === 'CSV' && allEntries[j].rtype === 'CSV') {
-          counts[i].csv++;
-          counts[j].csv++;
+          counts.get(i).csv++;
+          counts.get(j).csv++;
         }
         if (allEntries[i].rtype === 'DB' && allEntries[j].rtype === 'CSV') {
-          counts[j].ac++;
+          counts.get(j).ac++;
         }
         if (allEntries[j].rtype === 'DB' && allEntries[i].rtype === 'CSV') {
-          counts[i].ac++;
+          counts.get(i).ac++;
         }
       }
     }
@@ -404,21 +701,10 @@ function findLatestDbMatch(csvEntry, dbEntries, sha1ToGameids) {
   return best;
 }
 
-function buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, options) {
+function buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, clusterCache, options) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const allEntries = [...csvRows, ...dbEntries];
   const csvCount = csvRows.length;
-
-  const uf = new UnionFind(allEntries.length);
-  for (let i = 0; i < allEntries.length; i++) {
-    for (let j = i + 1; j < allEntries.length; j++) {
-      if (entriesMatch(allEntries[i], allEntries[j], sha1ToGameids)) {
-        uf.union(i, j);
-      }
-    }
-  }
-
-  const matchCounts = computeMatchCountsWithIndex(allEntries, sha1ToGameids);
 
   const seedIndices = new Set();
   for (let i = 0; i < csvCount; i++) {
@@ -428,17 +714,19 @@ function buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, o
     seedIndices.add(i);
   }
 
-  const groupsByRoot = new Map();
-  for (let i = 0; i < allEntries.length; i++) {
-    const root = uf.find(i);
-    if (!groupsByRoot.has(root)) groupsByRoot.set(root, []);
-    groupsByRoot.get(root).push(i);
-  }
-
+  const coveredIndices = new Set();
   const resultGroups = [];
-  for (const indices of groupsByRoot.values()) {
+
+  for (const members of Object.values(clusterCache.groups)) {
+    const indices = clusterIndicesForGroup(members, allEntries);
+    if (indices.length === 0) continue;
+
     const hasSeed = indices.some(idx => seedIndices.has(idx));
     if (!hasSeed) continue;
+
+    for (const idx of indices) coveredIndices.add(idx);
+
+    const matchCounts = computeMatchCountsForIndices(indices, allEntries, sha1ToGameids);
 
     const dbIndices = indices.filter(idx => idx >= csvCount);
     const csvIndices = indices.filter(idx => idx < csvCount);
@@ -454,60 +742,16 @@ function buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, o
       return ta - tb;
     });
 
-    const orderedIndices = [...dbIndices, ...csvIndices];
-    const group = { db_results: [], csv_results: [] };
+    resultGroups.push(buildGroupFromIndices(
+      [...dbIndices, ...csvIndices], allEntries, matchCounts, dbEntries, sha1ToGameids
+    ));
+  }
 
-    for (const idx of orderedIndices) {
-      const entry = allEntries[idx];
-      const counts = matchCounts[idx];
-      const ts = entry.rtype === 'CSV'
-        ? entryTimestamp(entry)
-        : (parseAdded(entry.added_raw || entry.added) || null);
-
-      let acceptedAs = 'notfound';
-      if (entry.rtype === 'CSV') {
-        const match = findLatestDbMatch(entry, dbEntries, sha1ToGameids);
-        acceptedAs = match ? String(match.gameid) : 'notfound';
-      } else {
-        acceptedAs = String(entry.gameid);
-      }
-
-      const result = {
-        rtype: entry.rtype,
-        all_matches: counts.all,
-        csv_matches: counts.csv,
-        ac_matches: counts.ac,
-        time_utc_seconds: ts,
-        time_iso: timestampToIso(ts),
-        gameid: String(entry.gameid),
-        accepted_as: acceptedAs,
-        name: entry.name || '',
-        demo: entry.demo || '',
-        sa1: entry.sa1 || '',
-        collab: entry.collab || '',
-        author: entry.author || '',
-        authors: entry.authors || '',
-        submitter: entry.submitter || '',
-        combinedtype: entry.combinedtype || '',
-        length: entry.length || '',
-        fields_type: entry.fields_type || '',
-        difficulty: entry.difficulty || '',
-        warnings: entry.warnings || '',
-        url: entry.url || '',
-        section: entry.section || '',
-        tags: entry.tags || '',
-        bps_files: entry.bps_files || '',
-        data_txid: entry.data_txid || '',
-      };
-
-      if (entry.rtype === 'DB') {
-        group.db_results.push(result);
-      } else {
-        group.csv_results.push(result);
-      }
-    }
-
-    resultGroups.push(group);
+  for (const idx of seedIndices) {
+    if (coveredIndices.has(idx)) continue;
+    resultGroups.push(buildGroupFromIndices(
+      [idx], allEntries, computeMatchCountsForIndices([idx], allEntries, sha1ToGameids), dbEntries, sha1ToGameids
+    ));
   }
 
   resultGroups.sort((a, b) => {
@@ -517,6 +761,62 @@ function buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, o
   });
 
   return resultGroups;
+}
+
+function buildGroupFromIndices(orderedIndices, allEntries, matchCounts, dbEntries, sha1ToGameids) {
+  const group = { db_results: [], csv_results: [] };
+
+  for (const idx of orderedIndices) {
+    const entry = allEntries[idx];
+    const counts = matchCounts.get(idx) || { all: 0, csv: 0, ac: 0 };
+    const ts = entry.rtype === 'CSV'
+      ? entryTimestamp(entry)
+      : (parseAdded(entry.added_raw || entry.added) || null);
+
+    let acceptedAs = 'notfound';
+    if (entry.rtype === 'CSV') {
+      const match = findLatestDbMatch(entry, dbEntries, sha1ToGameids);
+      acceptedAs = match ? String(match.gameid) : 'notfound';
+    } else {
+      acceptedAs = String(entry.gameid);
+    }
+
+    const result = {
+      rtype: entry.rtype,
+      all_matches: counts.all,
+      csv_matches: counts.csv,
+      ac_matches: counts.ac,
+      time_utc_seconds: ts,
+      time_iso: timestampToIso(ts),
+      gameid: String(entry.gameid),
+      accepted_as: acceptedAs,
+      name: entry.name || '',
+      demo: entry.demo || '',
+      sa1: entry.sa1 || '',
+      collab: entry.collab || '',
+      author: entry.author || '',
+      authors: entry.authors || '',
+      submitter: entry.submitter || '',
+      combinedtype: entry.combinedtype || '',
+      length: entry.length || '',
+      fields_type: entry.fields_type || '',
+      difficulty: entry.difficulty || '',
+      warnings: entry.warnings || '',
+      url: entry.url || '',
+      section: entry.section || '',
+      tags: entry.tags || '',
+      bps_files: entry.bps_files || '',
+      data_txid: entry.data_txid || '',
+    };
+
+    if (entry.rtype === 'DB') {
+      group.db_results.push(result);
+    } else {
+      group.csv_results.push(result);
+    }
+  }
+
+  return group;
 }
 
 function earliestGroupTimestamp(group) {
@@ -616,11 +916,28 @@ function formatJson(groups) {
 function run(options) {
   const indexPath = path.resolve(options.index);
   const rhdataPath = resolveRhdataPath(options.rhdataDb);
+  const cachePath = resolveClusterCachePath(indexPath, options.clusterCache);
 
   const csvRows = parseIndexCsv(indexPath);
   const { existingGameIds, dbEntries, sha1ToGameids } = loadDatabase(rhdataPath);
+  const allEntries = [...csvRows, ...dbEntries];
+  const entryLookup = buildEntryLookup(csvRows, dbEntries);
 
-  let groups = buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, {
+  const { cache: clusterCache, stats } = resolveClusterCache(allEntries, sha1ToGameids, entryLookup, {
+    noCache: options.noCache,
+    rebuildCache: options.rebuildCache,
+    clusterCachePath: cachePath,
+  });
+
+  if (!options.noCache) {
+    clusterCache.updated_at = new Date().toISOString();
+    saveClusterCache(cachePath, clusterCache);
+    if (stats.classified > 0 || stats.merged > 0) {
+      console.error(`Cluster cache: ${stats.classified} new entries classified, ${stats.merged} groups merged`);
+    }
+  }
+
+  let groups = buildResultGroups(csvRows, dbEntries, existingGameIds, sha1ToGameids, clusterCache, {
     olderThan: options.olderThan,
   });
 
@@ -667,10 +984,20 @@ if (require.main === module) {
 module.exports = {
   parseArgs,
   resolveRhdataPath,
+  resolveClusterCachePath,
   parseIndexCsv,
   parseBpsHashes,
   entryTimestamp,
   parseAdded,
+  entryMemberKeys,
+  entryAllKeys,
+  buildEntryLookup,
+  loadClusterCache,
+  saveClusterCache,
+  mergeGroups,
+  resolveClustersFull,
+  resolveClustersIncremental,
+  resolveClusterCache,
   normalizeForComparison,
   calculateSimilarity,
   entriesMatch,
@@ -682,4 +1009,5 @@ module.exports = {
   run,
   OUTPUT_FIELDS,
   NAME_SIM_THRESHOLD,
+  CACHE_VERSION,
 };

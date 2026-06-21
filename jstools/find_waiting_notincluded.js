@@ -22,6 +22,8 @@
  *   --hidematches-all      Hide groups with any DB fuzzy match
  *   --hidematches-oldonly  Hide groups only when DB match is newer than latest CSV entry
  *   --json                 JSON output instead of human-readable
+ *   --latest-waiting-csv   Export latest CSV row per group to stdout (waiting_index format)
+ *   --latest-waiting-csv=PATH  Write that CSV export to PATH instead of stdout
  *   --help                 Show help
  *
  * Environment:
@@ -74,6 +76,8 @@ Options:
   --hidematches-all      Hide groups with any accepted DB match
   --hidematches-oldonly  Hide groups when DB match is newer than latest CSV entry
   --json                 Emit JSON instead of human-readable text
+  --latest-waiting-csv   Export latest waiting row per group as CSV to stdout
+  --latest-waiting-csv=PATH  Write latest-waiting CSV export to PATH
   --help                 Show this help
 
 Environment:
@@ -92,6 +96,7 @@ function parseArgs(argv) {
     hideMatchesAll: false,
     hideMatchesOldOnly: false,
     json: false,
+    latestWaitingCsv: null,
     help: false,
   };
   for (const arg of argv) {
@@ -99,6 +104,10 @@ function parseArgs(argv) {
       parsed.help = true;
     } else if (arg === '--json') {
       parsed.json = true;
+    } else if (arg === '--latest-waiting-csv') {
+      parsed.latestWaitingCsv = true;
+    } else if (arg.startsWith('--latest-waiting-csv=')) {
+      parsed.latestWaitingCsv = path.normalize(arg.split('=').slice(1).join('='));
     } else if (arg === '--hidematches-all') {
       parsed.hideMatchesAll = true;
     } else if (arg === '--hidematches-oldonly') {
@@ -913,6 +922,60 @@ function formatJson(groups) {
   return JSON.stringify({ result_groups: groups }, null, 2);
 }
 
+function escapeCsvCell(val) {
+  const s = String(val ?? '');
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function latestGroupEntry(group) {
+  const all = [...group.db_results, ...group.csv_results];
+  if (!all.length) return null;
+  let best = all[0];
+  for (const entry of all) {
+    const bestTs = best.time_utc_seconds;
+    const entryTs = entry.time_utc_seconds;
+    if (entryTs === null || entryTs === undefined) continue;
+    if (bestTs === null || bestTs === undefined || entryTs > bestTs) {
+      best = entry;
+    }
+  }
+  return best;
+}
+
+function extractLatestWaitingRows(groups, csvRows) {
+  const csvByGameid = new Map();
+  for (const row of csvRows) {
+    csvByGameid.set(String(row.gameid), row);
+  }
+
+  const selected = [];
+  for (const group of groups) {
+    const latest = latestGroupEntry(group);
+    if (!latest || latest.rtype !== 'CSV') continue;
+    const original = csvByGameid.get(String(latest.gameid));
+    if (!original) continue;
+    selected.push({
+      row: original,
+      sortTs: latest.time_utc_seconds ?? 0,
+    });
+  }
+
+  selected.sort((a, b) => b.sortTs - a.sortTs);
+  return selected.map(s => s.row);
+}
+
+function formatWaitingIndexCsv(rows) {
+  const header = CSV_COLS.map(escapeCsvCell).join(',');
+  const body = rows.map(r => CSV_COLS.map(c => escapeCsvCell(r[c] ?? '')).join(','));
+  if (!body.length) {
+    return header + '\n';
+  }
+  return [header, ...body].join('\n') + '\n';
+}
+
 function run(options) {
   const indexPath = path.resolve(options.index);
   const rhdataPath = resolveRhdataPath(options.rhdataDb);
@@ -946,10 +1009,21 @@ function run(options) {
     hideMatchesOldOnly: options.hideMatchesOldOnly,
   });
 
-  if (options.json) {
-    return formatJson(groups);
+  if (options.latestWaitingCsv !== null) {
+    const rows = extractLatestWaitingRows(groups, csvRows);
+    const csvText = formatWaitingIndexCsv(rows);
+    if (options.latestWaitingCsv !== true) {
+      fs.mkdirSync(path.dirname(options.latestWaitingCsv), { recursive: true });
+      fs.writeFileSync(options.latestWaitingCsv, csvText, 'utf8');
+      return { type: 'latest-waiting-file', path: options.latestWaitingCsv, rowCount: rows.length };
+    }
+    return { type: 'latest-waiting-stdout', text: csvText };
   }
-  return formatHuman(groups);
+
+  if (options.json) {
+    return { type: 'json', text: formatJson(groups) };
+  }
+  return { type: 'human', text: formatHuman(groups) };
 }
 
 function main() {
@@ -967,10 +1041,18 @@ function main() {
     console.error('Error: --hidematches-all and --hidematches-oldonly are mutually exclusive.');
     process.exit(1);
   }
+  if (args.json && args.latestWaitingCsv !== null) {
+    console.error('Error: --json and --latest-waiting-csv are mutually exclusive.');
+    process.exit(1);
+  }
 
   try {
-    const output = run(args);
-    console.log(output);
+    const result = run(args);
+    if (result.type === 'latest-waiting-file') {
+      console.error(`Wrote ${result.rowCount} rows to ${result.path}`);
+    } else {
+      process.stdout.write(result.text);
+    }
   } catch (err) {
     console.error(`Error: ${err.message}`);
     process.exit(1);
@@ -1006,6 +1088,10 @@ module.exports = {
   applyHideFilters,
   formatHuman,
   formatJson,
+  latestGroupEntry,
+  extractLatestWaitingRows,
+  formatWaitingIndexCsv,
+  escapeCsvCell,
   run,
   OUTPUT_FIELDS,
   NAME_SIM_THRESHOLD,

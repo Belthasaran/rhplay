@@ -1,3 +1,12 @@
+- 2026-06-21 — RHPAK multi-owner rhpakuuid2 and is_system
+  - Purpose: Track multiple RHPAK UUIDs per owned row; distinguish system (updategames) RHPAKs from user-installed RHPAKs
+  - Command:
+    - `./enode.sh jsutils/migratedb.js --rhdatadb=/path/to/rhdata.db --patchbindb=/path/to/patchbin.db --resourcedb=/path/to/resource.db --screenshotdb=/path/to/screenshot.db`
+  - Applies:
+    - `rhdata_071_rhpakuuid2_multi_owner`, `rhdata_072_rhpaks_is_system`
+    - `patchbin_002_rhpakuuid2`, `resource_004_rhpakuuid2`, `screenshot_006_rhpakuuid2`
+  - Expected outcome: `rhpakuuid2` backfilled from `rhpakuuid`; `rhpaks.is_system` defaults to 0 for existing rows
+
 - 2026-06-20 — extrapatches ignore_warnings (rhdata)
   - Purpose: Add `ignore_warnings` column so ASAR extrapatch templates can ignore ASAR stderr warnings during build/staging
   - Command:

@@ -117,6 +117,27 @@ node updategames.js [options]
 
 ---
 
+### updategames_conflicts.js
+**Purpose**: Review RHPAK ownership conflicts before updategames in-place import; interactively reassign primary owner
+
+**Usage**:
+```bash
+enode.sh jstools/updategames_conflicts.js --game-folder=games20260618/40631
+enode.sh jstools/updategames_conflicts.js --source-folder=games20260618 --subfolders=40631,42356
+enode.sh jstools/updategames_conflicts.js --game-folder=games20260618/40631 --edit-ownership
+```
+
+**Key Options**:
+- `--source-folder=<path>` / `--subfolders=<list|all>` - Review multiple game folders
+- `--game-folder=<path>` - Review a single game folder
+- `--edit-ownership` - Prompt on console to reassign primary RHPAK owner per conflict
+- `--dry-run` - Show ownership changes without writing DB
+- `--yes-all` - Approve all ownership changes without prompting
+
+**Documentation**: See `devdocs/UPDATEGAMES_RHPAK_CONFLICTS_PLAN.md`
+
+---
+
 ## Blob Management
 
 ### list-unuploaded-blobs.js

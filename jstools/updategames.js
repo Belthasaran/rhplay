@@ -1223,7 +1223,8 @@ async function exportGameToFolder(dbManager, recordCreator, queueItem, patchFile
       rhpak_type: 'single',
       gameids: [gameid],
       has_detached_resources: false,
-      has_extrapatches: false
+      has_extrapatches: false,
+      is_system: true
     },
     artifacts: {
       patch: null // Will be set during --prepare

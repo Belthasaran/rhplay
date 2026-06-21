@@ -354,70 +354,6 @@
     }
   },
   {
-    "id": 42245,
-    "section": "smwhacks",
-    "name": "Super Mario Mushroom Kingdom Madness",
-    "time": 1776976052,
-    "submitted_at": 1776976052,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 72663,
-        "name": "Greeeen"
-      }
-    ],
-    "submitter": {
-      "id": 72663,
-      "name": "Greeeen"
-    },
-    "moderator": null,
-    "tags": [],
-    "images": [
-      "https://dl.smwcentral.net/image/123417.png",
-      "https://dl.smwcentral.net/image/123418.png",
-      "https://dl.smwcentral.net/image/123419.png",
-      "https://dl.smwcentral.net/image/123420.png",
-      "https://dl.smwcentral.net/image/123421.png",
-      "https://dl.smwcentral.net/image/123422.png",
-      "https://dl.smwcentral.net/image/123423.png",
-      "https://dl.smwcentral.net/image/123424.png"
-    ],
-    "rating": 5,
-    "size": 513307,
-    "downloads": 807,
-    "download_url": "https://dl.smwcentral.net/42245/SM%20Mushroom%20Kingdom%20Madness%20Demo.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "2",
-      "changelog": "New name, one more world, new graphics, more content.",
-      "difficulty": "Casual",
-      "type": "Standard",
-      "length": "30 exit(s)",
-      "hof": "No",
-      "demo": "Yes",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "Super Mario Super Quest is now Mushroom Kingdom Madness, a classic adventure around the mushroom kingdom to save the princess Peach."
-    },
-    "raw_fields": {
-      "version": "2",
-      "changelog": "New name, one more world, new graphics, more content.",
-      "difficulty": "diff_2",
-      "type": [
-        "standard"
-      ],
-      "length": 30,
-      "hof": false,
-      "demo": true,
-      "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "Super Mario Super Quest is now Mushroom Kingdom Madness, a classic adventure around the mushroom kingdom to save the princess Peach."
-    }
-  },
-  {
     "id": 42246,
     "section": "smwhacks",
     "name": "New Super Mario World 3: Peach's Double Trouble",
@@ -458,7 +394,7 @@
     ],
     "rating": 0,
     "size": 1628424,
-    "downloads": 228,
+    "downloads": 229,
     "download_url": "https://dl.smwcentral.net/42246/NSMW3%20v2.1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -586,7 +522,7 @@
     ],
     "rating": 0,
     "size": 36922,
-    "downloads": 80,
+    "downloads": 81,
     "download_url": "https://dl.smwcentral.net/42378/SMW%20Niko%20Moveset.zip",
     "obsoleted_by": null,
     "fields": {
@@ -805,7 +741,7 @@
     ],
     "rating": 4.3333,
     "size": 2346234,
-    "downloads": 193,
+    "downloads": 198,
     "download_url": "https://dl.smwcentral.net/42427/ynt_mario_en_v1.0.6.zip",
     "obsoleted_by": null,
     "fields": {
@@ -885,7 +821,7 @@
     ],
     "rating": 5,
     "size": 1210355,
-    "downloads": 300,
+    "downloads": 303,
     "download_url": "https://dl.smwcentral.net/42434/Ominous%20Castle%20v1.1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1017,7 +953,7 @@
     ],
     "rating": 0,
     "size": 839481,
-    "downloads": 121,
+    "downloads": 122,
     "download_url": "https://dl.smwcentral.net/42459/Castlemania%20-%20REVAMPED.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1084,7 +1020,7 @@
     ],
     "rating": 5,
     "size": 473199,
-    "downloads": 250,
+    "downloads": 251,
     "download_url": "https://dl.smwcentral.net/42466/SMTQFB_v1.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1231,7 +1167,7 @@
     ],
     "rating": 0,
     "size": 1070034,
-    "downloads": 65,
+    "downloads": 66,
     "download_url": "https://dl.smwcentral.net/42477/super%20Miles%20world%201.4.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1295,7 +1231,7 @@
     ],
     "rating": 4.6667,
     "size": 413970,
-    "downloads": 1332,
+    "downloads": 1333,
     "download_url": "https://dl.smwcentral.net/42495/SMB3%20as%20Dinosaur%20Land%20v3.4.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1363,7 +1299,7 @@
     ],
     "rating": 4.6667,
     "size": 5112760,
-    "downloads": 3358,
+    "downloads": 3360,
     "download_url": "https://dl.smwcentral.net/42500/Crash%20Bandicoot%20and%20the%20Retro%20Dimension%20Enhanced.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1429,7 +1365,7 @@
     ],
     "rating": 5,
     "size": 1628128,
-    "downloads": 87,
+    "downloads": 93,
     "download_url": "https://dl.smwcentral.net/42501/Gransys.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1763,7 +1699,7 @@
     ],
     "rating": 0,
     "size": 739656,
-    "downloads": 19,
+    "downloads": 20,
     "download_url": "https://dl.smwcentral.net/42535/Isle%20of%20Infestation%201.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -1978,7 +1914,7 @@
     ],
     "rating": 0,
     "size": 4870309,
-    "downloads": 189,
+    "downloads": 196,
     "download_url": "https://dl.smwcentral.net/42541/Crash%20Bandicoot%20and%20The%20Retro%20Dimension%202%20-%20The%20Crystal%20Hunt.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2049,7 +1985,7 @@
     ],
     "rating": 5,
     "size": 829582,
-    "downloads": 521,
+    "downloads": 522,
     "download_url": "https://dl.smwcentral.net/42543/playtime_1.11.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2120,7 +2056,7 @@
     ],
     "rating": 5,
     "size": 716798,
-    "downloads": 53,
+    "downloads": 54,
     "download_url": "https://dl.smwcentral.net/42544/LAG.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2181,25 +2117,25 @@
       "voice acting"
     ],
     "images": [
-      "https://dl.smwcentral.net/image/124658.png",
-      "https://dl.smwcentral.net/image/124659.png",
-      "https://dl.smwcentral.net/image/124660.png",
-      "https://dl.smwcentral.net/image/124661.png",
-      "https://dl.smwcentral.net/image/124662.png",
-      "https://dl.smwcentral.net/image/124663.png",
-      "https://dl.smwcentral.net/image/124664.png",
-      "https://dl.smwcentral.net/image/124665.png",
-      "https://dl.smwcentral.net/image/124666.png",
-      "https://dl.smwcentral.net/image/124667.png"
+      "https://dl.smwcentral.net/image/124819.png",
+      "https://dl.smwcentral.net/image/124820.png",
+      "https://dl.smwcentral.net/image/124821.png",
+      "https://dl.smwcentral.net/image/124822.png",
+      "https://dl.smwcentral.net/image/124823.png",
+      "https://dl.smwcentral.net/image/124824.png",
+      "https://dl.smwcentral.net/image/124825.png",
+      "https://dl.smwcentral.net/image/124826.png",
+      "https://dl.smwcentral.net/image/124827.png",
+      "https://dl.smwcentral.net/image/124828.png"
     ],
     "rating": 5,
-    "size": 791647,
-    "downloads": 69,
-    "download_url": "https://dl.smwcentral.net/42545/%5BHack%5D%20Super%20Mario%20World%20Challenges%202%20v1.0.1.zip",
+    "size": 792623,
+    "downloads": 74,
+    "download_url": "https://dl.smwcentral.net/42545/%5BHack%5D%20Super%20Mario%20World%20Challenges%202%20v1.0.2..zip",
     "obsoleted_by": null,
     "fields": {
-      "version": "1.0.1.",
-      "changelog": "- Added a way of resetting all checkpoints.<br>\r\n- Removed Player 2.",
+      "version": "1.0.2.",
+      "changelog": "v1.02 - \"Other minor inconveniences\"<br>\r\n\t- Minor adjustments to every level.<br>\r\n<br>\r\nv1.01 - \"Slight Oversights\"<br>\r\n\t- Added a way of resetting all checkpoints.<br>\r\n\t- Removed Player 2.",
       "difficulty": "Advanced",
       "type": "Standard",
       "length": "6 exit(s)",
@@ -2208,11 +2144,11 @@
       "collab": "No",
       "sa1": "Yes",
       "warnings": "",
-      "description": "Take on a handful of <u>new challenging variants</u> of <b>existing Super Mario World levels</b>, now with the <i>latest technological capabilities</i> of \"the creator.\" Levels will demand more as you trek through familiar environments, and <i>knowledge of the original game</i> <u>will be tested.</u><br>\r\n<br>\r\nCheck out the previous hack <a href=\"https://smwc.me/s/28581\">here</a>.<br>\r\n<br>\r\nA handful of bosses await you; opponents brand new, or foes awaiting a rematch. You have to <u>earn</u> your victory to overcome them, no matter the odds.<br>\r\n<br>\r\n<span style=\"font-size: 12pt;\">Will you join the victors of this challenge?</span><br>\r\n<br>\r\n<hr><br>\r\nUnlike the original game, dragon coins behave like they do in vanilla (<u>5 in one go</u>). They <u>do save to SRAM</u>. An <i>unlockable extra</i> can be found by finding <u>3 sets</u>. Be forewarned, said optional unlock is a challenge <u>beyond the game's difficulty</u> (you don't get an exit for clearing it).<br>\r\n<br>\r\n<span style=\"color: #ff0000;\"><b>THIS HACK MAY NOT BE USED FOR MIXTAPE.</b></span>"
+      "description": "Take on a handful of <u>new challenging variants</u> of <b>existing Super Mario World levels</b>, now with the <i>latest technological capabilities</i> of \"the creator.\" Levels will demand more as you trek through familiar environments, and <i>knowledge of the original game</i> <u>will be tested.</u><br>\r\n<br>\r\nCheck out the previous hack <a href=\"https://smwc.me/s/28581\">here</a>.<br>\r\n<br>\r\nA handful of bosses await you; opponents brand new, or foes awaiting a rematch. You have to <u>earn</u> your victory to overcome them, no matter the odds.<br>\r\n<br>\r\n<span style=\"font-size: 12pt;\">Will you join the victors of this challenge?</span><br>\r\n<br>\r\n<hr><br>\r\nUnlike the original game, dragon coins behave like they do in vanilla (<u>5 in one go</u>). They <u>do save to SRAM</u>. An <i>unlockable extra</i> can be found by finding <u>3 sets</u>. Be forewarned, said optional unlock is a challenge <u>beyond the game's difficulty</u> (you don't get an exit for clearing it)."
     },
     "raw_fields": {
-      "version": "1.0.1.",
-      "changelog": "- Added a way of resetting all checkpoints.\r\n- Removed Player 2.",
+      "version": "1.0.2.",
+      "changelog": "v1.02 - \"Other minor inconveniences\"\r\n\t- Minor adjustments to every level.\r\n\r\nv1.01 - \"Slight Oversights\"\r\n\t- Added a way of resetting all checkpoints.\r\n\t- Removed Player 2.",
       "difficulty": "diff_4",
       "type": [
         "standard"
@@ -2223,7 +2159,7 @@
       "collab": false,
       "sa1": true,
       "warnings": [],
-      "description": "Take on a handful of [u]new challenging variants[/u] of [b]existing Super Mario World levels[/b], now with the [i]latest technological capabilities[/i] of \"the creator.\" Levels will demand more as you trek through familiar environments, and [i]knowledge of the original game[/i] [u]will be tested.[/u]\r\n\r\nCheck out the previous hack [url=https://smwc.me/s/28581]here[/url].\r\n\r\nA handful of bosses await you; opponents brand new, or foes awaiting a rematch. You have to [u]earn[/u] your victory to overcome them, no matter the odds.\r\n\r\n[size=12]Will you join the victors of this challenge?[/size]\r\n\r\n<hr>\r\nUnlike the original game, dragon coins behave like they do in vanilla ([u]5 in one go[/u]). They [u]do save to SRAM[/u]. An [i]unlockable extra[/i] can be found by finding [u]3 sets[/u]. Be forewarned, said optional unlock is a challenge [u]beyond the game's difficulty[/u] (you don't get an exit for clearing it).\r\n\r\n[color=#ff0000][b]THIS HACK MAY NOT BE USED FOR MIXTAPE.[/b][/color]"
+      "description": "Take on a handful of [u]new challenging variants[/u] of [b]existing Super Mario World levels[/b], now with the [i]latest technological capabilities[/i] of \"the creator.\" Levels will demand more as you trek through familiar environments, and [i]knowledge of the original game[/i] [u]will be tested.[/u]\r\n\r\nCheck out the previous hack [url=https://smwc.me/s/28581]here[/url].\r\n\r\nA handful of bosses await you; opponents brand new, or foes awaiting a rematch. You have to [u]earn[/u] your victory to overcome them, no matter the odds.\r\n\r\n[size=12]Will you join the victors of this challenge?[/size]\r\n\r\n<hr>\r\nUnlike the original game, dragon coins behave like they do in vanilla ([u]5 in one go[/u]). They [u]do save to SRAM[/u]. An [i]unlockable extra[/i] can be found by finding [u]3 sets[/u]. Be forewarned, said optional unlock is a challenge [u]beyond the game's difficulty[/u] (you don't get an exit for clearing it)."
     }
   },
   {
@@ -2262,7 +2198,7 @@
     ],
     "rating": 0,
     "size": 408801,
-    "downloads": 16,
+    "downloads": 17,
     "download_url": "https://dl.smwcentral.net/42546/Pit%20of%20Gui%21%21%20%28Reformulated%20Version%29.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2337,7 +2273,7 @@
     ],
     "rating": 0,
     "size": 1276995,
-    "downloads": 69,
+    "downloads": 71,
     "download_url": "https://dl.smwcentral.net/42550/Dreadful%20Mario.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2416,8 +2352,8 @@
       "https://dl.smwcentral.net/image/124703.png"
     ],
     "rating": 4,
-    "size": 252432,
-    "downloads": 66,
+    "size": 252682,
+    "downloads": 73,
     "download_url": "https://dl.smwcentral.net/42555/Super%20Mario%20World%20II.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2450,92 +2386,6 @@
     }
   },
   {
-    "id": 42562,
-    "section": "smwhacks",
-    "name": "Toad's World",
-    "time": 1781877044,
-    "submitted_at": 1781877044,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 261,
-        "name": "FPI"
-      },
-      {
-        "id": 63,
-        "name": "Ice Man"
-      },
-      {
-        "id": 4,
-        "name": "ghettoyouth"
-      }
-    ],
-    "submitter": {
-      "id": 63,
-      "name": "Ice Man"
-    },
-    "moderator": null,
-    "tags": [
-      "asm",
-      "custom blocks",
-      "custom bosses",
-      "custom music",
-      "exgfx",
-      "hdma",
-      "sa1",
-      "standard",
-      "toad",
-      "traditional"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/124731.png",
-      "https://dl.smwcentral.net/image/124732.png",
-      "https://dl.smwcentral.net/image/124733.png",
-      "https://dl.smwcentral.net/image/124734.png",
-      "https://dl.smwcentral.net/image/124735.png",
-      "https://dl.smwcentral.net/image/124736.png",
-      "https://dl.smwcentral.net/image/124737.png",
-      "https://dl.smwcentral.net/image/124738.png",
-      "https://dl.smwcentral.net/image/124739.png",
-      "https://dl.smwcentral.net/image/124740.png",
-      "https://dl.smwcentral.net/image/124741.png"
-    ],
-    "rating": 4.3462,
-    "size": 1287420,
-    "downloads": 18362,
-    "download_url": "https://dl.smwcentral.net/42562/Toad%27s%20World%20%282026%20Update%29.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "2026 Update",
-      "changelog": "Upated to SA1.<br>\r\nUpdated to AddmusicK.<br>\r\nFixed dynamic sprite related issues.<br>\r\nMany QoL such as all levels having midway points and powerups and more.<br>\r\nFixed many other issues.",
-      "difficulty": "Intermediate",
-      "type": "Standard",
-      "length": "56 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "Yes",
-      "warnings": "",
-      "description": "This is the final version of Toad's World. It has new music, small level changes, and improvements.<br>\r\n<br>\r\nEnjoy!<br>\r\n<br>\r\n<b>MAJOR EDIT:</b> This is now compatible with the real hardware. I managed to update AddmusicK's code manually and keep all the music/sample pointers. Hooray!<br>\r\n<br>\r\n<b>2026 Update:</b> Retrieved everything back from the previous final version and improved everything by updating to SA-1 + AddmusicK and newest Lunar Magic as well as updating this hack to todays standards. Many things were fixed and improved while keeping the game as is. All levels now have a midway point and powerups to make the game more fair overall. Also added a status bar with item box as the old pause menu is not compatible with SA-1 at all.<br>\r\nFor more information please check the changelog."
-    },
-    "raw_fields": {
-      "version": "2026 Update",
-      "changelog": "Upated to SA1.\r\nUpdated to AddmusicK.\r\nFixed dynamic sprite related issues.\r\nMany QoL such as all levels having midway points and powerups and more.\r\nFixed many other issues.",
-      "difficulty": "diff_3",
-      "type": [
-        "standard"
-      ],
-      "length": 56,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": true,
-      "warnings": [],
-      "description": "This is the final version of Toad's World. It has new music, small level changes, and improvements.\r\n\r\nEnjoy!\r\n\r\n<b>MAJOR EDIT:</b> This is now compatible with the real hardware. I managed to update AddmusicK's code manually and keep all the music/sample pointers. Hooray!\r\n\r\n<b>2026 Update:</b> Retrieved everything back from the previous final version and improved everything by updating to SA-1 + AddmusicK and newest Lunar Magic as well as updating this hack to todays standards. Many things were fixed and improved while keeping the game as is. All levels now have a midway point and powerups to make the game more fair overall. Also added a status bar with item box as the old pause menu is not compatible with SA-1 at all.\r\nFor more information please check the changelog."
-    }
-  },
-  {
     "id": 42563,
     "section": "smwhacks",
     "name": "Tortured Souls 3",
@@ -2562,7 +2412,7 @@
     ],
     "rating": 0,
     "size": 2064493,
-    "downloads": 33,
+    "downloads": 39,
     "download_url": "https://dl.smwcentral.net/42563/Tortured%20Souls%203%201.2.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2656,7 +2506,7 @@
     ],
     "rating": 0,
     "size": 1545848,
-    "downloads": 54,
+    "downloads": 66,
     "download_url": "https://dl.smwcentral.net/42564/Super%20Mario%20World%20-%20The%20Magical%20Golden%20Mushroom%20v1.0.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2715,7 +2565,7 @@
     ],
     "rating": 0,
     "size": 24828,
-    "downloads": 9,
+    "downloads": 10,
     "download_url": "https://dl.smwcentral.net/42565/demo1.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2745,74 +2595,6 @@
       "sa1": false,
       "warnings": [],
       "description": "my first rom hack !"
-    }
-  },
-  {
-    "id": 42566,
-    "section": "smwhacks",
-    "name": "The Precise Is Right v1.1",
-    "time": 1781954421,
-    "submitted_at": 1781954421,
-    "moderated_at": null,
-    "moderated": false,
-    "authors": [
-      {
-        "id": 22816,
-        "name": "pixlrik"
-      }
-    ],
-    "submitter": {
-      "id": 22816,
-      "name": "pixlrik"
-    },
-    "moderator": null,
-    "tags": [
-      "custom music",
-      "precision"
-    ],
-    "images": [
-      "https://dl.smwcentral.net/image/124793.gif",
-      "https://dl.smwcentral.net/image/124794.png",
-      "https://dl.smwcentral.net/image/124795.png",
-      "https://dl.smwcentral.net/image/124796.png",
-      "https://dl.smwcentral.net/image/124797.png",
-      "https://dl.smwcentral.net/image/124798.png",
-      "https://dl.smwcentral.net/image/124799.png",
-      "https://dl.smwcentral.net/image/124800.png",
-      "https://dl.smwcentral.net/image/124801.png"
-    ],
-    "rating": 5,
-    "size": 566266,
-    "downloads": 403,
-    "download_url": "https://dl.smwcentral.net/42566/The%20Precise%20Is%20Right%20V1.1.zip",
-    "obsoleted_by": null,
-    "fields": {
-      "version": "v1.1",
-      "changelog": "",
-      "difficulty": "Expert",
-      "type": "Kaizo",
-      "length": "8 exit(s)",
-      "hof": "No",
-      "demo": "No",
-      "collab": "No",
-      "sa1": "No",
-      "warnings": "",
-      "description": "Try your luck at the toughest new gameshow in town!<br>\r\n<br>\r\nFeaturing over 80 one screen precision rooms, requiring a tight door entry at the end in order to progress. An optional final level contains some tougher rooms to master if you think you're up to the challenge...<br>\r\n<br>\r\nThe retry system can be changed on the fly to suit your play style.<br>\r\n<br>\r\nThe hack contains mainly vanilla graphics and sprites with a few custom ones thrown in to keep things interesting.<br>\r\n<br>\r\nTitle screen and cutscene character artwork by <a href=\"https://www.smwcentral.net/?p=profile&id=49231\">JezJitzu</a>. SNES style cover art by <a href=\"https://www.smwcentral.net/?p=profile&id=61574\">Dangil</a>. Huge shoutout to them both for their amazing work. &lt;3<br>\r\n<br>\r\nCome on down, and remember... The Precise Is Right!<br>\r\n<br>\r\n====================<br>\r\nv1.1 Update<br>\r\n<br>\r\n- One room has been overhauled while some others have received slight tweaks to setups and/or graphical updates to help with playability and readability<br>\r\n<br>\r\n- Final boss fight has been readjusted to make it fairer and easier to understand"
-    },
-    "raw_fields": {
-      "version": "v1.1",
-      "changelog": "",
-      "difficulty": "diff_5",
-      "type": [
-        "kaizo"
-      ],
-      "length": 8,
-      "hof": false,
-      "demo": false,
-      "collab": false,
-      "sa1": false,
-      "warnings": [],
-      "description": "Try your luck at the toughest new gameshow in town!\r\n\r\nFeaturing over 80 one screen precision rooms, requiring a tight door entry at the end in order to progress. An optional final level contains some tougher rooms to master if you think you're up to the challenge...\r\n\r\nThe retry system can be changed on the fly to suit your play style.\r\n\r\nThe hack contains mainly vanilla graphics and sprites with a few custom ones thrown in to keep things interesting.\r\n\r\nTitle screen and cutscene character artwork by [url=https://www.smwcentral.net/?p=profile&id=49231]JezJitzu[/url]. SNES style cover art by [url=https://www.smwcentral.net/?p=profile&id=61574]Dangil[/url]. Huge shoutout to them both for their amazing work. <3\r\n\r\nCome on down, and remember... The Precise Is Right!\r\n\r\n====================\r\nv1.1 Update\r\n\r\n- One room has been overhauled while some others have received slight tweaks to setups and/or graphical updates to help with playability and readability\r\n\r\n- Final boss fight has been readjusted to make it fairer and easier to understand"
     }
   },
   {
@@ -2852,7 +2634,7 @@
     ],
     "rating": 0,
     "size": 363854,
-    "downloads": 6,
+    "downloads": 18,
     "download_url": "https://dl.smwcentral.net/42570/Theislands.zip",
     "obsoleted_by": null,
     "fields": {
@@ -2882,6 +2664,91 @@
       "sa1": false,
       "warnings": [],
       "description": "This is my first Hack, it has some short sections and some longer sections, difficulty will ramp up as you go through. I hope you enjoy "
+    }
+  },
+  {
+    "id": 42572,
+    "section": "smwhacks",
+    "name": "Toad's World",
+    "time": 1782037549,
+    "submitted_at": 1782037549,
+    "moderated_at": null,
+    "moderated": false,
+    "authors": [
+      {
+        "id": 261,
+        "name": "FPI"
+      },
+      {
+        "id": 63,
+        "name": "Ice Man"
+      },
+      {
+        "id": 4,
+        "name": "ghettoyouth"
+      }
+    ],
+    "submitter": {
+      "id": 63,
+      "name": "Ice Man"
+    },
+    "moderator": null,
+    "tags": [
+      "asm",
+      "custom block",
+      "custom boss",
+      "custom music",
+      "exgfx",
+      "hdma",
+      "sa1",
+      "toad",
+      "traditional"
+    ],
+    "images": [
+      "https://dl.smwcentral.net/image/124808.png",
+      "https://dl.smwcentral.net/image/124809.png",
+      "https://dl.smwcentral.net/image/124810.png",
+      "https://dl.smwcentral.net/image/124811.png",
+      "https://dl.smwcentral.net/image/124812.png",
+      "https://dl.smwcentral.net/image/124813.png",
+      "https://dl.smwcentral.net/image/124814.png",
+      "https://dl.smwcentral.net/image/124815.png",
+      "https://dl.smwcentral.net/image/124816.png",
+      "https://dl.smwcentral.net/image/124817.png",
+      "https://dl.smwcentral.net/image/124818.png"
+    ],
+    "rating": 4.3462,
+    "size": 1287488,
+    "downloads": 18296,
+    "download_url": "https://dl.smwcentral.net/42572/Toad%27s%20World%20%282026%20Version%201.1%29.zip",
+    "obsoleted_by": null,
+    "fields": {
+      "version": "2026 Version 1.1",
+      "changelog": "Upated to SA1.<br>\r\nUpdated to AddmusicK.<br>\r\nFixed dynamic sprite related issues.<br>\r\nMany QoL such as all levels having midway points and powerups and more.<br>\r\nFixed many other issues.",
+      "difficulty": "Intermediate",
+      "type": "Standard",
+      "length": "56 exit(s)",
+      "hof": "No",
+      "demo": "No",
+      "collab": "Yes",
+      "sa1": "Yes",
+      "warnings": "",
+      "description": "<b>2026 Update 1:</b> <br>\r\nFixed a potential softlock in boss rooms with Mega Man gates.<br>\r\n<br>\r\n----------<br>\r\n<br>\r\n<b>2026 Update:</b><br>\r\nRetrieved everything back from the previous final version and improved everything by updating to SA-1 + AddmusicK and newest Lunar Magic as well as updating this hack to todays standards. Many things were fixed and improved while keeping the game as is. All levels now have a midway point and powerups to make the game more fair overall. Also added a status bar with item box as the old pause menu is not compatible with SA-1 at all.<br>\r\nFor more information please check the changelog.<br>\r\n<br>\r\n----------<br>\r\n<br>\r\n<b>Initial Release in 2013</b><br>\r\n<br>\r\n--------------------<br>\r\n<br>\r\nToad's World is a hack in collaboration with FPI and ghettoyouth. It features new music, enemies and more!<br>\r\n<br>\r\n"
+    },
+    "raw_fields": {
+      "version": "2026 Version 1.1",
+      "changelog": "Upated to SA1.\r\nUpdated to AddmusicK.\r\nFixed dynamic sprite related issues.\r\nMany QoL such as all levels having midway points and powerups and more.\r\nFixed many other issues.",
+      "difficulty": "diff_3",
+      "type": [
+        "standard"
+      ],
+      "length": 56,
+      "hof": false,
+      "demo": false,
+      "collab": true,
+      "sa1": true,
+      "warnings": [],
+      "description": "[b]2026 Update 1:[/b] \r\nFixed a potential softlock in boss rooms with Mega Man gates.\r\n\r\n----------\r\n\r\n[b]2026 Update:[/b]\r\nRetrieved everything back from the previous final version and improved everything by updating to SA-1 + AddmusicK and newest Lunar Magic as well as updating this hack to todays standards. Many things were fixed and improved while keeping the game as is. All levels now have a midway point and powerups to make the game more fair overall. Also added a status bar with item box as the old pause menu is not compatible with SA-1 at all.\r\nFor more information please check the changelog.\r\n\r\n----------\r\n\r\n[b]Initial Release in 2013[/b]\r\n\r\n--------------------\r\n\r\nToad's World is a hack in collaboration with FPI and ghettoyouth. It features new music, enemies and more!\r\n\r\n"
     }
   }
 ]

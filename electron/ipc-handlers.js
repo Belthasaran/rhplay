@@ -9727,7 +9727,7 @@ function registerDatabaseHandlers(dbManager) {
     try {
       const rhdataDb = dbManager.getConnection('rhdata');
       const rows = rhdataDb.prepare(`
-        SELECT rhpakuuid, jsfilename, name, created_at, updated_at
+        SELECT rhpakuuid, jsfilename, name, created_at, updated_at, is_system
         FROM rhpaks
         ORDER BY COALESCE(updated_at, created_at) DESC
       `).all();
@@ -9777,10 +9777,17 @@ function registerDatabaseHandlers(dbManager) {
   /**
    * Uninstall an RHPAK from the databases by UUID
    */
-  ipcMain.handle('rhpak:uninstall', async (_event, { rhpakuuid } = {}) => {
+  ipcMain.handle('rhpak:uninstall', async (_event, { rhpakuuid, allowSystemUninstall = false } = {}) => {
     try {
       if (!rhpakuuid) {
         return { success: false, error: 'rhpakuuid is required' };
+      }
+      if (!allowSystemUninstall) {
+        const rhdataDb = dbManager.getConnection('rhdata');
+        const row = rhdataDb.prepare('SELECT is_system FROM rhpaks WHERE rhpakuuid = ?').get(rhpakuuid);
+        if (row && row.is_system === 1) {
+          return { success: false, error: 'System RHPAKs cannot be uninstalled.' };
+        }
       }
       const config = buildNewgameConfig({
         uninstallUuid: rhpakuuid,

@@ -780,6 +780,23 @@ enode.sh jstools/update_waiting_index.js [--full-rebuild] [--no-copy] [--no-ardr
 
 ---
 
+### find_waiting_notincluded.js
+**Purpose**: Find waiting-index CSV entries whose gameids are not in gameversions, group related submissions (BPS hash + fuzzy name/author), and report stale waiting entries.
+
+**Usage**:
+```bash
+enode.sh jstools/find_waiting_notincluded.js --index=jstools/smwc_world/waiting_index_ar.csv
+enode.sh jstools/find_waiting_notincluded.js --index=... --older-than=30 --hidematches-oldonly --json
+```
+
+**Options**: `--index=PATH` (required), `--rhdatadb=PATH`, `--older-than=N`, `--hidematches-all`, `--hidematches-oldonly`, `--json`, `--help`
+
+**Environment**: `RHDATA_DB_PATH`
+
+**Documentation**: See `docs/SMWC_WAITING_AUTOMATION.md`
+
+---
+
 ### smwcw_waiting_build7z.js
 **Purpose**: Build 7z waiting packages for SMWC Waiting games (port of enter.py). By default includes extras (text/README/images from `smwc_world/extras`) in each 7z.
 

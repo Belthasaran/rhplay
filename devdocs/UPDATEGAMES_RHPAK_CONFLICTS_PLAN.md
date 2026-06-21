@@ -2,7 +2,7 @@
 name: updategames RHPAK Conflict Review and Multi-Owner Schema
 overview: Documents RHPAK ownership conflicts during updategames in-place import, and plans updategames_conflicts.js plus rhpakuuid2 / is_system schema extensions for safe review, reassignment, and shared-resource uninstall.
 date: 2026-06-21
-status: plan
+  status: implemented
 ---
 
 # updategames RHPAK Conflict Review and Multi-Owner Schema

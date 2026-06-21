@@ -242,6 +242,7 @@ function ensureRhpakagesStructures(db) {
     rhpakuuid TEXT PRIMARY KEY,
     jsfilename VARCHAR(255) NOT NULL,
     name TEXT NOT NULL,
+    is_system INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );`);
@@ -756,6 +757,41 @@ const MIGRATIONS = {
         } catch (e) {
           return false;
         }
+      },
+    },
+    {
+      id: 'rhdata_071_rhpakuuid2_multi_owner',
+      description: 'Add rhpakuuid2 JSON owner list to rhdata RHPAK-owned tables',
+      type: 'function',
+      apply(db) {
+        const tables = ['gameversions', 'gameversion_stats', 'patchblobs', 'patchblobs_extended', 'rhpatches', 'gamestages'];
+        for (const table of tables) {
+          if (!tableExists(db, table)) {
+            continue;
+          }
+          ensureColumn(db, table, 'rhpakuuid2', 'TEXT');
+          db.prepare(
+            `UPDATE ${table}
+             SET rhpakuuid2 = json_array(rhpakuuid)
+             WHERE rhpakuuid IS NOT NULL
+               AND (rhpakuuid2 IS NULL OR trim(rhpakuuid2) = '')`
+          ).run();
+        }
+      },
+      skipIf(db) {
+        return columnExists(db, 'gameversions', 'rhpakuuid2');
+      },
+    },
+    {
+      id: 'rhdata_072_rhpaks_is_system',
+      description: 'Add is_system flag to rhpaks registry',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/072_rhdata_rhpaks_is_system.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'rhpaks')) {
+          return true;
+        }
+        return columnExists(db, 'rhpaks', 'is_system');
       },
     },
   ],
@@ -1819,6 +1855,18 @@ const MIGRATIONS = {
         ensureColumn(db, 'attachments', 'rhpakuuid', 'TEXT');
       },
     },
+    {
+      id: 'patchbin_002_rhpakuuid2',
+      description: 'Add rhpakuuid2 JSON owner list to attachments',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/patchbin_002_rhpakuuid2.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'attachments')) {
+          return true;
+        }
+        return columnExists(db, 'attachments', 'rhpakuuid2');
+      },
+    },
   ],
   resource: [
     {
@@ -1843,7 +1891,19 @@ const MIGRATIONS = {
       skipIf(db) {
         return tableExists(db, 'res_alt_names');
       },
-    }
+    },
+    {
+      id: 'resource_004_rhpakuuid2',
+      description: 'Add rhpakuuid2 JSON owner list to res_attachments',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/resource_004_rhpakuuid2.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'res_attachments')) {
+          return true;
+        }
+        return columnExists(db, 'res_attachments', 'rhpakuuid2');
+      },
+    },
   ],
   screenshot: [
     {
@@ -1886,7 +1946,19 @@ const MIGRATIONS = {
       skipIf(db) {
         return tableExists(db, 'gameversion_screenshots');
       },
-    }
+    },
+    {
+      id: 'screenshot_006_rhpakuuid2',
+      description: 'Add rhpakuuid2 JSON owner list to res_screenshots',
+      type: 'sql',
+      file: resolveRelative('electron/sql/migrations/screenshot_006_rhpakuuid2.sql'),
+      skipIf(db) {
+        if (!tableExists(db, 'res_screenshots')) {
+          return true;
+        }
+        return columnExists(db, 'res_screenshots', 'rhpakuuid2');
+      },
+    },
   ],
 };
 

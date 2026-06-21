@@ -54,6 +54,7 @@ const BlobCreator = require('../lib/blob-creator');
 const { BinaryFinder } = require('../lib/binary-finder');
 const sevenZip = require('7zip-min');
 const { path7za } = require('7zip-bin');
+const rhpakOwnership = require('../lib/rhpak-ownership');
 
 // Helper function to configure 7zip-min with the correct unpacked binary path
 function configure7zipPath() {
@@ -1681,7 +1682,8 @@ function parseArgs(argv) {
     uninstallUuid: null,
     trustPatches: false,
     forceGameids: false,
-    forceExtrapatches: false
+    forceExtrapatches: false,
+    isSystem: false
   };
 
   for (const arg of args) {
@@ -1760,6 +1762,10 @@ function parseArgs(argv) {
     }
     if (arg === '--trust-patches') {
       config.trustPatches = true;
+      continue;
+    }
+    if (arg === '--is-system') {
+      config.isSystem = true;
       continue;
     }
     if (arg === '--help') {
@@ -2533,6 +2539,68 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {
  * Upsert operations
  */
 
+function resolveOwnerFieldsForUpsert(existing, incomingRhpak, options = {}) {
+  if (!incomingRhpak) {
+    throw new Error('rhpakuuid metadata missing for upsert.');
+  }
+  if (!existing) {
+    return rhpakOwnership.singleOwnerFields(incomingRhpak);
+  }
+  rhpakOwnership.assertCanUpsertRhpakRow(existing, incomingRhpak, 'Record', options);
+  return rhpakOwnership.mergeOwnerFieldsForUpsert(existing, incomingRhpak, options);
+}
+
+function tableHasColumn(db, table, column) {
+  try {
+    return db.prepare(`PRAGMA table_info(${table})`).all().some((row) => row.name === column);
+  } catch (_) {
+    return false;
+  }
+}
+
+function tableExists(db, table) {
+  try {
+    return !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
+  } catch (_) {
+    return false;
+  }
+}
+
+function selectRowsLinkedToRhpak(db, table, pkColumns, uuid) {
+  if (tableHasColumn(db, table, 'rhpakuuid2')) {
+    const pkSelect = pkColumns.join(', ');
+    return db.prepare(`
+      SELECT ${pkSelect}, rhpakuuid, rhpakuuid2 FROM ${table}
+      WHERE rhpakuuid = ?
+         OR (rhpakuuid2 IS NOT NULL AND EXISTS (
+           SELECT 1 FROM json_each(rhpakuuid2) WHERE value = ?
+         ))
+    `).all(uuid, uuid);
+  }
+  const pkSelect = pkColumns.join(', ');
+  return db.prepare(`SELECT ${pkSelect}, rhpakuuid FROM ${table} WHERE rhpakuuid = ?`).all(uuid);
+}
+
+function uninstallRhpakRowsFromTable(db, table, pkColumns, uuid) {
+  const rows = selectRowsLinkedToRhpak(db, table, pkColumns, uuid);
+  if (!tableHasColumn(db, table, 'rhpakuuid2')) {
+    return db.prepare(`DELETE FROM ${table} WHERE rhpakuuid = ?`).run(uuid).changes;
+  }
+  let changes = 0;
+  const where = pkColumns.map((col) => `${col} = @${col}`).join(' AND ');
+  for (const row of rows) {
+    const result = rhpakOwnership.removeOwner(row, uuid);
+    if (result.shouldDeleteRow) {
+      changes += db.prepare(`DELETE FROM ${table} WHERE ${where}`).run(row).changes;
+    } else {
+      changes += db.prepare(
+        `UPDATE ${table} SET rhpakuuid = @rhpakuuid, rhpakuuid2 = @rhpakuuid2 WHERE ${where}`
+      ).run({ ...row, rhpakuuid: result.rhpakuuid, rhpakuuid2: result.rhpakuuid2 }).changes;
+    }
+  }
+  return changes;
+}
+
 function upsertGameversion(db, skeleton, artifact, options) {
   const gv = skeleton.gameversion;
   ensureGameversionDerivedFields(skeleton);
@@ -2588,7 +2656,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
       length, difficulty, url, download_url, name_href, author_href, obsoleted_by,
       patchblob1_name, pat_sha224, size, description, gvjsondata, tags,
       tags_href, gvchange_attributes, gvchanges, fields_type, raw_difficulty,
-      combinedtype, legacy_type, rhpakuuid
+      combinedtype, legacy_type, rhpakuuid, rhpakuuid2
     )
     VALUES (
       @gvuuid, @section, @gameid, @version, @removed, @obsoleted, @gametype, @name,
@@ -2596,7 +2664,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
       @length, @difficulty, @url, @download_url, @name_href, @author_href, @obsoleted_by,
       @patchblob1_name, @pat_sha224, @size, @description, @gvjsondata, @tags,
       NULL, NULL, NULL, @fields_type, @raw_difficulty,
-      @combinedtype, @legacy_type, @rhpakuuid
+      @combinedtype, @legacy_type, @rhpakuuid, @rhpakuuid2
     )
     ON CONFLICT(gameid, version) DO UPDATE SET
       section = excluded.section,
@@ -2629,8 +2697,16 @@ function upsertGameversion(db, skeleton, artifact, options) {
       raw_difficulty = excluded.raw_difficulty,
       combinedtype = excluded.combinedtype,
       legacy_type = excluded.legacy_type,
-      rhpakuuid = excluded.rhpakuuid
+      rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2
   `;
+
+  const existing = db.prepare('SELECT gvuuid, rhpakuuid, rhpakuuid2 FROM gameversions WHERE gameid = ? AND version = ?')
+    .get(gv.gameid, gv.version);
+  const ownerFields = resolveOwnerFieldsForUpsert(existing, rhpakuuid, options);
+  if (existing && !existing.rhpakuuid && existing.gvuuid && existing.gvuuid !== gv.gvuuid) {
+    throw new Error(`Existing gameversion ${gv.gameid} v${gv.version} lacks rhpak ownership and cannot be replaced.`);
+  }
 
   const params = {
     gvuuid: gv.gvuuid,
@@ -2666,19 +2742,9 @@ function upsertGameversion(db, skeleton, artifact, options) {
     raw_difficulty: gv.raw_difficulty || deriveRawDifficultyCode(gv),
     combinedtype: gv.combinedtype || computeCombinedTypeForGameversion(gv, skeleton),
     legacy_type: gv.legacy_type || '',
-    rhpakuuid
+    rhpakuuid: ownerFields.rhpakuuid,
+    rhpakuuid2: ownerFields.rhpakuuid2
   };
-
-  const existing = db.prepare('SELECT gvuuid, rhpakuuid FROM gameversions WHERE gameid = ? AND version = ?')
-    .get(gv.gameid, gv.version);
-  if (existing) {
-    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
-      throw new Error(`Existing gameversion ${gv.gameid} v${gv.version} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
-    }
-    if (!existing.rhpakuuid && existing.gvuuid && existing.gvuuid !== gv.gvuuid) {
-      throw new Error(`Existing gameversion ${gv.gameid} v${gv.version} lacks rhpak ownership and cannot be replaced.`);
-    }
-  }
 
   db.prepare(query).run(params);
 }
@@ -2694,12 +2760,12 @@ function upsertGameversionStats(db, skeleton) {
     INSERT INTO gameversion_stats (
       gameid, gvuuid, download_count, view_count, comment_count,
       rating_value, rating_count, favorite_count, hof_status,
-      featured_status, gvjsondata, rhpakuuid
+      featured_status, gvjsondata, rhpakuuid, rhpakuuid2
     )
     VALUES (
       @gameid, @gvuuid, @download_count, @view_count, @comment_count,
       @rating_value, @rating_count, @favorite_count, @hof_status,
-      @featured_status, @gvjsondata, @rhpakuuid
+      @featured_status, @gvjsondata, @rhpakuuid, @rhpakuuid2
     )
     ON CONFLICT(gameid) DO UPDATE SET
       gvuuid = excluded.gvuuid,
@@ -2713,8 +2779,12 @@ function upsertGameversionStats(db, skeleton) {
       featured_status = excluded.featured_status,
       gvjsondata = excluded.gvjsondata,
       rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2,
       last_updated = CURRENT_TIMESTAMP
   `;
+
+  const existing = db.prepare('SELECT rhpakuuid, rhpakuuid2 FROM gameversion_stats WHERE gameid = ?').get(gv.gameid);
+  const ownerFields = resolveOwnerFieldsForUpsert(existing, rhpakuuid);
 
   const payload = {
     gameid: gv.gameid,
@@ -2736,18 +2806,9 @@ function upsertGameversionStats(db, skeleton) {
       rating_count: stats.rating_count || 0,
       favorite_count: stats.favorite_count || 0
     }),
-    rhpakuuid
+    rhpakuuid: ownerFields.rhpakuuid,
+    rhpakuuid2: ownerFields.rhpakuuid2
   };
-
-  const existing = db.prepare('SELECT rhpakuuid FROM gameversion_stats WHERE gameid = ?').get(gv.gameid);
-  if (existing) {
-    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
-      throw new Error(`Existing gameversion_stats for ${gv.gameid} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
-    }
-    if (!existing.rhpakuuid) {
-      throw new Error(`Existing gameversion_stats for ${gv.gameid} was not installed via an rhpak and cannot be replaced.`);
-    }
-  }
 
   db.prepare(query).run(payload);
 }
@@ -2767,12 +2828,12 @@ function upsertPatchblob(db, skeleton, artifact) {
     INSERT INTO patchblobs (
       pbuuid, gvuuid, patch_name, pat_sha1, pat_sha224, pat_shake_128,
       patchblob1_key, patchblob1_name, patchblob1_sha224,
-      result_sha1, result_sha224, result_shake1, pbjsondata, rhpakuuid
+      result_sha1, result_sha224, result_shake1, pbjsondata, rhpakuuid, rhpakuuid2
     )
     VALUES (
       @pbuuid, @gvuuid, @patch_name, @pat_sha1, @pat_sha224, @pat_shake_128,
       @patchblob1_key, @patchblob1_name, @patchblob1_sha224,
-      @result_sha1, @result_sha224, @result_shake1, @pbjsondata, @rhpakuuid
+      @result_sha1, @result_sha224, @result_shake1, @pbjsondata, @rhpakuuid, @rhpakuuid2
     )
     ON CONFLICT(patchblob1_name) DO UPDATE SET
       gvuuid = excluded.gvuuid,
@@ -2786,8 +2847,12 @@ function upsertPatchblob(db, skeleton, artifact) {
       result_sha224 = excluded.result_sha224,
       result_shake1 = excluded.result_shake1,
       pbjsondata = excluded.pbjsondata,
-      rhpakuuid = excluded.rhpakuuid
+      rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2
   `;
+
+  const existing = db.prepare('SELECT rhpakuuid, rhpakuuid2 FROM patchblobs WHERE patchblob1_name = ?').get(artifact.patchblobName);
+  const ownerFields = resolveOwnerFieldsForUpsert(existing, rhpakuuid);
 
   const payload = {
     pbuuid: pb.pbuuid,
@@ -2809,18 +2874,9 @@ function upsertPatchblob(db, skeleton, artifact) {
       pat_shake_128: artifact.patShake128,
       patchblob1_name: artifact.patchblobName
     }),
-    rhpakuuid
+    rhpakuuid: ownerFields.rhpakuuid,
+    rhpakuuid2: ownerFields.rhpakuuid2
   };
-
-  const existing = db.prepare('SELECT rhpakuuid FROM patchblobs WHERE patchblob1_name = ?').get(artifact.patchblobName);
-  if (existing) {
-    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
-      throw new Error(`Patchblob ${artifact.patchblobName} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
-    }
-    if (!existing.rhpakuuid) {
-      throw new Error(`Patchblob ${artifact.patchblobName} was not installed via an rhpak and cannot be replaced.`);
-    }
-  }
 
   db.prepare(query).run(payload);
   pb.patchblob1_name = artifact.patchblobName;
@@ -2840,28 +2896,22 @@ function upsertPatchblobExtended(db, skeleton, artifact) {
   }
   const query = `
     INSERT INTO patchblobs_extended (
-      pbuuid, patch_filename, patch_type, is_primary, zip_source, rhpakuuid
+      pbuuid, patch_filename, patch_type, is_primary, zip_source, rhpakuuid, rhpakuuid2
     )
     VALUES (
-      @pbuuid, @patch_filename, @patch_type, @is_primary, @zip_source, @rhpakuuid
+      @pbuuid, @patch_filename, @patch_type, @is_primary, @zip_source, @rhpakuuid, @rhpakuuid2
     )
     ON CONFLICT(pbuuid) DO UPDATE SET
       patch_filename = excluded.patch_filename,
       patch_type = excluded.patch_type,
       is_primary = excluded.is_primary,
       zip_source = excluded.zip_source,
-      rhpakuuid = excluded.rhpakuuid
+      rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2
   `;
 
-  const existing = db.prepare('SELECT rhpakuuid FROM patchblobs_extended WHERE pbuuid = ?').get(pb.pbuuid);
-  if (existing) {
-    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
-      throw new Error(`patchblobs_extended entry ${pb.pbuuid} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
-    }
-    if (!existing.rhpakuuid) {
-      throw new Error(`patchblobs_extended entry ${pb.pbuuid} was not installed via an rhpak and cannot be replaced.`);
-    }
-  }
+  const existing = db.prepare('SELECT rhpakuuid, rhpakuuid2 FROM patchblobs_extended WHERE pbuuid = ?').get(pb.pbuuid);
+  const ownerFields = resolveOwnerFieldsForUpsert(existing, rhpakuuid);
 
   db.prepare(query).run({
     pbuuid: pb.pbuuid,
@@ -2869,7 +2919,8 @@ function upsertPatchblobExtended(db, skeleton, artifact) {
     patch_type: artifact.extension || 'bps',
     is_primary: 1,
     zip_source: null,
-    rhpakuuid
+    rhpakuuid: ownerFields.rhpakuuid,
+    rhpakuuid2: ownerFields.rhpakuuid2
   });
 }
 
@@ -2885,20 +2936,15 @@ function upsertAttachment(db, skeleton, artifact) {
     at.auuid = generateUuid();
   }
 
-  const existing = db.prepare('SELECT auuid, rhpakuuid FROM attachments WHERE file_name = ?').get(artifact.patchblobName);
+  const existing = db.prepare('SELECT auuid, rhpakuuid, rhpakuuid2 FROM attachments WHERE file_name = ?').get(artifact.patchblobName);
+  const ownerFields = resolveOwnerFieldsForUpsert(existing, rhpakuuid);
   if (existing) {
-    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
-      throw new Error(`Attachment ${artifact.patchblobName} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
-    }
-    if (!existing.rhpakuuid) {
-      throw new Error(`Attachment ${artifact.patchblobName} was not installed via an rhpak and cannot be replaced.`);
-    }
     at.auuid = existing.auuid;
   }
 
   const query = `
     REPLACE INTO attachments (
-      auuid, pbuuid, gvuuid, rhpakuuid, resuuid,
+      auuid, pbuuid, gvuuid, rhpakuuid, rhpakuuid2, resuuid,
       file_crc16, file_crc32, locators, parents,
       file_ipfs_cidv0, file_ipfs_cidv1,
       file_hash_sha224, file_hash_sha1, file_hash_md5, file_hash_sha256,
@@ -2908,7 +2954,7 @@ function upsertAttachment(db, skeleton, artifact) {
       file_data, download_urls, file_size
     )
     VALUES (
-      @auuid, @pbuuid, @gvuuid, @rhpakuuid, NULL,
+      @auuid, @pbuuid, @gvuuid, @rhpakuuid, @rhpakuuid2, NULL,
       @file_crc16, @file_crc32, @locators, @parents,
       @file_ipfs_cidv0, @file_ipfs_cidv1,
       @file_hash_sha224, @file_hash_sha1, @file_hash_md5, @file_hash_sha256,
@@ -2927,7 +2973,8 @@ function upsertAttachment(db, skeleton, artifact) {
     auuid: at.auuid,
     pbuuid: pb.pbuuid,
     gvuuid: gv.gvuuid,
-    rhpakuuid,
+    rhpakuuid: ownerFields.rhpakuuid,
+    rhpakuuid2: ownerFields.rhpakuuid2,
     file_crc16: attachmentMeta.file_crc16 || artifact.crc16,
     file_crc32: attachmentMeta.file_crc32 || artifact.crc32,
     locators: JSON.stringify([]),
@@ -2952,7 +2999,7 @@ function upsertAttachment(db, skeleton, artifact) {
   });
 
   at.file_name = artifact.patchblobName;
-  at.rhpakuuid = rhpakuuid;
+  at.rhpakuuid = ownerFields.rhpakuuid;
 }
 
 function upsertGamestages(db, skeleton) {
@@ -2981,17 +3028,19 @@ function upsertGamestages(db, skeleton) {
       translevel_13bf, tile_x, tile_y, requisites,
       playable, rando, difficulty, mainexit, keyhole, credits, water,
       ghouse, spalace, castle, boss, secret, troll, final, lock,
-      playlevel_patch_code, excluded_patchcodes, extradescription, rhpakuuid
+      playlevel_patch_code, excluded_patchcodes, extradescription, rhpakuuid, rhpakuuid2
     )
     VALUES (
       @stage_uuid, @gameid, @levelnumber, @levelname, @versions, @submapid,
       @translevel_13bf, @tile_x, @tile_y, @requisites,
       @playable, @rando, @difficulty, @mainexit, @keyhole, @credits, @water,
       @ghouse, @spalace, @castle, @boss, @secret, @troll, @final, @lock,
-      @playlevel_patch_code, @excluded_patchcodes, @extradescription, @rhpakuuid
+      @playlevel_patch_code, @excluded_patchcodes, @extradescription, @rhpakuuid, @rhpakuuid2
     )
   `);
-  
+
+  const stageOwnerFields = rhpakOwnership.singleOwnerFields(rhpakuuid);
+
   for (const stage of stages) {
     const stageUuid = stage.stage_uuid || generateUuid();
     insertStmt.run({
@@ -3023,7 +3072,8 @@ function upsertGamestages(db, skeleton) {
       playlevel_patch_code: stage.playlevel_patch_code || null,
       excluded_patchcodes: stage.excluded_patchcodes || null,
       extradescription: stage.extradescription || null,
-      rhpakuuid: rhpakuuid
+      rhpakuuid: stageOwnerFields.rhpakuuid,
+      rhpakuuid2: stageOwnerFields.rhpakuuid2
     });
   }
 }
@@ -3034,31 +3084,26 @@ function upsertPatchRecord(db, skeleton, artifact) {
   if (!rhpakuuid) {
     throw new Error('rhpakuuid metadata missing for rhpatches upsert.');
   }
-  const existing = db.prepare('SELECT rhpakuuid FROM rhpatches WHERE patch_name = ?').get(artifact.patchRelativePath);
-  if (existing) {
-    if (existing.rhpakuuid && existing.rhpakuuid !== rhpakuuid) {
-      throw new Error(`Patch record ${artifact.patchRelativePath} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${rhpakuuid}.`);
-    }
-    if (!existing.rhpakuuid) {
-      throw new Error(`Patch record ${artifact.patchRelativePath} was not installed via an rhpak and cannot be replaced.`);
-    }
-  }
+  const existing = db.prepare('SELECT rhpakuuid, rhpakuuid2 FROM rhpatches WHERE patch_name = ?').get(artifact.patchRelativePath);
+  const ownerFields = resolveOwnerFieldsForUpsert(existing, rhpakuuid);
   const query = `
-    INSERT INTO rhpatches (rhpuuid, gameid, patch_name, rhpakuuid)
-    VALUES (@rhpuuid, @gameid, @patch_name, @rhpakuuid)
+    INSERT INTO rhpatches (rhpuuid, gameid, patch_name, rhpakuuid, rhpakuuid2)
+    VALUES (@rhpuuid, @gameid, @patch_name, @rhpakuuid, @rhpakuuid2)
     ON CONFLICT(patch_name) DO UPDATE SET
       gameid = excluded.gameid,
-      rhpakuuid = excluded.rhpakuuid
+      rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2
   `;
   db.prepare(query).run({
     rhpuuid: generateUuid(),
     gameid: gv.gameid,
     patch_name: artifact.patchRelativePath,
-    rhpakuuid
+    rhpakuuid: ownerFields.rhpakuuid,
+    rhpakuuid2: ownerFields.rhpakuuid2
   });
 }
 
-function upsertRhpakRecord(db, skeleton) {
+function upsertRhpakRecord(db, skeleton, options = {}) {
   const metadata = skeleton.metadata || {};
   const rhpakuuid = metadata.rhpakuuid;
   if (!rhpakuuid) {
@@ -3068,6 +3113,26 @@ function upsertRhpakRecord(db, skeleton) {
   const name = (metadata.rhpakname && metadata.rhpakname.trim())
     ? metadata.rhpakname.trim()
     : buildDefaultRhpakName(skeleton.gameversion || {});
+  const isSystem = options.isSystem === true
+    || metadata.is_system === true
+    || metadata.is_system === 1
+    || options.config?.isSystem === true
+    ? 1
+    : 0;
+  const hasIsSystem = tableHasColumn(db, 'rhpaks', 'is_system');
+  if (hasIsSystem) {
+    const query = `
+      INSERT INTO rhpaks (rhpakuuid, jsfilename, name, is_system)
+      VALUES (@rhpakuuid, @jsfilename, @name, @is_system)
+      ON CONFLICT(rhpakuuid) DO UPDATE SET
+        jsfilename = excluded.jsfilename,
+        name = excluded.name,
+        is_system = CASE WHEN excluded.is_system = 1 THEN 1 ELSE rhpaks.is_system END,
+        updated_at = CURRENT_TIMESTAMP
+    `;
+    db.prepare(query).run({ rhpakuuid, jsfilename, name, is_system: isSystem });
+    return;
+  }
   const query = `
     INSERT INTO rhpaks (rhpakuuid, jsfilename, name)
     VALUES (@rhpakuuid, @jsfilename, @name)
@@ -3091,7 +3156,7 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
   const insertStmt = resourceDb.prepare(`
     INSERT INTO res_attachments (
       rauuid, resource_scope, linked_type, linked_uuid,
-      gameid, gvuuid, rhpakuuid, description,
+      gameid, gvuuid, rhpakuuid, rhpakuuid2, description,
       file_name, file_ext, file_size,
       file_sha224, file_sha256, file_sha1, file_md5,
       file_crc16, file_crc32,
@@ -3104,7 +3169,7 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
     )
     VALUES (
       @rauuid, @resource_scope, @linked_type, @linked_uuid,
-      @gameid, @gvuuid, @rhpakuuid, @description,
+      @gameid, @gvuuid, @rhpakuuid, @rhpakuuid2, @description,
       @file_name, @file_ext, @file_size,
       @file_sha224, @file_sha256, @file_sha1, @file_md5,
       @file_crc16, @file_crc32,
@@ -3136,6 +3201,7 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
       blob_storage_path = excluded.blob_storage_path,
       source_path = excluded.source_path,
       rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2,
       updated_at = CURRENT_TIMESTAMP
   `);
 
@@ -3144,17 +3210,13 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
     const rauuid = entry.resource_uuid || generateUuid();
     entry.resource_uuid = rauuid;
     const effectiveFileSha256 = entry.file_sha256 || (payload.decodedBuffer ? sha256(payload.decodedBuffer) : null);
+    const entryRhpak = entry.rhpakuuid || rhpakuuid;
+    let ownerFields = rhpakOwnership.singleOwnerFields(entryRhpak);
     if (effectiveFileSha256) {
-      const existing = resourceDb.prepare('SELECT rhpakuuid FROM res_attachments WHERE file_sha256 = ?').get(effectiveFileSha256);
-      if (existing) {
-        const entryRhpak = entry.rhpakuuid || rhpakuuid;
-        if (existing.rhpakuuid && existing.rhpakuuid !== entryRhpak) {
-          throw new Error(`Resource file ${entry.file_name || effectiveFileSha256} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${entryRhpak}.`);
-        }
-        if (!existing.rhpakuuid) {
-          throw new Error(`Resource file ${entry.file_name || effectiveFileSha256} was not installed via an rhpak and cannot be replaced.`);
-        }
-      }
+      const existing = resourceDb.prepare(
+        'SELECT rauuid, rhpakuuid, rhpakuuid2 FROM res_attachments WHERE file_sha256 = ?'
+      ).get(effectiveFileSha256);
+      ownerFields = resolveOwnerFieldsForUpsert(existing, entryRhpak);
     }
     const effectiveFileSha224 = entry.file_sha224 || (payload.decodedBuffer ? sha224(payload.decodedBuffer) : null);
     const effectiveEncodedSha = entry.encoded_sha256 || (payload.encryptedBuffer ? sha256(payload.encryptedBuffer) : null);
@@ -3166,7 +3228,8 @@ function upsertPreparedResources(resourceDb, skeleton, payloads) {
       linked_uuid: entry.linked_uuid || gv.gvuuid,
       gameid: entry.gameid || gv.gameid,
       gvuuid: entry.gvuuid || gv.gvuuid,
-      rhpakuuid: entry.rhpakuuid || rhpakuuid,
+      rhpakuuid: ownerFields.rhpakuuid,
+      rhpakuuid2: ownerFields.rhpakuuid2,
       description: entry.description || null,
       file_name: entry.file_name,
       file_ext: entry.file_ext || null,
@@ -3209,7 +3272,7 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
   const insertFileStmt = screenshotDb.prepare(`
     INSERT INTO res_screenshots (
       rsuuid, screenshot_type, kind,
-      gameid, gvuuid, rhpakuuid,
+      gameid, gvuuid, rhpakuuid, rhpakuuid2,
       source_url, file_name, file_ext, file_size,
       file_sha256, encoded_sha256, decoded_sha256,
       encrypted_data, fernet_key,
@@ -3220,7 +3283,7 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
     )
     VALUES (
       @rsuuid, @screenshot_type, @kind,
-      @gameid, @gvuuid, @rhpakuuid,
+      @gameid, @gvuuid, @rhpakuuid, @rhpakuuid2,
       @source_url, @file_name, @file_ext, @file_size,
       @file_sha256, @encoded_sha256, @decoded_sha256,
       @encrypted_data, @fernet_key,
@@ -3251,18 +3314,19 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
       storage_path = excluded.storage_path,
       source_path = excluded.source_path,
       rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2,
       updated_at = CURRENT_TIMESTAMP
   `);
 
   const insertUrlStmt = screenshotDb.prepare(`
     INSERT INTO res_screenshots (
       rsuuid, screenshot_type, kind,
-      gameid, gvuuid, rhpakuuid,
+      gameid, gvuuid, rhpakuuid, rhpakuuid2,
       source_url, download_url
     )
     VALUES (
       @rsuuid, @screenshot_type, @kind,
-      @gameid, @gvuuid, @rhpakuuid,
+      @gameid, @gvuuid, @rhpakuuid, @rhpakuuid2,
       @source_url, @download_url
     )
     ON CONFLICT(rsuuid) DO UPDATE SET
@@ -3270,6 +3334,7 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
       gvuuid = excluded.gvuuid,
       download_url = excluded.download_url,
       rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2,
       updated_at = CURRENT_TIMESTAMP
   `);
 
@@ -3277,19 +3342,15 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
     const entry = payload.entry;
     const rsuuid = entry.screenshot_uuid || generateUuid();
     entry.screenshot_uuid = rsuuid;
+    const entryRhpak = entry.rhpakuuid || rhpakuuid;
 
     if (payload.type === 'file') {
+      let ownerFields = rhpakOwnership.singleOwnerFields(entryRhpak);
       if (entry.file_sha256) {
-        const existing = screenshotDb.prepare('SELECT rhpakuuid FROM res_screenshots WHERE file_sha256 = ?').get(entry.file_sha256);
-        if (existing) {
-          const entryRhpak = entry.rhpakuuid || rhpakuuid;
-          if (existing.rhpakuuid && existing.rhpakuuid !== entryRhpak) {
-            throw new Error(`Screenshot ${entry.file_name || entry.file_sha256} belongs to rhpak ${existing.rhpakuuid} and cannot be replaced by ${entryRhpak}.`);
-          }
-          if (!existing.rhpakuuid) {
-            throw new Error(`Screenshot ${entry.file_name || entry.file_sha256} was not installed via an rhpak and cannot be replaced.`);
-          }
-        }
+        const existing = screenshotDb.prepare(
+          'SELECT rhpakuuid, rhpakuuid2 FROM res_screenshots WHERE file_sha256 = ?'
+        ).get(entry.file_sha256);
+        ownerFields = resolveOwnerFieldsForUpsert(existing, entryRhpak);
       }
       insertFileStmt.run({
         rsuuid,
@@ -3297,7 +3358,8 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
         kind: entry.kind || 'file',
         gameid: entry.gameid || gv.gameid,
         gvuuid: entry.gvuuid || gv.gvuuid,
-        rhpakuuid: entry.rhpakuuid || rhpakuuid,
+        rhpakuuid: ownerFields.rhpakuuid,
+        rhpakuuid2: ownerFields.rhpakuuid2,
         source_url: entry.source_url || null,
         file_name: entry.file_name || null,
         file_ext: entry.file_ext || null,
@@ -3319,17 +3381,12 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
         source_path: entry.source_path || null
       });
     } else {
+      let urlOwnerFields = rhpakOwnership.singleOwnerFields(entryRhpak);
       if (entry.source_url) {
-        const existingUrl = screenshotDb.prepare('SELECT rhpakuuid FROM res_screenshots WHERE source_url = ?').get(entry.source_url);
-        if (existingUrl) {
-          const entryRhpak = entry.rhpakuuid || rhpakuuid;
-          if (existingUrl.rhpakuuid && existingUrl.rhpakuuid !== entryRhpak) {
-            throw new Error(`Screenshot URL ${entry.source_url} belongs to rhpak ${existingUrl.rhpakuuid} and cannot be replaced by ${entryRhpak}.`);
-          }
-          if (!existingUrl.rhpakuuid) {
-            throw new Error(`Screenshot URL ${entry.source_url} was not installed via an rhpak and cannot be replaced.`);
-          }
-        }
+        const existingUrl = screenshotDb.prepare(
+          'SELECT rhpakuuid, rhpakuuid2 FROM res_screenshots WHERE source_url = ?'
+        ).get(entry.source_url);
+        urlOwnerFields = resolveOwnerFieldsForUpsert(existingUrl, entryRhpak);
       }
       insertUrlStmt.run({
         rsuuid,
@@ -3337,7 +3394,8 @@ function upsertPreparedScreenshots(screenshotDb, skeleton, payloads) {
         kind: entry.kind || 'url',
         gameid: entry.gameid || gv.gameid,
         gvuuid: entry.gvuuid || gv.gvuuid,
-        rhpakuuid: entry.rhpakuuid || rhpakuuid,
+        rhpakuuid: urlOwnerFields.rhpakuuid,
+        rhpakuuid2: urlOwnerFields.rhpakuuid2,
         source_url: entry.source_url,
         download_url: entry.download_url || entry.source_url || null
       });
@@ -3436,6 +3494,7 @@ function deleteRhpakRecords(databases, rhpakuuid) {
       patchblobs: 0,
       patchblobs_extended: 0,
       rhpatches: 0,
+      gamestages: 0,
       rhpaks: 0
     },
     attachments: 0,
@@ -3446,11 +3505,14 @@ function deleteRhpakRecords(databases, rhpakuuid) {
   if (databases.rhdata) {
     const txn = databases.rhdata.transaction((uuid) => {
       const counts = {
-        rhpatches: databases.rhdata.prepare('DELETE FROM rhpatches WHERE rhpakuuid = ?').run(uuid).changes,
-        patchblobs_extended: databases.rhdata.prepare('DELETE FROM patchblobs_extended WHERE rhpakuuid = ?').run(uuid).changes,
-        patchblobs: databases.rhdata.prepare('DELETE FROM patchblobs WHERE rhpakuuid = ?').run(uuid).changes,
-        gameversion_stats: databases.rhdata.prepare('DELETE FROM gameversion_stats WHERE rhpakuuid = ?').run(uuid).changes,
-        gameversions: databases.rhdata.prepare('DELETE FROM gameversions WHERE rhpakuuid = ?').run(uuid).changes,
+        rhpatches: uninstallRhpakRowsFromTable(databases.rhdata, 'rhpatches', ['patch_name'], uuid),
+        patchblobs_extended: uninstallRhpakRowsFromTable(databases.rhdata, 'patchblobs_extended', ['pbuuid'], uuid),
+        patchblobs: uninstallRhpakRowsFromTable(databases.rhdata, 'patchblobs', ['patchblob1_name'], uuid),
+        gameversion_stats: uninstallRhpakRowsFromTable(databases.rhdata, 'gameversion_stats', ['gameid'], uuid),
+        gameversions: uninstallRhpakRowsFromTable(databases.rhdata, 'gameversions', ['gameid', 'version'], uuid),
+        gamestages: tableExists(databases.rhdata, 'gamestages')
+          ? uninstallRhpakRowsFromTable(databases.rhdata, 'gamestages', ['stage_uuid'], uuid)
+          : 0,
         rhpaks: databases.rhdata.prepare('DELETE FROM rhpaks WHERE rhpakuuid = ?').run(uuid).changes
       };
       return counts;
@@ -3459,17 +3521,23 @@ function deleteRhpakRecords(databases, rhpakuuid) {
   }
 
   if (databases.patchbin) {
-    const txn = databases.patchbin.transaction((uuid) => databases.patchbin.prepare('DELETE FROM attachments WHERE rhpakuuid = ?').run(uuid).changes);
+    const txn = databases.patchbin.transaction((uuid) => (
+      uninstallRhpakRowsFromTable(databases.patchbin, 'attachments', ['file_name'], uuid)
+    ));
     summary.attachments = txn(rhpakuuid);
   }
 
   if (databases.resource) {
-    const txn = databases.resource.transaction((uuid) => databases.resource.prepare('DELETE FROM res_attachments WHERE rhpakuuid = ?').run(uuid).changes);
+    const txn = databases.resource.transaction((uuid) => (
+      uninstallRhpakRowsFromTable(databases.resource, 'res_attachments', ['rauuid'], uuid)
+    ));
     summary.resources = txn(rhpakuuid);
   }
 
   if (databases.screenshot) {
-    const txn = databases.screenshot.transaction((uuid) => databases.screenshot.prepare('DELETE FROM res_screenshots WHERE rhpakuuid = ?').run(uuid).changes);
+    const txn = databases.screenshot.transaction((uuid) => (
+      uninstallRhpakRowsFromTable(databases.screenshot, 'res_screenshots', ['rsuuid'], uuid)
+    ));
     summary.screenshots = txn(rhpakuuid);
   }
 
@@ -3763,7 +3831,7 @@ async function performAddOperation(config, skeleton, baseDir, { savePath = null 
       upsertPatchblobExtended(rhdataDb, skeleton, patchArtifact);
       upsertPatchRecord(rhdataDb, skeleton, patchArtifact);
       upsertGamestages(rhdataDb, skeleton);
-      upsertRhpakRecord(rhdataDb, skeleton);
+      upsertRhpakRecord(rhdataDb, skeleton, { config });
     });
     const transactionAttachment = patchbinDb.transaction(() => {
       upsertAttachment(patchbinDb, skeleton, patchArtifact);
@@ -4165,6 +4233,7 @@ async function handleImportPackage(config) {
     }
     metadata.prepared = true;
     metadata.prepared_at = metadata.prepared_at || new Date().toISOString();
+    metadata.is_system = false;
     metadata.imported_from = {
       package: path.basename(packageAbs),
       imported_at: new Date().toISOString(),

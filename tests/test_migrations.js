@@ -107,6 +107,8 @@ function main() {
     assert(tableExists(rhDb, 'gameversions_local'), 'gameversions_local table missing.');
     assert(columnExists(rhDb, 'gameversions', 'stages_sealed'), 'stages_sealed column missing in gameversions.');
     assert(columnExists(rhDb, 'gameversions', 'stages_sealed_at'), 'stages_sealed_at column missing in gameversions.');
+    assert(columnExists(rhDb, 'gameversions', 'rhpakuuid2'), 'rhpakuuid2 column missing in gameversions.');
+    assert(columnExists(rhDb, 'rhpaks', 'is_system'), 'is_system column missing in rhpaks.');
 
     const remainingGames = rhDb.prepare('SELECT COUNT(DISTINCT gameid) AS count FROM gameversions').get().count;
     if (metadata && seedOk) {

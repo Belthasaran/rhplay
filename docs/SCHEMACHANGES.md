@@ -1,3 +1,14 @@
+- 2026-06-21: RHPAK multi-owner tracking and is_system flag
+  - Description: Add `rhpakuuid2` JSON owner-list column to all RHPAK-owned tables; add `rhpaks.is_system` to distinguish updategames/SMWC system RHPAKs from user-installed packages.
+  - Rationale: Allow shared resource ownership across RHPAKs, safe uninstall when multiple packs reference the same patch hash, and support `updategames_conflicts.js` ownership reassignment before in-place import.
+  - Tables/columns:
+    - rhdata.db: `gameversions`, `gameversion_stats`, `patchblobs`, `patchblobs_extended`, `rhpatches`, `gamestages` → `rhpakuuid2 TEXT`; `rhpaks.is_system INTEGER NOT NULL DEFAULT 0`
+    - patchbin.db: `attachments.rhpakuuid2`
+    - resource.db: `res_attachments.rhpakuuid2`
+    - screenshot.db: `res_screenshots.rhpakuuid2`
+  - Migrations: `rhdata_071_rhpakuuid2_multi_owner`, `rhdata_072_rhpaks_is_system`, `patchbin_002_rhpakuuid2`, `resource_004_rhpakuuid2`, `screenshot_006_rhpakuuid2` via `jsutils/migratedb.js`
+  - Backfill: existing rows with `rhpakuuid` set receive `rhpakuuid2 = json_array(rhpakuuid)`; existing `rhpaks.is_system = 0`
+
 - 2026-06-20: rhdata - extrapatches ignore_warnings for ASAR patches
   - Description: Add `ignore_warnings` flag to `extrapatches` so ASAR patch templates can treat stderr warnings as non-fatal during +Patch build and run staging.
   - Rationale: ASAR emits deprecation/leak warnings on stderr even when patching succeeds; per-patch opt-in avoids false build failures.

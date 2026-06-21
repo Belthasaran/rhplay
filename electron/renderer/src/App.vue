@@ -2911,7 +2911,15 @@
               placeholder="Filter by Name, UUID, or JSON File…"
               class="filter-search-input"
             />
-            <button @click="installedRhpaksFilter = ''" :disabled="!installedRhpaksFilter.trim()" class="btn-clear-filter">
+            <label class="installed-rhpak-show-system">
+              <input type="checkbox" v-model="installedRhpaksShowSystem" />
+              Show System
+            </label>
+            <button
+              @click="clearInstalledRhpakDisplayFilters"
+              :disabled="!installedRhpaksFilter.trim() && !installedRhpaksShowSystem"
+              class="btn-clear-filter"
+            >
               Clear RHPAK Display Filters
             </button>
           </div>
@@ -2961,7 +2969,7 @@
         <button @click="refreshInstalledRhpaks" :disabled="installedRhpaksLoading">Refresh</button>
         <button 
           @click="uninstallSelectedRhpaks" 
-          :disabled="selectedInstalledRhpaks.size === 0 || rhpakUninstallInProgress"
+          :disabled="!hasUninstallableSelectedRhpaks || rhpakUninstallInProgress"
         >
           {{ rhpakUninstallInProgress ? 'Uninstalling…' : 'Uninstall Selected' }}
         </button>
@@ -10186,6 +10194,7 @@ type InstalledRhpak = {
   jsfilename?: string;
   created_at?: string;
   updated_at?: string;
+  is_system?: number | null;
 };
 
 type InstallRhpakStatus = 'idle' | 'installing' | 'success' | 'error';
@@ -10400,15 +10409,42 @@ const rhpakUninstallInProgress = ref(false);
 const rhpakListMessage = ref('');
 const rhpakListMessageType = ref<'success' | 'error' | ''>('');
 const installedRhpaksFilter = ref('');
+const installedRhpaksShowSystem = ref(false);
+
+function isSystemRhpak(r: InstalledRhpak): boolean {
+  return r.is_system === 1;
+}
+
+function isUninstallableRhpak(r: InstalledRhpak): boolean {
+  return !isSystemRhpak(r);
+}
+
 const filteredInstalledRhpaks = computed(() => {
+  let list = installedRhpaks.value;
+  if (!installedRhpaksShowSystem.value) {
+    list = list.filter((r) => !isSystemRhpak(r));
+  }
   const q = installedRhpaksFilter.value.trim().toLowerCase();
-  if (!q) return installedRhpaks.value;
-  return installedRhpaks.value.filter((r) => {
+  if (!q) return list;
+  return list.filter((r) => {
     const name = (r.name || '').toLowerCase();
     const uuid = (r.rhpakuuid || '').toLowerCase();
     const jsfilename = (r.jsfilename || '').toLowerCase();
     return name.includes(q) || uuid.includes(q) || jsfilename.includes(q);
   });
+});
+const hasUninstallableSelectedRhpaks = computed(() => {
+  if (selectedInstalledRhpaks.value.size === 0) {
+    return false;
+  }
+  const byUuid = new Map(installedRhpaks.value.map((r) => [r.rhpakuuid, r]));
+  for (const uuid of selectedInstalledRhpaks.value) {
+    const rhpak = byUuid.get(uuid);
+    if (rhpak && isUninstallableRhpak(rhpak)) {
+      return true;
+    }
+  }
+  return false;
 });
 const allInstalledRhpaksSelected = computed(() => {
   const filtered = filteredInstalledRhpaks.value;
@@ -11768,7 +11804,13 @@ function openInstalledRhpaksModal() {
 function closeInstalledRhpaksModal() {
   installedRhpaksModalOpen.value = false;
   installedRhpaksFilter.value = '';
+  installedRhpaksShowSystem.value = false;
   selectedInstalledRhpaks.value = new Set();
+}
+
+function clearInstalledRhpakDisplayFilters() {
+  installedRhpaksFilter.value = '';
+  installedRhpaksShowSystem.value = false;
 }
 
 async function refreshInstalledRhpaks() {
@@ -11824,8 +11866,20 @@ async function uninstallSelectedRhpaks() {
   if (selectedInstalledRhpaks.value.size === 0) {
     return;
   }
+  const byUuid = new Map(installedRhpaks.value.map((r) => [r.rhpakuuid, r]));
+  const selected = Array.from(selectedInstalledRhpaks.value);
+  const toUninstall = selected.filter((uuid) => {
+    const rhpak = byUuid.get(uuid);
+    return rhpak && isUninstallableRhpak(rhpak);
+  });
+  const skippedSystem = selected.length - toUninstall.length;
+  if (toUninstall.length === 0) {
+    rhpakListMessage.value = 'No user RHPAKs selected (system RHPAKs cannot be uninstalled).';
+    rhpakListMessageType.value = 'error';
+    return;
+  }
   const confirmed = await showConfirm(
-    `Uninstall ${selectedInstalledRhpaks.value.size} rhpak(s)? This will remove their records from the local databases.`,
+    `Uninstall ${toUninstall.length} rhpak(s)? This will remove their records from the local databases.`,
     'Uninstall RHPAK'
   );
   if (!confirmed) {
@@ -11835,7 +11889,7 @@ async function uninstallSelectedRhpaks() {
   rhpakListMessage.value = '';
   rhpakListMessageType.value = '';
   const errors: string[] = [];
-  for (const uuid of selectedInstalledRhpaks.value) {
+  for (const uuid of toUninstall) {
     try {
       const response = await (window as any).electronAPI.rhpakUninstall(uuid);
       if (!response?.success) {
@@ -11846,12 +11900,16 @@ async function uninstallSelectedRhpaks() {
     }
   }
   rhpakUninstallInProgress.value = false;
-  const total = selectedInstalledRhpaks.value.size;
+  const total = toUninstall.length;
   if (errors.length > 0) {
     rhpakListMessage.value = errors.join(' ');
     rhpakListMessageType.value = 'error';
   } else {
-    rhpakListMessage.value = 'Selected rhpaks were uninstalled.';
+    let message = 'Selected rhpaks were uninstalled.';
+    if (skippedSystem > 0) {
+      message += ` Skipped ${skippedSystem} system RHPAK(s).`;
+    }
+    rhpakListMessage.value = message;
     rhpakListMessageType.value = 'success';
     selectedInstalledRhpaks.value = new Set();
   }
@@ -38906,6 +38964,17 @@ button:disabled {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  align-items: center;
+}
+
+.installed-rhpak-show-system {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
 }
 
 .installed-rhpak-table-wrapper {

@@ -496,9 +496,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Uninstall an RHPAK by UUID
    * @param {string} rhpakuuid - Identifier of the rhpak to remove
+   * @param {Object} [options] - Optional uninstall options
+   * @param {boolean} [options.allowSystemUninstall=false] - Allow uninstalling is_system=1 RHPAKs
    * @returns {Promise<{success: boolean, output?: string, error?: string}>}
    */
-  rhpakUninstall: (rhpakuuid) => ipcRenderer.invoke('rhpak:uninstall', { rhpakuuid }),
+  rhpakUninstall: (rhpakuuid, options = {}) =>
+    ipcRenderer.invoke('rhpak:uninstall', { rhpakuuid, ...options }),
   
   /**
    * Select directory

@@ -5,6 +5,10 @@
  * - (missing) — full chain implicit (legacy installs)
  * - "full"    — full chain chosen explicitly at provision time
  * - "light"   — light chain (metadata only; blobs via patch resolver / chunks)
+ *
+ * Shared-chain shortcut: when no configured base:light (file_name + sha256), light
+ * chain inherits base and sqlpatches from the full chain unless sqlpatches:light is
+ * explicitly listed. version always aliases: version:light ?? version.
  */
 
 const CHAIN_LIGHT = 'light';
@@ -39,41 +43,93 @@ function chainUsesLightManifest(effectiveChain) {
 function hasConfiguredLightBase(manifestEntry) {
   const base = manifestEntry?.['base:light'];
   if (!base || typeof base !== 'object') return false;
-  return Boolean(base.file_name || base.sha256);
+  return Boolean(base.file_name && base.sha256);
+}
+
+function isDivergentLightChain(manifestEntry) {
+  return hasConfiguredLightBase(manifestEntry);
+}
+
+function hasLightPatchesKey(manifestEntry) {
+  return manifestEntry != null && Object.prototype.hasOwnProperty.call(manifestEntry, 'sqlpatches:light');
+}
+
+function resolveLightSqlpatches(manifestEntry, sharedChainShortcut) {
+  if (hasLightPatchesKey(manifestEntry)) {
+    const patches = manifestEntry['sqlpatches:light'];
+    return Array.isArray(patches) ? patches : [];
+  }
+  if (sharedChainShortcut) {
+    const patches = manifestEntry?.sqlpatches;
+    return Array.isArray(patches) ? patches : [];
+  }
+  return [];
+}
+
+function resolveLightBase(manifestEntry, sharedChainShortcut) {
+  if (sharedChainShortcut) {
+    return manifestEntry?.base || null;
+  }
+  return manifestEntry?.['base:light'] || null;
 }
 
 function hasLightChainInManifest(manifestEntry) {
   if (!manifestEntry) return false;
-  if (manifestEntry['version:light'] != null) return true;
-  if (hasConfiguredLightBase(manifestEntry)) return true;
-  const patches = manifestEntry['sqlpatches:light'];
-  return Array.isArray(patches) && patches.length > 0;
+  if (isDivergentLightChain(manifestEntry)) return true;
+  if (manifestEntry['version:light'] != null
+    && String(manifestEntry['version:light']) !== String(manifestEntry.version ?? '')) {
+    return true;
+  }
+  if (hasLightPatchesKey(manifestEntry)) {
+    const lightPatches = manifestEntry['sqlpatches:light'];
+    if (Array.isArray(lightPatches) && lightPatches.length > 0) return true;
+  }
+  return false;
 }
 
 function resolveChainEntry(manifestEntry, chain) {
   const useLight = chain === CHAIN_LIGHT;
   const keys = useLight ? CHAIN_KEYS[CHAIN_LIGHT] : CHAIN_KEYS[CHAIN_FULL];
-  const base = manifestEntry?.[keys.base];
-  const sqlpatches = Array.isArray(manifestEntry?.[keys.patches])
-    ? manifestEntry[keys.patches]
-    : [];
-  const versionRaw = manifestEntry?.[keys.version] ?? manifestEntry?.version ?? '0';
 
-  if (useLight && (!base || !base.file_name) && sqlpatches.length === 0) {
+  if (!useLight) {
+    const base = manifestEntry?.[keys.base];
+    const sqlpatches = Array.isArray(manifestEntry?.[keys.patches])
+      ? manifestEntry[keys.patches]
+      : [];
+    const versionRaw = manifestEntry?.[keys.version] ?? manifestEntry?.version ?? '0';
+    return {
+      chain: CHAIN_FULL,
+      version: String(versionRaw),
+      base: base || null,
+      sqlpatches,
+      versionKey: keys.version,
+      baseKey: keys.base,
+      patchesKey: keys.patches,
+      sharedChainShortcut: false
+    };
+  }
+
+  const sharedChainShortcut = !isDivergentLightChain(manifestEntry);
+  const versionRaw = manifestEntry?.[keys.version] ?? manifestEntry?.version ?? '0';
+  const base = resolveLightBase(manifestEntry, sharedChainShortcut);
+  const sqlpatches = resolveLightSqlpatches(manifestEntry, sharedChainShortcut);
+
+  if ((!base || !base.file_name) && sqlpatches.length === 0) {
     throw new Error(
-      'Light chain requested but manifest has no base:light or sqlpatches:light for this target. '
+      'Light chain requested but manifest has no resolvable base or sqlpatches for this target. '
       + 'Use full chain or update dbmanifest.json.'
     );
   }
 
   return {
-    chain: useLight ? CHAIN_LIGHT : CHAIN_FULL,
+    chain: CHAIN_LIGHT,
     version: String(versionRaw),
     base: base || null,
     sqlpatches,
     versionKey: keys.version,
-    baseKey: keys.base,
-    patchesKey: keys.patches
+    baseKey: sharedChainShortcut ? 'base' : keys.base,
+    patchesKey: hasLightPatchesKey(manifestEntry) ? keys.patches : (sharedChainShortcut ? 'sqlpatches' : keys.patches),
+    sharedChainShortcut
   };
 }
 
@@ -162,6 +218,7 @@ module.exports = {
   getEffectiveChain,
   chainUsesLightManifest,
   hasConfiguredLightBase,
+  isDivergentLightChain,
   hasLightChainInManifest,
   resolveChainEntry,
   resolveChainView,

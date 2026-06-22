@@ -11,7 +11,6 @@ const manifestResolver = require('./manifest-resolver');
 const {
   getEffectiveChain,
   resolveChainView,
-  hasLightChainInManifest,
   formatChainLabel,
   CHAIN_LIGHT,
   CHAIN_FULL_IMPLICIT
@@ -258,8 +257,8 @@ function getDatabaseProvisionStatus() {
         try {
           const fullView = resolveChainView(manifestEntry, { requestedChain: 'full' });
           targetVersion = fullView.version;
-          if (hasLightChainInManifest(manifestEntry)) {
-            const lightView = resolveChainView(manifestEntry, { requestedChain: CHAIN_LIGHT });
+          const lightView = resolveChainView(manifestEntry, { requestedChain: CHAIN_LIGHT });
+          if (!lightView.sharedChainShortcut || lightView.version !== fullView.version) {
             lightTargetVersion = lightView.version;
           }
         } catch (err) {

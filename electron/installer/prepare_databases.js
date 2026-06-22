@@ -70,7 +70,7 @@ Options:
   --update-mode             Run in-place database update (apply patches from plan)
   --update-plan <file>      JSON file with updates to apply (required with --update-mode)
   --update-result-path <f>  Write per-db update results JSON (used with --update-mode)
-  --db-chain <full|light>   Provisioning chain: full (default) or light (base:light / sqlpatches:light)
+  --db-chain <full|light>   Provisioning chain: full (default) or light (uses base:light when configured, else shared base/sqlpatches)
   --lightdb                 Alias for --db-chain light
   --help                    Show this help message
 

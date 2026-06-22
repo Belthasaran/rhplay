@@ -10,12 +10,21 @@ const fs = require('fs');
 const path = require('path');
 
 const { UPDATEABLE_DATABASES } = require('./database-update-check');
+const { appendDbChainCliArgs, detectDominantProvisionChain } = require('./manifest-chain');
+const { loadProvisionedJson } = require('./database-update-check');
 
 // When patchbin.db is re-provisioned, rhdata.db must be too (rhdata references patchbin)
 const RHDATA_PATCHBIN_COUPLED = ['rhdata.db', 'patchbin.db'];
 
+function resolveDbChainFromUpdates(updates) {
+  if (!updates || !updates.length) return null;
+  const chain = updates[0].chain;
+  if (chain === 'light') return 'light';
+  if (chain === 'full') return 'full';
+  return null;
+}
+
 /**
- * Parse a line of stdout for progress info
  * Returns { message, filename, current, total, percent } or null
  */
 function parseProgressLine(line) {
@@ -323,6 +332,7 @@ async function executeDatabaseUpdate(updates, options) {
       '--progress-log', progressLogPath,
       '--progress-done', progressDonePath
     ];
+    appendDbChainCliArgs(args, resolveDbChainFromUpdates(nonPatchable));
 
     const cb = (p) => {
       if (progressCallback) progressCallback({ ...p, phase: 'reprovision' });
@@ -436,7 +446,8 @@ async function executeProvisionFull(options) {
     provisionerScriptPath,
     workingDir,
     progressCallback,
-    overwrite
+    overwrite,
+    dbChain = null
   } = options;
 
   if (!manifestPath || !userDataDir || !provisionerScriptPath) {
@@ -470,6 +481,7 @@ async function executeProvisionFull(options) {
   if (overwrite && overwrite.length) {
     args.push('--overwrite', Array.isArray(overwrite) ? overwrite.join(',') : overwrite);
   }
+  appendDbChainCliArgs(args, dbChain);
 
   const result = await spawnPrepareDatabases(args, progressCallback);
   if (!result.success) {
@@ -509,6 +521,8 @@ async function executeReProvision(options) {
   const overwriteList = UPDATEABLE_DATABASES.join(',');
   const progressLogPath = path.join(workingDir, 'db-reprovision-progress.log');
   const progressDonePath = path.join(workingDir, 'db-reprovision-progress.done.json');
+  const provisioned = loadProvisionedJson(userDataDir);
+  const dbChain = detectDominantProvisionChain(provisioned, UPDATEABLE_DATABASES);
 
   const args = [
     provisionerScriptPath,
@@ -521,6 +535,7 @@ async function executeReProvision(options) {
     '--progress-log', progressLogPath,
     '--progress-done', progressDonePath
   ];
+  appendDbChainCliArgs(args, dbChain);
 
   const result = await spawnPrepareDatabases(args, progressCallback);
   if (!result.success) {

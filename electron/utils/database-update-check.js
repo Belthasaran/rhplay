@@ -2,12 +2,20 @@
  * database-update-check.js
  *
  * Check if database updates are available by comparing provisioned.json
- * with dbmanifest.json version numbers.
+ * with dbmanifest.json version numbers (chain-aware: full vs light).
  */
 
 const fs = require('fs');
 const path = require('path');
 const manifestResolver = require('./manifest-resolver');
+const {
+  getEffectiveChain,
+  resolveChainView,
+  hasLightChainInManifest,
+  formatChainLabel,
+  CHAIN_LIGHT,
+  CHAIN_FULL_IMPLICIT
+} = require('./manifest-chain');
 
 // Database targets that can be updated (exclude clientdata.db - user data)
 const UPDATEABLE_DATABASES = ['rhdata.db', 'patchbin.db', 'resource.db', 'screenshot.db'];
@@ -109,11 +117,25 @@ function getPatchesToApply(provisionedVersion, sqlpatches) {
   return result;
 }
 
+function resolveUpdateContext(manifestEntry, provisionedEntry) {
+  const effectiveChain = getEffectiveChain(provisionedEntry);
+  let chainView;
+  try {
+    chainView = resolveChainView(manifestEntry, { provisionedEntry });
+  } catch (err) {
+    return { error: err.message, effectiveChain };
+  }
+  return {
+    effectiveChain,
+    chainView,
+    targetVersion: chainView.version,
+    sqlpatches: chainView.sqlpatches,
+    storeChain: chainView.storeChain
+  };
+}
+
 /**
- * Check for database updates
- * Compares dbmanifest.json versions with provisioned.json
- *
- * @returns {Object} { updatesAvailable: boolean, updates: [{ dbName, currentVersion, targetVersion, canPatch, patchesToApply }] }
+ * Check for database updates (uses each DB's provisioned chain).
  */
 function checkForDatabaseUpdates() {
   try {
@@ -140,15 +162,19 @@ function checkForDatabaseUpdates() {
         continue;
       }
 
-      const targetVersion = manifestEntry.version || '0';
       const provisionedEntry = provisioned.targets && provisioned.targets[dbName];
       const currentVersion = provisionedEntry ? (provisionedEntry.version || '0') : '0';
+      const ctx = resolveUpdateContext(manifestEntry, provisionedEntry);
+      if (ctx.error) {
+        continue;
+      }
 
+      const targetVersion = ctx.targetVersion || '0';
       if (compareVersions(currentVersion, targetVersion) >= 0) {
         continue;
       }
 
-      const sqlpatches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
+      const sqlpatches = ctx.sqlpatches;
       const canPatch = canPatchDatabase(currentVersion, sqlpatches);
       const patchesToApply = canPatch ? getPatchesToApply(currentVersion, sqlpatches) : [];
 
@@ -158,7 +184,10 @@ function checkForDatabaseUpdates() {
         targetVersion,
         canPatch,
         patchesToApply,
-        manifestEntry
+        manifestEntry,
+        chain: ctx.effectiveChain,
+        storeChain: ctx.storeChain,
+        chainLabel: formatChainLabel(ctx.storeChain ? ctx.effectiveChain : CHAIN_FULL_IMPLICIT)
       });
     }
 
@@ -173,8 +202,7 @@ function checkForDatabaseUpdates() {
 }
 
 /**
- * Per-database row for UI: current vs manifest target and coarse status.
- * @returns {{ rows: Array<{dbName, currentVersion, targetVersion, status}>, updatesAvailable: boolean, error?: string }}
+ * Per-database row for UI: current vs manifest target and coarse status (chain-aware).
  */
 function getDatabaseProvisionStatus() {
   try {
@@ -204,33 +232,70 @@ function getDatabaseProvisionStatus() {
           dbName,
           currentVersion: '—',
           targetVersion: '—',
-          status: 'unknown'
+          status: 'unknown',
+          chain: '—',
+          chainLabel: '—'
         });
         continue;
       }
 
-      const targetVersion = String(manifestEntry.version != null ? manifestEntry.version : '0').trim();
       const provisionedEntry = provisioned.targets && provisioned.targets[dbName];
       const currentVersion = provisionedEntry
         ? String(provisionedEntry.version != null ? provisionedEntry.version : '0').trim()
         : '0';
 
+      const effectiveChain = getEffectiveChain(provisionedEntry);
+      const chainLabel = formatChainLabel(provisionedEntry?.chain ? effectiveChain : CHAIN_FULL_IMPLICIT);
+
+      let targetVersion = '—';
+      let lightTargetVersion = null;
       let status;
+      let ctx = null;
+
       if (!provisionedEntry) {
         status = 'not-provisioned';
         updatesAvailable = true;
-      } else if (compareVersions(currentVersion, targetVersion) >= 0) {
-        status = 'up-to-date';
+        try {
+          const fullView = resolveChainView(manifestEntry, { requestedChain: 'full' });
+          targetVersion = fullView.version;
+          if (hasLightChainInManifest(manifestEntry)) {
+            const lightView = resolveChainView(manifestEntry, { requestedChain: CHAIN_LIGHT });
+            lightTargetVersion = lightView.version;
+          }
+        } catch (err) {
+          targetVersion = String(manifestEntry.version != null ? manifestEntry.version : '0');
+        }
       } else {
-        status = 'update-available';
-        updatesAvailable = true;
+        ctx = resolveUpdateContext(manifestEntry, provisionedEntry);
+        if (ctx.error) {
+          rows.push({
+            dbName,
+            currentVersion,
+            targetVersion: '—',
+            status: 'error',
+            chain: effectiveChain,
+            chainLabel,
+            error: ctx.error
+          });
+          continue;
+        }
+        targetVersion = ctx.targetVersion;
+        if (compareVersions(currentVersion, targetVersion) >= 0) {
+          status = 'up-to-date';
+        } else {
+          status = 'update-available';
+          updatesAvailable = true;
+        }
       }
 
       rows.push({
         dbName,
         currentVersion,
         targetVersion,
-        status
+        lightTargetVersion,
+        status,
+        chain: provisionedEntry ? (provisionedEntry.chain || CHAIN_FULL_IMPLICIT) : null,
+        chainLabel: provisionedEntry ? chainLabel : 'not provisioned'
       });
     }
 
@@ -250,6 +315,7 @@ module.exports = {
   canPatchDatabase,
   getPatchesToApply,
   loadProvisionedJson,
+  resolveUpdateContext,
   UPDATEABLE_DATABASES,
   compareVersions
 };

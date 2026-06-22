@@ -718,7 +718,7 @@ function sendProvisionerStatus(payload) {
     }
 }
 
-async function runProvisionerHelper({ provision }) {
+async function runProvisionerHelper({ provision, dbChain = null }) {
     if (activeProvisionerProcess) {
         throw new Error('Provisioning already in progress.');
     }
@@ -762,8 +762,13 @@ async function runProvisionerHelper({ provision }) {
     if (provision) {
         args.push('--provision');
     }
+    if (dbChain === 'light') {
+        args.push('--db-chain', 'light');
+    } else if (dbChain === 'full') {
+        args.push('--db-chain', 'full');
+    }
 
-    sendProvisionerStatus({ state: 'starting', provision });
+    sendProvisionerStatus({ state: 'starting', provision, dbChain });
 
     const child = spawn(process.execPath, args, {
         cwd: paths.workingDir,
@@ -925,18 +930,20 @@ function setupProvisionerIpc() {
         return copySmwRomToDataDir(sourcePath);
     });
 
-    ipcMain.handle('provisioner:run-plan', async () => {
+    ipcMain.handle('provisioner:run-plan', async (_event, options = {}) => {
         try {
-            const result = await runProvisionerHelper({ provision: false });
+            const dbChain = options.dbChain === 'light' ? 'light' : (options.dbChain === 'full' ? 'full' : null);
+            const result = await runProvisionerHelper({ provision: false, dbChain });
             return { success: true, ...result };
         } catch (err) {
             return { success: false, error: err.message, payload: err.payload || null };
         }
     });
 
-    ipcMain.handle('provisioner:run-provision', async () => {
+    ipcMain.handle('provisioner:run-provision', async (_event, options = {}) => {
         try {
-            const result = await runProvisionerHelper({ provision: true });
+            const dbChain = options.dbChain === 'light' ? 'light' : (options.dbChain === 'full' ? 'full' : null);
+            const result = await runProvisionerHelper({ provision: true, dbChain });
             return { success: true, ...result };
         } catch (err) {
             return { success: false, error: err.message, payload: err.payload || null };

@@ -9,6 +9,7 @@ const path = require('path');
 const { run } = require('../installer/prepare_databases');
 const { UPDATEABLE_DATABASES } = require('./database-update-check');
 const { computeAffectedDbs } = require('./database-update-executor');
+const { appendDbChainCliArgs } = require('./manifest-chain');
 
 async function runPrepareThrow(argv) {
   const prev = process.env.RHPLAY_PREPARE_DB_THROW;
@@ -255,7 +256,7 @@ async function executeReProvisionInProcess(options) {
 }
 
 async function executeProvisionFullInProcess(options) {
-  const { manifestPath, userDataDir, workingDir, overwrite } = options;
+  const { manifestPath, userDataDir, workingDir, overwrite, dbChain = null } = options;
   if (!manifestPath || !userDataDir || !workingDir) {
     return { success: false, error: 'Missing required paths' };
   }
@@ -286,6 +287,7 @@ async function executeProvisionFullInProcess(options) {
   if (overwrite && overwrite.length) {
     argv.push('--overwrite', Array.isArray(overwrite) ? overwrite.join(',') : overwrite);
   }
+  appendDbChainCliArgs(argv, dbChain);
 
   try {
     const plan = await runPrepareThrow(argv);

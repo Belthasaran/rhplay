@@ -665,7 +665,8 @@ function registerIpc() {
     }
   });
 
-  ipcMain.handle('launcher:provision-databases', async () => {
+  ipcMain.handle('launcher:provision-databases', async (_e, options = {}) => {
+    const dbChain = options.dbChain === 'light' ? 'light' : (options.dbChain === 'full' ? 'full' : null);
     if (!(await beginLongOperation('Provision databases'))) {
       return { success: false, error: 'Another operation is already in progress.' };
     }
@@ -702,6 +703,7 @@ function registerIpc() {
         provisionerScriptPath: scriptPath,
         workingDir,
         overwrite: null,
+        dbChain,
         progressCallback: (p) => sendOperationProgress({ kind: 'db', operation: 'provision', ...p })
       });
     } catch (err) {

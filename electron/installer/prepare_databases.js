@@ -36,6 +36,12 @@ const tar = require('tar');
 const Database = require('better-sqlite3');
 const ipfsFetchConfig = require('../utils/ipfs-fetch-config');
 const arweaveFetchConfig = require('../utils/arweave-fetch-config');
+const {
+  parseDbChainArg,
+  resolveChainView,
+  chainToStoreValue,
+  formatChainLabel
+} = require('../utils/manifest-chain');
 
 const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
@@ -64,6 +70,8 @@ Options:
   --update-mode             Run in-place database update (apply patches from plan)
   --update-plan <file>      JSON file with updates to apply (required with --update-mode)
   --update-result-path <f>  Write per-db update results JSON (used with --update-mode)
+  --db-chain <full|light>   Provisioning chain: full (default) or light (base:light / sqlpatches:light)
+  --lightdb                 Alias for --db-chain light
   --help                    Show this help message
 
 Examples:
@@ -173,6 +181,7 @@ function parseArgs(argv) {
     updateMode: false,
     updatePlanPath: null,
     updateResultPath: null,
+    dbChain: null,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -259,6 +268,13 @@ function parseArgs(argv) {
       opts.updatePlanPath = path.resolve(arg.substring('--update-plan='.length));
     } else if (arg.startsWith('--update-result-path=')) {
       opts.updateResultPath = path.resolve(arg.substring('--update-result-path='.length));
+    } else if (arg === '--db-chain') {
+      if (i + 1 >= argv.length) exitWithError('Missing value after --db-chain');
+      opts.dbChain = parseDbChainArg(argv[++i]);
+    } else if (arg.startsWith('--db-chain=')) {
+      opts.dbChain = parseDbChainArg(arg.substring('--db-chain='.length));
+    } else if (arg === '--lightdb') {
+      opts.dbChain = parseDbChainArg('light');
     } else if (arg.startsWith('--')) {
       exitWithError(`Unknown option "${arg}". Use --help for usage details.`);
     } else {
@@ -554,25 +570,34 @@ function saveProvisionedJson(userDataDir, data) {
 /**
  * Update provisioned.json entry for a database
  */
-function updateProvisionedEntry(userDataDir, dbName, manifestEntry, baseSha256, lastPatchSha256, lastPatchFileName) {
+function updateProvisionedEntry(userDataDir, dbName, version, baseSha256, lastPatchSha256, lastPatchFileName, storeChain = undefined) {
   const provisioned = loadProvisionedJson(userDataDir);
-
-  const version = manifestEntry.version || '0';
+  const existing = provisioned.targets[dbName];
   const timestamp = Math.floor(Date.now() / 1000).toString();
 
-  provisioned.targets[dbName] = {
-    version,
+  const entry = {
+    version: String(version ?? '0'),
     timestamp,
     patch: lastPatchFileName || null,
     base_sha256: baseSha256,
     patch_sha256: lastPatchSha256 || null,
   };
 
+  let chainToWrite = storeChain;
+  if (chainToWrite === undefined) {
+    chainToWrite = chainToStoreValue(null, existing);
+  }
+  if (chainToWrite === 'light' || chainToWrite === 'full') {
+    entry.chain = chainToWrite;
+  }
+
+  provisioned.targets[dbName] = entry;
   saveProvisionedJson(userDataDir, provisioned);
 }
 
 function inspectDatabases(opts, manifest) {
   const userDataDir = opts.userDataDir;
+  const provisioned = loadProvisionedJson(userDataDir);
   const results = [];
 
   // Check regular databases
@@ -581,6 +606,18 @@ function inspectDatabases(opts, manifest) {
     const exists = fs.existsSync(filePath);
     const shouldOverwrite = opts.overwrite.has(db.name);
     const manifestEntry = manifest[db.manifestKey];
+    const provisionedEntry = provisioned.targets && provisioned.targets[db.name];
+    let chainView = null;
+    if (manifestEntry) {
+      try {
+        chainView = resolveChainView(manifestEntry, {
+          requestedChain: opts.dbChain,
+          provisionedEntry
+        });
+      } catch (err) {
+        chainView = { error: err.message };
+      }
+    }
 
     const details = {
       name: db.name,
@@ -592,7 +629,10 @@ function inspectDatabases(opts, manifest) {
       sizeBytes: null,
       sha256: null,
       manifestAvailable: Boolean(manifestEntry),
-      manifestSummary: summarizeManifest(manifestEntry),
+      manifestSummary: summarizeChainView(chainView),
+      dbChain: chainView && !chainView.error ? chainView.effectiveChain : null,
+      chainLabel: chainView && !chainView.error ? formatChainLabel(chainView.storeChain ? chainView.effectiveChain : 'full-implicit') : null,
+      chainError: chainView?.error || null,
     };
 
     if (exists) {
@@ -651,6 +691,21 @@ function inspectDatabases(opts, manifest) {
   return results;
 }
 
+function summarizeChainView(chainView) {
+  if (!chainView || chainView.error) return null;
+  if (!chainView.base) return { chain: chainView.effectiveChain, version: chainView.version, patchCount: chainView.sqlpatches.length };
+  return {
+    chain: chainView.effectiveChain,
+    version: chainView.version,
+    base: {
+      file_name: chainView.base.file_name,
+      sha256: chainView.base.sha256,
+      size: chainView.base.size,
+      patchCount: chainView.sqlpatches.length,
+    },
+  };
+}
+
 function summarizeManifest(entry) {
   if (!entry) return null;
   const summary = {};
@@ -672,6 +727,7 @@ function buildPlan(opts, dbStatus) {
     userDataDir: opts.userDataDir,
     workingDir: opts.workingDir,
     ensureDirs: opts.ensureDirs,
+    dbChain: opts.dbChain || null,
     databases: dbStatus,
     downloads: [],
     provision: opts.provision,
@@ -717,6 +773,9 @@ function writeSummaryIfRequested(plan, filePath) {
   lines.push(`USER_DATA_DIR=${plan.userDataDir}`);
   lines.push(`WORKING_DIR=${plan.workingDir}`);
   lines.push(`MANIFEST=${plan.manifestPath}`);
+  if (plan.dbChain) {
+    lines.push(`DB_CHAIN=${plan.dbChain}`);
+  }
   lines.push('');
   lines.push('DATABASES:');
   plan.databases.forEach((db) => {
@@ -1367,18 +1426,18 @@ async function buildAppFilesFromManifest(dbStatus, manifestEntry, planPaths, dow
   console.log(`[provision] ${dbStatus.name}: tracking file created at ${trackingFilePath}`);
 
   // Update provisioned.json
-  updateProvisionedEntry(userDataDir, dbStatus.name, manifestEntry, base.sha256, null, null);
+  updateProvisionedEntry(userDataDir, dbStatus.name, version, base.sha256, null, null, null);
 
   return trackingFilePath;
 }
 
-async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, downloadTracker, userDataDir, ipfsTimeout = 20) {
+async function buildDatabaseFromManifest(dbStatus, chainView, planPaths, downloadTracker, userDataDir, ipfsTimeout = 20) {
   const { downloadsDir, stagingDir } = planPaths;
   ensureDirectory(stagingDir);
 
-  const base = manifestEntry.base;
+  const base = chainView.base;
   if (!base) {
-    throw new Error(`Manifest entry missing base description.`);
+    throw new Error(`Manifest entry missing base for ${chainView.effectiveChain} chain.`);
   }
 
   const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
@@ -1411,7 +1470,7 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
     `[plan] ${dbStatus.name}: extracted base archive (archive SHA already verified as ${base.sha256 || 'unknown'})`
   );
 
-  const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
+  const patches = Array.isArray(chainView.sqlpatches) ? chainView.sqlpatches : [];
   // Apply patches in manifest order (do not sort alphabetically)
   // The manifest order is critical for schema migrations and dependencies
 
@@ -1459,7 +1518,15 @@ async function buildDatabaseFromManifest(dbStatus, manifestEntry, planPaths, dow
   console.log(`[provision] ${dbStatus.name}: finalized database at ${finalDbPath}`);
   
   // Update provisioned.json
-  updateProvisionedEntry(userDataDir, dbStatus.name, manifestEntry, base.sha256, lastPatchSha256, lastPatchFileName);
+  updateProvisionedEntry(
+    userDataDir,
+    dbStatus.name,
+    chainView.version,
+    base.sha256,
+    lastPatchSha256,
+    lastPatchFileName,
+    chainView.storeChain
+  );
   
   return finalDbPath;
 }
@@ -1492,16 +1559,28 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
   };
 
   const downloadTracker = createDownloadTracker();
+  const provisioned = loadProvisionedJson(plan.userDataDir);
+
   for (const db of plan.databases) {
-    const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name)?.manifestKey];
+    const manifestKey = DATABASES.find((d) => d.name === db.name)?.manifestKey;
+    const manifestEntry = manifestKey ? manifest[manifestKey] : null;
     if (!manifestEntry) {
       continue;
     }
-    if (manifestEntry.base) {
-      downloadTracker.register(manifestEntry.base);
+    let chainView;
+    try {
+      chainView = resolveChainView(manifestEntry, {
+        requestedChain: plan.dbChain,
+        provisionedEntry: provisioned.targets && provisioned.targets[db.name]
+      });
+    } catch (err) {
+      continue;
     }
-    if (Array.isArray(manifestEntry.sqlpatches)) {
-      manifestEntry.sqlpatches.forEach((spec) => downloadTracker.register(spec));
+    if (chainView.base) {
+      downloadTracker.register(chainView.base);
+    }
+    if (Array.isArray(chainView.sqlpatches)) {
+      chainView.sqlpatches.forEach((spec) => downloadTracker.register(spec));
     }
   }
 
@@ -1526,13 +1605,16 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
         if (!manifestEntry) {
           throw new Error(`Manifest entry missing for embedded database ${db.name}.`);
         }
-        
+        const chainView = resolveChainView(manifestEntry, {
+          requestedChain: plan.dbChain,
+          provisionedEntry: provisioned.targets && provisioned.targets[db.name]
+        });
+
         // Copy embedded seed database
         const dest = await stageEmbeddedDb(db.name, paths.finalDir, true);
         console.log(`[provision] ${db.name}: embedded seed copied to ${dest}`);
-        
-        // Apply SQL patches if any exist in the manifest
-        const patches = Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches : [];
+
+        const patches = Array.isArray(chainView.sqlpatches) ? chainView.sqlpatches : [];
         let lastPatchSha256 = null;
         let lastPatchFileName = null;
         
@@ -1589,13 +1671,28 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
         // Update provisioned.json for embedded databases
         // For embedded databases, compute SHA256 from final database file
         const finalDbSha256 = sha256File(dest);
-        updateProvisionedEntry(plan.userDataDir, db.name, manifestEntry, finalDbSha256, lastPatchSha256, lastPatchFileName);
+        updateProvisionedEntry(
+          plan.userDataDir,
+          db.name,
+          chainView.version,
+          finalDbSha256,
+          lastPatchSha256,
+          lastPatchFileName,
+          chainView.storeChain
+        );
       } else if (db.action === 'provision-from-manifest') {
         const manifestEntry = manifest[DATABASES.find((d) => d.name === db.name).manifestKey];
         if (!manifestEntry) {
           throw new Error('Manifest entry missing.');
         }
-        const dest = await buildDatabaseFromManifest(db, manifestEntry, paths, downloadTracker, plan.userDataDir, ipfsTimeout);
+        if (db.chainError) {
+          throw new Error(db.chainError);
+        }
+        const chainView = resolveChainView(manifestEntry, {
+          requestedChain: plan.dbChain,
+          provisionedEntry: provisioned.targets && provisioned.targets[db.name]
+        });
+        const dest = await buildDatabaseFromManifest(db, chainView, paths, downloadTracker, plan.userDataDir, ipfsTimeout);
         result.executed.push({ name: db.name, action: 'provisioned', path: dest });
         console.log(`[provision] ${db.name}: provisioning completed -> ${dest}`);
       } else if (db.action === 'provision-appfiles') {
@@ -2205,8 +2302,17 @@ async function runUpdateMode(opts, manifest) {
 
       const currentEntry = provisioned.targets && provisioned.targets[dbName];
       const baseSha256 = currentEntry && currentEntry.base_sha256 ? currentEntry.base_sha256 : null;
-      const manifestForUpdate = { ...manifestEntry, version: targetVersion || manifestEntry.version };
-      updateProvisionedEntry(userDataDir, dbName, manifestForUpdate, baseSha256, lastPatchSha256, lastPatchFileName);
+      const chainView = resolveChainView(manifestEntry, { provisionedEntry: currentEntry });
+      const targetVer = u.targetVersion || chainView.version;
+      updateProvisionedEntry(
+        userDataDir,
+        dbName,
+        targetVer,
+        baseSha256,
+        lastPatchSha256,
+        lastPatchFileName,
+        chainView.storeChain
+      );
 
       results.push({ dbName, success: true });
     } catch (err) {
@@ -2319,7 +2425,15 @@ async function run(argv) {
   }
 }
 
-module.exports = { run };
+module.exports = {
+  run,
+  DATABASES,
+  updateProvisionedEntry,
+  loadProvisionedJson,
+  inspectDatabases,
+  buildPlan,
+  summarizeChainView
+};
 
 if (require.main === module) {
   run(process.argv.slice(2)).catch((err) => {

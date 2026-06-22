@@ -87,6 +87,18 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” 
     </section>
 
     <section class="controls">
+      <label class="chain-option">
+        <input
+          v-model="useLightChain"
+          type="checkbox"
+          :disabled="isLoadingPlan || isProvisioning"
+          @change="onChainPreferenceChange"
+        />
+        Use light database chain (faster downloads; patch blobs fetched on demand)
+      </label>
+      <p class="chain-hint">
+        Uncheck for full offline databases. Existing installs keep their current chain until you migrate (future release).
+      </p>
       <button :disabled="isLoadingPlan || isProvisioning || !canProvision" @click="refreshPlan">
         {{ isLoadingPlan ? 'Refreshing…' : 'Refresh Plan' }}
       </button>
@@ -108,6 +120,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” 
         <thead>
           <tr>
             <th>Database</th>
+            <th>Chain</th>
             <th>Action</th>
             <th>Base Archive</th>
             <th>Patches</th>
@@ -116,6 +129,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” 
         <tbody>
           <tr v-for="db in planDatabases" :key="db.name">
             <td>{{ db.name }}</td>
+            <td>{{ formatChain(db) }}</td>
             <td>
               <span :class="['badge', `action-${db.action}`]">{{ formatAction(db.action) }}</span>
             </td>
@@ -166,7 +180,12 @@ interface PlanDatabase {
   exists?: boolean;
   embedded?: boolean;
   overwrite?: boolean;
+  dbChain?: string | null;
+  chainLabel?: string | null;
+  chainError?: string | null;
   manifestSummary?: {
+    chain?: string;
+    version?: string;
     base?: {
       file_name: string;
       sha256?: string;
@@ -198,6 +217,9 @@ const errorMessage = ref<string | null>(null);
 const activeDownload = ref<{ name: string; index: number; total: number; percent: number; downloaded?: string; totalSize?: string } | null>(null);
 const completedDownloads = ref(0);
 const currentTask = ref<string | null>(null);
+const useLightChain = ref(true);
+
+const dbChainOption = computed(() => (useLightChain.value ? 'light' : 'full'));
 const logView = ref<HTMLTextAreaElement | null>(null);
 const romCheckModalOpen = ref(false);
 const romFound = ref(false);
@@ -255,6 +277,19 @@ function formatAction(action: string) {
       return 'Download & Patch';
     default:
       return action;
+  }
+}
+
+function formatChain(db: PlanDatabase) {
+  if (db.chainError) return `error: ${db.chainError}`;
+  if (db.chainLabel) return db.chainLabel;
+  if (db.manifestSummary?.chain === 'light') return 'light';
+  return useLightChain.value ? 'light (planned)' : 'full (explicit)';
+}
+
+async function onChainPreferenceChange() {
+  if (romFound.value) {
+    await refreshPlan();
   }
 }
 
@@ -339,7 +374,7 @@ async function refreshPlan() {
   currentOperation = 'plan';
   statusMessage.value = 'Generating provisioning plan…';
   try {
-    const response = await provisionerApi.runPlan();
+    const response = await provisionerApi.runPlan({ dbChain: dbChainOption.value });
     if (response.success) {
       plan.value = response.plan ?? null;
       missingDatabases.value = response.missingDatabases ?? missingDatabases.value;
@@ -376,7 +411,7 @@ async function startProvision() {
   currentOperation = 'provision';
   statusMessage.value = 'Launching provisioning…';
   try {
-    const response = await provisionerApi.runProvision();
+    const response = await provisionerApi.runProvision({ dbChain: dbChainOption.value });
     if (response.success) {
       provisionComplete.value = true;
       missingDatabases.value = response.missingDatabases ?? [];
@@ -619,8 +654,25 @@ onBeforeUnmount(() => {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin: 32px 0;
+}
+
+.chain-option {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: #334e68;
+}
+
+.chain-hint {
+  flex: 1 1 100%;
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: #627d98;
 }
 
 .controls button {

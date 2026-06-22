@@ -127,10 +127,16 @@
       </p>
       <p v-if="dbStatus?.error" class="error">{{ dbStatus.error }}</p>
       <div v-else-if="dbStatus?.rows?.length" class="db-table-wrap">
+        <label class="chain-option">
+          <input v-model="useLightChain" type="checkbox" :disabled="busy" />
+          Use light database chain for new provisioning (faster; blobs on demand)
+        </label>
+        <p class="hint">Uncheck for full offline databases. Updates follow each database's provisioned chain.</p>
         <table class="db-table">
           <thead>
             <tr>
               <th>Database</th>
+              <th>Chain</th>
               <th>Installed</th>
               <th>Target</th>
               <th>Status</th>
@@ -139,6 +145,7 @@
           <tbody>
             <tr v-for="(row, idx) in dbStatus.rows" :key="idx">
               <td class="db-name">{{ row.dbName }}</td>
+              <td>{{ row.chainLabel || row.chain || '—' }}</td>
               <td>{{ row.currentVersion }}</td>
               <td>{{ row.targetVersion }}</td>
               <td :class="statusClass(row.status)">{{ formatDbStatus(row.status) }}</td>
@@ -201,6 +208,7 @@ const dbStatus = ref(null);
 const fetchSettingsOpen = ref(false);
 const launching = ref(false);
 const launchingPath = ref('');
+const useLightChain = ref(true);
 let launchFeedbackTimer = null;
 
 const coreManifestVersionLabel = computed(() => {
@@ -309,7 +317,7 @@ async function maybePromptDatabaseMaintenance() {
     await refreshState();
     const s2 = await api.getState();
     if (dbNeedsMaintenance(s2.dbStatus)) {
-      const r2 = await api.provisionDatabases();
+      const r2 = await api.provisionDatabases({ dbChain: useLightChain.value ? 'light' : 'full' });
       dbMsg.value = r2.success
         ? 'Database provisioning finished.'
         : r2.error || 'Provisioning failed.';
@@ -445,7 +453,7 @@ async function doProvision() {
   busy.value = true;
   dbMsg.value = '';
   try {
-    const r = await api.provisionDatabases();
+    const r = await api.provisionDatabases({ dbChain: useLightChain.value ? 'light' : 'full' });
     dbMsg.value = r.success ? 'Provision finished.' : r.error || JSON.stringify(r);
     await refreshState();
   } finally {

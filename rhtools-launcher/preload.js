@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('launcherAPI', {
   selectRomFile: () => ipcRenderer.invoke('launcher:select-rom-file'),
   copyRom: (sourcePath) => ipcRenderer.invoke('launcher:copy-rom', sourcePath),
   checkDbUpdates: () => ipcRenderer.invoke('launcher:check-db-updates'),
-  provisionDatabases: () => ipcRenderer.invoke('launcher:provision-databases'),
+  provisionDatabases: (options) => ipcRenderer.invoke('launcher:provision-databases', options),
   runDbUpdate: () => ipcRenderer.invoke('launcher:run-db-update'),
   reprovisionDatabases: () => ipcRenderer.invoke('launcher:reprovision-databases'),
   openPath: (p) => ipcRenderer.invoke('shell:open-path', p),

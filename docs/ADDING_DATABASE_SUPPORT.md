@@ -72,6 +72,8 @@ If your database is **embedded** (bundled with the installer):
 
 If your database is **manifest-based** (downloaded from ArDrive/IPFS):
 
+**Dual provisioning chains:** Each target may define a **full** chain (`version`, `base`, `sqlpatches`) and an optional **light** chain (`version:light`, `base:light`, `sqlpatches:light`). RHPlay records which chain was used in `provisioned.json` per database (`chain`: omitted = legacy implicit full, `"full"` = explicit full, `"light"` = light). Use `prepare_databases.js --db-chain light` or the Provisioner checkbox for new installs. See `rhserver/devdocs/LIGHT_CHAIN_PROVISIONER_PHASE6.md`.
+
 1. **Add entry to dbmanifest.json:**
    Edit `electron/db_temp/dbmanifest.json` (or the active manifest) and add:
    ```json

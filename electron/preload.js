@@ -1414,8 +1414,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   provisioner: {
     getState: () => ipcRenderer.invoke('provisioner:get-state'),
-    runPlan: () => ipcRenderer.invoke('provisioner:run-plan'),
-    runProvision: () => ipcRenderer.invoke('provisioner:run-provision'),
+    runPlan: (options) => ipcRenderer.invoke('provisioner:run-plan', options),
+    runProvision: (options) => ipcRenderer.invoke('provisioner:run-provision', options),
     launchMain: () => ipcRenderer.invoke('provisioner:launch-main'),
     openArDrive: () => ipcRenderer.invoke('provisioner:open-ardrive'),
     checkRom: () => ipcRenderer.invoke('provisioner:check-rom'),

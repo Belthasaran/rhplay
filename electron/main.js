@@ -101,6 +101,34 @@ function setupDatabaseUpdateIpc() {
     databaseUpdateWindow.handleUserResponse(response);
     return { success: true };
   });
+  ipcMain.handle('database-update:scan-conflicts', async (_event, { updates, userDataDir }) => {
+    const { scanPatchConflicts } = require('../lib/provision-conflict-checker');
+    const path = require('path');
+    const fs = require('fs');
+    const results = [];
+    for (const u of updates || []) {
+      for (const patch of u.patchesToApply || []) {
+        if (String(patch.type || '').toLowerCase() !== 'bundle') continue;
+        const dbPath = path.join(userDataDir, u.dbName);
+        if (!fs.existsSync(dbPath)) continue;
+        const bundlePath = patch._localPath || null;
+        if (!bundlePath || !fs.existsSync(bundlePath)) {
+          results.push({ dbName: u.dbName, patch: patch.file_name, skipped: true, reason: 'bundle not local' });
+          continue;
+        }
+        const scan = await scanPatchConflicts({
+          dbPath,
+          dbName: u.dbName,
+          patchArchivePath: bundlePath,
+          patchSpec: patch,
+          rhdataPath: path.join(userDataDir, 'rhdata.db'),
+          clientdataPath: path.join(userDataDir, 'clientdata.db')
+        });
+        results.push({ dbName: u.dbName, patch: patch.file_name, scan });
+      }
+    }
+    return { results };
+  });
 }
 
 /**
@@ -1014,7 +1042,14 @@ app.whenReady().then(async () => {
     setupDatabaseUpdateIpc();
     setupFetchSettingsIpc();
 
-    // First-run: blocking fetch settings dialog if user-fetch-settings.json does not exist
+    try {
+      const { runGvMigrationRemap } = require('../lib/gv-migration-remapper');
+      runGvMigrationRemap({ userDataDir: app.getPath('userData'), onLog: () => {} });
+    } catch (gvErr) {
+      console.warn('[main] gv migration remap skipped:', gvErr.message);
+    }
+
+    // First-run: blocking fetch settings dialog
     if (!ipfsFetchConfig.fetchSettingsPathExists()) {
       try {
         await fetchSettingsWindow.createFetchSettingsWindow(null);

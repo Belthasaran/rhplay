@@ -9,6 +9,11 @@
           New database versions are available. Choose how to proceed:
         </p>
 
+        <div v-if="conflictSummary" class="conflict-preflight">
+          <h4>Conflict preflight</h4>
+          <p>{{ conflictSummary }}</p>
+        </div>
+
         <!-- Update list with per-row status -->
         <div class="update-list">
           <div
@@ -147,6 +152,12 @@ const isProcessing = computed(() => {
 
 const isCompletedWithErrors = computed(() => {
   return props.updateInfo.updateState === 'completedWithErrors';
+});
+
+const conflictSummary = computed(() => {
+  const pre = (props.updateInfo as { conflictPreflight?: { equivalentCount?: number; trueConflictCount?: number } }).conflictPreflight;
+  if (!pre) return '';
+  return `Feed-preinstalled skips: ${pre.equivalentCount ?? 0}; conflicts to reconcile: ${pre.trueConflictCount ?? 0}`;
 });
 
 const mergedUpdates = computed(() => {

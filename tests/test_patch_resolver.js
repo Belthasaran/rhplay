@@ -127,6 +127,32 @@ function makeDbManager() {
   };
 }
 
+async function testMethod0ArtifactStore() {
+  console.log('\n--- Method 0: artifact store ---');
+  const patchData = Buffer.from('BPS1-test-patch-data-method0');
+  const blobData = Buffer.from('raw-patchblob-bytes-m0');
+  const meta = setupDatabases(patchData, blobData, false);
+
+  const { addItem } = require('../lib/artifact-store');
+  const blobPath = path.join(TEST_DIR, 'm0blob');
+  fs.writeFileSync(blobPath, blobData);
+  addItem({
+    artifactType: 'pblob',
+    sourcePath: blobPath,
+    fileName: meta.blobName,
+    auuid: 'auuid-1',
+    pbuuid: meta.pbuuid,
+    file_hash_sha256: crypto.createHash('sha256').update(blobData).digest('hex'),
+    userDataDir: USER_DATA
+  });
+
+  const ctx = { dbManager: makeDbManager(), userDataPath: USER_DATA };
+  const blobResult = await resolvePatchblob(ctx, { pbuuid: meta.pbuuid });
+  assert(blobResult.success === true, 'method0 resolves from artifact store');
+  assert(blobResult.source && blobResult.source.method === 0, 'method0 source tag');
+  assert(blobResult.data.equals(blobData), 'method0 patchblob bytes match');
+}
+
 async function testMethod1Database() {
   console.log('\n--- Method 1: database file_data ---');
   const patchData = Buffer.from('BPS1-test-patch-data-method1');
@@ -212,6 +238,7 @@ async function run() {
   console.log('Patch resolver tests');
   try {
     await testVerifyHelpers();
+    await testMethod0ArtifactStore();
     await testMethod1Database();
     await testMethod2LocalPatch();
     await testMethod3LocalPatchblob();

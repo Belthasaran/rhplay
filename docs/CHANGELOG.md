@@ -268,6 +268,11 @@
 - Introduced `ModeratorDashboard` prototype in the Online dialog with trust-aware moderation actions (block/mute/freeze/warn), action history table, and revoke support backed by the new IPC + `ModerationManager`.
 - Trust declaration wizard now records `target_keypair_canonical_name` and new `target_keypair_public_hex`, fixing subject resolution (GUI populates npub + hex automatically; backend persists them).
 - Hardened `NostrRuntimeService` with per-relay health/backoff tracking, priority-aware outgoing queue scheduling, and richer status snapshots (includes relay health + queue buckets) now consumable by renderer dashboards and the new `cli/nostr-status.js` diagnostics utility.
+
+## 2026-06-20 — Provisioning bundles and client artifact store
+
+- Added `lib/artifact-store.js` and `lib/provision-bundle.js`; `prepare_databases.js` supports `type: "bundle"` bases and sqlpatches (7z/zip + provindex.json). Patch resolver checks artifact store before legacy `file_data`.
+
 # RHTools Changelog
 
 > **Note**: For a comprehensive summary of recent USB2SNES connection enhancements, see [`devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md`](../devdocs/USB2SNES_CONNECTION_ENHANCEMENTS_SUMMARY.md)

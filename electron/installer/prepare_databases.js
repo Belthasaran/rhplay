@@ -42,6 +42,8 @@ const {
   chainToStoreValue,
   formatChainLabel
 } = require('../utils/manifest-chain');
+const provisionBundle = require('../../lib/provision-bundle');
+const { isBundleSpec } = provisionBundle;
 
 const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
@@ -1263,6 +1265,88 @@ async function extractFileFromTar(tarPath, extractFile, outputPath) {
   }
 }
 
+async function extractBaseArchive({
+  base,
+  baseArchivePath,
+  dbName,
+  format,
+  stagingDir,
+  tempDbPath,
+  userDataDir,
+  onLog = console.log
+}) {
+  if (isBundleSpec(base)) {
+    const bundleStaging = path.join(stagingDir, `bundle-base-${dbName}`);
+    await provisionBundle.applyBundleAsBase({
+      bundlePath: baseArchivePath,
+      spec: base,
+      extractFile: base.extract_file || dbName,
+      dbName,
+      tempDbPath,
+      userDataDir,
+      stagingDir: bundleStaging,
+      onLog
+    });
+    return;
+  }
+
+  if (format === 'tar+xz' || format === 'tar.xz') {
+    onLog(`[extract] ${dbName}: decompressing tar archive ${base.file_name}`);
+    const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
+    await decompressXz(baseArchivePath, baseTarPath);
+    const extractFile = base.extract_file || dbName;
+    onLog(`[extract] ${dbName}: extracting ${extractFile} from tar`);
+    await extractFileFromTar(baseTarPath, extractFile, tempDbPath);
+    fs.unlinkSync(baseTarPath);
+  } else if (format === 'xz') {
+    onLog(`[extract] ${dbName}: decompressing ${base.file_name}`);
+    await decompressXz(baseArchivePath, tempDbPath);
+  } else {
+    throw new Error(`Unsupported format: ${format} for ${dbName}`);
+  }
+}
+
+async function applyManifestPatch({
+  patch,
+  patchArchivePath,
+  tempDbPath,
+  dbName,
+  stagingDir,
+  userDataDir,
+  onLog = console.log
+}) {
+  if (isBundleSpec(patch)) {
+    const bundleStaging = path.join(stagingDir, `bundle-patch-${dbName}-${path.basename(patch.file_name, path.extname(patch.file_name))}`);
+    await provisionBundle.applyBundleAsPatch({
+      bundlePath: patchArchivePath,
+      spec: patch,
+      dbPath: tempDbPath,
+      dbName,
+      userDataDir,
+      stagingDir: bundleStaging,
+      onLog
+    });
+    return;
+  }
+
+  const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
+  const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
+  if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
+    await decompressXz(patchArchivePath, sqlPath);
+    if (!fs.existsSync(sqlPath)) {
+      throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
+    }
+    const stats = fs.statSync(sqlPath);
+    if (stats.size === 0) {
+      throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
+    }
+  } else {
+    fs.copyFileSync(patchArchivePath, sqlPath);
+  }
+  await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
+  fs.unlinkSync(sqlPath);
+}
+
 /**
  * Extract multiple files/directories from tar archive
  * Supports wildcards like "Flips/*" to extract entire directories
@@ -1449,22 +1533,15 @@ async function buildDatabaseFromManifest(dbStatus, chainView, planPaths, downloa
     fs.unlinkSync(tempDbPath);
   }
 
-  if (format === 'tar+xz' || format === 'tar.xz') {
-    // Tar archive: decompress xz, then extract file from tar
-    console.log(`[extract] ${dbStatus.name}: decompressing tar archive ${base.file_name}`);
-    const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
-    await decompressXz(baseArchivePath, baseTarPath);
-    const extractFile = base.extract_file || dbStatus.name;
-    console.log(`[extract] ${dbStatus.name}: extracting ${extractFile} from tar`);
-    await extractFileFromTar(baseTarPath, extractFile, tempDbPath);
-    fs.unlinkSync(baseTarPath);
-  } else if (format === 'xz') {
-    // Direct xz-compressed file: just decompress
-    console.log(`[extract] ${dbStatus.name}: decompressing ${base.file_name}`);
-    await decompressXz(baseArchivePath, tempDbPath);
-  } else {
-    throw new Error(`Unsupported format: ${format} for ${dbStatus.name}`);
-  }
+  await extractBaseArchive({
+    base,
+    baseArchivePath,
+    dbName: dbStatus.name,
+    format,
+    stagingDir,
+    tempDbPath,
+    userDataDir
+  });
 
   console.log(
     `[plan] ${dbStatus.name}: extracted base archive (archive SHA already verified as ${base.sha256 || 'unknown'})`
@@ -1480,31 +1557,14 @@ async function buildDatabaseFromManifest(dbStatus, chainView, planPaths, downloa
   for (const patch of patches) {
     const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
     console.log(`[patch-start] ${dbStatus.name}: applying ${patch.file_name}`);
-    const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
-    
-    // Decompress if format is xz (or file ends with .xz)
-    const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
-    if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-      try {
-        await decompressXz(patchArchivePath, sqlPath);
-        // Verify decompressed file exists and is not empty
-        if (!fs.existsSync(sqlPath)) {
-          throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
-        }
-        const stats = fs.statSync(sqlPath);
-        if (stats.size === 0) {
-          throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
-        }
-      } catch (decompressErr) {
-        throw new Error(`Failed to decompress ${patch.file_name}: ${decompressErr.message}`);
-      }
-    } else {
-      // Assume uncompressed SQL file
-      fs.copyFileSync(patchArchivePath, sqlPath);
-    }
-    
-    await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
-    fs.unlinkSync(sqlPath);
+    await applyManifestPatch({
+      patch,
+      patchArchivePath,
+      tempDbPath,
+      dbName: dbStatus.name,
+      stagingDir,
+      userDataDir
+    });
     console.log(`[patch-complete] ${dbStatus.name}: applied ${patch.file_name}`);
     
     // Track last applied patch
@@ -1628,31 +1688,14 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
           for (const patch of patches) {
             const patchArchivePath = await ensureArtifact(patch, paths.downloadsDir, downloadTracker, plan.userDataDir, ipfsTimeout);
             console.log(`[patch-start] ${db.name}: applying ${patch.file_name}`);
-            const sqlPath = path.join(paths.stagingDir, patch.file_name.replace(/\.xz$/i, ''));
-            
-            // Decompress if format is xz (or file ends with .xz)
-            const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
-            if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-              try {
-                await decompressXz(patchArchivePath, sqlPath);
-                // Verify decompressed file exists and is not empty
-                if (!fs.existsSync(sqlPath)) {
-                  throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
-                }
-                const stats = fs.statSync(sqlPath);
-                if (stats.size === 0) {
-                  throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
-                }
-              } catch (decompressErr) {
-                throw new Error(`Failed to decompress ${patch.file_name}: ${decompressErr.message}`);
-              }
-            } else {
-              // Assume uncompressed SQL file
-              fs.copyFileSync(patchArchivePath, sqlPath);
-            }
-            
-            await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
-            fs.unlinkSync(sqlPath);
+            await applyManifestPatch({
+              patch,
+              patchArchivePath,
+              tempDbPath,
+              dbName: db.name,
+              stagingDir: paths.stagingDir,
+              userDataDir: plan.userDataDir
+            });
             console.log(`[patch-complete] ${db.name}: applied ${patch.file_name}`);
             
             // Track last applied patch
@@ -2069,19 +2112,16 @@ async function verifyBuild(manifest, opts) {
         const tempDbPath = path.join(stagingDir, `${targetKey}.tmp.db`);
         const format = target.base.format || 'xz';
 
-        if (format === 'tar+xz' || format === 'tar.xz') {
-          // Tar archive: decompress xz, then extract file from tar
-          const baseTarPath = path.join(stagingDir, `${target.base.file_name.replace(/\.xz$/i, '')}.tar`);
-          await decompressXz(basePath, baseTarPath);
-          const extractFile = target.base.extract_file || targetKey;
-          await extractFileFromTar(baseTarPath, extractFile, tempDbPath);
-          fs.unlinkSync(baseTarPath);
-        } else if (format === 'xz') {
-          // Direct xz-compressed file: just decompress
-          await decompressXz(basePath, tempDbPath);
-        } else {
-          throw new Error(`Unsupported format: ${format}`);
-        }
+        await extractBaseArchive({
+          base: target.base,
+          baseArchivePath: basePath,
+          dbName: targetKey,
+          format,
+          stagingDir,
+          tempDbPath,
+          userDataDir: opts.userDataDir || detectUserDataDir(),
+          onLog: console.log
+        });
 
         // Apply patches
         const patches = Array.isArray(target.sqlpatches) ? target.sqlpatches : [];
@@ -2097,34 +2137,16 @@ async function verifyBuild(manifest, opts) {
           console.log(`    Applying: ${patch.file_name}`);
           const patchPath = await ensureArtifact(patch, tempDir, null, opts.userDataDir || detectUserDataDir(), opts.ipfsTimeout || 20);
 
-          const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
-          
-          // Decompress if format is xz (or file ends with .xz)
-          const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
-          if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-            console.log(`    Decompressing ${patch.file_name} to ${path.basename(sqlPath)}...`);
-            try {
-              await decompressXz(patchPath, sqlPath);
-              // Verify decompressed file exists and is not empty
-              if (!fs.existsSync(sqlPath)) {
-                throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
-              }
-              const stats = fs.statSync(sqlPath);
-              if (stats.size === 0) {
-                throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
-              }
-              console.log(`    ✓ Decompressed successfully (${stats.size} bytes)`);
-            } catch (decompressErr) {
-              throw new Error(`Failed to decompress ${patch.file_name}: ${decompressErr.message}`);
-            }
-          } else {
-            // Assume uncompressed SQL file
-            fs.copyFileSync(patchPath, sqlPath);
-          }
-
-          // Apply patch (without wrapping in transaction, as patches may already contain transactions)
           try {
-            await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
+            await applyManifestPatch({
+              patch,
+              patchArchivePath: patchPath,
+              tempDbPath,
+              dbName: targetKey,
+              stagingDir,
+              userDataDir: opts.userDataDir || detectUserDataDir(),
+              onLog: (msg) => console.log(`    ${msg}`)
+            });
             console.log(`      ✓ Applied successfully`);
           } catch (err) {
             // Check for common issues
@@ -2150,8 +2172,6 @@ async function verifyBuild(manifest, opts) {
             console.log(`        Issue type: ${issue}`);
             throw err; // Stop processing this target
           }
-
-          fs.unlinkSync(sqlPath);
         }
 
         // Verify final database is valid
@@ -2273,24 +2293,14 @@ async function runUpdateMode(opts, manifest) {
       for (const patch of patches) {
         const patchArchivePath = await ensureArtifact(patch, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
         console.log(`[patch-start] ${dbName}: applying ${patch.file_name}`);
-        const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
-
-        const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
-        if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
-          await decompressXz(patchArchivePath, sqlPath);
-          if (!fs.existsSync(sqlPath)) {
-            throw new Error(`Decompression failed: output file ${sqlPath} does not exist`);
-          }
-          const stats = fs.statSync(sqlPath);
-          if (stats.size === 0) {
-            throw new Error(`Decompression failed: output file ${sqlPath} is empty`);
-          }
-        } else {
-          fs.copyFileSync(patchArchivePath, sqlPath);
-        }
-
-        await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
-        fs.unlinkSync(sqlPath);
+        await applyManifestPatch({
+          patch,
+          patchArchivePath,
+          tempDbPath,
+          dbName,
+          stagingDir,
+          userDataDir
+        });
         console.log(`[patch-complete] ${dbName}: applied ${patch.file_name}`);
         lastPatchSha256 = patch.sha256;
         lastPatchFileName = patch.file_name;

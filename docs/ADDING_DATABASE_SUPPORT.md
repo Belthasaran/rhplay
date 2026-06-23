@@ -102,6 +102,43 @@ If your database is **manifest-based** (downloaded from ArDrive/IPFS):
    }
    ```
 
+### Provisioning bundles (7z/zip + provindex.json)
+
+Thick-chain updates may use **`type: "bundle"`** instead of a single `.sql.xz` patch:
+
+```json
+{
+  "file_name": "pbin14_to_15_bundle.7z",
+  "version_before": "14",
+  "type": "bundle",
+  "format": "7z",
+  "sha256": "..."
+}
+```
+
+Base databases may also use bundles:
+
+```json
+"base": {
+  "file_name": "resource_15.7z",
+  "type": "bundle",
+  "format": "7z",
+  "extract_file": "resource.db",
+  "sha256": "..."
+}
+```
+
+Each bundle contains `provindex.json` (ordered JSON array) plus payload files. Instruction types:
+
+| type | purpose |
+|------|---------|
+| `EXTRACT_DB` | Copy a `.db` member to the staging database (base bundles) |
+| `SQL_PATCH` | Apply a `.sql` file (`PRAGMA foreign_keys=OFF`) |
+| `ADDITEM` | Copy artifact into `{userData}/artifacts/` and upsert index CSV |
+| `CLEANUP` | Append cleanup hint (no file deletion during provision) |
+
+Legacy `format: "xz"` / `tar+xz` patches and `file_data` in SQLite remain supported as fallback.
+
 2. **Add to main.js DATABASE_FILES:**
    Same as Step 2A, item 3.
 

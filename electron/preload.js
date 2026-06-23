@@ -1694,6 +1694,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object|null>}
    */
   databaseUpdateGetInfo: () => ipcRenderer.invoke('database-update:get-info'),
+  databaseUpdateScanConflicts: (params) => ipcRenderer.invoke('database-update:scan-conflicts', params),
 
   /**
    * Send user response from database update dialog

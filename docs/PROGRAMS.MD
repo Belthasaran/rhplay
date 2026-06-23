@@ -983,11 +983,23 @@ Example:
 
 **Module**: `lib/migrate-artifacts.js` (also used by provisioning bundle handling).
 
+**Provision conflict resolution**: Bundle patches ship `patch_declarations` in `provindex.json`. Before `SQL_PATCH`, the provisioner reconciles RHPAK overlaps and skips feed-equivalent rows; post-update remaps `clientdata.db` and runs orphan cleanup. See `devdocs/PROVISION_CONFLICTS.md`, `jstools/provision-conflicts.js`.
+
 **Output**: JSON summary describing directory paths, planned actions per database (`skip`, `copy-embedded`, `provision-from-manifest`), downloads required, and—when `--provision` is set—the execution results for each database (completed, skipped, errors).
 
 ---
 
 ## Utilities
+
+### jstools/provision-conflicts.js
+**Purpose**: Dry-run scan for manifest bundle patch conflicts vs local DB state.
+
+**Usage**:
+```bash
+./enode.sh jstools/provision-conflicts.js --bundle /path/to/patch.7z --db-name rhdata.db --user-data-dir /path/to/userdata --help
+```
+
+---
 
 ### jstools/stage_autotest.js
 **Purpose**: CLI automated stage test — builds patched ROM, launches RetroArch, verifies level entry and retry stability via SNI RAM

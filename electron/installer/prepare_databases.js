@@ -45,6 +45,9 @@ const {
 const provisionBundle = require('../../lib/provision-bundle');
 const { isBundleSpec } = provisionBundle;
 const { maybeMigrateArtifacts } = require('../../lib/migrate-artifacts');
+const { reconcileBeforePatch, getBackupSessionDir } = require('../../lib/provision-reconcile');
+const { runGvMigrationRemap } = require('../../lib/gv-migration-remapper');
+let activeProvisionBackupDir = null;
 
 const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
@@ -1323,6 +1326,16 @@ async function applyManifestPatch({
 }) {
   if (isBundleSpec(patch)) {
     const bundleStaging = path.join(stagingDir, `bundle-patch-${dbName}-${path.basename(patch.file_name, path.extname(patch.file_name))}`);
+    await reconcileBeforePatch({
+      dbPath: tempDbPath,
+      dbName,
+      patchArchivePath,
+      patchSpec: patch,
+      userDataDir,
+      stagingDir: bundleStaging,
+      backupDir: activeProvisionBackupDir || null,
+      onLog
+    });
     await provisionBundle.applyBundleAsPatch({
       bundlePath: patchArchivePath,
       spec: patch,
@@ -2276,6 +2289,7 @@ async function runUpdateMode(opts, manifest) {
 
   const provisioned = loadProvisionedJson(userDataDir);
   const results = [];
+  activeProvisionBackupDir = getBackupSessionDir(userDataDir);
 
   for (const u of updates) {
     const { dbName, patchesToApply, manifestEntry, targetVersion } = u;
@@ -2349,6 +2363,20 @@ async function runUpdateMode(opts, manifest) {
   const anyFailed = results.some((r) => !r.success);
   const success = anySucceeded && !anyFailed;
   const partialSuccess = anySucceeded && anyFailed;
+
+  if (anySucceeded) {
+    try {
+      runGvMigrationRemap({ userDataDir, onLog: console.log });
+      runProvisionOrphanCleanup({
+        userDataDir,
+        backupDir: activeProvisionBackupDir,
+        onLog: console.log
+      });
+    } catch (postErr) {
+      console.warn(`[update] post-provision cleanup: ${postErr.message}`);
+    }
+  }
+  activeProvisionBackupDir = null;
 
   if (opts.updateResultPath) {
     try {

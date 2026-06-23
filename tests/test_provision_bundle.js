@@ -38,24 +38,27 @@ async function run() {
   const blobData = Buffer.from('bundle-pblob');
   const auuid = crypto.randomUUID();
   const pbuuid = crypto.randomUUID();
-  const provindex = [
-    { type: 'SQL_PATCH', source: 'patch.sql' },
-    {
-      type: 'ADDITEM',
-      artifact_type: 'pblob',
-      source: 'pblob/ab/blob.bin',
-      auuid,
-      pbuuid,
-      file_hash_sha256: crypto.createHash('sha256').update(blobData).digest('hex')
-    },
-    { type: 'CLEANUP', artifact_type: 'pblob', auuid: '00000000-0000-4000-8000-000000000099' }
-  ];
-  fs.writeFileSync(path.join(bundleDir, 'provindex.json'), JSON.stringify(provindex));
+  const provindexDoc = {
+    patch_declarations: {},
+    instructions: [
+      { type: 'SQL_PATCH', source: 'patch.sql' },
+      {
+        type: 'ADDITEM',
+        artifact_type: 'pblob',
+        source: 'pblob/ab/blob.bin',
+        auuid,
+        pbuuid,
+        file_hash_sha256: crypto.createHash('sha256').update(blobData).digest('hex')
+      },
+      { type: 'CLEANUP', artifact_type: 'pblob', auuid: '00000000-0000-4000-8000-000000000099' }
+    ]
+  };
+  fs.writeFileSync(path.join(bundleDir, 'provindex.json'), JSON.stringify(provindexDoc));
   fs.writeFileSync(path.join(bundleDir, 'patch.sql'), sql);
   fs.mkdirSync(path.join(bundleDir, 'pblob', 'ab'), { recursive: true });
   fs.writeFileSync(path.join(bundleDir, 'pblob', 'ab', 'blob.bin'), blobData);
 
-  const instructions = loadProvindex(bundleDir);
+  const instructions = loadProvindex(bundleDir).instructions;
   assert.strictEqual(instructions.length, 3);
   console.log('✓ loadProvindex');
 
@@ -91,7 +94,7 @@ async function run() {
   const db2 = path.join(tmp, 'test2.db');
   fs.writeFileSync(db2, '');
   await executeProvindex({
-    instructions: loadProvindex(zipBundleDir),
+    instructions: loadProvindex(zipBundleDir).instructions,
     bundleDir: zipBundleDir,
     dbPath: db2
   });

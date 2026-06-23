@@ -44,6 +44,7 @@ const {
 } = require('../utils/manifest-chain');
 const provisionBundle = require('../../lib/provision-bundle');
 const { isBundleSpec } = provisionBundle;
+const { maybeMigrateArtifacts } = require('../../lib/migrate-artifacts');
 
 const DATABASES = [
   { name: 'clientdata.db', manifestKey: 'clientdata.db', embedded: true },
@@ -1287,10 +1288,7 @@ async function extractBaseArchive({
       stagingDir: bundleStaging,
       onLog
     });
-    return;
-  }
-
-  if (format === 'tar+xz' || format === 'tar.xz') {
+  } else if (format === 'tar+xz' || format === 'tar.xz') {
     onLog(`[extract] ${dbName}: decompressing tar archive ${base.file_name}`);
     const baseTarPath = path.join(stagingDir, `${base.file_name.replace(/\.xz$/i, '')}.tar`);
     await decompressXz(baseArchivePath, baseTarPath);
@@ -1304,6 +1302,14 @@ async function extractBaseArchive({
   } else {
     throw new Error(`Unsupported format: ${format} for ${dbName}`);
   }
+
+  await maybeMigrateArtifacts({
+    spec: base,
+    dbPath: tempDbPath,
+    dbName,
+    userDataDir,
+    onLog
+  });
 }
 
 async function applyManifestPatch({
@@ -1326,9 +1332,7 @@ async function applyManifestPatch({
       stagingDir: bundleStaging,
       onLog
     });
-    return;
-  }
-
+  } else {
   const sqlPath = path.join(stagingDir, patch.file_name.replace(/\.xz$/i, ''));
   const patchFormat = patch.format || (patch.file_name.toLowerCase().endsWith('.xz') ? 'xz' : null);
   if (patchFormat === 'xz' || patch.file_name.toLowerCase().endsWith('.xz')) {
@@ -1345,6 +1349,15 @@ async function applyManifestPatch({
   }
   await applySqlPatch(tempDbPath, sqlPath, patch.file_name);
   fs.unlinkSync(sqlPath);
+  }
+
+  await maybeMigrateArtifacts({
+    spec: patch,
+    dbPath: tempDbPath,
+    dbName,
+    userDataDir,
+    onLog
+  });
 }
 
 /**

@@ -954,6 +954,35 @@ enode.sh electron/installer/prepare_databases.js \
 - `--write-summary <path>` - Persist human-readable summary (used by installers for UI).
 - `--help` - Show usage information.
 
+**Manifest `migrate_artifacts`**: When `"migrate_artifacts": true` is set on a database target's `base` entry or any `sqlpatches` item (including `type: "bundle"`), RHPlay runs a post-step migration on that database immediately after the step completes. For `patchbin.db`, `resource.db`, and `screenshot.db`, blob columns (`file_data` / `encrypted_data`) are validated against row hash metadata, written into `{userData}/artifacts/` (`pblob/`, `resource/`, `screenshot/`), and set to `NULL` on success; per-row failures are logged and skipped. After each migration pass the database is compacted with `VACUUM` and `PRAGMA wal_checkpoint(TRUNCATE)`.
+
+Example:
+```json
+{
+  "patchbin.db": {
+    "version": "15",
+    "base": {
+      "file_name": "patchbin.db.initial.xz",
+      "format": "xz",
+      "sha256": "...",
+      "migrate_artifacts": true
+    },
+    "sqlpatches": [
+      {
+        "file_name": "pbin14_to_15_bundle.7z",
+        "format": "7z",
+        "type": "bundle",
+        "version_before": "14",
+        "sha256": "...",
+        "migrate_artifacts": true
+      }
+    ]
+  }
+}
+```
+
+**Module**: `lib/migrate-artifacts.js` (also used by provisioning bundle handling).
+
 **Output**: JSON summary describing directory paths, planned actions per database (`skip`, `copy-embedded`, `provision-from-manifest`), downloads required, and—when `--provision` is set—the execution results for each database (completed, skipped, errors).
 
 ---

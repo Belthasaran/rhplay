@@ -754,6 +754,7 @@ async function loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s, config
 
   const resultSha1 = sha1(romBuffer);
   const resultSha224 = sha224(romBuffer);
+  const resultSha256 = sha256(romBuffer);
   const resultShake1 = shake128Base64Url(romBuffer);
   const resultMd5 = md5(romBuffer);
   const resultCrc16 = crc16(romBuffer);
@@ -816,6 +817,7 @@ async function loadPreparedPatchArtifact(skeleton, baseDir, blockedSha1s, config
     attachmentMeta,
     resultSha1,
     resultSha224,
+    resultSha256,
     resultShake1,
     resultMd5,
     resultCrc16,
@@ -2225,6 +2227,7 @@ async function handlePrepare(config, skeleton) {
   skeleton.gameversion.patch_crc32 = artifact.crc32;
   skeleton.gameversion.result_sha1 = artifact.resultSha1;
   skeleton.gameversion.result_sha224 = artifact.resultSha224;
+  skeleton.gameversion.result_sha256 = artifact.resultSha256;
   skeleton.gameversion.result_shake1 = artifact.resultShake1;
   skeleton.gameversion.result_md5 = artifact.resultMd5;
   skeleton.gameversion.result_crc16 = artifact.resultCrc16;
@@ -2285,6 +2288,7 @@ async function handlePrepare(config, skeleton) {
     source_is_archive: artifact.isArchiveSource || false,
     result_sha1: artifact.resultSha1,
     result_sha224: artifact.resultSha224,
+    result_sha256: artifact.resultSha256,
     result_shake1: artifact.resultShake1,
     result_md5: artifact.resultMd5,
     result_crc16: artifact.resultCrc16,
@@ -2300,12 +2304,15 @@ async function handlePrepare(config, skeleton) {
   ensureGameversionDerivedFields(skeleton);
 
   const blobMeta = artifact.blobMetadata || {};
+  const attachmentMetaForSkeleton = artifact.attachmentMeta || {};
+  const encodedPatchblobSha224 =
+    blobMeta.patchblob1_sha224 || attachmentMetaForSkeleton.file_sha224 || null;
   skeleton.patchblob = {
     ...(skeleton.patchblob || {}),
     rhpakuuid,
     patchblob1_name: artifact.patchblobName,
     patchblob1_key: blobMeta.patchblob1_key || null,
-    patchblob1_sha224: blobMeta.patchblob1_sha224 || artifact.patSha224,
+    patchblob1_sha224: encodedPatchblobSha224,
     pat_sha1: artifact.patSha1,
     pat_sha224: artifact.patSha224,
     pat_shake_128: artifact.patShake128,
@@ -2315,6 +2322,7 @@ async function handlePrepare(config, skeleton) {
     rom_relative_path: artifact.romRelativePath,
     result_sha1: artifact.resultSha1,
     result_sha224: artifact.resultSha224,
+    result_sha256: artifact.resultSha256,
     result_shake1: artifact.resultShake1,
     result_md5: artifact.resultMd5,
     result_crc16: artifact.resultCrc16,
@@ -2442,6 +2450,7 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {
   const resultBuffer = resultInfo.buffer;
   const resultSha1 = sha1(resultBuffer);
   const resultSha224 = sha224(resultBuffer);
+  const resultSha256 = sha256(resultBuffer);
   const resultShake1 = shake128Base64Url(resultBuffer);
   const resultMd5 = md5(resultBuffer);
   const resultCrc16 = crc16(resultBuffer);
@@ -2477,6 +2486,7 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {
     pat_shake_128: patShake128,
     result_sha1: resultSha1,
     result_sha224: resultSha224,
+    result_sha256: resultSha256,
     result_shake1: resultShake1,
     result_file_path: finalRomPath,
     patch_filename: patchFileName,
@@ -2526,6 +2536,7 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {
     attachmentMeta,
     resultSha1,
     resultSha224,
+    resultSha256,
     resultShake1,
     resultMd5,
     resultCrc16,
@@ -2538,6 +2549,12 @@ async function preparePatchArtifacts(skeleton, baseDir, blockedSha1s, config = {
 /**
  * Upsert operations
  */
+
+function resolveEncodedPatchblobSha224(artifact) {
+  const blobMeta = artifact.blobMetadata || {};
+  const attachmentMeta = artifact.attachmentMeta || {};
+  return blobMeta.patchblob1_sha224 || attachmentMeta.file_sha224 || null;
+}
 
 function resolveOwnerFieldsForUpsert(existing, incomingRhpak, options = {}) {
   if (!incomingRhpak) {
@@ -2640,7 +2657,7 @@ function upsertGameversion(db, skeleton, artifact, options) {
     pat_sha224: artifact.patSha224,
     pat_shake_128: artifact.patShake128,
     patchblob1_name: artifact.patchblobName,
-    patchblob1_sha224: artifact.patSha224,
+    patchblob1_sha224: resolveEncodedPatchblobSha224(artifact),
     patchblob1_key: null,
     submission_notes: gv.submission_notes || '',
     patch_notes: gv.patch_notes || '',
@@ -2824,7 +2841,41 @@ function upsertPatchblob(db, skeleton, artifact) {
     pb.pbuuid = generateUuid();
   }
 
-  const query = `
+  const encodedPatchblobSha224 = resolveEncodedPatchblobSha224(artifact);
+  if (!encodedPatchblobSha224) {
+    throw new Error('Encoded patchblob SHA-224 missing; re-run --prepare.');
+  }
+
+  const hasResultSha256 = tableHasColumn(db, 'patchblobs', 'result_sha256');
+  const resultSha256 = artifact.resultSha256 || pb.result_sha256 || null;
+
+  const query = hasResultSha256 ? `
+    INSERT INTO patchblobs (
+      pbuuid, gvuuid, patch_name, pat_sha1, pat_sha224, pat_shake_128,
+      patchblob1_key, patchblob1_name, patchblob1_sha224,
+      result_sha1, result_sha224, result_sha256, result_shake1, pbjsondata, rhpakuuid, rhpakuuid2
+    )
+    VALUES (
+      @pbuuid, @gvuuid, @patch_name, @pat_sha1, @pat_sha224, @pat_shake_128,
+      @patchblob1_key, @patchblob1_name, @patchblob1_sha224,
+      @result_sha1, @result_sha224, @result_sha256, @result_shake1, @pbjsondata, @rhpakuuid, @rhpakuuid2
+    )
+    ON CONFLICT(patchblob1_name) DO UPDATE SET
+      gvuuid = excluded.gvuuid,
+      patch_name = excluded.patch_name,
+      pat_sha1 = excluded.pat_sha1,
+      pat_sha224 = excluded.pat_sha224,
+      pat_shake_128 = excluded.pat_shake_128,
+      patchblob1_key = excluded.patchblob1_key,
+      patchblob1_sha224 = excluded.patchblob1_sha224,
+      result_sha1 = excluded.result_sha1,
+      result_sha224 = excluded.result_sha224,
+      result_sha256 = excluded.result_sha256,
+      result_shake1 = excluded.result_shake1,
+      pbjsondata = excluded.pbjsondata,
+      rhpakuuid = excluded.rhpakuuid,
+      rhpakuuid2 = excluded.rhpakuuid2
+  ` : `
     INSERT INTO patchblobs (
       pbuuid, gvuuid, patch_name, pat_sha1, pat_sha224, pat_shake_128,
       patchblob1_key, patchblob1_name, patchblob1_sha224,
@@ -2861,30 +2912,46 @@ function upsertPatchblob(db, skeleton, artifact) {
     pat_sha1: artifact.patSha1,
     pat_sha224: artifact.patSha224,
     pat_shake_128: artifact.patShake128,
-    patchblob1_key: pb.patchblob1_key || null,
+    patchblob1_key: pb.patchblob1_key || artifact.blobMetadata?.patchblob1_key || null,
     patchblob1_name: artifact.patchblobName,
-    patchblob1_sha224: artifact.patSha224,
-    result_sha1: pb.result_sha1 || null,
-    result_sha224: pb.result_sha224 || null,
-    result_shake1: pb.result_shake1 || null,
+    patchblob1_sha224: encodedPatchblobSha224,
+    result_sha1: artifact.resultSha1 || pb.result_sha1 || null,
+    result_sha224: artifact.resultSha224 || pb.result_sha224 || null,
+    result_shake1: artifact.resultShake1 || pb.result_shake1 || null,
     pbjsondata: JSON.stringify({
       patch: artifact.patchRelativePath,
       pat_sha1: artifact.patSha1,
       pat_sha224: artifact.patSha224,
       pat_shake_128: artifact.patShake128,
-      patchblob1_name: artifact.patchblobName
+      patchblob1_name: artifact.patchblobName,
+      patchblob1_sha224: encodedPatchblobSha224
     }),
     rhpakuuid: ownerFields.rhpakuuid,
     rhpakuuid2: ownerFields.rhpakuuid2
   };
+  if (hasResultSha256) {
+    payload.result_sha256 = resultSha256;
+  }
 
   db.prepare(query).run(payload);
   pb.patchblob1_name = artifact.patchblobName;
-  pb.patchblob1_sha224 = artifact.patSha224;
+  pb.patchblob1_sha224 = encodedPatchblobSha224;
   pb.pat_sha1 = artifact.patSha1;
   pb.pat_sha224 = artifact.patSha224;
   pb.pat_shake_128 = artifact.patShake128;
   pb.patch_name = artifact.patchRelativePath;
+  if (hasResultSha256 && resultSha256) {
+    pb.result_sha256 = resultSha256;
+  }
+  if (artifact.resultSha1) {
+    pb.result_sha1 = artifact.resultSha1;
+  }
+  if (artifact.resultSha224) {
+    pb.result_sha224 = artifact.resultSha224;
+  }
+  if (artifact.resultShake1) {
+    pb.result_shake1 = artifact.resultShake1;
+  }
 }
 
 function upsertPatchblobExtended(db, skeleton, artifact) {
@@ -2967,6 +3034,7 @@ function upsertAttachment(db, skeleton, artifact) {
 
   const attachmentMeta = artifact.attachmentMeta || {};
   const blobMeta = artifact.blobMetadata || {};
+  const encodedPatchblobSha224 = resolveEncodedPatchblobSha224(artifact);
   const blobBuffer = fs.readFileSync(artifact.patchblobStoredPath);
 
   db.prepare(query).run({
@@ -2981,10 +3049,10 @@ function upsertAttachment(db, skeleton, artifact) {
     parents: JSON.stringify([]),
     file_ipfs_cidv0: attachmentMeta.ipfs_cid_v0 || '',
     file_ipfs_cidv1: attachmentMeta.ipfs_cid_v1 || '',
-    file_hash_sha224: attachmentMeta.file_sha224 || artifact.patSha224,
+    file_hash_sha224: attachmentMeta.file_sha224 || encodedPatchblobSha224,
     file_hash_sha1: attachmentMeta.file_sha1 || artifact.patSha1,
     file_hash_md5: attachmentMeta.file_md5 || artifact.patHashMd5,
-    file_hash_sha256: attachmentMeta.file_sha256 || artifact.patSha256,
+    file_hash_sha256: attachmentMeta.file_sha256 || attachmentMeta.encoded_sha256 || null,
     file_name: artifact.patchblobName,
     filekey: blobMeta.patchblob1_key || '',
     decoded_ipfs_cidv0: attachmentMeta.decoded_ipfs_cid_v0 || '',
@@ -4479,6 +4547,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  resolveEncodedPatchblobSha224,
   runNewgameWithArgs,
   runNewgameWithConfig,
   handleImportPackage,

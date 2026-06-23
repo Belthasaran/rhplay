@@ -229,6 +229,18 @@ node reprocess-attachments.js --game-ids=<ids> [options]
 
 ## Verification Tools
 
+### fix-patchblob1-sha224.js
+**Purpose**: Repair `patchblobs.patchblob1_sha224` values that were incorrectly set to decoded `pat_sha224` instead of the encoded outer blob hash (`attachments.file_hash_sha224`).
+
+**Usage**:
+```bash
+enode.sh jstools/fix-patchblob1-sha224.js [--dry-run]
+```
+
+**Environment**: `RHDATA_DB_PATH`, `PATCHBIN_DB_PATH`
+
+---
+
 ### verify-all-blobs.js
 **Purpose**: Verify blob integrity (JavaScript version)
 
@@ -374,6 +386,7 @@ enode.sh jstools/newgame.js ~/rhplay/work/newhack.rhpak --uninstall
 - Successful adds register the `rhpakuuid` and package name in the new `rhpakages` table so installed bundles can be audited and uninstalled later.
 - `--import` performs its work in a temporary directory, validating artifacts and writing directly to the databases without leaving extracted files behind on disk.
 - Patch and resource metadata rely on SHA-1/224/256, CRC16/CRC32, and IPFS CID generation identical to existing blob tooling.
+- **Hash field semantics (`--add` / `upsertPatchblob`)**: `patchblob1_sha224` and `attachments.file_hash_sha224` are the **encoded outer patchblob** SHA-224 (from `BlobCreator` / `computeAttachmentMetadata`). `pat_sha224`, `pat_sha1`, and `pat_shake_128` are **decoded BPS** hashes. `result_sha224`, `result_sha1`, `result_sha256`, and `result_shake1` are **flips result ROM** hashes. `updategames.js` export uses `BlobCreator` output directly; import delegates to `newgame.js --add`, so both paths must keep these columns aligned. Use `jstools/fix-patchblob1-sha224.js` to repair rows where `patchblob1_sha224` was wrongly set to `pat_sha224`.
 
 ---
 

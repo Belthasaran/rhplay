@@ -35,8 +35,8 @@ const RecordCreator = require('../lib/record-creator');
 const { getFlipsPath, getSmwRomPath } = require('../lib/binary-finder');
 
 const CONFIG = {
-  DB_PATH: path.join(__dirname, '..', 'electron', 'rhdata.db'),
-  PATCHBIN_DB_PATH: path.join(__dirname, '..', 'electron', 'patchbin.db'),
+  DB_PATH: process.env.RHDATA_DB_PATH || path.join(__dirname, '..', 'electron', 'rhdata.db'),
+  PATCHBIN_DB_PATH: process.env.PATCHBIN_DB_PATH || path.join(__dirname, '..', 'electron', 'patchbin.db'),
   BLOBS_DIR: path.join(__dirname, 'blobs'),
   TEMP_DIR: path.join(__dirname, '..', 'temp'),
   LOG_FILE: 'verification_results.log',
@@ -126,6 +126,7 @@ async function verifyBlob(patchblob, recordCreator, patchbinDb, logger, fullChec
     patch_hash_valid: false,
     flips_test_success: false,
     result_hash_valid: false,
+    result_sha256_valid: false,
     errors: []
   };
   
@@ -211,18 +212,29 @@ async function verifyBlob(patchblob, recordCreator, patchbinDb, logger, fullChec
         result.flips_test_success = true;
         
         // Check 6: Verify result hash (optional)
-        if (verifyResult && patchblob.result_sha224 && fs.existsSync(tempRom)) {
+        if (verifyResult && fs.existsSync(tempRom)) {
           const resultData = fs.readFileSync(tempRom);
-          const resultHash = crypto.createHash('sha224').update(resultData).digest('hex');
-          
-          if (resultHash === patchblob.result_sha224) {
-            result.result_hash_valid = true;
-          } else {
-            result.errors.push(`Result hash mismatch: expected ${patchblob.result_sha224}, got ${resultHash}`);
-            result.flips_test_success = false; // Override - result doesn't match despite success
+          if (patchblob.result_sha224) {
+            const resultHash224 = crypto.createHash('sha224').update(resultData).digest('hex');
+            if (resultHash224 === patchblob.result_sha224) {
+              result.result_hash_valid = true;
+            } else {
+              result.errors.push(`Result hash mismatch: expected ${patchblob.result_sha224}, got ${resultHash224}`);
+              result.flips_test_success = false;
+            }
+          } else if (verifyResult) {
+            result.result_hash_valid = null;
           }
-        } else if (verifyResult && !patchblob.result_sha224) {
-          // No expected hash to verify against - skip
+          if (patchblob.result_sha256) {
+            const resultHash256 = crypto.createHash('sha256').update(resultData).digest('hex');
+            if (resultHash256 === patchblob.result_sha256) {
+              result.result_sha256_valid = true;
+            } else {
+              result.errors.push(`Result SHA-256 mismatch: expected ${patchblob.result_sha256}, got ${resultHash256}`);
+              result.flips_test_success = false;
+            }
+          }
+        } else if (verifyResult && !patchblob.result_sha224 && !patchblob.result_sha256) {
           result.result_hash_valid = null;
         }
         

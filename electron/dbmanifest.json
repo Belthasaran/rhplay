@@ -1,5 +1,5 @@
 {
-  "lastupdated": "1782304466",
+  "lastupdated": "1782309721",
   "greetings": {
     "message": "No announcement has been specified"
   },
@@ -139,7 +139,20 @@
         "size": "35613293",
         "_packager_run": "bbd08249-4090-46ac-9dc4-f4f01679d8ce",
         "_packager_generated": true,
-        "_packager_chain": "thick"
+        "_packager_chain": "thick",
+        "ipfs_cidv1": "bafybeidsigkjqegzfehyzh5xn7wqtk7wy6eyomrn4hbbln54yodupuxfki",
+        "priority": [
+          "baddr",
+          "ipfs",
+          "ardrive"
+        ],
+        "baddr": "aHR0cHM6Ly9saW5rLnNtd3Jlc291cmNlLm5ldC9yZXMxNF90b18xNV9idW5kbGUuN3o=",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+        "ardrive_file_name": "res14_to_15_bundle.7z",
+        "ardrive_file_path": "/SMWRH/db/res14_to_15_bundle.7z",
+        "ardrive_file_id": "4de3dca0-7a96-4ca3-a7b8-eb3427e06e4c",
+        "data_txid": "tTGKNLuaPpfzv82dYUU3mX00pgsRIIh5dL-CfV48tuo"
       }
     ],
     "sqlpatches:light": [],

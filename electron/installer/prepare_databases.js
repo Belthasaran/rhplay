@@ -42,11 +42,12 @@ const {
   chainToStoreValue,
   formatChainLabel
 } = require('../utils/manifest-chain');
-const provisionBundle = require('../../lib/provision-bundle');
+const { requireRhplayModule } = require('./rhplay-require');
+const provisionBundle = requireRhplayModule('lib/provision-bundle');
 const { isBundleSpec } = provisionBundle;
-const { maybeMigrateArtifacts } = require('../../lib/migrate-artifacts');
-const { reconcileBeforePatch, getBackupSessionDir } = require('../../lib/provision-reconcile');
-const { runGvMigrationRemap } = require('../../lib/gv-migration-remapper');
+const { maybeMigrateArtifacts } = requireRhplayModule('lib/migrate-artifacts');
+const { reconcileBeforePatch, getBackupSessionDir } = requireRhplayModule('lib/provision-reconcile');
+const { runGvMigrationRemap } = requireRhplayModule('lib/gv-migration-remapper');
 let activeProvisionBackupDir = null;
 
 const DATABASES = [

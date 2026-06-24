@@ -360,6 +360,8 @@
       "electron/sql/migrations/**/*",
       "electron/installer/**/*",
       "electron/utils/ipfs-fetch-config.js",
+      "electron/utils/manifest-chain.js",
+      "electron/utils/patch-resolver-context.js",
       "electron/utils/arweave-fetch-config.js",
       "node_modules/@ar.io/wayfinder-core/**/*",
       "node_modules/plimit-lit/**/*",

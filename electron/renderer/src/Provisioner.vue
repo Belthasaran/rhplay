@@ -275,9 +275,15 @@ function formatAction(action: string) {
       return 'Copy Embedded Seed';
     case 'provision-from-manifest':
       return 'Download & Patch';
+    case 'provision-appfiles':
+      return 'Download App Files';
     default:
       return action;
   }
+}
+
+function formatProvisionErrors(errors: Array<{ name: string; message: string }>) {
+  return errors.map((e) => `${e.name}: ${e.message}`).join('\n');
 }
 
 function formatChain(db: PlanDatabase) {
@@ -412,16 +418,23 @@ async function startProvision() {
   statusMessage.value = 'Launching provisioning…';
   try {
     const response = await provisionerApi.runProvision({ dbChain: dbChainOption.value });
-    if (response.success) {
+    const provisionErrors = response.plan?.provisionResult?.errors
+      || response.provisionErrors
+      || [];
+    if (response.success && provisionErrors.length === 0) {
       provisionComplete.value = true;
       missingDatabases.value = response.missingDatabases ?? [];
       await refreshPlan();
       statusMessage.value = 'Provisioning finished successfully. Exit this program and restart when ready.';
     } else {
-      errorMessage.value = response.error || 'Provisioning did not complete successfully.';
+      errorMessage.value = response.error
+        || (provisionErrors.length ? formatProvisionErrors(provisionErrors) : 'Provisioning did not complete successfully.');
+      provisionComplete.value = false;
       missingDatabases.value = response.missingDatabases ?? missingDatabases.value;
       await refreshPlan();
-      statusMessage.value = 'Provisioning finished with issues.';
+      statusMessage.value = provisionErrors.length
+        ? 'Provisioning failed for one or more targets.'
+        : 'Provisioning finished with issues.';
     }
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : String(err);

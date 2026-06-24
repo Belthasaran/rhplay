@@ -1,15 +1,15 @@
 {
-  "lastupdated": "1774913386",
+  "lastupdated": "1782304466",
   "greetings": {
     "message": "No announcement has been specified"
   },
   "uberasm_flips.txt": {
     "type": "appfiles",
-    "version": "1",
+    "version": "2",
     "message": "This provisioning tracks additional executables that are downloaded and provisioned (UberASM and FLips)",
     "base": {
-      "file_name": "patchtools-20251204.tar.xz",
-      "format": "tar+xz",
+      "file_name": "patchtools-20260621.tar.xz",
+      "format": null,
       "install_files": [
         "asar.dll",
         "asar.exe",
@@ -19,18 +19,33 @@
         "flips-linux",
         "flips-macos",
         "UberASMTool21.zip",
-        "Flips/*"
+        "Flips/*",
+        "jitlevels/*",
+        "sni-linux-amd64/*",
+        "sni-windows-amd64/*"
       ],
-      "sha256": "0ad6b7f8abf8d077bc3c55491431d6a61ca2723e1231aace68415f0c503a757f",
-      "ipfs_cidv1": "bafybeif7uindxutfbnwsti27zhcy7a5cuupgw7epeygfgd6xm4tqpibiua",
-      "ardrive_file_name": "patchtools-20251204.tar.xz",
-      "ardrive_file_path": "/SMWRH/db/patch/patchtools-20251204.tar.xz",
-      "ardrive_file_id": "7f031148-9cca-4a06-86ae-2580f6af152a",
-      "data_txid": "wFeTp3WeuvthqyY3VqxHP-xLp0eSuA1lc6TiVqtMGZ8",
+      "sha256": "5bf18a13161bd0d87e7b8f9e25159a30bdcb4c6a15488398d22b86998ccc2fbf",
+      "ipfs_cidv1": "bafybeih5zrpzjj2eb4rfpgbwesblp7o4u6l2ytr22n6cidn5ehrlzxov4a",
+      "ardrive_file_name": "patchtools-20260621.tar.xz",
+      "ardrive_file_path": "/SMWRH/db/patch/patchtools-20260621.tar.xz",
+      "ardrive_file_id": "8bcc766f-223f-47ee-b944-6dbb260d4bbb",
+      "data_txid": "EWfdXcHon9zeydDBXZz5t1QoP9qY0aWZp3HVO7e1Y1w",
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
-      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+      "size": "29691104",
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ],
+      "baddr": "aHR0cHM6Ly9saW5rLnNtd3Jlc291cmNlLm5ldC9wYXRjaHRvb2xzLTIwMjYwNjIxLnRhci54eg=="
     },
-    "sqlpatches": []
+    "sqlpatches": [],
+    "base:light": {},
+    "base:empty": {},
+    "base:win64": {},
+    "base:linux64": {},
+    "base:macos": {}
   },
   "clientdata.db": {
     "final_sha256": "b1123fcaf2abdaeb245b0ffe6373f406f46cf63a56db08ef61921efde87155e8",
@@ -39,7 +54,7 @@
       "file_name": "clientdata.db.initial.xz",
       "format": "xz",
       "sha256": "51f93fe10acfe1669799156255ef0a4f35a5763c5d5dbf72c6bddbf1960df50c",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9pNGFKWDNIbwo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9pNGFKWDNIbwo=",
       "ipfs_cidv1": "bafkreicr7e76ccwp4ftjpgivmjk66cspgwsxmpc5lw7xfrv53pyzmdpvbq",
       "ardrive_file_path": "/SMWRH/db/clientdata.db.initial.xz",
       "ardrive_file_name": "clientdata.db.initial.xz",
@@ -52,11 +67,11 @@
     }
   },
   "resource.db": {
-    "version": "14",
+    "version": "15",
     "base": {
       "file_name": "resource.db.initial.xz",
       "format": "xz",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS96anRrb2t2Tgo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS96anRrb2t2Tgo=",
       "sha256": "31ecf773f00d550426423df3cdad9981974af22facdc7654f0f244e091b24f81",
       "ipfs_cidv1": "bafybeicmghwppy6vwgysxbu5hw3yfryeuzguqnngyqmthr52nmybllupgi",
       "size": "37453636",
@@ -65,12 +80,13 @@
       "ardrive_file_id": "b1782d13-a883-4ff4-9584-3f2a28759d91",
       "data_txid": "N5zUML9eJCsowv7-cW79hFCY-t-Z8Q82Wc3WWiH9EIE",
       "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
-      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+      "install_files": []
     },
-    "base:light" : {
+    "base:light": {
       "file_name": "resource.db.initial.xz",
       "format": "xz",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS96anRrb2t2Tgo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS96anRrb2t2Tgo=",
       "sha256": "31ecf773f00d550426423df3cdad9981974af22facdc7654f0f244e091b24f81",
       "ipfs_cidv1": "bafybeicmghwppy6vwgysxbu5hw3yfryeuzguqnngyqmthr52nmybllupgi",
       "size": "37453636",
@@ -84,7 +100,7 @@
     "sqlpatches": [
       {
         "file_name": "res12_to_13.sql.xz",
-	"version_before" : "12",
+        "version_before": "12",
         "format": "xz",
         "type": "sql",
         "sha256": "bcf789bf2c5776cc523842af6dc923bc924fd38375204eb16d0ddb605db41029",
@@ -100,21 +116,37 @@
       },
       {
         "file_name": "res13_to_14.sql.xz",
-	"version_before" : "13",
+        "version_before": "13",
         "format": "xz",
         "type": "sql",
         "sha256": "cf67dedcc4be638f0f401addea2366f7640cfbbc54ef353513b512d9aa6ff3de",
         "ipfs_cidv1": "bafybeia4ssw3qzj5g3xjdxwqv5nwjdbqzmad355lnpkporrzva7s6qv5vm",
         "size": "18910264",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS95YWg0RHQxRAo=",
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS95YWg0RHQxRAo=",
         "ardrive_file_name": "res13_to_14.sql.xz",
         "ardrive_file_path": "/SMWRH/db/patch/res13_to_14.sql.xz",
         "ardrive_file_id": "6e1093c7-6555-42b5-ae16-a53358e16631",
         "data_txid": "vXVcVJ6XUObVHOr4sr_55n1zi752LnbzW5XuDDHTJe4",
         "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
         "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      },
+      {
+        "file_name": "res14_to_15_bundle.7z",
+        "version_before": "14",
+        "type": "bundle",
+        "format": "7z",
+        "sha256": "3c3a9e5b732af6f8dab72b5db46248f6a7aef13a229c1592b06c0060be597d6e",
+        "size": "35613293",
+        "_packager_run": "bbd08249-4090-46ac-9dc4-f4f01679d8ce",
+        "_packager_generated": true,
+        "_packager_chain": "thick"
       }
-    ]
+    ],
+    "sqlpatches:light": [],
+    "base:empty": {},
+    "base:win64": {},
+    "base:linux64": {},
+    "base:macos": {}
   },
   "screenshot.db": {
     "version": "13",
@@ -122,7 +154,7 @@
       "x__source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
       "format": "xz",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vcnliNTRhcgo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vcnliNTRhcgo=",
       "sha256": "9ee9f45f88656f840fa0fc8e30e24338459dff32d08de87046bfa76322a04fe7",
       "ipfs_cidv1": "bafkreie65h2f7cdfn6ca7ih4ryyoeqzyiwo76mwqrxuharv7u5rsficp44",
       "size": "138440",
@@ -138,11 +170,11 @@
         "ardrive"
       ]
     },
-    "base:light" : {
+    "base:light": {
       "x__source_path": "packed_db/screenshot.db.initial.xz",
       "file_name": "screenshot.db.initial.xz",
       "format": "xz",
-      "baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vcnliNTRhcgo=",
+      "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9vcnliNTRhcgo=",
       "sha256": "9ee9f45f88656f840fa0fc8e30e24338459dff32d08de87046bfa76322a04fe7",
       "ipfs_cidv1": "bafkreie65h2f7cdfn6ca7ih4ryyoeqzyiwo76mwqrxuharv7u5rsficp44",
       "size": "138440",
@@ -501,7 +533,7 @@
       },
       {
         "file_name": "ss-p-010-to-012.sql.xz",
-	"version_before" : "10",
+        "version_before": "10",
         "format": "xz",
         "type": "sql",
         "sha256": "8029ce273be1ed49bfcb935322e07f24ed5815c31fa3cfd4e9165bbdeff4daea",
@@ -517,7 +549,7 @@
       },
       {
         "file_name": "ss12_to_13.sql.xz",
-	"version_before" : "12",
+        "version_before": "12",
         "format": "xz",
         "type": "sql",
         "sha256": "19de65d269fcf90fffdde295eab9788e9ad221a87d843c0e634af9bcd6c69629",
@@ -534,7 +566,7 @@
     ]
   },
   "rhdata.db": {
-    "version": "14",
+    "version": "15",
     "base": {
       "file_name": "rhdata-202602019.tar.xz",
       "format": "tar+xz",
@@ -544,7 +576,7 @@
       "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9id1kxaUI1Qwo=",
       "size": "30668920",
       "priority": [
-	"ipfs",
+        "ipfs",
         "baddr",
         "ardrive"
       ],
@@ -553,12 +585,44 @@
       "ardrive_file_name": "rhdata-202602019.tar.xz",
       "ardrive_file_path": "/SMWRH/db/patch/rhdata-202602019.tar.xz",
       "ardrive_file_id": "2f5b96aa-6894-4c3d-b9e2-cbeb7a9c5ca2",
-      "data_txid": "0kf0V98Zz8VaUz7lZoVXsOU18ILOUQUynxC50RcpD5s"
+      "data_txid": "0kf0V98Zz8VaUz7lZoVXsOU18ILOUQUynxC50RcpD5s",
+      "install_files": []
     },
-    "sqlpatches": []
+    "sqlpatches": [
+      {
+        "file_name": "rh14_to_15_bundle.7z",
+        "version_before": "14",
+        "type": "bundle",
+        "format": "7z",
+        "sha256": "e93a40179e539119f1f9a73047f2f047a2a6102f52a25c185034cc5284e95dda",
+        "size": "1352726",
+        "_packager_run": "bbd08249-4090-46ac-9dc4-f4f01679d8ce",
+        "_packager_generated": true,
+        "_packager_chain": "thick",
+        "ipfs_cidv1": "bafybeihsmvufwgdr67pqv3tdrkb7ro52j3ebhukssgbilcky3hoazbosci",
+        "priority": [
+          "baddr",
+          "ipfs",
+          "ardrive"
+        ],
+        "baddr": "aHR0cHM6Ly9saW5rLnNtd3Jlc291cmNlLm5ldC9yaDE0X3RvXzE1X2J1bmRsZS43eg==",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+        "ardrive_file_name": "rh14_to_15_bundle.7z",
+        "ardrive_file_path": "/SMWRH/db/rh14_to_15_bundle.7z",
+        "ardrive_file_id": "6aadb243-040e-4877-97af-0466248ebc6b",
+        "data_txid": "UJhrSti97O8RGOmaEORhSCoiyvWal3uShGV84iy5pBA"
+      }
+    ],
+    "sqlpatches:light": [],
+    "base:light": {},
+    "base:empty": {},
+    "base:win64": {},
+    "base:linux64": {},
+    "base:macos": {}
   },
   "patchbin.db": {
-    "version": "14",
+    "version": "15",
     "base": {
       "file_name": "bare_patchbin_2025_11_01.tar.xz",
       "format": "tar+xz",
@@ -579,7 +643,8 @@
         "ipfs",
         "baddr",
         "ardrive"
-      ]
+      ],
+      "install_files": []
     },
     "sqlpatches": [
       {
@@ -845,7 +910,7 @@
       },
       {
         "file_name": "patchbin-diff-003upto010.sql.xz",
-	"version_before" : "3",
+        "version_before": "3",
         "format": "xz",
         "type": "sql",
         "sha256": "a3749120127e26e4cb2d89ad86e2bf8bbe2ec7c1b152b8290c16b4a46225c63b",
@@ -866,7 +931,7 @@
       },
       {
         "file_name": "patchbin-diff-010-to-012.sql.xz",
-	"version_before" : "10",
+        "version_before": "10",
         "format": "xz",
         "type": "sql",
         "sha256": "ac443eb43aac47ffbae2449a3000f3ea332fff013ffe9b7b918c8b8c2e85ba12",
@@ -882,7 +947,7 @@
       },
       {
         "file_name": "pbin12_to13.sql.xz",
-	"version_before" : "12",
+        "version_before": "12",
         "format": "xz",
         "type": "sql",
         "sha256": "b7a908b5fd2a1201b98a2417f7b59ae96a47e50dab02a8ee661e877883045342",
@@ -898,20 +963,107 @@
       },
       {
         "file_name": "pbin13_to14.sql.xz",
-	"version_before" : "13",
+        "version_before": "13",
         "format": "xz",
         "type": "sql",
         "sha256": "310667bfaa44f7ddcd7987f032807ad4381f4394368fbf3e33565f764a29dc15",
         "ipfs_cidv1": "bafybeic7hfhcf66xcc2kfjnr7exa3gkdkpcwy7btfuo4lvpji4rq6iquui",
         "size": "12751240",
-	"baddr" : "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS94RjRGcUZyTQo=",
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS94RjRGcUZyTQo=",
         "ardrive_file_name": "pbin13_to14.sql.xz",
         "ardrive_file_path": "/SMWRH/db/patch/pbin13_to14.sql.xz",
         "ardrive_file_id": "ece41ddc-264c-42a6-8cb5-5bfdbcfb0a49",
         "data_txid": "Y4RNaUO1UPkqHb6W-DTGy5zrw19loFLdL7mKegj_0zs",
         "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
         "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af"
+      },
+      {
+        "file_name": "pbin14_to_15_bundle.7z",
+        "version_before": "14",
+        "type": "bundle",
+        "format": "7z",
+        "sha256": "7eed0f1d2f0c989917b8edc9b7d530026b291b481cd467c46194eacbc1f51d79",
+        "size": "64584230",
+        "_packager_run": "bbd08249-4090-46ac-9dc4-f4f01679d8ce",
+        "_packager_generated": true,
+        "_packager_chain": "thick",
+        "ipfs_cidv1": "bafybeib33cfldxmma7bp36vltnrpkdlwgluqyvndoo35qkzn2mqmcodrfi",
+        "priority": [
+          "baddr",
+          "ipfs",
+          "ardrive"
+        ],
+        "baddr": "aHR0cHM6Ly9waXhlbGRyYWluLmNvbS9hcGkvZmlsZXN5c3RlbS9xaUpOcGE3Mg==",
+        "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+        "ardrive_folder_id": "1e42b095-4fbf-4411-bcc9-688917d5a5af",
+        "ardrive_file_name": "pbin14_to_15_bundle.7z",
+        "ardrive_file_path": "/SMWRH/db/pbin14_to_15_bundle.7z",
+        "ardrive_file_id": "316c8435-268b-4683-8d70-fe066d4463f8",
+        "data_txid": "U4gO00fxDNAnwTqyv6BfhIs20MtBsimbmWv_FnGEqL0"
       }
-    ]
+    ],
+    "sqlpatches:light": [],
+    "base:light": {},
+    "base:empty": {},
+    "base:win64": {},
+    "base:linux64": {},
+    "base:macos": {}
+  },
+  "retroarch_deploy.txt": {
+    "type": "appfiles",
+    "version": "2",
+    "message": "",
+    "sqlpatches": [],
+    "base": {
+      "install_files": []
+    },
+    "base:light": {},
+    "base:empty": {},
+    "base:win64": {
+      "file_name": "retroarch-win64-20260621.tar.xz",
+      "format": "tar+xz",
+      "sha256": "9524f0cbcb1ed003a4cbe48be4e646fda0bcb6ebf9d3424f8a61f9cfc175e357",
+      "ipfs_cidv1": "bafybeidnrp5gveb2paancqmh34aztwi5c5ku7dthrhb4mod7wrp344dww4",
+      "size": "208775376",
+      "install_files": [
+        "RetroArch-Win64/*"
+      ],
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ],
+      "baddr": "aHR0cHM6Ly9saW5rLnNtd3Jlc291cmNlLm5ldC9yZXRyb2FyY2gtd2luNjQtMjAyNjA2MjEudGFyLnh6",
+      "ardrive_file_name": "retroarch-win64-20260621.tar.xz",
+      "ardrive_file_path": "/SMWRH/release/0.1.32beta/retroarch-win64-20260621.tar.xz",
+      "ardrive_file_id": "07c90219-6de0-45d4-820e-754186377ab5",
+      "data_txid": "kmMM4ok4QWK_ZxZpzp14krTJZcO-qXSh6_4HiyJkS-g",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "6d467ef3-9205-4c4b-8c93-6f7e5d2c846b"
+    },
+    "base:linux64": {
+      "file_name": "retroarch-linux64-20260621.tar.xz",
+      "format": "tar+xz",
+      "sha256": "1878852a7f77b7473439ee50e1a58d288df824ca95220bdbd75cb370f219458e",
+      "ipfs_cidv1": "bafybeicnpphjlszcldzfioq3wa7rawidm3noudfozsabh5at6sphd3b62y",
+      "size": "206953464",
+      "install_files": [
+        "RetroArch-Linux-x86_64.AppImage",
+        "RetroArch-Linux-x86_64.AppImage.home/*"
+      ],
+      "priority": [
+        "baddr",
+        "ipfs",
+        "ardrive"
+      ],
+      "baddr": "aHR0cHM6Ly9saW5rLnNtd3Jlc291cmNlLm5ldC9yZXRyb2FyY2gtbGludXg2NC0yMDI2MDYyMS50YXIueHo=",
+      "ardrive_file_name": "retroarch-linux64-20260621.tar.xz",
+      "ardrive_file_path": "/SMWRH/release/0.1.32beta/retroarch-linux64-20260621.tar.xz",
+      "ardrive_file_id": "6efd37be-24dd-4f85-9276-c511adb9231b",
+      "data_txid": "b0MmAn3IuzGNPHkrKXW-Qwll11MedUl3DIDmxavqtP0",
+      "ardrive_drive_id": "58677413-8a0c-4982-944d-4a1b40454039",
+      "ardrive_folder_id": "6d467ef3-9205-4c4b-8c93-6f7e5d2c846b"
+    },
+    "base:macos": {}
   }
 }

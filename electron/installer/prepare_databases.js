@@ -661,6 +661,7 @@ function inspectDatabases(opts, manifest) {
   for (const [targetKey, manifestEntry] of Object.entries(manifest)) {
     if (targetKey === 'greetings') continue;
     if (manifestEntry.type === 'appfiles') {
+      const appView = resolveAppfilesManifestView(manifestEntry);
       const filePath = path.join(userDataDir, targetKey);
       const exists = fs.existsSync(filePath);
       const shouldOverwrite = opts.overwrite.has(targetKey);
@@ -675,8 +676,10 @@ function inspectDatabases(opts, manifest) {
         sizeBytes: null,
         sha256: null,
         manifestAvailable: true,
-        manifestSummary: summarizeManifest(manifestEntry),
+        manifestSummary: summarizeAppfilesManifest(manifestEntry, appView),
         type: 'appfiles',
+        appfilesPlatform: appView.platform || null,
+        skipReason: null
       };
 
       if (exists) {
@@ -685,7 +688,10 @@ function inspectDatabases(opts, manifest) {
         details.sha256 = sha256File(filePath);
       }
 
-      if (!exists || shouldOverwrite) {
+      if (!appView.applicable) {
+        details.action = 'skip';
+        details.skipReason = appView.reason || 'not applicable on this platform';
+      } else if (!exists || shouldOverwrite) {
         details.action = 'provision-appfiles';
       } else {
         details.action = 'skip';
@@ -696,6 +702,91 @@ function inspectDatabases(opts, manifest) {
   }
 
   return results;
+}
+
+function detectProvisionerPlatform() {
+  const platform = process.platform;
+  const arch = process.arch;
+  if (platform === 'win32') return 'win64';
+  if (platform === 'darwin') return 'macos';
+  if (platform === 'linux') return 'linux64';
+  return null;
+}
+
+function isNonEmptyAppfilesBase(base) {
+  if (!base || typeof base !== 'object') return false;
+  if (base.file_name) return true;
+  return Array.isArray(base.install_files) && base.install_files.length > 0;
+}
+
+function resolveAppfilesManifestView(manifestEntry, platformKey = detectProvisionerPlatform()) {
+  if (!manifestEntry || manifestEntry.type !== 'appfiles') {
+    return { applicable: false, platform: platformKey, reason: 'not appfiles' };
+  }
+  if (manifestEntry.platform && platformKey && manifestEntry.platform !== platformKey) {
+    return {
+      applicable: false,
+      platform: platformKey,
+      reason: `appfiles target is for platform ${manifestEntry.platform} only`
+    };
+  }
+
+  const platformBaseKey = platformKey ? `base:${platformKey}` : null;
+  const platformBase = platformBaseKey ? manifestEntry[platformBaseKey] : null;
+  const sharedBase = manifestEntry.base || {};
+
+  let base;
+  if (isNonEmptyAppfilesBase(platformBase)) {
+    base = {
+      ...sharedBase,
+      ...platformBase,
+      install_files: Array.isArray(platformBase.install_files) && platformBase.install_files.length
+        ? platformBase.install_files
+        : (sharedBase.install_files || [])
+    };
+  } else if (isNonEmptyAppfilesBase(sharedBase)) {
+    base = { ...sharedBase };
+  } else {
+    return {
+      applicable: false,
+      platform: platformKey,
+      reason: platformKey
+        ? `no appfiles base configured for platform ${platformKey}`
+        : 'no appfiles base configured'
+    };
+  }
+
+  if (!Array.isArray(base.install_files) || base.install_files.length === 0) {
+    return { applicable: false, platform: platformKey, reason: 'Manifest entry missing install_files array.' };
+  }
+  if (!base.file_name) {
+    return { applicable: false, platform: platformKey, reason: 'Manifest entry missing base file_name.' };
+  }
+
+  return {
+    applicable: true,
+    platform: platformKey,
+    base,
+    version: manifestEntry.version,
+    message: manifestEntry.message || ''
+  };
+}
+
+function summarizeAppfilesManifest(manifestEntry, appView = null) {
+  const view = appView || resolveAppfilesManifestView(manifestEntry);
+  if (!view.applicable) {
+    if (!view.platform) return null;
+    return { platform: view.platform, skipped: view.reason || true };
+  }
+  return {
+    platform: view.platform,
+    base: {
+      file_name: view.base.file_name,
+      sha256: view.base.sha256,
+      size: view.base.size,
+      patchCount: Array.isArray(manifestEntry.sqlpatches) ? manifestEntry.sqlpatches.length : 0
+    }
+  };
 }
 
 function summarizeChainView(chainView) {
@@ -747,7 +838,12 @@ function buildPlan(opts, dbStatus) {
         database: db.name,
         manifestKey: manifestEntryKey,
       });
-    } else if (db.action === 'provision-appfiles' && db.manifestSummary && db.manifestSummary.base) {
+    } else if (
+      db.action === 'provision-appfiles'
+      && db.manifestSummary
+      && db.manifestSummary.base
+      && db.manifestSummary.base.file_name
+    ) {
       // Appfiles entries use their target name as the manifest key
       plan.downloads.push({
         database: db.name,
@@ -1476,14 +1572,11 @@ async function buildAppFilesFromManifest(dbStatus, manifestEntry, planPaths, dow
   const { downloadsDir, stagingDir } = planPaths;
   ensureDirectory(stagingDir);
 
-  const base = manifestEntry.base;
-  if (!base) {
-    throw new Error(`Manifest entry missing base description.`);
+  const appView = resolveAppfilesManifestView(manifestEntry);
+  if (!appView.applicable) {
+    throw new Error(appView.reason || 'Appfiles not applicable for this platform');
   }
-
-  if (!base.install_files || !Array.isArray(base.install_files) || base.install_files.length === 0) {
-    throw new Error(`Manifest entry missing install_files array.`);
-  }
+  const base = appView.base;
 
   // Download base archive
   const baseArchivePath = await ensureArtifact(base, downloadsDir, downloadTracker, userDataDir, ipfsTimeout);
@@ -1522,8 +1615,8 @@ async function buildAppFilesFromManifest(dbStatus, manifestEntry, planPaths, dow
 
   // Create tracking file
   const trackingFilePath = path.join(userDataDir, dbStatus.name);
-  const version = manifestEntry.version || '0';
-  const message = manifestEntry.message || '';
+  const version = appView.version || manifestEntry.version || '0';
+  const message = appView.message ?? manifestEntry.message ?? '';
   const timestamp = Math.floor(Date.now() / 1000).toString();
 
   const trackingContent = {
@@ -1680,8 +1773,9 @@ async function executeProvision(plan, manifest, ipfsTimeout = 20) {
 
   for (const db of plan.databases) {
     if (db.action === 'skip') {
-      console.log(`[provision] ${db.name}: skipping (already up to date)`);
-      result.skipped.push({ name: db.name, reason: 'existing kept' });
+      const reason = db.skipReason ? ` (${db.skipReason})` : '';
+      console.log(`[provision] ${db.name}: skipping (already up to date)${reason}`);
+      result.skipped.push({ name: db.name, reason: db.skipReason || 'existing kept' });
       continue;
     }
 
@@ -2470,6 +2564,9 @@ async function run(argv) {
 
     const success = !opts.provision || !plan.provisionResult || plan.provisionResult.errors.length === 0;
     finalizeProgress(success);
+    if (require.main === module && !success) {
+      process.exit(1);
+    }
     return plan;
   } catch (err) {
     finalizeProgress(false);
@@ -2484,7 +2581,10 @@ module.exports = {
   loadProvisionedJson,
   inspectDatabases,
   buildPlan,
-  summarizeChainView
+  summarizeChainView,
+  detectProvisionerPlatform,
+  resolveAppfilesManifestView,
+  summarizeAppfilesManifest
 };
 
 if (require.main === module) {

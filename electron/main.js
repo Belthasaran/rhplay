@@ -858,18 +858,34 @@ async function runProvisionerHelper({ provision, dbChain = null }) {
             }
 
             const missing = getMissingDatabases();
+            const provisionErrors = plan?.provisionResult?.errors || [];
+            const hasProvisionErrors = provision && provisionErrors.length > 0;
             const payload = {
-                success: code === 0 && (!provision || missing.length === 0),
+                success: code === 0 && !hasProvisionErrors && (!provision || missing.length === 0),
                 exitCode: code,
                 plan,
                 summary,
                 missingDatabases: missing,
+                provisionErrors,
             };
 
             if (code === 0) {
                 if (payload.success) {
                     sendProvisionerStatus({ state: provision ? 'complete' : 'plan', provision, plan, summary });
                     sendProvisionerLog('[provisioner] Completed successfully.');
+                } else if (hasProvisionErrors) {
+                    const errSummary = provisionErrors
+                        .map((e) => `${e.name}: ${e.message}`)
+                        .join('; ');
+                    sendProvisionerStatus({
+                        state: 'error',
+                        provision,
+                        plan,
+                        summary,
+                        missing,
+                        provisionErrors,
+                    });
+                    sendProvisionerLog(`[provisioner] Provisioning failed: ${errSummary}`);
                 } else {
                     sendProvisionerStatus({
                         state: provision ? 'needs-attention' : 'plan',
